@@ -18,9 +18,10 @@ from ext import db
 def main() -> int:
     app = create_app()
     with app.app_context():
-        rows = db.session.execute(
-            text(
-                """
+        rows = (
+            db.session.execute(
+                text(
+                    """
                 SELECT
                     c.user_id,
                     COUNT(*) AS company_count,
@@ -39,8 +40,11 @@ def main() -> int:
                 HAVING COUNT(*) > 1
                 ORDER BY c.user_id
                 """
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
 
         if not rows:
             print("OK: aucune collision company.user_id")

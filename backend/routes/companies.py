@@ -598,9 +598,7 @@ def get_company_from_token() -> tuple[
             None,
             {
                 "error": "company_profile_missing",
-                "message": (
-                    "Ce compte entreprise n'est rattaché à aucune entreprise."
-                ),
+                "message": ("Ce compte entreprise n'est rattaché à aucune entreprise."),
                 "support_code": "CP-COMPANY-PROFILE-MISSING",
             },
             409,
@@ -1998,10 +1996,7 @@ class CompanyDashboardBootstrap(Resource):
         return payload, 200
 
 
-
-@companies_ns.route(
-    "/me/action-queue/<string:action_id>/execute", strict_slashes=False
-)
+@companies_ns.route("/me/action-queue/<string:action_id>/execute", strict_slashes=False)
 class CompanyActionQueueExecute(Resource):
     """Exécute une action de la file `action_queue` (v2, PR3).
 
@@ -5317,7 +5312,9 @@ class DriverCompletedTrips(Resource):
 
         booking_repo = BookingRepository()
         page = max(request.args.get("page", default=1, type=int) or 1, 1)
-        per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 50)
+        per_page = min(
+            max(request.args.get("per_page", default=25, type=int) or 25, 1), 50
+        )
 
         # Pagination SQL à l'ouverture du détail (Lot 5) — pas de dump complet en mémoire
         page_trips, total = booking_repo.find_models_by_driver_and_company_paginated(

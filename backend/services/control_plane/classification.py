@@ -54,7 +54,9 @@ _TECHNICAL_EMAIL_SUFFIXES = (
 def _driver_count(company_id: int) -> int:
     return (
         db.session.scalar(
-            select(func.count()).select_from(Driver).where(Driver.company_id == company_id)
+            select(func.count())
+            .select_from(Driver)
+            .where(Driver.company_id == company_id)
         )
         or 0
     )
@@ -219,9 +221,10 @@ def _email_heuristic_origin(email: str | None) -> DataOriginDecision | None:
         return DataOriginDecision(
             "internal", "email_heuristic", "heuristic", {"email": lowered}
         )
-    if any(
-        lowered.endswith(sfx) for sfx in ("@test.example", "@example.com")
-    ) or "testuser" in lowered:
+    if (
+        any(lowered.endswith(sfx) for sfx in ("@test.example", "@example.com"))
+        or "testuser" in lowered
+    ):
         return DataOriginDecision(
             "test", "email_heuristic", "heuristic", {"email": lowered}
         )

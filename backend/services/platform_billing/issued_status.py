@@ -18,7 +18,9 @@ _TERMINAL = {
 
 
 def document_type_of(inv: PlatformIssuedInvoice) -> str:
-    return getattr(inv, "document_type", None) or PlatformIssuedDocumentType.INVOICE.value
+    return (
+        getattr(inv, "document_type", None) or PlatformIssuedDocumentType.INVOICE.value
+    )
 
 
 def is_credit_note(inv: PlatformIssuedInvoice) -> bool:
@@ -52,9 +54,7 @@ def payment_state(inv: PlatformIssuedInvoice) -> str:
     return "PARTIAL"
 
 
-def is_overdue_read(
-    inv: PlatformIssuedInvoice, *, now: datetime | None = None
-) -> bool:
+def is_overdue_read(inv: PlatformIssuedInvoice, *, now: datetime | None = None) -> bool:
     now = now or datetime.now(UTC)
     if is_credit_note(inv):
         return False

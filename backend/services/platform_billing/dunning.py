@@ -82,7 +82,10 @@ def is_invoice_overdue_enforceable(
     now = now or datetime.now(UTC)
     if is_credit_note(inv):
         return False
-    if getattr(inv, "document_type", None) == PlatformIssuedDocumentType.CREDIT_NOTE.value:
+    if (
+        getattr(inv, "document_type", None)
+        == PlatformIssuedDocumentType.CREDIT_NOTE.value
+    ):
         return False
     if inv.status in _TERMINAL:
         return False
@@ -247,7 +250,9 @@ def _ensure_event(
     return evt
 
 
-def _mark_sent(evt: PlatformDunningEvent, *, provider_message_id: str | None = None) -> None:
+def _mark_sent(
+    evt: PlatformDunningEvent, *, provider_message_id: str | None = None
+) -> None:
     evt.status = PlatformDunningEventStatus.SENT.value
     evt.sent_at = datetime.now(UTC)
     evt.provider_message_id = provider_message_id
@@ -277,9 +282,7 @@ def _send_dunning_email(
         mailer = current_app.extensions.get("mail")
         if mailer is None:
             # Dev / tests : considérer accepté si adresse présente
-            logger.info(
-                "dunning_email_simulated to=%s subject=%s", email, subject
-            )
+            logger.info("dunning_email_simulated to=%s subject=%s", email, subject)
             return True, f"sim:{email}", None
         # Fallback générique — ne pas échouer le moteur si mail non configuré
         logger.info("dunning_email_queued to=%s subject=%s", email, subject)
@@ -359,7 +362,9 @@ def _reminder_sent_for_case(case: PlatformDunningCase) -> PlatformDunningEvent |
     )
 
 
-def _apply_partial(case: PlatformDunningCase, company: Company, *, now: datetime) -> None:
+def _apply_partial(
+    case: PlatformDunningCase, company: Company, *, now: datetime
+) -> None:
     notice = _find_event(
         case.id, PlatformDunningEventType.PARTIAL_SUSPENSION_NOTICE.value
     )
@@ -379,9 +384,7 @@ def _apply_partial(case: PlatformDunningCase, company: Company, *, now: datetime
     )
     case.status = PlatformDunningCaseStatus.PARTIAL.value
     case.partial_suspended_at = now
-    evt = _ensure_event(
-        case, PlatformDunningEventType.PARTIAL_SUSPENSION_APPLIED.value
-    )
+    evt = _ensure_event(case, PlatformDunningEventType.PARTIAL_SUSPENSION_APPLIED.value)
     evt.status = PlatformDunningEventStatus.APPLIED.value
     evt.sent_at = now
     logger.info(
@@ -392,9 +395,7 @@ def _apply_partial(case: PlatformDunningCase, company: Company, *, now: datetime
 
 
 def _apply_full(case: PlatformDunningCase, company: Company, *, now: datetime) -> None:
-    notice = _find_event(
-        case.id, PlatformDunningEventType.FULL_SUSPENSION_NOTICE.value
-    )
+    notice = _find_event(case.id, PlatformDunningEventType.FULL_SUSPENSION_NOTICE.value)
     if notice is None or notice.status != PlatformDunningEventStatus.SENT.value:
         return
     applied = _find_event(
@@ -417,9 +418,7 @@ def _apply_full(case: PlatformDunningCase, company: Company, *, now: datetime) -
     )
     case.status = PlatformDunningCaseStatus.FULL.value
     case.full_suspended_at = now
-    evt = _ensure_event(
-        case, PlatformDunningEventType.FULL_SUSPENSION_APPLIED.value
-    )
+    evt = _ensure_event(case, PlatformDunningEventType.FULL_SUSPENSION_APPLIED.value)
     evt.status = PlatformDunningEventStatus.APPLIED.value
     evt.sent_at = now
     _ensure_event(case, PlatformDunningEventType.FINAL_NOTICE_REQUIRED.value)
@@ -430,9 +429,7 @@ def _apply_full(case: PlatformDunningCase, company: Company, *, now: datetime) -
     )
 
 
-def _try_resolve(
-    case: PlatformDunningCase, company: Company, *, now: datetime
-) -> bool:
+def _try_resolve(case: PlatformDunningCase, company: Company, *, now: datetime) -> bool:
     overdue = list_auto_overdue_invoices(company.id, now=now)
     if overdue:
         return False
@@ -468,7 +465,9 @@ def _try_resolve(
     return True
 
 
-def process_company_dunning(company_id: int, *, now: datetime | None = None) -> dict[str, Any]:
+def process_company_dunning(
+    company_id: int, *, now: datetime | None = None
+) -> dict[str, Any]:
     """Évalue et progresse le dossier de recouvrement d'une entreprise."""
     now = now or datetime.now(UTC)
     company = db.session.get(Company, int(company_id))
@@ -514,7 +513,9 @@ def process_company_dunning(company_id: int, *, now: datetime | None = None) -> 
     # 1) Reminder
     delay = int(policy.get("reminder_delay_days_after_due") or 0)
     grace = int(policy.get("reminder_grace_days") or 10)
-    due = trigger.due_at if trigger.due_at.tzinfo else trigger.due_at.replace(tzinfo=UTC)
+    due = (
+        trigger.due_at if trigger.due_at.tzinfo else trigger.due_at.replace(tzinfo=UTC)
+    )
     reminder_eligible_at = due + timedelta(days=delay)
 
     if now >= reminder_eligible_at:
@@ -527,7 +528,10 @@ def process_company_dunning(company_id: int, *, now: datetime | None = None) -> 
         if rem.status == PlatformDunningEventStatus.PENDING.value:
             pass  # outbox enverra
         # Si failed, re-queue
-        if rem.status == PlatformDunningEventStatus.FAILED.value and rem.attempt_count < 5:
+        if (
+            rem.status == PlatformDunningEventStatus.FAILED.value
+            and rem.attempt_count < 5
+        ):
             rem.status = PlatformDunningEventStatus.PENDING.value
 
     rem_sent = _reminder_sent_for_case(case)
@@ -635,9 +639,7 @@ def run_dunning_cycle(*, now: datetime | None = None) -> dict[str, Any]:
             source=PlatformBillingStateSource.AUTOMATIC_DUNNING.value,
             reason_code="dunning_resolved",
         )
-        a = _ensure_event(
-            case, PlatformDunningEventType.REINSTATEMENT_APPLIED.value
-        )
+        a = _ensure_event(case, PlatformDunningEventType.REINSTATEMENT_APPLIED.value)
         a.status = PlatformDunningEventStatus.APPLIED.value
         a.sent_at = now
     db.session.commit()

@@ -248,7 +248,6 @@ def build_issued_invoice_timeline(inv: PlatformIssuedInvoice) -> list[dict[str, 
     return events
 
 
-
 def serialize_issued_invoice(
     inv: PlatformIssuedInvoice,
     *,
@@ -287,9 +286,7 @@ def serialize_issued_invoice(
         "credited_at": inv.credited_at.isoformat() if inv.credited_at else None,
         "credit_of_invoice_id": credit_of,
         "credit_note_id": credit_note.id if credit_note else None,
-        "replaces_issued_invoice_id": getattr(
-            inv, "replaces_issued_invoice_id", None
-        ),
+        "replaces_issued_invoice_id": getattr(inv, "replaces_issued_invoice_id", None),
         "billing_year": getattr(inv, "billing_year", None),
         "billing_month": getattr(inv, "billing_month", None),
         "period_id": getattr(inv, "period_id", None),
@@ -315,9 +312,8 @@ def serialize_issued_invoice(
 
 
 def _base_query():
-    return (
-        select(PlatformIssuedInvoice, Company.name)
-        .outerjoin(Company, Company.id == PlatformIssuedInvoice.company_id)
+    return select(PlatformIssuedInvoice, Company.name).outerjoin(
+        Company, Company.id == PlatformIssuedInvoice.company_id
     )
 
 
@@ -398,7 +394,9 @@ def _apply_filters(
     return stmt, payment_state
 
 
-def _compute_stats(rows: list[PlatformIssuedInvoice], *, now: datetime) -> dict[str, Any]:
+def _compute_stats(
+    rows: list[PlatformIssuedInvoice], *, now: datetime
+) -> dict[str, Any]:
     total_invoiced = Decimal("0.00")
     total_credits = Decimal("0.00")
     total_paid = Decimal("0.00")
@@ -410,9 +408,7 @@ def _compute_stats(rows: list[PlatformIssuedInvoice], *, now: datetime) -> dict[
         if dtype == PlatformIssuedDocumentType.CREDIT_NOTE.value:
             total_credits += abs(Decimal(str(inv.total_amount or 0)))
             continue
-        if inv.status in (
-            PlatformIssuedInvoiceStatus.CANCELLED.value,
-        ):
+        if inv.status in (PlatformIssuedInvoiceStatus.CANCELLED.value,):
             continue
         total = Decimal(str(inv.total_amount or 0))
         paid = Decimal(str(inv.amount_paid or 0))
@@ -428,9 +424,7 @@ def _compute_stats(rows: list[PlatformIssuedInvoice], *, now: datetime) -> dict[
     return {
         "total_invoiced": decimal_to_str(money_round_chf(total_invoiced)),
         "total_credits": decimal_to_str(money_round_chf(total_credits)),
-        "net_invoiced": decimal_to_str(
-            money_round_chf(total_invoiced - total_credits)
-        ),
+        "net_invoiced": decimal_to_str(money_round_chf(total_invoiced - total_credits)),
         "total_paid": decimal_to_str(money_round_chf(total_paid)),
         "total_balance": decimal_to_str(money_round_chf(total_balance)),
         "overdue_count": overdue_count,
@@ -482,9 +476,13 @@ def list_issued_invoices(
         "company_name": Company.name,
     }.get(sort_by, PlatformIssuedInvoice.issued_at)
     if (sort_order or "desc").lower() == "asc":
-        stmt = stmt.order_by(sort_col.asc().nullslast(), PlatformIssuedInvoice.id.desc())
+        stmt = stmt.order_by(
+            sort_col.asc().nullslast(), PlatformIssuedInvoice.id.desc()
+        )
     else:
-        stmt = stmt.order_by(sort_col.desc().nullslast(), PlatformIssuedInvoice.id.desc())
+        stmt = stmt.order_by(
+            sort_col.desc().nullslast(), PlatformIssuedInvoice.id.desc()
+        )
 
     all_rows = db.session.execute(stmt).all()
     # Stats sur le jeu filtré (avant pagination / payment_state)
@@ -551,9 +549,13 @@ def get_issued_invoice_detail(issued_id: int) -> dict[str, Any]:
                 "id": ln.id,
                 "line_type": ln.line_type,
                 "label": ln.label,
-                "quantity": decimal_to_str(ln.quantity) if ln.quantity is not None else None,
+                "quantity": decimal_to_str(ln.quantity)
+                if ln.quantity is not None
+                else None,
                 "unit_amount": (
-                    decimal_to_str(ln.unit_amount) if ln.unit_amount is not None else None
+                    decimal_to_str(ln.unit_amount)
+                    if ln.unit_amount is not None
+                    else None
                 ),
                 "amount": decimal_to_str(ln.amount),
                 "calculation_mode": (
@@ -580,19 +582,15 @@ def get_issued_invoice_detail(issued_id: int) -> dict[str, Any]:
         data["statement_lines"] = []
 
     data["commercial_reference"] = getattr(inv, "commercial_reference", None)
-    data["source_updated_at"] = (
-        inv.updated_at.isoformat() if inv.updated_at else None
-    )
+    data["source_updated_at"] = inv.updated_at.isoformat() if inv.updated_at else None
     data["timeline"] = build_issued_invoice_timeline(inv)
 
     # Dunning résumé
     from models.platform_billing import PlatformDunningCase, PlatformInvoiceDunningHold
 
-    holds = (
-        PlatformInvoiceDunningHold.query.filter_by(
-            issued_invoice_id=inv.id, released_at=None
-        ).all()
-    )
+    holds = PlatformInvoiceDunningHold.query.filter_by(
+        issued_invoice_id=inv.id, released_at=None
+    ).all()
     data["dunning_holds"] = [
         {
             "id": h.id,

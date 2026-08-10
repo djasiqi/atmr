@@ -188,9 +188,7 @@ def test_patient_bp_isolated_by_company(db, company, portfolio_client):
     assert bp_b.company_id == other.id
 
 
-def test_resolve_portfolio_patient_prefers_third_party(
-    db, company, portfolio_client
-):
+def test_resolve_portfolio_patient_prefers_third_party(db, company, portfolio_client):
     curator = BillingParty()
     curator.company_id = company.id
     curator.type = BillingPartyType.CURATORSHIP

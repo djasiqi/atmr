@@ -51,7 +51,9 @@ def main() -> None:
         action="store_true",
         help="Appliquer et committer les mises à jour",
     )
-    parser.add_argument("--limit", type=int, default=None, help="Limiter le nombre de courses")
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Limiter le nombre de courses"
+    )
     parser.add_argument(
         "--company-id",
         type=int,

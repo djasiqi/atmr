@@ -17,12 +17,16 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table("company_platform_billing_config", schema=None) as batch_op:
+    with op.batch_alter_table(
+        "company_platform_billing_config", schema=None
+    ) as batch_op:
         batch_op.add_column(
             sa.Column("contract_special_conditions", sa.Text(), nullable=True)
         )
 
 
 def downgrade():
-    with op.batch_alter_table("company_platform_billing_config", schema=None) as batch_op:
+    with op.batch_alter_table(
+        "company_platform_billing_config", schema=None
+    ) as batch_op:
         batch_op.drop_column("contract_special_conditions")

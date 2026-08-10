@@ -197,12 +197,7 @@ def _styles() -> dict[str, ParagraphStyle]:
 
 
 def _esc(text: str) -> str:
-    return (
-        (text or "")
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+    return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _p(text: str, style: ParagraphStyle) -> Paragraph:
@@ -275,9 +270,7 @@ def _signature_column(sig, styles: dict) -> list:
     return parts
 
 
-def _signatures_block(
-    content: ParticularAgreementContent, styles: dict
-) -> Table:
+def _signatures_block(content: ParticularAgreementContent, styles: dict) -> Table:
     """Deux colonnes côte à côte, sans cadre ni filet."""
     left = _signature_column(content.signatures[0], styles)
     right = _signature_column(content.signatures[1], styles)
@@ -317,9 +310,7 @@ def _build_story(content: ParticularAgreementContent) -> list:
             styles["meta"],
         )
     )
-    story.append(
-        _p(f"Version : {content.particular_version}", styles["meta"])
-    )
+    story.append(_p(f"Version : {content.particular_version}", styles["meta"]))
     story.append(Spacer(1, 2 * mm))
     story.append(_rule())
     story.append(_p(content.pack_note, styles["intro"]))
@@ -352,9 +343,7 @@ def _build_story(content: ParticularAgreementContent) -> list:
 
     # ——— Page 2 ———
     story.append(PageBreak())
-    story.append(
-        _p("Article 4 — Clauses générales essentielles", styles["article"])
-    )
+    story.append(_p("Article 4 — Clauses générales essentielles", styles["article"]))
     story.append(_p(content.clauses_intro, styles["intro"]))
     for clause in content.clauses:
         story.append(
@@ -381,9 +370,7 @@ def _build_story(content: ParticularAgreementContent) -> list:
     story.append(_p(content.gps_summary, styles["body"]))
     story.append(_p(content.providers_summary, styles["body"]))
 
-    story.append(
-        _p("Article 6 — Documents contractuels incorporés", styles["article"])
-    )
+    story.append(_p("Article 6 — Documents contractuels incorporés", styles["article"]))
     story.append(
         _p(
             "Le Partenaire reconnaît avoir reçu et accepté, avant la signature :",
@@ -451,16 +438,13 @@ def build_particular_pdf_bytes(content: ParticularAgreementContent) -> bytes:
         topPadding=0,
         bottomPadding=0,
     )
-    doc.addPageTemplates(
-        [PageTemplate(id="main", frames=[frame], onPage=_on_page)]
-    )
+    doc.addPageTemplates([PageTemplate(id="main", frames=[frame], onPage=_on_page)])
     doc.build(_build_story(content))
     pdf_bytes = buffer.getvalue()
     pages = count_pdf_pages(pdf_bytes)
     if pages != 3:
         raise PartnerAgreementLayoutError(
-            f"Le contrat particulier doit contenir exactement 3 pages, "
-            f"obtenu : {pages}"
+            f"Le contrat particulier doit contenir exactement 3 pages, obtenu : {pages}"
         )
     from pypdf import PdfReader
 

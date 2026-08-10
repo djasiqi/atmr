@@ -6413,7 +6413,9 @@ class PDFService:
             )
 
             if qr_bill_svg_content:
-                drawing = _svg_content_to_drawing(qr_bill_svg_content, inset_qrbill_text=True)
+                drawing = _svg_content_to_drawing(
+                    qr_bill_svg_content, inset_qrbill_text=True
+                )
                 if drawing:
                     story.append(_make_qr_bill_flowable(drawing))
             else:
@@ -7179,7 +7181,9 @@ class PDFService:
                 invoice, override_amount=qr_override_m
             )
             if qr_bill_svg_content:
-                drawing = _svg_content_to_drawing(qr_bill_svg_content, inset_qrbill_text=True)
+                drawing = _svg_content_to_drawing(
+                    qr_bill_svg_content, inset_qrbill_text=True
+                )
                 if drawing:
                     story.append(_make_qr_bill_flowable(drawing))
         except Exception as e:
@@ -7802,7 +7806,9 @@ class PDFService:
                 invoice, override_amount=qr_override_d
             )
             if qr_bill_svg_content:
-                drawing = _svg_content_to_drawing(qr_bill_svg_content, inset_qrbill_text=True)
+                drawing = _svg_content_to_drawing(
+                    qr_bill_svg_content, inset_qrbill_text=True
+                )
                 if drawing:
                     story.append(_make_qr_bill_flowable(drawing))
         except Exception as e:
@@ -8100,7 +8106,9 @@ class PDFService:
                 )
 
                 if qr_bill_svg_content:
-                    drawing = _svg_content_to_drawing(qr_bill_svg_content, inset_qrbill_text=True)
+                    drawing = _svg_content_to_drawing(
+                        qr_bill_svg_content, inset_qrbill_text=True
+                    )
                     if drawing:
                         story.append(_make_qr_bill_flowable(drawing))
                         app_logger.info("QR-bill ajouté au PDF de rappel consolidé")

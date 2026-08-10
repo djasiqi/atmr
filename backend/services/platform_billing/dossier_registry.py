@@ -130,11 +130,7 @@ def build_dossier_row(
     zc, zc_reason = zero_charge_flags(statement)
     qr_errors: list[str] = []
     issuable = False
-    if (
-        status == "PRETE_A_EMETTRE"
-        and statement is not None
-        and check_qr
-    ):
+    if status == "PRETE_A_EMETTRE" and statement is not None and check_qr:
         from services.platform_billing.issuance import statement_qr_ready
 
         issuable, qr_errors = statement_qr_ready(statement)
@@ -237,7 +233,9 @@ def _caller_caps(admin_user_id: int | None) -> set[str]:
     return {c for c in wanted if user_has_admin_capability(admin_user_id, c)}
 
 
-def _pairs_for_period(period: PlatformBillingPeriod) -> list[tuple[Company, PlatformInvoice | None]]:
+def _pairs_for_period(
+    period: PlatformBillingPeriod,
+) -> list[tuple[Company, PlatformInvoice | None]]:
     billable = set(distinct_billable_company_ids())
     invoices = (
         PlatformInvoice.query.filter_by(period_id=period.id)
@@ -318,11 +316,9 @@ def list_dossiers(
         for co, st in _pairs_for_period(period):
             raw_rows.append((period, co, st))
     elif year is not None and month is not None:
-        period = (
-            PlatformBillingPeriod.query.filter_by(
-                billing_year=int(year), billing_month=int(month)
-            ).first()
-        )
+        period = PlatformBillingPeriod.query.filter_by(
+            billing_year=int(year), billing_month=int(month)
+        ).first()
         if period:
             for co, st in _pairs_for_period(period):
                 raw_rows.append((period, co, st))
@@ -410,11 +406,16 @@ def _compute_stats(dossiers: list[dict[str, Any]]) -> dict[str, Any]:
         paid = Decimal(str(d["amount_paid"] or 0))
         bal = Decimal(str(d["balance_due"] or 0))
         pid = d.get("primary_invoice_id")
-        if pid is None and d.get("statement_id") and status in (
-            "A_CALCULER",
-            "A_CONTROLER",
-            "PRETE_A_CLOTURER",
-            "PRETE_A_EMETTRE",
+        if (
+            pid is None
+            and d.get("statement_id")
+            and status
+            in (
+                "A_CALCULER",
+                "A_CONTROLER",
+                "PRETE_A_CLOTURER",
+                "PRETE_A_EMETTRE",
+            )
         ):
             a_emettre += amt
         elif pid is not None:
@@ -430,11 +431,9 @@ def _compute_stats(dossiers: list[dict[str, Any]]) -> dict[str, Any]:
     # Avoirs liés : somme des credit_note totals si IDs présents
     credit_ids = [d["credit_note_id"] for d in dossiers if d.get("credit_note_id")]
     if credit_ids:
-        credits = (
-            PlatformIssuedInvoice.query.filter(
-                PlatformIssuedInvoice.id.in_(credit_ids)
-            ).all()
-        )
+        credits = PlatformIssuedInvoice.query.filter(
+            PlatformIssuedInvoice.id.in_(credit_ids)
+        ).all()
         avoirs = Decimal("0.00")
         for c in credits:
             avoirs += money_round_chf(abs(Decimal(str(c.total_amount or 0))))
@@ -462,9 +461,7 @@ def get_dossier(
     if not period or not company:
         return None
     statement = (
-        PlatformInvoice.query.filter_by(
-            period_id=period.id, company_id=company.id
-        )
+        PlatformInvoice.query.filter_by(period_id=period.id, company_id=company.id)
         .options(joinedload(PlatformInvoice.issued_invoices))
         .first()
     )

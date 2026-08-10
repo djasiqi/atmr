@@ -83,8 +83,14 @@ def _now() -> datetime:
 
 def get_device_session_limit(role: str | None = None) -> int:
     if (role or "").lower() == "driver":
-        return int(os.getenv("MAX_MOBILE_DEVICE_SESSIONS_DRIVER", str(DEFAULT_DEVICE_SESSION_LIMIT)))
-    return int(os.getenv("MAX_MOBILE_DEVICE_SESSIONS", str(DEFAULT_DEVICE_SESSION_LIMIT)))
+        return int(
+            os.getenv(
+                "MAX_MOBILE_DEVICE_SESSIONS_DRIVER", str(DEFAULT_DEVICE_SESSION_LIMIT)
+            )
+        )
+    return int(
+        os.getenv("MAX_MOBILE_DEVICE_SESSIONS", str(DEFAULT_DEVICE_SESSION_LIMIT))
+    )
 
 
 def list_active_sessions(user_id: int) -> list[MobileDeviceSession]:
@@ -102,7 +108,11 @@ def get_session_by_id(
     session_id: uuid.UUID | str, *, for_update: bool = False
 ) -> MobileDeviceSession | None:
     try:
-        sid = session_id if isinstance(session_id, uuid.UUID) else uuid.UUID(str(session_id))
+        sid = (
+            session_id
+            if isinstance(session_id, uuid.UUID)
+            else uuid.UUID(str(session_id))
+        )
     except (ValueError, TypeError):
         return None
     query = MobileDeviceSession.query.filter_by(session_id=sid)
@@ -163,18 +173,24 @@ def create_or_reuse_session(
         existing = find_active_session_for_installation(user_id, device_installation_id)
         if existing is not None:
             existing.previous_credential_hash = existing.credential_hash
-            existing.previous_generation = existing.credential_generation or existing.generation
+            existing.previous_generation = (
+                existing.credential_generation or existing.generation
+            )
             existing.previous_credential_valid_until = now + timedelta(
                 seconds=PREVIOUS_CREDENTIAL_GRACE_SECONDS
             )
             existing.credential_hash = hash_credential(recovery)
             existing.revocation_secret_hash = hash_revocation_secret(revocation)
-            new_cred_gen = int(existing.credential_generation or existing.generation or 1) + 1
+            new_cred_gen = (
+                int(existing.credential_generation or existing.generation or 1) + 1
+            )
             existing.credential_generation = new_cred_gen
             existing.generation = new_cred_gen  # alias legacy
             # session_epoch inchangé (même session active)
             existing.device_name = device_name or existing.device_name
-            existing.driver_id = driver_id if driver_id is not None else existing.driver_id
+            existing.driver_id = (
+                driver_id if driver_id is not None else existing.driver_id
+            )
             existing.last_seen_at = now
             existing.last_refresh_at = now
             existing.last_app_version = app_version
@@ -226,7 +242,9 @@ def create_or_reuse_session(
         now = _now()
         existing.credential_hash = hash_credential(recovery)
         existing.revocation_secret_hash = hash_revocation_secret(revocation)
-        new_cred_gen = int(existing.credential_generation or existing.generation or 1) + 1
+        new_cred_gen = (
+            int(existing.credential_generation or existing.generation or 1) + 1
+        )
         existing.credential_generation = new_cred_gen
         existing.generation = new_cred_gen
         existing.last_seen_at = now
@@ -236,9 +254,7 @@ def create_or_reuse_session(
     raise DeviceSessionLimitReached([])
 
 
-def verify_recovery_credential(
-    session: MobileDeviceSession, credential: str
-) -> bool:
+def verify_recovery_credential(session: MobileDeviceSession, credential: str) -> bool:
     h = hash_credential(credential)
     if secrets.compare_digest(h, session.credential_hash):
         return True
@@ -436,6 +452,7 @@ def revoke_pending_idempotent(
 
 # --- Cache Redis session validation ---
 
+
 def _cache_key(session_id: uuid.UUID | str) -> str:
     return f"auth:mobile_session:{session_id}"
 
@@ -484,9 +501,7 @@ def _cache_session_revoked(session_id: uuid.UUID) -> None:
         import json
 
         payload = json.dumps({"status": "revoked", "session_epoch": -1})
-        r.setex(
-            _cache_key(session_id), SESSION_NEGATIVE_CACHE_TTL_SECONDS, payload
-        )
+        r.setex(_cache_key(session_id), SESSION_NEGATIVE_CACHE_TTL_SECONDS, payload)
     except Exception as exc:
         logger.debug("cache session revoked failed: %s", exc)
 
@@ -761,7 +776,9 @@ def resolve_rotation_idempotency(
         )
 
     try:
-        stored = decrypt_rotation_response(row.response_ciphertext, row.encryption_key_id)
+        stored = decrypt_rotation_response(
+            row.response_ciphertext, row.encryption_key_id
+        )
     except Exception as exc:
         logger.error(
             "AuthRotationResult UNREADABLE session_id=%s key_id=%s: %s",
@@ -796,7 +813,9 @@ def load_rotation_response(row: AuthRotationResult) -> dict[str, Any] | None:
     if row.expires_at and row.expires_at < _now():
         return None
     try:
-        stored = decrypt_rotation_response(row.response_ciphertext, row.encryption_key_id)
+        stored = decrypt_rotation_response(
+            row.response_ciphertext, row.encryption_key_id
+        )
     except Exception as exc:
         logger.warning("decrypt AuthRotationResult failed: %s", exc)
         return None

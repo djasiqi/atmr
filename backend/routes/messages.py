@@ -101,6 +101,8 @@ def _resolve_upload_mime(file, filename: str) -> str:
     if inferred and (not raw or raw.startswith("audio/") or raw.startswith("image/")):
         return inferred
     return raw
+
+
 MAX_FILE_SIZE_MB = 10  # 10 Mo max par fichier
 MAX_FILES_PER_MESSAGE = 1  # Limite: 1 fichier par message
 
@@ -370,9 +372,10 @@ def _user_can_access_message_attachment(user, message) -> bool:
         company = getattr(user, "company", None)
         return company is not None and int(company.id) == int(message_company_id)
     if role == "DRIVER":
-        driver = getattr(user, "driver", None) or Driver.query.filter_by(
-            user_id=user.id
-        ).first()
+        driver = (
+            getattr(user, "driver", None)
+            or Driver.query.filter_by(user_id=user.id).first()
+        )
         return driver is not None and int(driver.company_id) == int(message_company_id)
     return False
 

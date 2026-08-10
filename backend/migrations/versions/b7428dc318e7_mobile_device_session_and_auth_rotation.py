@@ -151,9 +151,7 @@ def downgrade():
     op.drop_index(
         "ix_mobile_device_session_user_id", table_name="mobile_device_session"
     )
-    op.drop_index(
-        "ix_mobile_device_session_status", table_name="mobile_device_session"
-    )
+    op.drop_index("ix_mobile_device_session_status", table_name="mobile_device_session")
     op.drop_index(
         "ix_mobile_device_session_device_installation_id",
         table_name="mobile_device_session",

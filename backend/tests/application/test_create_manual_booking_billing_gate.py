@@ -54,10 +54,11 @@ def test_manual_booking_calls_own_portfolio_gate():
         with pytest.raises(CreateManualBookingError):
             uc.execute(
                 company_id=42,
-                validated_data={"client_id": 9, "scheduled_time": "2026-08-10T10:00:00"},
+                validated_data={
+                    "client_id": 9,
+                    "scheduled_time": "2026-08-10T10:00:00",
+                },
                 client=object(),
                 user=object(),
             )
-    gate.assert_called_once_with(
-        42, BillingCapability.CREATE_OWN_PORTFOLIO_BOOKING
-    )
+    gate.assert_called_once_with(42, BillingCapability.CREATE_OWN_PORTFOLIO_BOOKING)

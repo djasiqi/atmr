@@ -231,8 +231,12 @@ class TestInvoicesListLot6MixedOrderAndPagination:
 
         # Pas de fusion naïve de deux listes indépendamment paginées : aucun doublon,
         # les 4 factures sont vues exactement une fois sur l'ensemble des 2 pages.
-        seen_ids = {(item["id"], item.get("is_partner_invoice", False)) for item in page1_items}
-        seen_ids |= {(item["id"], item.get("is_partner_invoice", False)) for item in page2_items}
+        seen_ids = {
+            (item["id"], item.get("is_partner_invoice", False)) for item in page1_items
+        }
+        seen_ids |= {
+            (item["id"], item.get("is_partner_invoice", False)) for item in page2_items
+        }
         assert seen_ids == {
             (partner_new.id, True),
             (regular_new.id, False),
@@ -269,8 +273,12 @@ class TestInvoicesListLot6MixedOrderAndPagination:
         first_call = client.get(url, headers=headers).get_json()["data"]
         second_call = client.get(url, headers=headers).get_json()["data"]
 
-        ordered_keys_first = [(item["id"], item.get("is_partner_invoice", False)) for item in first_call]
-        ordered_keys_second = [(item["id"], item.get("is_partner_invoice", False)) for item in second_call]
+        ordered_keys_first = [
+            (item["id"], item.get("is_partner_invoice", False)) for item in first_call
+        ]
+        ordered_keys_second = [
+            (item["id"], item.get("is_partner_invoice", False)) for item in second_call
+        ]
 
         # Même ordre à chaque appel (stabilité du départage SQL, pas un tri Python
         # instable dépendant de l'ordre d'itération).

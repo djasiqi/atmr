@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def extract_mobile_session_claims(claims: dict[str, Any] | None = None) -> tuple[str | None, int | None]:
+def extract_mobile_session_claims(
+    claims: dict[str, Any] | None = None,
+) -> tuple[str | None, int | None]:
     data = claims if claims is not None else {}
     try:
         data = data or get_jwt() or {}
@@ -67,7 +69,9 @@ def mobile_session_required(fn: F) -> F:
                     user_id = user.id
                     # token_version
                     jwt_tv = claims.get("token_version")
-                    if jwt_tv is not None and int(getattr(user, "token_version", 0) or 0) != int(jwt_tv):
+                    if jwt_tv is not None and int(
+                        getattr(user, "token_version", 0) or 0
+                    ) != int(jwt_tv):
                         return (
                             jsonify(
                                 {

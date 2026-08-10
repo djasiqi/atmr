@@ -21,7 +21,9 @@ depends_on = None
 
 def upgrade() -> None:
     with op.batch_alter_table("message", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("audio_url", sa.String(length=500), nullable=True))
+        batch_op.add_column(
+            sa.Column("audio_url", sa.String(length=500), nullable=True)
+        )
 
 
 def downgrade() -> None:

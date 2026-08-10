@@ -162,7 +162,9 @@ class User(db.Model):
         String(32), nullable=False, server_default="unknown"
     )
     data_origin_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    data_origin_confidence: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    data_origin_confidence: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
     classified_at = Column(DateTime(timezone=True), nullable=True)
     classified_by_user_id: Mapped[int | None] = mapped_column(
         Integer,

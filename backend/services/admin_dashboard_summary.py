@@ -151,8 +151,7 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
             )
             .where(
                 PlatformInvoice.statement_status.in_(_STATEMENT_TO_REVIEW),
-                PlatformBillingPeriod.status
-                == PlatformBillingPeriodStatus.DRAFT.value,
+                PlatformBillingPeriod.status == PlatformBillingPeriodStatus.DRAFT.value,
                 PlatformInvoice.cancelled_at.is_(None),
             )
         )

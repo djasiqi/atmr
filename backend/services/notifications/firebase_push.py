@@ -169,6 +169,7 @@ def _send_with_retry(msg: Any, *, platform: str) -> dict[str, Any]:
         return exhausted
     return {"ok": False, "error": "fcm_send_error", "retry_exhausted": True}
 
+
 def _init_firebase() -> bool:
     """Lazy-init Firebase Admin SDK.
 

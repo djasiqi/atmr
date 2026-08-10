@@ -10,7 +10,18 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Integer, String, and_, case, cast, func, literal, or_, select, union_all
+from sqlalchemy import (
+    Integer,
+    String,
+    and_,
+    case,
+    cast,
+    func,
+    literal,
+    or_,
+    select,
+    union_all,
+)
 from sqlalchemy.orm import aliased
 
 from ext import db
@@ -413,7 +424,9 @@ def build_partners_summary(
     )
 
     now = datetime.now(UTC)
-    active_demos_q = select(func.count(func.distinct(DemoAccess.demo_request_id))).where(
+    active_demos_q = select(
+        func.count(func.distinct(DemoAccess.demo_request_id))
+    ).where(
         DemoAccess.status == "active",
         DemoAccess.demo_expires_at.isnot(None),
         DemoAccess.demo_expires_at > now,

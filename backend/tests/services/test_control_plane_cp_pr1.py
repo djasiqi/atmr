@@ -69,7 +69,9 @@ def seeded(db_session):
 def test_classify_driver_makes_transport_tenant(db_session, seeded):
     owner = _user(role=UserRole.COMPANY)
     company = _company(owner)
-    driver_user = _user(role=UserRole.DRIVER, username="drv1", email="drv1@prod.example.ch")
+    driver_user = _user(
+        role=UserRole.DRIVER, username="drv1", email="drv1@prod.example.ch"
+    )
     d = Driver()
     d.user_id = driver_user.id
     d.company_id = company.id
@@ -168,9 +170,7 @@ def test_projector_tenant_and_shadow_entitlement(db_session, seeded):
     org = proj.ensure_company_organization(company)
     assert org is not None
     assert org.organization_type == "company"
-    ents = OrganizationServiceEntitlement.query.filter_by(
-        organization_id=org.id
-    ).all()
+    ents = OrganizationServiceEntitlement.query.filter_by(organization_id=org.id).all()
     assert ents
     assert all(e.enforcement_mode == "shadow" for e in ents)
 

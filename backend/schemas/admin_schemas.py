@@ -33,7 +33,9 @@ class UserRoleUpdateSchema(Schema):
         validate=validate.Length(min=5, max=500),
         allow_none=True,
     )
-    expected_current_role = fields.Str(required=False, load_default=None, allow_none=True)
+    expected_current_role = fields.Str(
+        required=False, load_default=None, allow_none=True
+    )
     expected_company_id = fields.Int(
         validate=validate.Range(min=1),
         allow_none=True,

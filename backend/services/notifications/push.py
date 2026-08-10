@@ -58,7 +58,9 @@ def _parse_retry_delays() -> tuple[float, ...]:
 
 PUSH_RETRY_DELAYS_SEC = _parse_retry_delays()
 MAX_RETRY_ATTEMPTS = len(PUSH_RETRY_DELAYS_SEC)
-INITIAL_RETRY_DELAY = PUSH_RETRY_DELAYS_SEC[1] if len(PUSH_RETRY_DELAYS_SEC) > 1 else 30.0
+INITIAL_RETRY_DELAY = (
+    PUSH_RETRY_DELAYS_SEC[1] if len(PUSH_RETRY_DELAYS_SEC) > 1 else 30.0
+)
 MAX_RETRY_DELAY = PUSH_RETRY_DELAYS_SEC[-1] if PUSH_RETRY_DELAYS_SEC else 600.0
 PUSH_RETRY_MAX_WALL_CLOCK_SEC = float(os.getenv("PUSH_RETRY_MAX_WALL_CLOCK_SEC", "900"))
 PUSH_RETRY_JITTER_RATIO = float(os.getenv("PUSH_RETRY_JITTER_RATIO", "0.2"))
@@ -278,7 +280,9 @@ def _log_fcm_pipeline_result(
             token_invalid=bool(result.get("token_invalid")),
             # Clarifie : fcm_sent = provider_accepted, pas livraison device
             delivery_status=(
-                "provider_accepted" if result.get("ok") else result.get("delivery_status")
+                "provider_accepted"
+                if result.get("ok")
+                else result.get("delivery_status")
             ),
         )
     except Exception:

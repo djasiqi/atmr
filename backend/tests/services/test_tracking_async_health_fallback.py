@@ -50,7 +50,9 @@ def test_should_use_sync_when_circuit_open(monkeypatch: pytest.MonkeyPatch) -> N
     assert ac.should_use_async_ingest() is False
 
 
-def test_should_use_sync_when_redis_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_should_use_sync_when_redis_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(ac, "redis_client", None)
     monkeypatch.setattr(ac, "HEALTH_GATE_ENABLED", True)
     assert ac.should_use_async_ingest() is False

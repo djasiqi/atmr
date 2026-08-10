@@ -68,9 +68,7 @@ def parse_dunning_fields(data: dict[str, Any]) -> dict[str, Any]:
         "full_suspend_days_after_due": full_days,
         "full_suspend_overdue_invoice_count": full_count,
         "termination_notice_days": term,
-        "partial_block_marketplace_offers": _bool(
-            "partial_block_marketplace_offers"
-        ),
+        "partial_block_marketplace_offers": _bool("partial_block_marketplace_offers"),
         "partial_block_marketplace_acceptance": _bool(
             "partial_block_marketplace_acceptance"
         ),
@@ -167,7 +165,7 @@ def is_dunning_authorized_at_issuance(
     today: date | None = None,
 ) -> bool:
     return bool(
-        compute_dunning_automation_ready(
-            cfg=cfg, agreement=agreement, today=today
-        )["ready"]
+        compute_dunning_automation_ready(cfg=cfg, agreement=agreement, today=today)[
+            "ready"
+        ]
     )

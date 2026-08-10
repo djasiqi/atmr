@@ -69,9 +69,7 @@ def test_validate_refuses_needs_review():
     inv.period = period
     with (
         patch("services.platform_billing.engine.db.session.get", return_value=inv),
-        patch(
-            "services.platform_billing.engine.assert_billing_period_has_ended"
-        ),
+        patch("services.platform_billing.engine.assert_billing_period_has_ended"),
         pytest.raises(BillingInvariantError) as ei,
     ):
         validate_statement(1, now_utc=datetime(2026, 8, 2, tzinfo=UTC))
@@ -87,9 +85,7 @@ def test_validate_refuses_draft():
     inv.period = period
     with (
         patch("services.platform_billing.engine.db.session.get", return_value=inv),
-        patch(
-            "services.platform_billing.engine.assert_billing_period_has_ended"
-        ),
+        patch("services.platform_billing.engine.assert_billing_period_has_ended"),
         pytest.raises(BillingInvariantError) as ei,
     ):
         validate_statement(1)
@@ -105,9 +101,7 @@ def test_validate_accepts_calculated():
     inv.period = period
     with (
         patch("services.platform_billing.engine.db.session.get", return_value=inv),
-        patch(
-            "services.platform_billing.engine.assert_billing_period_has_ended"
-        ),
+        patch("services.platform_billing.engine.assert_billing_period_has_ended"),
         patch("services.platform_billing.engine.db.session.commit"),
     ):
         out = validate_statement(1)
@@ -154,12 +148,8 @@ def test_issue_refuses_validated_without_lock():
             "services.platform_billing.issuance.db.session.get",
             return_value=statement,
         ),
-        patch(
-            "services.platform_billing.issuance.PlatformIssuedInvoice"
-        ) as Issued,
-        patch(
-            "services.platform_billing.engine.assert_billing_period_has_ended"
-        ),
+        patch("services.platform_billing.issuance.PlatformIssuedInvoice") as Issued,
+        patch("services.platform_billing.engine.assert_billing_period_has_ended"),
         pytest.raises(BillingInvariantError) as ei,
     ):
         Issued.query = mock_q
@@ -185,12 +175,8 @@ def test_issue_refuses_validated_even_if_period_locked():
             "services.platform_billing.issuance.db.session.get",
             return_value=statement,
         ),
-        patch(
-            "services.platform_billing.issuance.PlatformIssuedInvoice"
-        ) as Issued,
-        patch(
-            "services.platform_billing.engine.assert_billing_period_has_ended"
-        ),
+        patch("services.platform_billing.issuance.PlatformIssuedInvoice") as Issued,
+        patch("services.platform_billing.engine.assert_billing_period_has_ended"),
         pytest.raises(BillingInvariantError) as ei,
     ):
         Issued.query = mock_q

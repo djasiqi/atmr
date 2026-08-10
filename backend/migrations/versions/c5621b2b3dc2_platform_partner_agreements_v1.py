@@ -66,9 +66,7 @@ def upgrade():
         ),
         sa.Column("generated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column(
-            "signed_file_uploaded_at", sa.DateTime(timezone=True), nullable=True
-        ),
+        sa.Column("signed_file_uploaded_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("agreement_signed_on", sa.Date(), nullable=True),
         sa.Column("agreement_effective_from", sa.Date(), nullable=True),
         sa.Column("generated_by_user_id", sa.Integer(), nullable=True),
@@ -103,9 +101,7 @@ def upgrade():
         sa.ForeignKeyConstraint(
             ["generated_by_user_id"], ["user.id"], ondelete="SET NULL"
         ),
-        sa.ForeignKeyConstraint(
-            ["sent_by_user_id"], ["user.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["sent_by_user_id"], ["user.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
             ["signed_uploaded_by_user_id"], ["user.id"], ondelete="SET NULL"
         ),

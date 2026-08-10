@@ -348,7 +348,9 @@ class ControlPlaneProjector:
         driver_role_id = _role_template_id("company", "company_driver")
         owner_role_id = _role_template_id("company", "company_owner")
         inst_role_ids = db.session.scalars(
-            select(RoleTemplate.id).where(RoleTemplate.organization_type == "institution")
+            select(RoleTemplate.id).where(
+                RoleTemplate.organization_type == "institution"
+            )
         ).all()
 
         memberships = db.session.scalars(
@@ -379,9 +381,7 @@ class ControlPlaneProjector:
                 m.updated_at = _now()
 
         if new_role == "DRIVER":
-            driver = db.session.scalar(
-                select(Driver).where(Driver.user_id == user.id)
-            )
+            driver = db.session.scalar(select(Driver).where(Driver.user_id == user.id))
             if driver is not None:
                 self.sync_driver(driver)
         elif new_role == "INSTITUTION" and user.institution_id:
@@ -395,7 +395,9 @@ class ControlPlaneProjector:
                 if org is not None:
                     self.sync_company_owner(company, organization=org)
 
-    def _maybe_update_lifecycle(self, org: PlatformOrganization, lifecycle: str) -> None:
+    def _maybe_update_lifecycle(
+        self, org: PlatformOrganization, lifecycle: str
+    ) -> None:
         if org.lifecycle_source == "explicit_admin":
             return
         org.lifecycle_status = lifecycle

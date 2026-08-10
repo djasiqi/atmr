@@ -81,9 +81,7 @@ def upgrade() -> None:
             postgresql.JSONB(astext_type=sa.Text()),
             nullable=True,
         ),
-        sa.Column(
-            "is_sensitive", sa.Boolean(), server_default="false", nullable=False
-        ),
+        sa.Column("is_sensitive", sa.Boolean(), server_default="false", nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -223,22 +221,16 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["classified_by_user_id"], ["user.id"], ondelete="SET NULL"
         ),
-        sa.ForeignKeyConstraint(
-            ["company_id"], ["company.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["institution_id"], ["institutions.id"], ondelete="RESTRICT"
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "company_id", name="uq_platform_organization_company_id"
-        ),
+        sa.UniqueConstraint("company_id", name="uq_platform_organization_company_id"),
         sa.UniqueConstraint(
             "institution_id", name="uq_platform_organization_institution_id"
         ),
-        sa.UniqueConstraint(
-            "public_id", name="uq_platform_organization_public_id"
-        ),
+        sa.UniqueConstraint("public_id", name="uq_platform_organization_public_id"),
     )
     op.create_index(
         "ix_platform_organization_company_id",
@@ -287,13 +279,9 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "fingerprint", name="uq_control_plane_anomaly_fingerprint"
-        ),
+        sa.UniqueConstraint("fingerprint", name="uq_control_plane_anomaly_fingerprint"),
     )
-    op.create_index(
-        "ix_control_plane_anomaly_code", "control_plane_anomaly", ["code"]
-    )
+    op.create_index("ix_control_plane_anomaly_code", "control_plane_anomaly", ["code"])
     op.create_index(
         "ix_control_plane_anomaly_organization_id",
         "control_plane_anomaly",
@@ -329,9 +317,7 @@ def upgrade() -> None:
             server_default="1",
             nullable=False,
         ),
-        sa.Column(
-            "scope_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True
-        ),
+        sa.Column("scope_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("source", sa.String(length=64), nullable=True),
         sa.Column("invited_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
@@ -357,9 +343,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["role_template_id"], ["role_template.id"], ondelete="SET NULL"
         ),
-        sa.ForeignKeyConstraint(
-            ["user_id"], ["user.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "organization_id",
@@ -469,9 +453,7 @@ def upgrade() -> None:
             sa.Column("data_origin_source", sa.String(length=64), nullable=True)
         )
         batch_op.add_column(
-            sa.Column(
-                "data_origin_confidence", sa.String(length=32), nullable=True
-            )
+            sa.Column("data_origin_confidence", sa.String(length=32), nullable=True)
         )
         batch_op.add_column(
             sa.Column("classified_at", sa.DateTime(timezone=True), nullable=True)
@@ -529,9 +511,7 @@ def downgrade() -> None:
         "ix_control_plane_anomaly_organization_id",
         table_name="control_plane_anomaly",
     )
-    op.drop_index(
-        "ix_control_plane_anomaly_code", table_name="control_plane_anomaly"
-    )
+    op.drop_index("ix_control_plane_anomaly_code", table_name="control_plane_anomaly")
     op.drop_table("control_plane_anomaly")
 
     op.drop_index(

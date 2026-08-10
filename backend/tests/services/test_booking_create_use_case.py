@@ -317,9 +317,7 @@ def test_suspended_company_fails_before_stay_pricing_distance_geocoding_and_writ
     geocoding = _FakeGeocoding()
     writer = _FakeBookingWriter()
     freeze_mock = MagicMock(return_value=(1, 2, 15.0, {"x": 1}))
-    monkeypatch.setattr(
-        CreateBookingUseCase, "_compute_pricing_freeze", freeze_mock
-    )
+    monkeypatch.setattr(CreateBookingUseCase, "_compute_pricing_freeze", freeze_mock)
 
     uc = _build_uc(
         writer=writer,
@@ -555,9 +553,7 @@ def test_geocode_miss_effect_order_is_writer_async_geo_event_audit(
     import application.bookings.create_booking as mod
 
     calls: list[str] = []
-    monkeypatch.setattr(
-        mod, "publish_event", lambda _evt: calls.append("event")
-    )
+    monkeypatch.setattr(mod, "publish_event", lambda _evt: calls.append("event"))
     monkeypatch.setattr(mod, "resolve_pickup_admin", _admin_token)
     import services.billing.client_stay_resolver as stay_mod
 
@@ -589,9 +585,7 @@ def test_geocode_success_effect_order_is_writer_event_audit(
     import application.bookings.create_booking as mod
 
     calls: list[str] = []
-    monkeypatch.setattr(
-        mod, "publish_event", lambda _evt: calls.append("event")
-    )
+    monkeypatch.setattr(mod, "publish_event", lambda _evt: calls.append("event"))
     monkeypatch.setattr(mod, "resolve_pickup_admin", _admin_token)
     import services.billing.client_stay_resolver as stay_mod
 
@@ -681,9 +675,10 @@ def test_known_client_post_routes_delegate_to_shared_helper() -> None:
                     isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
                     and item.name == method_name
                 ):
-                    segment = ast.get_source_segment(
-                        path.read_text(encoding="utf-8"), item
-                    ) or ""
+                    segment = (
+                        ast.get_source_segment(path.read_text(encoding="utf-8"), item)
+                        or ""
+                    )
                     assert "execute_client_booking_creation" in segment, (
                         f"{rel} {class_name}.{method_name}"
                     )

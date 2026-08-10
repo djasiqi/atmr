@@ -931,7 +931,9 @@ class LocationService:
             if not db_session:
                 session.rollback()
             db_persisted = False
-            logger.warning("[LocationService] DB store failed (unexpected)", exc_info=True)
+            logger.warning(
+                "[LocationService] DB store failed (unexpected)", exc_info=True
+            )
         return (
             accept_status,
             accept_reason,

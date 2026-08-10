@@ -81,7 +81,9 @@ def _upsert_anomaly(
         existing.resolution_source = None
 
 
-def reconcile_control_plane(*, dry_run: bool = True, apply_projection: bool = True) -> dict[str, Any]:
+def reconcile_control_plane(
+    *, dry_run: bool = True, apply_projection: bool = True
+) -> dict[str, Any]:
     """Recalcule projections (si apply) et anomalies. dry_run = rollback final."""
     seed_control_plane_catalogs(commit=False)
     projector = get_projector()

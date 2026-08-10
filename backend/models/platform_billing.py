@@ -193,7 +193,9 @@ class PlatformSubscriptionPricingGrid(db.Model):
         String(64), nullable=False, server_default="default"
     )
     label: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="CHF")
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default="CHF"
+    )
     valid_from: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -375,9 +377,7 @@ class CompanyPlatformBillingConfig(db.Model):
     commission_cancellation_policy: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default="exclude"
     )
-    free_license_max_months: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )
+    free_license_max_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
     statement_dispute_days: Mapped[int | None] = mapped_column(
         Integer, nullable=True, server_default="10"
     )
@@ -439,9 +439,7 @@ class CompanyPlatformBillingConfig(db.Model):
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Conditions particulières imprimées dans l'annexe B (jamais confondues avec notes).
-    contract_special_conditions: Mapped[str | None] = mapped_column(
-        Text, nullable=True
-    )
+    contract_special_conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -533,9 +531,7 @@ class PlatformBillingStatementItem(db.Model):
     gross_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     eligibility_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     eligibility_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    source_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, nullable=True
-    )
+    source_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -561,12 +557,8 @@ class PlatformIssuedInvoice(db.Model):
                 "AND status NOT IN ('CANCELLED', 'CREDITED')"
             ),
         ),
-        UniqueConstraint(
-            "invoice_number", name="uq_platform_issued_invoice_number"
-        ),
-        UniqueConstraint(
-            "qr_reference", name="uq_platform_issued_invoice_qr_ref"
-        ),
+        UniqueConstraint("invoice_number", name="uq_platform_issued_invoice_number"),
+        UniqueConstraint("qr_reference", name="uq_platform_issued_invoice_qr_ref"),
         Index(
             "uq_platform_issued_credit_of",
             "credit_of_invoice_id",
@@ -658,9 +650,7 @@ class PlatformIssuedInvoice(db.Model):
     )
     pdf_storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     pdf_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    debtor_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, nullable=True
-    )
+    debtor_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     creditor_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
@@ -670,9 +660,7 @@ class PlatformIssuedInvoice(db.Model):
     replace_idempotency_key: Mapped[str | None] = mapped_column(
         String(64), nullable=True
     )
-    commercial_reference: Mapped[str | None] = mapped_column(
-        String(128), nullable=True
-    )
+    commercial_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     billing_config_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("company_platform_billing_config.id", ondelete="SET NULL"),
@@ -804,9 +792,7 @@ class PlatformInvoiceDueDateChange(db.Model):
     """Audit des changements d'échéance d'une facture légale plateforme."""
 
     __tablename__ = "platform_invoice_due_date_change"
-    __table_args__ = (
-        Index("ix_plat_due_change_invoice", "issued_invoice_id"),
-    )
+    __table_args__ = (Index("ix_plat_due_change_invoice", "issued_invoice_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     issued_invoice_id: Mapped[int] = mapped_column(
@@ -906,9 +892,7 @@ class PlatformPartnerAgreement(db.Model):
             postgresql_where=text("status IN ('draft', 'sent', 'signed')"),
         ),
         Index("ix_ppa_company_id", "company_id"),
-        CheckConstraint(
-            "revision_number >= 1", name="ck_ppa_revision_number_positive"
-        ),
+        CheckConstraint("revision_number >= 1", name="ck_ppa_revision_number_positive"),
         CheckConstraint(
             "status IN ('draft', 'sent', 'signed', 'void')",
             name="ck_ppa_status",
@@ -930,7 +914,9 @@ class PlatformPartnerAgreement(db.Model):
         String(16), nullable=False, server_default="draft"
     )
 
-    generated_storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    generated_storage_key: Mapped[str | None] = mapped_column(
+        String(512), nullable=True
+    )
     generated_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     generated_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     generated_content_type: Mapped[str | None] = mapped_column(
@@ -1065,9 +1051,7 @@ class PlatformDunningEvent(db.Model):
             "event_type",
             "policy_version",
             unique=True,
-            postgresql_where=text(
-                "invoice_id IS NOT NULL AND status <> 'cancelled'"
-            ),
+            postgresql_where=text("invoice_id IS NOT NULL AND status <> 'cancelled'"),
         ),
         Index(
             "uq_platform_dunning_event_case_type",
@@ -1128,9 +1112,7 @@ class PlatformInvoiceDunningHold(db.Model):
     """Hold de contestation / pause sur le solde exécutoire d'une facture."""
 
     __tablename__ = "platform_invoice_dunning_hold"
-    __table_args__ = (
-        Index("ix_platform_dunning_hold_invoice", "issued_invoice_id"),
-    )
+    __table_args__ = (Index("ix_platform_dunning_hold_invoice", "issued_invoice_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     issued_invoice_id: Mapped[int] = mapped_column(

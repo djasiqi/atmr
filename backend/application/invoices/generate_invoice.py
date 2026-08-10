@@ -267,7 +267,9 @@ class GenerateInvoiceUseCase:
             opportunity_billing_party_id: int | None = None
 
             if input_data.billing_opportunity_key:
-                parsed = parse_billing_opportunity_key(input_data.billing_opportunity_key)
+                parsed = parse_billing_opportunity_key(
+                    input_data.billing_opportunity_key
+                )
                 if parsed.billing_party_id is None or parsed.subject_id is None:
                     raise ValueError("billing_opportunity_key incomplet")
                 excluded = {
@@ -328,10 +330,7 @@ class GenerateInvoiceUseCase:
                 ip: InstitutionPatient | None = getattr(
                     sample, "institution_patient", None
                 )
-                if (
-                    ip is None
-                    and parsed.subject_type == "institution_patient"
-                ):
+                if ip is None and parsed.subject_type == "institution_patient":
                     ip = db.session.get(InstitutionPatient, parsed.subject_id)
 
                 display = (bp.display_name or "").strip()

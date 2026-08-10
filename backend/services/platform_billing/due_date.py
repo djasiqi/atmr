@@ -32,7 +32,10 @@ def update_issued_invoice_due_date(
     reason_clean = (reason or "").strip()
     if not reason_clean:
         raise ValueError("Motif de changement d'échéance obligatoire")
-    if getattr(inv, "document_type", None) == PlatformIssuedDocumentType.CREDIT_NOTE.value:
+    if (
+        getattr(inv, "document_type", None)
+        == PlatformIssuedDocumentType.CREDIT_NOTE.value
+    ):
         raise ValueError("Échéance non modifiable sur une note de crédit")
     if inv.status in ("CANCELLED", "CREDITED", "DRAFT"):
         raise ValueError("Échéance non modifiable pour ce statut")
@@ -42,7 +45,9 @@ def update_issued_invoice_due_date(
     if issued is not None:
         issued_aware = issued if issued.tzinfo else issued.replace(tzinfo=UTC)
         if new_due < issued_aware:
-            raise ValueError("L'échéance ne peut pas être antérieure à la date d'émission")
+            raise ValueError(
+                "L'échéance ne peut pas être antérieure à la date d'émission"
+            )
 
     old_due = inv.due_at
     old_checksum = inv.pdf_checksum

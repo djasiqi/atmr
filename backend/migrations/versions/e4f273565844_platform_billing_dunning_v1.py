@@ -55,9 +55,7 @@ def upgrade():
             "status IN ('open', 'partial', 'full', 'resolved')",
             name="ck_platform_dunning_case_status",
         ),
-        sa.ForeignKeyConstraint(
-            ["company_id"], ["company.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["trigger_invoice_id"],
             ["platform_issued_invoice.id"],
@@ -202,11 +200,15 @@ def upgrade():
     )
     op.add_column(
         "company",
-        sa.Column("platform_billing_state_reason_code", sa.String(length=64), nullable=True),
+        sa.Column(
+            "platform_billing_state_reason_code", sa.String(length=64), nullable=True
+        ),
     )
     op.add_column(
         "company",
-        sa.Column("platform_billing_state_since", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "platform_billing_state_since", sa.DateTime(timezone=True), nullable=True
+        ),
     )
     op.add_column(
         "company",
@@ -452,7 +454,9 @@ def downgrade():
         "ix_platform_issued_invoice_billing_config_id",
         table_name="platform_issued_invoice",
     )
-    op.drop_column("platform_issued_invoice", "dunning_automation_authorized_at_issuance")
+    op.drop_column(
+        "platform_issued_invoice", "dunning_automation_authorized_at_issuance"
+    )
     op.drop_column("platform_issued_invoice", "dunning_policy_snapshot")
     op.drop_column("platform_issued_invoice", "partner_agreement_id")
     op.drop_column("platform_issued_invoice", "billing_config_id")
@@ -489,15 +493,9 @@ def downgrade():
     ):
         op.drop_column("company_platform_billing_config", col)
 
-    op.drop_constraint(
-        "ck_company_billing_state_fields", "company", type_="check"
-    )
-    op.drop_constraint(
-        "ck_company_billing_state_source", "company", type_="check"
-    )
-    op.drop_constraint(
-        "ck_company_billing_access_state", "company", type_="check"
-    )
+    op.drop_constraint("ck_company_billing_state_fields", "company", type_="check")
+    op.drop_constraint("ck_company_billing_state_source", "company", type_="check")
+    op.drop_constraint("ck_company_billing_access_state", "company", type_="check")
     op.drop_constraint(
         "fk_company_dunning_paused_by_user", "company", type_="foreignkey"
     )
@@ -524,7 +522,9 @@ def downgrade():
         table_name="platform_dunning_event",
         postgresql_where=sa.text("invoice_id IS NULL"),
     )
-    op.drop_index("ix_platform_dunning_event_status", table_name="platform_dunning_event")
+    op.drop_index(
+        "ix_platform_dunning_event_status", table_name="platform_dunning_event"
+    )
     op.drop_index("ix_platform_dunning_event_case", table_name="platform_dunning_event")
     op.drop_table("platform_dunning_event")
     op.drop_index(

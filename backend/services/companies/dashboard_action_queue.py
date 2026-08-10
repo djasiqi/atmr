@@ -52,7 +52,11 @@ def delay_severity_for_minutes(
 
 
 def _booking_status_str(booking) -> str:
-    status = booking.status.value if hasattr(booking.status, "value") else str(booking.status)
+    status = (
+        booking.status.value
+        if hasattr(booking.status, "value")
+        else str(booking.status)
+    )
     return (status or "").lower()
 
 
@@ -78,7 +82,9 @@ def build_dashboard_action_queue(bookings, kpi):
         elif st in ("accepted",) and not getattr(b, "driver_id", None):
             kind = "unassigned"
             allowed = ["assign"]
-        elif st in _ACTIVE_DELAYABLE_STATUS_VALUES and getattr(b, "scheduled_time", None):
+        elif st in _ACTIVE_DELAYABLE_STATUS_VALUES and getattr(
+            b, "scheduled_time", None
+        ):
             delay_minutes = (now - b.scheduled_time).total_seconds() / 60.0
             if delay_minutes >= critical_delay_minutes:
                 kind = "critical_delay"
@@ -146,7 +152,9 @@ def _build_delay_summary(bookings, kpi):
     rows = []
     for b in bookings or []:
         st = _booking_status_str(b)
-        if st not in _ACTIVE_DELAYABLE_STATUS_VALUES or not getattr(b, "scheduled_time", None):
+        if st not in _ACTIVE_DELAYABLE_STATUS_VALUES or not getattr(
+            b, "scheduled_time", None
+        ):
             continue
         delay_minutes = (now - b.scheduled_time).total_seconds() / 60.0
         severity = delay_severity_for_minutes(
@@ -197,7 +205,9 @@ def _build_upcoming_bookings_light(bookings, _kpi, *, limit: int = 30):
     return upcoming[:limit]
 
 
-def serialize_dashboard_v2_extras(bookings, kpi, *, action_queue_limit: int | None = None):
+def serialize_dashboard_v2_extras(
+    bookings, kpi, *, action_queue_limit: int | None = None
+):
     import os
 
     limit = action_queue_limit
@@ -237,13 +247,17 @@ def _current_version(booking: Booking) -> int:
     return int(getattr(booking, "edit_version", None) or 1)
 
 
-def _idempotency_redis_key(company_id: int, action_id: str, idempotency_key: str) -> str:
+def _idempotency_redis_key(
+    company_id: int, action_id: str, idempotency_key: str
+) -> str:
     return f"{_IDEMPOTENCY_KEY_PREFIX}{company_id}:{action_id}:{idempotency_key}"
 
 
 def _payload_fingerprint(action: str, expected_version: Any) -> str:
     raw = json.dumps(
-        {"action": action, "expected_version": expected_version}, sort_keys=True, default=str
+        {"action": action, "expected_version": expected_version},
+        sort_keys=True,
+        default=str,
     )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
@@ -317,7 +331,9 @@ def _store_idempotent_result(
         _memory_store_set(redis_key, payload)
 
 
-def _apply_action(booking: Booking, kind: str, action: str) -> tuple[dict[str, Any], int]:
+def _apply_action(
+    booking: Booking, kind: str, action: str
+) -> tuple[dict[str, Any], int]:
     """Applique la transition métier — voir avertissement d'implémentation minimale
     en tête de module (seul `pending_decision` mute réellement l'état)."""
     from ext import db
@@ -370,7 +386,10 @@ def _apply_action(booking: Booking, kind: str, action: str) -> tuple[dict[str, A
         # Acquittement uniquement (aucune mutation métier) — la résolution réelle du
         # retard reste gérée par les flux dispatch existants (voir routes/dispatch).
     else:
-        return {"error": "unknown_action_kind", "message": "Type d'action inconnu."}, 400
+        return {
+            "error": "unknown_action_kind",
+            "message": "Type d'action inconnu.",
+        }, 400
 
     booking.edit_version = _current_version(booking) + 1
     booking.updated_at = datetime.now(UTC)
@@ -405,7 +424,10 @@ def execute_action(
     """
     if not idempotency_key:
         return (
-            {"error": "idempotency_key_required", "message": "idempotency_key est obligatoire."},
+            {
+                "error": "idempotency_key_required",
+                "message": "idempotency_key est obligatoire.",
+            },
             400,
         )
 
@@ -444,7 +466,10 @@ def execute_action(
             int(expected_version) if expected_version is not None else None
         )
     except (TypeError, ValueError):
-        return {"error": "invalid_expected_version", "message": "expected_version invalide."}, 400
+        return {
+            "error": "invalid_expected_version",
+            "message": "expected_version invalide.",
+        }, 400
     if expected_version_int is not None and expected_version_int != current_version:
         result, status_code = (
             {
@@ -454,7 +479,9 @@ def execute_action(
             },
             409,
         )
-        _store_idempotent_result(redis_client, redis_key, fingerprint, result, status_code)
+        _store_idempotent_result(
+            redis_client, redis_key, fingerprint, result, status_code
+        )
         return result, status_code
 
     result, status_code = _apply_action(booking, kind, action)

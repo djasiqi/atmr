@@ -378,7 +378,9 @@ def seed_control_plane_catalogs(*, commit: bool = True) -> dict[str, int]:
     """Insère ou met à jour catalogues / templates / permissions (idempotent)."""
     services_upserted = 0
     for row in SERVICE_SEED:
-        existing = ServiceCatalog.query.filter_by(service_key=row["service_key"]).first()
+        existing = ServiceCatalog.query.filter_by(
+            service_key=row["service_key"]
+        ).first()
         if existing is None:
             existing = ServiceCatalog(service_key=row["service_key"])
             db.session.add(existing)

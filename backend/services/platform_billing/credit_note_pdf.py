@@ -37,9 +37,7 @@ def build_and_store_credit_note_pdf(
         fontName="Helvetica-Bold",
         spaceAfter=10,
     )
-    normal = ParagraphStyle(
-        "CnNormal", parent=styles["Normal"], fontSize=9, leading=12
-    )
+    normal = ParagraphStyle("CnNormal", parent=styles["Normal"], fontSize=9, leading=12)
     debtor = credit.debtor_snapshot or {}
     creditor = credit.creditor_snapshot or {}
     story = [

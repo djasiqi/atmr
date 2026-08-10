@@ -136,11 +136,14 @@ def test_billing_adjustment_allows_institution_portal(_mock_line):
     b.billing_locked_at = None
     b.invoice_line_id = None
     b._resolve_source_transport_request = MagicMock(return_value=None)
-    with patch(
-        "application.companies.reservations.billing_adjustment._propagate_payer_to_return_legs",
-        return_value=[],
-    ), patch(
-        "application.companies.reservations.billing_adjustment._apply_billing_party_resolution",
+    with (
+        patch(
+            "application.companies.reservations.billing_adjustment._propagate_payer_to_return_legs",
+            return_value=[],
+        ),
+        patch(
+            "application.companies.reservations.billing_adjustment._apply_billing_party_resolution",
+        ),
     ):
         r = uc.execute(
             b,
@@ -181,11 +184,14 @@ def test_billing_adjustment_outbound_propagates_return(_mock_line):
     outbound.invoice_line_id = None
     outbound._resolve_source_transport_request = MagicMock(return_value=None)
 
-    with patch(
-        "application.companies.reservations.billing_adjustment._propagate_payer_to_return_legs",
-        return_value=[101],
-    ) as prop, patch(
-        "application.companies.reservations.billing_adjustment._apply_billing_party_resolution",
+    with (
+        patch(
+            "application.companies.reservations.billing_adjustment._propagate_payer_to_return_legs",
+            return_value=[101],
+        ) as prop,
+        patch(
+            "application.companies.reservations.billing_adjustment._apply_billing_party_resolution",
+        ),
     ):
         r = uc.execute(
             outbound,
@@ -226,11 +232,14 @@ def test_billing_adjustment_return_does_not_propagate(_mock_line):
     ret.invoice_line_id = None
     ret._resolve_source_transport_request = MagicMock(return_value=None)
 
-    with patch(
-        "application.companies.reservations.billing_adjustment._propagate_payer_to_return_legs",
-        return_value=[],
-    ) as prop, patch(
-        "application.companies.reservations.billing_adjustment._apply_billing_party_resolution",
+    with (
+        patch(
+            "application.companies.reservations.billing_adjustment._propagate_payer_to_return_legs",
+            return_value=[],
+        ) as prop,
+        patch(
+            "application.companies.reservations.billing_adjustment._apply_billing_party_resolution",
+        ),
     ):
         r = uc.execute(
             ret,

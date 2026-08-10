@@ -188,9 +188,7 @@ def test_particular_mentions_progressive_suspension():
         dpa_sha256=canon["dpa"].sha256,
     )
     pdf = build_particular_pdf_bytes(content)
-    text = "\n".join(
-        (p.extract_text() or "") for p in PdfReader(BytesIO(pdf)).pages
-    )
+    text = "\n".join((p.extract_text() or "") for p in PdfReader(BytesIO(pdf)).pages)
     assert PACK_SCHEMA_VERSION == "lirie-partner-pack-v1"
     assert PARTICULAR_VERSION in text
     assert "suspension" in text.lower()

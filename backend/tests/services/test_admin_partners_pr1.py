@@ -120,7 +120,9 @@ def test_delete_user_blocked_when_not_testing(client, admin_headers, db_session,
             headers=admin_headers,
         )
         assert response.status_code == 409
-        assert response.get_json().get("error") == "physical_user_deletion_requires_review"
+        assert (
+            response.get_json().get("error") == "physical_user_deletion_requires_review"
+        )
     finally:
         app.config["TESTING"] = previous
 

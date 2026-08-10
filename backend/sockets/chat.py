@@ -531,7 +531,6 @@ def _extract_token(auth) -> str | None:
     return token_result
 
 
-
 def _emit_company_room_subscribed(company_id: int, room: str) -> None:
     """ACK explicite apres join room entreprise (dashboard reliability PR2/PR3)."""
     from services.realtime.event_sequence import get_snapshot_cursor_status
@@ -546,6 +545,7 @@ def _emit_company_room_subscribed(company_id: int, room: str) -> None:
             "health": {"realtime_sequence": health},
         },
     )
+
 
 def init_chat_socket(socketio: SocketIO):
     logger.info("🔧 [INIT] Initialisation des handlers Socket.IO chat")
@@ -3301,8 +3301,6 @@ def init_chat_socket(socketio: SocketIO):
                 "error": "Internal error processing batch",
                 "retry": True,  # Indique au client de retry
             }
-
-
 
     @socketio.on("join_company")
     def handle_join_company(data=None):  # noqa: ARG001

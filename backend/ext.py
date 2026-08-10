@@ -828,7 +828,9 @@ def _ensure_demo_shadow_user(user_public_id: str | None, token_role: str | None)
                 db.session.add(company)
                 db.session.flush()
                 try:
-                    from services.control_plane.legacy_hooks import project_company_tenant
+                    from services.control_plane.legacy_hooks import (
+                        project_company_tenant,
+                    )
 
                     project_company_tenant(company)
                 except Exception:

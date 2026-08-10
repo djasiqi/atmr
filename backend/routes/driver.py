@@ -1674,9 +1674,7 @@ class DriverLocation(Resource):
                     "retryable": False,
                 }, 401
         except Exception as session_guard_exc:
-            logger.warning(
-                "mobile session guard fail-closed: %s", session_guard_exc
-            )
+            logger.warning("mobile session guard fail-closed: %s", session_guard_exc)
             return {
                 "error": "session_validation_unavailable",
                 "error_code": "session_validation_unavailable",
@@ -1883,10 +1881,12 @@ class DriverLocation(Resource):
                                         ensure_http_tracking_session_fields,
                                     )
 
-                                    ingest_payload = ensure_http_tracking_session_fields(
-                                        driver_id=int(driver.id),
-                                        company_id=company_id_value,
-                                        payload=ingest_payload,
+                                    ingest_payload = (
+                                        ensure_http_tracking_session_fields(
+                                            driver_id=int(driver.id),
+                                            company_id=company_id_value,
+                                            payload=ingest_payload,
+                                        )
                                     )
                                 ingest_result = enqueue_tracking_event(
                                     driver_id=driver.id,
@@ -1921,7 +1921,9 @@ class DriverLocation(Resource):
                                         "tracking_session_id": ingest_payload.get(
                                             "tracking_session_id"
                                         ),
-                                        "sequence_id": ingest_payload.get("sequence_id"),
+                                        "sequence_id": ingest_payload.get(
+                                            "sequence_id"
+                                        ),
                                     }, 202
 
                             from application.drivers.update_driver_location import (
@@ -2244,7 +2246,9 @@ class DriverLocation(Resource):
                                     else None
                                 )
                                 sequence_id_out = (
-                                    p.get("sequence_id") if isinstance(p, dict) else None
+                                    p.get("sequence_id")
+                                    if isinstance(p, dict)
+                                    else None
                                 )
                                 persisted_at = datetime.now(UTC).isoformat()
                                 # P0.1 : persisted_sync uniquement si PG a réellement commit
@@ -4280,9 +4284,7 @@ class TestPushNotification(Resource):
                 redis_client.incr(rl_key)
                 redis_client.expire(rl_key, 60)
 
-            query = DeviceToken.query.filter_by(
-                driver_id=driver.id, is_active=True
-            )
+            query = DeviceToken.query.filter_by(driver_id=driver.id, is_active=True)
             if provider_filter:
                 query = query.filter_by(provider=provider_filter)
             if requested_token_id is not None:
@@ -4452,14 +4454,19 @@ class PushNotificationAck(Resource):
             )
 
             ack_kind = str(body.get("ack_kind") or "received").lower()
-            status = MOBILE_OPENED if ack_kind in ("opened", "open", "tap") else MOBILE_RECEIVED
+            status = (
+                MOBILE_OPENED
+                if ack_kind in ("opened", "open", "tap")
+                else MOBILE_RECEIVED
+            )
             log_push_attempt_event(
                 delivery_status=status,
                 driver_id=getattr(driver, "id", None),
                 notification_type=notification_type,
                 correlation_id=correlation_id,
                 notification_id=str(notification_id) if notification_id else None,
-                deduplication_key=body.get("deduplication_key") or body.get("dedupe_key"),
+                deduplication_key=body.get("deduplication_key")
+                or body.get("dedupe_key"),
             )
         except Exception:
             logger.exception("[push_ack] failed to log delivery_status")

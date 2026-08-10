@@ -47,9 +47,7 @@ def upgrade():
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["admin_user_id"], ["user.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["admin_user_id"], ["user.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
             ["issued_invoice_id"],
             ["platform_issued_invoice.id"],
@@ -245,9 +243,7 @@ def upgrade():
         "platform_dunning_event",
         ["invoice_id", "event_type", "policy_version"],
         unique=True,
-        postgresql_where=sa.text(
-            "invoice_id IS NOT NULL AND status <> 'cancelled'"
-        ),
+        postgresql_where=sa.text("invoice_id IS NOT NULL AND status <> 'cancelled'"),
     )
     op.drop_index(
         "uq_platform_dunning_event_case_type",
@@ -258,9 +254,7 @@ def upgrade():
         "platform_dunning_event",
         ["dunning_case_id", "event_type"],
         unique=True,
-        postgresql_where=sa.text(
-            "invoice_id IS NULL AND status <> 'cancelled'"
-        ),
+        postgresql_where=sa.text("invoice_id IS NULL AND status <> 'cancelled'"),
     )
 
 

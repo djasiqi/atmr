@@ -72,7 +72,10 @@ def compute_effective_access(user_id: int) -> dict[str, Any]:
     if getattr(user, "archived_at", None) is not None:
         blocking.append({"code": "ACCOUNT_ARCHIVED"})
         subject_state = "blocked"
-    if getattr(user, "disabled_at", None) is not None or user.account_status == "disabled":
+    if (
+        getattr(user, "disabled_at", None) is not None
+        or user.account_status == "disabled"
+    ):
         blocking.append({"code": "ACCOUNT_DISABLED"})
         subject_state = "blocked"
     if user.account_status in ("invited", "pending_activation"):

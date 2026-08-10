@@ -7,10 +7,7 @@ from pathlib import Path
 
 _LOGO_CANDIDATES = (
     Path(__file__).resolve().parents[2] / "assets" / "lirie" / "logo-lirie.png",
-    Path(__file__).resolve().parents[3]
-    / "frontend"
-    / "public"
-    / "logo-lirie.png",
+    Path(__file__).resolve().parents[3] / "frontend" / "public" / "logo-lirie.png",
 )
 
 
@@ -33,11 +30,15 @@ def resolve_lirie_logo_public_url() -> str | None:
     if explicit.startswith(("http://", "https://")):
         return explicit.rstrip("/")
     frontend = (
-        os.getenv("PUBLIC_FRONTEND_URL")
-        or os.getenv("FRONTEND_URL")
-        or os.getenv("PUBLIC_APP_URL")
-        or ""
-    ).strip().rstrip("/")
+        (
+            os.getenv("PUBLIC_FRONTEND_URL")
+            or os.getenv("FRONTEND_URL")
+            or os.getenv("PUBLIC_APP_URL")
+            or ""
+        )
+        .strip()
+        .rstrip("/")
+    )
     if frontend.startswith(("http://", "https://")) and "localhost" not in frontend:
         return f"{frontend}/logo-lirie.png"
     # Prod publique connue (emails consultés hors machine locale)

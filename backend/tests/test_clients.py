@@ -261,9 +261,7 @@ def test_company_clients_sort_whitelist(client, auth_headers, db, sample_company
     assert response.status_code in [200, 404]
 
 
-def test_company_clients_export_streams_csv(
-    client, auth_headers, db, sample_company
-):
+def test_company_clients_export_streams_csv(client, auth_headers, db, sample_company):
     """GET /companies/me/clients/export renvoie un CSV streamé, séparé de la liste UI."""
     from ext import bcrypt
     from models import ClientType, ManagementMode
@@ -289,9 +287,7 @@ def test_company_clients_export_streams_csv(
     db.session.add(client_obj)
     db.session.flush()
 
-    response = client.get(
-        "/api/companies/me/clients/export", headers=auth_headers
-    )
+    response = client.get("/api/companies/me/clients/export", headers=auth_headers)
     assert response.status_code in [200, 404]
     if response.status_code == 200:
         assert response.mimetype == "text/csv"

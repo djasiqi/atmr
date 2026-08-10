@@ -468,8 +468,9 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 pid = getattr(b, "parent_booking_id", None)
                 if pid is not None and int(pid) in by_id:
                     parent = by_id[int(pid)]
-                    if parent.invoice_line_id is not None and booking_has_blocking_invoice_line(
-                        parent
+                    if (
+                        parent.invoice_line_id is not None
+                        and booking_has_blocking_invoice_line(parent)
                     ):
                         continue
                 # enfants déjà facturés bloquent le parent ouvert
@@ -529,9 +530,10 @@ class GenerateClinicMonthlyInvoiceUseCase:
                         pid = getattr(b, "parent_booking_id", None)
                         if pid is not None:
                             wanted.add(int(pid))
-                    if getattr(b, "parent_booking_id", None) is not None and int(
-                        b.parent_booking_id
-                    ) in wanted:
+                    if (
+                        getattr(b, "parent_booking_id", None) is not None
+                        and int(b.parent_booking_id) in wanted
+                    ):
                         wanted.add(int(b.id))
                 period_anchor_ids &= wanted
                 # inclure pairs hors période des sélectionnés
@@ -539,15 +541,12 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     if wid in by_id:
                         period_anchor_ids.add(wid)
 
-            scope_bookings = [
-                by_id[i] for i in sorted(period_anchor_ids) if i in by_id
-            ]
+            scope_bookings = [by_id[i] for i in sorted(period_anchor_ids) if i in by_id]
             # n'émettre que les bookings encore ouverts
             scope_bookings = [
                 b
                 for b in scope_bookings
-                if b.invoice_line_id is None
-                or not booking_has_blocking_invoice_line(b)
+                if b.invoice_line_id is None or not booking_has_blocking_invoice_line(b)
             ]
             scope_bookings = [b for b in scope_bookings if b.invoice_line_id is None]
 
@@ -588,10 +587,7 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 units = still_open_units
 
             reservations = [
-                by_id[bid]
-                for u in units
-                for bid in u.booking_ids
-                if bid in by_id
+                by_id[bid] for u in units for bid in u.booking_ids if bid in by_id
             ]
 
             # ✅ Pré-vérification : livraisons matériel sans description
@@ -989,8 +985,7 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     ordered = sorted(
                         segments,
                         key=lambda b: (
-                            b.scheduled_time
-                            or datetime.min.replace(tzinfo=UTC),
+                            b.scheduled_time or datetime.min.replace(tzinfo=UTC),
                             int(b.id),
                         ),
                     )

@@ -468,9 +468,7 @@ def promote_guest_booking_after_saferpay(
     booking.created_via = BookingCreatedVia.PUBLIC_GUEST
     from services.platform_billing.billing_origin import apply_origin_on_booking
 
-    apply_origin_on_booking(
-        booking, created_via=BookingCreatedVia.PUBLIC_GUEST
-    )
+    apply_origin_on_booking(booking, created_via=BookingCreatedVia.PUBLIC_GUEST)
     booking.user_id = None
     booking.client_id = None
     booking.company_id = None

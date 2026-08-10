@@ -25,7 +25,9 @@ logger = logging.getLogger(__name__)
 
 # Dual-window (plan P0 DEPLOY-A)
 _SHORT_LIMIT = max(1, int(os.getenv("HTTP_DRIVER_LOCATION_SHORT_LIMIT", "30")))
-_SHORT_WINDOW_SEC = max(1, int(os.getenv("HTTP_DRIVER_LOCATION_SHORT_WINDOW_SEC", "10")))
+_SHORT_WINDOW_SEC = max(
+    1, int(os.getenv("HTTP_DRIVER_LOCATION_SHORT_WINDOW_SEC", "10"))
+)
 _LONG_LIMIT = max(1, int(os.getenv("HTTP_DRIVER_LOCATION_LONG_LIMIT", "120")))
 _LONG_WINDOW_SEC = max(1, int(os.getenv("HTTP_DRIVER_LOCATION_LONG_WINDOW_SEC", "60")))
 # Compat anciens noms d'env → fenêtre longue si fournis

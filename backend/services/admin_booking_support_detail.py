@@ -89,7 +89,9 @@ def _age_seconds(dt: datetime | None, *, now: datetime | None = None) -> int | N
     return max(0, int((now_aware - aware).total_seconds()))
 
 
-def _actor_ref(*, id_: int | None = None, label: str | None = None) -> dict[str, Any] | None:
+def _actor_ref(
+    *, id_: int | None = None, label: str | None = None
+) -> dict[str, Any] | None:
     if id_ is None and not (label or "").strip():
         return None
     return {"id": id_, "label": (label or "").strip() or None}
@@ -148,9 +150,7 @@ def _sanitize_details(
         if allowed_keys is not None and key not in allowed_keys:
             continue
         if isinstance(v, dict):
-            nested = _sanitize_details(
-                v, allowed_keys=None, depth=depth + 1
-            )
+            nested = _sanitize_details(v, allowed_keys=None, depth=depth + 1)
             if nested:
                 out[key] = nested
         elif isinstance(v, (list, tuple)):

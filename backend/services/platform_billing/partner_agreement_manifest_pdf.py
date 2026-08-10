@@ -20,12 +20,7 @@ LIRIE_GREEN = colors.HexColor("#00796B")
 
 
 def _esc(text: str) -> str:
-    return (
-        (text or "")
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+    return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def build_delivery_manifest_pdf_bytes(

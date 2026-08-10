@@ -449,6 +449,7 @@ class AdminPlatformBookingsExport(Resource):
 @admin_ns.route("/bookings/<int:booking_id>")
 class AdminPlatformBookingDetail(Resource):
     """GET /admin/bookings/:id — détail + timeline."""
+
     @jwt_required()
     @role_required(UserRole.admin)
     @ip_whitelist_required()
@@ -478,8 +479,7 @@ def _enrich_users_admin_payload(users: list[User]) -> list[dict[str, Any]]:
     company_user_ids = [
         u.id
         for u in users
-        if normalized_role_value(getattr(u, "role", None))
-        == UserRole.COMPANY.value
+        if normalized_role_value(getattr(u, "role", None)) == UserRole.COMPANY.value
     ]
     driver_user_ids = [
         u.id
@@ -496,11 +496,15 @@ def _enrich_users_admin_payload(users: list[User]) -> list[dict[str, Any]]:
 
     drivers_by_user_id: dict[int, Driver] = {}
     if driver_user_ids:
-        for driver in db.session.scalars(
-            select(Driver)
-            .options(joinedload(Driver.company))
-            .where(Driver.user_id.in_(driver_user_ids))
-        ).unique().all():
+        for driver in (
+            db.session.scalars(
+                select(Driver)
+                .options(joinedload(Driver.company))
+                .where(Driver.user_id.in_(driver_user_ids))
+            )
+            .unique()
+            .all()
+        ):
             if driver.user_id is not None:
                 drivers_by_user_id[int(driver.user_id)] = driver
 
@@ -586,7 +590,11 @@ class AllUsers(Resource):
             # filtres explicites, conserver l'ancien comportement (retour complet).
             # Sinon, forcer la pagination serveur.
             has_filters = bool(
-                search or role or company_id is not None or has_sort_args or has_page_args
+                search
+                or role
+                or company_id is not None
+                or has_sort_args
+                or has_page_args
             )
             if not paginate and has_filters:
                 paginate = True
@@ -1082,7 +1090,10 @@ class AdminCompanyApproval(Resource):
         from routes.admin_platform_billing import _admin_user_id_from_jwt
         from schemas.admin_schemas import AdminCompanyApprovalSchema
         from schemas.validation_utils import handle_validation_error, validate_request
-        from services.admin_company_ops import AdminCompanyOpsError, set_company_approval
+        from services.admin_company_ops import (
+            AdminCompanyOpsError,
+            set_company_approval,
+        )
 
         try:
             data = request.get_json(silent=True) or {}
@@ -1128,7 +1139,10 @@ class AdminCompanyDispatchStatus(Resource):
         from routes.admin_platform_billing import _admin_user_id_from_jwt
         from schemas.admin_schemas import AdminCompanyDispatchSchema
         from schemas.validation_utils import handle_validation_error, validate_request
-        from services.admin_company_ops import AdminCompanyOpsError, set_company_dispatch
+        from services.admin_company_ops import (
+            AdminCompanyOpsError,
+            set_company_dispatch,
+        )
 
         try:
             data = request.get_json(silent=True) or {}
@@ -2537,9 +2551,9 @@ class AdminControlPlaneAnomalies(Resource):
                 entity_type=(request.args.get("entity_type") or "").strip() or None,
                 severity=(request.args.get("severity") or "").strip() or None,
                 code=(request.args.get("code") or "").strip() or None,
-                unresolved_only=str(
-                    request.args.get("unresolved_only", "true")
-                ).strip().lower()
+                unresolved_only=str(request.args.get("unresolved_only", "true"))
+                .strip()
+                .lower()
                 in {"1", "true", "yes"},
             )
             return payload, 200

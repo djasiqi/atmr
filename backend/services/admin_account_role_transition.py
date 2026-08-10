@@ -13,7 +13,11 @@ from sqlalchemy import func, select
 
 from ext import db
 from models.company import Company
-from models.control_plane import OrganizationMembership, PlatformOrganization, RoleTemplate
+from models.control_plane import (
+    OrganizationMembership,
+    PlatformOrganization,
+    RoleTemplate,
+)
 from models.driver import Driver
 from models.enums import InstitutionRole, UserRole
 from models.institution import Institution
@@ -105,7 +109,9 @@ class RoleTransitionResult:
             "reauthentication_required": self.reauthentication_required,
             "transition_id": self.transition_id,
             "noop": self.noop,
-            "user": self.user.serialize if hasattr(self.user, "serialize") else {"id": self.user.id},
+            "user": self.user.serialize
+            if hasattr(self.user, "serialize")
+            else {"id": self.user.id},
         }
 
 
@@ -130,7 +136,9 @@ def _driver_for_user(user: User) -> Driver | None:
 
 
 def _owned_companies(user_id: int) -> list[Company]:
-    return list(db.session.scalars(select(Company).where(Company.user_id == user_id)).all())
+    return list(
+        db.session.scalars(select(Company).where(Company.user_id == user_id)).all()
+    )
 
 
 def _transport_tenants_owned(user_id: int) -> list[Company]:
@@ -165,9 +173,10 @@ def _is_active_company_owner(user: User) -> bool:
     if _has_active_company_owner_membership(int(user.id)):
         return True
     # Owner legacy d'un transport tenant non encore projeté
-    return len(_transport_tenants_owned(int(user.id))) > 0 and normalized_role_value(
-        user.role
-    ) == "COMPANY"
+    return (
+        len(_transport_tenants_owned(int(user.id))) > 0
+        and normalized_role_value(user.role) == "COMPANY"
+    )
 
 
 def _resolve_company_for_driver(company_id: int | None) -> Company:
@@ -201,9 +210,7 @@ def _resolve_company_for_driver(company_id: int | None) -> Company:
     return company
 
 
-def _resolve_target_company_owner(
-    user: User, company_id: int | None
-) -> Company:
+def _resolve_target_company_owner(user: User, company_id: int | None) -> Company:
     tenants = _transport_tenants_owned(int(user.id))
     if company_id is not None:
         company = db.session.get(Company, company_id)
@@ -265,7 +272,9 @@ def _assert_expected_context(
             error="concurrent_role_mismatch",
             details={"expected": exp_role, "actual": ctx["role"]},
         )
-    if expected_company_id is not None and ctx["company_id"] != int(expected_company_id):
+    if expected_company_id is not None and ctx["company_id"] != int(
+        expected_company_id
+    ):
         raise RoleTransitionError(
             "L'entreprise chauffeur actuelle a changé.",
             status_code=409,
@@ -279,9 +288,10 @@ def _assert_expected_context(
             status_code=409,
             error="concurrent_institution_mismatch",
         )
-    if expected_institution_role is not None and (
-        ctx["institution_role"] or ""
-    ) != expected_institution_role:
+    if (
+        expected_institution_role is not None
+        and (ctx["institution_role"] or "") != expected_institution_role
+    ):
         raise RoleTransitionError(
             "Le rôle institution actuel a changé.",
             status_code=409,
@@ -321,7 +331,9 @@ def _future_bookings_warning(driver: Driver | None) -> str | None:
         if count:
             return f"{int(count)} course(s) assignée(s)/en attente potentiellement impactée(s)."
     except Exception:
-        logger.debug("Impossible de compter les courses futures pour preview", exc_info=True)
+        logger.debug(
+            "Impossible de compter les courses futures pour preview", exc_info=True
+        )
     return None
 
 
@@ -343,7 +355,9 @@ class AdminAccountRoleTransitionService:
     ) -> RoleTransitionPreview:
         user = db.session.get(User, user_id)
         if user is None:
-            raise RoleTransitionError("Compte introuvable.", status_code=404, error="user_not_found")
+            raise RoleTransitionError(
+                "Compte introuvable.", status_code=404, error="user_not_found"
+            )
 
         if expected_current_role:
             _assert_expected_context(
@@ -399,7 +413,9 @@ class AdminAccountRoleTransitionService:
             return preview
 
         preview.changes.append(f"Rôle {old_ctx['role']} → {new_role}")
-        preview.preserved_data.append("Historique et données liées conservés (pas de suppression physique)")
+        preview.preserved_data.append(
+            "Historique et données liées conservés (pas de suppression physique)"
+        )
         preview.changes.append("Révocation de toutes les sessions")
 
         if new_role == "DRIVER":
@@ -437,7 +453,9 @@ class AdminAccountRoleTransitionService:
 
         if new_role == "ADMIN":
             preview.changes.append("Promotion administrateur plateforme")
-            preview.warnings.append("Action sensible : dual capacité manage+security requise")
+            preview.warnings.append(
+                "Action sensible : dual capacité manage+security requise"
+            )
 
         return preview
 
@@ -472,7 +490,9 @@ class AdminAccountRoleTransitionService:
             select(User).where(User.id == user_id).with_for_update()
         ).scalar_one_or_none()
         if user is None:
-            raise RoleTransitionError("Compte introuvable.", status_code=404, error="user_not_found")
+            raise RoleTransitionError(
+                "Compte introuvable.", status_code=404, error="user_not_found"
+            )
 
         _assert_expected_context(
             user,
@@ -610,7 +630,9 @@ class AdminAccountRoleTransitionService:
         if normalized_role_value(new_role) == "DRIVER":
             return company_id is None or ctx["company_id"] == int(company_id)
         if normalized_role_value(new_role) == "INSTITUTION":
-            same_inst = institution_id is None or ctx["institution_id"] == int(institution_id)
+            same_inst = institution_id is None or ctx["institution_id"] == int(
+                institution_id
+            )
             same_irole = (
                 institution_role is None
                 or (ctx["institution_role"] or "") == institution_role

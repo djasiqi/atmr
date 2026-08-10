@@ -347,9 +347,9 @@ class CompanyBookingBillingAdjustmentUseCase:
 
         # Propagation A/R et re-résolution BP uniquement si le destinataire change réellement
         # (le formulaire envoie toujours billed_to_type même pour un simple changement de montant).
-        payer_changed = target_btype != old_type_str or target_bcomp != old[
-            "billed_to_company_id"
-        ]
+        payer_changed = (
+            target_btype != old_type_str or target_bcomp != old["billed_to_company_id"]
+        )
 
         booking.billed_to_type = target_btype
         booking.billed_to_company_id = target_bcomp

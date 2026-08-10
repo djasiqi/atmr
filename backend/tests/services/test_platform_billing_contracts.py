@@ -64,7 +64,9 @@ def test_month_start_zurich_january_winter():
 
 
 def test_resolve_effective_year_month_january_2027():
-    from services.platform_billing.contracts import resolve_effective_instant_from_payload
+    from services.platform_billing.contracts import (
+        resolve_effective_instant_from_payload,
+    )
 
     dt = resolve_effective_instant_from_payload(
         {"effective_year": 2027, "effective_month": 1},
@@ -76,7 +78,9 @@ def test_resolve_effective_year_month_january_2027():
 
 
 def test_resolve_effective_conflict_raises():
-    from services.platform_billing.contracts import resolve_effective_instant_from_payload
+    from services.platform_billing.contracts import (
+        resolve_effective_instant_from_payload,
+    )
     from services.platform_billing.errors import BillingInvariantError
 
     with pytest.raises(BillingInvariantError) as ei:
@@ -98,9 +102,7 @@ def test_create_contract_defaults_inactive_and_requires_products():
     from services.platform_billing.errors import BillingInvariantError
 
     with (
-        patch(
-            "services.platform_billing.contracts.supersede_overlapping_contracts"
-        ),
+        patch("services.platform_billing.contracts.supersede_overlapping_contracts"),
         patch("services.platform_billing.contracts.assert_no_overlap"),
         patch("services.platform_billing.contracts.db.session") as session,
         pytest.raises(BillingInvariantError) as ei,
@@ -126,9 +128,7 @@ def test_create_contract_incomplete_payload_stays_inactive():
         captured["cfg"] = obj
 
     with (
-        patch(
-            "services.platform_billing.contracts.supersede_overlapping_contracts"
-        ),
+        patch("services.platform_billing.contracts.supersede_overlapping_contracts"),
         patch("services.platform_billing.contracts.assert_no_overlap"),
         patch("services.platform_billing.contracts.db.session") as session,
     ):
@@ -181,9 +181,7 @@ def test_effective_config_for_period_picks_matching_window():
         cfg_new,
         cfg_old,
     ]
-    with patch(
-        "services.platform_billing.contracts.CompanyPlatformBillingConfig"
-    ) as M:
+    with patch("services.platform_billing.contracts.CompanyPlatformBillingConfig") as M:
         M.query = mock_query
         # July 1 Zurich is still before cfg_old.effective_to if effective_to is July 1 UTC
         # period_start for July is June 30 22:00 UTC — contained in cfg_old [Jan1, Jul1)

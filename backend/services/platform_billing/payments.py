@@ -154,11 +154,9 @@ def record_payment(
 
     key = (idempotency_key or "").strip() or None
     if key:
-        existing = (
-            PlatformInvoicePayment.query.filter_by(
-                issued_invoice_id=inv.id, idempotency_key=key
-            ).first()
-        )
+        existing = PlatformInvoicePayment.query.filter_by(
+            issued_invoice_id=inv.id, idempotency_key=key
+        ).first()
         if existing is not None:
             db.session.refresh(inv)
             return inv
@@ -293,8 +291,7 @@ def _create_credit_note_no_commit(
     paid = money_round_chf(Decimal(str(source.amount_paid or 0)))
     if paid > 0:
         raise ValueError(
-            "Avoir interdit dès qu'un paiement existe "
-            "(remboursements hors périmètre)"
+            "Avoir interdit dès qu'un paiement existe (remboursements hors périmètre)"
         )
     existing_cn = PlatformIssuedInvoice.query.filter_by(
         credit_of_invoice_id=source.id
@@ -372,8 +369,7 @@ def refresh_overdue_statuses(*, now: datetime | None = None) -> int:
     """Passe en OVERDUE les factures INVOICE envoyées échues avec solde restant."""
     now = now or datetime.now(UTC)
     rows = PlatformIssuedInvoice.query.filter(
-        PlatformIssuedInvoice.document_type
-        == PlatformIssuedDocumentType.INVOICE.value,
+        PlatformIssuedInvoice.document_type == PlatformIssuedDocumentType.INVOICE.value,
         PlatformIssuedInvoice.status.in_(
             [
                 PlatformIssuedInvoiceStatus.SENT.value,

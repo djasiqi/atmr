@@ -101,6 +101,7 @@ def _inc_ignored_missing_billing_party_metric(count: int = 1) -> None:
             exc_info=True,
         )
 
+
 def _period_bounds(period_year: int, period_month: int) -> tuple[datetime, datetime]:
     start_date = datetime(period_year, period_month, 1)
     if period_month == CALENDAR_MONTHS:
@@ -125,7 +126,9 @@ def _client_display_name(client: Client) -> str:
     return f"Client #{client.id}"
 
 
-def _institution_patient_display(patient: InstitutionPatient | None, fallback: str) -> str:
+def _institution_patient_display(
+    patient: InstitutionPatient | None, fallback: str
+) -> str:
     if patient is None:
         return fallback
     ln = (getattr(patient, "last_name", None) or "").strip()
@@ -231,7 +234,11 @@ def parse_billing_opportunity_key(key: str) -> ParsedBillingOpportunityKey:
         except (TypeError, ValueError):
             subject_id = None
 
-    if subject_type not in ("institution_patient", "client", "legacy_institution_booking"):
+    if subject_type not in (
+        "institution_patient",
+        "client",
+        "legacy_institution_booking",
+    ):
         raise ValueError(
             "billing_opportunity_key invalide "
             "(attendu institution_patient:{id}|billing_party:{id} "
@@ -302,9 +309,7 @@ def resolve_recipient_status(
 ) -> RecipientStatus:
     """Alias public pour generate_invoice (adresse destinataire)."""
     _ = display_name
-    return _recipient_status_for_party(
-        billing_party, patient=institution_patient
-    )
+    return _recipient_status_for_party(billing_party, patient=institution_patient)
 
 
 def build_billing_subject_snapshot(
@@ -355,8 +360,7 @@ def build_recipient_snapshot(
         "billing_address": addr,
         "contact_email": billing_party.contact_email,
         "contact_phone": getattr(billing_party, "contact_phone", None),
-        "type": getattr(billing_party.type, "value", None)
-        or str(billing_party.type),
+        "type": getattr(billing_party.type, "value", None) or str(billing_party.type),
         "recipient_status": recipient_status,
     }
 
@@ -531,10 +535,9 @@ def list_billing_opportunities(
         patient: InstitutionPatient | None = None
         if subj.subject_type == "institution_patient" and subj.subject_id is not None:
             if subj.subject_id not in ip_cache:
-                ip_cache[subj.subject_id] = (
-                    getattr(sample, "institution_patient", None)
-                    or db.session.get(InstitutionPatient, subj.subject_id)
-                )
+                ip_cache[subj.subject_id] = getattr(
+                    sample, "institution_patient", None
+                ) or db.session.get(InstitutionPatient, subj.subject_id)
             patient = ip_cache.get(subj.subject_id)
 
         bp: BillingParty | None = None
@@ -551,9 +554,7 @@ def list_billing_opportunities(
             client = getattr(sample, "client", None)
             display = _client_display_name(client) if client else f"Client #{carrier}"
         else:
-            display = (
-                getattr(sample, "customer_name", None) or subject_key or "Booking"
-            )
+            display = getattr(sample, "customer_name", None) or subject_key or "Booking"
 
         bp_type_raw = (
             (getattr(bp.type, "value", None) or str(bp.type)).lower().strip()
@@ -695,7 +696,9 @@ def list_billing_opportunities(
             )
         )
 
-    would_patient = sum(1 for p in patient_items if p.can_generate and p.segments_count > 0)
+    would_patient = sum(
+        1 for p in patient_items if p.can_generate and p.segments_count > 0
+    )
     would_clinic = sum(1 for c in clinic_items if c.transports_count > 0)
 
     if ignored_missing_billing_party_count:

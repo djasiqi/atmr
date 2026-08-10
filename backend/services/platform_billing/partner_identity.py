@@ -123,9 +123,7 @@ def validate_legal_form(value: str | None) -> str | None:
         return None
     v = str(value).strip()
     if v not in _LEGAL_FORMS:
-        raise ValueError(
-            f"legal_form doit être parmi {sorted(_LEGAL_FORMS)}"
-        )
+        raise ValueError(f"legal_form doit être parmi {sorted(_LEGAL_FORMS)}")
     return v
 
 

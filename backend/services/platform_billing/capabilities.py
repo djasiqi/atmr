@@ -60,9 +60,7 @@ class BillingAccessRestricted(Exception):
         self.capability = capability
         self.state = state
         self.error_code = ERROR_BILLING_ACCESS_RESTRICTED
-        super().__init__(
-            f"Accès billing restreint ({state}) : {capability.value}"
-        )
+        super().__init__(f"Accès billing restreint ({state}) : {capability.value}")
 
 
 def _active_policy_flags(company_id: int) -> dict[str, bool]:
@@ -134,8 +132,7 @@ def is_billing_capability_allowed(
         return True
 
     state = (
-        company.platform_billing_access_state
-        or PlatformBillingAccessState.ACTIVE.value
+        company.platform_billing_access_state or PlatformBillingAccessState.ACTIVE.value
     )
     if state == PlatformBillingAccessState.ACTIVE.value:
         return True
@@ -168,9 +165,8 @@ def assert_billing_capability_allowed(
     ):
         company = db.session.get(Company, int(company_id))
         state = (
-            (company.platform_billing_access_state if company else None)
-            or PlatformBillingAccessState.ACTIVE.value
-        )
+            company.platform_billing_access_state if company else None
+        ) or PlatformBillingAccessState.ACTIVE.value
         raise BillingAccessRestricted(capability, state)
 
 
@@ -231,7 +227,9 @@ def set_billing_access_state(
     return company
 
 
-def is_dunning_effectively_paused(company: Company, *, now: datetime | None = None) -> bool:
+def is_dunning_effectively_paused(
+    company: Company, *, now: datetime | None = None
+) -> bool:
     now = now or datetime.now(UTC)
     until = company.dunning_paused_until
     if until is None:

@@ -27,7 +27,6 @@ LOCATION_PATH = "/api/v1/driver/me/location"
 _GPS_ENV = {"REMOTE_ADDR": "10.66.4.101"}
 
 
-
 class _BusinessLimitStub:
     """Compteur métier local (limit appels autorisés)."""
 
@@ -72,7 +71,6 @@ def strict_global_limiter(app: Flask) -> Iterator[Limiter]:
     if not previous_enabled:
         limiter.enabled = False
         app.config["RATELIMIT_ENABLED"] = False
-
 
 
 def _is_flask_global_429(response: Any) -> bool:

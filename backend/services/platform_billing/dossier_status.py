@@ -284,7 +284,11 @@ def resolve_actions(
     _add(ACTION_VIEW)
 
     if status == STATUS_A_CALCULER:
-        primary = ACTION_RECALCULATE_DOSSIER if _can(ACTION_RECALCULATE_DOSSIER) else ACTION_VIEW
+        primary = (
+            ACTION_RECALCULATE_DOSSIER
+            if _can(ACTION_RECALCULATE_DOSSIER)
+            else ACTION_VIEW
+        )
         _add(ACTION_RECALCULATE_DOSSIER)
     elif status == STATUS_A_CONTROLER:
         primary = ACTION_REVIEW if _can(ACTION_REVIEW) else ACTION_VIEW
@@ -325,9 +329,7 @@ def resolve_actions(
                 else "Facture déjà envoyée",
             )
     elif status in (STATUS_A_ENCAISSER, STATUS_PARTIALLY_PAID):
-        primary = (
-            ACTION_RECORD_PAYMENT if _can(ACTION_RECORD_PAYMENT) else ACTION_VIEW
-        )
+        primary = ACTION_RECORD_PAYMENT if _can(ACTION_RECORD_PAYMENT) else ACTION_VIEW
         _add(ACTION_RECORD_PAYMENT)
         _add(ACTION_VIEW_PAYMENTS)
         _add(ACTION_DOWNLOAD_PDF)
@@ -390,9 +392,7 @@ def resolve_actions(
             "Correction impossible tant que des paiements sont enregistrés",
         )
     elif status == STATUS_CREDITED:
-        primary = (
-            ACTION_VIEW_CREDIT_NOTE if credit_note_id else ACTION_VIEW
-        )
+        primary = ACTION_VIEW_CREDIT_NOTE if credit_note_id else ACTION_VIEW
         if credit_note_id:
             _add(ACTION_VIEW_CREDIT_NOTE)
         _add(ACTION_DOWNLOAD_PDF)
@@ -402,7 +402,11 @@ def resolve_actions(
         primary = ACTION_VIEW
 
     if inv is not None and ACTION_DOWNLOAD_PDF not in allowed:
-        if status not in (STATUS_A_CALCULER, STATUS_A_CONTROLER, STATUS_PRETE_A_CLOTURER):
+        if status not in (
+            STATUS_A_CALCULER,
+            STATUS_A_CONTROLER,
+            STATUS_PRETE_A_CLOTURER,
+        ):
             _add(ACTION_DOWNLOAD_PDF)
 
     # Filtrer allowed par caps si fournis

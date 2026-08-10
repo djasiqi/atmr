@@ -82,10 +82,10 @@ def _geocode_log_correlation(raw: str) -> str:
         or os.getenv("SECRET_KEY")
         or "geocode-log-dev-only"
     ).encode("utf-8")
-    digest = hmac.new(
-        secret, (raw or "").encode("utf-8"), hashlib.sha256
-    ).hexdigest()
+    digest = hmac.new(secret, (raw or "").encode("utf-8"), hashlib.sha256).hexdigest()
     return digest[:16]
+
+
 GEOADMIN_BASE_URL = os.getenv("GEOADMIN_BASE_URL", "https://api3.geo.admin.ch").rstrip(
     "/"
 )
@@ -1847,15 +1847,19 @@ class GeocodeFavoritesAutocomplete(Resource):
         try:
             verify_jwt_in_request()
         except (NoAuthorizationError, PyJWTError):
-            return {"error": "Authentification requise"}, 401, {
-                "Cache-Control": "private, no-store"
-            }
+            return (
+                {"error": "Authentification requise"},
+                401,
+                {"Cache-Control": "private, no-store"},
+            )
 
         user = get_current_user_via_use_case()
         if user is None or getattr(user, "role", None) != UserRole.company:
-            return {"error": "Accès réservé aux entreprises"}, 403, {
-                "Cache-Control": "private, no-store"
-            }
+            return (
+                {"error": "Accès réservé aux entreprises"},
+                403,
+                {"Cache-Control": "private, no-store"},
+            )
 
         q = (request.args.get("q") or "").strip()
         if len(q) < MIN_QUERY_LENGTH:

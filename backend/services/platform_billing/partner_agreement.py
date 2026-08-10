@@ -85,9 +85,7 @@ from shared.upload_write import ensure_writable_dir
 logger = logging.getLogger(__name__)
 _ZURICH = ZoneInfo("Europe/Zurich")
 
-DOCX_MIME = (
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-)
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PDF_MIME = "application/pdf"
 ACTIVE_STATUSES = (
     PartnerAgreementStatus.DRAFT.value,
@@ -176,7 +174,11 @@ def legal_text_sha256() -> str:
 def _fmt_dt_fr(dt: datetime | None) -> str:
     if dt is None:
         return "—"
-    local = dt.astimezone(_ZURICH) if dt.tzinfo else dt.replace(tzinfo=UTC).astimezone(_ZURICH)
+    local = (
+        dt.astimezone(_ZURICH)
+        if dt.tzinfo
+        else dt.replace(tzinfo=UTC).astimezone(_ZURICH)
+    )
     return local.strftime("%d.%m.%Y %H:%M %Z")
 
 
@@ -267,9 +269,7 @@ def _next_revision_number(billing_config_id: int) -> int:
     current = (
         db.session.execute(
             select(PlatformPartnerAgreement.revision_number)
-            .where(
-                PlatformPartnerAgreement.billing_config_id == billing_config_id
-            )
+            .where(PlatformPartnerAgreement.billing_config_id == billing_config_id)
             .order_by(PlatformPartnerAgreement.revision_number.desc())
             .limit(1)
             .with_for_update()
@@ -362,8 +362,7 @@ def validate_signatory_authority_verification(
     return {
         "source": str(payload.get("source") or "registre_du_commerce").strip(),
         "register_name": str(
-            payload.get("register_name")
-            or "Registre du commerce / Zefix"
+            payload.get("register_name") or "Registre du commerce / Zefix"
         ).strip(),
         "checked_at": str(
             payload.get("checked_at") or datetime.now(_ZURICH).isoformat()
@@ -416,9 +415,7 @@ def build_commercial_snapshot(cfg: CompanyPlatformBillingConfig) -> dict[str, An
         if cfg.statement_dispute_days is not None
         else 10,
         "payment_terms_days": cfg.payment_terms_days,
-        "support_hourly_rate_default": decimal_to_str(
-            cfg.support_hourly_rate_default
-        ),
+        "support_hourly_rate_default": decimal_to_str(cfg.support_hourly_rate_default),
         "amounts_are_tax_inclusive": bool(
             getattr(cfg, "amounts_are_tax_inclusive", False)
         ),
@@ -468,7 +465,9 @@ def serialize_agreement(agr: PlatformPartnerAgreement) -> dict[str, Any]:
             or str(agr.generated_storage_key).endswith(".docx")
         )
     )
-    has_internal_docx = bool(internal.get("storage_key")) or has_legacy_docx_as_generated
+    has_internal_docx = (
+        bool(internal.get("storage_key")) or has_legacy_docx_as_generated
+    )
     is_sent_or_signed = agr.status in (
         PartnerAgreementStatus.SENT.value,
         PartnerAgreementStatus.SIGNED.value,
@@ -538,9 +537,7 @@ def list_agreements_for_config(
     billing_config_id: int,
 ) -> list[PlatformPartnerAgreement]:
     return (
-        PlatformPartnerAgreement.query.filter_by(
-            billing_config_id=billing_config_id
-        )
+        PlatformPartnerAgreement.query.filter_by(billing_config_id=billing_config_id)
         .order_by(PlatformPartnerAgreement.revision_number.desc())
         .all()
     )
@@ -912,9 +909,8 @@ def _assert_generation_integrity(agr: PlatformPartnerAgreement) -> None:
         )
     snap_grid = (commercial.get("subscription_pricing") or {}).get("resolved_grid_id")
     mode = commercial.get("subscription_pricing_mode")
-    if (
-        mode == SubscriptionPricingMode.VOLUME.value
-        and commercial.get("own_portfolio_billing_enabled")
+    if mode == SubscriptionPricingMode.VOLUME.value and commercial.get(
+        "own_portfolio_billing_enabled"
     ):
         if cfg.use_global_pricing_grid:
             raise PartnerAgreementError(
@@ -944,7 +940,7 @@ def _normalize_delivery_declaration(
             status_code=400,
         )
     channel = str(payload.get("channel") or "unspecified").strip()[:64]
-    recipient = (payload.get("recipient") or None)
+    recipient = payload.get("recipient") or None
     if recipient is not None:
         recipient = str(recipient).strip()[:255] or None
     return {

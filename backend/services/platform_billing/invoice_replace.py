@@ -82,7 +82,9 @@ def sync_derived_line_label(
     return lab or "Ligne"
 
 
-def normalize_editor_lines(raw_lines: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def normalize_editor_lines(
+    raw_lines: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
     """Calcule les montants ligne (SSOT serveur)."""
     if not raw_lines:
         raise InvoiceReplaceError("Au moins une ligne est requise")
@@ -139,9 +141,7 @@ def normalize_editor_lines(raw_lines: list[dict[str, Any]] | None) -> list[dict[
                     f"Ligne {idx + 1} : calculation_mode invalide ({mode})"
                 )
         except (InvalidOperation, TypeError, ValueError) as exc:
-            raise InvoiceReplaceError(
-                f"Ligne {idx + 1} : montants invalides"
-            ) from exc
+            raise InvoiceReplaceError(f"Ligne {idx + 1} : montants invalides") from exc
     return normalized
 
 
@@ -311,7 +311,9 @@ def _cancel_no_commit(inv: PlatformIssuedInvoice) -> None:
     if inv.sent_at:
         raise InvoiceReplaceError("Annulation impossible après envoi")
     if money_round_chf(Decimal(str(inv.amount_paid or 0))) > 0:
-        raise InvoiceReplaceError("Annulation impossible : des paiements sont enregistrés")
+        raise InvoiceReplaceError(
+            "Annulation impossible : des paiements sont enregistrés"
+        )
     inv.status = PlatformIssuedInvoiceStatus.CANCELLED.value
     inv.cancelled_at = datetime.now(UTC)
 

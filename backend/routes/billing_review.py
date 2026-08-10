@@ -88,7 +88,9 @@ def _align_billing_party_after_payer_change(booking: Booking) -> None:
         if clinic_id is None:
             return
         bp_id = getattr(booking, "billing_party_id", None)
-        current = db.session.get(BillingParty, int(bp_id)) if bp_id is not None else None
+        current = (
+            db.session.get(BillingParty, int(bp_id)) if bp_id is not None else None
+        )
         if current is not None and is_establishment_billing_party(current):
             return
         bp = resolve_billing_party_for_clinic(

@@ -102,11 +102,7 @@ def _styles() -> dict[str, ParagraphStyle]:
 
 
 def _escape(text: str) -> str:
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _inline_md(text: str) -> str:
@@ -135,9 +131,7 @@ def markdown_to_flowables(md: str) -> list:
         for row in table_rows:
             if all(set(cell.strip()) <= {"-", ":"} for cell in row):
                 continue
-            data.append(
-                [Paragraph(_inline_md(c.strip()), styles["cell"]) for c in row]
-            )
+            data.append([Paragraph(_inline_md(c.strip()), styles["cell"]) for c in row])
         if data:
             n = len(data[0])
             width = 16.5 * cm

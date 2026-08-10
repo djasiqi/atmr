@@ -1,4 +1,4 @@
-﻿"""KPI dashboard bootstrap v2 — champs matrice + meta troncature."""
+"""KPI dashboard bootstrap v2 — champs matrice + meta troncature."""
 
 from __future__ import annotations
 
@@ -20,7 +20,9 @@ from shared.time_utils import now_local
 def _company_headers(client, user, company_id: int) -> dict[str, str]:
     claims = {"role": user.role.value, "company_id": company_id, "aud": "atmr-api"}
     with client.application.app_context():
-        token = create_access_token(identity=str(user.public_id), additional_claims=claims)
+        token = create_access_token(
+            identity=str(user.public_id), additional_claims=claims
+        )
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -76,7 +78,9 @@ def test_booking_stats_includes_kpi_matrix(db, kpi_company, kpi_booking):
     assert stats["pending_decision"] >= 1
 
 
-def test_bootstrap_v2_shape_and_truncation_meta(client, sample_user, kpi_company, kpi_booking, monkeypatch):
+def test_bootstrap_v2_shape_and_truncation_meta(
+    client, sample_user, kpi_company, kpi_booking, monkeypatch
+):
     monkeypatch.setenv("LIRIE_DASHBOARD_BOOTSTRAP_MAX_BOOKINGS", "0")
     headers = _company_headers(client, sample_user, kpi_company.id)
     day_str = kpi_booking.scheduled_time.strftime("%Y-%m-%d")

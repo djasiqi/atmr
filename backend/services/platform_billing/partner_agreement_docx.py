@@ -778,8 +778,7 @@ def build_partner_agreement_docx_bytes(
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r = title.add_run(
-        "CONTRAT CADRE DE PARTENARIAT\n"
-        "& LICENCE D'UTILISATION DE LA PLATEFORME LIRIE"
+        "CONTRAT CADRE DE PARTENARIAT\n& LICENCE D'UTILISATION DE LA PLATEFORME LIRIE"
     )
     _apply_lirie_run(r, size_pt=13, bold=True, color=LIRIE_GREEN)
     _compact_paragraph(title, space_before_pt=0, space_after_pt=8, keep_with_next=True)
@@ -1074,8 +1073,7 @@ def build_partner_agreement_docx_bytes(
             "correspondants, déclarer toute correction, note de crédit ou "
             "annulation ultérieure, et s'interdire de réduire artificiellement "
             "un montant afin de diminuer la commission due ;",
-            "s'acquitter des sommes dues à LIRIE aux échéances fixées en "
-            "Partie B ;",
+            "s'acquitter des sommes dues à LIRIE aux échéances fixées en Partie B ;",
             "informer LIRIE sans délai de toute circonstance affectant "
             "significativement sa capacité à exécuter les transports acceptés.",
         ],
@@ -1402,9 +1400,7 @@ def build_partner_agreement_docx_bytes(
 
     _add_heading(doc, "B.2 Commission sur les Courses transmises", level=2)
     if commission_enabled:
-        due_if_unpaid = bool(
-            commercial.get("commission_due_if_customer_unpaid", True)
-        )
+        due_if_unpaid = bool(commercial.get("commission_due_if_customer_unpaid", True))
         _add_para(
             doc,
             f"Taux applicable : {_pct(commission_rate)} du montant HT définitif "
@@ -1574,19 +1570,13 @@ def build_partner_agreement_docx_bytes(
         rem_delay = _fmt_days(commercial.get("reminder_delay_days_after_due"), 0)
         rem_grace = _fmt_days(commercial.get("reminder_grace_days"), 10)
         full_days = _fmt_days(commercial.get("full_suspend_days_after_due"), 30)
-        full_count = _fmt_days(
-            commercial.get("full_suspend_overdue_invoice_count"), 2
-        )
+        full_count = _fmt_days(commercial.get("full_suspend_overdue_invoice_count"), 2)
         term_days = _fmt_days(commercial.get("termination_notice_days"), 10)
-        block_offers = bool(
-            commercial.get("partial_block_marketplace_offers", True)
-        )
+        block_offers = bool(commercial.get("partial_block_marketplace_offers", True))
         block_accept = bool(
             commercial.get("partial_block_marketplace_acceptance", True)
         )
-        block_support = bool(
-            commercial.get("partial_block_billable_support", True)
-        )
+        block_support = bool(commercial.get("partial_block_billable_support", True))
         block_config = bool(
             commercial.get("partial_block_billable_configuration", True)
         )
@@ -1701,12 +1691,9 @@ def build_partner_agreement_docx_bytes(
     retention_ver = (
         compliance.get("retention_policy_version") or RETENTION_POLICY_VERSION
     )
-    subprocessors_ver = (
-        compliance.get("subprocessors_version") or SUBPROCESSORS_VERSION
-    )
+    subprocessors_ver = compliance.get("subprocessors_version") or SUBPROCESSORS_VERSION
     penalty_ver = (
-        compliance.get("penalty_calculation_version")
-        or PENALTY_CALCULATION_VERSION
+        compliance.get("penalty_calculation_version") or PENALTY_CALCULATION_VERSION
     )
     _add_para(
         doc,
@@ -1960,10 +1947,9 @@ def build_partner_agreement_docx_bytes(
         else (operator.get("signatory_name") or _operator_natural_person_name(operator))
     )
     partner_co_signatory = None
-    if (
-        signatory_authority.get("signature_mode") == "collective"
-        and signatory_authority.get("co_signatory_name")
-    ):
+    if signatory_authority.get(
+        "signature_mode"
+    ) == "collective" and signatory_authority.get("co_signatory_name"):
         partner_co_signatory = signatory_authority.get("co_signatory_name")
     _add_signatures_table(
         doc,

@@ -111,9 +111,7 @@ class RegisterUserUseCase:
                 )
 
         if phone:
-            existing_by_phone = (
-                User.query.filter(User.phone == phone).limit(1).first()
-            )
+            existing_by_phone = User.query.filter(User.phone == phone).limit(1).first()
             if existing_by_phone:
                 return RegisterUserOutput(
                     success=False,

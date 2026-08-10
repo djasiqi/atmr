@@ -145,7 +145,9 @@ def test_session_resume_installation_mismatch_rejected(client, db, resume_sessio
     assert body["error_code"] == "refresh_replay_detected"
 
 
-def test_session_resume_replay_after_grace_expired(client, db, resume_session, monkeypatch):
+def test_session_resume_replay_after_grace_expired(
+    client, db, resume_session, monkeypatch
+):
     """Receipt valide + grâce credential expirée → replay sans verify courant."""
     monkeypatch.setenv("MOBILE_SESSION_PREVIOUS_CREDENTIAL_GRACE_SECONDS", "0")
     # Recharger la constante déjà lue au import
@@ -170,7 +172,9 @@ def test_session_resume_replay_after_grace_expired(client, db, resume_session, m
 
         session = get_session_by_id(resume_session["session_id"])
         assert session is not None
-        session.previous_credential_valid_until = datetime.now(UTC) - timedelta(seconds=1)
+        session.previous_credential_valid_until = datetime.now(UTC) - timedelta(
+            seconds=1
+        )
         db.session.commit()
 
     second = client.post(

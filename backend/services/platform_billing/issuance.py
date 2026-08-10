@@ -164,9 +164,7 @@ def statement_issuance_ready(statement: PlatformInvoice) -> tuple[bool, list[str
         errors.append("Période introuvable pour ce relevé")
     else:
         if period.status != PlatformBillingPeriodStatus.LOCKED.value:
-            errors.append(
-                "La période doit être verrouillée avant l’émission."
-            )
+            errors.append("La période doit être verrouillée avant l’émission.")
         year, month = int(period.billing_year), int(period.billing_month)
         if not billing_period_has_ended(year, month):
             ends_at = next_month_start_zurich_utc(year, month)
@@ -238,7 +236,9 @@ def _support_qty_unit_from_snapshot(snap: dict[str, Any]) -> tuple[Any, Any]:
         return hours_raw, rate_raw
     total_minutes = sum(int(r.duration_minutes or 0) for r in rows)
     hours = (Decimal(total_minutes) / Decimal(60)).quantize(Decimal("0.01"))
-    rates = {str(r.hourly_rate_snapshot) for r in rows if r.hourly_rate_snapshot is not None}
+    rates = {
+        str(r.hourly_rate_snapshot) for r in rows if r.hourly_rate_snapshot is not None
+    }
     rate = rows[0].hourly_rate_snapshot if len(rates) == 1 else None
     return hours, rate
 
@@ -260,16 +260,12 @@ def resolve_line_qty_unit(ln: Any) -> dict[str, Any]:
         rate_raw = snap.get("commission_rate")
         if rate_raw is not None:
             try:
-                rate_percent = (
-                    Decimal(str(rate_raw)) * Decimal("100")
-                ).quantize(Decimal("0.0001"))
+                rate_percent = (Decimal(str(rate_raw)) * Decimal("100")).quantize(
+                    Decimal("0.0001")
+                )
             except Exception:
                 rate_percent = None
-        if (
-            unit is None
-            and qty is not None
-            and ln.amount is not None
-        ):
+        if unit is None and qty is not None and ln.amount is not None:
             try:
                 q = Decimal(str(qty))
                 if q > 0:
@@ -373,11 +369,7 @@ def _statement_line_dicts(statement: PlatformInvoice) -> list[dict[str, Any]]:
         resolved = resolve_line_qty_unit(ln)
         qty = resolved["quantity"]
         unit = resolved["unit_amount"]
-        mode = (
-            "UNIT_PRICE"
-            if qty is not None and unit is not None
-            else "FIXED_AMOUNT"
-        )
+        mode = "UNIT_PRICE" if qty is not None and unit is not None else "FIXED_AMOUNT"
         result.append(
             {
                 "line_type": ln.line_type,
@@ -391,7 +383,9 @@ def _statement_line_dicts(statement: PlatformInvoice) -> list[dict[str, Any]]:
     return result
 
 
-def _lines_for_pdf(inv: PlatformIssuedInvoice, statement: PlatformInvoice | None) -> list[dict[str, Any]]:
+def _lines_for_pdf(
+    inv: PlatformIssuedInvoice, statement: PlatformInvoice | None
+) -> list[dict[str, Any]]:
     """Préfère lines_snapshot ; fallback relevé (legacy)."""
     from services.platform_billing.invoice_replace import sync_derived_line_label
 
@@ -449,7 +443,9 @@ def _lines_for_pdf(inv: PlatformIssuedInvoice, statement: PlatformInvoice | None
                 ),
                 "amount": Decimal(str(ln["amount"])),
                 "quantity": (
-                    Decimal(str(ln["quantity"])) if ln.get("quantity") is not None else None
+                    Decimal(str(ln["quantity"]))
+                    if ln.get("quantity") is not None
+                    else None
                 ),
                 "unit_amount": (
                     Decimal(str(ln["unit_amount"]))
@@ -473,16 +469,8 @@ def _build_and_store_pdf(
     payment_terms_days: int,
 ) -> None:
     period = statement.period if statement is not None else None
-    year = (
-        period.billing_year
-        if period
-        else int(inv.billing_year or 0)
-    )
-    month = (
-        period.billing_month
-        if period
-        else int(inv.billing_month or 0)
-    )
+    year = period.billing_year if period else int(inv.billing_year or 0)
+    month = period.billing_month if period else int(inv.billing_month or 0)
     pdf_bytes = generate_platform_invoice_pdf_bytes(
         invoice_number=inv.invoice_number,
         issued_at=inv.issued_at,
@@ -538,8 +526,7 @@ def _cancelled_issued_for_replace(statement_id: int) -> PlatformIssuedInvoice | 
         .filter(
             PlatformIssuedInvoice.document_type
             == PlatformIssuedDocumentType.INVOICE.value,
-            PlatformIssuedInvoice.status
-            == PlatformIssuedInvoiceStatus.CANCELLED.value,
+            PlatformIssuedInvoice.status == PlatformIssuedInvoiceStatus.CANCELLED.value,
         )
         .order_by(PlatformIssuedInvoice.id.desc())
         .first()
@@ -562,9 +549,7 @@ def issue_platform_invoice(
             details={"statement_id": statement_id},
         )
     existing = _active_issued_for_statement(statement_id)
-    if existing and existing.status not in (
-        PlatformIssuedInvoiceStatus.DRAFT.value,
-    ):
+    if existing and existing.status not in (PlatformIssuedInvoiceStatus.DRAFT.value,):
         raise BillingInvariantError(
             "INVOICE_ALREADY_ISSUED",
             "Facture déjà émise pour ce relevé",
@@ -574,7 +559,11 @@ def issue_platform_invoice(
     cancelled = _cancelled_issued_for_replace(statement_id)
     replaces_id = cancelled.id if cancelled is not None else None
     # Réutiliser un brouillon éventuel ; sinon créer une nouvelle ligne (1:N)
-    draft = existing if existing and existing.status == PlatformIssuedInvoiceStatus.DRAFT.value else None
+    draft = (
+        existing
+        if existing and existing.status == PlatformIssuedInvoiceStatus.DRAFT.value
+        else None
+    )
     existing = draft
 
     period = statement.period
@@ -775,11 +764,7 @@ def _heal_lines_snapshot_labels(inv: PlatformIssuedInvoice) -> None:
         if not isinstance(raw, dict):
             continue
         row = dict(raw)
-        qty = (
-            Decimal(str(row["quantity"]))
-            if row.get("quantity") is not None
-            else None
-        )
+        qty = Decimal(str(row["quantity"])) if row.get("quantity") is not None else None
         unit = (
             Decimal(str(row["unit_amount"]))
             if row.get("unit_amount") is not None

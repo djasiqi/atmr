@@ -57,7 +57,9 @@ def test_build_invoice_pdf_download_filename_from_username():
         bill_to_client=SimpleNamespace(
             is_institution=False,
             institution_name=None,
-            user=SimpleNamespace(first_name="", last_name="", username="M VUILLE Michel"),
+            user=SimpleNamespace(
+                first_name="", last_name="", username="M VUILLE Michel"
+            ),
         ),
     )
     assert (

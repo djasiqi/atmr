@@ -28,7 +28,9 @@ from services.control_plane.cutover import assert_control_plane_read_cutover_rea
 
 
 def organizations_read_mode() -> str:
-    raw = (os.getenv("CONTROL_PLANE_ORGANIZATIONS_READ_MODE") or "legacy").strip().lower()
+    raw = (
+        (os.getenv("CONTROL_PLANE_ORGANIZATIONS_READ_MODE") or "legacy").strip().lower()
+    )
     if raw in ("legacy", "compare", "control_plane"):
         return raw
     return "legacy"
@@ -299,9 +301,7 @@ def list_organizations_with_read_mode(**kwargs: Any) -> dict[str, Any]:
             public_id = _cp_public_id_for_legacy(otype, oid)
             item["public_id"] = public_id
             item["read_source"] = "legacy"
-            item["comparison_state"] = (
-                "matched" if public_id else "missing_in_cp"
-            )
+            item["comparison_state"] = "matched" if public_id else "missing_in_cp"
         legacy["read_mode"] = "compare"
     else:
         legacy["read_mode"] = "legacy"
@@ -480,7 +480,9 @@ def list_anomalies(
                 "organization_id": a.organization_id,
                 "user_id": a.user_id,
                 "details": a.details_json or {},
-                "first_seen_at": a.first_seen_at.isoformat() if a.first_seen_at else None,
+                "first_seen_at": a.first_seen_at.isoformat()
+                if a.first_seen_at
+                else None,
                 "last_seen_at": a.last_seen_at.isoformat() if a.last_seen_at else None,
                 "resolved_at": a.resolved_at.isoformat() if a.resolved_at else None,
             }

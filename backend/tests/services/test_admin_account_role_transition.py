@@ -111,11 +111,12 @@ def test_client_to_driver_ok(db_session, seeded):
     u = _user(role=UserRole.CLIENT, username="newdrv", email="newdrv@x.ch")
     admin = _user(role=UserRole.ADMIN, username="adm", email="adm@x.ch")
     svc = AdminAccountRoleTransitionService()
-    with patch(
-        "services.admin_account_role_transition.user_has_admin_capability",
-        return_value=True,
-    ), patch(
-        "security.mobile_device_session_service.revoke_user_security_sessions"
+    with (
+        patch(
+            "services.admin_account_role_transition.user_has_admin_capability",
+            return_value=True,
+        ),
+        patch("security.mobile_device_session_service.revoke_user_security_sessions"),
     ):
         result = svc.apply(
             user_id=u.id,
@@ -155,9 +156,7 @@ def test_driver_to_client_soft_disables(db_session, seeded):
 
     admin = _user(role=UserRole.ADMIN, username="adm2", email="adm2@x.ch")
     svc = AdminAccountRoleTransitionService()
-    with patch(
-        "security.mobile_device_session_service.revoke_user_security_sessions"
-    ):
+    with patch("security.mobile_device_session_service.revoke_user_security_sessions"):
         svc.apply(
             user_id=u.id,
             target_role="client",

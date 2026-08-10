@@ -47,9 +47,7 @@ def _user_token_version(user: User) -> int:
 def _issue_token_pair(user: User, session) -> dict:
     epoch = int(getattr(session, "session_epoch", 1) or 1)
     refresh_gen = int(getattr(session, "refresh_generation", 1) or 1)
-    cred_gen = int(
-        getattr(session, "credential_generation", session.generation) or 1
-    )
+    cred_gen = int(getattr(session, "credential_generation", session.generation) or 1)
     claims = {
         "role": getattr(user, "role", None),
         "aud": "atmr-api",
@@ -317,9 +315,8 @@ def register_mobile_session_routes(auth_ns) -> None:
             secret = body.get("revocation_secret")
             if not secret:
                 return {"error": "revocation_secret_requis"}, 400
-            operation_id = (
-                body.get("operation_id")
-                or request.headers.get("Idempotency-Key")
+            operation_id = body.get("operation_id") or request.headers.get(
+                "Idempotency-Key"
             )
             session = get_session_by_id(session_id)
             if session is None:
@@ -327,7 +324,9 @@ def register_mobile_session_routes(auth_ns) -> None:
                 return {"ok": True, "already_absent": True}, 200
 
             payload, err = revoke_pending_idempotent(
-                session, str(secret), operation_id=str(operation_id) if operation_id else None
+                session,
+                str(secret),
+                operation_id=str(operation_id) if operation_id else None,
             )
             if err:
                 return {

@@ -24,9 +24,13 @@ def upgrade() -> None:
     op.create_table(
         "platform_subscription_pricing_grid",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("grid_key", sa.String(length=64), nullable=False, server_default="default"),
+        sa.Column(
+            "grid_key", sa.String(length=64), nullable=False, server_default="default"
+        ),
         sa.Column("label", sa.String(length=128), nullable=True),
-        sa.Column("currency", sa.String(length=3), nullable=False, server_default="CHF"),
+        sa.Column(
+            "currency", sa.String(length=3), nullable=False, server_default="CHF"
+        ),
         sa.Column("valid_from", sa.DateTime(timezone=True), nullable=True),
         sa.Column("valid_until", sa.DateTime(timezone=True), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
@@ -79,7 +83,9 @@ def upgrade() -> None:
         sa.Column("building_number", sa.String(length=16), nullable=True),
         sa.Column("postal_code", sa.String(length=16), nullable=False),
         sa.Column("city", sa.String(length=35), nullable=False),
-        sa.Column("country_code", sa.String(length=2), nullable=False, server_default="CH"),
+        sa.Column(
+            "country_code", sa.String(length=2), nullable=False, server_default="CH"
+        ),
         sa.Column("uid_ide", sa.String(length=20), nullable=True),
         sa.Column("vat_number", sa.String(length=32), nullable=True),
         sa.Column(
@@ -313,7 +319,9 @@ def upgrade() -> None:
     )
     op.add_column(
         "platform_invoice",
-        sa.Column("snapshot_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "snapshot_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
     )
     op.create_foreign_key(
         "fk_platform_invoice_contract",
@@ -360,9 +368,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["booking_id"], ["booking.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
             ["statement_id"], ["platform_invoice.id"], ondelete="CASCADE"
         ),
@@ -393,7 +399,9 @@ def upgrade() -> None:
         sa.Column(
             "status", sa.String(length=32), nullable=False, server_default="DRAFT"
         ),
-        sa.Column("currency", sa.String(length=3), nullable=False, server_default="CHF"),
+        sa.Column(
+            "currency", sa.String(length=3), nullable=False, server_default="CHF"
+        ),
         sa.Column("subtotal_amount", sa.Numeric(12, 2), nullable=False),
         sa.Column("tax_rate", sa.Numeric(8, 4), nullable=False),
         sa.Column("tax_amount", sa.Numeric(12, 2), nullable=False),
@@ -433,9 +441,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["company_id"], ["company.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["credit_of_invoice_id"],
             ["platform_issued_invoice.id"],
@@ -515,12 +521,8 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["author_user_id"], ["user.id"], ondelete="SET NULL"
-        ),
-        sa.ForeignKeyConstraint(
-            ["booking_id"], ["booking.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["author_user_id"], ["user.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -566,8 +568,12 @@ def downgrade() -> None:
     op.drop_table("platform_issued_invoice")
     op.drop_table("platform_billing_statement_item")
 
-    op.drop_constraint("fk_platform_invoice_pricing_grid", "platform_invoice", type_="foreignkey")
-    op.drop_constraint("fk_platform_invoice_contract", "platform_invoice", type_="foreignkey")
+    op.drop_constraint(
+        "fk_platform_invoice_pricing_grid", "platform_invoice", type_="foreignkey"
+    )
+    op.drop_constraint(
+        "fk_platform_invoice_contract", "platform_invoice", type_="foreignkey"
+    )
     for col in (
         "snapshot_json",
         "support_amount",
@@ -586,10 +592,16 @@ def downgrade() -> None:
     ):
         op.drop_column("platform_invoice", col)
 
-    op.drop_constraint("fk_plat_sub_pricing_grid", "platform_subscription_pricing", type_="foreignkey")
+    op.drop_constraint(
+        "fk_plat_sub_pricing_grid", "platform_subscription_pricing", type_="foreignkey"
+    )
     op.drop_column("platform_subscription_pricing", "grid_id")
 
-    op.drop_constraint("fk_cpb_config_pricing_grid", "company_platform_billing_config", type_="foreignkey")
+    op.drop_constraint(
+        "fk_cpb_config_pricing_grid",
+        "company_platform_billing_config",
+        type_="foreignkey",
+    )
     for col in (
         "tax_rate_override",
         "amounts_are_tax_inclusive",

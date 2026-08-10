@@ -54,9 +54,7 @@ def _run(*, apply: bool) -> int:
                 parent_ids_by_booking={
                     int(r[0]): int(r[1]) for r in chunk if r[1] is not None
                 },
-                route_group_by_booking={
-                    int(r[0]): str(r[2]) for r in chunk if r[2]
-                },
+                route_group_by_booking={int(r[0]): str(r[2]) for r in chunk if r[2]},
                 billing_party_by_booking={
                     int(r[0]): int(r[3]) for r in chunk if r[3] is not None
                 },

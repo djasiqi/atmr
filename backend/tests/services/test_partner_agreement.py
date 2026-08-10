@@ -231,9 +231,7 @@ def test_particular_pack_pdf_three_pages_and_sha_in_content():
     assert count_pdf_pages(pdf) == 3
     assert pdf.startswith(b"%PDF")
     assert docx[:2] == b"PK"
-    text = "\n".join(
-        (p.extract_text() or "") for p in PdfReader(BytesIO(pdf)).pages
-    )
+    text = "\n".join((p.extract_text() or "") for p in PdfReader(BytesIO(pdf)).pages)
     # Normalise les coupures de ligne PDF pour les assertions de phrases.
     flat = " ".join(text.split())
     assert "LIRIE/PART/2026-08/001" in flat
@@ -587,9 +585,7 @@ def test_ensure_contract_pricing_grid_key_and_inactive():
             "services.platform_billing.subscription_pricing_resolver."
             "PlatformSubscriptionPricingTier"
         ) as tier_cls,
-        patch(
-            "services.platform_billing.subscription_pricing_resolver.db"
-        ) as mock_db,
+        patch("services.platform_billing.subscription_pricing_resolver.db") as mock_db,
     ):
         grid_cls.query = query
         tier_cls.query = tier_query

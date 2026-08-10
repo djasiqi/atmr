@@ -483,9 +483,7 @@ class CreateBookingUseCase:
 
         booking_id = int(getattr(new_booking, "id", 0) or 0)
         if booking_id <= 0:
-            raise RuntimeError(
-                "Booking writer returned a booking without a valid id"
-            )
+            raise RuntimeError("Booking writer returned a booking without a valid id")
 
         if geocode_miss:
             self._trigger_async_geocoding(

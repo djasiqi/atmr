@@ -88,7 +88,9 @@ def preview_dispatch_disable(company_id: int) -> dict[str, Any]:
     )
     total_drivers = (
         db.session.scalar(
-            select(func.count()).select_from(Driver).where(Driver.company_id == company_id)
+            select(func.count())
+            .select_from(Driver)
+            .where(Driver.company_id == company_id)
         )
         or 0
     )

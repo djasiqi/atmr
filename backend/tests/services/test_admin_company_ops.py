@@ -148,9 +148,7 @@ def test_approval_independent_of_dispatch(db_session, seeded):
     company = _company(owner, is_approved=False, dispatch_enabled=False)
     admin = _user(role=UserRole.ADMIN, username="adm3", email="adm3@x.ch")
 
-    with patch(
-        "services.admin_company_ops.get_projector"
-    ) as proj:
+    with patch("services.admin_company_ops.get_projector") as proj:
         proj.return_value.ensure_company_organization.return_value = None
         result = set_company_approval(
             company_id=company.id,

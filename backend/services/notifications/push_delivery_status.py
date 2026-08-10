@@ -387,7 +387,9 @@ def ensure_deduplication_fields(
         ntype = notification_type or out.get("type") or "push"
         booking = out.get("booking_id") or out.get("mission_id") or "na"
         driver = driver_id if driver_id is not None else out.get("driver_id") or "na"
-        out["deduplication_key"] = f"{ntype}:{booking}:{driver}:{out['notification_id']}"
+        out["deduplication_key"] = (
+            f"{ntype}:{booking}:{driver}:{out['notification_id']}"
+        )
         out["dedupe_key"] = out["deduplication_key"]
 
     return out

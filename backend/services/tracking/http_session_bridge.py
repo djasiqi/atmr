@@ -103,9 +103,7 @@ def ensure_http_tracking_session_fields(
         sid = f"http-legacy-{driver_id}"
 
     seq_raw = enriched.get("sequence_id")
-    sequence_from_payload = (
-        seq_raw is not None and str(seq_raw).strip() != ""
-    )
+    sequence_from_payload = seq_raw is not None and str(seq_raw).strip() != ""
 
     app = get_flask_app()
     with app.app_context():

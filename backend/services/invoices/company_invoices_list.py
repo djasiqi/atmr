@@ -180,7 +180,10 @@ def list_company_invoices_unified(
     # - sinon : statut stocké inchangé
     partner_balance_expr = PartnerInvoice.total_amount - PartnerInvoice.amount_paid
     partner_effective_status = case(
-        (PartnerInvoice.status == PartnerInvoiceStatus.CANCELLED, PartnerInvoice.status),
+        (
+            PartnerInvoice.status == PartnerInvoiceStatus.CANCELLED,
+            PartnerInvoice.status,
+        ),
         (partner_balance_expr <= 0, PartnerInvoiceStatus.PAID),
         (PartnerInvoice.amount_paid > 0, PartnerInvoiceStatus.PARTIALLY_PAID),
         (PartnerInvoice.status == PartnerInvoiceStatus.PAID, PartnerInvoiceStatus.SENT),
@@ -418,7 +421,9 @@ def list_company_invoices_unified(
             PartnerInvoice.status == partner_status_enum
         )
     if year:
-        partner_stats_base = partner_stats_base.filter(PartnerInvoice.period_year == year)
+        partner_stats_base = partner_stats_base.filter(
+            PartnerInvoice.period_year == year
+        )
     if month:
         partner_stats_base = partner_stats_base.filter(
             PartnerInvoice.period_month == month
@@ -454,12 +459,12 @@ def list_company_invoices_unified(
     total_paid = _d(regular_stats_row.total_paid if regular_stats_row else 0) + _d(
         partner_stats_row.total_paid if partner_stats_row else 0
     )
-    total_balance = _d(regular_stats_row.total_balance if regular_stats_row else 0) + _d(
-        partner_stats_row.total_balance if partner_stats_row else 0
-    )
-    overdue_count = int(regular_stats_row.overdue_count if regular_stats_row else 0) + int(
-        partner_stats_row.overdue_count if partner_stats_row else 0
-    )
+    total_balance = _d(
+        regular_stats_row.total_balance if regular_stats_row else 0
+    ) + _d(partner_stats_row.total_balance if partner_stats_row else 0)
+    overdue_count = int(
+        regular_stats_row.overdue_count if regular_stats_row else 0
+    ) + int(partner_stats_row.overdue_count if partner_stats_row else 0)
 
     # Conversion float uniquement à la frontière JSON (le frontend appelle .toFixed(2)) ;
     # tous les calculs internes ci-dessus restent en Decimal.

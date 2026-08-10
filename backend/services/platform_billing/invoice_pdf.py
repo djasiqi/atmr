@@ -191,7 +191,9 @@ def _make_platform_promo_footer_callback(
 
         canvas.setFillColor(colors.HexColor("#334155"))
         canvas.setFont("Helvetica", 7.5)
-        line1 = "LIRIE avec vous — scannez pour rejoindre la plateforme ou en savoir plus."
+        line1 = (
+            "LIRIE avec vous — scannez pour rejoindre la plateforme ou en savoir plus."
+        )
         canvas.drawString(text_x, baseline + qr_size - 12, line1)
         canvas.setFillColor(colors.HexColor("#0f766e"))
         canvas.setFont("Helvetica", 7.5)
@@ -314,9 +316,7 @@ def generate_platform_invoice_pdf_bytes(
         canvas.rect(0, A4[1] / 2 - 40, A4[0], 80, fill=1, stroke=0)
         canvas.setFillColor(colors.HexColor("#b91c1c"))
         canvas.setFont("Helvetica-Bold", 18)
-        canvas.drawCentredString(
-            A4[0] / 2, A4[1] / 2, "APERÇU — DOCUMENT NON PAYABLE"
-        )
+        canvas.drawCentredString(A4[0] / 2, A4[1] / 2, "APERÇU — DOCUMENT NON PAYABLE")
         canvas.restoreState()
 
     # Réserve bas de page pour le QR marketing fixe (~3.2 cm)
@@ -430,9 +430,7 @@ def generate_platform_invoice_pdf_bytes(
 
     story.append(Paragraph("Facture plateforme LIRIE", title_style))
     if preview:
-        story.append(
-            Paragraph("APERÇU — DOCUMENT NON PAYABLE", watermark_style)
-        )
+        story.append(Paragraph("APERÇU — DOCUMENT NON PAYABLE", watermark_style))
 
     if 1 <= period_month <= 12:
         period_label = f"{_MONTHS_FR[period_month - 1]} {period_year}"

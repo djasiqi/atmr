@@ -180,9 +180,7 @@ class SqlAlchemyBookingWriter:
         )
         from services.platform_billing.billing_origin import apply_origin_on_booking
 
-        apply_origin_on_booking(
-            new_booking, created_via=BookingCreatedVia.CLIENT_APP
-        )
+        apply_origin_on_booking(new_booking, created_via=BookingCreatedVia.CLIENT_APP)
 
         def _write_core() -> None:
             db.session.add(new_booking)

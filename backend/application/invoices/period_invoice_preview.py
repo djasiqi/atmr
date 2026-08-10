@@ -494,11 +494,7 @@ def build_period_invoice_preview(
     clients_by_id_s2: dict[int, Any] = {}
     if include_line_details:
         clients_by_id_s2 = crepo.find_models_by_ids_and_company_with_user(
-            {
-                int(b.client_id)
-                for b in eligible_bookings
-                if b.client_id is not None
-            },
+            {int(b.client_id) for b in eligible_bookings if b.client_id is not None},
             company_id,
         )
 
@@ -529,9 +525,7 @@ def build_period_invoice_preview(
 
         locked = bool(getattr(b, "invoice_line_id", None))
         b_client = (
-            clients_by_id_s2.get(int(b.client_id))
-            if b.client_id is not None
-            else None
+            clients_by_id_s2.get(int(b.client_id)) if b.client_id is not None else None
         )
         from application.invoices.invoice_line_description import (
             resolve_s2_clinic_line_patient_name,

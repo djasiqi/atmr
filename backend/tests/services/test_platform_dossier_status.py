@@ -66,9 +66,7 @@ def _issued(**kwargs):
 class TestOperationalStatus:
     def test_no_statement_a_calculer(self):
         assert (
-            operational_status(
-                statement=None, period=_period(), primary_invoice=None
-            )
+            operational_status(statement=None, period=_period(), primary_invoice=None)
             == STATUS_A_CALCULER
         )
 
@@ -88,9 +86,7 @@ class TestOperationalStatus:
             total_amount=Decimal("0.00"),
         )
         assert (
-            operational_status(
-                statement=st, period=_period(), primary_invoice=None
-            )
+            operational_status(statement=st, period=_period(), primary_invoice=None)
             == STATUS_A_CONTROLER
         )
         zc, reason = zero_charge_flags(st)
@@ -210,9 +206,7 @@ class TestActions:
     def test_emettre_when_issuable(self):
         out = resolve_actions(
             status=STATUS_PRETE_A_EMETTRE,
-            statement=_statement(
-                statement_status=PlatformStatementStatus.LOCKED.value
-            ),
+            statement=_statement(statement_status=PlatformStatementStatus.LOCKED.value),
             primary_invoice=None,
             credit_note_id=None,
             issuable=True,

@@ -328,8 +328,6 @@ def build_support_diagnostic(
         "primary_reason_code": primary["code"] if primary else None,
         "headline": headline,
         "summary": summary,
-        "recommended_action": (
-            primary.get("recommended_action") if primary else None
-        ),
+        "recommended_action": (primary.get("recommended_action") if primary else None),
         "reasons": reasons,
     }

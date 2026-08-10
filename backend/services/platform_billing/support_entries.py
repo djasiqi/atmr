@@ -67,9 +67,7 @@ def create_support_entry(
 
     occurred_raw = data.get("occurred_at")
     if occurred_raw:
-        occurred_at = datetime.fromisoformat(
-            str(occurred_raw).replace("Z", "+00:00")
-        )
+        occurred_at = datetime.fromisoformat(str(occurred_raw).replace("Z", "+00:00"))
     else:
         occurred_at = datetime.now(UTC)
 
@@ -174,9 +172,7 @@ def update_support_entry(
         se.hourly_rate_snapshot = money_round_chf(hourly)
 
     if "amount" in data and data["amount"] is not None:
-        amount = parse_decimal(
-            data["amount"], field="amount", min_value=Decimal("0")
-        )
+        amount = parse_decimal(data["amount"], field="amount", min_value=Decimal("0"))
         if amount is None:
             raise ValueError("amount invalide")
         se.amount = money_round_chf(amount)

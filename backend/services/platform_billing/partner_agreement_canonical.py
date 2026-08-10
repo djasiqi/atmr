@@ -63,9 +63,7 @@ def _load_expected_hashes() -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise CanonicalDocumentError(
-            f"Manifeste canonique illisible : {exc}"
-        ) from exc
+        raise CanonicalDocumentError(f"Manifeste canonique illisible : {exc}") from exc
     if not isinstance(data, dict):
         raise CanonicalDocumentError("Manifeste canonique invalide")
     return data
@@ -96,9 +94,7 @@ def _verify_one(version: str, kind: str, expected: dict[str, Any]) -> CanonicalD
     size = pdf_path.stat().st_size
     expected_size = expected.get("size_bytes")
     if expected_size is not None and int(expected_size) != size:
-        raise CanonicalDocumentError(
-            f"Taille PDF canonique incohérente pour {version}"
-        )
+        raise CanonicalDocumentError(f"Taille PDF canonique incohérente pour {version}")
     return CanonicalDocument(
         version=version,
         kind=kind,

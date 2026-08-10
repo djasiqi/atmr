@@ -48,7 +48,9 @@ class MobileDeviceSession(db.Model):
         ),
         Index("ix_mobile_device_session_user_id", "user_id"),
         Index("ix_mobile_device_session_status", "status"),
-        Index("ix_mobile_device_session_device_installation_id", "device_installation_id"),
+        Index(
+            "ix_mobile_device_session_device_installation_id", "device_installation_id"
+        ),
     )
 
     session_id: Mapped[uuid.UUID] = mapped_column(
@@ -73,7 +75,9 @@ class MobileDeviceSession(db.Model):
     )
 
     credential_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    previous_credential_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    previous_credential_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
     previous_credential_valid_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -131,7 +135,9 @@ class MobileDeviceSession(db.Model):
             "refresh_generation": self.refresh_generation,
             "created_at": _iso(self.created_at),
             "last_seen_at": _iso(self.last_seen_at) if self.last_seen_at else None,
-            "last_refresh_at": _iso(self.last_refresh_at) if self.last_refresh_at else None,
+            "last_refresh_at": _iso(self.last_refresh_at)
+            if self.last_refresh_at
+            else None,
             "is_current": is_current,
         }
 

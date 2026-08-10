@@ -308,7 +308,9 @@ def subscription_volume_count(
     return int(n or 0)
 
 
-def _select_tier_from_grid(grid_id: int, volume: int) -> PlatformSubscriptionPricingTier | None:
+def _select_tier_from_grid(
+    grid_id: int, volume: int
+) -> PlatformSubscriptionPricingTier | None:
     from services.platform_billing.subscription_pricing_resolver import (
         select_tier_from_grid,
     )
@@ -393,7 +395,10 @@ def recalculate_platform_period_drafts(period_id: int) -> dict[str, Any]:
     )
     existing = PlatformInvoice.query.filter_by(period_id=period_id).all()
     for inv in existing:
-        status = getattr(inv, "statement_status", None) or PlatformStatementStatus.DRAFT.value
+        status = (
+            getattr(inv, "statement_status", None)
+            or PlatformStatementStatus.DRAFT.value
+        )
         if status in locked_statuses:
             continue
         db.session.delete(inv)
@@ -404,11 +409,9 @@ def recalculate_platform_period_drafts(period_id: int) -> dict[str, Any]:
     generated = 0
     for company_id in company_ids:
         # Déjà un relevé VALIDATED/LOCKED : ne pas régénérer
-        kept = (
-            PlatformInvoice.query.filter_by(
-                period_id=period_id, company_id=company_id
-            ).first()
-        )
+        kept = PlatformInvoice.query.filter_by(
+            period_id=period_id, company_id=company_id
+        ).first()
         if kept:
             continue
         company = db.session.get(Company, company_id)
@@ -490,7 +493,9 @@ def _build_invoice_for_company(
     own_on, comm_on, support_on = _product_flags(cfg)
     dm = _dispatch_mode_for_company(company, cfg)
     tax_rate = _resolve_tax_rate(cfg)
-    cancel_policy = getattr(cfg, "commission_cancellation_policy", "exclude") or "exclude"
+    cancel_policy = (
+        getattr(cfg, "commission_cancellation_policy", "exclude") or "exclude"
+    )
     pricing_mode = getattr(
         cfg, "subscription_pricing_mode", SubscriptionPricingMode.VOLUME.value
     )
@@ -503,9 +508,7 @@ def _build_invoice_for_company(
     tier_label = None
 
     if own_on:
-        vol = subscription_volume_count(
-            cid, year, month, own_portfolio_only=True
-        )
+        vol = subscription_volume_count(cid, year, month, own_portfolio_only=True)
         if pricing_mode == SubscriptionPricingMode.FREE.value:
             sub_amount = Decimal("0.00")
             tier_label = "Gratuit"
@@ -526,17 +529,13 @@ def _build_invoice_for_company(
                     grid_id = grid.id
                     tier = _select_tier_from_grid(grid.id, vol)
                     sub_amount = (
-                        money_round_chf(tier.price_monthly)
-                        if tier
-                        else Decimal("0.00")
+                        money_round_chf(tier.price_monthly) if tier else Decimal("0.00")
                     )
                     tier_label = tier.label if tier else None
                 else:
                     tier = select_subscription_tier(dm, vol)
                     sub_amount = (
-                        money_round_chf(tier.price_monthly)
-                        if tier
-                        else Decimal("0.00")
+                        money_round_chf(tier.price_monthly) if tier else Decimal("0.00")
                     )
                     tier_label = tier.label if tier else None
             else:
@@ -752,8 +751,7 @@ def _build_invoice_for_company(
                     "quantity": hours,
                     "unit_amount": (
                         Decimal(str(rate_ref))
-                        if len({str(r.hourly_rate_snapshot) for r in support_rows})
-                        == 1
+                        if len({str(r.hourly_rate_snapshot) for r in support_rows}) == 1
                         else None
                     ),
                     "snapshot_json": {
@@ -767,9 +765,7 @@ def _build_invoice_for_company(
                 }
             )
 
-    subtotal = money_round_chf(
-        sum(Decimal(str(x["amount"])) for x in lines_data)
-    )
+    subtotal = money_round_chf(sum(Decimal(str(x["amount"])) for x in lines_data))
     tax_amount = money_round_chf(subtotal * tax_rate / Decimal("100"))
     total = money_round_chf(subtotal + tax_amount)
 
@@ -794,10 +790,16 @@ def _build_invoice_for_company(
         own_portfolio_count=vol if own_on else 0,
         subscription_amount=sub_amount if own_on else Decimal("0.00"),
         lirie_transport_count=len(commission_details) if comm_on else 0,
-        commission_base=money_round_chf(commission_base) if comm_on else Decimal("0.00"),
+        commission_base=money_round_chf(commission_base)
+        if comm_on
+        else Decimal("0.00"),
         commission_rate_snapshot=rate if comm_on else None,
-        commission_amount=money_round_chf(commission_total) if comm_on else Decimal("0.00"),
-        support_amount=money_round_chf(support_total) if support_on else Decimal("0.00"),
+        commission_amount=money_round_chf(commission_total)
+        if comm_on
+        else Decimal("0.00"),
+        support_amount=money_round_chf(support_total)
+        if support_on
+        else Decimal("0.00"),
         snapshot_json={
             "contract_id": cfg.id,
             "pricing_grid_id": grid_id,
@@ -970,17 +972,12 @@ def lock_platform_billing_period(
     now_utc: datetime | None = None,
 ) -> PlatformBillingPeriod:
     """Verrouille la période seulement si readiness.ready_to_lock."""
-    readiness = build_platform_billing_period_readiness(
-        period_id, now_utc=now_utc
-    )
+    readiness = build_platform_billing_period_readiness(period_id, now_utc=now_utc)
     if not readiness["ready_to_lock"]:
         first = (readiness.get("blocking_reasons") or [{}])[0]
         raise BillingInvariantError(
             str(first.get("code") or "PERIOD_NOT_READY_TO_LOCK"),
-            str(
-                first.get("message")
-                or "La période ne peut pas être verrouillée."
-            ),
+            str(first.get("message") or "La période ne peut pas être verrouillée."),
             details={"readiness": readiness},
         )
     period = db.session.get(PlatformBillingPeriod, period_id)

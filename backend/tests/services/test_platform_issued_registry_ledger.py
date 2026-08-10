@@ -93,9 +93,7 @@ def test_recompute_clears_paid_at_after_partial_reverse_logic():
         "services.platform_billing.payments.sum_ledger_amount",
         return_value=Decimal("40.00"),
     ):
-        recompute_invoice_payment_state(
-            inv, now=datetime(2026, 8, 4, tzinfo=UTC)
-        )
+        recompute_invoice_payment_state(inv, now=datetime(2026, 8, 4, tzinfo=UTC))
     assert inv.amount_paid == Decimal("40.00")
     assert inv.paid_at is None
     assert inv.status == PlatformIssuedInvoiceStatus.SENT.value
@@ -112,26 +110,20 @@ def test_recompute_overdue_after_reverse():
         "services.platform_billing.payments.sum_ledger_amount",
         return_value=Decimal("40.00"),
     ):
-        recompute_invoice_payment_state(
-            inv, now=datetime(2026, 8, 4, tzinfo=UTC)
-        )
+        recompute_invoice_payment_state(inv, now=datetime(2026, 8, 4, tzinfo=UTC))
     assert inv.status == PlatformIssuedInvoiceStatus.OVERDUE.value
     assert inv.paid_at is None
 
 
 def test_credit_note_rejects_when_paid():
     inv = _make_invoice(amount_paid=Decimal("10.00"))
-    with patch(
-        "services.platform_billing.payments._lock_invoice", return_value=inv
-    ):
+    with patch("services.platform_billing.payments._lock_invoice", return_value=inv):
         with pytest.raises(ValueError, match="paiement"):
             create_credit_note(1, reason="Erreur de facturation")
 
 
 def test_credit_note_requires_reason():
     inv = _make_invoice(amount_paid=Decimal("0.00"))
-    with patch(
-        "services.platform_billing.payments._lock_invoice", return_value=inv
-    ):
+    with patch("services.platform_billing.payments._lock_invoice", return_value=inv):
         with pytest.raises(ValueError, match="Motif"):
             create_credit_note(1, reason="  ")

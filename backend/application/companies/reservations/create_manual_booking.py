@@ -917,7 +917,9 @@ class CreateManualBookingUseCase:
                 return_booking.company_id = cid
                 return_booking.booking_type = "manual"
                 return_booking.created_via = BookingCreatedVia.DISPATCHER
-                from services.platform_billing.billing_origin import apply_origin_on_booking
+                from services.platform_billing.billing_origin import (
+                    apply_origin_on_booking,
+                )
 
                 apply_origin_on_booking(
                     return_booking, created_via=BookingCreatedVia.DISPATCHER

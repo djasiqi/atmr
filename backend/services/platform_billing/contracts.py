@@ -53,7 +53,9 @@ def _as_aware(dt: datetime | None) -> datetime | None:
     return dt
 
 
-def window_contains(effective_from: datetime | None, effective_to: datetime | None, at: datetime) -> bool:
+def window_contains(
+    effective_from: datetime | None, effective_to: datetime | None, at: datetime
+) -> bool:
     """Vrai si at ∈ [effective_from, effective_to) (NULL from = -∞, NULL to = +∞)."""
     at = _as_aware(at) or at
     ef = _as_aware(effective_from)
@@ -107,7 +109,9 @@ def effective_config_for_period(
     return matches[0]
 
 
-def lock_company_contracts_for_update(company_id: int) -> list[CompanyPlatformBillingConfig]:
+def lock_company_contracts_for_update(
+    company_id: int,
+) -> list[CompanyPlatformBillingConfig]:
     """Verrouille les versions actives d'une entreprise (anti-chevauchement concurrent)."""
     stmt = (
         select(CompanyPlatformBillingConfig)
@@ -164,9 +168,7 @@ def supersede_overlapping_contracts(
     for row in locked:
         if not row.is_active:
             continue
-        if not windows_overlap(
-            new_from, new_to, row.effective_from, row.effective_to
-        ):
+        if not windows_overlap(new_from, new_to, row.effective_from, row.effective_to):
             continue
         old_from = _as_aware(row.effective_from)
         if old_from is None or old_from < close_at:
@@ -275,9 +277,7 @@ def serialize_contract(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
         "custom_subscription_amount": decimal_to_str(
             getattr(cfg, "custom_subscription_amount", None)
         ),
-        "use_global_pricing_grid": bool(
-            getattr(cfg, "use_global_pricing_grid", True)
-        ),
+        "use_global_pricing_grid": bool(getattr(cfg, "use_global_pricing_grid", True)),
         "pricing_grid_id": getattr(cfg, "pricing_grid_id", None),
         "commission_cancellation_policy": getattr(
             cfg,
@@ -295,9 +295,7 @@ def serialize_contract(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
         ),
         "legacy_dispatch_mode_override": cfg.dispatch_mode_override,
         "commission_rate": decimal_to_str(cfg.commission_rate, places=6),
-        "support_hourly_rate_default": decimal_to_str(
-            cfg.support_hourly_rate_default
-        ),
+        "support_hourly_rate_default": decimal_to_str(cfg.support_hourly_rate_default),
         "effective_year": ef_year,
         "effective_month": ef_month,
         "effective_from": cfg.effective_from.isoformat()

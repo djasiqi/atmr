@@ -46,7 +46,9 @@ _SERVICE_LABELS = {
 def _driver_counts(company_id: int) -> tuple[int, int]:
     total = (
         db.session.scalar(
-            select(func.count()).select_from(Driver).where(Driver.company_id == company_id)
+            select(func.count())
+            .select_from(Driver)
+            .where(Driver.company_id == company_id)
         )
         or 0
     )
@@ -70,7 +72,10 @@ def _detected_services(company: Company) -> dict[str, Any]:
     services: list[dict[str, Any]] = []
     if org is not None:
         rows = db.session.execute(
-            select(ServiceCatalog.service_key, OrganizationServiceEntitlement.enforcement_mode)
+            select(
+                ServiceCatalog.service_key,
+                OrganizationServiceEntitlement.enforcement_mode,
+            )
             .join(
                 OrganizationServiceEntitlement,
                 OrganizationServiceEntitlement.service_catalog_id == ServiceCatalog.id,
@@ -89,7 +94,11 @@ def _detected_services(company: Company) -> dict[str, Any]:
                 )
     # Fallback dérivé legacy si rien projeté
     if not services:
-        derived = ["company.own_portfolio", "company.driver_management", "company.live_tracking"]
+        derived = [
+            "company.own_portfolio",
+            "company.driver_management",
+            "company.live_tracking",
+        ]
         if bool(getattr(company, "is_partner", False)) or bool(company.is_approved):
             derived.append("company.marketplace")
         if bool(company.dispatch_enabled):
@@ -180,7 +189,9 @@ def build_account_manage_context(
                 "contact_email": company.contact_email,
                 "is_approved": bool(company.is_approved),
                 "dispatch_enabled": bool(company.dispatch_enabled),
-                "platform_suspended": bool(getattr(company, "platform_suspended", False)),
+                "platform_suspended": bool(
+                    getattr(company, "platform_suspended", False)
+                ),
                 "active_drivers_count": active_drivers,
                 "total_drivers_count": total_drivers,
                 "inactive_drivers_count": max(0, total_drivers - active_drivers),
@@ -190,7 +201,9 @@ def build_account_manage_context(
                 "company_id": company.id,
                 "state": state,
                 "source": getattr(company, "platform_billing_state_source", None),
-                "reason_code": getattr(company, "platform_billing_state_reason_code", None),
+                "reason_code": getattr(
+                    company, "platform_billing_state_reason_code", None
+                ),
                 "since": (
                     company.platform_billing_state_since.isoformat()
                     if getattr(company, "platform_billing_state_since", None)
@@ -245,12 +258,10 @@ def build_account_manage_context(
     ).all()
 
     can_security = bool(
-        actor_admin_id
-        and user_has_admin_capability(actor_admin_id, CAP_USERS_SECURITY)
+        actor_admin_id and user_has_admin_capability(actor_admin_id, CAP_USERS_SECURITY)
     )
     can_manage = bool(
-        actor_admin_id
-        and user_has_admin_capability(actor_admin_id, CAP_USERS_MANAGE)
+        actor_admin_id and user_has_admin_capability(actor_admin_id, CAP_USERS_MANAGE)
     )
     can_billing = bool(
         company_profile
@@ -284,9 +295,7 @@ def build_account_manage_context(
         "commercial_access": commercial_access,
         "security": {
             "active_sessions": int(sessions),
-            "password_temporary": bool(
-                getattr(user, "force_password_change", False)
-            ),
+            "password_temporary": bool(getattr(user, "force_password_change", False)),
         },
         "diagnostic": {
             "checks": integrity.get("checks") or [],
@@ -304,7 +313,9 @@ def build_account_manage_context(
             "manage_billing_access": can_billing,
             "manage_commercial_restriction": can_billing,
             "pause_dunning": can_billing,
-            "manage_operational_flags": bool(can_manage and company_profile is not None),
+            "manage_operational_flags": bool(
+                can_manage and company_profile is not None
+            ),
             "open_billing_configuration": bool(company_profile is not None),
             "open_platform_operations": bool(company_profile is not None),
         },

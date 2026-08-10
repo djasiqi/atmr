@@ -177,9 +177,7 @@ class BrevoEmailProvider:
                         }
                     )
                 else:
-                    attachment_items.append(
-                        {"name": filename, "content": content_b64}
-                    )
+                    attachment_items.append({"name": filename, "content": content_b64})
             if attachment_items:
                 payload["attachment"] = attachment_items
             if inline_items:

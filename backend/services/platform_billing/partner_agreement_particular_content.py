@@ -261,7 +261,9 @@ def _partner_name(party: dict[str, Any]) -> str:
     return name
 
 
-def _fmt_days_table(value: int, *, calendar: bool = False, working: bool = False) -> str:
+def _fmt_days_table(
+    value: int, *, calendar: bool = False, working: bool = False
+) -> str:
     unit = "jour" if abs(value) <= 1 else "jours"
     suffix = " calendaires" if calendar else (" ouvrables" if working else "")
     return f"{value} {unit}{suffix}"
@@ -389,9 +391,7 @@ def build_particular_agreement_content(
     partner = parties.get("partner") or {}
     authority = parties.get("signatory_authority_verification") or {}
     special = (commercial.get("contract_special_conditions") or "").strip()
-    special_lines = tuple(
-        line.strip() for line in special.splitlines() if line.strip()
-    )
+    special_lines = tuple(line.strip() for line in special.splitlines() if line.strip())
 
     clauses = (
         ClauseBlock(
@@ -521,7 +521,9 @@ def build_particular_agreement_content(
         "co_signatory_required"
     ):
         co_name = _format_person_name(authority.get("co_signatory_name") or "") or None
-        co_title = _title_as_entered(authority.get("co_signatory_function") or "") or None
+        co_title = (
+            _title_as_entered(authority.get("co_signatory_function") or "") or None
+        )
 
     signatures = (
         SignatureBlock(

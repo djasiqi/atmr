@@ -43,7 +43,9 @@ class ServiceCatalog(db.Model):
     )  # company | institution
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    dependencies_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    dependencies_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
     is_sensitive: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
@@ -173,7 +175,9 @@ class PlatformOrganization(db.Model):
         String(32), nullable=False, server_default="unknown"
     )
     data_origin_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    data_origin_confidence: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    data_origin_confidence: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
     classified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

@@ -187,9 +187,12 @@ def _period_activity_counts(
 
 def _dual_product_config_ui_enabled() -> bool:
     """UI dual-produit visible par défaut (désactiver via env = false)."""
-    return os.getenv(
-        "PLATFORM_BILLING_DUAL_PRODUCT_CONFIG_UI", "true"
-    ).lower() in ("1", "true", "yes", "on")
+    return os.getenv("PLATFORM_BILLING_DUAL_PRODUCT_CONFIG_UI", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 
 def _serialize_line(ln: PlatformInvoiceLine) -> dict[str, Any]:
@@ -314,7 +317,9 @@ def _serialize_debtor_address(
     return {
         "source": "company_domicile",
         "legal_name": company.name if company else None,
-        "street_name": getattr(company, "domicile_address_line1", None) if company else None,
+        "street_name": getattr(company, "domicile_address_line1", None)
+        if company
+        else None,
         "building_number": None,
         "postal_code": getattr(company, "domicile_zip", None) if company else None,
         "city": getattr(company, "domicile_city", None) if company else None,
@@ -350,9 +355,12 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 .all()
             )
             stmt_c, iss_c = _period_activity_counts([p.id for p in rows])
-            only_active = str(
-                request.args.get("with_activity", "false")
-            ).lower() in ("1", "true", "yes", "on")
+            only_active = str(request.args.get("with_activity", "false")).lower() in (
+                "1",
+                "true",
+                "yes",
+                "on",
+            )
             payload = []
             for p in rows:
                 sc = stmt_c.get(p.id, 0)
@@ -360,9 +368,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 if only_active and sc == 0 and ic == 0:
                     continue
                 payload.append(
-                    _serialize_period(
-                        p, statement_count=sc, issued_count=ic
-                    )
+                    _serialize_period(p, statement_count=sc, issued_count=ic)
                 )
             return {"periods": payload}, 200
 
@@ -619,7 +625,9 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             )
             cfg_map = {c.company_id: c for c in latest_cfgs}
             # Par défaut : entreprises approuvées uniquement (évite les clones e2e).
-            include_unapproved = (request.args.get("include_unapproved") or "").lower() in (
+            include_unapproved = (
+                request.args.get("include_unapproved") or ""
+            ).lower() in (
                 "1",
                 "true",
                 "yes",
@@ -769,9 +777,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             if cid:
                 q = q.filter(PlatformSupportEntry.company_id == cid)
             rows = q.order_by(PlatformSupportEntry.occurred_at.desc()).limit(200).all()
-            return {
-                "entries": [serialize_support_entry(e) for e in rows]
-            }, 200
+            return {"entries": [serialize_support_entry(e) for e in rows]}, 200
 
         @jwt_required()
         @role_required(UserRole.admin)
@@ -827,9 +833,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             data = request.get_json(silent=True) or {}
             user_id = _admin_user_id_from_jwt()
             try:
-                se = update_support_entry(
-                    entry_id, data, validated_by_user_id=user_id
-                )
+                se = update_support_entry(entry_id, data, validated_by_user_id=user_id)
             except LookupError:
                 admin_ns.abort(404, "Entrée introuvable")
             except ValueError as e:
@@ -930,9 +934,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 "PLATFORM_BILLING_DUAL_PRODUCT_CONFIG_UI": _dual_product_config_ui_enabled()
             }, 200
 
-    @admin_ns.route(
-        "/platform-billing/companies/<int:company_id>/billing-contracts"
-    )
+    @admin_ns.route("/platform-billing/companies/<int:company_id>/billing-contracts")
     class CompanyBillingContracts(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1002,9 +1004,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return {"ok": True, "contract": serialize_contract(cfg)}, 201
 
-    @admin_ns.route(
-        "/platform-billing/companies/<int:company_id>/debtor-address"
-    )
+    @admin_ns.route("/platform-billing/companies/<int:company_id>/debtor-address")
     class CompanyDebtorAddressResource(Resource):
         """Adresse + identité contractuelle partenaire (sans création de profil)."""
 
@@ -1046,12 +1046,12 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
 
             if "signatory_name" in data:
                 company.signatory_name = (
-                    (data.get("signatory_name") or "").strip() or None
-                )
+                    data.get("signatory_name") or ""
+                ).strip() or None
             if "signatory_title" in data:
                 company.signatory_title = (
-                    (data.get("signatory_title") or "").strip() or None
-                )
+                    data.get("signatory_title") or ""
+                ).strip() or None
             if "uid_ide" in data:
                 company.uid_ide = (data.get("uid_ide") or "").strip() or None
 
@@ -1114,9 +1114,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 admin_ns.abort(404, "Contrat introuvable")
             return {"contract": serialize_contract(cfg)}, 200
 
-    @admin_ns.route(
-        "/platform-billing/billing-contracts/<int:contract_id>/close"
-    )
+    @admin_ns.route("/platform-billing/billing-contracts/<int:contract_id>/close")
     class BillingContractClose(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1138,9 +1136,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return {"ok": True, "contract": serialize_contract(cfg)}, 200
 
-    @admin_ns.route(
-        "/platform-billing/billing-contracts/<int:contract_id>/agreements"
-    )
+    @admin_ns.route("/platform-billing/billing-contracts/<int:contract_id>/agreements")
     class BillingContractAgreements(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1189,9 +1185,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 return {"ok": False, "error": exc.message}, exc.status_code
             return {"ok": True, "agreement": serialize_agreement(agr)}, 201
 
-    @admin_ns.route(
-        "/platform-billing/agreements/<int:agreement_id>/migrate-v120"
-    )
+    @admin_ns.route("/platform-billing/agreements/<int:agreement_id>/migrate-v120")
     class PartnerAgreementMigrateV120(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1221,9 +1215,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 return {"ok": False, "error": exc.message}, exc.status_code
             return {"ok": True, "agreement": serialize_agreement(agr)}, 201
 
-    @admin_ns.route(
-        "/platform-billing/agreements/<int:agreement_id>"
-    )
+    @admin_ns.route("/platform-billing/agreements/<int:agreement_id>")
     class PartnerAgreementDetail(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1240,9 +1232,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 admin_ns.abort(404, "Accord introuvable")
             return {"agreement": serialize_agreement(agr)}, 200
 
-    @admin_ns.route(
-        "/platform-billing/agreements/<int:agreement_id>/docx"
-    )
+    @admin_ns.route("/platform-billing/agreements/<int:agreement_id>/docx")
     class PartnerAgreementDocxDownload(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1282,14 +1272,10 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             return serve_stored_upload(
                 storage_key,
                 as_attachment=True,
-                download_filename=(
-                    f"{agr.reference.replace('/', '_')}_interne.docx"
-                ),
+                download_filename=(f"{agr.reference.replace('/', '_')}_interne.docx"),
             )
 
-    @admin_ns.route(
-        "/platform-billing/agreements/<int:agreement_id>/preview.pdf"
-    )
+    @admin_ns.route("/platform-billing/agreements/<int:agreement_id>/preview.pdf")
     class PartnerAgreementPreviewPdf(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1321,9 +1307,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 },
             )
 
-    @admin_ns.route(
-        "/platform-billing/agreements/<int:agreement_id>/particular.pdf"
-    )
+    @admin_ns.route("/platform-billing/agreements/<int:agreement_id>/particular.pdf")
     class PartnerAgreementParticularPdf(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1375,9 +1359,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 ),
             )
 
-    @admin_ns.route(
-        "/platform-billing/agreements/<int:agreement_id>/package"
-    )
+    @admin_ns.route("/platform-billing/agreements/<int:agreement_id>/package")
     class PartnerAgreementPackageDownload(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1422,9 +1404,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 download_filename=delivery_zip_filename(agr.reference),
             )
 
-    @admin_ns.route(
-        "/platform-billing/agreements/<int:agreement_id>/mark-sent"
-    )
+    @admin_ns.route("/platform-billing/agreements/<int:agreement_id>/mark-sent")
     class PartnerAgreementMarkSent(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1449,9 +1429,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 return {"ok": False, "error": exc.message}, exc.status_code
             return {"ok": True, "agreement": serialize_agreement(agr)}, 200
 
-    @admin_ns.route(
-        "/platform-billing/agreements/<int:agreement_id>/void"
-    )
+    @admin_ns.route("/platform-billing/agreements/<int:agreement_id>/void")
     class PartnerAgreementVoid(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1476,9 +1454,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 return {"ok": False, "error": exc.message}, exc.status_code
             return {"ok": True, "agreement": serialize_agreement(agr)}, 200
 
-    @admin_ns.route(
-        "/platform-billing/agreements/<int:agreement_id>/upload-signed"
-    )
+    @admin_ns.route("/platform-billing/agreements/<int:agreement_id>/upload-signed")
     class PartnerAgreementUploadSigned(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1501,10 +1477,9 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             f = request.files["file"]
             content = f.read()
-            signed_on_raw = (
-                request.form.get("agreement_signed_on")
-                or (request.get_json(silent=True) or {}).get("agreement_signed_on")
-            )
+            signed_on_raw = request.form.get("agreement_signed_on") or (
+                request.get_json(silent=True) or {}
+            ).get("agreement_signed_on")
             if not signed_on_raw:
                 return APIErrorHandler.handle_validation_error(
                     "agreement_signed_on (YYYY-MM-DD) est obligatoire",
@@ -1518,9 +1493,8 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     logger_instance=logger,
                 )
             confirmed_raw = (
-                request.form.get("additional_pages_confirmed")
-                or ""
-            ).strip().lower()
+                (request.form.get("additional_pages_confirmed") or "").strip().lower()
+            )
             additional_confirmed = confirmed_raw in ("1", "true", "yes", "oui")
             try:
                 agr = upload_signed_pdf(
@@ -1535,9 +1509,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 return {"ok": False, "error": exc.message}, exc.status_code
             return {"ok": True, "agreement": serialize_agreement(agr)}, 200
 
-    @admin_ns.route(
-        "/platform-billing/agreements/<int:agreement_id>/signed"
-    )
+    @admin_ns.route("/platform-billing/agreements/<int:agreement_id>/signed")
     class PartnerAgreementSignedDownload(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1653,9 +1625,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     allow_none=False,
                 )
             if "payment_terms_days_default" in data:
-                c.payment_terms_days_default = int(
-                    data["payment_terms_days_default"]
-                )
+                c.payment_terms_days_default = int(data["payment_terms_days_default"])
             if "is_active" in data:
                 c.is_active = bool(data["is_active"])
             db.session.commit()
@@ -1705,9 +1675,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return {"items": items}, 200
 
-    @admin_ns.route(
-        "/platform-billing/invoices/<int:invoice_id>/validate"
-    )
+    @admin_ns.route("/platform-billing/invoices/<int:invoice_id>/validate")
     class PlatformInvoiceValidate(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1724,9 +1692,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return {"ok": True, "invoice": _serialize_invoice(inv)}, 200
 
-    @admin_ns.route(
-        "/platform-billing/invoices/<int:invoice_id>/reopen"
-    )
+    @admin_ns.route("/platform-billing/invoices/<int:invoice_id>/reopen")
     class PlatformInvoiceReopen(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1741,9 +1707,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return result, 200
 
-    @admin_ns.route(
-        "/platform-billing/invoices/<int:invoice_id>/statement-items"
-    )
+    @admin_ns.route("/platform-billing/invoices/<int:invoice_id>/statement-items")
     class PlatformInvoiceStatementItems(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1775,9 +1739,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 ]
             }, 200
 
-    @admin_ns.route(
-        "/platform-billing/invoices/<int:invoice_id>/issue"
-    )
+    @admin_ns.route("/platform-billing/invoices/<int:invoice_id>/issue")
     class PlatformInvoiceIssue(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1809,9 +1771,12 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 month = request.args.get("month", type=int)
                 q = request.args.get("q") or None
                 status = request.args.get("operational_status") or None
-                a_traiter = str(
-                    request.args.get("a_traiter", "false")
-                ).lower() in ("1", "true", "yes", "on")
+                a_traiter = str(request.args.get("a_traiter", "false")).lower() in (
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                )
                 page = request.args.get("page", default=1, type=int)
                 per_page = request.args.get("per_page", default=50, type=int)
                 return list_dossiers(
@@ -1843,9 +1808,12 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 month = request.args.get("month", type=int)
                 q = request.args.get("q") or None
                 status = request.args.get("operational_status") or None
-                a_traiter = str(
-                    request.args.get("a_traiter", "false")
-                ).lower() in ("1", "true", "yes", "on")
+                a_traiter = str(request.args.get("a_traiter", "false")).lower() in (
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                )
                 csv_body = export_dossiers_csv(
                     period_id=period_id,
                     year=year,
@@ -1868,9 +1836,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             except ValueError as e:
                 return {"error": str(e)}, 400
 
-    @admin_ns.route(
-        "/platform-billing/dossiers/<int:period_id>/<int:company_id>"
-    )
+    @admin_ns.route("/platform-billing/dossiers/<int:period_id>/<int:company_id>")
     class PlatformBillingDossierDetail(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -1898,9 +1864,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         def get(self):
             args = request.args
             try:
-                company_id = (
-                    int(args["company_id"]) if args.get("company_id") else None
-                )
+                company_id = int(args["company_id"]) if args.get("company_id") else None
                 year = int(args["year"]) if args.get("year") else None
                 month = int(args["month"]) if args.get("month") else None
                 page = int(args.get("page") or 1)
@@ -1937,9 +1901,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         def get(self):
             args = request.args
             try:
-                company_id = (
-                    int(args["company_id"]) if args.get("company_id") else None
-                )
+                company_id = int(args["company_id"]) if args.get("company_id") else None
                 year = int(args["year"]) if args.get("year") else None
                 month = int(args["month"]) if args.get("month") else None
             except (TypeError, ValueError):
@@ -1984,9 +1946,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     str(e), logger_instance=logger
                 )
 
-    @admin_ns.route(
-        "/platform-billing/issued-invoices/<int:issued_id>/due-date"
-    )
+    @admin_ns.route("/platform-billing/issued-invoices/<int:issued_id>/due-date")
     class PlatformIssuedDueDate(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2003,9 +1963,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     logger_instance=logger,
                 )
             try:
-                new_due = datetime.fromisoformat(
-                    str(due_raw).replace("Z", "+00:00")
-                )
+                new_due = datetime.fromisoformat(str(due_raw).replace("Z", "+00:00"))
                 inv = update_issued_invoice_due_date(
                     issued_id,
                     new_due_at=new_due,
@@ -2018,9 +1976,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return {"ok": True, "issued_invoice": _serialize_issued(inv)}, 200
 
-    @admin_ns.route(
-        "/platform-billing/issued-invoices/<int:issued_id>/pdf"
-    )
+    @admin_ns.route("/platform-billing/issued-invoices/<int:issued_id>/pdf")
     class PlatformIssuedInvoicePdf(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2041,9 +1997,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 },
             )
 
-    @admin_ns.route(
-        "/platform-billing/invoices/<int:invoice_id>/readiness"
-    )
+    @admin_ns.route("/platform-billing/invoices/<int:invoice_id>/readiness")
     class PlatformInvoiceReadiness(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2063,9 +2017,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 "qr_errors": qr_err,
             }, 200
 
-    @admin_ns.route(
-        "/platform-billing/issued-invoices/<int:issued_id>/send"
-    )
+    @admin_ns.route("/platform-billing/issued-invoices/<int:issued_id>/send")
     class PlatformIssuedSend(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2080,9 +2032,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return {"ok": True, "issued_invoice": _serialize_issued(inv)}, 200
 
-    @admin_ns.route(
-        "/platform-billing/issued-invoices/<int:issued_id>/payments"
-    )
+    @admin_ns.route("/platform-billing/issued-invoices/<int:issued_id>/payments")
     class PlatformIssuedPayments(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2140,9 +2090,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return {"ok": True, "issued_invoice": _serialize_issued(inv)}, 200
 
-    @admin_ns.route(
-        "/platform-billing/issued-invoices/<int:issued_id>/cancel"
-    )
+    @admin_ns.route("/platform-billing/issued-invoices/<int:issued_id>/cancel")
     class PlatformIssuedCancel(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2157,9 +2105,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return {"ok": True, "issued_invoice": _serialize_issued(inv)}, 200
 
-    @admin_ns.route(
-        "/platform-billing/issued-invoices/<int:issued_id>/credit-note"
-    )
+    @admin_ns.route("/platform-billing/issued-invoices/<int:issued_id>/credit-note")
     class PlatformIssuedCredit(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2179,9 +2125,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return {"ok": True, "issued_invoice": _serialize_issued(inv)}, 201
 
-    @admin_ns.route(
-        "/platform-billing/issued-invoices/<int:issued_id>/editor"
-    )
+    @admin_ns.route("/platform-billing/issued-invoices/<int:issued_id>/editor")
     class PlatformIssuedInvoiceEditor(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2201,9 +2145,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     str(e), logger_instance=logger
                 )
 
-    @admin_ns.route(
-        "/platform-billing/issued-invoices/<int:issued_id>/editor/preview"
-    )
+    @admin_ns.route("/platform-billing/issued-invoices/<int:issued_id>/editor/preview")
     class PlatformIssuedInvoiceEditorPreview(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2265,9 +2207,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 },
             )
 
-    @admin_ns.route(
-        "/platform-billing/issued-invoices/<int:issued_id>/replace"
-    )
+    @admin_ns.route("/platform-billing/issued-invoices/<int:issued_id>/replace")
     class PlatformIssuedInvoiceReplace(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2343,9 +2283,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             n = refresh_overdue_statuses()
             return {"ok": True, "updated": n}, 200
 
-    @admin_ns.route(
-        "/platform-billing/bookings/<int:booking_id>/billing-origin"
-    )
+    @admin_ns.route("/platform-billing/bookings/<int:booking_id>/billing-origin")
     class BookingBillingOriginCorrect(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2377,9 +2315,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 "billing_origin_source": booking.billing_origin_source,
             }, 200
 
-    @admin_ns.route(
-        "/platform-billing/companies/<int:company_id>/dunning/pause"
-    )
+    @admin_ns.route("/platform-billing/companies/<int:company_id>/dunning/pause")
     class PlatformBillingDunningPause(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2436,9 +2372,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 "dunning_pause_reason": reason,
             }, 200
 
-    @admin_ns.route(
-        "/platform-billing/companies/<int:company_id>/dunning/resume"
-    )
+    @admin_ns.route("/platform-billing/companies/<int:company_id>/dunning/resume")
     class PlatformBillingDunningResume(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2467,9 +2401,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 "reason": reason,
             }, 200
 
-    @admin_ns.route(
-        "/platform-billing/companies/<int:company_id>/billing-access"
-    )
+    @admin_ns.route("/platform-billing/companies/<int:company_id>/billing-access")
     class PlatformBillingAccessStateResource(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
@@ -2538,9 +2470,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 else None,
             }, 200
 
-    @admin_ns.route(
-        "/platform-billing/issued-invoices/<int:issued_id>/dunning-hold"
-    )
+    @admin_ns.route("/platform-billing/issued-invoices/<int:issued_id>/dunning-hold")
     class PlatformInvoiceDunningHoldResource(Resource):
         @jwt_required()
         @role_required(UserRole.admin)

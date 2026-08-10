@@ -1208,9 +1208,9 @@ def _login_post_body():
     is_mobile_request = _is_mobile_request()
 
     contract = (request.headers.get("X-Auth-Contract-Version") or "").strip()
-    device_installation_id = request.headers.get(
-        "X-Device-ID"
-    ) or request.headers.get("X-Installation-ID")
+    device_installation_id = request.headers.get("X-Device-ID") or request.headers.get(
+        "X-Installation-ID"
+    )
 
     # P0 : contrat v1 sans identité appareil — fail-closed avant toute émission JWT
     if contract == "mobile-device-session-v1" and not device_installation_id:
@@ -1320,9 +1320,7 @@ def _login_post_body():
     }
     if mobile_session is not None:
         claims["session_id"] = str(mobile_session.session_id)
-        claims["session_epoch"] = int(
-            getattr(mobile_session, "session_epoch", 1) or 1
-        )
+        claims["session_epoch"] = int(getattr(mobile_session, "session_epoch", 1) or 1)
         # Compat clients legacy
         claims["session_generation"] = claims["session_epoch"]
     access_expires_delta = _resolve_access_token_expires(is_mobile_request)
@@ -1387,7 +1385,9 @@ def _login_post_body():
             device_name=device_name,
             commit=False,
         )
-        if mobile_session is not None and hasattr(stored_refresh_token_row, "session_id"):
+        if mobile_session is not None and hasattr(
+            stored_refresh_token_row, "session_id"
+        ):
             stored_refresh_token_row.session_id = str(mobile_session.session_id)
             stored_refresh_token_row.session_generation = int(
                 getattr(mobile_session, "session_epoch", mobile_session.generation) or 1
@@ -1484,7 +1484,9 @@ def _login_post_body():
                 getattr(mobile_session, "session_epoch", 1) or 1
             )
             response_data["credential_generation"] = int(
-                getattr(mobile_session, "credential_generation", mobile_session.generation)
+                getattr(
+                    mobile_session, "credential_generation", mobile_session.generation
+                )
                 or 1
             )
             response_data["refresh_generation"] = int(
@@ -2711,14 +2713,21 @@ class RefreshToken(Resource):
                         "error_code": classified_code,
                         "retryable": False,
                     }, 401
-                rotation_request_generation = int(
-                    getattr(mobile_session_for_rotation, "refresh_generation", 1) or 1
-                ) if mobile_session_for_rotation is not None else None
+                rotation_request_generation = (
+                    int(
+                        getattr(mobile_session_for_rotation, "refresh_generation", 1)
+                        or 1
+                    )
+                    if mobile_session_for_rotation is not None
+                    else None
+                )
                 claims["session_id"] = str(old_session_id)
-                epoch_val = int(
-                    getattr(mobile_session_for_rotation, "session_epoch", 1) or 1
-                ) if mobile_session_for_rotation is not None else (
-                    int(old_session_epoch) if old_session_epoch is not None else 1
+                epoch_val = (
+                    int(getattr(mobile_session_for_rotation, "session_epoch", 1) or 1)
+                    if mobile_session_for_rotation is not None
+                    else (
+                        int(old_session_epoch) if old_session_epoch is not None else 1
+                    )
                 )
                 claims["session_epoch"] = epoch_val
                 claims["session_generation"] = epoch_val
@@ -2745,7 +2754,9 @@ class RefreshToken(Resource):
             # Bump refresh_generation (pas session_epoch, pas recovery)
             new_refresh_gen = 1
             if mobile_session_for_rotation is not None:
-                from security.mobile_device_session_service import bump_refresh_generation
+                from security.mobile_device_session_service import (
+                    bump_refresh_generation,
+                )
 
                 new_refresh_gen = bump_refresh_generation(mobile_session_for_rotation)
             new_refresh_claims: dict[str, object] = {
@@ -2808,10 +2819,7 @@ class RefreshToken(Resource):
                         mobile_session_for_rotation.session_id
                     )
                     new_refresh_token_row.session_generation = int(
-                        getattr(
-                            mobile_session_for_rotation, "session_epoch", 1
-                        )
-                        or 1
+                        getattr(mobile_session_for_rotation, "session_epoch", 1) or 1
                     )
 
                 # Réponse à persister pour idempotence (avant commit)
@@ -2825,13 +2833,19 @@ class RefreshToken(Resource):
                         else None
                     ),
                     "session_epoch": (
-                        int(getattr(mobile_session_for_rotation, "session_epoch", 1) or 1)
+                        int(
+                            getattr(mobile_session_for_rotation, "session_epoch", 1)
+                            or 1
+                        )
                         if mobile_session_for_rotation is not None
                         else None
                     ),
                     "refresh_generation": new_refresh_gen,
                     "session_generation": (
-                        int(getattr(mobile_session_for_rotation, "session_epoch", 1) or 1)
+                        int(
+                            getattr(mobile_session_for_rotation, "session_epoch", 1)
+                            or 1
+                        )
                         if mobile_session_for_rotation is not None
                         else None
                     ),
@@ -2895,9 +2909,7 @@ class RefreshToken(Resource):
                     token_service.limit_active_tokens(user.id, max_active_tokens)
             except Exception as store_error:
                 if is_rotation_idempotency_conflict(store_error):
-                    logger.warning(
-                        "refresh-token idempotency IntegrityError recovered"
-                    )
+                    logger.warning("refresh-token idempotency IntegrityError recovered")
                     db.session.rollback()
                     if (
                         idempotency_key
@@ -3208,15 +3220,11 @@ class Logout(Resource):
                     current_app.config["COOKIE_REFRESH_TOKEN_NAME"]
                 )
             if not refresh_token:
-                refresh_token = (
-                    logout_body.get("refresh_token")
-                    or logout_body.get("refreshToken")
+                refresh_token = logout_body.get("refresh_token") or logout_body.get(
+                    "refreshToken"
                 )
 
-            session_id = (
-                logout_body.get("session_id")
-                or jwt_claims.get("session_id")
-            )
+            session_id = logout_body.get("session_id") or jwt_claims.get("session_id")
             already_revoked = False
             token_service = RefreshTokenService()
 
@@ -3245,8 +3253,10 @@ class Logout(Resource):
                     return True
                 # Même utilisateur si identity connue
                 refresh_sub = decoded.get("sub")
-                if current_user_id and refresh_sub and str(refresh_sub) != str(
+                if (
                     current_user_id
+                    and refresh_sub
+                    and str(refresh_sub) != str(current_user_id)
                 ):
                     return False
                 return True
@@ -3295,9 +3305,7 @@ class Logout(Resource):
                     )
                     if refresh_token:
                         token_service.revoke_token(refresh_token)
-                        revoke_refresh_token(
-                            refresh_token, reason="Logout utilisateur"
-                        )
+                        revoke_refresh_token(refresh_token, reason="Logout utilisateur")
                 elif refresh_token:
                     # Legacy : révoquer uniquement le refresh transmis / device courant
                     token_service.revoke_token(refresh_token)
@@ -4524,12 +4532,8 @@ class Register(Resource):
             ) or None
             email_raw = validated_data.get("email")
             phone_raw = validated_data.get("phone")
-            email: str | None = (
-                str(email_raw).strip() if email_raw else None
-            ) or None
-            phone: str | None = (
-                str(phone_raw).strip() if phone_raw else None
-            ) or None
+            email: str | None = (str(email_raw).strip() if email_raw else None) or None
+            phone: str | None = (str(phone_raw).strip() if phone_raw else None) or None
 
             if not email and not phone:
                 return auth_error(
@@ -4651,9 +4655,9 @@ class Register(Resource):
                     try_enqueue_activation_email,
                 )
 
-                environment = str(
-                    current_app.config.get("ENVIRONMENT", "")
-                ).strip().lower()
+                environment = (
+                    str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+                )
                 # Lot 1 : jeton HMAC dérivé de email_delivery_id (pas itsdangerous)
                 enqueue_result = try_enqueue_activation_email(
                     activation_session,
@@ -4839,9 +4843,7 @@ class VerifyActivationEmail(Resource):
                     locked.email_delivery_id != delivery.email_delivery_id
                     or delivery.superseded_at is not None
                 ):
-                    recovery = _activation_recovery_details(
-                        locked, reason="superseded"
-                    )
+                    recovery = _activation_recovery_details(locked, reason="superseded")
                     db.session.rollback()
                     logger.warning(
                         "activation_email_verify_rejected reason=superseded "

@@ -57,7 +57,9 @@ def test_encrypt_decrypt_rotation_response_roundtrip():
 
 
 def test_validate_mobile_session_missing_id_is_legacy_ok():
-    err, retryable = svc.validate_mobile_session(session_id=None, session_generation=None)
+    err, retryable = svc.validate_mobile_session(
+        session_id=None, session_generation=None
+    )
     assert err is None
     assert retryable is False
 

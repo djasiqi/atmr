@@ -64,9 +64,7 @@ def _short_refresh_ttl_seconds() -> int:
 
 
 def _long_refresh_ttl_seconds() -> int:
-    return int(
-        os.getenv("JWT_REFRESH_TOKEN_LONG_EXPIRES_SECONDS", str(30 * 24 * 3600))
-    )
+    return int(os.getenv("JWT_REFRESH_TOKEN_LONG_EXPIRES_SECONDS", str(30 * 24 * 3600)))
 
 
 def _decode_refresh_ttl(refresh_token: str) -> int:
@@ -123,7 +121,9 @@ class TestLoginRememberMe:
         _assert_access_expiry_metadata(data)
 
         ttl = _decode_refresh_ttl(_cookie_value(cookie))
-        assert abs(ttl - long_ttl) <= 5, f"TTL JWT long attendu ~{long_ttl}s, reçu {ttl}"
+        assert abs(ttl - long_ttl) <= 5, (
+            f"TTL JWT long attendu ~{long_ttl}s, reçu {ttl}"
+        )
 
     def test_login_remember_me_false_uses_session_cookie_and_short_ttl(
         self, client, sample_user

@@ -148,7 +148,9 @@ def get_or_create_billing_party_for_direct_patient(
     Idempotence via ``external_ref = patient_client:{client.id}`` (scopé company_id).
     """
     if client is None or getattr(client, "id", None) is None:
-        raise ValueError("client requis pour get_or_create_billing_party_for_direct_patient")
+        raise ValueError(
+            "client requis pour get_or_create_billing_party_for_direct_patient"
+        )
 
     client_id = int(client.id)
     if int(getattr(client, "company_id", 0) or 0) != int(company_id):

@@ -100,7 +100,14 @@ class TestCompanyDashboardBootstrap:
 
         # KPI du jour (mêmes agrégats que /me/reservations/summary).
         kpi = data["kpi"]
-        for key in ("total", "pending", "inProgress", "completed", "canceled", "revenue"):
+        for key in (
+            "total",
+            "pending",
+            "inProgress",
+            "completed",
+            "canceled",
+            "revenue",
+        ):
             assert key in kpi
         assert kpi["total"] >= 1
         assert kpi["pending"] >= 1
@@ -155,9 +162,7 @@ class TestCompanyDashboardBootstrap:
         data = response.get_json()
         assert data["date"] == now_local().strftime("%Y-%m-%d")
 
-    def test_rejects_invalid_date_format(
-        self, client, sample_user, bootstrap_company
-    ):
+    def test_rejects_invalid_date_format(self, client, sample_user, bootstrap_company):
         headers = _company_headers(client, sample_user, bootstrap_company.id)
         response = client.get(
             "/api/v1/companies/me/dashboard/bootstrap?date=not-a-date",
@@ -283,9 +288,7 @@ class TestCompanyDashboardBootstrap:
         def _boom(*_args, **_kwargs):
             raise RuntimeError("agrégat KPI indisponible")
 
-        monkeypatch.setattr(
-            companies_module, "_booking_stats_from_base_query", _boom
-        )
+        monkeypatch.setattr(companies_module, "_booking_stats_from_base_query", _boom)
         headers = _company_headers(client, sample_user, bootstrap_company.id)
 
         response = client.get(

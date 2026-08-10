@@ -38,9 +38,7 @@ class TestCancellationCohort:
     def test_rate_zero_when_no_creations(self):
         created = 0
         canceled_from_created = 0
-        rate = (
-            float(canceled_from_created) / float(max(created, 1)) if created else 0.0
-        )
+        rate = float(canceled_from_created) / float(max(created, 1)) if created else 0.0
         assert rate == 0.0
 
 
@@ -53,7 +51,9 @@ class TestBillingToReviewScope:
         assert (
             PlatformStatementStatus.CALCULATED.value in summary_mod._STATEMENT_TO_REVIEW
         )
-        assert PlatformStatementStatus.LOCKED.value not in summary_mod._STATEMENT_TO_REVIEW
+        assert (
+            PlatformStatementStatus.LOCKED.value not in summary_mod._STATEMENT_TO_REVIEW
+        )
         assert PlatformBillingPeriodStatus.DRAFT.value == "draft"
 
     def test_billing_query_requires_draft_period(self):
@@ -91,9 +91,7 @@ class TestBookingTrendsDeprecated:
 
     def test_trends_empty_with_app_context(self, app, fixed_now):
         query_chain = MagicMock()
-        query_chain.options.return_value.order_by.return_value.limit.return_value.all.return_value = (
-            []
-        )
+        query_chain.options.return_value.order_by.return_value.limit.return_value.all.return_value = []
         exec_result = MagicMock()
         exec_result.scalar_one.return_value = 0
 
@@ -125,7 +123,9 @@ class TestIssuedExcluded:
         assert (
             PlatformIssuedInvoiceStatus.CANCELLED.value in summary_mod._ISSUED_EXCLUDED
         )
-        assert PlatformIssuedInvoiceStatus.CREDITED.value in summary_mod._ISSUED_EXCLUDED
+        assert (
+            PlatformIssuedInvoiceStatus.CREDITED.value in summary_mod._ISSUED_EXCLUDED
+        )
         assert (
             PlatformIssuedInvoiceStatus.ISSUED.value not in summary_mod._ISSUED_EXCLUDED
         )

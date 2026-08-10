@@ -75,7 +75,9 @@ class ListCompanyClientsUseCase:
     """Use-case Application: liste + search + pagination (slice)
     pour les clients d'une company."""
 
-    MAX_PER_PAGE = 100  # ✅ Aligné avec la validation de la route backend (Lot 5 perf : max 100)
+    MAX_PER_PAGE = (
+        100  # ✅ Aligné avec la validation de la route backend (Lot 5 perf : max 100)
+    )
 
     def __init__(  # pyright: ignore[reportMissingSuperCall]
         self, *, client_repo: _ClientRepo

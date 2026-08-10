@@ -109,7 +109,9 @@ def test_post_clients_me_bookings_ignores_forbidden_fields(
         assert user_id == client_user.id
         assert client_id == test_client.id
         assert FORBIDDEN_CLIENT_FIELDS.isdisjoint(data.keys())
-        published.append({"user_id": user_id, "client_id": client_id, "data": dict(data)})
+        published.append(
+            {"user_id": user_id, "client_id": client_id, "data": dict(data)}
+        )
         return fake_booking
 
     monkeypatch.setattr(
@@ -153,7 +155,9 @@ def test_post_clients_public_id_bookings_ignores_forbidden_fields(
     captured: dict[str, Any] = {}
 
     def _fake_create(*, user_id: int, client_id: int, data: dict[str, Any]):
-        captured.update(data=dict(data), client_id=client_id, company_id=sample_company.id)
+        captured.update(
+            data=dict(data), client_id=client_id, company_id=sample_company.id
+        )
         return fake_booking
 
     monkeypatch.setattr(

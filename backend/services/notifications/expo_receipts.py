@@ -168,8 +168,7 @@ def apply_expo_receipts(
             apply_push_result_to_device_token(
                 int(device_token_id),
                 {
-                    "ok": classified["delivery_status"]
-                    in ("provider_accepted",),
+                    "ok": classified["delivery_status"] in ("provider_accepted",),
                     "error": classified.get("failure_reason"),
                     "token_invalid": classified.get("deactivate_token"),
                     "deactivate_token": classified.get("deactivate_token"),

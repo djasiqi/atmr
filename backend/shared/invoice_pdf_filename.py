@@ -124,9 +124,7 @@ def build_invoice_pdf_download_filename(invoice: Any) -> str:
     except (TypeError, ValueError):
         year = 0
 
-    month_label = (
-        _MONTHS_FR[month_idx - 1] if 1 <= month_idx <= 12 else "Periode"
-    )
+    month_label = _MONTHS_FR[month_idx - 1] if 1 <= month_idx <= 12 else "Periode"
     year_label = str(year) if year > 0 else ""
 
     number_raw = (getattr(invoice, "invoice_number", None) or "").strip()

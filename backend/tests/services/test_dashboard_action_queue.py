@@ -150,7 +150,6 @@ def test_build_action_queue_includes_delay_severity_from_namespace():
     assert items[0]["delay_severity"] == "critical"
 
 
-
 def test_serialize_v2_extras_truncation_meta(action_queue_booking):
     kpi = {
         "pending_decision": 5,
@@ -159,7 +158,9 @@ def test_serialize_v2_extras_truncation_meta(action_queue_booking):
         "critical_delay_minutes": 15,
         "total": 1,
     }
-    extras = serialize_dashboard_v2_extras([action_queue_booking], kpi, action_queue_limit=0)
+    extras = serialize_dashboard_v2_extras(
+        [action_queue_booking], kpi, action_queue_limit=0
+    )
     assert extras["summary"]["to_handle"] == 5
     assert extras["action_queue_total"] == 5
     assert extras["action_queue_truncated"] is True
@@ -170,7 +171,9 @@ def test_serialize_v2_extras_truncation_meta(action_queue_booking):
 def _company_headers(client, user, company_id: int) -> dict[str, str]:
     claims = {"role": user.role.value, "company_id": company_id, "aud": "atmr-api"}
     with client.application.app_context():
-        token = create_access_token(identity=str(user.public_id), additional_claims=claims)
+        token = create_access_token(
+            identity=str(user.public_id), additional_claims=claims
+        )
     return {"Authorization": f"Bearer {token}"}
 
 

@@ -45,10 +45,9 @@ CIRCUIT_OK_THRESHOLD = max(
 )
 LAG_THRESHOLD = max(0, int(os.getenv("TRACKING_ASYNC_CIRCUIT_LAG_THRESHOLD", "500")))
 CIRCUIT_TTL_SEC = max(HEARTBEAT_TTL_SEC * 3, 60)
-HEALTH_GATE_ENABLED = (
-    os.getenv("TRACKING_ASYNC_HEALTH_GATE_ENABLED", "true").lower()
-    in ("1", "true", "yes", "on")
-)
+HEALTH_GATE_ENABLED = os.getenv(
+    "TRACKING_ASYNC_HEALTH_GATE_ENABLED", "true"
+).lower() in ("1", "true", "yes", "on")
 
 
 def _utcnow_iso() -> str:
@@ -154,7 +153,9 @@ def open_circuit_immediate(*, reason: str = "consumer_down") -> dict[str, Any]:
     return payload
 
 
-def _heartbeat_healthy(hb: dict[str, Any] | None) -> tuple[bool, str, float | None, int]:
+def _heartbeat_healthy(
+    hb: dict[str, Any] | None,
+) -> tuple[bool, str, float | None, int]:
     if not hb:
         return False, "heartbeat_absent", None, 0
     age = _parse_iso_age_seconds(hb.get("last_poll_at") or hb.get("updated_at"))

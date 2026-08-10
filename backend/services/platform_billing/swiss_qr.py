@@ -48,7 +48,9 @@ def is_swiss_qr_iban(iban: str | None) -> bool:
     return 30000 <= iid <= 31999
 
 
-def resolve_platform_reference_mode(iban: str | None, requested_mode: str | None) -> str:
+def resolve_platform_reference_mode(
+    iban: str | None, requested_mode: str | None
+) -> str:
     """Résout le type de référence QR-facture.
 
     - QRR : uniquement avec un QR-IBAN ; sinon bascule SCOR (IBAN classique).
