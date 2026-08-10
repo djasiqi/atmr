@@ -24,6 +24,7 @@ def expire_awaiting_client_payment_bookings(
     *,
     now: datetime | None = None,
     grace_minutes: int = CLIENT_ONLINE_PAYMENT_GRACE_MINUTES,
+    company_id: int | None = None,
 ) -> int:
     """Annule (CANCELED) les réservations AWAITING_CLIENT_PAYMENT non payées après le délai.
 
@@ -57,7 +58,7 @@ def expire_awaiting_client_payment_bookings(
         ),
     )
 
-    rows = (
+    query = (
         Booking.query.filter(Booking.status == BookingStatus.AWAITING_CLIENT_PAYMENT)
         .filter(
             func.lower(func.coalesce(Booking.billed_to_type, "patient")) == "patient"
@@ -66,8 +67,10 @@ def expire_awaiting_client_payment_bookings(
         .filter(Booking.created_at <= threshold)
         .filter(~has_completed_payment)
         .filter(~has_active_saferpay_pending)
-        .all()
     )
+    if company_id is not None:
+        query = query.filter(Booking.company_id == company_id)
+    rows = query.all()
 
     cancelled = 0
     for booking in rows:

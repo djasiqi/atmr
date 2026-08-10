@@ -39,7 +39,9 @@ class TestInvoicePdfPerformance:
         client_user.set_password("password123", force_change=False)
         db.session.add_all([user, client_user])
         db.session.flush()
-        company = Company(name="Test Company", uid_ide="CHE-123.456.789", user_id=user.id)
+        company = Company(
+            name="Test Company", uid_ide="CHE-123.456.789", user_id=user.id
+        )
         client = Client(user=client_user, company=company)
         db.session.add_all([company, client])
         db.session.commit()
@@ -127,7 +129,9 @@ class TestInvoicePdfPerformance:
         client_user.set_password("password123", force_change=False)
         db.session.add_all([user, client_user])
         db.session.flush()
-        company = Company(name="Test Company", uid_ide="CHE-123.456.789", user_id=user.id)
+        company = Company(
+            name="Test Company", uid_ide="CHE-123.456.789", user_id=user.id
+        )
         client = Client(user=client_user, company=company)
         db.session.add_all([company, client])
         db.session.commit()

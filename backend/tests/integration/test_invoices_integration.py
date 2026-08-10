@@ -1593,9 +1593,7 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert_response_status(dr, 200)
         inv_out = dr.get_json()["data"]["invoice"]
         lines = inv_out.get("lines") or []
-        ride_lines = [
-            ln for ln in lines if str(ln.get("type", "")).upper() == "RIDE"
-        ]
+        ride_lines = [ln for ln in lines if str(ln.get("type", "")).upper() == "RIDE"]
         assert len(ride_lines) >= 1
         assert sum(float(ln.get("line_total", 0) or 0) for ln in ride_lines) < 200.0
         assert inv_out.get("meta", {}).get("global_discount", {}).get("percent") == 10.0

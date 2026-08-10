@@ -7,6 +7,13 @@ from services.security.safety import (
     SafetyThresholds,
     get_safety_guards,
     logger,
+    reset_safety_guards,
 )
 
-__all__ = ["SafetyGuards", "SafetyThresholds", "get_safety_guards", "logger"]
+__all__ = [
+    "SafetyGuards",
+    "SafetyThresholds",
+    "get_safety_guards",
+    "logger",
+    "reset_safety_guards",
+]

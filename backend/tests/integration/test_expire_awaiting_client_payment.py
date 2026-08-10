@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-
-import uuid
 
 import pytest
 
@@ -29,19 +28,22 @@ class TestExpireAwaitingClientPayment:
         booking.customer_name = f"{test_client.first_name} {test_client.last_name}"
         booking.pickup_location = "Rue A, 1200 Genève"
         booking.dropoff_location = "HUG, 1205 Genève"
+        now = datetime(2001, 1, 1, tzinfo=UTC)
         booking.scheduled_time = datetime.now(UTC) + timedelta(hours=2)
         booking.status = BookingStatus.AWAITING_CLIENT_PAYMENT
         booking.amount = float(Decimal("45.00"))
         booking.billed_to_type = "patient"
         db.session.add(booking)
         db.session.flush()
-        past = datetime.now(UTC) - timedelta(
-            minutes=CLIENT_ONLINE_PAYMENT_GRACE_MINUTES + 5
-        )
+        past = now - timedelta(minutes=CLIENT_ONLINE_PAYMENT_GRACE_MINUTES + 5)
         booking.created_at = past
         db.session.commit()
 
-        n = expire_awaiting_client_payment_bookings()
+        # Une fenêtre temporelle dédiée évite que le test compte des paiements
+        # en attente créés par d'autres fixtures dans la base PostgreSQL partagée.
+        n = expire_awaiting_client_payment_bookings(
+            now=now, company_id=test_company.id
+        )
         assert n == 1
         db.session.refresh(booking)
         assert booking.status == BookingStatus.CANCELED
@@ -51,6 +53,9 @@ class TestExpireAwaitingClientPayment:
     def test_skips_when_within_grace(
         self, db, test_company, test_client, requires_postgresql
     ):
+        # Une horloge isolée empêche les réservations en attente d'autres tests,
+        # présentes dans PostgreSQL partagé, d'être incluses dans le décompte.
+        now = datetime(2000, 1, 1, tzinfo=UTC)
         booking = Booking()
         booking.user_id = test_client.user_id
         booking.company_id = test_company.id
@@ -64,10 +69,12 @@ class TestExpireAwaitingClientPayment:
         booking.billed_to_type = "patient"
         db.session.add(booking)
         db.session.flush()
-        booking.created_at = datetime.now(UTC) - timedelta(minutes=5)
+        booking.created_at = now - timedelta(minutes=5)
         db.session.commit()
 
-        n = expire_awaiting_client_payment_bookings()
+        n = expire_awaiting_client_payment_bookings(
+            now=now, company_id=test_company.id
+        )
         assert n == 0
         db.session.refresh(booking)
         assert booking.status == BookingStatus.AWAITING_CLIENT_PAYMENT
@@ -75,6 +82,7 @@ class TestExpireAwaitingClientPayment:
     def test_skips_when_payment_completed(
         self, db, test_company, test_client, requires_postgresql
     ):
+        now = datetime(2000, 1, 1, tzinfo=UTC)
         booking = Booking()
         booking.user_id = test_client.user_id
         booking.company_id = test_company.id
@@ -88,7 +96,7 @@ class TestExpireAwaitingClientPayment:
         booking.billed_to_type = "patient"
         db.session.add(booking)
         db.session.flush()
-        booking.created_at = datetime.now(UTC) - timedelta(
+        booking.created_at = now - timedelta(
             minutes=CLIENT_ONLINE_PAYMENT_GRACE_MINUTES + 10
         )
         pay = Payment(
@@ -102,7 +110,9 @@ class TestExpireAwaitingClientPayment:
         db.session.add(pay)
         db.session.commit()
 
-        n = expire_awaiting_client_payment_bookings()
+        n = expire_awaiting_client_payment_bookings(
+            now=now, company_id=test_company.id
+        )
         assert n == 0
         db.session.refresh(booking)
         assert booking.status == BookingStatus.AWAITING_CLIENT_PAYMENT
@@ -110,6 +120,7 @@ class TestExpireAwaitingClientPayment:
     def test_skips_when_saferpay_pending_has_token(
         self, db, test_company, test_client, requires_postgresql
     ):
+        now = datetime(2000, 1, 1, tzinfo=UTC)
         booking = Booking()
         booking.user_id = test_client.user_id
         booking.company_id = test_company.id
@@ -123,7 +134,7 @@ class TestExpireAwaitingClientPayment:
         booking.billed_to_type = "patient"
         db.session.add(booking)
         db.session.flush()
-        booking.created_at = datetime.now(UTC) - timedelta(
+        booking.created_at = now - timedelta(
             minutes=CLIENT_ONLINE_PAYMENT_GRACE_MINUTES + 10
         )
         pay = Payment(
@@ -139,7 +150,9 @@ class TestExpireAwaitingClientPayment:
         db.session.add(pay)
         db.session.commit()
 
-        n = expire_awaiting_client_payment_bookings()
+        n = expire_awaiting_client_payment_bookings(
+            now=now, company_id=test_company.id
+        )
         assert n == 0
         db.session.refresh(booking)
         assert booking.status == BookingStatus.AWAITING_CLIENT_PAYMENT
@@ -147,6 +160,7 @@ class TestExpireAwaitingClientPayment:
     def test_skips_when_saferpay_pending_has_transaction_id_only(
         self, db, test_company, test_client, requires_postgresql
     ):
+        now = datetime(2000, 1, 1, tzinfo=UTC)
         booking = Booking()
         booking.user_id = test_client.user_id
         booking.company_id = test_company.id
@@ -160,7 +174,7 @@ class TestExpireAwaitingClientPayment:
         booking.billed_to_type = "patient"
         db.session.add(booking)
         db.session.flush()
-        booking.created_at = datetime.now(UTC) - timedelta(
+        booking.created_at = now - timedelta(
             minutes=CLIENT_ONLINE_PAYMENT_GRACE_MINUTES + 10
         )
         pay = Payment(
@@ -177,7 +191,9 @@ class TestExpireAwaitingClientPayment:
         db.session.add(pay)
         db.session.commit()
 
-        n = expire_awaiting_client_payment_bookings()
+        n = expire_awaiting_client_payment_bookings(
+            now=now, company_id=test_company.id
+        )
         assert n == 0
         db.session.refresh(booking)
         assert booking.status == BookingStatus.AWAITING_CLIENT_PAYMENT

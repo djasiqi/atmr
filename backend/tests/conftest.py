@@ -74,8 +74,7 @@ os.environ.setdefault(
 # Default 5433 = port docker-compose.test.yml (postgres_test) pour éviter confusion 5432 vs 5433
 os.environ.setdefault(
     "DATABASE_URL",
-    os.getenv("DATABASE_URL_TEST")
-    or "postgresql://test:test@localhost:5433/atmr_test",
+    os.getenv("DATABASE_URL_TEST") or "postgresql://test:test@localhost:5433/atmr_test",
 )
 # Désactiver la doc RESTX pour éviter les conflits d'endpoint /specs en tests
 os.environ["API_DOCS"] = "off"

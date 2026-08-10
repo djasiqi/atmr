@@ -78,7 +78,7 @@ def test_list_bookings_pagination(
             customer_name=f"Client {i}",
             pickup_location="Lausanne Gare",
             dropoff_location="CHUV",
-            scheduled_time=datetime.now(UTC) + timedelta(days=i),
+            scheduled_time=datetime.now(UTC) + timedelta(days=i + 1),
             status=BookingStatus.PENDING,
             amount=50.0,
             distance_meters=0.5000,
@@ -512,7 +512,8 @@ def test_booking_create_scheduled_time_none_rejected(
             customer_name="Test Client",
             pickup_location="Lausanne",
             dropoff_location="Genève",
-            scheduled_time=None,  # None devrait être rejeté
+            time_confirmed=True,
+            scheduled_time=None,  # None doit être rejeté si l'heure est confirmée
             status=BookingStatus.PENDING,
             amount=50.0,
         )
@@ -889,7 +890,7 @@ def _client_auth_headers(client, sample_client):
 def test_saferpay_assert_returns_finalize_payload(
     client, db, sample_company, sample_client, monkeypatch, requires_postgresql
 ):
-    from datetime import UTC, datetime
+    from datetime import UTC, datetime, timedelta
     from unittest.mock import patch
 
     from models.booking import Booking
@@ -908,7 +909,7 @@ def test_saferpay_assert_returns_finalize_payload(
     booking.customer_name = "Test"
     booking.pickup_location = "A"
     booking.dropoff_location = "B"
-    booking.scheduled_time = datetime.now(UTC)
+    booking.scheduled_time = datetime.now(UTC) + timedelta(minutes=1)
     booking.status = BookingStatus.AWAITING_CLIENT_PAYMENT
     booking.amount = 10.0
     booking.billed_to_type = "patient"
@@ -949,7 +950,7 @@ def test_saferpay_assert_returns_finalize_payload(
 def test_saferpay_assert_not_found_payment(
     client, db, sample_company, sample_client, monkeypatch, requires_postgresql
 ):
-    from datetime import UTC, datetime
+    from datetime import UTC, datetime, timedelta
 
     from models.booking import Booking
     from models.enums import BookingStatus
@@ -966,7 +967,7 @@ def test_saferpay_assert_not_found_payment(
     booking.customer_name = "Test"
     booking.pickup_location = "A"
     booking.dropoff_location = "B"
-    booking.scheduled_time = datetime.now(UTC)
+    booking.scheduled_time = datetime.now(UTC) + timedelta(minutes=1)
     booking.status = BookingStatus.AWAITING_CLIENT_PAYMENT
     booking.amount = 10.0
     booking.billed_to_type = "patient"

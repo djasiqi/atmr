@@ -29,6 +29,8 @@ def _make_booking(
     b.customer_name = "Stats Test"
     b.pickup_location = "Rue A, 1000 Lausanne"
     b.dropoff_location = "Rue B, 1000 Lausanne"
+    # Les données historiques n'ont pas d'heure de dispatch à confirmer.
+    b.time_confirmed = False
     b.scheduled_time = created_at + timedelta(days=1)
     b.status = BookingStatus.PENDING
     b.amount = Decimal("10.00")

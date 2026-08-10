@@ -88,6 +88,7 @@ class KafkaDlqConsumer:
     def _init_consumer(self) -> None:
         try:
             from kafka import KafkaConsumer as KC
+
             from services.kafka.bootstrap_retry import run_with_kafka_bootstrap_retry
 
             def _connect():
@@ -143,6 +144,7 @@ class KafkaDlqConsumer:
     def _update_dlq_metric(self, topic: str) -> None:
         try:
             from kafka import TopicPartition
+
             from services.notifications.metrics import set_dlq_size
 
             assert self._consumer is not None

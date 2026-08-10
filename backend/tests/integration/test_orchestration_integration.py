@@ -187,14 +187,18 @@ class TestProblemBuilderIntegration:
         booking1.dropoff_lat = 46.3
         booking1.dropoff_lon = 6.2
         future_day = datetime.now(UTC) + timedelta(days=14)
-        booking1.scheduled_time = future_day.replace(hour=12, minute=0, second=0, microsecond=0)
+        booking1.scheduled_time = future_day.replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
 
         booking2 = BookingFactory(company_id=company.id)
         booking2.pickup_lat = 46.2
         booking2.pickup_lon = 6.1
         booking2.dropoff_lat = 46.3
         booking2.dropoff_lon = 6.2
-        booking2.scheduled_time = future_day.replace(hour=13, minute=0, second=0, microsecond=0)
+        booking2.scheduled_time = future_day.replace(
+            hour=13, minute=0, second=0, microsecond=0
+        )
 
         driver = DriverFactory(company_id=company.id)
         driver.current_lat = 46.2
@@ -293,7 +297,9 @@ class TestPipelineExecutorIntegration:
         booking.dropoff_lat = 46.3
         booking.dropoff_lon = 6.2
         future_day = datetime.now(UTC) + timedelta(days=14)
-        booking.scheduled_time = future_day.replace(hour=12, minute=0, second=0, microsecond=0)
+        booking.scheduled_time = future_day.replace(
+            hour=12, minute=0, second=0, microsecond=0
+        )
         db.session.add(booking)
 
         driver = DriverFactory(company_id=company.id)
@@ -355,9 +361,7 @@ class TestPipelineExecutorIntegration:
 class TestShadowModeManagerIntegration:
     """Tests d'intégration pour ShadowModeManager."""
 
-    @patch(
-        "services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator"
-    )
+    @patch("services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator")
     def test_should_apply_rl_integration(self, mock_orchestrator_class, app, db):
         """Test : Décision d'appliquer RL."""
         with app.app_context():

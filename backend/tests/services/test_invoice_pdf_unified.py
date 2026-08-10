@@ -200,7 +200,9 @@ class TestInvoicePdfUnified:
 
         # Assert
         pdf_text = _extract_text_from_pdf(pdf_bytes)
-        assert "Rue de la Paix" in pdf_text, "Adresse pickup manquante pour facture clinique"
+        assert "Rue de la Paix" in pdf_text, (
+            "Adresse pickup manquante pour facture clinique"
+        )
         assert "DÉTAIL DES PRESTATIONS" in pdf_text, (
             "Section 'DÉTAIL DES PRESTATIONS' manquante"
         )

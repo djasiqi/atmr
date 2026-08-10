@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -12,6 +13,13 @@ from application.companies.reservations.create_manual_booking import (
 )
 from models import BillingParty, Client, ClientBillingParty, Company, User
 from models.enums import BillingPartyType, UserRole
+
+
+def _tomorrow_at(hour: int) -> datetime:
+    """Construit un horaire futur, indépendant de la date d'exécution."""
+    return (datetime.now() + timedelta(days=1)).replace(
+        hour=hour, minute=0, second=0, microsecond=0
+    )
 
 
 def _company_and_client(db):
@@ -90,6 +98,7 @@ def _execute_manual(company, client, user, validated_data):
 
 def test_manual_one_way_assigns_patient_billing_party(db, company_client):
     company, client, user = company_client
+    scheduled_at = _tomorrow_at(10)
     result = _execute_manual(
         company,
         client,
@@ -102,7 +111,7 @@ def test_manual_one_way_assigns_patient_billing_party(db, company_client):
             "pickup_lon": 6.1,
             "dropoff_lat": 46.21,
             "dropoff_lon": 6.12,
-            "scheduled_time": "2026-08-10T10:00:00",
+            "scheduled_time": scheduled_at.isoformat(),
             "amount": 45.0,
             "amount_source": "manual",
         },
@@ -119,6 +128,7 @@ def test_manual_one_way_assigns_patient_billing_party(db, company_client):
 
 def test_manual_round_trip_shares_billing_party(db, company_client):
     company, client, user = company_client
+    scheduled_at = _tomorrow_at(10)
     result = _execute_manual(
         company,
         client,
@@ -131,9 +141,9 @@ def test_manual_round_trip_shares_billing_party(db, company_client):
             "pickup_lon": 6.1,
             "dropoff_lat": 46.21,
             "dropoff_lon": 6.12,
-            "scheduled_time": "2026-08-10T10:00:00",
+            "scheduled_time": scheduled_at.isoformat(),
             "is_round_trip": True,
-            "return_date": "2026-08-10",
+            "return_date": scheduled_at.date().isoformat(),
             "return_time": "14:00",
             "amount": 90.0,
             "amount_source": "manual",
@@ -151,6 +161,7 @@ def test_manual_round_trip_shares_billing_party(db, company_client):
 
 def test_manual_recurrence_shares_billing_party(db, company_client):
     company, client, user = company_client
+    scheduled_at = _tomorrow_at(10)
     result = _execute_manual(
         company,
         client,
@@ -163,7 +174,7 @@ def test_manual_recurrence_shares_billing_party(db, company_client):
             "pickup_lon": 6.1,
             "dropoff_lat": 46.21,
             "dropoff_lon": 6.12,
-            "scheduled_time": "2026-08-10T10:00:00",
+            "scheduled_time": scheduled_at.isoformat(),
             "is_recurring": True,
             "recurrence_type": "daily",
             "occurrences": 3,
@@ -195,6 +206,7 @@ def test_manual_uses_third_party_when_configured(db, company_client):
     db.session.add(link)
     db.session.flush()
 
+    scheduled_at = _tomorrow_at(10)
     result = _execute_manual(
         company,
         client,
@@ -207,7 +219,7 @@ def test_manual_uses_third_party_when_configured(db, company_client):
             "pickup_lon": 6.1,
             "dropoff_lat": 46.21,
             "dropoff_lon": 6.12,
-            "scheduled_time": "2026-08-11T10:00:00",
+            "scheduled_time": scheduled_at.isoformat(),
             "amount": 45.0,
             "amount_source": "manual",
         },

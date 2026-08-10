@@ -1,0 +1,18 @@
+﻿NAMES                              STATUS                      IMAGE
+atmr-redis_test-1                  Exited (255) 12 hours ago   redis:7-alpine
+atmr-postgres_test-1               Exited (255) 12 hours ago   postgis/postgis:16-3.4-alpine
+atmr-tracking-processed-fanout-1   Up 12 hours (healthy)       atmr-tracking-processed-fanout
+atmr-traefik-local                 Up 12 hours                 traefik:v2.11
+atmr-tracking-kafka-consumer-1     Up 12 hours (healthy)       atmr-tracking-kafka-consumer
+atmr-kafka-dlq-consumer-1          Up 12 hours (healthy)       atmr-kafka-dlq-consumer
+atmr-flower-1                      Up 12 hours (healthy)       atmr-flower
+atmr-celery-worker-1               Up 12 hours (healthy)       atmr-celery-worker
+atmr-celery-beat-1                 Up 12 hours (healthy)       atmr-celery-beat
+atmr-atmr_api                      Up 12 hours (healthy)       atmr-api
+atmr-kafka-topics-init             Exited (0) 7 days ago       confluentinc/cp-kafka:7.6.0
+atmr-kafka-broker-1                Up 12 hours (healthy)       confluentinc/cp-kafka:7.6.0
+atmr-pgbouncer-1                   Up 12 hours (healthy)       edoburu/pgbouncer:latest
+atmr-redis-1                       Up 12 hours (healthy)       redis:7-alpine
+atmr-zookeeper                     Up 12 hours (healthy)       confluentinc/cp-zookeeper:7.5.0
+atmr-postgres-1                    Up 12 hours (healthy)       postgis/postgis:16-3.4-alpine
+atmr-osrm-1                        Up 12 hours                 osrm/osrm-backend:latest

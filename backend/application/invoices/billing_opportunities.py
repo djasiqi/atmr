@@ -296,11 +296,7 @@ def pick_canonical_billing_party_id(bookings: list[Booking]) -> int | None:
         bp_id = getattr(booking, "billing_party_id", None)
         if bp_id is None:
             continue
-        bp = (
-            db.session.get(BillingParty, int(bp_id))
-            if can_access_database
-            else None
-        )
+        bp = db.session.get(BillingParty, int(bp_id)) if can_access_database else None
         # Ne pas élire un BP établissement pour une opportunité patient.
         if bp is not None and is_establishment_billing_party(bp):
             continue

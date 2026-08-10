@@ -330,6 +330,7 @@ class TestBookingUpdatedHandler:
             assert "Failed to notify driver about booking update" in str(
                 mock_logger.exception.call_args
             )
+
     """Tests pour handle_booking_cancelled."""
 
     def test_handle_booking_cancelled_success(self, app):
@@ -343,9 +344,12 @@ class TestBookingUpdatedHandler:
             "company_id": 1,
         }
 
-        with app.app_context(), patch(
-            "services.notifications.core.notify_booking_cancelled"
-        ) as mock_notify:
+        with (
+            app.app_context(),
+            patch(
+                "services.notifications.core.notify_booking_cancelled"
+            ) as mock_notify,
+        ):
             handle_booking_cancelled(event)
 
             mock_notify.assert_called_once()
@@ -373,7 +377,8 @@ class TestBookingUpdatedHandler:
         }
 
         with (
-            app.app_context(), patch(
+            app.app_context(),
+            patch(
                 "services.notifications.core.notify_booking_cancelled",
                 side_effect=Exception("Notification failed"),
             ),
@@ -671,9 +676,12 @@ class TestEventIntegration:
 
         registry.register("BookingCancelledEvent", handle_booking_cancelled)
 
-        with app.app_context(), patch(
-            "services.notifications.core.notify_booking_cancelled"
-        ) as mock_notify:
+        with (
+            app.app_context(),
+            patch(
+                "services.notifications.core.notify_booking_cancelled"
+            ) as mock_notify,
+        ):
             publish_event(
                 BookingCancelledEvent(
                     booking_id=123,

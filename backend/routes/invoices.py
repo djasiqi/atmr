@@ -2961,7 +2961,10 @@ class InvoicePayments(Resource):
                         },
                     )
                     cached_payload = cached_response[1] or {}
-                    if isinstance(cached_payload, dict) and "response" in cached_payload:
+                    if (
+                        isinstance(cached_payload, dict)
+                        and "response" in cached_payload
+                    ):
                         return (
                             cached_payload["response"],
                             cached_payload.get("status_code", 200),

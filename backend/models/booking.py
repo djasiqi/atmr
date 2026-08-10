@@ -1305,6 +1305,9 @@ class Booking(db.Model):
     def validate_scheduled_time(self, _key, scheduled_time):
         # scheduled_time est obligatoire pour le dispatch. Les retours et courses
         # « heure à définir » (time_confirmed=False) peuvent rester sans horaire.
+        # Note: time_confirmed peut être None pendant la construction Python
+        # (server_default DB non encore appliqué) — ne pas le forcer à True ici,
+        # sinon les fixtures historiques (dates passées) cassent en masse.
         is_return = getattr(self, "is_return", False)
         time_confirmed = getattr(self, "time_confirmed", True)
         if scheduled_time is None:

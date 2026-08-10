@@ -1,0 +1,7 @@
+﻿docker : sh: 1: Syntax error: "(" unexpected
+Au caractère C:\Users\jasiq\AppData\Local\Temp\ps-script-8e5e67cd-f563-4fa6-b303-0e1b5207b40b.ps1:91 : 256
++ ... er-ps.txt"; docker compose exec -T atmr_api sh -c 'env | grep -E "^(R ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (sh: 1: Syntax error: "(" unexpected:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

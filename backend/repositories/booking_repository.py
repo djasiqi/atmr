@@ -1322,7 +1322,11 @@ class BookingRepository:
 
         from ext import db
 
-        month_expr = func.date_trunc("month", Booking.created_at)
+        # created_at est un timestamptz : l'agrégation doit être indépendante du
+        # fuseau de la session PostgreSQL pour conserver des mois calendaires UTC.
+        month_expr = func.date_trunc(
+            "month", Booking.created_at.op("AT TIME ZONE")("UTC")
+        )
 
         rows = (
             db.session.query(

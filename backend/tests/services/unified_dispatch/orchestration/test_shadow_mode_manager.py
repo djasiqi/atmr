@@ -28,9 +28,7 @@ def _app_context(app: Flask):
 class TestShouldApplyRl:
     """Tests pour la méthode should_apply_rl."""
 
-    @patch(
-        "services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator"
-    )
+    @patch("services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator")
     def test_should_apply_rl_returns_true_with_quality_score(
         self, mock_orchestrator_class
     ):
@@ -68,9 +66,7 @@ class TestShouldApplyRl:
             company=company,
         )
 
-    @patch(
-        "services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator"
-    )
+    @patch("services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator")
     def test_should_apply_rl_returns_false_with_none_quality_score(
         self, mock_orchestrator_class
     ):
@@ -101,9 +97,7 @@ class TestShouldApplyRl:
         assert should_apply is False
         assert quality_score is None
 
-    @patch(
-        "services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator"
-    )
+    @patch("services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator")
     def test_should_apply_rl_handles_none_dispatch_run_id(
         self, mock_orchestrator_class
     ):
@@ -138,9 +132,7 @@ class TestShouldApplyRl:
 class TestGenerateAndStoreSuggestions:
     """Tests pour la méthode generate_and_store_suggestions."""
 
-    @patch(
-        "services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator"
-    )
+    @patch("services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator")
     def test_generate_and_store_suggestions_returns_true_when_stored(
         self, mock_orchestrator_class
     ):
@@ -175,9 +167,7 @@ class TestGenerateAndStoreSuggestions:
             used_solver=False,
         )
 
-    @patch(
-        "services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator"
-    )
+    @patch("services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator")
     def test_generate_and_store_suggestions_returns_false_when_not_stored(
         self, mock_orchestrator_class
     ):
@@ -205,9 +195,7 @@ class TestGenerateAndStoreSuggestions:
 
         assert result is False
 
-    @patch(
-        "services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator"
-    )
+    @patch("services.unified_dispatch.shadow_mode.manager.ShadowModeOrchestrator")
     def test_generate_and_store_suggestions_handles_none_dispatch_run_id(
         self, mock_orchestrator_class
     ):

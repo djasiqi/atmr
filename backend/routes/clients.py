@@ -2687,7 +2687,10 @@ class ClientsList(Resource):
                         },
                     )
                     cached_payload = cached_response[1] or {}
-                    if isinstance(cached_payload, dict) and "response" in cached_payload:
+                    if (
+                        isinstance(cached_payload, dict)
+                        and "response" in cached_payload
+                    ):
                         return (
                             cached_payload["response"],
                             cached_payload.get("status_code", 201),
@@ -2739,8 +2742,14 @@ class ClientsList(Resource):
             from application.companies.clients.create_company_client import (
                 _generate_password,
             )
+            from security.password_policy import PasswordPolicyService
 
-            new_user.set_password(_generate_password())
+            generated_password = _generate_password()
+            # Validation explicite avant set_password (règle Semgrep unvalidated-password)
+            PasswordPolicyService.validate_password(
+                generated_password, user_id=None, check_history=False
+            )
+            new_user.set_password(generated_password)  # nosem
             db.session.add(new_user)
             db.session.flush()  # récupère new_user.id
 

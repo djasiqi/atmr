@@ -130,7 +130,7 @@ class TestQRRReference:
 
         try:
             # Act & Assert
-            with pytest.raises(ValueError, match="QR-IBAN invalide|Le 5ème caractère"):
+            with pytest.raises(ValueError, match=r"QR-IBAN invalide|Le 5ème caractère"):
                 service._get_payment_reference(invoice)
         finally:
             # Restore

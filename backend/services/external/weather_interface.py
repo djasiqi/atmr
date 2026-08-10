@@ -105,7 +105,5 @@ def set_weather_service(service: WeatherServiceInterface) -> None:
     Args:
         service: Instance du service météo
     """
-    # Mettre à jour via le module pour éviter global statement
-    import services.external.weather_interface as module
-
-    module._default_weather_service = service
+    global _default_weather_service
+    _default_weather_service = service

@@ -49,15 +49,20 @@ class AuthenticateUserUseCase:
                 status_code=401,
             )
 
-        inactive_error = self._inactive_profile_error(user)
-        if inactive_error is not None:
-            return inactive_error
-
         if not user.check_password(input_data.password):
             return AuthenticateUserOutput(
                 success=False,
                 error={"error": "invalid_password"},
                 status_code=401,
+            )
+
+        inactive_error = self._inactive_profile_error(user)
+        if inactive_error is not None:
+            return AuthenticateUserOutput(
+                success=False,
+                user=user,
+                error=inactive_error.error,
+                status_code=inactive_error.status_code,
             )
 
         return AuthenticateUserOutput(success=True, user=user)

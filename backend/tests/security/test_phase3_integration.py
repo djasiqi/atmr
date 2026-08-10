@@ -174,9 +174,12 @@ class TestAdminIPWhitelistIntegration:
             return {"status": "ok"}
 
         # Devrait lever Forbidden (abort 403)
-        with app.test_request_context(
-            "/api/admin/stats", environ_base={"REMOTE_ADDR": "10.0.0.1"}
-        ), pytest.raises(Forbidden, match="Accès non autorisé"):
+        with (
+            app.test_request_context(
+                "/api/admin/stats", environ_base={"REMOTE_ADDR": "10.0.0.1"}
+            ),
+            pytest.raises(Forbidden, match="Accès non autorisé"),
+        ):
             test_endpoint()
 
 

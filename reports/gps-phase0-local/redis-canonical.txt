@@ -1,0 +1,2 @@
+﻿canonical_count=0
+http_rate_count=0

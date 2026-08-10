@@ -182,8 +182,10 @@ class AutonomousAction(db.Model):
 
         """
         # Début de journée UTC (naïf), cohérent avec created_at.
-        today_start = datetime.now(UTC).replace(tzinfo=None).replace(
-            hour=0, minute=0, second=0, microsecond=0
+        today_start = (
+            datetime.now(UTC)
+            .replace(tzinfo=None)
+            .replace(hour=0, minute=0, second=0, microsecond=0)
         )
 
         query = cls.query.filter(

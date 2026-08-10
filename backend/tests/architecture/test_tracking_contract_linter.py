@@ -13,6 +13,8 @@ SCRIPT = BACKEND_ROOT / "scripts" / "architecture" / "check_tracking_contract.py
 def test_architecture_contract_script_exits_zero() -> None:
     import runpy
 
+    assert SCRIPT.is_file(), f"Script introuvable: {SCRIPT}"
+
     with pytest.raises(SystemExit) as exc_info:
         runpy.run_path(str(SCRIPT), run_name="__main__")
     assert exc_info.value.code == 0, (

@@ -91,6 +91,7 @@ class TestA02CryptographicFailures:
         response = client.post(
             "/api/auth/login",
             json={"email": "test@example.com", "password": "password123"},
+            headers={"X-Requested-With": "Expo"},
         )
         if response.status_code == 200:
             token = response.get_json().get("token")
@@ -319,6 +320,7 @@ class TestA07AuthenticationFailures:
         response = client.post(
             "/api/auth/login",
             json={"email": "test@example.com", "password": "password123"},
+            headers={"X-Requested-With": "Expo"},
         )
         if response.status_code == 200:
             token = response.get_json().get("token")

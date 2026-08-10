@@ -654,8 +654,11 @@ class TestP0StabilizationE2E:
 
         idempotency_key = f"e2e-booking-key-{uuid4().hex}"
         scheduled_time = (
-            datetime.now(UTC) + timedelta(days=2)
-        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            (datetime.now(UTC) + timedelta(days=2))
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
 
         # Créer un booking
         response = client.post(

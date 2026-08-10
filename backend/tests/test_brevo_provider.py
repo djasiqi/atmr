@@ -207,7 +207,9 @@ class TestBrevoEmailProvider:
         mock_response.text = "Not found"
         mock_get.return_value = mock_response
 
-        with patch.object(BrevoEmailProvider, "_add_domain_to_brevo", return_value=None):
+        with patch.object(
+            BrevoEmailProvider, "_add_domain_to_brevo", return_value=None
+        ):
             provider = BrevoEmailProvider(api_key="test_key")
             result = provider.verify_domain("notfound.ch")
 

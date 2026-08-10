@@ -220,8 +220,10 @@ class TestSafetyLimits:
     def test_daily_limit_reached(self, db, company_fully_auto):
         """Test limite journalière atteinte."""
         # Créer 20 actions (limite configurée)
-        today_start = datetime.now(UTC).replace(tzinfo=None).replace(
-            hour=0, minute=0, second=0, microsecond=0
+        today_start = (
+            datetime.now(UTC)
+            .replace(tzinfo=None)
+            .replace(hour=0, minute=0, second=0, microsecond=0)
         )
         for i in range(20):
             action = AutonomousAction(
@@ -263,8 +265,10 @@ class TestSafetyLimits:
 
     def test_action_type_daily_limit(self, db, company_fully_auto):
         """Test limite journalière par type d'action."""
-        today_start = datetime.now(UTC).replace(tzinfo=None).replace(
-            hour=0, minute=0, second=0, microsecond=0
+        today_start = (
+            datetime.now(UTC)
+            .replace(tzinfo=None)
+            .replace(hour=0, minute=0, second=0, microsecond=0)
         )
         for i in range(10):
             action = AutonomousAction(
