@@ -208,6 +208,66 @@ def _is_mobile_request() -> bool:
     return any(marker in user_agent for marker in _MOBILE_UA_MARKERS)
 
 
+def _resolve_client_platform() -> str | None:
+    """Plateforme client : X-Client-Platform prioritaire, X-Platform en compat N-1."""
+    raw = (
+        request.headers.get("X-Client-Platform")
+        or request.headers.get("X-Platform")
+        or ""
+    ).strip()
+    return raw or None
+
+
+def _resolve_client_app_version() -> str | None:
+    raw = (request.headers.get("X-App-Version") or "").strip()
+    return raw or None
+
+
+def _resolve_client_app_build() -> str | None:
+    raw = (request.headers.get("X-App-Build") or "").strip()
+    return raw or None
+
+
+def _resolve_client_os_version() -> str | None:
+    raw = (request.headers.get("X-OS-Version") or "").strip()
+    return raw or None
+
+
+def _resolve_device_session_metadata():
+    """Métadonnées appareil depuis headers (best-effort)."""
+    from security.mobile_device_session_service import DeviceSessionMetadata
+
+    name = (request.headers.get("X-Device-Name") or "").strip()
+    if name.lower() in {"lirie", "atmr", "expo"}:
+        name = ""
+    model = (request.headers.get("X-Device-Model") or "").strip() or None
+    manufacturer = (request.headers.get("X-Device-Manufacturer") or "").strip() or None
+    device_type = (request.headers.get("X-Device-Type") or "").strip() or None
+    return DeviceSessionMetadata(
+        device_name=name[:255] if name else None,
+        device_model=model[:128] if model else None,
+        device_manufacturer=manufacturer[:128] if manufacturer else None,
+        device_type=device_type[:32] if device_type else None,
+        platform=_resolve_client_platform(),
+        os_version=_resolve_client_os_version(),
+        app_version=_resolve_client_app_version(),
+        app_build=_resolve_client_app_build(),
+        context_id=(request.headers.get("X-Active-Context-Id") or "").strip() or None,
+    )
+
+
+def _resolve_device_display_name() -> str | None:
+    """Compat legacy : nom humain OS, sinon modèle, jamais le nom d'app."""
+    meta = _resolve_device_session_metadata()
+    if meta.device_name:
+        return meta.device_name
+    if meta.device_model:
+        return meta.device_model
+    if meta.device_manufacturer:
+        return meta.device_manufacturer
+    return None
+
+
 def _clear_web_auth_cookies(response) -> None:
     """Supprime les cookies auth web (Domain configuré + host-only legacy).
 
@@ -1111,7 +1171,9 @@ def _login_post_body():
     input_data = AuthenticateUserInput(email=email, password=password)
     auth_result = uc.execute(input_data)
 
-    user = None if not auth_result.success else auth_result.user
+    # Les refus d'activation conservent l'utilisateur après vérification du
+    # mot de passe afin de retourner le contrat de reprise d'activation.
+    user = auth_result.user
 
     if not user:
         err_code = (auth_result.error or {}).get("error", "invalid_credentials")
@@ -1251,22 +1313,42 @@ def _login_post_body():
                 create_or_reuse_session(
                     user_id=user.id,
                     device_installation_id=str(device_installation_id),
-                    device_name=request.headers.get("X-Device-Name"),
                     driver_id=driver_id_for_session,
                     role=user.role.value if user.role else None,
-                    platform=request.headers.get("X-Platform"),
-                    app_version=request.headers.get("X-App-Version"),
-                    context_id=request.headers.get("X-Active-Context-Id"),
+                    meta=_resolve_device_session_metadata(),
                 )
             )
         except DeviceSessionLimitReached as limit_exc:
             db.session.rollback()
-            return {
+            active_sessions = list(limit_exc.sessions)
+            role_value = user.role.value if user.role else None
+            from security.mobile_device_session_service import (
+                get_device_session_limit,
+                issue_device_session_resolution_token,
+            )
+
+            limit = get_device_session_limit(role_value)
+            resolution_token = issue_device_session_resolution_token(
+                user_id=user.id,
+                requested_device_installation_id=str(device_installation_id),
+                allowed_sessions=active_sessions,
+            )
+            payload = {
                 "error": "device_session_limit_reached",
                 "error_code": "device_session_limit_reached",
-                "sessions": [s.serialize() for s in limit_exc.sessions],
+                "message": (
+                    "Nombre maximal d'appareils atteint. "
+                    "Déconnectez un ancien appareil pour continuer."
+                ),
+                "limit": limit,
+                "active_count": len(active_sessions),
+                "sessions": [s.serialize() for s in active_sessions],
                 "trace_id": get_trace_id(),
-            }, 409
+                **auth_capabilities(),
+            }
+            if resolution_token:
+                payload["resolution_token"] = resolution_token
+            return payload, 409
         except Exception as mds_exc:
             # F1b : login mobile v1 fail-closed — pas de session orpheline
             logger.error("MobileDeviceSession login failed: %s", mds_exc)
@@ -2755,9 +2837,14 @@ class RefreshToken(Resource):
             new_refresh_gen = 1
             if mobile_session_for_rotation is not None:
                 from security.mobile_device_session_service import (
+                    apply_session_metadata,
                     bump_refresh_generation,
                 )
 
+                apply_session_metadata(
+                    mobile_session_for_rotation,
+                    _resolve_device_session_metadata(),
+                )
                 new_refresh_gen = bump_refresh_generation(mobile_session_for_rotation)
             new_refresh_claims: dict[str, object] = {
                 "aud": "atmr-api",

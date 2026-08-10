@@ -572,6 +572,10 @@ export function CompanySettingsScreenContent() {
                 style={styles.sectionButton}
               />
             ) : null}
+            <LinkRow
+              label="Appareils connectés"
+              onPress={() => router.push("/(app)/device-sessions" as never)}
+            />
             <AppButton title="Se déconnecter" variant="secondary" onPress={logout} />
           </View>
 

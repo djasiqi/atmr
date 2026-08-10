@@ -18,6 +18,7 @@ export default function AuthenticatedLayout() {
               <Stack.Screen name="unauthorized" />
               <Stack.Screen name="maintenance" />
               <Stack.Screen name="blocked" />
+              <Stack.Screen name="device-sessions" />
               <Stack.Screen name="(client)" />
               <Stack.Screen name="(driver)" />
               <Stack.Screen name="(company)" />

@@ -5,6 +5,7 @@ import { STORAGE_KEYS } from "../storage/storageKeys";
 export type LoginPreferences = {
   rememberMe: boolean;
   email: string | null;
+  /** Toujours null — conservé pour compat type / lecture legacy. */
   password: string | null;
 };
 
@@ -15,38 +16,33 @@ const DEFAULT_PREFERENCES: LoginPreferences = {
 };
 
 function normalizeEmail(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function normalizePassword(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  return value.length > 0 ? value : null;
-}
-
-async function readRememberedPassword(): Promise<string | null> {
-  const value = await SecureStore.getItemAsync(STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD);
-  return normalizePassword(value);
-}
-
-async function writeRememberedPassword(password: string | null): Promise<void> {
-  if (!password) {
-    await SecureStore.deleteItemAsync(STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD);
-    return;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
   }
-  await SecureStore.setItemAsync(STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD, password);
+  return null;
+}
+
+/** Purge défensive de tout mot de passe legacy encore en SecureStore. */
+async function clearLegacyRememberedPassword(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD);
+  } catch {
+    /* ignore */
+  }
 }
 
 async function clearRememberedCredentials(): Promise<void> {
   await Promise.all([
     removeItem(STORAGE_KEYS.LOGIN_PREFERENCES),
-    SecureStore.deleteItemAsync(STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD),
+    clearLegacyRememberedPassword(),
   ]);
 }
 
 export async function readLoginPreferences(): Promise<LoginPreferences> {
   const stored = await getItem<Partial<LoginPreferences>>(STORAGE_KEYS.LOGIN_PREFERENCES);
+  // Toujours purger un éventuel mot de passe legacy.
+  await clearLegacyRememberedPassword();
   if (!stored || typeof stored !== "object") {
     return { ...DEFAULT_PREFERENCES };
   }
@@ -54,11 +50,11 @@ export async function readLoginPreferences(): Promise<LoginPreferences> {
   if (!rememberMe) {
     return { rememberMe: false, email: null, password: null };
   }
-  const [email, password] = await Promise.all([
-    Promise.resolve(normalizeEmail(stored.email)),
-    readRememberedPassword(),
-  ]);
-  return { rememberMe: true, email, password };
+  return {
+    rememberMe: true,
+    email: normalizeEmail(stored.email),
+    password: null,
+  };
 }
 
 export async function writeLoginPreferences(preferences: LoginPreferences): Promise<void> {
@@ -70,17 +66,17 @@ export async function writeLoginPreferences(preferences: LoginPreferences): Prom
     rememberMe: true,
     email: normalizeEmail(preferences.email),
   });
-  await writeRememberedPassword(normalizePassword(preferences.password));
+  await clearLegacyRememberedPassword();
 }
 
 export async function persistLoginRememberMe(
   email: string,
-  password: string,
+  _password: string,
   rememberMe: boolean
 ): Promise<void> {
   await writeLoginPreferences({
     rememberMe,
     email: rememberMe ? email.trim() : null,
-    password: rememberMe ? password : null,
+    password: null,
   });
 }

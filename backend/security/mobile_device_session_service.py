@@ -14,7 +14,6 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from enum import Enum
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -41,8 +40,26 @@ SESSION_CACHE_TTL_SECONDS = int(os.getenv("MOBILE_SESSION_CACHE_TTL_SECONDS", "5
 SESSION_NEGATIVE_CACHE_TTL_SECONDS = int(
     os.getenv("MOBILE_SESSION_NEGATIVE_CACHE_TTL_SECONDS", "30")
 )
+RESOLUTION_TOKEN_TTL_SECONDS = int(
+    os.getenv("MOBILE_DEVICE_RESOLUTION_TOKEN_TTL_SECONDS", "300")
+)
+RESOLUTION_CLAIM_TTL_SECONDS = int(
+    os.getenv("MOBILE_DEVICE_RESOLUTION_CLAIM_TTL_SECONDS", "60")
+)
+PROVISIONAL_SESSION_TTL_SECONDS = int(
+    os.getenv("MOBILE_DEVICE_PROVISIONAL_TTL_SECONDS", "900")
+)
+# P1 : replace + provisional activés côté contrat (mobile gated sur capabilities)
+DEVICE_SESSION_REPLACE_ENABLED = os.getenv(
+    "MOBILE_DEVICE_SESSION_REPLACE_ENABLED", "true"
+).lower() in {"1", "true", "yes", "on"}
+PROVISIONAL_CONFIRMATION_ENABLED = os.getenv(
+    "MOBILE_DEVICE_PROVISIONAL_CONFIRMATION_ENABLED", "true"
+).lower() in {"1", "true", "yes", "on"}
 ROTATION_META_KEY = "_rotation_meta"
 ROTATION_IDEMPOTENCY_CONSTRAINT = "uq_auth_rotation_result_session_idempotency"
+RESOLUTION_TOKEN_PREFIX = "auth:device_session_resolution:"
+RESOLUTION_CLAIM_PREFIX = "auth:device_session_resolution_claim:"
 
 
 def auth_capabilities() -> dict[str, Any]:
@@ -53,6 +70,9 @@ def auth_capabilities() -> dict[str, Any]:
             "idempotent_rotation": True,
             "session_resume": True,
             "session_validation": True,
+            "device_session_management": True,
+            "device_session_replace": bool(DEVICE_SESSION_REPLACE_ENABLED),
+            "provisional_session_confirmation": bool(PROVISIONAL_CONFIRMATION_ENABLED),
         },
     }
 
@@ -138,6 +158,273 @@ class DeviceSessionLimitReached(Exception):
         super().__init__("device_session_limit_reached")
 
 
+class DeviceSessionResolutionError(Exception):
+    def __init__(self, code: str, message: str = ""):
+        self.code = code
+        self.message = message or code
+        super().__init__(self.message)
+
+
+@dataclass
+class DeviceSessionMetadata:
+    """Métadonnées appareil best-effort (headers client)."""
+
+    device_name: str | None = None
+    device_model: str | None = None
+    device_manufacturer: str | None = None
+    device_type: str | None = None
+    platform: str | None = None
+    os_version: str | None = None
+    app_version: str | None = None
+    app_build: str | None = None
+    context_id: str | None = None
+
+
+def apply_session_metadata(
+    session: MobileDeviceSession,
+    meta: DeviceSessionMetadata | None,
+    *,
+    touch_seen: bool = True,
+) -> None:
+    """Rafraîchit les métadonnées présentes (login / resume / refresh / confirm)."""
+    if meta is None:
+        return
+    changed = False
+    if meta.device_name:
+        session.device_name = meta.device_name[:255]
+        changed = True
+    if meta.device_model:
+        session.device_model = meta.device_model[:128]
+        changed = True
+    if meta.device_manufacturer:
+        session.device_manufacturer = meta.device_manufacturer[:128]
+        changed = True
+    if meta.device_type:
+        session.device_type = meta.device_type[:32]
+        changed = True
+    if meta.platform:
+        session.last_platform = meta.platform[:32]
+        changed = True
+    if meta.os_version:
+        session.last_os_version = meta.os_version[:64]
+        changed = True
+    if meta.app_version:
+        session.last_app_version = meta.app_version[:64]
+        changed = True
+    if meta.app_build:
+        session.last_app_build = meta.app_build[:64]
+        changed = True
+    if meta.context_id:
+        session.last_context_id = meta.context_id[:128]
+        changed = True
+    now = _now()
+    if touch_seen:
+        session.last_seen_at = now
+    if changed:
+        session.metadata_updated_at = now
+
+
+def mark_session_confirmed(session: MobileDeviceSession) -> bool:
+    """Confirme une session provisional (idempotent). Retourne True si transition."""
+    if session.confirmed_at is not None:
+        session.provisional_expires_at = None
+        return False
+    session.confirmed_at = _now()
+    session.provisional_expires_at = None
+    return True
+
+
+def _resolution_redis_key(token: str) -> str:
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return f"{RESOLUTION_TOKEN_PREFIX}{digest}"
+
+
+def _resolution_claim_key(token: str) -> str:
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return f"{RESOLUTION_CLAIM_PREFIX}{digest}"
+
+
+def issue_device_session_resolution_token(
+    *,
+    user_id: int,
+    requested_device_installation_id: str,
+    allowed_sessions: list[MobileDeviceSession],
+    ttl_seconds: int | None = None,
+) -> str | None:
+    """Émet un challenge Redis (état issued) avec snapshot des sessions autorisées.
+
+    Retourne None si replace désactivé ou Redis indisponible (fail-soft UX).
+    """
+    if not DEVICE_SESSION_REPLACE_ENABLED:
+        return None
+
+    import json
+
+    r = _get_redis()
+    if not r:
+        return None
+    token = secrets.token_urlsafe(32)
+    ttl = int(ttl_seconds or RESOLUTION_TOKEN_TTL_SECONDS)
+    operation_id = secrets.token_urlsafe(16)
+    allowed_ids = [str(s.session_id) for s in allowed_sessions]
+    payload = {
+        "scope": "device_session_resolution",
+        "state": "issued",
+        "operation_id": operation_id,
+        "user_id": int(user_id),
+        "requested_device_installation_id": str(requested_device_installation_id),
+        "allowed_session_ids": allowed_ids,
+        "session_set_version": hashlib.sha256(
+            "|".join(sorted(allowed_ids)).encode("utf-8")
+        ).hexdigest()[:16],
+    }
+    try:
+        r.setex(_resolution_redis_key(token), ttl, json.dumps(payload))
+        return token
+    except Exception as exc:
+        logger.warning("issue_device_session_resolution_token failed: %s", exc)
+        return None
+
+
+def claim_device_session_resolution_token(
+    *,
+    token: str,
+    requested_device_installation_id: str,
+) -> dict[str, Any]:
+    """Passe issued → claimed (atomique). Lève DeviceSessionResolutionError."""
+    import json
+
+    raw_token = (token or "").strip()
+    if not raw_token:
+        raise DeviceSessionResolutionError("resolution_token_required")
+    if not DEVICE_SESSION_REPLACE_ENABLED:
+        raise DeviceSessionResolutionError("resolution_unavailable")
+
+    r = _get_redis()
+    if not r:
+        raise DeviceSessionResolutionError(
+            "resolution_unavailable",
+            "Service de résolution temporairement indisponible.",
+        )
+
+    key = _resolution_redis_key(raw_token)
+    claim_key = _resolution_claim_key(raw_token)
+    try:
+        raw = r.get(key)
+    except Exception as exc:
+        logger.warning("resolution token redis get failed: %s", exc)
+        raise DeviceSessionResolutionError("resolution_unavailable") from exc
+
+    if not raw:
+        raise DeviceSessionResolutionError(
+            "resolution_token_expired",
+            "Le délai pour remplacer un appareil a expiré. Reconnectez-vous.",
+        )
+
+    try:
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        payload = json.loads(raw)
+    except Exception as exc:
+        raise DeviceSessionResolutionError("resolution_token_invalid") from exc
+
+    if payload.get("scope") != "device_session_resolution":
+        raise DeviceSessionResolutionError("resolution_token_invalid")
+
+    state = payload.get("state") or "issued"
+    if state == "consumed":
+        raise DeviceSessionResolutionError(
+            "resolution_token_expired",
+            "Ce challenge a déjà été utilisé.",
+        )
+
+    expected_device = str(payload.get("requested_device_installation_id") or "")
+    if not expected_device or expected_device != str(requested_device_installation_id):
+        raise DeviceSessionResolutionError(
+            "resolution_device_mismatch",
+            "Cet appareil ne correspond pas au challenge de résolution.",
+        )
+
+    # Claim atomique : empêche double replace concurrent ; reclaimable sur rollback.
+    try:
+        claimed = r.set(
+            claim_key,
+            payload.get("operation_id") or "1",
+            nx=True,
+            ex=RESOLUTION_CLAIM_TTL_SECONDS,
+        )
+        if not claimed:
+            raise DeviceSessionResolutionError(
+                "resolution_token_in_use",
+                "Un remplacement est déjà en cours. Réessayez.",
+            )
+        payload["state"] = "claimed"
+        ttl = r.ttl(key)
+        if ttl and int(ttl) > 0:
+            r.setex(key, int(ttl), json.dumps(payload))
+        else:
+            r.setex(key, RESOLUTION_TOKEN_TTL_SECONDS, json.dumps(payload))
+    except DeviceSessionResolutionError:
+        raise
+    except Exception as exc:
+        logger.warning("resolution claim failed: %s", exc)
+        raise DeviceSessionResolutionError("resolution_unavailable") from exc
+
+    return payload
+
+
+def release_device_session_resolution_claim(*, token: str) -> None:
+    """Libère le claim après rollback PG pour permettre un retry."""
+    r = _get_redis()
+    if not r:
+        return
+    with contextlib.suppress(Exception):
+        r.delete(_resolution_claim_key(token))
+    # Remettre state=issued si le token existe encore
+    import json
+
+    key = _resolution_redis_key(token)
+    try:
+        raw = r.get(key)
+        if not raw:
+            return
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        payload = json.loads(raw)
+        if payload.get("state") == "claimed":
+            payload["state"] = "issued"
+            ttl = r.ttl(key)
+            if ttl and int(ttl) > 0:
+                r.setex(key, int(ttl), json.dumps(payload))
+    except Exception as exc:
+        logger.debug("release resolution claim failed: %s", exc)
+
+
+def consume_device_session_resolution_token(*, token: str) -> None:
+    """Marque le challenge consumed après COMMIT PG réussi."""
+    import json
+
+    r = _get_redis()
+    if not r:
+        return
+    key = _resolution_redis_key(token)
+    claim_key = _resolution_claim_key(token)
+    try:
+        raw = r.get(key)
+        if raw:
+            if isinstance(raw, bytes):
+                raw = raw.decode("utf-8")
+            payload = json.loads(raw)
+            payload["state"] = "consumed"
+            r.setex(key, 30, json.dumps(payload))
+        r.delete(claim_key)
+    except Exception as exc:
+        logger.debug("consume resolution token failed: %s", exc)
+        with contextlib.suppress(Exception):
+            r.delete(key)
+            r.delete(claim_key)
+
+
 def find_active_session_for_installation(
     user_id: int, device_installation_id: str
 ) -> MobileDeviceSession | None:
@@ -148,24 +435,64 @@ def find_active_session_for_installation(
     ).first()
 
 
-def create_or_reuse_session(
+def reap_expired_provisional_sessions(
+    user_id: int,
+    *,
+    commit: bool = False,
+) -> list[uuid.UUID]:
+    """Révoque les sessions provisional expirées (SQL only). Retourne les session_ids.
+
+    commit=False : flush uniquement — publication Redis à la charge de l'appelant
+    après COMMIT (via publish_session_revoked).
+    """
+    now = _now()
+    expired = (
+        MobileDeviceSession.query.filter(
+            MobileDeviceSession.user_id == user_id,
+            MobileDeviceSession.status == MobileDeviceSessionStatus.active,
+            MobileDeviceSession.confirmed_at.is_(None),
+            MobileDeviceSession.provisional_expires_at.isnot(None),
+            MobileDeviceSession.provisional_expires_at <= now,
+        )
+        .with_for_update()
+        .all()
+    )
+    revoked_ids: list[uuid.UUID] = []
+    for sess in expired:
+        revoke_session_state(
+            sess,
+            reason="provisional_expired",
+            status=MobileDeviceSessionStatus.revoked,
+        )
+        revoked_ids.append(sess.session_id)
+        try:
+            from security.refresh_token_service import revoke_tokens_for_session
+
+            revoke_tokens_for_session(
+                str(sess.session_id),
+                reason="provisional_expired",
+                commit=False,
+            )
+        except Exception as exc:
+            logger.warning("reap provisional tokens failed: %s", exc)
+    if revoked_ids:
+        db.session.flush()
+    if commit and revoked_ids:
+        db.session.commit()
+        for sid in revoked_ids:
+            publish_session_revoked(sid)
+    return revoked_ids
+
+
+def _create_or_reuse_session_locked(
     *,
     user_id: int,
     device_installation_id: str,
-    device_name: str | None = None,
     driver_id: int | None = None,
     role: str | None = None,
-    app_version: str | None = None,
-    platform: str | None = None,
-    context_id: str | None = None,
+    meta: DeviceSessionMetadata | None = None,
 ) -> tuple[MobileDeviceSession, str, str]:
-    """Crée ou tourne les credentials d'une session active pour une installation.
-
-    Sessions terminales : jamais réactivées — nouvelle ligne + nouveau session_id.
-    Concurrence : IntegrityError sur index partiel → recharge gagnante + politique active.
-    """
-    from sqlalchemy.exc import IntegrityError
-
+    """Primitive interne : suppose User FOR UPDATE déjà détenu."""
     for _attempt in range(2):
         recovery = generate_opaque_secret()
         revocation = generate_opaque_secret()
@@ -173,6 +500,27 @@ def create_or_reuse_session(
 
         existing = find_active_session_for_installation(user_id, device_installation_id)
         if existing is not None:
+            # Provisional expirée sur la même installation → révoquer puis recréer
+            if existing.is_provisional_expired(now=now):
+                revoke_session_state(
+                    existing,
+                    reason="provisional_expired_reuse",
+                    status=MobileDeviceSessionStatus.revoked,
+                )
+                try:
+                    from security.refresh_token_service import revoke_tokens_for_session
+
+                    revoke_tokens_for_session(
+                        str(existing.session_id),
+                        reason="provisional_expired_reuse",
+                        commit=False,
+                    )
+                except Exception as exc:
+                    logger.warning("revoke tokens provisional reuse: %s", exc)
+                db.session.flush()
+                # Boucler pour créer une nouvelle ligne
+                continue
+
             existing.previous_credential_hash = existing.credential_hash
             existing.previous_generation = (
                 existing.credential_generation or existing.generation
@@ -187,32 +535,33 @@ def create_or_reuse_session(
             )
             existing.credential_generation = new_cred_gen
             existing.generation = new_cred_gen  # alias legacy
-            # session_epoch inchangé (même session active)
-            existing.device_name = device_name or existing.device_name
             existing.driver_id = (
                 driver_id if driver_id is not None else existing.driver_id
             )
-            existing.last_seen_at = now
             existing.last_refresh_at = now
-            existing.last_app_version = app_version
-            existing.last_platform = platform
-            existing.last_context_id = context_id
+            apply_session_metadata(existing, meta, touch_seen=True)
+            # Reuse confirmé : ne jamais repasser provisional
+            if existing.confirmed_at is not None:
+                existing.provisional_expires_at = None
             db.session.add(existing)
             db.session.flush()
             _invalidate_session_cache(existing.session_id)
             return existing, recovery, revocation
+
+        # Reap sync avant count (INV-AUTH-DEVICE-01)
+        reap_expired_provisional_sessions(user_id, commit=False)
 
         active = list_active_sessions(user_id)
         limit = get_device_session_limit(role)
         if len(active) >= limit:
             raise DeviceSessionLimitReached(active)
 
+        provisional = bool(PROVISIONAL_CONFIRMATION_ENABLED)
         session = MobileDeviceSession(
             session_id=uuid.uuid4(),
             user_id=user_id,
             driver_id=driver_id,
             device_installation_id=device_installation_id,
-            device_name=device_name,
             status=MobileDeviceSessionStatus.active,
             credential_hash=hash_credential(recovery),
             revocation_secret_hash=hash_revocation_secret(revocation),
@@ -222,20 +571,22 @@ def create_or_reuse_session(
             refresh_generation=1,
             last_seen_at=now,
             last_refresh_at=now,
-            last_app_version=app_version,
-            last_platform=platform,
-            last_context_id=context_id,
+            confirmed_at=None if provisional else now,
+            provisional_expires_at=(
+                now + timedelta(seconds=PROVISIONAL_SESSION_TTL_SECONDS)
+                if provisional
+                else None
+            ),
         )
+        apply_session_metadata(session, meta, touch_seen=False)
         db.session.add(session)
         try:
             with db.session.begin_nested():
                 db.session.flush()
             return session, recovery, revocation
         except IntegrityError:
-            # Concurrent create : recharger la session gagnante
             continue
 
-    # Dernier recours après 2 tentatives
     existing = find_active_session_for_installation(user_id, device_installation_id)
     if existing is not None:
         recovery = generate_opaque_secret()
@@ -249,10 +600,161 @@ def create_or_reuse_session(
         existing.credential_generation = new_cred_gen
         existing.generation = new_cred_gen
         existing.last_seen_at = now
+        apply_session_metadata(existing, meta, touch_seen=True)
         db.session.add(existing)
         db.session.flush()
         return existing, recovery, revocation
     raise DeviceSessionLimitReached([])
+
+
+def create_or_reuse_session(
+    *,
+    user_id: int,
+    device_installation_id: str,
+    device_name: str | None = None,
+    driver_id: int | None = None,
+    role: str | None = None,
+    app_version: str | None = None,
+    platform: str | None = None,
+    context_id: str | None = None,
+    meta: DeviceSessionMetadata | None = None,
+) -> tuple[MobileDeviceSession, str, str]:
+    """Crée ou tourne les credentials d'une session active pour une installation.
+
+    Prend User FOR UPDATE puis délègue à _create_or_reuse_session_locked.
+    """
+    from models import User
+
+    User.query.filter_by(id=user_id).with_for_update().one()
+    effective_meta = meta or DeviceSessionMetadata(
+        device_name=device_name,
+        platform=platform,
+        app_version=app_version,
+        context_id=context_id,
+    )
+    return _create_or_reuse_session_locked(
+        user_id=user_id,
+        device_installation_id=device_installation_id,
+        driver_id=driver_id,
+        role=role,
+        meta=effective_meta,
+    )
+
+
+def replace_device_session(
+    *,
+    user_id: int,
+    session_to_revoke: str,
+    device_installation_id: str,
+    allowed_session_ids: list[str] | None = None,
+    driver_id: int | None = None,
+    role: str | None = None,
+    meta: DeviceSessionMetadata | None = None,
+) -> tuple[MobileDeviceSession, str, str, uuid.UUID]:
+    """Révoque une session puis crée/reprend sous verrou (SQL only, sans Redis).
+
+    Retourne (new_session, recovery, revocation, revoked_session_id).
+    Publication Redis + consume challenge : après COMMIT appelant.
+    """
+    from models import User
+
+    User.query.filter_by(id=user_id).with_for_update().one()
+
+    target = get_session_by_id(session_to_revoke)
+    if target is None or target.user_id != user_id:
+        raise DeviceSessionResolutionError(
+            "session_not_found",
+            "Session à révoquer introuvable.",
+        )
+
+    if allowed_session_ids is not None:
+        allowed = {str(s) for s in allowed_session_ids}
+        if str(target.session_id) not in allowed:
+            raise DeviceSessionResolutionError(
+                "session_not_in_challenge",
+                "Cet appareil n'était pas dans la liste au moment du challenge.",
+            )
+
+    revoked_id = target.session_id
+    if target.is_active():
+        revoke_session_state(
+            target,
+            reason="Remplacement multi-appareils (resolution)",
+            revoked_by_user_id=user_id,
+            status=MobileDeviceSessionStatus.revoked,
+        )
+        try:
+            from security.refresh_token_service import revoke_tokens_for_session
+
+            revoke_tokens_for_session(
+                str(target.session_id),
+                reason="Remplacement multi-appareils",
+                commit=False,
+            )
+        except Exception as exc:
+            logger.warning("revoke_tokens_for_session during replace: %s", exc)
+
+    new_session, recovery, revocation = _create_or_reuse_session_locked(
+        user_id=user_id,
+        device_installation_id=device_installation_id,
+        driver_id=driver_id,
+        role=role,
+        meta=meta,
+    )
+    return new_session, recovery, revocation, revoked_id
+
+
+def revoke_session_state(
+    session: MobileDeviceSession,
+    *,
+    reason: str,
+    revoked_by_user_id: int | None = None,
+    status: MobileDeviceSessionStatus = MobileDeviceSessionStatus.revoked,
+) -> None:
+    """SQL / ORM uniquement — aucun effet Redis (appeler publish après COMMIT)."""
+    session.status = status
+    session.revoked_at = _now()
+    session.revoked_reason = reason
+    session.revoked_by_user_id = revoked_by_user_id
+    session.session_epoch = int(getattr(session, "session_epoch", 1) or 1) + 1
+    session.provisional_expires_at = None
+
+
+def publish_session_revoked(session_id: uuid.UUID | str) -> None:
+    """Après COMMIT uniquement : marqueur négatif Redis (pas d'invalidate contradictoire)."""
+    try:
+        sid = (
+            session_id
+            if isinstance(session_id, uuid.UUID)
+            else uuid.UUID(str(session_id))
+        )
+    except (ValueError, TypeError):
+        return
+    _cache_session_revoked(sid)
+
+
+def revoke_session(
+    session: MobileDeviceSession,
+    *,
+    reason: str,
+    revoked_by_user_id: int | None = None,
+    status: MobileDeviceSessionStatus = MobileDeviceSessionStatus.revoked,
+    publish_cache: bool = True,
+) -> None:
+    """Révocation session. publish_cache=True uniquement si COMMIT immédiat suit.
+
+    Pour les flux transactionnels (replace), préférer revoke_session_state +
+    publish_session_revoked après COMMIT.
+    """
+    revoke_session_state(
+        session,
+        reason=reason,
+        revoked_by_user_id=revoked_by_user_id,
+        status=status,
+    )
+    if publish_cache:
+        # Ne PAS invalider après : cela effaçait le marqueur négatif (bug historique).
+        publish_session_revoked(session.session_id)
 
 
 def verify_recovery_credential(session: MobileDeviceSession, credential: str) -> bool:
@@ -284,6 +786,7 @@ def rotate_recovery_credential(
     session.generation = new_gen  # alias legacy
     session.last_refresh_at = now
     session.last_seen_at = now
+    mark_session_confirmed(session)
     return new_secret
 
 
@@ -292,24 +795,8 @@ def bump_refresh_generation(session: MobileDeviceSession) -> int:
     session.refresh_generation = int(getattr(session, "refresh_generation", 1) or 1) + 1
     session.last_refresh_at = _now()
     session.last_seen_at = session.last_refresh_at
+    mark_session_confirmed(session)
     return int(session.refresh_generation)
-
-
-def revoke_session(
-    session: MobileDeviceSession,
-    *,
-    reason: str,
-    revoked_by_user_id: int | None = None,
-    status: MobileDeviceSessionStatus = MobileDeviceSessionStatus.revoked,
-) -> None:
-    session.status = status
-    session.revoked_at = _now()
-    session.revoked_reason = reason
-    session.revoked_by_user_id = revoked_by_user_id
-    # Rendre tokens/caches structurellement obsolètes
-    session.session_epoch = int(getattr(session, "session_epoch", 1) or 1) + 1
-    _cache_session_revoked(session.session_id)
-    _invalidate_session_cache(session.session_id)
 
 
 def revoke_all_user_sessions(
@@ -319,11 +806,12 @@ def revoke_all_user_sessions(
     status: MobileDeviceSessionStatus = MobileDeviceSessionStatus.security_revoked,
     except_session_id: uuid.UUID | None = None,
 ) -> int:
+    """Révoque les sessions actives (SQL only). publish_session_revoked après COMMIT."""
     count = 0
     for sess in list_active_sessions(user_id):
         if except_session_id and sess.session_id == except_session_id:
             continue
-        revoke_session(sess, reason=reason, status=status)
+        revoke_session_state(sess, reason=reason, status=status)
         count += 1
     return count
 
@@ -342,10 +830,11 @@ def revoke_user_security_sessions(
     Couvre reset/changement MDP, reset admin, révocation globale.
 
     fail_closed=True : propage l'échec refresh tokens (pas de swallow).
-    commit_tokens=False : flush only — commit laissé à l'appelant.
+    commit_tokens=False : flush only — commit + publish_session_revoked à l'appelant.
     """
     if increment_token_version and hasattr(user, "token_version"):
         user.token_version = int(getattr(user, "token_version", 0) or 0) + 1
+    revoked_ids = [s.session_id for s in list_active_sessions(user.id)]
     count = revoke_all_user_sessions(user.id, reason=reason, status=status)
     try:
         from security.refresh_token_service import revoke_all_user_tokens
@@ -355,6 +844,10 @@ def revoke_user_security_sessions(
         if fail_closed:
             raise
         logger.warning("revoke_all_user_tokens après security revoke: %s", exc)
+    if commit_tokens:
+        # Tokens déjà commités : publier le cache négatif maintenant.
+        for sid in revoked_ids:
+            publish_session_revoked(sid)
     return count
 
 
@@ -386,7 +879,7 @@ def consume_revocation_secret(session: MobileDeviceSession, secret: str) -> bool
         return False
     session.revocation_secret_hash = hash_revocation_secret(generate_opaque_secret())
     if session.is_active():
-        revoke_session(session, reason="pending_revocation")
+        revoke_session_state(session, reason="pending_revocation")
     return True
 
 
@@ -397,6 +890,8 @@ def revoke_pending_idempotent(
     operation_id: str | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Révoque via revocation_secret avec rejeu idempotent (perte d'ACK).
+
+    SQL only — publish_session_revoked après COMMIT appelant.
 
     Returns:
         (payload_ok, error_code) — error_code None si succès.
@@ -426,7 +921,7 @@ def revoke_pending_idempotent(
 
     already = not session.is_active()
     if session.is_active():
-        revoke_session(session, reason="pending_revocation")
+        revoke_session_state(session, reason="pending_revocation")
 
     # One-shot après succès (rejeu via operation_id + receipt)
     consumed_hash = hash_revocation_secret(secret)
@@ -458,9 +953,9 @@ def _cache_key(session_id: uuid.UUID | str) -> str:
 
 def _get_redis():
     try:
-        from shared.redis_client import get_redis_client
+        from ext import redis_client
 
-        return get_redis_client()
+        return redis_client
     except Exception:
         return None
 

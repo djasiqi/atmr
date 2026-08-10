@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import enum
+import hashlib
 import uuid
 from datetime import datetime
 
@@ -26,6 +27,50 @@ from typing_extensions import override
 from ext import db
 
 from .base import _iso
+
+_APP_LABELS = frozenset({"", "lirie", "atmr", "expo"})
+
+
+def _device_code_from_installation(installation_id: str | None) -> str:
+    """Code court non réversible pour affichage UI (pas l'ID complet)."""
+    raw = (installation_id or "").strip()
+    if not raw:
+        return "------"
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest().upper()
+    return digest[:6]
+
+
+def resolve_device_display_name(
+    *,
+    device_name: str | None,
+    device_model: str | None,
+    device_manufacturer: str | None,
+    last_platform: str | None,
+    has_metadata: bool,
+) -> str:
+    """Display resolver serveur (jamais le nom d'application)."""
+    raw_name = (device_name or "").strip()
+    if raw_name and raw_name.lower() not in _APP_LABELS:
+        return raw_name
+
+    manufacturer = (device_manufacturer or "").strip()
+    model = (device_model or "").strip()
+    if manufacturer and model:
+        return f"{manufacturer} {model}"
+    if model:
+        return model
+    if manufacturer:
+        return manufacturer
+
+    platform = (last_platform or "").strip().lower()
+    if platform == "ios":
+        return "iPhone"
+    if platform == "android":
+        return "Appareil Android"
+
+    if not has_metadata:
+        return "Ancienne session Lirie — informations appareil indisponibles"
+    return "Appareil"
 
 
 class MobileDeviceSessionStatus(enum.Enum):
@@ -51,6 +96,13 @@ class MobileDeviceSession(db.Model):
         Index(
             "ix_mobile_device_session_device_installation_id", "device_installation_id"
         ),
+        Index(
+            "ix_mobile_device_session_provisional_expires",
+            "provisional_expires_at",
+            postgresql_where=text(
+                "status = 'active' AND confirmed_at IS NULL"
+            ),
+        ),
     )
 
     session_id: Mapped[uuid.UUID] = mapped_column(
@@ -61,7 +113,11 @@ class MobileDeviceSession(db.Model):
     )
     driver_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     device_installation_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Nom humain OS (ex. « iPhone de Drin ») — jamais le nom d'application
     device_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    device_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    device_manufacturer: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    device_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     status: Mapped[MobileDeviceSessionStatus] = mapped_column(
         Enum(
@@ -116,18 +172,72 @@ class MobileDeviceSession(db.Model):
 
     last_context_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_app_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_app_build: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_platform: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_os_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Provisional adoption (P1) — backfill existant = confirmed
+    confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    provisional_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     user = relationship("User", foreign_keys=[user_id])
 
     def is_active(self) -> bool:
         return self.status == MobileDeviceSessionStatus.active
 
-    def serialize(self, *, is_current: bool = False) -> dict[str, object]:
-        return {
+    def is_provisional(self) -> bool:
+        return self.is_active() and self.confirmed_at is None
+
+    def is_provisional_expired(self, *, now: datetime | None = None) -> bool:
+        if not self.is_provisional():
+            return False
+        if self.provisional_expires_at is None:
+            return False
+        ref = now or datetime.now(
+            self.provisional_expires_at.tzinfo
+            if self.provisional_expires_at.tzinfo
+            else None
+        )
+        return self.provisional_expires_at <= ref
+
+    def serialize(
+        self,
+        *,
+        is_current: bool = False,
+        include_installation_id: bool = False,
+    ) -> dict[str, object]:
+        """Sérialisation publique minimale pour UI / erreurs auth.
+
+        N'expose pas l'installation_id complet par défaut (device_code à la place).
+        """
+        has_metadata = bool(
+            self.last_platform
+            or self.last_app_version
+            or self.device_model
+            or self.device_manufacturer
+        )
+        display_name = resolve_device_display_name(
+            device_name=self.device_name,
+            device_model=self.device_model,
+            device_manufacturer=self.device_manufacturer,
+            last_platform=self.last_platform,
+            has_metadata=has_metadata,
+        )
+
+        payload: dict[str, object] = {
             "session_id": str(self.session_id),
-            "device_name": self.device_name or "Appareil inconnu",
-            "device_installation_id": self.device_installation_id,
+            "device_name": display_name,
+            "device_model": self.device_model,
+            "device_manufacturer": self.device_manufacturer,
+            "device_type": self.device_type,
+            "device_code": _device_code_from_installation(self.device_installation_id),
             "status": self.status.value if self.status else None,
             "generation": self.generation,
             "session_epoch": self.session_epoch,
@@ -138,8 +248,24 @@ class MobileDeviceSession(db.Model):
             "last_refresh_at": _iso(self.last_refresh_at)
             if self.last_refresh_at
             else None,
+            "last_platform": self.last_platform,
+            "last_os_version": self.last_os_version,
+            "last_app_version": self.last_app_version,
+            "last_app_build": self.last_app_build,
+            "metadata_updated_at": _iso(self.metadata_updated_at)
+            if self.metadata_updated_at
+            else None,
+            "confirmed_at": _iso(self.confirmed_at) if self.confirmed_at else None,
+            "provisional_expires_at": _iso(self.provisional_expires_at)
+            if self.provisional_expires_at
+            else None,
+            "is_provisional": self.is_provisional(),
             "is_current": is_current,
+            "metadata_incomplete": not has_metadata,
         }
+        if include_installation_id:
+            payload["device_installation_id"] = self.device_installation_id
+        return payload
 
     @override
     def __repr__(self) -> str:

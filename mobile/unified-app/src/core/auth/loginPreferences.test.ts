@@ -48,37 +48,43 @@ describe("loginPreferences", () => {
       email: null,
       password: null,
     });
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(
+      STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD
+    );
   });
 
-  it("readLoginPreferences charge email et mot de passe mémorisés", async () => {
+  it("readLoginPreferences charge l'email sans jamais renvoyer de mot de passe", async () => {
     getItem.mockResolvedValue({
       rememberMe: true,
       email: "user@example.com",
     });
-    SecureStore.getItemAsync.mockResolvedValue("secret123");
     await expect(readLoginPreferences()).resolves.toEqual({
       rememberMe: true,
       email: "user@example.com",
-      password: "secret123",
+      password: null,
     });
-    expect(SecureStore.getItemAsync).toHaveBeenCalledWith(STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD);
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(
+      STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD
+    );
   });
 
-  it("persistLoginRememberMe enregistre email et mot de passe", async () => {
+  it("persistLoginRememberMe enregistre l'email sans mot de passe", async () => {
     await persistLoginRememberMe("user@example.com", "secret123", true);
     expect(setItem).toHaveBeenCalledWith(STORAGE_KEYS.LOGIN_PREFERENCES, {
       rememberMe: true,
       email: "user@example.com",
     });
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-      STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD,
-      "secret123"
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(
+      STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD
     );
   });
 
   it("writeLoginPreferences supprime email et mot de passe si rememberMe est false", async () => {
     await writeLoginPreferences({ rememberMe: false, email: null, password: null });
     expect(removeItem).toHaveBeenCalledWith(STORAGE_KEYS.LOGIN_PREFERENCES);
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD);
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(
+      STORAGE_KEYS.LOGIN_REMEMBERED_PASSWORD
+    );
   });
 });

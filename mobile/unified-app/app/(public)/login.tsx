@@ -18,7 +18,11 @@ import { resolveInitialRoute } from "../../src/core/navigation/resolveInitialRou
 import { useRuntimeUpdateGate } from "../../src/core/version/useRuntimeUpdateGate";
 import { getLastDraftId } from "../../src/core/public/preRequestDraft";
 import { queueExternalIntentResume } from "../../src/core/navigation/externalIntent";
-import { hasStoredRefreshToken } from "../../src/core/api/client";
+import {
+  hasStoredRefreshToken,
+  canReplaceDeviceSession,
+  replaceDeviceSessionOnLimit,
+} from "../../src/core/api/client";
 import {
   authenticateWithBiometric,
   isBiometricAvailable,
@@ -44,7 +48,17 @@ const ReactRuntime: any = require("react");
 type LoginApiError = {
   message?: string;
   reason?: string;
+  code?: string;
   details?: Record<string, unknown>;
+};
+
+type DeviceSessionRow = {
+  session_id: string;
+  device_name?: string;
+  device_code?: string;
+  last_seen_at?: string | null;
+  last_platform?: string | null;
+  last_app_version?: string | null;
 };
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
@@ -71,6 +85,11 @@ export default function LoginScreen() {
   const [rememberSession, setRememberSession] = ReactRuntime.useState(true);
   const [submitting, setSubmitting] = ReactRuntime.useState(false);
   const [localError, setLocalError] = ReactRuntime.useState(null as string | null);
+  const [deviceLimitSessions, setDeviceLimitSessions] = ReactRuntime.useState(
+    [] as DeviceSessionRow[]
+  );
+  const [resolutionToken, setResolutionToken] = ReactRuntime.useState(null as string | null);
+  const [replacingSessionId, setReplacingSessionId] = ReactRuntime.useState(null as string | null);
   const [preferencesLoaded, setPreferencesLoaded] = ReactRuntime.useState(false);
   const [biometricLoginAvailable, setBiometricLoginAvailable] = ReactRuntime.useState(false);
   const [biometricPending, setBiometricPending] = ReactRuntime.useState(false);
@@ -94,9 +113,7 @@ export default function LoginScreen() {
       if (preferences.email) {
         setEmail(preferences.email);
       }
-      if (preferences.password) {
-        setPassword(preferences.password);
-      }
+      // Mot de passe : jamais prérempli (Lot J — plus de stockage).
       setPreferencesLoaded(true);
     })();
     return () => {
@@ -192,6 +209,8 @@ export default function LoginScreen() {
 
   const onSubmit = async () => {
     setLocalError(null);
+    setDeviceLimitSessions([]);
+    setResolutionToken(null);
     if (!email.trim() || !password.trim()) {
       setLocalError("Email et mot de passe requis.");
       return;
@@ -205,6 +224,7 @@ export default function LoginScreen() {
       const typedError = (typeof e === "object" && e ? e : {}) as LoginApiError;
       const message = asString(typedError.message) || "Echec de connexion.";
       const reason = asString(typedError.reason).toLowerCase();
+      const errorCode = asString(typedError.code);
       const activationSessionId = asString(typedError.details?.activation_session_id);
       const maskedEmail = asString(typedError.details?.masked_email);
       const maskedPhone = asString(typedError.details?.masked_phone);
@@ -230,9 +250,63 @@ export default function LoginScreen() {
         } as any);
         return;
       }
+      if (errorCode === "device_session_limit_reached") {
+        const sessions = Array.isArray(typedError.details?.sessions)
+          ? (typedError.details.sessions as DeviceSessionRow[])
+          : [];
+        const replaceAllowed = canReplaceDeviceSession(typedError.details ?? null);
+        const token = replaceAllowed
+          ? typeof typedError.details?.resolution_token === "string"
+            ? typedError.details.resolution_token
+            : null
+          : null;
+        const limit =
+          typeof typedError.details?.limit === "number"
+            ? typedError.details.limit
+            : sessions.length || 5;
+        // Toujours afficher la liste (lisibilité P0) ; le replace n'apparaît que si token.
+        setDeviceLimitSessions(sessions);
+        setResolutionToken(token);
+        setLocalError(
+          token
+            ? `Nombre maximal d'appareils atteint (${limit}/${limit}). Choisissez un appareil à déconnecter pour continuer sur celui-ci.`
+            : [
+                `Nombre maximal d'appareils atteint (${limit}/${limit}).`,
+                "Déconnectez un ancien appareil depuis un appareil déjà connecté (Compte → Sécurité), puis réessayez.",
+              ].join("\n")
+        );
+        return;
+      }
       setLocalError(message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const onReplaceDeviceSession = async (sessionId: string) => {
+    if (!resolutionToken || replacingSessionId || submitting) return;
+    setLocalError(null);
+    setReplacingSessionId(sessionId);
+    try {
+      await replaceDeviceSessionOnLimit({
+        sessionToRevoke: sessionId,
+        resolutionToken,
+      });
+      await persistLoginRememberMe(email, password, rememberSession);
+      setDeviceLimitSessions([]);
+      setResolutionToken(null);
+      await bootstrapSession();
+      await navigateAfterAuth();
+    } catch (e) {
+      const typedError = (typeof e === "object" && e ? e : {}) as LoginApiError;
+      setLocalError(
+        asString(typedError.message) ||
+          "Impossible de remplacer l'appareil. Réessayez la connexion."
+      );
+      setDeviceLimitSessions([]);
+      setResolutionToken(null);
+    } finally {
+      setReplacingSessionId(null);
     }
   };
 
@@ -391,11 +465,11 @@ export default function LoginScreen() {
                 void persistLoginRememberMe("", "", false);
               }
             }}
-            accessibilityLabel="Se souvenir de moi"
+            accessibilityLabel="Mémoriser mon email"
             style={styles.rememberRow}
             label={
               <Text style={styles.rememberLabel} maxFontSizeMultiplier={1.35}>
-                Se souvenir de moi
+                Mémoriser mon email
               </Text>
             }
           />
@@ -431,6 +505,67 @@ export default function LoginScreen() {
             <AppText variant="error" style={{ marginTop: 14 }} accessibilityRole="alert">
               {localError ?? error}
             </AppText>
+          ) : null}
+
+          {deviceLimitSessions.length > 0 ? (
+            <View style={{ marginTop: 16, gap: 10 }}>
+              {deviceLimitSessions.map((session) => {
+                const sid = asString(session.session_id);
+                if (!sid) return null;
+                const busy = replacingSessionId === sid;
+                const metaBits = [
+                  session.last_platform,
+                  session.last_app_version,
+                  session.device_code ? `code ${session.device_code}` : null,
+                ].filter(Boolean);
+                return (
+                  <View
+                    key={sid}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: UI_BORDER,
+                      borderRadius: 12,
+                      padding: 12,
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ color: UI_TEXT, fontWeight: "600", fontSize: FONT_SIZE.px15 }}>
+                      {asString(session.device_name) || "Appareil"}
+                    </Text>
+                    {metaBits.length > 0 ? (
+                      <Text style={{ color: UI_MUTED, fontSize: FONT_SIZE.px12 }}>
+                        {metaBits.join(" · ")}
+                      </Text>
+                    ) : null}
+                    {session.last_seen_at ? (
+                      <Text style={{ color: UI_MUTED, fontSize: FONT_SIZE.px12 }}>
+                        Dernière activité : {asString(session.last_seen_at)}
+                      </Text>
+                    ) : null}
+                    {resolutionToken ? (
+                      <Pressable
+                        onPress={() => void onReplaceDeviceSession(sid)}
+                        disabled={Boolean(replacingSessionId) || submitting}
+                        style={({ pressed }) => [
+                          styles.submitButton,
+                          { marginTop: 4 },
+                          pressed ? { opacity: 0.9 } : null,
+                          replacingSessionId || submitting ? styles.submitButtonDisabled : null,
+                        ]}
+                      >
+                        {busy ? (
+                          <ActivityIndicator color="#FFFFFF" />
+                        ) : (
+                          <AppText variant="label" style={styles.submitText}>
+                            Déconnecter et utiliser cet appareil
+                          </AppText>
+                        )}
+                      </Pressable>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
           ) : null}
 
           {!updateGate.requiresUpdate && (updateGate.updateAvailable || updateGate.recommendedUpdate) ? (

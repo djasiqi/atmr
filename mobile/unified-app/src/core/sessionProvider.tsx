@@ -256,6 +256,16 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
     // 1. Flush pending réseau (ne crée pas de preuve terminale)
     await flushPendingRevocationTombstone().catch(() => false);
+    try {
+       
+      const { flushPendingSessionConfirmation } = require("./auth/pendingSessionConfirmation") as {
+        flushPendingSessionConfirmation: () => Promise<boolean>;
+      };
+      // Best-effort : confirmation provisional post-login (nécessite access token si déjà en mémoire)
+      void flushPendingSessionConfirmation().catch(() => undefined);
+    } catch {
+      /* ignore */
+    }
 
     // 2. Restore offline snapshot
     const offline = await restoreOfflineSessionSnapshot();
@@ -298,6 +308,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
     if (hasAuthToken()) {
       void appendSessionJournalEvent("session.resume.skipped_has_access_token");
       setMobileSessionStatus("authenticated_online");
+      try {
+         
+        const { flushPendingSessionConfirmation } = require("./auth/pendingSessionConfirmation") as {
+          flushPendingSessionConfirmation: () => Promise<boolean>;
+        };
+        void flushPendingSessionConfirmation().catch(() => undefined);
+      } catch {
+        /* ignore */
+      }
       return;
     }
     // 3. Recovery REST (refresh puis session-resume) — capture génération, pas de bump
@@ -307,6 +326,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
     if (outcome === "recovered") {
       setMobileSessionStatus("authenticated_online");
       void appendSessionJournalEvent("session.resume.success", { via: "coordinator" });
+      try {
+         
+        const { flushPendingSessionConfirmation } = require("./auth/pendingSessionConfirmation") as {
+          flushPendingSessionConfirmation: () => Promise<boolean>;
+        };
+        void flushPendingSessionConfirmation().catch(() => undefined);
+      } catch {
+        /* ignore */
+      }
       try {
         const ctx = activeContextRef.current;
         if (ctx?.context_type === "driver") {

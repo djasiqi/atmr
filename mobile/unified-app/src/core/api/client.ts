@@ -266,24 +266,19 @@ function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function resolveDeviceName(): Promise<string> {
-   
-  const Application = require("expo-application") as {
-    applicationName?: string | null;
-  };
-  return (
-    (typeof Application.applicationName === "string" && Application.applicationName.length > 0
-      ? Application.applicationName
-      : null) ?? Platform.OS
-  );
-}
-
 /** Headers appareil best-effort (logout / resume) — ne bloque pas si SecureStore échoue. */
 async function buildAuthDeviceHeaders(): Promise<Record<string, string>> {
   try {
     return await buildRequiredAuthDeviceHeaders();
   } catch {
-    return {};
+    try {
+      const { buildDeviceMetadataHeaders } = require("../device/deviceRuntimeMetadata") as {
+        buildDeviceMetadataHeaders: () => Record<string, string>;
+      };
+      return buildDeviceMetadataHeaders();
+    } catch {
+      return {};
+    }
   }
 }
 
@@ -292,6 +287,9 @@ async function buildRequiredAuthDeviceHeaders(): Promise<Record<string, string>>
    
   const { getStableDeviceId } = require("../notifications/getStableDeviceId") as {
     getStableDeviceId: () => Promise<string>;
+  };
+  const { buildDeviceMetadataHeaders } = require("../device/deviceRuntimeMetadata") as {
+    buildDeviceMetadataHeaders: () => Record<string, string>;
   };
   let deviceId: string;
   try {
@@ -310,7 +308,7 @@ async function buildRequiredAuthDeviceHeaders(): Promise<Record<string, string>>
   }
   return {
     "X-Device-ID": deviceId,
-    "X-Device-Name": await resolveDeviceName(),
+    ...buildDeviceMetadataHeaders(),
   };
 }
 
@@ -626,7 +624,20 @@ apiClient.interceptors.request.use(async (config) => {
   const requestUrl = String(config.url ?? "");
   const effectiveTimeoutMs = resolveAdaptiveTimeoutMs(requestUrl, Number(config.timeout ?? 15000));
   config.timeout = effectiveTimeoutMs;
-  config.headers["X-Client-Platform"] = Platform.OS;
+  try {
+     
+    const { buildDeviceMetadataHeaders } = require("../device/deviceRuntimeMetadata") as {
+      buildDeviceMetadataHeaders: () => Record<string, string>;
+    };
+    const deviceMetaHeaders = buildDeviceMetadataHeaders();
+    for (const [key, value] of Object.entries(deviceMetaHeaders)) {
+      if (!config.headers[key]) {
+        config.headers[key] = value;
+      }
+    }
+  } catch {
+    config.headers["X-Client-Platform"] = Platform.OS;
+  }
   config.headers["X-Session-Diag"] = buildSessionDiagHeader();
   config.headers["X-Trace-Id"] = buildTraceId();
   if (activeContextIdForApi && !config.headers["X-Active-Context-Id"]) {
@@ -807,6 +818,11 @@ function toApiError(error: unknown): ApiCallError {
         activation_session_id?: string;
         masked_email?: string;
         masked_phone?: string;
+        limit?: number;
+        active_count?: number;
+        sessions?: unknown[];
+        resolution_token?: string;
+        capabilities?: Record<string, unknown>;
         details?: Record<string, unknown>;
       }
     | undefined;
@@ -815,11 +831,14 @@ function toApiError(error: unknown): ApiCallError {
   const isTransportFailure =
     Boolean(e.request) && !e.response && e.code !== "ERR_CANCELED";
   const transportHint = isTransportFailure ? buildNoHttpResponseHint(requestUrl, e) : "";
+  const errorCode = data?.error_code ?? "UNKNOWN_ERROR";
+  const isDeviceSessionLimit = errorCode === "device_session_limit_reached";
   return {
     status: e.response?.status ?? null,
-    code: data?.error_code ?? "UNKNOWN_ERROR",
-    message:
-      (data?.error_message ?? data?.error ?? data?.message ?? e.message) + transportHint,
+    code: errorCode,
+    message: isDeviceSessionLimit
+      ? "Nombre maximal d'appareils atteint. Déconnectez un ancien appareil pour continuer."
+      : (data?.error_message ?? data?.error ?? data?.message ?? e.message) + transportHint,
     reason: data?.reason,
     outcome_class: data?.outcome_class,
     retryable: data?.retryable,
@@ -829,8 +848,129 @@ function toApiError(error: unknown): ApiCallError {
       activation_session_id: data?.activation_session_id,
       masked_email: data?.masked_email,
       masked_phone: data?.masked_phone,
+      ...(Array.isArray(data?.sessions) ? { sessions: data.sessions } : {}),
+      ...(typeof data?.limit === "number" ? { limit: data.limit } : {}),
+      ...(typeof data?.active_count === "number" ? { active_count: data.active_count } : {}),
+      ...(typeof data?.resolution_token === "string"
+        ? { resolution_token: data.resolution_token }
+        : {}),
+      ...(data?.capabilities && typeof data.capabilities === "object"
+        ? { capabilities: data.capabilities }
+        : {}),
     },
   };
+}
+
+/** Remplacement multi-appareils autorisé si token présent et capability non désactivée. */
+export function canReplaceDeviceSession(details?: Record<string, unknown> | null): boolean {
+  if (!details) return false;
+  const token = details.resolution_token;
+  if (typeof token !== "string" || !token.trim()) return false;
+  const caps = details.capabilities;
+  if (caps && typeof caps === "object") {
+    const replaceCap = (caps as Record<string, unknown>).device_session_replace;
+    if (replaceCap === false) return false;
+  }
+  return true;
+}
+
+export type DeviceSessionInfo = {
+  session_id: string;
+  device_name?: string | null;
+  device_model?: string | null;
+  device_code?: string | null;
+  last_platform?: string | null;
+  last_app_version?: string | null;
+  last_seen_at?: string | null;
+  is_current?: boolean;
+  is_provisional?: boolean;
+  status?: string | null;
+};
+
+export type DeviceSessionsListResponse = {
+  sessions: DeviceSessionInfo[];
+  auth_contract_version?: string;
+  capabilities?: Record<string, unknown>;
+};
+
+async function schedulePendingSessionConfirmation(
+  sessionId: string,
+  deviceInstallationId: string
+): Promise<void> {
+  try {
+    const {
+      writePendingSessionConfirmation,
+      flushPendingSessionConfirmation,
+    } = require("../auth/pendingSessionConfirmation") as typeof import("../auth/pendingSessionConfirmation");
+    await writePendingSessionConfirmation({ sessionId, deviceInstallationId });
+    void flushPendingSessionConfirmation().catch(() => undefined);
+  } catch {
+    /* best-effort */
+  }
+}
+
+export async function confirmDeviceSession(sessionId: string): Promise<void> {
+  if (useMockBootstrap) return;
+  try {
+    await apiClient.post(
+      `/auth/device-sessions/${encodeURIComponent(sessionId)}/confirm`,
+      {}
+    );
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
+
+export async function listDeviceSessions(): Promise<DeviceSessionsListResponse> {
+  if (useMockBootstrap) {
+    return { sessions: [] };
+  }
+  try {
+    const { data } = await apiClient.get<DeviceSessionsListResponse>("/auth/device-sessions");
+    const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
+    return {
+      sessions,
+      auth_contract_version:
+        typeof data?.auth_contract_version === "string"
+          ? data.auth_contract_version
+          : undefined,
+      capabilities:
+        data?.capabilities && typeof data.capabilities === "object"
+          ? data.capabilities
+          : undefined,
+    };
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
+
+export async function revokeDeviceSession(sessionId: string): Promise<void> {
+  if (useMockBootstrap) return;
+  try {
+    await apiClient.delete(`/auth/device-sessions/${encodeURIComponent(sessionId)}`);
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
+
+export async function revokeOtherDeviceSessions(): Promise<{
+  ok: boolean;
+  revoked_sessions: number;
+}> {
+  if (useMockBootstrap) return { ok: true, revoked_sessions: 0 };
+  try {
+    const { data } = await apiClient.post<{
+      ok?: boolean;
+      revoked_sessions?: number;
+    }>("/auth/device-sessions/revoke-others", {});
+    return {
+      ok: data?.ok !== false,
+      revoked_sessions:
+        typeof data?.revoked_sessions === "number" ? data.revoked_sessions : 0,
+    };
+  } catch (error) {
+    throw toApiError(error);
+  }
 }
 
 function extractToken(payload: unknown): string | null {
@@ -872,6 +1012,14 @@ export async function clearLocalAuth(): Promise<void> {
       store.bumpAuthEpoch();
       await store.clearLocalAuthCredentialsLocked();
     });
+  } catch {
+    /* ignore */
+  }
+  try {
+    const { clearPendingSessionConfirmation } = require("../auth/pendingSessionConfirmation") as {
+      clearPendingSessionConfirmation: () => Promise<void>;
+    };
+    await clearPendingSessionConfirmation();
   } catch {
     /* ignore */
   }
@@ -1118,9 +1266,200 @@ export async function login(email: string, password: string): Promise<void> {
         setAuthToken(token);
       }
       markBootstrapAuthFresh();
+      void schedulePendingSessionConfirmation(sessionId, deviceId);
     }
   } catch (error) {
     // Best-effort : flush pending créés lors d'un échec d'écriture login.
+    try {
+      const recoveryMod = require("../auth/authRecoveryCoordinator") as typeof import("../auth/authRecoveryCoordinator");
+      void recoveryMod.flushPendingRevocationTombstone().catch(() => undefined);
+    } catch {
+      /* ignore */
+    }
+    throw toApiError(error);
+  }
+}
+
+/**
+ * Remplace une session existante après un 409 device_session_limit_reached.
+ * Même contrat de persistance locale que login().
+ * À n'appeler que si canReplaceDeviceSession(details) (resolution_token présent).
+ */
+export async function replaceDeviceSessionOnLimit(params: {
+  sessionToRevoke: string;
+  resolutionToken: string;
+}): Promise<void> {
+  if (useMockBootstrap) return;
+  try {
+    const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+    const {
+      withCredentialStoreLock,
+      withSessionCredentialMutation,
+    } = require("../auth/sessionCredentialMutex") as typeof import("../auth/sessionCredentialMutex");
+    const {
+      enqueueOrphanedLoginRevocation,
+      flushOrphanedLoginRevocationInBackground,
+    } = require("../auth/authRecoveryCoordinator") as typeof import("../auth/authRecoveryCoordinator");
+    const { decodeJwtClaims } = require("../auth/jwtClaims") as typeof import("../auth/jwtClaims");
+
+    const loginGeneration = await withCredentialStoreLock(() => store.bumpSessionGeneration());
+    const deviceHeaders = await buildRequiredAuthDeviceHeaders();
+    const { data } = await apiClient.post(
+      "/auth/device-sessions/replace",
+      {
+        session_to_revoke: params.sessionToRevoke,
+        resolution_token: params.resolutionToken,
+      },
+      {
+        headers: {
+          ...deviceHeaders,
+          "X-Auth-Contract-Version": "mobile-device-session-v1",
+        },
+      }
+    );
+
+    const token = extractToken(data);
+    const refreshToken = extractRefreshToken(data);
+    const responseObj = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+    const recovery = responseObj.recovery_credential;
+    const revocationSecret = responseObj.revocation_secret;
+    const userObj =
+      responseObj.user && typeof responseObj.user === "object"
+        ? (responseObj.user as Record<string, unknown>)
+        : {};
+
+    if (!refreshToken || typeof recovery !== "string" || !recovery) {
+      const sid = responseObj.session_id;
+      if (typeof sid === "string" && typeof revocationSecret === "string") {
+        try {
+          await revokeSessionPending(sid, revocationSecret);
+        } catch {
+          /* best-effort */
+        }
+      }
+      throw new AuthContractError(
+        "AUTH_LOGIN_CONTRACT_INCOMPLETE",
+        "Le serveur n'a pas retourné les éléments nécessaires à une session sécurisée."
+      );
+    }
+
+    const deviceId = deviceHeaders["X-Device-ID"] ?? "unknown";
+    const accessClaims = token ? decodeJwtClaims(token) : null;
+    const driverIdClaim = accessClaims?.driver_id;
+    const sessionId = responseObj.session_id;
+    if (typeof sessionId !== "string") {
+      throw new AuthContractError(
+        "AUTH_LOGIN_CONTRACT_INCOMPLETE",
+        "Le serveur n'a pas retourné les éléments nécessaires à une session sécurisée."
+      );
+    }
+
+    const credentialGenerationRaw = responseObj.credential_generation;
+    const credentialGeneration =
+      typeof credentialGenerationRaw === "number"
+        ? credentialGenerationRaw
+        : typeof credentialGenerationRaw === "string" &&
+            credentialGenerationRaw.trim() !== "" &&
+            Number.isFinite(Number(credentialGenerationRaw))
+          ? Number(credentialGenerationRaw)
+          : null;
+
+    const envelopePayload = {
+      schema_version: 1,
+      session_id: sessionId,
+      device_installation_id: deviceId,
+      user_public_id: String(userObj.public_id ?? ""),
+      driver_id: typeof driverIdClaim === "number" ? driverIdClaim : null,
+      role: String(userObj.role ?? "driver"),
+      active_context_id: null as string | null,
+      refresh_generation: Number(
+        responseObj.refresh_generation ?? responseObj.session_generation ?? 1
+      ),
+      credential_generation: credentialGeneration,
+      last_authenticated_at: new Date().toISOString(),
+      revocation_secret: typeof revocationSecret === "string" ? revocationSecret : null,
+    };
+
+    const persistResult = await withSessionCredentialMutation(loginGeneration, async () => {
+      const recoveryWrite = await store.writeRecoveryCredential(recovery);
+      if (recoveryWrite.status !== "ok") {
+        throw new AuthContractError(
+          "STORAGE_UNAVAILABLE",
+          "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
+        );
+      }
+      const refreshWrite = await store.writeRefreshToken(refreshToken);
+      if (refreshWrite.status !== "ok") {
+        await store.deleteRecoveryCredential();
+        throw new AuthContractError(
+          "STORAGE_UNAVAILABLE",
+          "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
+        );
+      }
+      try {
+        await SecureStore.setItemAsync(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+      } catch {
+        /* ignore */
+      }
+      const envelopeWrite = await store.writeSessionEnvelope(envelopePayload);
+      if (envelopeWrite.status !== "ok") {
+        await store.deleteRefreshToken();
+        await store.deleteRecoveryCredential();
+        if (typeof revocationSecret === "string") {
+          await store.appendPendingRevocation({
+            operation_id: `replace-fail-${Date.now()}`,
+            session_id: sessionId,
+            device_installation_id: deviceId,
+            revocation_secret: revocationSecret,
+            created_at: new Date().toISOString(),
+            origin: "orphaned_login_cleanup",
+          });
+        }
+        throw new AuthContractError(
+          "STORAGE_UNAVAILABLE",
+          "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
+        );
+      }
+      return true;
+    });
+
+    if (persistResult.status === "stale") {
+      if (typeof revocationSecret === "string") {
+        const orphan = await enqueueOrphanedLoginRevocation({
+          sessionId,
+          deviceInstallationId: deviceId,
+          revocationSecret,
+        });
+        flushOrphanedLoginRevocationInBackground(orphan);
+      }
+      throw new AuthContractError(
+        "AUTH_LOGIN_STALE",
+        "Une autre session a pris le relais pendant la connexion. Réessayez."
+      );
+    }
+
+    if (persistResult.status === "applied") {
+      if (!store.isCurrentSessionGeneration(loginGeneration)) {
+        if (typeof revocationSecret === "string") {
+          const orphan = await enqueueOrphanedLoginRevocation({
+            sessionId,
+            deviceInstallationId: deviceId,
+            revocationSecret,
+          });
+          flushOrphanedLoginRevocationInBackground(orphan);
+        }
+        throw new AuthContractError(
+          "AUTH_LOGIN_STALE",
+          "Une autre session a pris le relais pendant la connexion. Réessayez."
+        );
+      }
+      if (token) {
+        setAuthToken(token);
+      }
+      markBootstrapAuthFresh();
+      void schedulePendingSessionConfirmation(sessionId, deviceId);
+    }
+  } catch (error) {
     try {
       const recoveryMod = require("../auth/authRecoveryCoordinator") as typeof import("../auth/authRecoveryCoordinator");
       void recoveryMod.flushPendingRevocationTombstone().catch(() => undefined);

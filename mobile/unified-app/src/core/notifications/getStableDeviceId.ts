@@ -1,4 +1,3 @@
-import * as Application from "expo-application";
 import {
   createAndPersistInstallationId,
   readInstallationId,
@@ -6,29 +5,15 @@ import {
 
 let cachedDeviceId: string | null = null;
 
-type ApplicationWithInstallationId = typeof Application & {
-  getInstallationIdAsync?: () => Promise<string | null>;
-};
-
 /**
  * Identifiant d'installation stable (survit aux redémarrages, change après réinstallation).
+ *
+ * Source de vérité : SecureStore via authCredentialStore.
+ * Ne pas utiliser de méthodes non documentées d'expo-application (ex. getInstallationIdAsync).
  * Échec de persistance → erreur device_identity_storage_unavailable (pas d'ID mémoire silencieux).
  */
 export async function getStableDeviceId(): Promise<string> {
   if (cachedDeviceId) return cachedDeviceId;
-
-  try {
-    const application = Application as ApplicationWithInstallationId;
-    const installationId = application.getInstallationIdAsync
-      ? await application.getInstallationIdAsync()
-      : null;
-    if (installationId && installationId.length > 0) {
-      cachedDeviceId = installationId;
-      return installationId;
-    }
-  } catch {
-    // fallback SecureStore via authCredentialStore
-  }
 
   const stored = await readInstallationId();
   if (stored.status === "found") {

@@ -618,6 +618,10 @@ export function DriverSettingsScreenContent() {
                 variant="secondary"
                 onPress={() => router.push("/(public)/forgot-password" as never)}
               />
+              <LinkRow
+                label="Appareils connectés"
+                onPress={() => router.push("/(app)/device-sessions" as never)}
+              />
               <AppButton title="Se déconnecter" variant="secondary" onPress={() => logout()} />
             </Animated.View>
 

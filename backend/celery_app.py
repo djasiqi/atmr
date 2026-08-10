@@ -501,6 +501,15 @@ celery.conf.beat_schedule = {
             "jitter": 1800,
         },
     },
+    # Sessions mobile provisional expirées (filet de sécurité, toutes les 5 min)
+    "reap-provisional-device-sessions": {
+        "task": "tasks.security_tasks.reap_expired_provisional_device_sessions",
+        "schedule": 300.0,
+        "options": {
+            "expires": 600,
+            "jitter": 30,
+        },
+    },
     # ✅ DLQ: Cleanup automatique DLQ (quotidien)
     "dlq-cleanup-daily": {
         "task": "tasks.dlq_cleanup_task.cleanup_old_dlq_entries",

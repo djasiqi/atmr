@@ -1,6 +1,7 @@
-import { getInstallationIdAsync } from "expo-application";
-import * as SecureStore from "expo-secure-store";
-
+import {
+  readInstallationId,
+  createAndPersistInstallationId,
+} from "../auth/authCredentialStore";
 import { getStableDeviceId, resetStableDeviceIdCacheForTests } from "./getStableDeviceId";
 
 jest.mock("expo-secure-store", () => ({
@@ -8,9 +9,18 @@ jest.mock("expo-secure-store", () => ({
   setItemAsync: jest.fn(),
 }));
 
-jest.mock("expo-application", () => ({
-  getInstallationIdAsync: jest.fn().mockResolvedValue("install-abc-123"),
+jest.mock("../auth/authCredentialStore", () => ({
+  readInstallationId: jest.fn(),
+  createAndPersistInstallationId: jest.fn(),
 }));
+
+const mockReadInstallationId = readInstallationId as jest.MockedFunction<
+  typeof readInstallationId
+>;
+const mockCreateAndPersistInstallationId =
+  createAndPersistInstallationId as jest.MockedFunction<
+    typeof createAndPersistInstallationId
+  >;
 
 describe("getStableDeviceId", () => {
   beforeEach(() => {
@@ -18,19 +28,31 @@ describe("getStableDeviceId", () => {
     jest.clearAllMocks();
   });
 
-  it("returns installation id when available", async () => {
-    const id = await getStableDeviceId();
-    expect(id).toBe("install-abc-123");
-    const again = await getStableDeviceId();
-    expect(again).toBe("install-abc-123");
-  });
-
-  it("falls back to SecureStore when installation id unavailable", async () => {
-    jest.mocked(getInstallationIdAsync).mockResolvedValueOnce(null);
-    (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce("stored-device-id");
-
-    resetStableDeviceIdCacheForTests();
+  it("retourne l'ID SecureStore existant et le met en cache", async () => {
+    mockReadInstallationId.mockResolvedValue({ status: "found", value: "stored-device-id" });
     const id = await getStableDeviceId();
     expect(id).toBe("stored-device-id");
+    const again = await getStableDeviceId();
+    expect(again).toBe("stored-device-id");
+    expect(mockReadInstallationId).toHaveBeenCalledTimes(1);
+  });
+
+  it("crée un ID si aucun n'existe", async () => {
+    mockReadInstallationId.mockResolvedValue({ status: "missing" });
+    mockCreateAndPersistInstallationId.mockResolvedValue({
+      status: "found",
+      value: "atmr-new-id",
+    });
+    const id = await getStableDeviceId();
+    expect(id).toBe("atmr-new-id");
+    expect(mockCreateAndPersistInstallationId).toHaveBeenCalled();
+  });
+
+  it("échoue si SecureStore est temporairement indisponible", async () => {
+    mockReadInstallationId.mockResolvedValue({ status: "temporarily_unavailable" });
+    await expect(getStableDeviceId()).rejects.toThrow(
+      "device_identity_storage_unavailable"
+    );
+    expect(mockCreateAndPersistInstallationId).not.toHaveBeenCalled();
   });
 });

@@ -79,11 +79,58 @@ def test_device_session_limit_exception_payload():
     assert exc.sessions is sessions
 
 
+def test_serialize_public_payload_hides_installation_id_and_exposes_metadata(
+    app, session_user
+):
+    with app.app_context():
+        session, _recovery, _revocation = svc.create_or_reuse_session(
+            user_id=session_user.id,
+            device_installation_id="install-secret-xyz",
+            device_name="Lirie",
+            role="driver",
+            platform="ios",
+            app_version="1.0.11",
+        )
+        db.session.commit()
+
+        public = session.serialize()
+        assert "device_installation_id" not in public
+        assert len(str(public["device_code"])) == 6
+        assert public["last_platform"] == "ios"
+        assert public["last_app_version"] == "1.0.11"
+        assert public["metadata_incomplete"] is False
+        # Nom app « Lirie » ignoré → fallback plateforme
+        assert public["device_name"] == "iPhone"
+
+        full = session.serialize(include_installation_id=True)
+        assert full["device_installation_id"] == "install-secret-xyz"
+
+
+def test_serialize_legacy_session_without_metadata(app, session_user):
+    with app.app_context():
+        session, _recovery, _revocation = svc.create_or_reuse_session(
+            user_id=session_user.id,
+            device_installation_id=f"device-{uuid.uuid4()}",
+            device_name="Lirie",
+            role="driver",
+        )
+        session.last_platform = None
+        session.last_app_version = None
+        db.session.commit()
+
+        public = session.serialize()
+        assert "Ancienne session Lirie" in str(public["device_name"])
+        assert public["metadata_incomplete"] is True
+
+
 def test_auth_capabilities_contract():
     caps = svc.auth_capabilities()
     assert caps["auth_contract_version"] == "mobile-device-session-v1"
     assert caps["capabilities"]["durable_device_session"] is True
     assert caps["capabilities"]["session_resume"] is True
+    assert caps["capabilities"]["device_session_management"] is True
+    assert "device_session_replace" in caps["capabilities"]
+    assert "provisional_session_confirmation" in caps["capabilities"]
 
 
 def test_create_or_reuse_session_creates_new(app, session_user):

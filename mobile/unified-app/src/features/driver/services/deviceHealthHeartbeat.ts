@@ -17,6 +17,7 @@ import * as Battery from "expo-battery";
 import * as Location from "expo-location";
 import { AppState, AppStateStatus, Platform } from "react-native";
 
+import { resolveDeviceRuntimeMetadata } from "../../../core/device/deviceRuntimeMetadata";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { getTrackingRuntimeSnapshot } from "./trackingRuntime";
 
@@ -138,108 +139,6 @@ async function readNotificationsEnabled(): Promise<boolean | undefined> {
   } catch {
     return undefined;
   }
-}
-
-function readDeviceIdentity(): { manufacturer: string | null; model: string | null } {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Device = require("expo-device") as {
-      manufacturer?: string | null;
-      modelName?: string | null;
-    };
-    return {
-      manufacturer: Device?.manufacturer ? String(Device.manufacturer) : null,
-      model: Device?.modelName ? String(Device.modelName) : null,
-    };
-  } catch {
-    return { manufacturer: null, model: null };
-  }
-}
-
-function readAppOsVersion(): {
-  appVersion: string | null;
-  osVersion: string | null;
-  nativeBuildVersion: string | null;
-  expoRuntimeVersion: string | null;
-  otaUpdateId: string | null;
-  releaseChannel: string | null;
-  releaseSha: string | null;
-} {
-  let appVersion: string | null = null;
-  let osVersion: string | null = null;
-  let nativeBuildVersion: string | null = null;
-  let expoRuntimeVersion: string | null = null;
-  let otaUpdateId: string | null = null;
-  let releaseChannel: string | null = null;
-  let releaseSha: string | null = null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Application = require("expo-application") as {
-      nativeApplicationVersion?: string | null;
-      nativeBuildVersion?: string | null;
-    };
-    appVersion = Application?.nativeApplicationVersion
-      ? String(Application.nativeApplicationVersion)
-      : null;
-    nativeBuildVersion = Application?.nativeBuildVersion
-      ? String(Application.nativeBuildVersion)
-      : null;
-  } catch {
-    appVersion = null;
-  }
-  if (!appVersion) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const Constants = require("expo-constants").default as {
-        expoConfig?: { version?: string | null; extra?: Record<string, unknown> | null } | null;
-      };
-      appVersion = Constants?.expoConfig?.version
-        ? String(Constants.expoConfig.version)
-        : null;
-      const extraSha = Constants?.expoConfig?.extra?.releaseSha;
-      if (typeof extraSha === "string" && extraSha.trim()) {
-        releaseSha = extraSha.trim().slice(0, 64);
-      }
-    } catch {
-      /* noop */
-    }
-  }
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Device = require("expo-device") as { osVersion?: string | null };
-    osVersion = Device?.osVersion ? String(Device.osVersion) : null;
-  } catch {
-    osVersion = null;
-  }
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Updates = require("expo-updates") as {
-      updateId?: string | null;
-      runtimeVersion?: string | null;
-      channel?: string | null;
-      isEmbeddedLaunch?: boolean;
-    };
-    otaUpdateId = Updates?.updateId ? String(Updates.updateId) : "embedded";
-    expoRuntimeVersion = Updates?.runtimeVersion
-      ? String(Updates.runtimeVersion)
-      : null;
-    if (Updates?.channel) {
-      releaseChannel = String(Updates.channel);
-    } else if (Updates?.isEmbeddedLaunch) {
-      releaseChannel = "embedded";
-    }
-  } catch {
-    otaUpdateId = null;
-  }
-  return {
-    appVersion,
-    osVersion,
-    nativeBuildVersion,
-    expoRuntimeVersion,
-    otaUpdateId,
-    releaseChannel,
-    releaseSha,
-  };
 }
 
 async function readIosLowPowerMode(): Promise<boolean | null> {
@@ -485,16 +384,18 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
   const lastFixAgeSeconds = computeLastFixAgeSeconds(snapshot);
   const nativeLastFixAgeSeconds = computeNativeLastFixAgeSeconds();
   const fgsExpected = expectFgsRunning(snapshot);
-  const identity = readDeviceIdentity();
+  const runtimeMeta = resolveDeviceRuntimeMetadata();
   const {
+    manufacturer,
+    model,
     appVersion,
     osVersion,
-    nativeBuildVersion,
+    appBuild: nativeBuildVersion,
     expoRuntimeVersion,
     otaUpdateId,
     releaseChannel,
     releaseSha,
-  } = readAppOsVersion();
+  } = runtimeMeta;
 
   const trackingState = resolveTrackingHealthState({
     fgsRunning,
@@ -537,8 +438,8 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
 
   return {
     kind: "tracking_health",
-    manufacturer: identity.manufacturer,
-    model: identity.model,
+    manufacturer,
+    model,
     platform: Platform.OS,
     fgs_running: fgsRunning,
     tracking_active: trackingActive,

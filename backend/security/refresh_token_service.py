@@ -438,10 +438,18 @@ def revoke_active_tokens_for_device(
     return count
 
 
-def revoke_tokens_for_session(session_id: str, reason: str | None = None) -> int:
+def revoke_tokens_for_session(
+    session_id: str,
+    reason: str | None = None,
+    *,
+    commit: bool = True,
+) -> int:
     """Révoque les refresh tokens rattachés à une MobileDeviceSession donnée.
 
     Utilisé par le logout scopé session (pas de revoke_all_user_tokens).
+
+    Args:
+        commit: Si False, flush seulement (transaction appelante — replace atomique).
     """
     if not session_id or not str(session_id).strip():
         return 0
@@ -463,7 +471,10 @@ def revoke_tokens_for_session(session_id: str, reason: str | None = None) -> int
             token.is_revoked = True
             token.revoked_at = now
             token.revoked_reason = revoked_reason
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         logger.info(
             "%d refresh token(s) révoqué(s) pour session_id=%s",
             count,

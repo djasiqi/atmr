@@ -20,17 +20,25 @@ from ext import db, limiter
 from models import User
 from models.mobile_device_session import MobileDeviceSessionStatus
 from security.mobile_device_session_service import (
+    DeviceSessionResolutionError,
     RotationProof,
+    apply_session_metadata,
     auth_capabilities,
+    claim_device_session_resolution_token,
+    consume_device_session_resolution_token,
     get_session_by_id,
     hash_credential,
     http_response_for_idempotency,
     is_rotation_idempotency_conflict,
     list_active_sessions,
+    mark_session_confirmed,
+    publish_session_revoked,
+    release_device_session_resolution_claim,
+    replace_device_session,
     resolve_rotation_idempotency,
     revoke_all_user_sessions,
     revoke_pending_idempotent,
-    revoke_session,
+    revoke_session_state,
     rotate_recovery_credential,
     store_rotation_result,
     verify_recovery_credential,
@@ -214,6 +222,10 @@ def register_mobile_session_routes(auth_ns) -> None:
                     }, 401
 
             request_generation = cred_gen
+            from routes.auth import _resolve_device_session_metadata
+            from security.mobile_device_session_service import apply_session_metadata
+
+            apply_session_metadata(session, _resolve_device_session_metadata())
             new_recovery = rotate_recovery_credential(session)
             tokens = _issue_token_pair(user, session)
             tokens["recovery_credential"] = new_recovery
@@ -294,6 +306,7 @@ def register_mobile_session_routes(auth_ns) -> None:
             user = User.query.filter_by(public_id=str(identity)).first()
             if not user:
                 return {"error": "utilisateur_introuvable"}, 404
+            revoked_ids = [s.session_id for s in list_active_sessions(user.id)]
             count = revoke_all_user_sessions(
                 user.id,
                 reason="Logout-all utilisateur",
@@ -302,10 +315,14 @@ def register_mobile_session_routes(auth_ns) -> None:
             try:
                 from security.refresh_token_service import revoke_all_user_tokens
 
-                revoke_all_user_tokens(user.id, reason="Logout-all utilisateur")
+                revoke_all_user_tokens(
+                    user.id, reason="Logout-all utilisateur", commit=False
+                )
             except Exception as exc:
                 logger.warning("revoke_all_user_tokens: %s", exc)
             db.session.commit()
+            for sid in revoked_ids:
+                publish_session_revoked(sid)
             return {"ok": True, "revoked_sessions": count}, 200
 
     @auth_ns.route("/sessions/<string:session_id>/revoke-pending")
@@ -333,7 +350,9 @@ def register_mobile_session_routes(auth_ns) -> None:
                     "error": "secret_invalide",
                     "error_code": err,
                 }, 401
+            sid = session.session_id
             db.session.commit()
+            publish_session_revoked(sid)
             return payload or {"ok": True}, 200
 
     @auth_ns.route("/device-sessions")
@@ -369,7 +388,7 @@ def register_mobile_session_routes(auth_ns) -> None:
                 return {"ok": True, "already_absent": True}, 200
             if not session.is_active():
                 return {"ok": True, "already_revoked": True}, 200
-            revoke_session(
+            revoke_session_state(
                 session,
                 reason="Revocation manuelle multi-appareils",
                 revoked_by_user_id=user.id,
@@ -379,12 +398,61 @@ def register_mobile_session_routes(auth_ns) -> None:
                 from security.refresh_token_service import revoke_tokens_for_session
 
                 revoke_tokens_for_session(
-                    str(session.session_id), reason="Revocation manuelle"
+                    str(session.session_id),
+                    reason="Revocation manuelle",
+                    commit=False,
                 )
             except Exception as exc:
                 logger.warning("revoke_tokens_for_session: %s", exc)
+            sid = session.session_id
             db.session.commit()
+            publish_session_revoked(sid)
             return {"ok": True}, 200
+
+    @auth_ns.route("/device-sessions/<string:session_uuid>/confirm")
+    class DeviceSessionConfirm(Resource):
+        @jwt_required()
+        @limiter.limit("30 per minute")
+        def post(self, session_uuid: str):
+            """Confirme l'adoption locale d'une session provisional (idempotent)."""
+            identity = get_jwt_identity()
+            user = User.query.filter_by(public_id=str(identity)).first()
+            if not user:
+                return {"error": "utilisateur_introuvable"}, 404
+            claims = get_jwt() or {}
+            jwt_sid = str(claims.get("session_id") or "")
+            if not jwt_sid or jwt_sid != str(session_uuid):
+                return {
+                    "error": "session_mismatch",
+                    "error_code": "session_mismatch",
+                    "message": "Le jeton ne correspond pas à la session à confirmer.",
+                }, 403
+            session = get_session_by_id(session_uuid)
+            if session is None or session.user_id != user.id:
+                return {
+                    "error": "session_not_found",
+                    "error_code": "session_not_found",
+                }, 404
+            if not session.is_active():
+                return {
+                    "error": "session_revoked",
+                    "error_code": "session_revoked",
+                }, 401
+
+            from routes.auth import _resolve_device_session_metadata
+
+            apply_session_metadata(session, _resolve_device_session_metadata())
+            transitioned = mark_session_confirmed(session)
+            db.session.add(session)
+            db.session.commit()
+            return {
+                "ok": True,
+                "status": "confirmed" if transitioned else "already_confirmed",
+                "session_id": str(session.session_id),
+                "confirmed_at": session.confirmed_at.isoformat()
+                if session.confirmed_at
+                else None,
+            }, 200
 
     @auth_ns.route("/device-sessions/revoke-others")
     class DeviceSessionsRevokeOthers(Resource):
@@ -405,11 +473,146 @@ def register_mobile_session_routes(auth_ns) -> None:
                     except_id = _uuid.UUID(str(current_sid))
                 except (ValueError, TypeError):
                     except_id = None
+            # collect ids before revoke for post-commit publish
+            to_revoke = [
+                s.session_id
+                for s in list_active_sessions(user.id)
+                if except_id is None or s.session_id != except_id
+            ]
             count = revoke_all_user_sessions(
                 user.id,
                 reason="Revoke-others",
                 status=MobileDeviceSessionStatus.revoked,
                 except_session_id=except_id,
             )
+            # revoke_all still calls revoke_session which may publish early —
+            # republish after commit for coherence
             db.session.commit()
+            for sid in to_revoke:
+                publish_session_revoked(sid)
             return {"ok": True, "revoked_sessions": count}, 200
+
+    @auth_ns.route("/device-sessions/replace")
+    class DeviceSessionsReplace(Resource):
+        @limiter.limit("10 per minute")
+        def post(self):
+            """Remplace une session active via resolution_token (sans JWT).
+
+            Transaction PostgreSQL unique ; Redis revoked + consume après COMMIT.
+            """
+            caps = auth_capabilities().get("capabilities") or {}
+            if not caps.get("device_session_replace"):
+                return {
+                    "error": "resolution_unavailable",
+                    "error_code": "resolution_unavailable",
+                    "message": "Le remplacement d'appareil n'est pas disponible.",
+                }, 503
+
+            body = request.get_json(silent=True) or {}
+            resolution_token = str(body.get("resolution_token") or "").strip()
+            session_to_revoke = body.get("session_to_revoke")
+            device_installation_id = request.headers.get("X-Device-ID")
+            if not device_installation_id:
+                return {
+                    "error": "device_identity_required",
+                    "error_code": "device_identity_required",
+                }, 400
+            if not session_to_revoke:
+                return {
+                    "error": "session_to_revoke_required",
+                    "error_code": "session_to_revoke_required",
+                }, 400
+
+            try:
+                challenge = claim_device_session_resolution_token(
+                    token=resolution_token,
+                    requested_device_installation_id=str(device_installation_id),
+                )
+            except DeviceSessionResolutionError as exc:
+                status = 401 if exc.code.startswith("resolution_") else 400
+                return {
+                    "error": exc.code,
+                    "error_code": exc.code,
+                    "message": exc.message,
+                }, status
+
+            user = User.query.filter_by(id=int(challenge["user_id"])).first()
+            if not user:
+                release_device_session_resolution_claim(token=resolution_token)
+                return {"error": "utilisateur_introuvable"}, 404
+
+            driver_id_for_session = getattr(user, "driver_id", None)
+            if driver_id_for_session is None:
+                driver_obj = getattr(user, "driver", None)
+                driver_id_for_session = getattr(driver_obj, "id", None)
+
+            from routes.auth import _resolve_device_session_metadata
+
+            try:
+                mobile_session, recovery, revocation, revoked_id = (
+                    replace_device_session(
+                        user_id=user.id,
+                        session_to_revoke=str(session_to_revoke),
+                        device_installation_id=str(device_installation_id),
+                        allowed_session_ids=list(
+                            challenge.get("allowed_session_ids") or []
+                        ),
+                        driver_id=driver_id_for_session,
+                        role=user.role.value if user.role else None,
+                        meta=_resolve_device_session_metadata(),
+                    )
+                )
+                tokens = _issue_token_pair(user, mobile_session)
+                db.session.commit()
+            except DeviceSessionResolutionError as exc:
+                db.session.rollback()
+                release_device_session_resolution_claim(token=resolution_token)
+                return {
+                    "error": exc.code,
+                    "error_code": exc.code,
+                    "message": exc.message,
+                }, 409
+            except Exception as exc:
+                db.session.rollback()
+                release_device_session_resolution_claim(token=resolution_token)
+                logger.error("device-sessions/replace failed: %s", exc)
+                return {
+                    "error": "session_replace_failed",
+                    "error_code": "session_replace_failed",
+                    "retryable": True,
+                }, 503
+
+            # Post-commit : cache revoked + challenge consumed
+            publish_session_revoked(revoked_id)
+            consume_device_session_resolution_token(token=resolution_token)
+
+            return {
+                **tokens,
+                "token": tokens.get("access_token"),
+                "recovery_credential": recovery,
+                "revocation_secret": revocation,
+                "session_id": str(mobile_session.session_id),
+                "refresh_generation": int(
+                    getattr(mobile_session, "refresh_generation", 1) or 1
+                ),
+                "credential_generation": int(
+                    getattr(
+                        mobile_session,
+                        "credential_generation",
+                        mobile_session.generation,
+                    )
+                    or 1
+                ),
+                "session_epoch": int(getattr(mobile_session, "session_epoch", 1) or 1),
+                "user": {
+                    "public_id": user.public_id,
+                    "email": user.email,
+                    "role": user.role.value if user.role else None,
+                    "first_name": getattr(user, "first_name", None),
+                    "last_name": getattr(user, "last_name", None),
+                },
+                **auth_capabilities(),
+            }, 200
+
+
+# Fin register_mobile_session_routes
