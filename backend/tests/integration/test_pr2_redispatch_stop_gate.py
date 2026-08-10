@@ -135,10 +135,10 @@ class TestCas1RevalidationCreatesChangeRequest:
 
         cr = BookingChangeRequest.query.get(committed_booking.active_change_request_id)
         assert cr is not None
-        assert cr.status == BookingChangeRequestStatus.PENDING
+        assert cr.status == BookingChangeRequestStatus.REQUESTED
         assert "dropoff_location" in (cr.changed_fields or {})
 
-    def test_minor_change_applies_directly(
+    def test_minor_change_creates_change_request(
         self, db, requires_postgresql, committed_booking, transport_request, institution
     ):
         from services.institutions.booking_change_service import (
@@ -154,10 +154,16 @@ class TestCas1RevalidationCreatesChangeRequest:
             actor_display_name="Admin Test",
         )
 
-        assert code == 200, body
+        assert code == 202, body
+        assert body["status"] == "pending_action"
         db.session.refresh(committed_booking)
-        assert committed_booking.active_change_request_id is None
-        assert committed_booking.notes_medical == "Note non critique"
+        assert committed_booking.active_change_request_id is not None
+        assert committed_booking.notes_medical is None
+        change_request = BookingChangeRequest.query.get(
+            committed_booking.active_change_request_id
+        )
+        assert change_request is not None
+        assert change_request.proposed_patch["notes_medical"] == "Note non critique"
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +211,7 @@ class TestCas2CompanyAccepts:
         )
 
         assert result.success, result.error
-        assert result.status == BookingChangeRequestStatus.ACCEPTED
+        assert result.status == BookingChangeRequestStatus.COMPLETED
         db.session.refresh(committed_booking)
         assert committed_booking.dropoff_location == "Clinique X, 1206 Genève"
         assert committed_booking.active_change_request_id is None
@@ -217,7 +223,7 @@ class TestCas2CompanyAccepts:
 
 
 class TestCas3CompanyRefuses:
-    def test_refuse_releases_booking(
+    def test_refuse_keeps_booking_unchanged(
         self, db, requires_postgresql, committed_booking, transport_request, institution
     ):
         from application.institutions.respond_to_change_request import (
@@ -257,11 +263,11 @@ class TestCas3CompanyRefuses:
         )
 
         assert result.success, result.error
-        assert result.status == BookingChangeRequestStatus.REFUSED
+        assert result.status == BookingChangeRequestStatus.REJECTED
         db.session.refresh(committed_booking)
-        # Course libérée → repassée en PENDING, transporteur détaché
-        assert committed_booking.status == BookingStatus.PENDING
-        assert committed_booking.company_id is None
+        # Un refus n'applique aucune mutation : le transporteur reste engagé.
+        assert committed_booking.status == BookingStatus.ACCEPTED
+        assert committed_booking.company_id == company_id
         assert committed_booking.active_change_request_id is None
 
 
@@ -310,7 +316,9 @@ class TestCas4Supersede:
 
         assert first_id != second_id
         first = BookingChangeRequest.query.get(first_id)
-        assert first.status == BookingChangeRequestStatus.SUPERSEDED
+        # Le workflow V1.1 clôt les actions ouvertes remplacées sans les
+        # marquer « SUPERSEDED », réservé aux supersessions métier explicites.
+        assert first.status == BookingChangeRequestStatus.CLOSED_REPLACED
         db.session.refresh(committed_booking)
         assert committed_booking.active_change_request_id == second_id
 
@@ -509,8 +517,28 @@ class TestCancelMultiStopCascade:
             client_version=1,
         )
 
-        assert code == 200, body
-        assert set(body["cancelled_linked_booking_ids"]) == {leg2.id, leg3.id}
+        assert code == 202, body
+        assert body["status"] == "pending_action"
+
+        # L'annulation post-engagement est exécutée seulement après validation
+        # du transporteur ; la cascade reste portée par l'effet de décision.
+        from application.institutions.respond_to_change_request import (
+            RespondToChangeRequestInput,
+            RespondToChangeRequestUseCase,
+        )
+
+        result = RespondToChangeRequestUseCase().execute(
+            RespondToChangeRequestInput(
+                booking_id=principal.id,
+                change_request_id=body["change_request"]["id"],
+                company_id=principal.company_id,
+                user_id=None,
+                action="accept",
+                version=1,
+                billing_outcome="ZERO",
+            )
+        )
+        assert result.success, result.error
 
         for leg in (principal, leg2, leg3):
             db.session.refresh(leg)

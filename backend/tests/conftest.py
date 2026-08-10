@@ -57,6 +57,7 @@ def test_nested_transaction(db):
 
 import importlib.util
 import os
+from unittest import mock
 
 # Note: Les tests backend utilisent PostgreSQL par défaut (voir DATABASE_URL plus bas),
 # on conserve donc le type JSONB natif pour préserver les index GIN en migrations.
@@ -239,6 +240,16 @@ def db_session(db):
 
 
 @pytest.fixture
+def mocker():
+    """Compatibilité minimale avec pytest-mock dans l'image de test.
+
+    Les tests l'utilisent avec ``mocker.patch.object(...)`` dans un contexte ;
+    le module standard fournit exactement cette API sans dépendance additionnelle.
+    """
+    return mock
+
+
+@pytest.fixture
 def db(app):
     """Crée une DB propre pour chaque test en utilisant des savepoints."""
     import logging
@@ -349,6 +360,12 @@ def sample_company(db, sample_user):
     db.session.add(company)
     db.session.flush()  # Use flush instead of commit to work with savepoints
     return company
+
+
+@pytest.fixture
+def test_company(sample_company):
+    """Alias d'entreprise pour les tests historiques hors dossier intégration."""
+    return sample_company
 
 
 @pytest.fixture

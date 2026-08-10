@@ -99,7 +99,7 @@ class TestCompanySettingsEmailSignature:
         )
         billing.email_signature_mode = "html"
         billing.email_signature_html_template = html_template
-        billing.email_signature_logo_url = "https://example.com/logo.png"
+        test_company.logo_url = "https://example.com/logo.png"
         db.session.commit()
 
         # Assert: Vérifier persistance
@@ -109,14 +109,11 @@ class TestCompanySettingsEmailSignature:
         ).first()
         assert billing_reloaded.email_signature_mode == "html"
         assert billing_reloaded.email_signature_html_template == html_template
-        assert (
-            billing_reloaded.email_signature_logo_url == "https://example.com/logo.png"
-        )
+        assert test_company.logo_url == "https://example.com/logo.png"
 
         result_dict = billing_reloaded.to_dict()
         assert result_dict["email_signature_mode"] == "html"
         assert result_dict["email_signature_html_template"] == html_template
-        assert result_dict["email_signature_logo_url"] == "https://example.com/logo.png"
 
     def test_email_signature_form_mode_persistence(self, db, test_company):
         """Test que les champs du mode 'form' sont persistés."""
@@ -143,7 +140,7 @@ class TestCompanySettingsEmailSignature:
         billing.signature_address_line = "Route de Chevrens 145"
         billing.signature_zip = "1247"
         billing.signature_city = "Anières"
-        billing.signature_logo_url = "https://example.com/logo.png"
+        test_company.logo_url = "https://example.com/logo.png"
         db.session.commit()
 
         # Assert: Vérifier persistance
@@ -162,7 +159,7 @@ class TestCompanySettingsEmailSignature:
         assert billing_reloaded.signature_address_line == "Route de Chevrens 145"
         assert billing_reloaded.signature_zip == "1247"
         assert billing_reloaded.signature_city == "Anières"
-        assert billing_reloaded.signature_logo_url == "https://example.com/logo.png"
+        assert test_company.logo_url == "https://example.com/logo.png"
 
         result_dict = billing_reloaded.to_dict()
         assert result_dict["email_signature_mode"] == "form"
@@ -176,4 +173,3 @@ class TestCompanySettingsEmailSignature:
         assert result_dict["signature_address_line"] == "Route de Chevrens 145"
         assert result_dict["signature_zip"] == "1247"
         assert result_dict["signature_city"] == "Anières"
-        assert result_dict["signature_logo_url"] == "https://example.com/logo.png"

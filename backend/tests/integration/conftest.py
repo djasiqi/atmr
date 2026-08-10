@@ -125,6 +125,8 @@ def test_client(db, test_company):
     client.first_name = f"Test{unique_suffix}"
     client.last_name = "Client"
     client.email = f"client_{unique_suffix}@test.ch"
+    # Les cas d'envoi de facture résolvent explicitement contact_email.
+    client.contact_email = client.email
     client.phone = "0211234567"
     client.client_type = ClientType.TRANSPORT
     client.management_mode = ManagementMode.MANAGED

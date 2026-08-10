@@ -56,6 +56,7 @@ class TestEmailSignatureInInvoices:
             db.session.commit()
 
         signature_text = "Khalid ALAOUI\nAssocié gérant\n022 512 02 03"
+        billing_settings.email_signature_mode = "text"
         billing_settings.email_signature_text = signature_text
         billing_settings.smtp_username = "test@example.com"
         billing_settings.from_name = "Test Company"
@@ -136,6 +137,7 @@ class TestEmailSignatureInInvoices:
             db.session.commit()
 
         signature_text = "Signature Rappel\ninfo@test.ch"
+        billing_settings.email_signature_mode = "text"
         billing_settings.email_signature_text = signature_text
         billing_settings.smtp_username = "test@example.com"
         billing_settings.from_name = "Test Company"
