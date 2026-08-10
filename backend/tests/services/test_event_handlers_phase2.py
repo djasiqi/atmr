@@ -331,6 +331,8 @@ class TestBookingUpdatedHandler:
                 mock_logger.exception.call_args
             )
 
+
+class TestBookingCancelledHandler:
     """Tests pour handle_booking_cancelled."""
 
     def test_handle_booking_cancelled_success(self, app):
@@ -344,8 +346,32 @@ class TestBookingUpdatedHandler:
             "company_id": 1,
         }
 
+        ctx = MagicMock()
+        ctx.driver_id = 456
+        ctx.owner_company_id = 1
+        ctx.executing_company_id = None
+        ctx.institution_id = None
+
+        targets = MagicMock()
+        targets.notify_driver_push = True
+        targets.notify_owner_push = False
+        targets.notify_executing_socket = False
+        targets.notify_executing_push = False
+        targets.notify_executing_persist = False
+        targets.notify_institution_socket = False
+        targets.notify_institution_persist = False
+
         with (
             app.app_context(),
+            patch("ext.db.session.get", return_value=None),
+            patch(
+                "services.notifications.notification_targets.resolve_booking_notification_context",
+                return_value=ctx,
+            ),
+            patch(
+                "services.notifications.notification_targets.compute_all_notification_targets",
+                return_value=targets,
+            ),
             patch(
                 "services.notifications.core.notify_booking_cancelled"
             ) as mock_notify,
@@ -376,8 +402,32 @@ class TestBookingUpdatedHandler:
             "company_id": 1,
         }
 
+        ctx = MagicMock()
+        ctx.driver_id = 456
+        ctx.owner_company_id = 1
+        ctx.executing_company_id = None
+        ctx.institution_id = None
+
+        targets = MagicMock()
+        targets.notify_driver_push = True
+        targets.notify_owner_push = False
+        targets.notify_executing_socket = False
+        targets.notify_executing_push = False
+        targets.notify_executing_persist = False
+        targets.notify_institution_socket = False
+        targets.notify_institution_persist = False
+
         with (
             app.app_context(),
+            patch("ext.db.session.get", return_value=None),
+            patch(
+                "services.notifications.notification_targets.resolve_booking_notification_context",
+                return_value=ctx,
+            ),
+            patch(
+                "services.notifications.notification_targets.compute_all_notification_targets",
+                return_value=targets,
+            ),
             patch(
                 "services.notifications.core.notify_booking_cancelled",
                 side_effect=Exception("Notification failed"),
@@ -676,8 +726,32 @@ class TestEventIntegration:
 
         registry.register("BookingCancelledEvent", handle_booking_cancelled)
 
+        ctx = MagicMock()
+        ctx.driver_id = 456
+        ctx.owner_company_id = 1
+        ctx.executing_company_id = None
+        ctx.institution_id = None
+
+        targets = MagicMock()
+        targets.notify_driver_push = True
+        targets.notify_owner_push = False
+        targets.notify_executing_socket = False
+        targets.notify_executing_push = False
+        targets.notify_executing_persist = False
+        targets.notify_institution_socket = False
+        targets.notify_institution_persist = False
+
         with (
             app.app_context(),
+            patch("ext.db.session.get", return_value=None),
+            patch(
+                "services.notifications.notification_targets.resolve_booking_notification_context",
+                return_value=ctx,
+            ),
+            patch(
+                "services.notifications.notification_targets.compute_all_notification_targets",
+                return_value=targets,
+            ),
             patch(
                 "services.notifications.core.notify_booking_cancelled"
             ) as mock_notify,

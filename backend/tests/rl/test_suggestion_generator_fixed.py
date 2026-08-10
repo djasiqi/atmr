@@ -31,15 +31,15 @@ class TestLazyImport:
 
             with (
                 patch(
-                    "services.rl.improved_dqn_agent",
+                    "services.ml.rl.improved_dqn_agent",
                     mock_dqn_module,
                 ),
                 patch(
-                    "services.rl.dispatch_env",
+                    "services.ml.rl.dispatch_env",
                     mock_dispatch_module,
                 ),
                 patch(
-                    "services.rl.improved_dqn_agent.ImprovedDQNAgent",
+                    "services.ml.rl.improved_dqn_agent.ImprovedDQNAgent",
                     mock_improved_dqn_class,
                 ),
             ):
@@ -75,14 +75,14 @@ class TestLazyImport:
             def mock_import(
                 name, globals_dict=None, locals_dict=None, fromlist=(), level=0
             ):
-                # Lever ImportError pour services.rl.improved_dqn_agent
-                if name == "services.rl.improved_dqn_agent":
+                # Lever ImportError pour services.ml.rl.improved_dqn_agent
+                if name == "services.ml.rl.improved_dqn_agent":
                     raise ImportError("Module not found")
                 # Appeler le vrai __import__ pour tous les autres modules
                 return original_import(name, globals_dict, locals_dict, fromlist, level)
 
             # Supprimer le module du cache pour forcer un nouvel import
-            original_module = sys.modules.pop("services.rl.improved_dqn_agent", None)
+            original_module = sys.modules.pop("services.ml.rl.improved_dqn_agent", None)
             try:
                 with (
                     patch("builtins.__import__", side_effect=mock_import),
@@ -92,9 +92,9 @@ class TestLazyImport:
             finally:
                 # Restaurer le module original
                 if original_module is not None:
-                    sys.modules["services.rl.improved_dqn_agent"] = original_module
-                elif "services.rl.improved_dqn_agent" in sys.modules:
-                    del sys.modules["services.rl.improved_dqn_agent"]
+                    sys.modules["services.ml.rl.improved_dqn_agent"] = original_module
+                elif "services.ml.rl.improved_dqn_agent" in sys.modules:
+                    del sys.modules["services.ml.rl.improved_dqn_agent"]
         finally:
             sg_module._dqn_agent = original_dqn
             sg_module._dispatch_env = original_env
@@ -133,7 +133,7 @@ class TestRLSuggestionGenerator:
         assert generator.agent is None
         assert generator.env is None
 
-    @patch("services.rl.suggestion_generator.Path")
+    @patch("services.ml.rl.suggestion_generator.Path")
     def test_load_model_file_exists(self, mock_path_class):
         """Test chargement de modèle quand le fichier existe."""
         # Configurer le mock Path
@@ -154,7 +154,7 @@ class TestRLSuggestionGenerator:
         mock_env.action_space.n = 26
 
         # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
-        # ✅ FIX: Patcher les classes à la source (services.rl) car les imports
+        # ✅ FIX: Patcher les classes à la source (services.ml.rl) car les imports
         # sont faits localement dans _load_model()
         import services.ml.rl.suggestion_generator as sg_module
 
@@ -163,9 +163,9 @@ class TestRLSuggestionGenerator:
             sg_module._model_loaded = False
 
             with (
-                patch("services.rl.dispatch_env.DispatchEnv", return_value=mock_env),
+                patch("services.ml.rl.dispatch_env.DispatchEnv", return_value=mock_env),
                 patch(
-                    "services.rl.improved_dqn_agent.ImprovedDQNAgent",
+                    "services.ml.rl.improved_dqn_agent.ImprovedDQNAgent",
                     return_value=mock_agent,
                 ),
                 patch(
@@ -190,7 +190,7 @@ class TestRLSuggestionGenerator:
             sg_module._model_loaded = original_model_loaded
 
     @patch("pathlib.Path")
-    @patch("services.rl.suggestion_generator._lazy_import_rl")
+    @patch("services.ml.rl.suggestion_generator._lazy_import_rl")
     def test_load_model_torch_load_error(
         self,
         mock_lazy_import,

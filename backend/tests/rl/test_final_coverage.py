@@ -457,7 +457,7 @@ class TestFinalCoverage:
 
         from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
-        with patch("services.rl.suggestion_generator.Path") as mock_path:
+        with patch("services.ml.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
 
             generator = RLSuggestionGenerator()

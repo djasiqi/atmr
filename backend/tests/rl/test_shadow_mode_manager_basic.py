@@ -41,7 +41,7 @@ class TestShadowModeManager:
         logger = manager._setup_logging()
 
         assert logger is not None
-        assert logger.name == "services.rl.shadow_mode_manager"
+        assert logger.name == "services.ml.rl.shadow_mode_manager"
 
     def test_log_decision_comparison_basic(self):
         """Test enregistrement de comparaison de décision de base."""

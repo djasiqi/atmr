@@ -149,7 +149,10 @@ class TestExceptionHandlingCorrections:
 
     def test_notification_service_socketio_errors(self):
         """Test : SocketIO service gère correctement les erreurs Socket.IO."""
-        with patch("services.realtime.socketio.socketio") as mock_socketio:
+        with (
+            patch("services.realtime.socketio.is_skip_socketio", return_value=False),
+            patch("services.realtime.socketio.socketio") as mock_socketio,
+        ):
             # Simuler une erreur de connexion Socket.IO
             mock_socketio.emit.side_effect = ConnectionError(
                 "Socket.IO connection failed"
@@ -168,7 +171,10 @@ class TestExceptionHandlingCorrections:
 
     def test_notification_service_type_errors(self):
         """Test : SocketIO service gère correctement les TypeError."""
-        with patch("services.realtime.socketio.socketio") as mock_socketio:
+        with (
+            patch("services.realtime.socketio.is_skip_socketio", return_value=False),
+            patch("services.realtime.socketio.socketio") as mock_socketio,
+        ):
             # Simuler une TypeError (problème de compatibilité Socket.IO)
             # La première tentative avec 'to=' lève TypeError, puis fallback 'room='
             mock_socketio.emit.side_effect = TypeError("Invalid type")

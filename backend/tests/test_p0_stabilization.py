@@ -342,9 +342,9 @@ class TestCreateBookingP0:
         response = client.post(
             f"/api/v1/clients/{sample_client.user.public_id}/bookings",
             json={
-                "customer_name": "Test",
-                "pickup_location": "A",
-                "dropoff_location": "123 Test Street",
+                "customer_name": "Test Customer",
+                "pickup_location": "Rue de la Gare 1, 1000 Lausanne",
+                "dropoff_location": "123 Test Street, Genève",
                 "scheduled_time": scheduled,
                 "amount": 50.0,
             },
@@ -382,9 +382,9 @@ class TestCreateBookingP0:
             "Idempotency-Key": idempotency_key,
         }
         payload = {
-            "customer_name": "Test",
-            "pickup_location": "A",
-            "dropoff_location": "456 Test Ave",
+            "customer_name": "Test Customer",
+            "pickup_location": "Rue de la Gare 1, 1000 Lausanne",
+            "dropoff_location": "456 Test Ave, Genève",
             "scheduled_time": scheduled,
             "amount": 50.0,
         }
@@ -414,9 +414,9 @@ class TestCreateBookingP0:
         response = client.post(
             "/api/v1/clients/00000000-0000-4000-8000-000000000001/bookings",
             json={
-                "customer_name": "Test",
-                "pickup_location": "A",
-                "dropoff_location": "Test",
+                "customer_name": "Test Customer",
+                "pickup_location": "Rue de la Gare 1, 1000 Lausanne",
+                "dropoff_location": "Avenue de Test 10, Genève",
                 "scheduled_time": scheduled,
                 "amount": 50.0,
             },

@@ -228,7 +228,10 @@ def test_replace_rejects_session_not_in_challenge(app, session_user):
                 user_id=session_user.id,
                 session_to_revoke=str(outsider.session_id),
                 device_installation_id=f"attacker-{uuid.uuid4()}",
-                allowed_session_ids=[str(filled[0].session_id), str(filled[1].session_id)],
+                allowed_session_ids=[
+                    str(filled[0].session_id),
+                    str(filled[1].session_id),
+                ],
                 role="driver",
             )
         assert exc.value.code == "session_not_in_challenge"
@@ -351,7 +354,9 @@ def test_challenge_issued_claimed_consumed_and_reclaim(app, session_user):
                 svc.consume_device_session_resolution_token(token=token)
 
 
-def test_reuse_confirmed_installation_keeps_same_session_id(app, session_user, monkeypatch):
+def test_reuse_confirmed_installation_keeps_same_session_id(
+    app, session_user, monkeypatch
+):
     monkeypatch.setattr(svc, "PROVISIONAL_CONFIRMATION_ENABLED", True)
     with app.app_context():
         install = f"stable-{uuid.uuid4()}"

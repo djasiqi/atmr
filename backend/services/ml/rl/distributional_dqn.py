@@ -374,9 +374,9 @@ class DistributionalLoss:
             + gamma * target_quantiles * (~dones.unsqueeze(-1)).float()
         )
 
-        # Calculer la perte de régression quantile
+        # Pinball / quantile regression loss (asymétrique ; pas abs*weight)
         td_error = target_quantiles - quantiles
-        loss = torch.abs(td_error) * (tau - (td_error < TD_ERROR_ZERO).float())
+        loss = td_error * (tau - (td_error < TD_ERROR_ZERO).float())
 
         return loss.mean()
 

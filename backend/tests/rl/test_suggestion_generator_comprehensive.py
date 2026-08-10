@@ -42,7 +42,7 @@ class TestRLSuggestionGenerator:
             sg_module._dqn_agent = None
             sg_module._dispatch_env = None
 
-            # ✅ FIX: Patcher les modules à la source (services.rl) plutôt que
+            # ✅ FIX: Patcher les modules à la source (services.ml.rl) plutôt que
             # dans suggestion_generator car les imports sont faits dans
             # _lazy_import_rl()
             mock_dqn_module = Mock()
@@ -51,15 +51,15 @@ class TestRLSuggestionGenerator:
 
             with (
                 patch(
-                    "services.rl.improved_dqn_agent",
+                    "services.ml.rl.improved_dqn_agent",
                     mock_dqn_module,
                 ),
                 patch(
-                    "services.rl.dispatch_env",
+                    "services.ml.rl.dispatch_env",
                     mock_dispatch_module,
                 ),
                 patch(
-                    "services.rl.improved_dqn_agent.ImprovedDQNAgent",
+                    "services.ml.rl.improved_dqn_agent.ImprovedDQNAgent",
                     mock_improved_dqn_class,
                 ),
             ):
@@ -84,11 +84,11 @@ class TestRLSuggestionGenerator:
             sg_module._dispatch_env = None
 
             # ✅ FIX: Utiliser builtins.__import__ pour intercepter l'import
-            # et lever ImportError pour services.rl.improved_dqn_agent
+            # et lever ImportError pour services.ml.rl.improved_dqn_agent
             real_import = builtins.__import__
 
             def mock_import(name, *args, **kwargs):
-                if name == "services.rl.improved_dqn_agent":
+                if name == "services.ml.rl.improved_dqn_agent":
                     raise ImportError("Module not found")
                 return real_import(name, *args, **kwargs)
 
@@ -114,7 +114,7 @@ class TestRLSuggestionGenerator:
         mock_env.action_space = Mock()
         mock_env.action_space.n = 26
 
-        # ✅ FIX: Patcher les classes à la source (services.rl) plutôt que
+        # ✅ FIX: Patcher les classes à la source (services.ml.rl) plutôt que
         # dans suggestion_generator car les imports sont faits dans _load_model()
         # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
         import services.ml.rl.suggestion_generator as sg_module
@@ -124,13 +124,13 @@ class TestRLSuggestionGenerator:
             sg_module._model_loaded = False
 
             with (
-                patch("services.rl.suggestion_generator.Path") as mock_path,
-                patch("services.rl.suggestion_generator._lazy_import_rl"),
+                patch("services.ml.rl.suggestion_generator.Path") as mock_path,
+                patch("services.ml.rl.suggestion_generator._lazy_import_rl"),
                 patch(
-                    "services.rl.improved_dqn_agent.ImprovedDQNAgent",
+                    "services.ml.rl.improved_dqn_agent.ImprovedDQNAgent",
                     return_value=mock_agent,
                 ),
-                patch("services.rl.dispatch_env.DispatchEnv", return_value=mock_env),
+                patch("services.ml.rl.dispatch_env.DispatchEnv", return_value=mock_env),
                 patch(
                     "torch.load",
                     return_value={
@@ -161,8 +161,8 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         with (
-            patch("services.rl.suggestion_generator.Path") as mock_path,
-            patch("services.rl.suggestion_generator._lazy_import_rl"),
+            patch("services.ml.rl.suggestion_generator.Path") as mock_path,
+            patch("services.ml.rl.suggestion_generator._lazy_import_rl"),
             patch("torch.load", side_effect=Exception("Load error")),
         ):
             mock_path_instance = Mock()
@@ -179,8 +179,8 @@ class TestRLSuggestionGenerator:
         generator = RLSuggestionGenerator()
 
         with (
-            patch("services.rl.suggestion_generator.Path") as mock_path,
-            patch("services.rl.suggestion_generator._lazy_import_rl"),
+            patch("services.ml.rl.suggestion_generator.Path") as mock_path,
+            patch("services.ml.rl.suggestion_generator._lazy_import_rl"),
         ):
             mock_path_instance = Mock()
             mock_path_instance.exists.return_value = False

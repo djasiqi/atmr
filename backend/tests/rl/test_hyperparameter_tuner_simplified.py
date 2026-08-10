@@ -91,22 +91,22 @@ class TestHyperparameterTuner:
             0.6,  # alpha
             0.4,  # beta_start
             0.9,  # beta_end
-            0.99,  # n_step_gamma
             0.005,  # tau
+            0.99,  # n_step_gamma
         ]
         mock_trial.suggest_categorical.side_effect = [
+            True,  # use_n_step
             128,  # batch_size
             100000,  # buffer_size
             True,  # use_double_dqn
             True,  # use_prioritized_replay
-            True,  # use_n_step
             True,  # use_dueling
         ]
         mock_trial.suggest_int.side_effect = [
             10,  # target_update_freq
-            3,  # n_step
             5,  # num_drivers
             15,  # max_bookings
+            3,  # n_step
         ]
 
         config = tuner._suggest_hyperparameters(mock_trial)
@@ -138,26 +138,26 @@ class TestHyperparameterTuner:
             0.6,
             0.4,
             0.9,
-            0.99,
             0.005,
+            0.99,
         ]
         mock_trial.suggest_categorical.side_effect = [
+            True,
             128,
             100000,
             True,
             True,
             True,
-            True,
         ]
-        mock_trial.suggest_int.side_effect = [10, 3, 3, 10]
+        mock_trial.suggest_int.side_effect = [10, 5, 15, 3]
         # ✅ FIX: Mock report et should_prune pour objective
         mock_trial.report = Mock()
         mock_trial.should_prune.return_value = False
 
         with (
-            patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
+            patch("services.ml.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
             patch(
-                "services.rl.hyperparameter_tuner.ImprovedDQNAgent"
+                "services.ml.rl.hyperparameter_tuner.ImprovedDQNAgent"
             ) as mock_agent_class,
         ):
             # Mock environment
@@ -214,26 +214,26 @@ class TestHyperparameterTuner:
             0.6,
             0.4,
             0.9,
-            0.99,
             0.005,
+            0.99,
         ]
         mock_trial.suggest_categorical.side_effect = [
+            True,
             128,
             100000,
             True,
             True,
             True,
-            True,
         ]
-        mock_trial.suggest_int.side_effect = [10, 3, 3, 10]
+        mock_trial.suggest_int.side_effect = [10, 5, 15, 3]
         # ✅ FIX: Mock report et should_prune pour objective
         mock_trial.report = Mock()
         mock_trial.should_prune.return_value = True
 
         with (
-            patch("services.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
+            patch("services.ml.rl.hyperparameter_tuner.DispatchEnv") as mock_env_class,
             patch(
-                "services.rl.hyperparameter_tuner.ImprovedDQNAgent"
+                "services.ml.rl.hyperparameter_tuner.ImprovedDQNAgent"
             ) as mock_agent_class,
         ):
             # Mock environment

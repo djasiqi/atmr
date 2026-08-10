@@ -1491,7 +1491,9 @@ def _login_post_body():
         # Sessions provisional reaped pendant create/reuse → marqueur négatif post-commit
         if mobile_reaped_session_ids:
             with suppress(Exception):
-                from security.mobile_device_session_service import publish_session_revoked
+                from security.mobile_device_session_service import (
+                    publish_session_revoked,
+                )
 
                 for _sid in mobile_reaped_session_ids:
                     publish_session_revoked(_sid)

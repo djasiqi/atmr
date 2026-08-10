@@ -52,7 +52,7 @@ class TestDispatchEnvUltraSimple:
         # (mais seulement 1 driver et 1 booking)
         action = 10
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             _obs, reward, _terminated, _truncated, info = env.step(action)
 
             # Vérifier les lignes exactes 266-270
@@ -102,7 +102,7 @@ class TestDispatchEnvUltraSimple:
         # Action pour assigner le booking déjà assigné
         action = 1  # driver_idx = 0, booking_idx = 0
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             _obs, reward, _terminated, _truncated, info = env.step(action)
 
             # Vérifier les lignes exactes 277-281
@@ -124,7 +124,7 @@ class TestDispatchEnvUltraSimple:
         driver = {"available": True, "lat": "invalid", "lon": "invalid"}
         booking = {"pickup_lat": "invalid", "pickup_lon": "invalid"}
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             is_valid = env._check_time_window_constraint(driver, booking)
 
             # Vérifier les lignes exactes 373-375
@@ -142,7 +142,7 @@ class TestDispatchEnvUltraSimple:
         driver = {"lat": "invalid", "lon": "invalid"}
         booking = {"pickup_lat": "invalid", "pickup_lon": "invalid"}
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             travel_time = env._calculate_travel_time(driver, booking)
 
             # ✅ FIX: Le code retourne 30.0 (pas 0.0) en cas d'exception
@@ -453,14 +453,22 @@ class TestDispatchEnvUltraSimple:
         env = DispatchEnv(num_drivers=3, max_bookings=5)
         env.reset()
 
-        # ✅ FIX: Mock _get_booking_generation_rate pour retourner 1.0
+        # Mock _get_booking_generation_rate pour retourner 1.0
         # et np_random.random() pour retourner 0.0 afin de garantir
         # que _generate_new_bookings sera appelé (0.0 < 1.0)
+        from unittest.mock import PropertyMock
+
+        mock_rng = Mock()
+        mock_rng.random.return_value = 0.0
+        mock_rng.randint.return_value = 1
         with (
             patch.object(env, "_get_booking_generation_rate", return_value=1.0),
-            patch.object(env.np_random, "random", return_value=0.0),
+            patch.object(
+                type(env), "np_random", new_callable=PropertyMock
+            ) as mock_prop,
             patch.object(env, "_generate_new_bookings") as mock_generate,
         ):
+            mock_prop.return_value = mock_rng
             _obs, _reward, _terminated, _truncated, _info = env.step(0)
 
             # Vérifier que la ligne 470 est couverte (nouveaux bookings générés)
@@ -605,7 +613,7 @@ class TestDispatchEnvUltraSimple:
         env.active_driver_count = len(env.drivers)
         env.active_booking_count = len(env.bookings)
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(10)
             assert reward == -100.0
             # ✅ FIX: Le code ajoute ces clés dans info seulement si
@@ -642,7 +650,7 @@ class TestDispatchEnvUltraSimple:
             }
         ]
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(1)
             assert reward == -100.0
             # ✅ FIX: Le code ajoute ces clés dans info seulement si

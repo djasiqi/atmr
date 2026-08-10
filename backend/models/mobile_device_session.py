@@ -99,9 +99,7 @@ class MobileDeviceSession(db.Model):
         Index(
             "ix_mobile_device_session_provisional_expires",
             "provisional_expires_at",
-            postgresql_where=text(
-                "status = 'active' AND confirmed_at IS NULL"
-            ),
+            postgresql_where=text("status = 'active' AND confirmed_at IS NULL"),
         ),
     )
 

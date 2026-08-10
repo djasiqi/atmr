@@ -16,7 +16,17 @@ from services.messaging.message_idempotence import find_idempotent_message
 @pytest.mark.usefixtures("app")
 def test_find_idempotent_message(app):
     with app.app_context():
-        sender_id = 9001
+        from models import User, UserRole
+
+        sender = User(
+            email=f"idempotence_{uuid.uuid4().hex[:12]}@test.com",
+            username=f"idempotence_{uuid.uuid4().hex[:12]}",
+            role=UserRole.DRIVER.value,
+        )
+        sender.set_password("password123", force_change=False)
+        db.session.add(sender)
+        db.session.flush()
+        sender_id = sender.id
         cid = f"local-test-idempotence-{uuid.uuid4().hex}"
         existing = Message(
             sender_id=sender_id,

@@ -13,7 +13,7 @@ class TestSimpleCoverage:
         from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
         # Mock le chargement du modèle pour éviter les erreurs
-        with patch("services.rl.suggestion_generator.Path") as mock_path:
+        with patch("services.ml.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
 
             generator = RLSuggestionGenerator()
@@ -26,7 +26,7 @@ class TestSimpleCoverage:
         """Test initialisation avec chemin personnalisé"""
         from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
-        with patch("services.rl.suggestion_generator.Path") as mock_path:
+        with patch("services.ml.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
 
             generator = RLSuggestionGenerator(model_path="custom/path.pth")
@@ -39,7 +39,7 @@ class TestSimpleCoverage:
 
         from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
-        with patch("services.rl.suggestion_generator.Path") as mock_path:
+        with patch("services.ml.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
 
             generator = RLSuggestionGenerator()
@@ -56,7 +56,7 @@ class TestSimpleCoverage:
 
         from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
-        with patch("services.rl.suggestion_generator.Path") as mock_path:
+        with patch("services.ml.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
 
             generator = RLSuggestionGenerator()
@@ -74,7 +74,7 @@ class TestSimpleCoverage:
 
         from services.ml.rl.suggestion_generator import RLSuggestionGenerator
 
-        with patch("services.rl.suggestion_generator.Path") as mock_path:
+        with patch("services.ml.rl.suggestion_generator.Path") as mock_path:
             mock_path.return_value.exists.return_value = False
 
             generator = RLSuggestionGenerator()

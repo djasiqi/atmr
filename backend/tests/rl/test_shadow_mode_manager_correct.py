@@ -20,11 +20,13 @@ class TestShadowModeManagerCorrect:
         assert isinstance(manager.decision_metadata, dict)
         assert manager.logger is not None
 
-    def test_init_with_custom_data_dir(self):
-        """Test initialisation avec répertoire personnalisé."""
-        manager = ShadowModeManager(data_dir="custom/shadow/data")
+    def test_init_with_custom_data_dir(self, tmp_path):
+        """Test initialisation avec répertoire personnalisé (chemin absolu writable)."""
+        target = tmp_path / "custom" / "shadow" / "data"
+        manager = ShadowModeManager(data_dir=str(target))
 
-        assert str(manager.data_dir) == "custom/shadow/data"
+        assert manager.data_dir == target
+        assert target.is_dir()
 
     def test_setup_logging(self):
         """Test configuration logging."""
@@ -32,7 +34,7 @@ class TestShadowModeManagerCorrect:
 
         # Vérifier que le logger est configuré
         assert manager.logger is not None
-        assert manager.logger.name == "services.rl.shadow_mode_manager"
+        assert manager.logger.name == "services.ml.rl.shadow_mode_manager"
 
     def test_log_decision_comparison_basic(self):
         """Test logging comparaison décisions basique."""

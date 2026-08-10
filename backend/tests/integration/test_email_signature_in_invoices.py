@@ -1,5 +1,7 @@
 """Tests d'intégration pour vérifier l'injection de signature dans les emails de facturation."""
 
+from unittest.mock import patch
+
 import pytest
 
 from application.invoices.send_invoice_by_email import (
@@ -12,7 +14,6 @@ from application.invoices.send_reminder_by_email import (
 )
 from models import CompanyBillingSettings, Invoice, InvoiceReminder
 from models.enums import InvoiceStatus
-from services.email.signature_utils import inject_signature_into_html
 
 
 @pytest.mark.integration
@@ -73,10 +74,11 @@ class TestEmailSignatureInInvoices:
             return EmailResult(success=True, message_id="test-123")
 
         # Act: Envoyer l'email
-        use_case = SendInvoiceByEmailUseCase()
-        with mocker.patch.object(
-            use_case.brevo_provider, "send_invoice_email", side_effect=mock_send_email
-        ):
+        with patch(
+            "application.invoices.send_invoice_by_email.BrevoEmailProvider"
+        ) as provider_cls:
+            use_case = SendInvoiceByEmailUseCase()
+            provider_cls.return_value.send_invoice_email.side_effect = mock_send_email
             result = use_case.execute(SendInvoiceByEmailInput(invoice_id=invoice.id))
 
         # Assert: Vérifier que la signature est dans le HTML
@@ -154,10 +156,11 @@ class TestEmailSignatureInInvoices:
             return EmailResult(success=True, message_id="test-456")
 
         # Act: Envoyer l'email de rappel
-        use_case = SendReminderByEmailUseCase()
-        with mocker.patch.object(
-            use_case.brevo_provider, "send_invoice_email", side_effect=mock_send_email
-        ):
+        with patch(
+            "application.invoices.send_reminder_by_email.BrevoEmailProvider"
+        ) as provider_cls:
+            use_case = SendReminderByEmailUseCase()
+            provider_cls.return_value.send_invoice_email.side_effect = mock_send_email
             result = use_case.execute(SendReminderByEmailInput(reminder_id=reminder.id))
 
         # Assert: Vérifier que la signature est dans le HTML
@@ -219,10 +222,11 @@ class TestEmailSignatureInInvoices:
             return EmailResult(success=True, message_id="test-789")
 
         # Act
-        use_case = SendInvoiceByEmailUseCase()
-        with mocker.patch.object(
-            use_case.brevo_provider, "send_invoice_email", side_effect=mock_send_email
-        ):
+        with patch(
+            "application.invoices.send_invoice_by_email.BrevoEmailProvider"
+        ) as provider_cls:
+            use_case = SendInvoiceByEmailUseCase()
+            provider_cls.return_value.send_invoice_email.side_effect = mock_send_email
             result = use_case.execute(SendInvoiceByEmailInput(invoice_id=invoice.id))
 
         # Assert: Vérifier que le HTML ne contient PAS le séparateur "—"
@@ -294,10 +298,11 @@ class TestEmailSignatureInInvoices:
             return EmailResult(success=True, message_id="test-html-123")
 
         # Act
-        use_case = SendInvoiceByEmailUseCase()
-        with mocker.patch.object(
-            use_case.brevo_provider, "send_invoice_email", side_effect=mock_send_email
-        ):
+        with patch(
+            "application.invoices.send_invoice_by_email.BrevoEmailProvider"
+        ) as provider_cls:
+            use_case = SendInvoiceByEmailUseCase()
+            provider_cls.return_value.send_invoice_email.side_effect = mock_send_email
             result = use_case.execute(SendInvoiceByEmailInput(invoice_id=invoice.id))
 
         # Assert: Vérifier que le HTML rendu contient les variables
@@ -380,10 +385,11 @@ class TestEmailSignatureInInvoices:
             return EmailResult(success=True, message_id="test-form-123")
 
         # Act
-        use_case = SendInvoiceByEmailUseCase()
-        with mocker.patch.object(
-            use_case.brevo_provider, "send_invoice_email", side_effect=mock_send_email
-        ):
+        with patch(
+            "application.invoices.send_invoice_by_email.BrevoEmailProvider"
+        ) as provider_cls:
+            use_case = SendInvoiceByEmailUseCase()
+            provider_cls.return_value.send_invoice_email.side_effect = mock_send_email
             result = use_case.execute(SendInvoiceByEmailInput(invoice_id=invoice.id))
 
         # Assert: Vérifier que le HTML généré contient les champs

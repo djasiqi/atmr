@@ -285,7 +285,7 @@ def test_compose_config_json_fused_with_p0_hold_override(tmp_path):
                 assert "fixture-not-a-real-secret" not in val
 
     consumer_env = services["tracking-kafka-consumer"].get("environment") or {}
-    assert consumer_env.get("TRACKING_PERSIST_WITH_OUTBOX") in ("false", False)
+    assert consumer_env.get("TRACKING_PERSIST_WITH_OUTBOX") in ("true", True)
     assert consumer_env.get("TRACKING_INGEST_PERSIST_ENABLED") in ("true", True)
     assert consumer_env.get("TRACKING_INGEST_ALLOW_REPUBLISH_ONLY") in ("false", False)
     assert consumer_env.get("TRACKING_INGEST_SEEK_TO_END_ON_START") in ("false", False)

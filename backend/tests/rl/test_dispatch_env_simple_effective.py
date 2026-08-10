@@ -46,7 +46,7 @@ class TestDispatchEnvSimpleEffective:
         # Action qui pointe vers un driver inexistant (driver_idx >= len(drivers))
         action = 10  # driver_idx = 10 // 5 = 2, mais seulement 1 driver
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             _obs, reward, _terminated, _truncated, info = env.step(action)
 
             # Vérifier les lignes exactes 266-270
@@ -90,7 +90,7 @@ class TestDispatchEnvSimpleEffective:
         # Action pour assigner le booking déjà assigné
         action = 1  # driver_idx = 0, booking_idx = 0
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             _obs, reward, _terminated, _truncated, info = env.step(action)
 
             # Vérifier les lignes exactes 277-281
@@ -112,7 +112,7 @@ class TestDispatchEnvSimpleEffective:
         driver = {"available": True, "lat": "invalid", "lon": "invalid"}
         booking = {"pickup_lat": "invalid", "pickup_lon": "invalid"}
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             is_valid = env._check_time_window_constraint(driver, booking)
 
             # Vérifier les lignes exactes 373-375
@@ -130,7 +130,7 @@ class TestDispatchEnvSimpleEffective:
         driver = {"lat": "invalid", "lon": "invalid"}
         booking = {"pickup_lat": "invalid", "pickup_lon": "invalid"}
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             travel_time = env._calculate_travel_time(driver, booking)
 
             # ✅ FIX: Le code retourne 30.0 (pas 0.0) en cas d'exception
@@ -593,7 +593,7 @@ class TestDispatchEnvSimpleEffective:
         env.active_driver_count = len(env.drivers)
         env.active_booking_count = len(env.bookings)
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(10)
             assert reward == -100.0
             assert info["invalid_action"] is True
@@ -614,7 +614,7 @@ class TestDispatchEnvSimpleEffective:
             }
         ]
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(1)
             assert reward == -100.0
             assert info["invalid_action"] is True

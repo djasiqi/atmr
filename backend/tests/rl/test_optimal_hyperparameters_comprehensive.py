@@ -474,9 +474,11 @@ class TestOptimalHyperparameters:
     def test_main_execution(self):
         """Test de l'exécution du module principal"""
         with (
-            patch("services.rl.optimal_hyperparameters.logging.info") as mock_logging,
             patch(
-                "services.rl.optimal_hyperparameters.OptimalHyperparameters.save_config"
+                "services.ml.rl.optimal_hyperparameters.logging.info"
+            ) as mock_logging,
+            patch(
+                "services.ml.rl.optimal_hyperparameters.OptimalHyperparameters.save_config"
             ) as mock_save,
         ):
             # Simuler l'exécution du module principal

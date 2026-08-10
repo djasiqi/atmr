@@ -48,7 +48,7 @@ class TestRewardShapingComprehensive:
         }
 
         # Activer le logging debug
-        with patch("services.rl.reward_shaping.logger") as mock_logger:
+        with patch("services.ml.rl.reward_shaping.logger") as mock_logger:
             mock_logger.isEnabledFor.return_value = True
 
             reward_shaping.calculate_reward(state, action, next_state, info)
@@ -270,7 +270,7 @@ class TestRewardShapingComprehensive:
         """Test mise à jour des poids"""
         reward_shaping = AdvancedRewardShaping()
 
-        with patch("services.rl.reward_shaping.logger") as mock_logger:
+        with patch("services.ml.rl.reward_shaping.logger") as mock_logger:
             reward_shaping.update_weights(punctuality_weight=2.0, distance_weight=1.5)
 
             assert reward_shaping.punctuality_weight == 2.0
@@ -305,7 +305,7 @@ class TestRewardShapingComprehensive:
         """Test reset des statistiques"""
         reward_shaping = AdvancedRewardShaping()
 
-        with patch("services.rl.reward_shaping.logger") as mock_logger:
+        with patch("services.ml.rl.reward_shaping.logger") as mock_logger:
             reward_shaping.reset()
 
             mock_logger.debug.assert_called_once_with(

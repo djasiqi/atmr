@@ -41,9 +41,7 @@ class TestExpireAwaitingClientPayment:
 
         # Une fenêtre temporelle dédiée évite que le test compte des paiements
         # en attente créés par d'autres fixtures dans la base PostgreSQL partagée.
-        n = expire_awaiting_client_payment_bookings(
-            now=now, company_id=test_company.id
-        )
+        n = expire_awaiting_client_payment_bookings(now=now, company_id=test_company.id)
         assert n == 1
         db.session.refresh(booking)
         assert booking.status == BookingStatus.CANCELED
@@ -72,9 +70,7 @@ class TestExpireAwaitingClientPayment:
         booking.created_at = now - timedelta(minutes=5)
         db.session.commit()
 
-        n = expire_awaiting_client_payment_bookings(
-            now=now, company_id=test_company.id
-        )
+        n = expire_awaiting_client_payment_bookings(now=now, company_id=test_company.id)
         assert n == 0
         db.session.refresh(booking)
         assert booking.status == BookingStatus.AWAITING_CLIENT_PAYMENT
@@ -110,9 +106,7 @@ class TestExpireAwaitingClientPayment:
         db.session.add(pay)
         db.session.commit()
 
-        n = expire_awaiting_client_payment_bookings(
-            now=now, company_id=test_company.id
-        )
+        n = expire_awaiting_client_payment_bookings(now=now, company_id=test_company.id)
         assert n == 0
         db.session.refresh(booking)
         assert booking.status == BookingStatus.AWAITING_CLIENT_PAYMENT
@@ -150,9 +144,7 @@ class TestExpireAwaitingClientPayment:
         db.session.add(pay)
         db.session.commit()
 
-        n = expire_awaiting_client_payment_bookings(
-            now=now, company_id=test_company.id
-        )
+        n = expire_awaiting_client_payment_bookings(now=now, company_id=test_company.id)
         assert n == 0
         db.session.refresh(booking)
         assert booking.status == BookingStatus.AWAITING_CLIENT_PAYMENT
@@ -191,9 +183,7 @@ class TestExpireAwaitingClientPayment:
         db.session.add(pay)
         db.session.commit()
 
-        n = expire_awaiting_client_payment_bookings(
-            now=now, company_id=test_company.id
-        )
+        n = expire_awaiting_client_payment_bookings(now=now, company_id=test_company.id)
         assert n == 0
         db.session.refresh(booking)
         assert booking.status == BookingStatus.AWAITING_CLIENT_PAYMENT

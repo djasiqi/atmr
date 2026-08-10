@@ -28,8 +28,8 @@ class TestRLSuggestionGeneratorSimple:
         import services.ml.rl.suggestion_generator as sg_module
 
         with (
-            patch("services.rl.improved_dqn_agent"),
-            patch("services.rl.dispatch_env"),
+            patch("services.ml.rl.improved_dqn_agent"),
+            patch("services.ml.rl.dispatch_env"),
         ):
             # Réinitialiser les variables globales
             sg_module._dqn_agent = None
@@ -55,11 +55,11 @@ class TestRLSuggestionGeneratorSimple:
             sg_module._dispatch_env = None
 
             # ✅ FIX: Utiliser builtins.__import__ pour intercepter l'import
-            # et lever ImportError pour services.rl.improved_dqn_agent
+            # et lever ImportError pour services.ml.rl.improved_dqn_agent
             real_import = builtins.__import__
 
             def mock_import(name, *args, **kwargs):
-                if name == "services.rl.improved_dqn_agent":
+                if name == "services.ml.rl.improved_dqn_agent":
                     raise ImportError("RL not available")
                 return real_import(name, *args, **kwargs)
 
@@ -97,11 +97,11 @@ class TestRLSuggestionGeneratorSimple:
             mock_env.action_space.n = 26
 
             with (
-                patch("services.rl.suggestion_generator.Path") as mock_path_class,
-                patch("services.rl.suggestion_generator._lazy_import_rl"),
-                patch("services.rl.dispatch_env.DispatchEnv", return_value=mock_env),
+                patch("services.ml.rl.suggestion_generator.Path") as mock_path_class,
+                patch("services.ml.rl.suggestion_generator._lazy_import_rl"),
+                patch("services.ml.rl.dispatch_env.DispatchEnv", return_value=mock_env),
                 patch(
-                    "services.rl.improved_dqn_agent.ImprovedDQNAgent",
+                    "services.ml.rl.improved_dqn_agent.ImprovedDQNAgent",
                     return_value=mock_agent,
                 ),
                 patch(
@@ -131,11 +131,11 @@ class TestRLSuggestionGeneratorSimple:
     def test_load_model_failure(self):
         """Test chargement modèle échoué"""
         with (
-            patch("services.rl.suggestion_generator.Path") as mock_path_class,
-            patch("services.rl.suggestion_generator._lazy_import_rl"),
-            patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
+            patch("services.ml.rl.suggestion_generator.Path") as mock_path_class,
+            patch("services.ml.rl.suggestion_generator._lazy_import_rl"),
+            patch("services.ml.rl.dispatch_env.DispatchEnv") as mock_env_class,
             patch(
-                "services.rl.improved_dqn_agent.ImprovedDQNAgent"
+                "services.ml.rl.improved_dqn_agent.ImprovedDQNAgent"
             ) as mock_agent_class,
             patch("torch.load", side_effect=Exception("Load error")),
         ):
@@ -163,7 +163,7 @@ class TestRLSuggestionGeneratorSimple:
 
     def test_load_model_file_not_found(self):
         """Test fichier modèle non trouvé"""
-        with patch("services.rl.suggestion_generator.Path") as mock_path_class:
+        with patch("services.ml.rl.suggestion_generator.Path") as mock_path_class:
             mock_path_instance = Mock()
             mock_path_instance.exists.return_value = False
             mock_path_class.return_value = mock_path_instance

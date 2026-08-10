@@ -146,7 +146,7 @@ class TestDispatchEnvAdditionalEdgeCases:
         driver = {"available": True, "lat": "invalid", "lon": "invalid"}
         booking = {"pickup_lat": "invalid", "pickup_lon": "invalid"}
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             is_valid = env._check_time_window_constraint(driver, booking)
 
             assert isinstance(is_valid, bool)
@@ -189,7 +189,7 @@ class TestDispatchEnvAdditionalEdgeCases:
         driver = {"lat": "invalid", "lon": "invalid"}
         booking = {"pickup_lat": "invalid", "pickup_lon": "invalid"}
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             travel_time = env._calculate_travel_time(driver, booking)
 
             assert isinstance(travel_time, float)

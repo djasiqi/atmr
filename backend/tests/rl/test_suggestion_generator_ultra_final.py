@@ -990,7 +990,7 @@ class TestOptimalHyperparametersUltraFinal:
         config = {"test": "value"}
         with (
             tempfile.TemporaryDirectory() as tmpdir,
-            patch("services.rl.optimal_hyperparameters.Path") as mock_path,
+            patch("services.ml.rl.optimal_hyperparameters.Path") as mock_path,
         ):
             # Patcher le chemin pour utiliser un répertoire temporaire
             def path_side_effect(*args):
@@ -1017,7 +1017,7 @@ class TestOptimalHyperparametersUltraFinal:
                 json.dump(config, f)
 
             # Patcher le chemin pour utiliser le fichier temporaire
-            with patch("services.rl.optimal_hyperparameters.Path") as mock_path:
+            with patch("services.ml.rl.optimal_hyperparameters.Path") as mock_path:
 
                 def path_side_effect(*args):
                     if len(args) == 1 and args[0] == "backend/data/rl/configs":
@@ -1167,6 +1167,9 @@ class TestHyperparameterTunerUltraFinal:
             def should_prune(self):
                 return False
 
+            def set_user_attr(self, key, value):
+                pass
+
         trial = MockTrial()
         # Utiliser une méthode publique ou créer un mock approprié
         with patch.object(tuner, "_suggest_hyperparameters") as mock_suggest:
@@ -1189,7 +1192,7 @@ class TestHyperparameterTunerUltraFinal:
         # Mock the imports
         with pytest.MonkeyPatch().context() as m:
             m.setattr(
-                "services.rl.hyperparameter_tuner.DispatchEnv", self._create_mock_env
+                "services.ml.rl.hyperparameter_tuner.DispatchEnv", self._create_mock_env
             )
 
             # ✅ FIX: Créer une fonction wrapper qui retourne directement une instance
@@ -1201,7 +1204,7 @@ class TestHyperparameterTunerUltraFinal:
                 return MockAgentClass(*args, **kwargs)
 
             m.setattr(
-                "services.rl.hyperparameter_tuner.ImprovedDQNAgent",
+                "services.ml.rl.hyperparameter_tuner.ImprovedDQNAgent",
                 create_mock_agent_wrapper,
             )
 
@@ -1226,6 +1229,9 @@ class TestHyperparameterTunerUltraFinal:
 
             def should_prune(self):
                 return False
+
+            def set_user_attr(self, key, value):
+                pass
 
         return MockTrial()
 
@@ -1306,8 +1312,8 @@ class TestHyperparameterTunerUltraFinal:
 
         # Mock the imports
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("services.rl.hyperparameter_tuner.DispatchEnv", MockEnv)
-            m.setattr("services.rl.hyperparameter_tuner.ImprovedDQNAgent", MockAgent)
+            m.setattr("services.ml.rl.hyperparameter_tuner.DispatchEnv", MockEnv)
+            m.setattr("services.ml.rl.hyperparameter_tuner.ImprovedDQNAgent", MockAgent)
 
             result = tuner.optimize()
             assert result is not None

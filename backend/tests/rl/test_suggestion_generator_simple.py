@@ -13,7 +13,7 @@ class TestRLSuggestionGeneratorSimple:
 
     def test_init_with_default_params(self):
         """Test initialisation avec paramètres par défaut"""
-        # ✅ FIX: Patcher les classes à la source (services.rl) plutôt que
+        # ✅ FIX: Patcher les classes à la source (services.ml.rl) plutôt que
         # dans suggestion_generator car les imports sont faits dans _load_model()
         # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
         import services.ml.rl.suggestion_generator as sg_module
@@ -23,11 +23,11 @@ class TestRLSuggestionGeneratorSimple:
             sg_module._model_loaded = False
 
             with (
-                patch("services.rl.suggestion_generator.Path") as mock_path_class,
-                patch("services.rl.suggestion_generator._lazy_import_rl"),
-                patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
+                patch("services.ml.rl.suggestion_generator.Path") as mock_path_class,
+                patch("services.ml.rl.suggestion_generator._lazy_import_rl"),
+                patch("services.ml.rl.dispatch_env.DispatchEnv") as mock_env_class,
                 patch(
-                    "services.rl.improved_dqn_agent.ImprovedDQNAgent"
+                    "services.ml.rl.improved_dqn_agent.ImprovedDQNAgent"
                 ) as mock_agent_class,
                 patch(
                     "torch.load",
@@ -72,10 +72,10 @@ class TestRLSuggestionGeneratorSimple:
         """Test initialisation avec paramètres personnalisés"""
         with (
             patch("pathlib.Path") as mock_path_class,
-            patch("services.rl.suggestion_generator._lazy_import_rl"),
-            patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
+            patch("services.ml.rl.suggestion_generator._lazy_import_rl"),
+            patch("services.ml.rl.dispatch_env.DispatchEnv") as mock_env_class,
             patch(
-                "services.rl.suggestion_generator.ImprovedDQNAgent"
+                "services.ml.rl.suggestion_generator.ImprovedDQNAgent"
             ) as mock_agent_class,
         ):
             mock_path_instance = Mock()

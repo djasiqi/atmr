@@ -58,9 +58,7 @@ def upgrade() -> None:
         "mobile_device_session",
         ["provisional_expires_at"],
         unique=False,
-        postgresql_where=sa.text(
-            "status = 'active' AND confirmed_at IS NULL"
-        ),
+        postgresql_where=sa.text("status = 'active' AND confirmed_at IS NULL"),
     )
     # Backfill : sessions existantes considérées confirmées
     op.execute(

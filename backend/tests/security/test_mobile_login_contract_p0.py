@@ -66,7 +66,7 @@ class TestMobileLoginContractP0:
         )()
         with patch(
             "routes.auth.create_or_reuse_session",
-            return_value=(fake_session, None, None),
+            return_value=(fake_session, None, None, []),
         ):
             resp = client.post(
                 "/api/v1/auth/login",

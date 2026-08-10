@@ -17,13 +17,36 @@ class TestPurgeOldBookings:
     """Tests pour purge_old_bookings."""
 
     def test_purge_old_bookings_no_data(self, db):
-        """Test purge quand aucune donnée ancienne."""
+        """Test purge quand aucune donnée ancienne (compteur isolé)."""
+        from models import Booking, BookingStatus
+
+        retention = DEFAULT_RETENTION_DAYS
+        cutoff_date = datetime.now(UTC) - timedelta(days=retention)
+        deletable_statuses = [
+            BookingStatus.COMPLETED,
+            BookingStatus.RETURN_COMPLETED,
+            BookingStatus.CANCELED,
+        ]
+        before_ids = {
+            bid
+            for (bid,) in Booking.query.filter(
+                Booking.created_at < cutoff_date,
+                Booking.status.in_(deletable_statuses),
+            )
+            .with_entities(Booking.id)
+            .all()
+        }
+
         result = purge_old_bookings(None)
 
         assert result["status"] == "success"
         assert result["model"] == "Booking"
-        assert result["deleted_count"] == 0
+        assert result["deleted_count"] == len(before_ids)
         assert result["retention_days"] == DEFAULT_RETENTION_DAYS
+
+        if before_ids:
+            remaining = Booking.query.filter(Booking.id.in_(before_ids)).count()
+            assert remaining == 0
 
     def test_purge_old_bookings_with_old_completed(
         self, db, factory_booking, sample_company

@@ -52,7 +52,7 @@ class TestDispatchEnvTargeted:
         # Action qui pointe vers un driver inexistant (driver_idx >= len(drivers))
         action = 10  # driver_idx = 10 // 5 = 2, mais seulement 1 driver
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             _obs, reward, _terminated, _truncated, info = env.step(action)
 
             # Vérifier les lignes exactes 266-270
@@ -101,7 +101,7 @@ class TestDispatchEnvTargeted:
         # Action pour assigner le booking déjà assigné
         action = 1  # driver_idx = 0, booking_idx = 0
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             _obs, reward, _terminated, _truncated, info = env.step(action)
 
             # Vérifier les lignes exactes 277-281
@@ -393,7 +393,7 @@ class TestDispatchEnvTargeted:
             }
         ]
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(10)
             assert reward == -100.0
             assert info["invalid_action"] is True
@@ -427,7 +427,7 @@ class TestDispatchEnvTargeted:
             }
         ]
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(1)
             assert reward == -100.0
             assert info["invalid_action"] is True

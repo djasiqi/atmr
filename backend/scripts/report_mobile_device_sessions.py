@@ -48,7 +48,11 @@ def _classify(session: MobileDeviceSession, *, now: datetime) -> str:
     last = session.last_seen_at or session.last_refresh_at or session.created_at
     if last and (now - last) < timedelta(hours=24):
         return "current_recent" if session.last_refresh_at else "active_recent"
-    if last and session.created_at and last <= session.created_at + timedelta(minutes=1):
+    if (
+        last
+        and session.created_at
+        and last <= session.created_at + timedelta(minutes=1)
+    ):
         return "never_reused"
     if last and (now - last) < timedelta(days=7):
         return "active_recent"
@@ -78,17 +82,13 @@ def report(*, email: str | None, user_id: int | None) -> int:
             .order_by(MobileDeviceSession.created_at.desc())
             .all()
         )
-        active = [
-            s for s in sessions if s.status == MobileDeviceSessionStatus.active
-        ]
+        active = [s for s in sessions if s.status == MobileDeviceSessionStatus.active]
         confirmed = [s for s in active if s.confirmed_at is not None]
         provisional = [
             s
             for s in active
             if s.confirmed_at is None
-            and (
-                s.provisional_expires_at is None or s.provisional_expires_at > now
-            )
+            and (s.provisional_expires_at is None or s.provisional_expires_at > now)
         ]
         expired_prov = [
             s
@@ -126,10 +126,7 @@ def report(*, email: str | None, user_id: int | None) -> int:
             ver = s.last_app_version or "—"
             build = s.last_app_build or "—"
             print(f"  Lirie            {ver} ({build})")
-            print(
-                f"  confirmed        "
-                f"{'yes' if s.confirmed_at else 'no'}"
-            )
+            print(f"  confirmed        {'yes' if s.confirmed_at else 'no'}")
             print(f"  created          {_iso(s.created_at)}")
             print(f"  last_seen        {_iso(s.last_seen_at)}")
             print(f"  last_refresh     {_iso(s.last_refresh_at)}")

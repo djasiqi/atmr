@@ -44,18 +44,27 @@ def test_resolve_outbound_route_uses_first_leg():
 def test_estimate_anieres_hug_google_or_haversine(monkeypatch):
     request = SimpleNamespace(
         pickup_location="Chemin des Courbes 9, 1247, Anières",
-        pickup_lat=None,
-        pickup_lng=None,
+        pickup_lat=46.2765,
+        pickup_lng=6.2348,
         dropoff_location=(
             "Hôpitaux Universitaires de Genève (HUG), "
             "Rue Gabrielle-Perret-Gentil 4, 1205, Genève"
         ),
-        dropoff_lat=None,
-        dropoff_lng=None,
+        dropoff_lat=46.1936,
+        dropoff_lng=6.1489,
         mission_date=date(2026, 6, 16),
         scheduled_time=datetime(2026, 6, 16, 9, 30),
         next_confirmed_time=None,
         legs=[],
+    )
+
+    monkeypatch.setattr(
+        "services.institutions.route_travel_estimate_service._geocode_address",
+        lambda _address: None,
+    )
+    monkeypatch.setattr(
+        "services.institutions.route_travel_estimate_service._fetch_google_minutes",
+        lambda *_args, **_kwargs: (None, "directions_unavailable"),
     )
 
     payload = estimate_outbound_travel_minutes(request)

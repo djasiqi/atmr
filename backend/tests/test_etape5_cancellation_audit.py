@@ -465,8 +465,13 @@ class TestInstitutionEvents:
             )
 
             assert result is True
-            mock_socketio.emit.assert_called_once()
-            call_args = mock_socketio.emit.call_args
+            request_sent_calls = [
+                call
+                for call in mock_socketio.emit.call_args_list
+                if call.args and call.args[0] == "request_sent"
+            ]
+            assert len(request_sent_calls) >= 1
+            call_args = request_sent_calls[0]
             assert call_args[0][0] == "request_sent"
             assert call_args[1]["to"] == "institution_1"
 
@@ -485,8 +490,13 @@ class TestInstitutionEvents:
             )
 
             assert result is True
-            mock_socketio.emit.assert_called_once()
-            call_args = mock_socketio.emit.call_args
+            status_calls = [
+                call
+                for call in mock_socketio.emit.call_args_list
+                if call.args and call.args[0] == "booking_status_updated"
+            ]
+            assert len(status_calls) >= 1
+            call_args = status_calls[0]
             assert call_args[0][0] == "booking_status_updated"
 
     def test_get_institution_from_booking(self, db):

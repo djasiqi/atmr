@@ -27,6 +27,7 @@ def _invoice_email_app_context(app):
     """Model.query / Mock(spec=Model) exigent un contexte Flask."""
     with (
         app.app_context(),
+        patch("application.invoices.send_invoice_by_email.BrevoEmailProvider"),
         patch(
             "application.invoices.send_invoice_by_email.inject_signature_into_html",
             side_effect=lambda html, **_kwargs: (html, None),

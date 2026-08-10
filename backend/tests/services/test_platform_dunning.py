@@ -198,16 +198,16 @@ def test_particular_mentions_progressive_suspension():
 
 
 def test_canonical_terms_cover_dunning_procedure():
-    from pathlib import Path
+    from pypdf import PdfReader
 
-    source = (
-        Path(__file__).resolve().parents[2]
-        / "assets"
-        / "contracts"
-        / "canonical"
-        / "sources"
-        / "lirie-partner-terms-v1.20.md"
+    from services.platform_billing.partner_agreement_canonical import (
+        ensure_canonical_documents,
     )
-    md = source.read_text(encoding="utf-8")
-    assert "Procédure de rappel" in md or "suspension" in md.lower()
-    assert "défaut de paiement" in md.lower()
+
+    canonical = ensure_canonical_documents()
+    pdf_path = canonical["general_terms"].pdf_path
+    text = "\n".join(
+        page.extract_text() or "" for page in PdfReader(str(pdf_path)).pages
+    )
+    assert "Procédure de rappel" in text or "suspension" in text.lower()
+    assert "défaut de paiement" in text.lower()

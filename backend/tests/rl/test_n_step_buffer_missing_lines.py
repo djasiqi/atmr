@@ -223,21 +223,12 @@ class TestNStepBufferMissingLines:
         """Test get_stats avec exception."""
         buffer = NStepBuffer(capacity=10, n_step=3)
 
-        # ✅ FIX: On ne peut pas patcher deque.__len__ car c'est en lecture seule.
-        # Au lieu de cela, on patche len() globalement pour qu'il lève une exception
-        # uniquement quand on appelle len() sur buffer.buffer
-        original_len = len
-        target_buffer = buffer.buffer
+        # Remplacer le buffer par un mock dont __len__ lève (évite patch builtins.len)
+        bad_buffer = Mock()
+        bad_buffer.__len__ = Mock(side_effect=Exception("Test error"))
+        buffer.buffer = bad_buffer
 
-        def mock_len(obj):
-            if obj is target_buffer:
-                raise Exception("Test error")
-            return original_len(obj)
-
-        with (
-            patch("builtins.len", side_effect=mock_len),
-            patch.object(buffer.logger, "error") as mock_error,
-        ):
+        with patch.object(buffer.logger, "error") as mock_error:
             stats = buffer.get_stats()
 
             # Devrait retourner des stats par défaut (dict vide en cas d'erreur)

@@ -40,7 +40,7 @@ class TestRLSuggestionGeneratorMinimal:
 
     def test_init_basic(self):
         """Test initialisation basique"""
-        # ✅ FIX: Patcher les classes à la source (services.rl) plutôt que
+        # ✅ FIX: Patcher les classes à la source (services.ml.rl) plutôt que
         # dans suggestion_generator car les imports sont faits dans _load_model()
         # ✅ FIX: Réinitialiser _model_loaded et créer le générateur dans le bloc with
         import services.ml.rl.suggestion_generator as sg_module
@@ -50,11 +50,11 @@ class TestRLSuggestionGeneratorMinimal:
             sg_module._model_loaded = False
 
             with (
-                patch("services.rl.suggestion_generator.Path") as mock_path_class,
-                patch("services.rl.suggestion_generator._lazy_import_rl"),
-                patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
+                patch("services.ml.rl.suggestion_generator.Path") as mock_path_class,
+                patch("services.ml.rl.suggestion_generator._lazy_import_rl"),
+                patch("services.ml.rl.dispatch_env.DispatchEnv") as mock_env_class,
                 patch(
-                    "services.rl.improved_dqn_agent.ImprovedDQNAgent"
+                    "services.ml.rl.improved_dqn_agent.ImprovedDQNAgent"
                 ) as mock_agent_class,
                 patch(
                     "torch.load",
@@ -115,11 +115,11 @@ class TestRLSuggestionGeneratorMinimal:
             mock_env.action_space.n = 26
 
             with (
-                patch("services.rl.suggestion_generator.Path") as mock_path_class,
-                patch("services.rl.suggestion_generator._lazy_import_rl"),
-                patch("services.rl.dispatch_env.DispatchEnv", return_value=mock_env),
+                patch("services.ml.rl.suggestion_generator.Path") as mock_path_class,
+                patch("services.ml.rl.suggestion_generator._lazy_import_rl"),
+                patch("services.ml.rl.dispatch_env.DispatchEnv", return_value=mock_env),
                 patch(
-                    "services.rl.improved_dqn_agent.ImprovedDQNAgent",
+                    "services.ml.rl.improved_dqn_agent.ImprovedDQNAgent",
                     return_value=mock_agent,
                 ),
                 patch(
@@ -149,7 +149,7 @@ class TestRLSuggestionGeneratorMinimal:
     def test_lazy_import_rl_failure(self):
         """Test import paresseux RL échoué"""
         with patch(
-            "services.rl.suggestion_generator.ImprovedDQNAgent",
+            "services.ml.rl.suggestion_generator.ImprovedDQNAgent",
             side_effect=ImportError("RL not available"),
         ):
             generator = RLSuggestionGenerator()
@@ -160,8 +160,8 @@ class TestRLSuggestionGeneratorMinimal:
     def test_load_model_file_not_found(self):
         """Test chargement de modèle - fichier non trouvé"""
         with (
-            patch("services.rl.suggestion_generator.Path") as mock_path_class,
-            patch("services.rl.suggestion_generator._lazy_import_rl"),
+            patch("services.ml.rl.suggestion_generator.Path") as mock_path_class,
+            patch("services.ml.rl.suggestion_generator._lazy_import_rl"),
         ):
             mock_path_instance = Mock()
             mock_path_instance.exists.return_value = False
@@ -175,11 +175,11 @@ class TestRLSuggestionGeneratorMinimal:
     def test_load_model_with_exception(self):
         """Test chargement de modèle avec exception"""
         with (
-            patch("services.rl.suggestion_generator.Path") as mock_path_class,
-            patch("services.rl.suggestion_generator._lazy_import_rl"),
-            patch("services.rl.dispatch_env.DispatchEnv") as mock_env_class,
+            patch("services.ml.rl.suggestion_generator.Path") as mock_path_class,
+            patch("services.ml.rl.suggestion_generator._lazy_import_rl"),
+            patch("services.ml.rl.dispatch_env.DispatchEnv") as mock_env_class,
             patch(
-                "services.rl.suggestion_generator.ImprovedDQNAgent"
+                "services.ml.rl.suggestion_generator.ImprovedDQNAgent"
             ) as mock_agent_class,
             patch("torch.load", side_effect=Exception("Load error")),
         ):

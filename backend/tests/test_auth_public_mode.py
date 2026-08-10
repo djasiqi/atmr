@@ -209,7 +209,7 @@ def test_booking_status_token_expired(client, monkeypatch):
 
 
 def test_guest_booking_create_minimal_without_pii(client, monkeypatch):
-    from services import public_guest_booking_pricing as guest_pricing
+    from routes import auth as auth_routes
 
     def _fake_price(**_kwargs):
         return {
@@ -224,9 +224,7 @@ def test_guest_booking_create_minimal_without_pii(client, monkeypatch):
             "breakdown": {},
         }
 
-    monkeypatch.setattr(
-        guest_pricing, "compute_public_guest_booking_price", _fake_price
-    )
+    monkeypatch.setattr(auth_routes, "compute_public_guest_booking_price", _fake_price)
 
     response = client.post(
         "/api/v1/auth/public/guest-booking/create",

@@ -331,9 +331,7 @@ def legs_snapshot(legs: list[TransportRequestLeg]) -> list[dict[str, Any]]:
     ]
 
 
-def _leg_stop_with_billing_override(
-    stop: LegStop, override: str | None
-) -> LegStop:
+def _leg_stop_with_billing_override(stop: LegStop, override: str | None) -> LegStop:
     """Retourne un LegStop avec override si l'entrant n'en a pas encore."""
     if stop.destination_billing_override is not None or not override:
         return stop

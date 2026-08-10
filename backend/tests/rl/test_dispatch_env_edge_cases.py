@@ -54,7 +54,7 @@ class TestDispatchEnvEdgeCases:
         # (mais seulement 1 driver)
         action = 10
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(action)
 
             assert isinstance(obs, np.ndarray)
@@ -106,7 +106,7 @@ class TestDispatchEnvEdgeCases:
         # (mais seulement 1 booking)
         action = 3
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(action)
 
             assert isinstance(obs, np.ndarray)
@@ -151,7 +151,7 @@ class TestDispatchEnvEdgeCases:
         # Action pour assigner le booking déjà assigné
         action = 1  # driver_idx = 0, booking_idx = 0
 
-        with patch("services.rl.dispatch_env.logging") as mock_logging:
+        with patch("services.ml.rl.dispatch_env.logging") as mock_logging:
             obs, reward, _terminated, _truncated, info = env.step(action)
 
             assert isinstance(obs, np.ndarray)

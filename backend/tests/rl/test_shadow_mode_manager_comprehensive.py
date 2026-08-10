@@ -19,11 +19,36 @@ class TestShadowModeManagerComprehensive:
         assert manager.kpi_metrics is not None
         assert manager.logger is not None
 
-    def test_init_with_custom_data_dir(self):
-        """Test initialisation avec data_dir personnalisé."""
-        manager = ShadowModeManager(data_dir="custom/path")
+    def test_init_with_custom_data_dir(self, tmp_path):
+        """Test initialisation avec data_dir personnalisé (chemin absolu writable)."""
+        target = tmp_path / "custom" / "path"
+        manager = ShadowModeManager(data_dir=str(target))
 
-        assert str(manager.data_dir) == "custom/path"
+        assert manager.data_dir == target
+        assert target.is_dir()
+
+    def test_init_fallback_on_permission_error(self, tmp_path, monkeypatch):
+        """Test fallback temporaire si mkdir échoue (PermissionError)."""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        relative = "custom/path"
+        calls = {"n": 0}
+        real_mkdir = Path.mkdir
+
+        def mkdir_side_effect(self, *args, **kwargs):
+            calls["n"] += 1
+            # Premier mkdir (sous /app/...) échoue ; le fallback doit réussir
+            if calls["n"] == 1:
+                raise PermissionError("lecture seule")
+            return real_mkdir(self, *args, **kwargs)
+
+        monkeypatch.setenv("SHADOW_MODE_DATA_DIR", str(tmp_path / "fallback_shadow"))
+        with patch.object(Path, "mkdir", mkdir_side_effect):
+            manager = ShadowModeManager(data_dir=relative)
+
+        assert manager.data_dir == tmp_path / "fallback_shadow"
+        assert manager.data_dir.is_dir()
 
     def test_setup_logging(self):
         """Test configuration logging."""

@@ -529,9 +529,22 @@ class TestSendWithOffers:
         sample_company,
     ):
         """Test GO-LIVE: Envoyer une demande CONVERTED retourne 409."""
-        # Simuler une demande déjà convertie
+        from models.enums import BookingStatus
+
+        booking = Booking(
+            customer_name="Patient convertie test",
+            pickup_location=sample_request.pickup_location,
+            dropoff_location=sample_request.dropoff_location,
+            scheduled_time=sample_request.scheduled_time,
+            amount=1,
+            status=BookingStatus.PENDING,
+            company_id=sample_company.id,
+        )
+        db.session.add(booking)
+        db.session.flush()
+
         sample_request.status = RequestStatus.CONVERTED.value
-        sample_request.booking_id = 12345  # Booking fictif
+        sample_request.booking_id = booking.id
         db.session.commit()
 
         # Tentative d'envoi -> 409

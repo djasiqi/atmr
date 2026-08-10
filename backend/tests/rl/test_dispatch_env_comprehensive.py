@@ -33,9 +33,9 @@ class TestDispatchEnvComprehensive:
         """Test initialisation avec reward shaping réussi"""
         with (
             patch(
-                "services.rl.reward_shaping.AdvancedRewardShaping"
+                "services.ml.rl.reward_shaping.AdvancedRewardShaping"
             ) as mock_reward_shaping,
-            patch("services.rl.reward_shaping.RewardShapingConfig") as mock_config,
+            patch("services.ml.rl.reward_shaping.RewardShapingConfig") as mock_config,
         ):
             mock_config.get_profile.return_value = {"punctuality_weight": 1.0}
             mock_reward_shaping.return_value = Mock()
@@ -48,7 +48,7 @@ class TestDispatchEnvComprehensive:
     def test_init_with_reward_shaping_failure(self):
         """Test initialisation avec reward shaping en échec"""
         with patch(
-            "services.rl.reward_shaping.AdvancedRewardShaping",
+            "services.ml.rl.reward_shaping.AdvancedRewardShaping",
             side_effect=Exception("Import error"),
         ):
             env = DispatchEnv(num_drivers=3, max_bookings=5, reward_profile="DEFAULT")

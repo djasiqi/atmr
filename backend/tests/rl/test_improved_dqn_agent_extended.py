@@ -17,7 +17,7 @@ class TestImprovedDQNAgentExtended:
     def test_init_with_torch_import_error(self):
         """Test initialisation avec erreur d'import PyTorch"""
         with (
-            patch("services.rl.improved_dqn_agent.torch", None),
+            patch("services.ml.rl.improved_dqn_agent.torch", None),
             pytest.raises(ImportError, match="PyTorch is required"),
         ):
             ImprovedDQNAgent(state_dim=62, action_dim=51)
@@ -27,8 +27,8 @@ class TestImprovedDQNAgentExtended:
         # ✅ FIX: create_n_step_buffer n'existe pas,
         # il faut patcher NStepBuffer ou NStepPrioritizedBuffer
         with (
-            patch("services.rl.improved_dqn_agent.NStepBuffer", None),
-            patch("services.rl.improved_dqn_agent.NStepPrioritizedBuffer", None),
+            patch("services.ml.rl.improved_dqn_agent.NStepBuffer", None),
+            patch("services.ml.rl.improved_dqn_agent.NStepPrioritizedBuffer", None),
             pytest.raises(ImportError, match="N-step buffers are required"),
         ):
             ImprovedDQNAgent(state_dim=62, action_dim=51, use_n_step=True)
@@ -39,7 +39,7 @@ class TestImprovedDQNAgentExtended:
         # donc si None, ça lèvera TypeError, pas ImportError
         # Le code ne vérifie pas si DuelingQNetwork est None avant de l'utiliser
         with (
-            patch("services.rl.improved_dqn_agent.DuelingQNetwork", None),
+            patch("services.ml.rl.improved_dqn_agent.DuelingQNetwork", None),
             pytest.raises(TypeError, match="'NoneType' object is not callable"),
         ):
             ImprovedDQNAgent(state_dim=62, action_dim=51, use_dueling=True)
@@ -52,7 +52,7 @@ class TestImprovedDQNAgentExtended:
         # ✅ FIX: use_n_step=False pour utiliser PrioritizedReplayBuffer au lieu de
         # NStepPrioritizedBuffer
         with (
-            patch("services.rl.improved_dqn_agent.PrioritizedReplayBuffer", None),
+            patch("services.ml.rl.improved_dqn_agent.PrioritizedReplayBuffer", None),
             pytest.raises(TypeError, match="'NoneType' object is not callable"),
         ):
             ImprovedDQNAgent(
@@ -75,7 +75,7 @@ class TestImprovedDQNAgentExtended:
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
-            if name == "services.rl.rl_logger":
+            if name == "services.ml.rl.rl_logger":
                 raise ImportError("RLLogger not available")
             return real_import(name, *args, **kwargs)
 
@@ -96,7 +96,7 @@ class TestImprovedDQNAgentExtended:
         mock_logger = Mock()
         mock_logger.log_decision.side_effect = Exception("Logging error")
 
-        with patch("services.rl.rl_logger.get_rl_logger", return_value=mock_logger):
+        with patch("services.ml.rl.rl_logger.get_rl_logger", return_value=mock_logger):
             state = np.random.rand(agent.state_dim)
             action = agent.select_action(state)
 
