@@ -192,6 +192,11 @@ compose stop tracking-processed-fanout kafka-dlq-consumer || true
 echo "== Stop ingest =="
 compose stop tracking-kafka-consumer || true
 
+# Sentry release = SHA réel de l'image consumer (pas celui du dernier deploy backend).
+export GIT_SHA="${SOURCE_SHA}"
+export SENTRY_RELEASE="${SOURCE_SHA}"
+echo "OK Sentry release consumer GIT_SHA=${GIT_SHA} SENTRY_RELEASE=${SENTRY_RELEASE}"
+
 echo "== Recreate ingest (--pull never, scale=${EXPECTED_INGEST_REPLICAS}) =="
 compose up -d --no-deps --pull never --force-recreate \
   --scale "tracking-kafka-consumer=${EXPECTED_INGEST_REPLICAS}" \

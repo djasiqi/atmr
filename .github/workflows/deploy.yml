@@ -358,6 +358,7 @@ jobs:
     env:
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
       DOCKER_TAG: ${{ needs.build-and-push.outputs.docker_tag }}
+      SOURCE_SHA: ${{ needs.build-and-push.outputs.source_sha }}
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT }}
@@ -537,11 +538,15 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
+          envs: SOURCE_SHA
           script: |
             chmod +x /srv/atmr/scripts/deploy-production.sh
             chmod +x /srv/atmr/scripts/smoke_tests.sh
             chmod +x /srv/atmr/scripts/ops-tracking-p0-recreate-ingest.sh || true
             chmod +x /srv/atmr/scripts/kafka-env-effective.sh || true
+            # Traçabilité Sentry : SHA exact du build (release=GIT_SHA dans sentry_init).
+            export GIT_SHA="${SOURCE_SHA}"
+            export SENTRY_RELEASE="${SOURCE_SHA}"
             /srv/atmr/scripts/deploy-production.sh \
               "${{ secrets.APP_ENCRYPTION_KEY_B64 }}" \
               "${{ secrets.SECRET_KEY }}" \

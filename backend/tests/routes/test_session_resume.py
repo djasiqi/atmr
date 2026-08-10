@@ -330,3 +330,69 @@ def test_is_rotation_idempotency_conflict_requires_constraint_name():
 
     other = IntegrityError("stmt", {}, _OtherOrig())
     assert svc.is_rotation_idempotency_conflict(other) is False
+
+
+@pytest.mark.integration
+def test_session_resume_concurrent_same_idempotency_key(app, db, resume_session):
+    """Deux POST simultanés (même session + Idempotency-Key) → 1 rotation, 0 × 500."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from threading import Barrier
+
+    session_id = resume_session["session_id"]
+    payload = {
+        "session_id": session_id,
+        "device_installation_id": resume_session["device_installation_id"],
+        "recovery_credential": resume_session["recovery_credential"],
+        "idempotency_key": str(uuid.uuid4()),
+    }
+
+    with app.app_context():
+        session_before = svc.get_session_by_id(session_id)
+        assert session_before is not None
+        initial_credential_generation = int(session_before.credential_generation or 1)
+        initial_generation = int(session_before.generation or 1)
+        initial_refresh_generation = int(session_before.refresh_generation or 1)
+        initial_session_epoch = int(session_before.session_epoch or 1)
+
+    barrier = Barrier(2)
+
+    def _post_once() -> tuple[int, dict]:
+        barrier.wait(timeout=30)
+        with app.test_client() as thread_client:
+            response = thread_client.post(SESSION_RESUME_URL, json=payload)
+            body = response.get_json() or {}
+            return response.status_code, body
+
+    results: list[tuple[int, dict]] = []
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(_post_once) for _ in range(2)]
+        for future in as_completed(futures):
+            results.append(future.result())
+
+    assert len(results) == 2
+    assert all(status == 200 for status, _ in results), results
+    assert not any(status >= 500 for status, _ in results)
+
+    bodies = [body for _, body in results]
+    tokens = {(b.get("access_token"), b.get("refresh_token"), b.get("recovery_credential")) for b in bodies}
+    assert len(tokens) == 1, "les deux réponses doivent rejouer le même payload gagnant"
+    assert any(b.get("error_code") == "refresh_duplicate" for b in bodies) or all(
+        b.get("access_token") for b in bodies
+    )
+
+    # Relecture PostgreSQL hors identity map (objets pré-course invalidés).
+    db.session.remove()
+    with app.app_context():
+        session_after = svc.get_session_by_id(session_id)
+        assert session_after is not None
+        assert session_after.credential_generation == initial_credential_generation + 1
+        assert session_after.generation == initial_generation + 1
+        assert session_after.refresh_generation == initial_refresh_generation
+        assert session_after.session_epoch == initial_session_epoch
+
+        key_hash = svc.hash_idempotency_key(payload["idempotency_key"])
+        rows = AuthRotationResult.query.filter_by(
+            session_id=uuid.UUID(session_id),
+            idempotency_key_hash=key_hash,
+        ).all()
+        assert len(rows) == 1

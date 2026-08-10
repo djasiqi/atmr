@@ -184,6 +184,8 @@ jobs:
             export ATMR_DEPLOY_ROOT=/srv/atmr
             eval "$(./scripts/kafka-env-effective.sh)"
             export DOCKER_IMAGE DOCKER_TAG SOURCE_SHA IMAGE_DIGEST
+            export GIT_SHA="${SOURCE_SHA}"
+            export SENTRY_RELEASE="${SOURCE_SHA}"
             export COMPOSE_PROJECT_NAME=atmr
             export COMPOSE_FILES="-f docker-compose.production.yml -f docker-compose.kafka.yml -f docker-compose.kafka.atmr-network.yml -f docker-compose.kafka.p0-hold.yml"
             export ENV_FILE="--env-file ${ATMR_ENV_FILE}"
@@ -207,6 +209,8 @@ jobs:
             eval "$(./scripts/kafka-env-effective.sh)"
             echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
             export DOCKER_IMAGE DOCKER_TAG SOURCE_SHA IMAGE_DIGEST
+            export GIT_SHA="${SOURCE_SHA}"
+            export SENTRY_RELEASE="${SOURCE_SHA}"
             export COMPOSE_PROJECT_NAME=atmr
             export COMPOSE_FILES="-f docker-compose.production.yml -f docker-compose.kafka.yml -f docker-compose.kafka.atmr-network.yml -f docker-compose.kafka.p0-hold.yml"
             export ENV_FILE="--env-file ${ATMR_ENV_FILE}"

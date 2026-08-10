@@ -629,6 +629,10 @@ services:
     environment:
       FLASK_ENV: production
       FLASK_CONFIG: production
+      # Release Sentry propre au consumer (peut différer du backend si recreate Kafka P0).
+      # Priorité sur env_file .env.production : export GIT_SHA/SENTRY_RELEASE=SOURCE_SHA avant up.
+      GIT_SHA: ${GIT_SHA:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-${GIT_SHA:-}}
       # DSN construit côté Python (quote_plus) — neutralise les URL héritées de .env.production
       POSTGRES_USER: ${POSTGRES_USER:-atmr}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}

@@ -439,6 +439,10 @@ fi
   echo "WS_SERVICE_IMAGE=${WS_SERVICE_IMAGE}"
   echo "MAIL_PASSWORD=${MAIL_PASSWORD:-}"
   echo "SENTRY_DSN=${SENTRY_DSN:-}"
+  # Traçabilité Sentry : SHA Git exact du code déployé (Flask / Celery / workers).
+  # Sourcé depuis le workflow (source_sha) ou l’environnement appelant.
+  echo "GIT_SHA=${GIT_SHA:-${SOURCE_SHA:-}}"
+  echo "SENTRY_RELEASE=${SENTRY_RELEASE:-${GIT_SHA:-${SOURCE_SHA:-}}}"
   echo "PDF_BASE_URL=${PDF_BASE_URL:-}"
   echo "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}"
   echo "SAFERPAY_CUSTOMER_ID=${SAFERPAY_CUSTOMER_ID:-}"
