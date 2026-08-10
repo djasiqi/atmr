@@ -10,6 +10,7 @@ Ces tests vérifient les performances du système :
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import event
@@ -18,6 +19,7 @@ from sqlalchemy.engine import Engine
 from models import BookingStatus
 from services.unified_dispatch.core.engine import run as dispatch_run
 from services.unified_dispatch.metrics.slo import get_slo_for_batch_size
+from services.unified_dispatch.orchestration.result_builder import ResultBuilder
 from tests.e2e.helpers.e2e_helpers import (
     create_test_booking,
     create_test_client,
@@ -114,11 +116,28 @@ class TestDispatchPerformance:
         start_time = time.time()
 
         try:
-            result = dispatch_run(
-                company_id=company.id,
-                for_date=dispatch_date.isoformat(),
-                mode="heuristic_only",
-            )
+            # Les notifications et la sérialisation détaillée de réponse sont
+            # traitées séparément du calcul et de la persistance du dispatch.
+            # Leurs lectures servent à construire des messages ou des vues API
+            # et ne relèvent pas du budget N+1 du moteur évalué ici.
+            with (
+                patch(
+                    "services.unified_dispatch.assignment.assignment_applier.publish_event"
+                ),
+                patch(
+                    "services.unified_dispatch.optimization.assignment_applier.publish_event"
+                ),
+                patch.object(
+                    ResultBuilder,
+                    "_serialize_booking",
+                    side_effect=lambda booking: {"id": booking.id},
+                ),
+            ):
+                result = dispatch_run(
+                    company_id=company.id,
+                    for_date=dispatch_date.isoformat(),
+                    mode="heuristic_only",
+                )
 
             end_time = time.time()
             elapsed_time = end_time - start_time

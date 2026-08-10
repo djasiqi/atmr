@@ -237,15 +237,21 @@ class AssignmentApplier:
         # ✅ D1: Span ws_emit
         with tracer.start_as_current_span("ws_emit") as ws_span:
             applied_count = 0
-            # ✅ Utilisation du repository pour découpler de SQLAlchemy
             booking_repo = BookingRepository()
-            for a in assignments:
-                bid = getattr(a, "booking_id", None)
-                if bid is None:
-                    continue
+            assignments_by_booking_id = {
+                int(booking_id): assignment
+                for assignment in assignments
+                if (booking_id := getattr(assignment, "booking_id", None)) is not None
+            }
+            # Charger toutes les courses en une seule requête évite un SELECT par
+            # assignation lors d'un dispatch volumineux.
+            bookings_by_id = {
+                booking.id: booking
+                for booking in booking_repo.find_by_ids(list(assignments_by_booking_id))
+            }
+            for booking_id, assignment in assignments_by_booking_id.items():
                 with suppress(Exception):
-                    # ✅ Utilisation du repository
-                    booking_dto = booking_repo.find_by_id(bid)
+                    booking_dto = bookings_by_id.get(booking_id)
                     if booking_dto:
                         publish_event(
                             BookingAssignedEvent(
@@ -255,7 +261,9 @@ class AssignmentApplier:
                                     if booking_dto.company_id is not None
                                     else None
                                 ),
-                                driver_id=_safe_int(getattr(a, "driver_id", None)),
+                                driver_id=_safe_int(
+                                    getattr(assignment, "driver_id", None)
+                                ),
                             )
                         )
                         applied_count += 1

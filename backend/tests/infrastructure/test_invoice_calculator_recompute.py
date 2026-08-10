@@ -24,7 +24,12 @@ from infrastructure.invoices.invoice_calculator import (
     round_to_5_cents,
 )
 from models import Client, Company, User
-from models.enums import InvoiceBillingStrategy, InvoiceStatus, UserRole
+from models.enums import (
+    InvoiceBillingStrategy,
+    InvoiceLineType,
+    InvoiceStatus,
+    UserRole,
+)
 from models.invoice import Invoice, InvoiceLine
 
 
@@ -118,6 +123,7 @@ class TestRecomputeInvoiceTotals:
         for desc, amount in lines_data:
             line = InvoiceLine()
             line.invoice_id = invoice.id
+            line.type = InvoiceLineType.RIDE
             line.description = desc
             line.qty = Decimal("1")
             line.unit_price = amount
@@ -225,6 +231,7 @@ class TestRecomputeInvoiceTotals:
         # Ajouter une ligne avec TVA
         line = InvoiceLine()
         line.invoice_id = invoice.id
+        line.type = InvoiceLineType.RIDE
         line.description = "Transport avec TVA"
         line.qty = Decimal("1")
         line.unit_price = Decimal("100.00")
@@ -289,6 +296,7 @@ class TestRecomputeInvoiceTotals:
         # Ajouter une ligne
         line = InvoiceLine()
         line.invoice_id = invoice.id
+        line.type = InvoiceLineType.RIDE
         line.description = "Transport"
         line.qty = Decimal("1")
         line.unit_price = Decimal("100.00")

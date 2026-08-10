@@ -125,7 +125,8 @@ class TestCas1RevalidationCreatesChangeRequest:
         )
 
         assert code == 202, body
-        assert body["status"] == "pending_revalidation"
+        assert body["status"] == "pending_action"
+        assert body.get("pending_revalidation") is True
 
         db.session.refresh(committed_booking)
         assert committed_booking.active_change_request_id is not None

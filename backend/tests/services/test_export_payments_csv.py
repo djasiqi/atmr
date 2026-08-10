@@ -35,20 +35,14 @@ def company(app):
 
 
 @pytest.fixture
-def client_user(app):
-    """Créer un utilisateur client."""
-    with app.app_context():
-        user = UserFactory(role=UserRole.CLIENT)
-        db.session.commit()
-        return user
-
-
-@pytest.fixture
-def billing_client(app, client_user):
+def billing_client(app):
     """Créer un client facturation (évite le shadowing du Flask test client)."""
     with app.app_context():
-        client = ClientFactory(user_id=client_user.id)
+        user = UserFactory(role=UserRole.CLIENT)
+        db.session.flush()
+        client = ClientFactory(user_id=user.id)
         db.session.commit()
+        db.session.refresh(client)
         return client
 
 

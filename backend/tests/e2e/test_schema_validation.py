@@ -3092,59 +3092,66 @@ class TestSchemaValidationE2E:
 
     # ========== ANALYTICS ENDPOINTS (QUERY PARAMS) ==========
 
-    def test_analytics_dashboard_valid_query(self, authenticated_client):
+    def test_analytics_dashboard_valid_query(self, client, sample_company):
         """Test GET /api/analytics/dashboard avec query params valides."""
-        response = authenticated_client.get("/api/v1/analytics/dashboard?period=30d")
-        assert response.status_code in [200, 404]  # 404 si pas de company
+        response = client.get(
+            "/api/v1/analytics/dashboard?period=30d",
+            headers=_company_auth_headers(sample_company),
+        )
+        assert response.status_code == 200
 
-    def test_analytics_dashboard_invalid_query(self, authenticated_client):
+    def test_analytics_dashboard_invalid_query(self, client, sample_company):
         """Test GET /api/analytics/dashboard avec query params invalides
         (period invalide)."""
-        response = authenticated_client.get(
-            "/api/v1/analytics/dashboard?period=invalid"
+        response = client.get(
+            "/api/v1/analytics/dashboard?period=invalid",
+            headers=_company_auth_headers(sample_company),
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée
-        assert response.status_code in [400, 404, 500]
+        assert response.status_code == 400
         data = response.get_json() or {}
-        assert "message" in data or "errors" in data
+        assert "message" in data or "errors" in data or "error" in data
 
-    def test_analytics_insights_valid_query(self, authenticated_client):
+    def test_analytics_insights_valid_query(self, client, sample_company):
         """Test GET /api/analytics/insights avec query params valides."""
-        response = authenticated_client.get(
-            "/api/v1/analytics/insights?lookback_days=30"
+        response = client.get(
+            "/api/v1/analytics/insights?lookback_days=30",
+            headers=_company_auth_headers(sample_company),
         )
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
 
-    def test_analytics_insights_invalid_query(self, authenticated_client):
+    def test_analytics_insights_invalid_query(self, client, sample_company):
         """Test GET /api/analytics/insights avec query params invalides
         (lookback_days trop élevé)."""
-        response = authenticated_client.get(
-            "/api/v1/analytics/insights?lookback_days=400"
+        response = client.get(
+            "/api/v1/analytics/insights?lookback_days=400",
+            headers=_company_auth_headers(sample_company),
         )
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée
-        assert response.status_code in [400, 404]
+        assert response.status_code == 400
         data = response.get_json() or {}
-        assert "message" in data or "errors" in data
+        assert "message" in data or "errors" in data or "error" in data
 
-    def test_analytics_export_valid_query(self, authenticated_client):
+    def test_analytics_export_valid_query(self, client, sample_company):
         """Test GET /api/analytics/export avec query params valides."""
         start_date = date.today() - timedelta(days=7)
         end_date = date.today()
-        response = authenticated_client.get(
+        response = client.get(
             f"/api/v1/analytics/export?"
             f"start_date={start_date.isoformat()}&"
-            f"end_date={end_date.isoformat()}&format=csv"
+            f"end_date={end_date.isoformat()}&format=csv",
+            headers=_company_auth_headers(sample_company),
         )
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
 
-    def test_analytics_export_invalid_query(self, authenticated_client):
+    def test_analytics_export_invalid_query(self, client, sample_company):
         """Test GET /api/analytics/export avec query params invalides
         (dates manquantes)."""
-        response = authenticated_client.get("/api/v1/analytics/export?format=csv")
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée
-        assert response.status_code in [400, 404]
+        response = client.get(
+            "/api/v1/analytics/export?format=csv",
+            headers=_company_auth_headers(sample_company),
+        )
+        assert response.status_code == 400
         data = response.get_json() or {}
-        assert "message" in data or "errors" in data
+        assert "message" in data or "errors" in data or "error" in data
 
     def test_analytics_weekly_summary_valid_query(self, authenticated_client):
         """✅ Test E2E GET /api/analytics/weekly-summary
