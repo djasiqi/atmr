@@ -30,7 +30,7 @@
           "legendFormat": "battery optimized"
         }
       ],
-      "title": "% drivers battery optimized",
+      "title": "% heartbeats battery_optimized",
       "type": "stat"
     },
     {
@@ -90,7 +90,7 @@
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 16 },
       "id": 6,
       "targets": [
         {
@@ -98,17 +98,18 @@
           "legendFormat": "tracking active"
         }
       ],
-      "title": "% drivers tracking active in mission",
+      "title": "% heartbeats tracking_active",
       "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "fieldConfig": { "defaults": { "unit": "cpm" }, "overrides": [] },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 16 },
       "id": 7,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(rate(driver_device_health_reports_total[1m])) * 60",
+          "expr": "(sum(rate(driver_device_health_reports_total[1m])) * 60) or vector(0)",
           "legendFormat": "heartbeats/min"
         }
       ],
@@ -117,16 +118,33 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
-      "id": 8,
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 16 },
+      "id": 20,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(rate(push_fcm_background_handler_no_callback_total[5m]))",
-          "legendFormat": "{{platform}}"
+          "expr": "sum(increase(driver_device_health_reports_total[5m])) or vector(0)",
+          "legendFormat": "heartbeats 5m"
+        }
+      ],
+      "title": "Heartbeats received (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 16 },
+      "id": 8,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "expr": "sum(rate(push_fcm_background_handler_no_callback_total[5m])) or vector(0)",
+          "legendFormat": "fcm no callback/s"
         }
       ],
       "title": "FCM background handler no callback",
-      "type": "timeseries"
+      "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
@@ -163,14 +181,15 @@
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
       "id": 11,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(rate(tracking_mission_live_missing_mission_id_total[5m]))",
-          "legendFormat": "missing mission_id/s (post-déploiement)"
+          "expr": "sum(rate(tracking_mission_live_missing_mission_id_total[5m])) or vector(0)",
+          "legendFormat": "missing mission_id/s"
         }
       ],
       "title": "mission_live sans mission_id (doit être 0 post-P0-C)",
-      "type": "timeseries"
+      "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
@@ -191,9 +210,10 @@
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
       "id": 13,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(increase(tracking_delivery_result_total{mode=\"availability_presence\",transport=\"http\",result=\"success\"}[48h]))",
+          "expr": "sum(increase(tracking_delivery_result_total{mode=\"availability_presence\",transport=\"http\",result=\"success\"}[48h])) or vector(0)",
           "legendFormat": "presence http success (gate #2)"
         }
       ],
@@ -205,9 +225,10 @@
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
       "id": 14,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(increase(tracking_delivery_result_total{result=\"forbidden\"}[48h]))",
+          "expr": "sum(increase(tracking_delivery_result_total{result=\"forbidden\"}[48h])) or vector(0)",
           "legendFormat": "forbidden (gate #5 alerte)"
         }
       ],
@@ -248,11 +269,13 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 56 },
       "id": 17,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(increase(driver_location_received_total[10m]))",
+          "expr": "sum(increase(driver_location_received_total[10m])) or vector(0)",
           "legendFormat": "locations received"
         }
       ],
@@ -261,16 +284,18 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 56 },
       "id": 18,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(increase(tracking_invariant_violation_total[1h])) by (invariant_id)",
-          "legendFormat": "{{invariant_id}}"
+          "expr": "sum(increase(tracking_invariant_violation_total[1h])) or vector(0)",
+          "legendFormat": "violations 1h"
         }
       ],
       "title": "Invariant violations (1h)",
-      "type": "timeseries"
+      "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
@@ -283,6 +308,67 @@
         }
       ],
       "title": "Pipeline stage latency p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "lengthm" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 64 },
+      "id": 21,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(driver_location_gps_accuracy_meters_bucket[5m])) by (le))",
+          "legendFormat": "accuracy p50"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(driver_location_gps_accuracy_meters_bucket[5m])) by (le))",
+          "legendFormat": "accuracy p99"
+        }
+      ],
+      "title": "GPS accuracy p50/p99 (ingestion)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 64 },
+      "id": 22,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "expr": "sum(increase(driver_location_gps_accuracy_meters_count[10m])) or vector(0)",
+          "legendFormat": "accuracy observations 10m"
+        }
+      ],
+      "title": "GPS accuracy observations (10m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 72 },
+      "id": 23,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum(increase(driver_location_received_total[10m])) or vector(0)",
+          "legendFormat": "received"
+        },
+        {
+          "expr": "sum(increase(driver_location_processed_total[10m])) or vector(0)",
+          "legendFormat": "processed total"
+        },
+        {
+          "expr": "sum(increase(driver_location_processed_total{accept_status=\"accepted_canonical\"}[10m])) or vector(0)",
+          "legendFormat": "accepted_canonical"
+        },
+        {
+          "expr": "sum(increase(driver_location_canonical_redis_write_total[10m])) or vector(0)",
+          "legendFormat": "canonical Redis write"
+        }
+      ],
+      "title": "GPS pipeline activity (10m)",
       "type": "timeseries"
     }
   ],
@@ -337,5 +423,5 @@
   "timezone": "browser",
   "title": "Driver Tracking Health",
   "uid": "driver-tracking-health",
-  "version": 1
+  "version": 2
 }

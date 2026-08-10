@@ -367,6 +367,21 @@ Dashboard [`driver-tracking-health.json`](../../monitoring/grafana/dashboards/dr
 - `tracking_mission_live_missing_mission_id_total` rate > 0 post-P0-C
 - Ratio `accepted_observability_only`
 
+### ✅ **Implémenté** : panneaux canary GPS (observabilité)
+
+Panneaux ajoutés / durcis dans le JSON canonique (sync via `scripts/ops/sync-grafana-tracking-dashboard.sh prod`) :
+
+| Panneau | Lecture canary |
+|---------|----------------|
+| `GPS accuracy p50/p99 (ingestion)` | Précision en mètres (histogramme `driver_location_gps_accuracy_meters`) |
+| `GPS accuracy observations (10m)` | Volume d’obs. (panneau séparé — pas le même axe que p50/p99) |
+| `Heartbeats received (5m)` | `increase` métier zero-safe (pas `timestamp()` scrape) |
+| `GPS pipeline activity (10m)` | received → processed → accepted_canonical → Redis write |
+| STOP GATE forbidden / mission_live / invariants / FCM | `or vector(0)` pour afficher **0** au lieu de No data |
+
+Renommages : `% heartbeats battery_optimized` / `% heartbeats tracking_active` (ratio de heartbeats, pas de chauffeurs distincts).
+
+
 ## Sprint 1 — Pipeline OSRM + DLQ (S1.4)
 
 ✅ **Implémenté** : timeout OSRM 1,5 s, circuit breaker coexistence, métriques et alerte DLQ force commit.
