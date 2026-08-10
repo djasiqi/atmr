@@ -21,6 +21,8 @@ ios/
 *.p12
 *.key
 *.mobileprovision
+credentials/
+**/google-play-service-account.json
 
 # Google Services — injectés via secrets EAS
 google-services.json
