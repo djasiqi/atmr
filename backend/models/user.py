@@ -244,7 +244,13 @@ class User(db.Model):
             pw_str = pw_any.decode("utf-8", "ignore")
         else:
             pw_str = cast("str", pw_any or "")
-        return check_password_hash(pw_str, password)
+        if not pw_str.strip():
+            return False
+        try:
+            return check_password_hash(pw_str, password)
+        except ValueError:
+            # Hash absent ou format non werkzeug (ex. legacy bcrypt) → refus silencieux
+            return False
 
     # Validation du téléphone
 

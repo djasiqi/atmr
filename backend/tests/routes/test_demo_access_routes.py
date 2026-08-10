@@ -16,6 +16,8 @@ def test_admin_provision_access_success_partial_email(
         magic_token="token",
         email_sent=False,
         email_error="smtp failed",
+        reused_existing_access=False,
+        provision_summary={"profile": "demo"},
     )
     monkeypatch.setattr(
         "routes.demo_requests.provision_demo_access", lambda **kwargs: fake_result

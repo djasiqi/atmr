@@ -2317,15 +2317,16 @@ class DeleteAccount(Resource):
                 )
             client_model.is_active = False
             try:
+                from models import User
                 from security.mobile_device_session_service import disable_user_sessions
-                from security.token_blacklist import revoke_token
 
-                disable_user_sessions(
-                    current_user,
-                    reason="Account deactivated",
-                    increment_token_version=True,
-                )
-                revoke_token()
+                user_model = db.session.get(User, current_user.id)
+                if user_model is not None:
+                    disable_user_sessions(
+                        user_model,
+                        reason="Account deactivated",
+                        increment_token_version=True,
+                    )
             except Exception as revoke_error:
                 logger.warning(
                     "Échec révocation tokens lors suppression compte (ignoré): %s",

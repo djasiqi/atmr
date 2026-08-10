@@ -70,11 +70,12 @@ os.environ["PDF_BASE_URL"] = "http://localhost:5000"  # Valeur factice pour test
 os.environ.setdefault(
     "TEST_DATABASE_URL", "postgresql://atmr:atmr@localhost:5432/atmr_test"
 )
-# ✅ Tests d'intégration : forcer Postgres par défaut (évite SQLite quand DATABASE_URL absent)
+# ✅ Tests d'intégration : Postgres par défaut si DATABASE_URL absent (respecte CI / env explicite)
 # Default 5433 = port docker-compose.test.yml (postgres_test) pour éviter confusion 5432 vs 5433
 os.environ.setdefault(
     "DATABASE_URL",
-    os.getenv("DATABASE_URL_TEST") or "postgresql://test:test@localhost:5433/atmr_test",
+    os.getenv("DATABASE_URL_TEST")
+    or "postgresql://test:test@localhost:5433/atmr_test",
 )
 # Désactiver la doc RESTX pour éviter les conflits d'endpoint /specs en tests
 os.environ["API_DOCS"] = "off"
@@ -755,9 +756,8 @@ def sample_client(db, sample_company):
     """Crée un client de test avec utilisateur associé."""
     import uuid
 
-    from ext import bcrypt
     from models.client import Client
-    from models.enums import UserRole
+    from models.enums import ClientType, ManagementMode, UserRole
     from models.user import User
 
     # Utiliser un email unique pour éviter les conflits
@@ -771,14 +771,15 @@ def sample_client(db, sample_company):
     user.phone = "0791234567"
     user.address = "Rue Client 1, 1000 Lausanne"
     user.public_id = str(uuid.uuid4())
-    password_hash = bcrypt.generate_password_hash("password123")
-    user.password = password_hash.decode("utf-8")
+    user.set_password("password123")
     db.session.add(user)
     db.session.flush()
 
     client = Client()
     client.user_id = user.id
     client.company_id = sample_company.id
+    client.client_type = ClientType.TRANSPORT
+    client.management_mode = ManagementMode.MANAGED
     client.billing_address = "Rue Client 1, 1000 Lausanne"
     client.contact_email = user.email
     client.contact_phone = "0791234567"

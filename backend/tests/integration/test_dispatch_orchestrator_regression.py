@@ -173,7 +173,7 @@ class TestEdgeCases:
         booking.pickup_lon = 6.1
         booking.dropoff_lat = 46.3
         booking.dropoff_lon = 6.2
-        booking.scheduled_time = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
+        booking.scheduled_time = datetime.now(UTC) + timedelta(days=30)
         db.session.add(booking)
         db.session.commit()
 
@@ -184,7 +184,7 @@ class TestEdgeCases:
         orchestrator = DispatchOrchestrator()
         result = orchestrator.execute(
             company_id=company.id,
-            for_date="2025-01-14",
+            for_date=(datetime.now(UTC) + timedelta(days=30)).strftime("%Y-%m-%d"),
             mode="auto",
         )
 
@@ -206,7 +206,7 @@ class TestEdgeCases:
         booking.pickup_lon = None
         booking.dropoff_lat = None
         booking.dropoff_lon = None
-        booking.scheduled_time = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
+        booking.scheduled_time = datetime.now(UTC) + timedelta(days=30)
         db.session.add(booking)
         db.session.commit()
 
@@ -217,7 +217,7 @@ class TestEdgeCases:
         orchestrator = DispatchOrchestrator()
         result = orchestrator.execute(
             company_id=company.id,
-            for_date="2025-01-14",
+            for_date=(datetime.now(UTC) + timedelta(days=30)).strftime("%Y-%m-%d"),
             mode="auto",
         )
 

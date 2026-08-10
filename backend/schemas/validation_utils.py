@@ -267,35 +267,45 @@ def handle_validation_error(error: ValidationError):
     if "error_code" in messages:
         return messages, 400
 
-    # ✅ FIX: Utiliser le format standard v2
-    # Extraire le premier message d'erreur pour le champ "message"
+    # Les validateurs internes remontent déjà parfois la structure
+    # ``{"message": ..., "errors": {...}}``. La déplier évite des clés
+    # artificielles telles que ``errors.for_date``.
     first_message = "Erreur de validation des données"
     errors_dict: Dict[str, Any] = {}
 
-    for field, field_errors in messages.items():
-        if field.startswith("_"):
-            continue  # Ignorer les champs internes
+    formatted_errors = messages.get("errors")
+    if isinstance(formatted_errors, dict):
+        errors_dict = formatted_errors
+        message = messages.get("message")
+        if isinstance(message, str) and message:
+            first_message = message
+    else:
+        for field, field_errors in messages.items():
+            if field.startswith("_"):
+                continue  # Ignorer les champs internes
 
-        if isinstance(field_errors, list) and field_errors:
-            errors_dict[field] = field_errors
-            if first_message == "Erreur de validation des données":
-                first_message = field_errors[0]
-        elif isinstance(field_errors, str):
-            errors_dict[field] = [field_errors]
-            if first_message == "Erreur de validation des données":
-                first_message = field_errors
-        elif isinstance(field_errors, dict):
-            # Champs imbriqués
-            for subfield, suberrors in field_errors.items():
-                key = f"{field}.{subfield}"
-                if isinstance(suberrors, list) and suberrors:
-                    errors_dict[key] = suberrors
-                    if first_message == "Erreur de validation des données":
-                        first_message = suberrors[0]
+            if isinstance(field_errors, list) and field_errors:
+                errors_dict[field] = field_errors
+                if first_message == "Erreur de validation des données":
+                    first_message = field_errors[0]
+            elif isinstance(field_errors, str):
+                errors_dict[field] = [field_errors]
+                if first_message == "Erreur de validation des données":
+                    first_message = field_errors
+            elif isinstance(field_errors, dict):
+                # Champs imbriqués
+                for subfield, suberrors in field_errors.items():
+                    key = f"{field}.{subfield}"
+                    if isinstance(suberrors, list) and suberrors:
+                        errors_dict[key] = suberrors
+                        if first_message == "Erreur de validation des données":
+                            first_message = suberrors[0]
 
     return {
         "error": "validation_error",
         "message": first_message,
+        # Compatibilité avec les consommateurs du format v1.
+        "errors": errors_dict,
         "details": {"fields": errors_dict} if errors_dict else None,
     }, 400
 

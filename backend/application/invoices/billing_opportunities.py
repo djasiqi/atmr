@@ -10,6 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
+from flask import has_app_context
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload
 
@@ -277,9 +278,13 @@ def pick_canonical_billing_party_id(bookings: list[Booking]) -> int | None:
         is_establishment_billing_party,
     )
 
+    # Le choix déterministe reste utilisable dans les helpers purs. Les
+    # vérifications et corrections ORM ne sont pertinentes qu'en contexte Flask.
+    can_access_database = has_app_context()
+
     for booking in bookings:
         btype = str(getattr(booking, "billed_to_type", None) or "").lower().strip()
-        if btype != "patient":
+        if btype != "patient" or not can_access_database:
             continue
         bp_id = getattr(booking, "billing_party_id", None)
         bp = db.session.get(BillingParty, int(bp_id)) if bp_id is not None else None
@@ -291,7 +296,11 @@ def pick_canonical_billing_party_id(bookings: list[Booking]) -> int | None:
         bp_id = getattr(booking, "billing_party_id", None)
         if bp_id is None:
             continue
-        bp = db.session.get(BillingParty, int(bp_id))
+        bp = (
+            db.session.get(BillingParty, int(bp_id))
+            if can_access_database
+            else None
+        )
         # Ne pas élire un BP établissement pour une opportunité patient.
         if bp is not None and is_establishment_billing_party(bp):
             continue

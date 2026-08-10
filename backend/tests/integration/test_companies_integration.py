@@ -254,7 +254,7 @@ class TestCompaniesIntegration:
         db.session.flush()
 
         response = authenticated_client.get(
-            "/api/v1/companies/search", params={"q": "emmenez"}
+            "/api/v1/companies/search", query_string={"q": "emmenez"}
         )
         assert response.status_code == 200
         data = response.get_json()

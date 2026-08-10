@@ -48,6 +48,11 @@ class AuthenticateUserUseCase:
                 error={"error": "invalid_credentials"},
                 status_code=401,
             )
+
+        inactive_error = self._inactive_profile_error(user)
+        if inactive_error is not None:
+            return inactive_error
+
         if not user.check_password(input_data.password):
             return AuthenticateUserOutput(
                 success=False,
@@ -62,6 +67,39 @@ class AuthenticateUserUseCase:
         return user_repo.find_model_by_email(
             lowered
         ) or user_repo.find_model_by_username(lowered)
+
+    def _inactive_profile_error(self, user) -> AuthenticateUserOutput | None:
+        """Refuse la connexion si le profil métier associé est désactivé."""
+        from models.enums import UserRole
+
+        if getattr(user, "account_status", None) == "pending_activation":
+            return AuthenticateUserOutput(
+                success=False,
+                error={"error": "account_pending_activation"},
+                status_code=403,
+            )
+
+        if user.role == UserRole.DRIVER:
+            driver = getattr(user, "driver", None)
+            if driver is not None and not getattr(driver, "is_active", True):
+                return AuthenticateUserOutput(
+                    success=False,
+                    error={"error": "account_disabled"},
+                    status_code=403,
+                )
+
+        if user.role == UserRole.CLIENT:
+            from models import Client
+
+            client_rows = Client.query.filter_by(user_id=user.id).all()
+            if client_rows and not any(c.is_active for c in client_rows):
+                return AuthenticateUserOutput(
+                    success=False,
+                    error={"error": "account_disabled"},
+                    status_code=403,
+                )
+
+        return None
 
     def _validate_input(
         self, input_data: AuthenticateUserInput

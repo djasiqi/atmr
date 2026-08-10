@@ -111,4 +111,4 @@ class TestBookingsIntegration:
         if response.status_code == 200:
             # Vérifier que la réservation est annulée
             db.session.refresh(test_booking)
-            assert test_booking.status == BookingStatus.CANCELLED
+            assert test_booking.status == BookingStatus.CANCELED

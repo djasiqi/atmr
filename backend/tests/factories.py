@@ -24,10 +24,12 @@ from models.driver import Driver
 from models.enums import (
     AssignmentStatus,
     BookingStatus,
+    ClientType,
     DispatchMode,
     DispatchStatus,
     DriverType,
     InvoiceStatus,
+    ManagementMode,
     MissionType,
     RequestStatus,
     ScheduledTimeType,
@@ -125,6 +127,8 @@ class ClientFactory(SQLAlchemyModelFactory):
     company = factory.SubFactory(
         CompanyFactory
     )  # Toujours créer une company pour éviter NULL company_id
+    client_type = ClientType.TRANSPORT
+    management_mode = ManagementMode.MANAGED
 
     billing_address = factory.LazyAttribute(
         lambda _: fake.address().replace("\n", ", ")[:255]

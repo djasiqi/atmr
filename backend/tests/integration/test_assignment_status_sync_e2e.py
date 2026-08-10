@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -21,6 +21,7 @@ from tests.factories import create_assignment_with_booking_driver
 @pytest.mark.integration
 def test_assignment_sync_and_trip_tracking_by_phase(db, sample_company) -> None:
     """STOP GATE P0-A : en_route → EN_ROUTE_PICKUP, in_progress → ONBOARD + trip_tracking."""
+    phase_now = datetime.now(UTC)
     assignment = create_assignment_with_booking_driver(
         company=sample_company,
         status=AssignmentStatus.SCHEDULED,
@@ -47,7 +48,7 @@ def test_assignment_sync_and_trip_tracking_by_phase(db, sample_company) -> None:
             resolve_delays_fn=lambda *_a, **_k: None,
             emit_assignment_cancelled_fn=lambda *_a, **_k: None,
             maybe_trigger_dispatch_fn=None,
-            now_utc_fn=lambda: datetime(2026, 6, 17, 14, 0, 0, tzinfo=UTC),
+            now_utc_fn=lambda: phase_now,
         )
         res = uc.execute(
             UpdateDriverBookingStatusCommand(
@@ -66,7 +67,7 @@ def test_assignment_sync_and_trip_tracking_by_phase(db, sample_company) -> None:
             speed=5.0,
             heading=90.0,
             accuracy=10.0,
-            timestamp=datetime(2026, 6, 17, 14, 5, 0, tzinfo=UTC),
+            timestamp=phase_now,
             location_mode="mission_live",
             mission_id=booking.id,
             db_session=db.session,
@@ -92,7 +93,7 @@ def test_assignment_sync_and_trip_tracking_by_phase(db, sample_company) -> None:
         speed=6.0,
         heading=95.0,
         accuracy=10.0,
-        timestamp=datetime(2026, 6, 17, 14, 20, 0, tzinfo=UTC),
+        timestamp=phase_now + timedelta(seconds=20),
         location_mode="mission_live",
         mission_id=booking.id,
         db_session=db.session,

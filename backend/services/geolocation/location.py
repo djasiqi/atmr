@@ -974,7 +974,12 @@ class LocationService:
             return False
         if accept_status != "accepted_observability_only":
             return False
-        if accept_reason not in {"older_than_canonical", "too_old_for_mode"}:
+        if accept_reason not in {
+            "older_than_canonical",
+            "too_old_for_mode",
+            # Sans Redis (tests / dégradé) : historiser quand même la mission active.
+            "redis_unavailable_no_arbitration",
+        }:
             return False
         now = datetime.now(UTC)
         ra = recorded_at if recorded_at.tzinfo else recorded_at.replace(tzinfo=UTC)

@@ -138,6 +138,9 @@ def test_ingest_consumer_persist_and_dedup_integration(
     )
     # Évite un app_context imbriqué qui isole la session pytest (savepoint).
     monkeypatch.setattr(app, "app_context", lambda *args, **kwargs: nullcontext())
+    # persist_driver_location_from_kafka appelle session.remove() si has_app_context()
+    # — vrai sous pytest-flask même avec app_context mocké.
+    monkeypatch.setattr(db.session, "remove", lambda: None)
     monkeypatch.setattr("celery_app.get_flask_app", lambda: app)
     monkeypatch.setattr(
         "services.tracking.ingest_consumer.TRACKING_INGEST_PERSIST_ENABLED", True
@@ -163,7 +166,7 @@ def test_ingest_consumer_persist_and_dedup_integration(
         )
 
     monkeypatch.setattr(consumer, "_publish_with_ack", _capture_publish)
-    monkeypatch.setattr(consumer, "_commit_current", lambda: None)
+    monkeypatch.setattr(consumer, "_commit_record", lambda _record: None)
 
     location_event_id = f"integration-{uuid.uuid4()}"
     recorded_at = datetime.now(UTC).isoformat()

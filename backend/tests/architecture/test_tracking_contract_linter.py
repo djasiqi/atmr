@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[3]
-SCRIPT = ROOT / "scripts" / "architecture" / "check_tracking_contract.py"
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = BACKEND_ROOT / "scripts" / "architecture" / "check_tracking_contract.py"
 
 
 def test_architecture_contract_script_exits_zero() -> None:

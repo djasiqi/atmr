@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 from flask import abort, g, request
 
-from ext import db
+from ext import db, redis_client
 
 if TYPE_CHECKING:
     from models.institution_api_key import InstitutionApiKey
@@ -124,8 +124,6 @@ def check_rate_limit(institution_id: int) -> tuple[bool, int]:
         - is_allowed: True si la requête est autorisée
         - remaining: Nombre de requêtes restantes
     """
-    from ext import redis_client
-
     if not redis_client:
         # Redis non disponible, autoriser par défaut
         logger.debug("[API Key Rate Limit] Redis non disponible, skip rate limit")
