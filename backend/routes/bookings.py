@@ -679,7 +679,13 @@ def execute_client_booking_creation(public_id: str) -> Any:
                         "idempotency_key": idempotency_key,
                     },
                 )
-                return cached_response[1], 201
+                cached_payload = cached_response[1] or {}
+                if isinstance(cached_payload, dict) and "response" in cached_payload:
+                    return (
+                        cached_payload["response"],
+                        cached_payload.get("status_code", 201),
+                    )
+                return cached_payload, 201
 
         data = request.get_json(silent=True) or {}
 

@@ -44,7 +44,7 @@ def test_platform_me_ok(admin_tenant_client):
     assert rv.status_code == 200
     data = rv.get_json()
     assert "role" in data
-    assert data["role"] == "admin"
+    assert data["role"].lower() == "admin"
 
 
 def test_platform_me_includes_permissions_effective(admin_tenant_client):
@@ -70,11 +70,22 @@ def test_policies_evaluate_allow(admin_tenant_client):
 
 
 def test_tenants_list_contains_sample_company(admin_tenant_client, sample_company):
-    rv = admin_tenant_client.get("/api/v1/platform/tenants?per_page=50")
-    assert rv.status_code == 200
-    data = rv.get_json()
-    ids = {x["tenant_id"] for x in data["items"]}
-    assert sample_company.id in ids
+    page = 1
+    found = False
+    while not found:
+        rv = admin_tenant_client.get(
+            f"/api/v1/platform/tenants?per_page=100&page={page}"
+        )
+        assert rv.status_code == 200
+        data = rv.get_json()
+        ids = {x["tenant_id"] for x in data["items"]}
+        if sample_company.id in ids:
+            found = True
+            break
+        if page >= data.get("pages", page):
+            break
+        page += 1
+    assert found, f"tenant {sample_company.id} absent de la liste paginée"
 
 
 def test_tenant_detail_governance_shape(admin_tenant_client, sample_company):

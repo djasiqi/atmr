@@ -2686,7 +2686,13 @@ class ClientsList(Resource):
                             "idempotency_key": idempotency_key,
                         },
                     )
-                    return cached_response[1], 201
+                    cached_payload = cached_response[1] or {}
+                    if isinstance(cached_payload, dict) and "response" in cached_payload:
+                        return (
+                            cached_payload["response"],
+                            cached_payload.get("status_code", 201),
+                        )
+                    return cached_payload, 201
 
             data = request.get_json() or {}
             # Validation basique
@@ -2728,6 +2734,13 @@ class ClientsList(Resource):
                 email=data["email"],
                 role=UserRole.client,
             )
+            # La contrainte SQL impose un hash de mot de passe, même pour les
+            # clients créés par une entreprise avant leur première activation.
+            from application.companies.clients.create_company_client import (
+                _generate_password,
+            )
+
+            new_user.set_password(_generate_password())
             db.session.add(new_user)
             db.session.flush()  # récupère new_user.id
 

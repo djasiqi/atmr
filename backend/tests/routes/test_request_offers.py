@@ -439,8 +439,15 @@ class TestSendWithOffers:
         )
         assert response.status_code == 200
         assert mock_notify.called
-        kwargs = mock_notify.call_args.kwargs
-        assert kwargs["company_id"] == sample_company.id
+        relaunch_calls = [
+            call
+            for call in mock_notify.call_args_list
+            if call.kwargs.get("company_id") == sample_company.id
+        ]
+        assert relaunch_calls, (
+            f"Aucune notification relance pour company_id={sample_company.id}"
+        )
+        kwargs = relaunch_calls[0].kwargs
         assert kwargs["title"] == "Demande de transport relancée"
         assert ":relaunch:" in kwargs["dedupe_key"]
 

@@ -6,6 +6,7 @@ Teste que les logs de performance sont émis correctement avec les seuils.
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -29,13 +30,18 @@ class TestInvoicePdfPerformance:
     def test_performance_logging_normal(self, db):
         """Test que les logs INFO sont émis pour une facture normale."""
         # Arrange
-        company = Company(name="Test Company", uid_ide="CHE-123.456.789")
-        user = User(username="testuser", email="test@example.com")
+        uid = uuid.uuid4().hex[:8]
+        user = User(username=f"perf-user-{uid}", email=f"perf-{uid}@example.com")
         user.set_password("password123", force_change=False)
-        client_user = User(username="clientuser", email="client@example.com")
+        client_user = User(
+            username=f"perf-client-{uid}", email=f"perf-client-{uid}@example.com"
+        )
         client_user.set_password("password123", force_change=False)
+        db.session.add_all([user, client_user])
+        db.session.flush()
+        company = Company(name="Test Company", uid_ide="CHE-123.456.789", user_id=user.id)
         client = Client(user=client_user, company=company)
-        db.session.add_all([company, user, client_user, client])
+        db.session.add_all([company, client])
         db.session.commit()
 
         invoice = Invoice(
@@ -58,7 +64,6 @@ class TestInvoicePdfPerformance:
             booking = Booking(
                 company=company,
                 client=client,
-                user=user,
                 customer_name=f"Customer {i}",
                 pickup_location=f"Point A{i}",
                 dropoff_location=f"Point B{i}",
@@ -67,6 +72,7 @@ class TestInvoicePdfPerformance:
                 status=BookingStatus.COMPLETED,
             )
             db.session.add(booking)
+            db.session.flush()
             line = InvoiceLine(
                 invoice=invoice,
                 reservation_id=booking.id,
@@ -89,28 +95,41 @@ class TestInvoicePdfPerformance:
 
             # Vérifier que INFO a été appelé avec les bonnes données
             assert mock_logger.info.called, "INFO log should be called"
-            call_args = mock_logger.info.call_args[0]
-            assert "InvoicePDF generated" in call_args[0]
-            assert "invoice_id=" in call_args[0]
-            assert "nb_rows=" in call_args[0]
-            assert "generation_ms=" in call_args[0]
-            assert f"template_version={TEMPLATE_VERSION}" in call_args[0]
+            perf_call = next(
+                call
+                for call in mock_logger.info.call_args_list
+                if call.args and "InvoicePDF generated" in str(call.args[0])
+            )
+            assert perf_call.args[1] == invoice.id
+            assert perf_call.args[4] == TEMPLATE_VERSION
+            assert isinstance(perf_call.args[2], int)
+            assert isinstance(perf_call.args[3], int)
 
-            # Vérifier que WARNING n'a pas été appelé (facture normale)
-            assert not mock_logger.warning.called, (
-                "WARNING should not be called for normal invoice"
+            # Vérifier que WARNING perf n'a pas été émis (facture normale)
+            perf_warnings = [
+                call
+                for call in mock_logger.warning.call_args_list
+                if call.args and "InvoicePDF slow/large" in str(call.args[0])
+            ]
+            assert not perf_warnings, (
+                "WARNING perf ne doit pas être émis pour une facture normale"
             )
 
     def test_performance_logging_large_invoice(self, db):
         """Test que les logs WARNING sont émis pour une facture avec beaucoup de lignes."""
         # Arrange
-        company = Company(name="Test Company", uid_ide="CHE-123.456.789")
-        user = User(username="testuser", email="test@example.com")
+        uid = uuid.uuid4().hex[:8]
+        user = User(username=f"perf-user-{uid}", email=f"perf-{uid}@example.com")
         user.set_password("password123", force_change=False)
-        client_user = User(username="clientuser", email="client@example.com")
+        client_user = User(
+            username=f"perf-client-{uid}", email=f"perf-client-{uid}@example.com"
+        )
         client_user.set_password("password123", force_change=False)
+        db.session.add_all([user, client_user])
+        db.session.flush()
+        company = Company(name="Test Company", uid_ide="CHE-123.456.789", user_id=user.id)
         client = Client(user=client_user, company=company)
-        db.session.add_all([company, user, client_user, client])
+        db.session.add_all([company, client])
         db.session.commit()
 
         invoice = Invoice(
@@ -134,7 +153,6 @@ class TestInvoicePdfPerformance:
             booking = Booking(
                 company=company,
                 client=client,
-                user=user,
                 customer_name=f"Customer {i}",
                 pickup_location=f"Point A{i}",
                 dropoff_location=f"Point B{i}",
@@ -143,6 +161,7 @@ class TestInvoicePdfPerformance:
                 status=BookingStatus.COMPLETED,
             )
             db.session.add(booking)
+            db.session.flush()
             line = InvoiceLine(
                 invoice=invoice,
                 reservation_id=booking.id,
@@ -159,7 +178,10 @@ class TestInvoicePdfPerformance:
         db.session.commit()
 
         # Act & Assert
-        with patch("services.documents.pdf.app_logger") as mock_logger:
+        with (
+            patch("services.documents.pdf.app_logger") as mock_logger,
+            patch("services.documents.pdf.PERF_WARNING_ROWS_THRESHOLD", 5),
+        ):
             pdf_service = PDFService()
             pdf_service.generate_invoice_pdf(invoice)
 
@@ -167,11 +189,12 @@ class TestInvoicePdfPerformance:
             assert mock_logger.warning.called, (
                 "WARNING log should be called for large invoice"
             )
-            call_args = mock_logger.warning.call_args[0]
-            assert "InvoicePDF slow/large" in call_args[0]
-            assert "invoice_id=" in call_args[0]
-            assert "nb_rows=" in call_args[0]
-            assert "generation_ms=" in call_args[0]
-            assert f"template_version={TEMPLATE_VERSION}" in call_args[0]
-            assert "thresholds_exceeded=" in call_args[0]
-            assert "rows=" in call_args[0] or "time=" in call_args[0]
+            perf_call = next(
+                call
+                for call in mock_logger.warning.call_args_list
+                if call.args and "InvoicePDF slow/large" in str(call.args[0])
+            )
+            assert perf_call.args[1] == invoice.id
+            assert perf_call.args[4] == TEMPLATE_VERSION
+            assert perf_call.args[2] > 5
+            assert "rows=" in str(perf_call.args[5])

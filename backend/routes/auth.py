@@ -2898,6 +2898,8 @@ class RefreshToken(Resource):
 
                 # Redis best-effort après commit SQL
                 with suppress(Exception):
+                    token_service.revoke_token(refresh_token)
+                with suppress(Exception):
                     token_service.store_token(
                         user.id,
                         new_refresh_token,

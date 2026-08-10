@@ -148,11 +148,12 @@ class TestCancelConvertedRequest:
     def auth_headers(self, sample_user, sample_institution):
         """Headers JWT pour l'utilisateur institution."""
         token = create_access_token(
-            identity=sample_user.id,
+            identity=str(sample_user.public_id),
             additional_claims={
                 "role": UserRole.INSTITUTION.value,
                 "institution_id": sample_institution.id,
                 "institution_role": "institution_admin",
+                "aud": "atmr-api",
             },
         )
         return {"Authorization": f"Bearer {token}"}
@@ -160,9 +161,18 @@ class TestCancelConvertedRequest:
     @pytest.fixture
     def converted_request(self, db, sample_institution):
         """Crée une demande de transport CONVERTED avec un booking."""
-        # Créer un booking minimal
-        # Note: Booking requires company_id, client_id, etc.
-        # Pour ce test simplifié, on crée juste la TransportRequest
+        # La référence résultante doit respecter la FK SQL, même si la route
+        # ne charge pas le booking pour retourner sa référence.
+        booking = Booking(
+            customer_name="Patient test",
+            pickup_location="123 Rue Test",
+            dropoff_location="456 Avenue Dest",
+            scheduled_time=datetime.now(UTC) + timedelta(days=2),
+            amount=1,
+            status=BookingStatus.PENDING,
+        )
+        db.session.add(booking)
+        db.session.flush()
         transport_req = TransportRequest()
         transport_req.institution_id = sample_institution.id
         transport_req.external_reference = f"TEST-{uuid.uuid4().hex[:8]}"
@@ -172,7 +182,7 @@ class TestCancelConvertedRequest:
         transport_req.mission_date = transport_req.scheduled_time.date()
         transport_req.pickup_time_confirmed = True
         transport_req.status = RequestStatus.CONVERTED.value
-        transport_req.booking_id = 99999  # ID fictif pour le test
+        transport_req.booking_id = booking.id
         db.session.add(transport_req)
         db.session.flush()
         return transport_req
@@ -265,11 +275,12 @@ class TestBillingPermissions:
     def billing_auth_headers(self, billing_user, sample_institution):
         """Headers JWT pour l'utilisateur billing."""
         token = create_access_token(
-            identity=billing_user.id,
+            identity=str(billing_user.public_id),
             additional_claims={
                 "role": UserRole.INSTITUTION.value,
                 "institution_id": sample_institution.id,
                 "institution_role": "institution_billing",
+                "aud": "atmr-api",
             },
         )
         return {"Authorization": f"Bearer {token}"}
@@ -278,11 +289,12 @@ class TestBillingPermissions:
     def reader_auth_headers(self, reader_user, sample_institution):
         """Headers JWT pour l'utilisateur reader."""
         token = create_access_token(
-            identity=reader_user.id,
+            identity=str(reader_user.public_id),
             additional_claims={
                 "role": UserRole.INSTITUTION.value,
                 "institution_id": sample_institution.id,
                 "institution_role": "institution_reader",
+                "aud": "atmr-api",
             },
         )
         return {"Authorization": f"Bearer {token}"}
@@ -311,7 +323,11 @@ class TestBillingPermissions:
         response = client.put(
             f"/api/v1/institutions/billing/requests/{sample_request.id}",
             headers=billing_auth_headers,
-            json={"billing_intent": "institution"},
+            json={
+                "billing_intent": "institution",
+                "billing_change_reason_code": "PATIENT_REQUEST",
+                "override_reason": "Demande du patient",
+            },
         )
 
         assert response.status_code == 200
@@ -326,7 +342,11 @@ class TestBillingPermissions:
         response = client.put(
             f"/api/v1/institutions/billing/requests/{sample_request.id}",
             headers=reader_auth_headers,
-            json={"billing_intent": "institution"},
+            json={
+                "billing_intent": "institution",
+                "billing_change_reason_code": "PATIENT_REQUEST",
+                "override_reason": "Demande du patient",
+            },
         )
 
         assert response.status_code == 403
@@ -448,7 +468,7 @@ class TestInstitutionEvents:
             mock_socketio.emit.assert_called_once()
             call_args = mock_socketio.emit.call_args
             assert call_args[0][0] == "request_sent"
-            assert call_args[1]["room"] == "institution_1"
+            assert call_args[1]["to"] == "institution_1"
 
     def test_emit_booking_status_updated(self):
         """Test: emit_booking_status_updated fonctionne."""

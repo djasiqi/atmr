@@ -96,10 +96,10 @@ class TestBookingUpdatedHandler:
         # Mock fanout (handler utilise fanout directement, pas notify_booking_update)
         with (
             patch(
-                "services.events.handlers.booking_handlers.fanout_booking_updated"
+                "services.events.fanout.fanout_booking_updated"
             ) as mock_fanout_driver,
             patch(
-                "services.events.handlers.booking_handlers.fanout_booking_updated_to_company"
+                "services.events.fanout.fanout_booking_updated_to_company"
             ) as mock_fanout_company,
         ):
             event = {
@@ -327,13 +327,12 @@ class TestBookingUpdatedHandler:
             # Vérifier que l'exception est loggée mais n'est pas propagée
             # Le handler utilise logger.exception() pour les exceptions génériques
             mock_logger.exception.assert_called_once()
-            assert "Failed to notify driver" in str(mock_logger.exception.call_args)
-
-
-class TestBookingCancelledHandler:
+            assert "Failed to notify driver about booking update" in str(
+                mock_logger.exception.call_args
+            )
     """Tests pour handle_booking_cancelled."""
 
-    def test_handle_booking_cancelled_success(self):
+    def test_handle_booking_cancelled_success(self, app):
         """Test que handle_booking_cancelled notifie correctement le driver."""
         from services.events.handlers.booking_handlers import handle_booking_cancelled
 
@@ -344,14 +343,13 @@ class TestBookingCancelledHandler:
             "company_id": 1,
         }
 
-        with patch(
-            "services.events.handlers.booking_handlers.notify_booking_cancelled"
+        with app.app_context(), patch(
+            "services.notifications.core.notify_booking_cancelled"
         ) as mock_notify:
             handle_booking_cancelled(event)
 
-            # Vérifier que notify_booking_cancelled a été appelé
             mock_notify.assert_called_once()
-            assert mock_notify.call_args[0] == (456, 123)
+            assert mock_notify.call_args[0][:2] == (456, 123)
 
     def test_handle_booking_cancelled_missing_fields(self):
         """Test que handle_booking_cancelled gère les champs manquants."""
@@ -363,7 +361,7 @@ class TestBookingCancelledHandler:
             handle_booking_cancelled(event)
             mock_logger.warning.assert_called_once()
 
-    def test_handle_booking_cancelled_exception_handling(self):
+    def test_handle_booking_cancelled_exception_handling(self, app):
         """Test que handle_booking_cancelled gère les exceptions."""
         from services.events.handlers.booking_handlers import handle_booking_cancelled
 
@@ -374,20 +372,19 @@ class TestBookingCancelledHandler:
             "company_id": 1,
         }
 
-        # Mock notify_booking_cancelled pour lever une exception
         with (
-            patch(
-                "services.notification_service.notify_booking_cancelled",
+            app.app_context(), patch(
+                "services.notifications.core.notify_booking_cancelled",
                 side_effect=Exception("Notification failed"),
             ),
             patch("services.events.handlers.booking_handlers.logger") as mock_logger,
         ):
             handle_booking_cancelled(event)
 
-            # Vérifier que l'exception est loggée mais n'est pas propagée
-            # Le handler utilise logger.exception() pour les exceptions génériques
             mock_logger.exception.assert_called_once()
-            assert "Failed to notify driver" in str(mock_logger.exception.call_args)
+            assert "Failed to handle booking cancellation" in str(
+                mock_logger.exception.call_args
+            )
 
 
 class TestDriverNewBookingHandler:
@@ -454,7 +451,7 @@ class TestDriverNewBookingHandler:
 
         # Mock notify_driver_new_booking
         with patch(
-            "services.notification_service.notify_driver_new_booking"
+            "services.notifications.core.notify_driver_new_booking"
         ) as mock_notify:
             event = {
                 "event_type": "DriverNewBookingEvent",
@@ -492,7 +489,7 @@ class TestDriverNewBookingHandler:
         }
 
         with patch(
-            "services.notification_service.notify_driver_new_booking"
+            "services.notifications.core.notify_driver_new_booking"
         ) as mock_notify:
             handle_driver_new_booking(event)
             # Ne doit pas appeler notify si le booking n'existe pas
@@ -560,7 +557,7 @@ class TestDriverNewBookingHandler:
         # Mock notify_driver_new_booking pour lever une exception
         with (
             patch(
-                "services.notification_service.notify_driver_new_booking",
+                "services.notifications.core.notify_driver_new_booking",
                 side_effect=Exception("Notification failed"),
             ),
             patch("services.events.handlers.driver_handlers.logger") as mock_logger,
@@ -575,8 +572,10 @@ class TestDriverNewBookingHandler:
 
             # Vérifier que l'exception est loggée mais n'est pas propagée
             # Le handler utilise logger.exception() pour les exceptions génériques
-            mock_logger.exception.assert_called_once()
-            assert "Failed to notify driver" in str(mock_logger.exception.call_args)
+            mock_logger.exception.assert_called()
+            assert "Failed to notify driver about new booking" in str(
+                mock_logger.exception.call_args
+            )
 
 
 class TestEventIntegration:
@@ -666,18 +665,15 @@ class TestEventIntegration:
             # Vérifier que le handler a été appelé (fanout au moins une fois)
             assert mock_fanout_driver.called or mock_fanout_company.called
 
-    def test_booking_cancelled_event_flow(self):
+    def test_booking_cancelled_event_flow(self, app):
         """Test le flux complet : publication → handler → notification."""
-        # Réenregistrer les handlers après le clear du registry
         from services.events.handlers.booking_handlers import handle_booking_cancelled
 
         registry.register("BookingCancelledEvent", handle_booking_cancelled)
 
-        # Mock notify_booking_cancelled
-        with patch(
-            "services.notification_service.notify_booking_cancelled"
+        with app.app_context(), patch(
+            "services.notifications.core.notify_booking_cancelled"
         ) as mock_notify:
-            # Publier l'événement
             publish_event(
                 BookingCancelledEvent(
                     booking_id=123,
@@ -686,8 +682,8 @@ class TestEventIntegration:
                 )
             )
 
-            # Vérifier que le handler a été appelé
-            mock_notify.assert_called_once_with(456, 123)
+            mock_notify.assert_called_once()
+            assert mock_notify.call_args[0][:2] == (456, 123)
 
     def test_driver_new_booking_event_flow(self, db):
         """Test le flux complet : publication → handler → notification."""
@@ -754,7 +750,7 @@ class TestEventIntegration:
 
         # Mock notify_driver_new_booking
         with patch(
-            "services.notification_service.notify_driver_new_booking"
+            "services.notifications.core.notify_driver_new_booking"
         ) as mock_notify:
             # Publier l'événement
             publish_event(

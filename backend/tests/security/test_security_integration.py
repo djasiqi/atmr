@@ -261,6 +261,4 @@ class TestSecurityMonitoring:
         action_details = json.loads(log_entry.action_details or "{}")
         assert action_details.get("test") == "integration_test"
 
-        # Nettoyer
-        db.session.delete(log_entry)
-        db.session.commit()
+        # Les journaux sont volontairement immuables : aucun nettoyage SQL.

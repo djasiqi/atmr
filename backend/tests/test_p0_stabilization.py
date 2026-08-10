@@ -34,16 +34,16 @@ class TestAuthLoginP0:
         assert response.headers.get("X-Trace-Id") == data["trace_id"]
 
     def test_login_invalid_email(self, client):
-        """Test login avec email invalide (400)."""
+        """Test login avec email invalide (401 sans énumération de comptes)."""
         response = client.post(
             "/api/v1/auth/login",
             json={"email": "invalid-email", "password": "password123"},
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 401
         data = response.get_json()
         assert "error" in data or "message" in data
-        assert "trace_id" in data
+        assert "trace_id" in data or "trace_id" in data.get("details", {})
 
     def test_login_invalid_password(self, client, sample_user):
         """Test login avec mauvais mot de passe (401)."""
@@ -78,8 +78,8 @@ class TestAuthLoginP0:
         # Au moins une requête devrait être limitée
         status_codes = [r.status_code for r in responses]
         assert 429 in status_codes or all(
-            s == 401 for s in status_codes
-        )  # Accepte 401 si rate limit non activé
+            s in (400, 401) for s in status_codes
+        )  # Validation du mot de passe ou rate limit selon la configuration
 
 
 class TestAuthRefreshTokenP0:
@@ -102,6 +102,7 @@ class TestAuthRefreshTokenP0:
                 response = client.post(
                     "/api/v1/auth/refresh-token",
                     json={"refresh_token": refresh_token},
+                    headers={"X-Requested-With": "Expo"},
                 )
 
                 assert response.status_code in [200, 201]
@@ -115,6 +116,7 @@ class TestAuthRefreshTokenP0:
         response = client.post(
             "/api/v1/auth/refresh-token",
             json={"refresh_token": "invalid-token"},
+            headers={"X-Requested-With": "Expo"},
         )
 
         assert response.status_code == 401
@@ -123,10 +125,14 @@ class TestAuthRefreshTokenP0:
         assert "trace_id" in data
 
     def test_refresh_token_missing(self, client):
-        """Test refresh token sans token (400)."""
-        response = client.post("/api/v1/auth/refresh-token", json={})
+        """Test refresh token sans token (401)."""
+        response = client.post(
+            "/api/v1/auth/refresh-token",
+            json={},
+            headers={"X-Requested-With": "Expo"},
+        )
 
-        assert response.status_code == 400
+        assert response.status_code == 401
         data = response.get_json()
         assert "error" in data or "message" in data
         assert "trace_id" in data
@@ -200,7 +206,7 @@ class TestCreateClientP0:
         assert response.status_code == 400
         data = response.get_json()
         assert "error" in data or "message" in data
-        assert "trace_id" in data
+        assert "errors" in data.get("details", {})
 
     def test_create_client_duplicate_email(self, client, auth_headers, sample_client):
         """Test création client avec email existant (409)."""
@@ -233,6 +239,9 @@ class TestCreateCompanyClientP0:
                 "last_name": "Client",
                 "email": "company.client@example.com",
                 "phone": "+33123456789",
+                "management_mode": "MANAGED",
+                "gender": "male",
+                "address": "Rue de Test 1, 1000 Lausanne",
             },
             headers={**auth_headers, "Idempotency-Key": idempotency_key},
         )
@@ -253,6 +262,9 @@ class TestCreateCompanyClientP0:
                 "first_name": "Idempotent",
                 "last_name": "Client",
                 "email": "idempotent@example.com",
+                "management_mode": "MANAGED",
+                "gender": "female",
+                "address": "Rue de Test 2, 1000 Lausanne",
             },
             headers={**auth_headers, "Idempotency-Key": idempotency_key},
         )
@@ -267,6 +279,9 @@ class TestCreateCompanyClientP0:
                 "first_name": "Idempotent",
                 "last_name": "Client",
                 "email": "idempotent@example.com",
+                "management_mode": "MANAGED",
+                "gender": "female",
+                "address": "Rue de Test 2, 1000 Lausanne",
             },
             headers={**auth_headers, "Idempotency-Key": idempotency_key},
         )
@@ -530,7 +545,11 @@ class TestCreatePaymentP0:
         # Première requête
         response1 = client.post(
             f"/api/v1/invoices/companies/{sample_invoice.company_id}/invoices/{sample_invoice.id}/payments",
-            json={"amount": 50.0, "method": "card"},
+            json={
+                "amount": 50.0,
+                "method": "bank_transfer",
+                "paid_at": "2026-08-10T00:00:00Z",
+            },
             headers={**auth_headers, "Idempotency-Key": idempotency_key},
         )
         assert response1.status_code in [200, 201]
@@ -539,7 +558,11 @@ class TestCreatePaymentP0:
         # Deuxième requête avec même clé
         response2 = client.post(
             f"/api/v1/invoices/companies/{sample_invoice.company_id}/invoices/{sample_invoice.id}/payments",
-            json={"amount": 50.0, "method": "card"},
+            json={
+                "amount": 50.0,
+                "method": "bank_transfer",
+                "paid_at": "2026-08-10T00:00:00Z",
+            },
             headers={**auth_headers, "Idempotency-Key": idempotency_key},
         )
         assert response2.status_code in [200, 201]
@@ -554,7 +577,11 @@ class TestCreatePaymentP0:
         idempotency_key = "test-payment-key-789"
         response = client.post(
             f"/api/v1/invoices/companies/{sample_company.id}/invoices/99999/payments",
-            json={"amount": 100.0, "method": "card"},
+            json={
+                "amount": 100.0,
+                "method": "bank_transfer",
+                "paid_at": "2026-08-10T00:00:00Z",
+            },
             headers={**auth_headers, "Idempotency-Key": idempotency_key},
         )
 
@@ -622,24 +649,37 @@ class TestP0StabilizationE2E:
 
     def test_e2e_booking_creation_flow(self, client, auth_headers, sample_client):
         """Test E2E complet: création booking avec trace_id et idempotency."""
-        idempotency_key = "e2e-booking-key-789"
+        from datetime import UTC, datetime, timedelta
+        from uuid import uuid4
+
+        idempotency_key = f"e2e-booking-key-{uuid4().hex}"
+        scheduled_time = (
+            datetime.now(UTC) + timedelta(days=2)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
         # Créer un booking
         response = client.post(
             f"/api/v1/clients/{sample_client.user.public_id}/bookings",
             json={
+                "customer_name": "Client E2E",
                 "pickup_location": "123 Main St, Geneva",
                 "dropoff_location": "456 Park Ave, Geneva",
-                "scheduled_time": "2025-12-31T14:00:00Z",
+                "scheduled_time": scheduled_time,
                 "amount": 25.0,
             },
-            headers={**auth_headers, "Idempotency-Key": idempotency_key},
+            headers={
+                **TestCreateBookingP0._client_bearer_headers(
+                    client, sample_client.user
+                ),
+                "Idempotency-Key": idempotency_key,
+            },
         )
 
         assert response.status_code in [200, 201]
         data = response.get_json()
-        assert "trace_id" in data
-        assert response.headers.get("X-Trace-Id") == data["trace_id"]
+        trace_id = data.get("trace_id") or data.get("data", {}).get("trace_id")
+        assert trace_id
+        assert response.headers.get("X-Trace-Id") == trace_id
 
     def test_e2e_payment_flow(self, client, auth_headers, sample_company, db):
         """Test E2E complet: paiement avec idempotency (CRITIQUE)."""
@@ -661,7 +701,7 @@ class TestP0StabilizationE2E:
             total_amount=100.0,
             amount_paid=0.0,
             balance_due=100.0,
-            status=InvoiceStatus.PENDING,
+            status=InvoiceStatus.DRAFT,
             issued_at=_issued,
             due_date=_issued + timedelta(days=30),
         )
@@ -673,18 +713,26 @@ class TestP0StabilizationE2E:
         # Premier paiement
         response1 = client.post(
             f"/api/v1/invoices/companies/{sample_company.id}/invoices/{invoice.id}/payments",
-            json={"amount": 50.0, "method": "bank_transfer"},
+            json={
+                "amount": 50.0,
+                "method": "bank_transfer",
+                "paid_at": "2026-08-10T00:00:00Z",
+            },
             headers={**auth_headers, "Idempotency-Key": idempotency_key},
         )
 
         assert response1.status_code == 200
         data1 = response1.get_json()
-        assert "trace_id" in data1
+        assert "trace_id" in data1.get("data", data1)
 
         # Deuxième paiement identique (doit retourner le même résultat)
         response2 = client.post(
             f"/api/v1/invoices/companies/{sample_company.id}/invoices/{invoice.id}/payments",
-            json={"amount": 50.0, "method": "bank_transfer"},
+            json={
+                "amount": 50.0,
+                "method": "bank_transfer",
+                "paid_at": "2026-08-10T00:00:00Z",
+            },
             headers={**auth_headers, "Idempotency-Key": idempotency_key},
         )
 

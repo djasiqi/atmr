@@ -217,7 +217,7 @@ class TestRLLoggerWithRedis:
     def test_redis_logging(self, rl_logger_redis, sample_state):
         """Test le logging Redis."""
         # Mock Redis pour éviter les erreurs de connexion
-        with patch("services.rl.rl_logger.redis_client") as mock_redis:
+        with patch("services.ml.rl.rl_logger.redis_client") as mock_redis:
             mock_redis.lpush.return_value = 1
             mock_redis.ltrim.return_value = True
             mock_redis.expire.return_value = True
@@ -233,7 +233,7 @@ class TestRLLoggerWithRedis:
 
     def test_get_recent_logs(self, rl_logger_redis, sample_state):
         """Test la récupération des logs récents."""
-        with patch("services.rl.rl_logger.redis_client") as mock_redis:
+        with patch("services.ml.rl.rl_logger.redis_client") as mock_redis:
             # Mock des logs Redis
             mock_logs = [
                 json.dumps({"action": 1, "state_hash": "abc123"}),
@@ -263,8 +263,8 @@ class TestRLLoggerWithDB:
         """Test le logging en base de données."""
         # Mock des modules DB
         with (
-            patch("services.rl.rl_logger.db") as mock_db,
-            patch("services.rl.rl_logger.RLSuggestionMetric") as mock_metric,
+            patch("services.ml.rl.rl_logger.db") as mock_db,
+            patch("services.ml.rl.rl_logger.RLSuggestionMetric") as mock_metric,
             patch("flask.has_app_context") as mock_has_app_context,
         ):
             mock_session = Mock()
@@ -307,7 +307,7 @@ class TestRLLoggerIntegration:
         if log_rl_decision is None:
             pytest.skip("log_rl_decision non disponible")
 
-        with patch("services.rl.rl_logger.get_rl_logger") as mock_get_logger:
+        with patch("services.ml.rl.rl_logger.get_rl_logger") as mock_get_logger:
             mock_logger = Mock()
             mock_logger.log_decision.return_value = True
             mock_get_logger.return_value = mock_logger

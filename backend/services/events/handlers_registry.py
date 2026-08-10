@@ -7,6 +7,6 @@ On expose donc les mêmes symboles ici.
 
 from __future__ import annotations
 
-from services.events.registry import dispatch_event, register
+from services.events.registry import dispatch_event, logger, register
 
-__all__ = ["dispatch_event", "register"]
+__all__ = ["dispatch_event", "logger", "register"]

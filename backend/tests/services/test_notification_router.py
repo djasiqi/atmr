@@ -195,23 +195,22 @@ def test_dedup_skip_when_key_exists(mock_get_redis):
     from services.notifications.dedup_throttle import should_skip_dedup
 
     mock_redis = pytest.importorskip("unittest.mock").MagicMock()
-    mock_redis.get.return_value = b"1"
+    mock_redis.set.return_value = False  # NX: clé déjà présente
     mock_get_redis.return_value = mock_redis
     assert should_skip_dedup("driver", 101, "booking:1:type:x:v1") is True
-    mock_redis.get.assert_called_once()
-    mock_redis.setex.assert_not_called()
+    mock_redis.set.assert_called_once()
 
 
 @patch("services.notifications.dedup_throttle._get_redis")
 def test_dedup_no_skip_when_key_absent(mock_get_redis):
-    """Si la clé dedup n'existe pas -> should_skip_dedup False, setex appelé."""
+    """Si la clé dedup n'existe pas -> should_skip_dedup False, set NX appelé."""
     from services.notifications.dedup_throttle import should_skip_dedup
 
     mock_redis = MagicMock()
-    mock_redis.get.return_value = None
+    mock_redis.set.return_value = True  # NX: clé créée
     mock_get_redis.return_value = mock_redis
     assert should_skip_dedup("driver", 101, "booking:1:type:x:v1") is False
-    mock_redis.setex.assert_called_once()
+    mock_redis.set.assert_called_once()
 
 
 @patch("services.notifications.dedup_throttle._get_redis")
@@ -220,7 +219,7 @@ def test_check_dedup_and_throttle_returns_deduped(mock_get_redis):
     from services.notifications.dedup_throttle import check_dedup_and_throttle
 
     mock_redis = pytest.importorskip("unittest.mock").MagicMock()
-    mock_redis.get.return_value = b"1"
+    mock_redis.set.return_value = False
     mock_get_redis.return_value = mock_redis
     skip, reason = check_dedup_and_throttle("driver", 101, "dedupe_key", "scope", 60, 1)
     assert skip is True
@@ -233,8 +232,8 @@ def test_check_dedup_and_throttle_returns_throttled(mock_get_redis):
     from services.notifications.dedup_throttle import check_dedup_and_throttle
 
     mock_redis = MagicMock()
-    mock_redis.get.return_value = None
-    mock_redis.incr.return_value = 2
+    mock_redis.set.return_value = True
+    mock_redis.eval.return_value = 2
     mock_get_redis.return_value = mock_redis
     skip, reason = check_dedup_and_throttle(
         "company", 42, "dedupe_key", "booking_1", 60, 1

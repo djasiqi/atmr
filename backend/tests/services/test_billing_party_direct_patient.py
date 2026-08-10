@@ -256,6 +256,7 @@ def test_opportunity_lists_patient_when_bp_present(db, company, portfolio_client
 
 
 def test_opportunity_counts_ignored_missing_bp(db, company, portfolio_client):
+    """Sans BP explicite, le linker crée automatiquement le payeur patient."""
     _make_booking(
         db,
         company=company,
@@ -269,8 +270,9 @@ def test_opportunity_counts_ignored_missing_bp(db, company, portfolio_client):
         company_id=company.id, period_year=2026, period_month=8
     )
     payload = opportunities_to_dict(result)
-    assert payload["ignored_missing_billing_party_count"] == 1
-    assert result.patient_items == []
+    assert payload["ignored_missing_billing_party_count"] == 0
+    assert len(result.patient_items) == 1
+    assert result.patient_items[0].billing_party_id is not None
 
 
 def test_backfill_assigns_patient_bp_idempotent(db, company, portfolio_client):

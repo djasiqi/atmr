@@ -1593,17 +1593,12 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert_response_status(dr, 200)
         inv_out = dr.get_json()["data"]["invoice"]
         lines = inv_out.get("lines") or []
-        remise_lines = [
-            ln
-            for ln in lines
-            if str(ln.get("type", "")).upper() == "CUSTOM"
-            and float(ln.get("line_total", 0) or 0) < 0
+        ride_lines = [
+            ln for ln in lines if str(ln.get("type", "")).upper() == "RIDE"
         ]
-        assert len(remise_lines) >= 1
-        if len(remise_lines) > 1:
-            assert all(
-                "remise" in (ln.get("description") or "").lower() for ln in remise_lines
-            )
+        assert len(ride_lines) >= 1
+        assert sum(float(ln.get("line_total", 0) or 0) for ln in ride_lines) < 200.0
+        assert inv_out.get("meta", {}).get("global_discount", {}).get("percent") == 10.0
 
     def test_draft_remove_global_discount_restores_ride_line_ht(
         self,
@@ -1737,7 +1732,7 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert inv.subtotal_amount == Decimal("53.00")
         assert inv.total_amount == Decimal("53.00")
 
-    def test_remove_global_discount_without_pct_meta_preserves_ride_amounts(
+    def test_remove_global_discount_without_pct_meta_preserves_ride_amounts(  # noqa: PLR0917
         self,
         authenticated_client,
         test_company,
@@ -1783,7 +1778,7 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         db.session.refresh(ride)
         assert ride.line_total == Decimal("40.00")
 
-    def test_sent_invoice_line_can_be_edited(
+    def test_sent_invoice_line_can_be_edited(  # noqa: PLR0917
         self,
         authenticated_client,
         test_company,
@@ -1818,7 +1813,7 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         pr = authenticated_client.patch(purl, json={"line_total": 5.0})
         assert_response_status(pr, 200)
 
-    def test_draft_edit_refused_when_invoice_paid(
+    def test_draft_edit_refused_when_invoice_paid(  # noqa: PLR0917
         self,
         authenticated_client,
         test_company,

@@ -210,6 +210,8 @@ class QRBillService:
                     )
                     result = None
 
+        except ValueError:
+            raise
         except Exception as e:
             app_logger.error("[QR-Bill] Erreur génération référence : %s", e)
             result = None

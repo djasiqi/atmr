@@ -97,7 +97,7 @@ class TestLogPushRecipientProof:
             import services.notifications.token_audit as m
 
             importlib.reload(m)
-            with patch.object(m, "app_logger") as mock_log:
+            with patch("ext.app_logger") as mock_log:
                 m.log_push_recipient_proof(
                     trace_id="t1",
                     booking_id=1,

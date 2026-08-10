@@ -12,6 +12,10 @@ def prod_env_minimal(monkeypatch):
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("SOCKETIO_CORS_ORIGINS", "https://app.example.com")
     monkeypatch.setenv("PDF_BASE_URL", "https://api.example.com")
+    monkeypatch.setenv(
+        "INTERNAL_SERVICE_TOKEN",
+        "test-internal-service-token-with-at-least-32-characters",
+    )
 
 
 def test_production_whitelist_required_raises_when_empty(prod_env_minimal, monkeypatch):

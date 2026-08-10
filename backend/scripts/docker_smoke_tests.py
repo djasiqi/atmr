@@ -90,6 +90,12 @@ class DockerSmokeTests:
         self.results["image_exists"] = False
         return False
 
+    # Aliases conservés pour le contrat historique des vérifications de
+    # production. Les implémentations ci-dessous restent les sources uniques.
+    def test_image_build(self) -> bool:
+        """Vérifie que l'image cible est disponible pour le smoke test."""
+        return self.test_image_exists()
+
     def test_container_startup(self) -> bool:
         """Test le démarrage du conteneur."""
         print("🚀 Test de démarrage du conteneur...")
@@ -131,6 +137,10 @@ class DockerSmokeTests:
         self.results["container_startup"] = False
         return False
 
+    def test_container_start(self) -> bool:
+        """Démarre le conteneur de smoke."""
+        return self.test_container_startup()
+
     def test_health_endpoint(self) -> bool:
         """Test l'endpoint de santé."""
         print("🏥 Test de l'endpoint de santé...")
@@ -160,6 +170,10 @@ class DockerSmokeTests:
             print("❌ Erreur lors du test de santé: {e}")
             self.results["health_endpoint"] = False
             return False
+
+    def test_health_check(self) -> bool:
+        """Vérifie l'endpoint de santé du conteneur de smoke."""
+        return self.test_health_endpoint()
 
     def test_models_loaded(self) -> bool:
         """Test si les modèles sont chargés."""

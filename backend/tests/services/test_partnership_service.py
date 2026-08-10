@@ -57,7 +57,7 @@ class TestPartnershipService:
             db.session.commit()
 
             # Essayer de créer un doublon
-            with pytest.raises(ValueError, match="déjà existe"):
+            with pytest.raises(ValueError, match="déjà en attente"):
                 PartnershipService.create_partnership(
                     owner_company_id=company_a.id,
                     partner_company_id=company_b.id,
@@ -69,7 +69,7 @@ class TestPartnershipService:
             company = CompanyFactory()
             db.session.commit()
 
-            with pytest.raises(ValueError, match="même entreprise"):
+            with pytest.raises(ValueError, match="partenaire d'elle-même"):
                 PartnershipService.create_partnership(
                     owner_company_id=company.id,
                     partner_company_id=company.id,
@@ -91,6 +91,12 @@ class TestPartnershipService:
             partnership_ac = PartnershipService.create_partnership(
                 owner_company_id=company_a.id,
                 partner_company_id=company_c.id,
+            )
+            PartnershipService.accept_partnership_request(
+                partnership_ab.id, company_b.id
+            )
+            PartnershipService.accept_partnership_request(
+                partnership_ac.id, company_c.id
             )
             db.session.commit()
 

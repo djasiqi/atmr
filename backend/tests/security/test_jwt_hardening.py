@@ -105,7 +105,7 @@ class TestJWTExpirationConfig:
         # Vérifier que les durées correspondent à la config
         with client.application.app_context():
             expected_access = int(
-                current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()
+                current_app.config["JWT_MOBILE_ACCESS_TOKEN_EXPIRES"].total_seconds()
             )
             expected_refresh = int(
                 current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()

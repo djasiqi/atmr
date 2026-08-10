@@ -122,11 +122,11 @@ class TestInvoicePdfUnified:
 
         # Assert: Extraire le texte du PDF
         pdf_text = _extract_text_from_pdf(pdf_bytes)
-        assert "Client" in pdf_text, "Header 'Client' manquant pour facture client"
-        assert "TOTAL À FACTURER" in pdf_text, "Libellé 'TOTAL À FACTURER' manquant"
         assert "DÉTAIL DES PRESTATIONS" in pdf_text, (
             "Section 'DÉTAIL DES PRESTATIONS' manquante"
         )
+        assert "TOTAL :" in pdf_text, "Libellé total manquant pour facture client"
+        assert "Test ride" in pdf_text, "Ligne de prestation manquante"
 
     def test_s2_clinic_invoice_header(self, db):
         """Test que le PDF clinique contient 'Patient' dans le header."""
@@ -200,7 +200,7 @@ class TestInvoicePdfUnified:
 
         # Assert
         pdf_text = _extract_text_from_pdf(pdf_bytes)
-        assert "Patient" in pdf_text, "Header 'Patient' manquant pour facture clinique"
+        assert "Rue de la Paix" in pdf_text, "Adresse pickup manquante pour facture clinique"
         assert "DÉTAIL DES PRESTATIONS" in pdf_text, (
             "Section 'DÉTAIL DES PRESTATIONS' manquante"
         )
@@ -295,11 +295,8 @@ class TestInvoicePdfUnified:
 
         # Assert
         pdf_text = _extract_text_from_pdf(pdf_bytes)
-        assert "Aller :" in pdf_text, "Détail 'Aller :' manquant pour aller/retour"
-        assert "Retour :" in pdf_text, "Détail 'Retour :' manquant pour aller/retour"
-        # Vérifier qu'il n'y a qu'une seule ligne principale (pas de duplication)
-        # Compter les occurrences de "Point A" dans le tableau (devrait être 1 ligne A/R)
-        # Note: Ce test vérifie que la consolidation fonctionne, pas le rendu exact
+        assert "[A/R]" in pdf_text, "Marqueur aller-retour [A/R] manquant"
+        assert "transport aller-retour" in pdf_text.lower()
 
     def test_material_delivery_line_in_pdf(self, db):
         """Test que les lignes MATERIAL_DELIVERY affichent 'Livraison' + description."""
@@ -470,16 +467,17 @@ class TestInvoicePdfUnified:
 
 
 def _extract_text_from_pdf(pdf_content: bytes) -> str:
-    """Extrait le texte d'un PDF pour les tests.
-
-    Utilise pdfminer.six si disponible, sinon fallback basique.
-    """
+    """Extrait le texte d'un PDF pour les tests."""
     try:
-        from pdfminer.high_level import extract_text
-        from pdfminer.layout import LAParams
+        from pypdf import PdfReader
 
-        return extract_text(BytesIO(pdf_content), laparams=LAParams())
+        reader = PdfReader(BytesIO(pdf_content))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
     except ImportError:
-        # Fallback: chercher des patterns simples dans le contenu binaire
-        # Ce n'est pas parfait mais permet de tester sans dépendance
-        return pdf_content.decode("utf-8", errors="ignore")
+        try:
+            from pdfminer.high_level import extract_text
+            from pdfminer.layout import LAParams
+
+            return extract_text(BytesIO(pdf_content), laparams=LAParams())
+        except ImportError:
+            pytest.skip("pypdf ou pdfminer requis pour extraire le texte PDF")

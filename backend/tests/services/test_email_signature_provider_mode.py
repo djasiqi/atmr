@@ -65,6 +65,7 @@ class TestSmtpMimeContainsRelatedAndContentId:
     ):
         """Vérifie multipart/related + Content-ID <company_logo> + src=\"cid:company_logo\" dans le HTML."""
         monkeypatch.setenv("EMAIL_PROVIDER_MODE", "brevo_smtp")
+        monkeypatch.setenv("BREVO_SMTP_PASSWORD", "test-smtp-password")
         mock_smtp = mock_smtp_class.return_value.__enter__.return_value
         sent_message = []
 

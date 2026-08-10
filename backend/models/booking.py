@@ -1303,9 +1303,8 @@ class Booking(db.Model):
 
     @validates("scheduled_time")
     def validate_scheduled_time(self, _key, scheduled_time):
-        # ✅ scheduled_time est obligatoire pour le dispatch
-        # SAUF pour les courses retour (is_return=True) qui peuvent avoir scheduled_time=None
-        # Le dispatch gère déjà ce cas (voir get_bookings_for_dispatch dans booking_repository)
+        # scheduled_time est obligatoire pour le dispatch. Les retours et courses
+        # « heure à définir » (time_confirmed=False) peuvent rester sans horaire.
         is_return = getattr(self, "is_return", False)
         time_confirmed = getattr(self, "time_confirmed", True)
         if scheduled_time is None:
@@ -1324,7 +1323,6 @@ class Booking(db.Model):
         #   - Utile pour les retours avec heure à confirmer ou imports de données anciennes
         # ✅ Sentinelle 00:00:00 = "heure à définir" : ne pas valider "dans le passé"
         is_sentinel_midnight = st.hour == 0 and st.minute == 0 and st.second == 0
-        time_confirmed = getattr(self, "time_confirmed", True)
         if not is_sentinel_midnight and st < now_local() and time_confirmed:
             msg = "Heure prévue dans le passé."
             raise ValueError(msg)

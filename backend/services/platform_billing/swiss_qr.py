@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
-
-from services.platform_billing.money import money_round_chf
 
 
 @dataclass(frozen=True)
@@ -32,8 +30,8 @@ class SwissQrBillPayload:
 
 
 def platform_qr_amount(total_ttc: Decimal) -> Decimal:
-    """Montant QR plateforme = total TTC figé (même arrondi 0,05 que money_round_chf)."""
-    return money_round_chf(total_ttc)
+    """Montant QR plateforme = total TTC figé (sans arrondi aux 5 centimes)."""
+    return Decimal(total_ttc).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def is_swiss_qr_iban(iban: str | None) -> bool:

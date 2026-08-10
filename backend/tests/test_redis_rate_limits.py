@@ -13,22 +13,21 @@ Tests couverts :
 from unittest.mock import MagicMock, patch
 
 import pytest
-from flask import Flask
-from flask.testing import FlaskClient
+from flask_jwt_extended import create_access_token
 
 
 @pytest.fixture
-def rate_limit_app():
-    """App Flask minimale pour les tests rate-limit (évite conflit conftest `app`)."""
-    with patch("backend.app.create_app") as mock_create_app:
-        app = Flask(__name__)
-        app.config["TESTING"] = True
-        app.config["ENVIRONMENT"] = "test"
-        app.config["RATELIMIT_ENABLED"] = (
-            False  # Désactiver rate limiting dans les tests
-        )
-        mock_create_app.return_value = app
-        yield app
+def rate_limit_app(app):
+    """Réutilise l'application de test créée par la vraie factory."""
+    app.config.update(
+        ENVIRONMENT="test",
+        RATELIMIT_ENABLED=False,
+        RATELIMIT_DEFAULT_LIMITS="1000 per hour",
+        RATELIMIT_STORAGE_URL="redis://localhost:6379/0",
+        RATELIMIT_STRATEGY="moving-window",
+        RATELIMIT_CONFIG_VERSION="v1",
+    )
+    return app
 
 
 @pytest.fixture
@@ -38,16 +37,21 @@ def client(rate_limit_app):
 
 
 @pytest.fixture
-def admin_token():
-    """Fixture d'un token JWT admin pour les tests."""
-    # Token mock (à remplacer par un vrai token de test)
-    return "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.admin"
+def admin_token(rate_limit_app, sample_admin_user):
+    """Crée un token JWT administrateur accepté par les décorateurs réels."""
+    claims = {"role": sample_admin_user.role.value, "aud": "atmr-api"}
+    with rate_limit_app.app_context():
+        token = create_access_token(
+            identity=str(sample_admin_user.public_id),
+            additional_claims=claims,
+        )
+    return f"Bearer {token}"
 
 
 class TestRateLimitFlush:
     """Tests pour l'endpoint POST /api/v1/admin/rate-limit/flush."""
 
-    @patch("backend.routes.admin.redis_client")
+    @patch("routes.admin.redis_client")
     def test_flush_success(self, mock_redis, client, admin_token):
         """Test flush réussi avec Redis disponible."""
         # Arrange
@@ -55,20 +59,10 @@ class TestRateLimitFlush:
         mock_redis.delete.return_value = 2
 
         # Act
-        with (
-            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
-            patch(
-                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ),
-            patch(
-                "backend.routes.admin.ip_whitelist_required",
-                return_value=lambda f: f,
-            ),
-        ):
-            response = client.post(
-                "/api/v1/admin/rate-limit/flush",
-                headers={"Authorization": admin_token},
-            )
+        response = client.post(
+            "/api/v1/admin/rate-limit/flush",
+            headers={"Authorization": admin_token},
+        )
 
         # Assert
         assert response.status_code == 200
@@ -77,24 +71,14 @@ class TestRateLimitFlush:
         assert data["keys_deleted"] == 2
         mock_redis.delete.assert_called_once()
 
-    @patch("backend.routes.admin.redis_client", None)
+    @patch("routes.admin.redis_client", None)
     def test_flush_redis_down(self, client, admin_token):
         """Test flush quand Redis est indisponible."""
         # Act
-        with (
-            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
-            patch(
-                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ),
-            patch(
-                "backend.routes.admin.ip_whitelist_required",
-                return_value=lambda f: f,
-            ),
-        ):
-            response = client.post(
-                "/api/v1/admin/rate-limit/flush",
-                headers={"Authorization": admin_token},
-            )
+        response = client.post(
+            "/api/v1/admin/rate-limit/flush",
+            headers={"Authorization": admin_token},
+        )
 
         # Assert
         assert response.status_code == 503
@@ -114,7 +98,7 @@ class TestRateLimitFlush:
 class TestRateLimitStats:
     """Tests pour l'endpoint GET /api/v1/admin/rate-limit/stats."""
 
-    @patch("backend.routes.admin.redis_client")
+    @patch("routes.admin.redis_client")
     def test_stats_success(self, mock_redis, client, admin_token):
         """Test récupération des statistiques avec Redis disponible."""
         # Arrange
@@ -128,20 +112,10 @@ class TestRateLimitStats:
         mock_redis.info.return_value = {"used_memory_human": "10M"}
 
         # Act
-        with (
-            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
-            patch(
-                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ),
-            patch(
-                "backend.routes.admin.ip_whitelist_required",
-                return_value=lambda f: f,
-            ),
-        ):
-            response = client.get(
-                "/api/v1/admin/rate-limit/stats",
-                headers={"Authorization": admin_token},
-            )
+        response = client.get(
+            "/api/v1/admin/rate-limit/stats",
+            headers={"Authorization": admin_token},
+        )
 
         # Assert
         assert response.status_code == 200
@@ -151,24 +125,14 @@ class TestRateLimitStats:
         assert "redis_memory_used" in data
         assert data["redis_memory_used"] == "10M"
 
-    @patch("backend.routes.admin.redis_client", None)
+    @patch("routes.admin.redis_client", None)
     def test_stats_redis_down(self, client, admin_token):
         """Test stats quand Redis est indisponible."""
         # Act
-        with (
-            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
-            patch(
-                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ),
-            patch(
-                "backend.routes.admin.ip_whitelist_required",
-                return_value=lambda f: f,
-            ),
-        ):
-            response = client.get(
-                "/api/v1/admin/rate-limit/stats",
-                headers={"Authorization": admin_token},
-            )
+        response = client.get(
+            "/api/v1/admin/rate-limit/stats",
+            headers={"Authorization": admin_token},
+        )
 
         # Assert
         assert response.status_code == 503
@@ -179,7 +143,7 @@ class TestRateLimitStats:
 class TestRedisInfo:
     """Tests pour l'endpoint GET /api/v1/admin/redis/info."""
 
-    @patch("backend.routes.admin.redis_client")
+    @patch("routes.admin.redis_client")
     def test_info_success(self, mock_redis, client, admin_token):
         """Test récupération des informations Redis."""
         # Arrange
@@ -191,20 +155,10 @@ class TestRedisInfo:
         ]
 
         # Act
-        with (
-            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
-            patch(
-                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ),
-            patch(
-                "backend.routes.admin.ip_whitelist_required",
-                return_value=lambda f: f,
-            ),
-        ):
-            response = client.get(
-                "/api/v1/admin/redis/info",
-                headers={"Authorization": admin_token},
-            )
+        response = client.get(
+            "/api/v1/admin/redis/info",
+            headers={"Authorization": admin_token},
+        )
 
         # Assert
         assert response.status_code == 200
@@ -221,29 +175,10 @@ class TestRateLimitConfig:
     def test_config_success(self, client, admin_token):
         """Test récupération de la configuration des rate limits."""
         # Act
-        with (
-            patch("backend.routes.admin.jwt_required", return_value=lambda f: f),
-            patch(
-                "backend.routes.admin.role_required", return_value=lambda r: lambda f: f
-            ),
-            patch(
-                "backend.routes.admin.ip_whitelist_required",
-                return_value=lambda f: f,
-            ),
-            patch("backend.routes.admin.current_app") as mock_app,
-        ):
-            mock_app.config.get.side_effect = lambda key, default=None: {
-                "RATELIMIT_DEFAULT_LIMITS": "1000 per hour",
-                "ENVIRONMENT": "test",
-                "RATELIMIT_STORAGE_URL": "redis://localhost:6379/0",
-                "RATELIMIT_STRATEGY": "moving-window",
-                "RATELIMIT_CONFIG_VERSION": "v1",
-            }.get(key, default)
-
-            response = client.get(
-                "/api/v1/admin/rate-limit/config",
-                headers={"Authorization": admin_token},
-            )
+        response = client.get(
+            "/api/v1/admin/rate-limit/config",
+            headers={"Authorization": admin_token},
+        )
 
         # Assert
         assert response.status_code == 200
@@ -257,18 +192,14 @@ class TestRateLimitConfig:
 class TestRedisStorageWithTTL:
     """Tests pour la classe RedisStorageWithTTL."""
 
-    @patch("backend.ext.redis.Redis")
-    def test_ttl_set_on_first_incr(self, mock_redis_class):
+    def test_ttl_set_on_first_incr(self):
         """Test que le TTL est défini sur la première incrémentation."""
         # Arrange
-        from backend.ext import RedisStorageWithTTL
+        from ext import RedisStorageWithTTL
 
         mock_redis = MagicMock()
-        mock_redis_class.from_url.return_value = mock_redis
-
-        with patch("backend.ext.RedisStorage") as mock_storage_class:
-            mock_storage = MagicMock()
-            mock_storage_class.return_value = mock_storage
+        with patch("limits.storage.RedisStorage") as mock_storage_class:
+            mock_storage = mock_storage_class.return_value
             mock_storage.incr.return_value = 1  # Première incrémentation
             mock_storage.storage = mock_redis
 
@@ -281,19 +212,15 @@ class TestRedisStorageWithTTL:
             assert result == 1
             mock_redis.expire.assert_called_once_with("test_key", 3600)
 
-    @patch("backend.ext.redis.Redis")
-    def test_ttl_not_set_on_subsequent_incr(self, mock_redis_class):
+    def test_ttl_not_set_on_subsequent_incr(self):
         """Test que le TTL n'est PAS prolongé sur les incrémentations
         suivantes (mode fixed)."""
         # Arrange
-        from backend.ext import RedisStorageWithTTL
+        from ext import RedisStorageWithTTL
 
         mock_redis = MagicMock()
-        mock_redis_class.from_url.return_value = mock_redis
-
-        with patch("backend.ext.RedisStorage") as mock_storage_class:
-            mock_storage = MagicMock()
-            mock_storage_class.return_value = mock_storage
+        with patch("limits.storage.RedisStorage") as mock_storage_class:
+            mock_storage = mock_storage_class.return_value
             mock_storage.incr.return_value = 2  # Incrémentation suivante
             mock_storage.storage = mock_redis
 
@@ -306,18 +233,14 @@ class TestRedisStorageWithTTL:
             assert result == 2
             mock_redis.expire.assert_not_called()  # Pas de prolongation
 
-    @patch("backend.ext.redis.Redis")
-    def test_ttl_renewed_with_elastic_expiry(self, mock_redis_class):
+    def test_ttl_renewed_with_elastic_expiry(self):
         """Test que le TTL est prolongé à chaque hit en mode elastic_expiry=True."""
         # Arrange
-        from backend.ext import RedisStorageWithTTL
+        from ext import RedisStorageWithTTL
 
         mock_redis = MagicMock()
-        mock_redis_class.from_url.return_value = mock_redis
-
-        with patch("backend.ext.RedisStorage") as mock_storage_class:
-            mock_storage = MagicMock()
-            mock_storage_class.return_value = mock_storage
+        with patch("limits.storage.RedisStorage") as mock_storage_class:
+            mock_storage = mock_storage_class.return_value
             mock_storage.incr.return_value = 5  # Incrémentation suivante
             mock_storage.storage = mock_redis
 
@@ -330,19 +253,16 @@ class TestRedisStorageWithTTL:
             assert result == 5
             mock_redis.expire.assert_called_once_with("test_key", 3600)  # ✅ Prolongé
 
-    @patch("backend.ext.redis.Redis")
-    def test_ttl_error_handled_gracefully(self, mock_redis_class):
+    def test_ttl_error_handled_gracefully(self):
         """Test que l'échec du TTL ne fait pas crasher l'application."""
         # Arrange
-        from backend.ext import RedisStorageWithTTL
+        from ext import RedisStorageWithTTL
 
         mock_redis = MagicMock()
-        mock_redis_class.from_url.return_value = mock_redis
         mock_redis.expire.side_effect = Exception("Redis error")
 
-        with patch("backend.ext.RedisStorage") as mock_storage_class:
-            mock_storage = MagicMock()
-            mock_storage_class.return_value = mock_storage
+        with patch("limits.storage.RedisStorage") as mock_storage_class:
+            mock_storage = mock_storage_class.return_value
             mock_storage.incr.return_value = 1
             mock_storage.storage = mock_redis
 

@@ -320,7 +320,7 @@ class TestSafetyGuardsIntegration:
 
         assert guards1 is guards2
 
-    @patch("services.safety_guards.logging")
+    @patch("services.security.safety.logging")
     def test_logging_integration(self, mock_logging):
         """Test l'intégration avec le système de logging."""
         if SafetyGuards is None:

@@ -27,6 +27,14 @@ LOCATION_PATH = "/api/v1/driver/me/location"
 _GPS_ENV = {"REMOTE_ADDR": "10.66.4.101"}
 
 
+@pytest.fixture
+def app() -> Iterator[Flask]:
+    """Crée une application neuve avant l'enregistrement des hooks Limiter."""
+    from app import create_app
+
+    return create_app(config_name="testing")
+
+
 class _BusinessLimitStub:
     """Compteur métier local (limit appels autorisés)."""
 
@@ -254,7 +262,7 @@ def test_d_registered_view_is_exempt_not_only_resource_put(
     ]
     assert matched, "Aucune règle PUT /driver/me/location"
     assert any(
-        ep == "driver_driver_location" or ep.endswith("driver_location")
+        ep == "driver_driver_location" or ep.startswith("driver_driver_location_")
         for _, ep in matched
     )
 

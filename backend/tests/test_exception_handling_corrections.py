@@ -104,7 +104,7 @@ class TestExceptionHandlingCorrections:
 
         # Dispatcher l'événement - ne devrait pas lever d'exception
         # mais logger l'erreur
-        with patch("services.events.handlers_registry.logger") as mock_logger:
+        with patch("services.events.registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_event", "data": "test"})
 
             # Vérifier que l'erreur est loggée
@@ -124,7 +124,7 @@ class TestExceptionHandlingCorrections:
         register("test_network_event", network_handler)
 
         # Dispatcher l'événement - ne devrait pas lever d'exception
-        with patch("services.events.handlers_registry.logger") as mock_logger:
+        with patch("services.events.registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_network_event", "data": "test"})
 
             # Vérifier que l'erreur réseau est loggée
@@ -195,7 +195,7 @@ class TestExceptionHandlingCorrections:
 
         # Dispatcher l'événement - ne devrait pas lever d'exception
         # mais être capturé par le filet de sécurité
-        with patch("services.events.handlers_registry.logger") as mock_logger:
+        with patch("services.events.registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_unexpected_event", "data": "test"})
 
             # Vérifier que l'erreur inattendue est loggée avec exception()
@@ -310,7 +310,7 @@ class TestExceptionLogging:
         register("test_context_event", context_handler)
 
         # Dispatcher l'événement
-        with patch("services.events.handlers_registry.logger") as mock_logger:
+        with patch("services.events.registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_context_event", "data": "test"})
 
             # Vérifier que le log contient le contexte (event_type, handler)
@@ -330,7 +330,7 @@ class TestExceptionLogging:
         register("test_trace_event", unexpected_handler)
 
         # Dispatcher l'événement
-        with patch("services.events.handlers_registry.logger") as mock_logger:
+        with patch("services.events.registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_trace_event", "data": "test"})
 
             # Vérifier que exception() est appelé (trace complète)
@@ -354,7 +354,7 @@ class TestExceptionRegression:
         register("test_no_swallow_event", error_handler)
 
         # Dispatcher l'événement
-        with patch("services.events.handlers_registry.logger") as mock_logger:
+        with patch("services.events.registry.logger") as mock_logger:
             dispatch_event({"event_type": "test_no_swallow_event", "data": "test"})
 
             # Vérifier que l'erreur est loggée (pas silencieusement avalée)

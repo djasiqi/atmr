@@ -8,7 +8,6 @@ Ces tests vérifient que :
 4. Le nombre de tokens actifs est limité
 """
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,6 +24,7 @@ class FakeRedis:
     def __init__(self):
         self._data: dict[str, str] = {}
         self._sets: dict[str, set[str]] = {}
+        self._zsets: dict[str, dict[str, float]] = {}
         self._ttl: dict[str, int] = {}
 
     def get(self, key: str) -> str | None:
@@ -46,6 +46,10 @@ class FakeRedis:
                 count += 1
             if key in self._sets:
                 del self._sets[key]
+                count += 1
+            if key in self._zsets:
+                del self._zsets[key]
+                count += 1
         return count
 
     def sadd(self, key: str, *values: str) -> int:
@@ -74,6 +78,45 @@ class FakeRedis:
                 count += 1
         return count
 
+    def zadd(self, key: str, mapping: dict[str, float]) -> int:
+        zset = self._zsets.setdefault(key, {})
+        added = 0
+        for member, score in mapping.items():
+            if member not in zset:
+                added += 1
+            zset[member] = float(score)
+        return added
+
+    def zcard(self, key: str) -> int:
+        return len(self._zsets.get(key, {}))
+
+    def zrange(self, key: str, start: int, end: int) -> list[str]:
+        members = sorted(
+            self._zsets.get(key, {}).items(), key=lambda item: (item[1], item[0])
+        )
+        if end == -1:
+            end = len(members) - 1
+        return [member for member, _score in members[start : end + 1]]
+
+    def zscore(self, key: str, member: str) -> float | None:
+        return self._zsets.get(key, {}).get(member)
+
+    def zrem(self, key: str, *members: str) -> int:
+        zset = self._zsets.get(key, {})
+        removed = 0
+        for member in members:
+            if member in zset:
+                del zset[member]
+                removed += 1
+        return removed
+
+    def zremrangebyscore(self, key: str, minimum: float, maximum: float) -> int:
+        zset = self._zsets.get(key, {})
+        members = [
+            member for member, score in zset.items() if minimum <= score <= maximum
+        ]
+        return self.zrem(key, *members)
+
     def srandmember(self, key: str, count: int = 1) -> list[str] | str | None:
         if key not in self._sets or not self._sets[key]:
             return None if count == 1 else []
@@ -83,7 +126,7 @@ class FakeRedis:
         return members[:count]
 
     def expire(self, key: str, ttl: int) -> bool:
-        if key in self._data or key in self._sets:
+        if key in self._data or key in self._sets or key in self._zsets:
             self._ttl[key] = ttl
             return True
         return False
@@ -128,6 +171,7 @@ def mock_redis(monkeypatch, app):
     # Nettoyer après le test
     fake_redis._data.clear()
     fake_redis._sets.clear()
+    fake_redis._zsets.clear()
     fake_redis._ttl.clear()
 
 
@@ -175,6 +219,7 @@ def test_token_rotation_on_refresh(
     client.set_cookie("refresh_token", old_refresh_token)
     refresh_response = client.post(
         "/api/v1/auth/refresh-token",
+        json={},
         headers={"Content-Type": "application/json"},
     )
 
@@ -224,12 +269,12 @@ def test_token_rotation_on_refresh(
         )
 
 
-def test_revoke_all_tokens_on_logout(
+def test_revoke_current_token_on_logout(
     client: FlaskClient,
     auth_headers: dict[str, str],
     sample_user,
 ) -> None:
-    """Test que tous les tokens sont révoqués au logout."""
+    """Test que le refresh token explicitement fourni est révoqué au logout."""
     # 1. Login plusieurs fois (créer plusieurs tokens)
     tokens = []
     for _ in range(3):
@@ -260,11 +305,16 @@ def test_revoke_all_tokens_on_logout(
 
     assert len(tokens) > 0, "Aucun token n'a été créé"
 
-    # 2. Logout avec le dernier token (celui dans auth_headers)
-    logout_response = client.post("/api/v1/auth/logout", headers=auth_headers)
+    # 2. Logout avec le dernier token. Sans session_id, le contrat du endpoint
+    # est une révocation ciblée et non une déconnexion de tous les appareils.
+    logout_response = client.post(
+        "/api/v1/auth/logout",
+        json={"refresh_token": tokens[-1]},
+        headers=auth_headers,
+    )
     assert logout_response.status_code == 200
 
-    # 3. Vérifier que tous les tokens sont révoqués
+    # 3. Vérifier que seul le token du device courant est révoqué
     with client.application.app_context():
         from models import User
 
@@ -272,9 +322,12 @@ def test_revoke_all_tokens_on_logout(
         user = User.query.filter_by(email=sample_user.email).first()
         assert user is not None, "L'utilisateur devrait exister"
 
-        for token in tokens:
-            assert not token_service.is_token_valid(token, user.id), (
-                f"Le token devrait être révoqué après logout: {token[:8]}..."
+        assert not token_service.is_token_valid(tokens[-1], user.id), (
+            "Le token explicitement fourni devrait être révoqué après logout"
+        )
+        for token in tokens[:-1]:
+            assert token_service.is_token_valid(token, user.id), (
+                "Un logout ciblé ne doit pas révoquer les autres appareils"
             )
 
 
@@ -282,10 +335,11 @@ def test_token_limit_per_user(
     client: FlaskClient,
     sample_user,
     app: Flask,
+    monkeypatch,
 ) -> None:
     """Test que le nombre de tokens actifs est limité."""
     # Configurer une limite basse pour le test
-    os.environ["MAX_ACTIVE_REFRESH_TOKENS"] = "2"
+    monkeypatch.setenv("MAX_ACTIVE_REFRESH_TOKENS_COMPANY", "2")
 
     # 1. Login plusieurs fois
     tokens = []

@@ -62,6 +62,11 @@ class CancellationPolicySchema(Schema):
     @validates_schema
     def _validate_policy(self, data: dict[str, Any], **_kwargs) -> None:
         tier_ids = [t["id"] for t in data.get("tiers", [])]
+        if data["enabled"] and not tier_ids:
+            raise ValidationError(
+                "At least one cancellation fee tier is required when enabled",
+                field_name="tiers",
+            )
         if len(tier_ids) != len(set(tier_ids)):
             raise ValidationError("Tier IDs must be unique", field_name="tiers")
 

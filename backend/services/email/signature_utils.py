@@ -10,6 +10,7 @@ from typing import Any
 from flask import current_app
 from jinja2 import select_autoescape
 from jinja2.sandbox import SandboxedEnvironment
+from markupsafe import Markup
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +192,8 @@ def render_signature_html_template(
             address_parts.append(f"{company.domicile_zip} {company.domicile_city}")
     elif hasattr(company, "address") and company.address:
         address_parts.append(company.address)
-    address = "<br>".join(address_parts) if address_parts else ""
+    # Markup : conserver les <br> dans l'adresse malgré l'auto-escape Jinja2
+    address = Markup("<br>".join(address_parts)) if address_parts else ""
 
     # Variables whitelistées uniquement
     context = {
@@ -397,10 +399,13 @@ def generate_signature_html_from_form(
             f'<a href="{html.escape(website_clean)}" style="color: #1b4b7a; text-decoration: none;">{website_escaped}</a>'
         )
 
-    # Adresse
+    # Adresse (supporte plusieurs lignes via \n ou <br>)
     address_parts = []
     if address_line:
-        address_parts.append(html.escape(address_line))
+        for raw_segment in re.split(r"<br>|\n", address_line):
+            segment = raw_segment.strip()
+            if segment:
+                address_parts.append(html.escape(segment))
     if zip_code and city:
         address_parts.append(f"{html.escape(zip_code)} {html.escape(city)}")
     elif city:
@@ -778,15 +783,17 @@ def generate_simple_signature_html(
     city: str | None = None
     if address and address.strip():
         lines = [line.strip() for line in address.strip().splitlines() if line.strip()]
-        if lines:
+        if len(lines) == 1:
             address_line = lines[0]
-        if len(lines) > 1:
+        elif len(lines) >= 2:
             tail = lines[-1]
             parts = tail.split(None, 1)
             if len(parts) == 2 and parts[0].isdigit():
                 zip_code, city = parts[0], parts[1]
+                address_line = "<br>".join(lines[:-1])
             else:
                 city = tail
+                address_line = "<br>".join(lines[:-1]) if len(lines) > 2 else lines[0]
 
     company_obj = (
         SimpleNamespace(logo_url=logo_url, name=contact_name or "")

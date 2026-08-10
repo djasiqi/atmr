@@ -806,6 +806,9 @@ class TestInstitutionInvitation:
         login_data = login.get_json()
         assert login_data["user"]["force_password_change"] is True
         access_token = login_data.get("access_token") or login_data.get("token")
+        if not access_token:
+            cookie_name = client.application.config["COOKIE_ACCESS_TOKEN_NAME"]
+            access_token = client.get_cookie(cookie_name)
         assert access_token
 
         # 3. Changement de mot de passe via JWT (SEC-02 — plus de reset par public_id)

@@ -554,7 +554,9 @@ class MetricsFinalizer:
             - Logging: Warnings si analyse échoue
         """
         try:
-            from services.unified_dispatch.analysis import UnassignedAnalyzer
+            from services.unified_dispatch.validation.analysis import (
+                UnassignedAnalyzer,
+            )
 
             analyzer = UnassignedAnalyzer()
             result = analyzer.analyze(problem, assignments, unassigned_ids)

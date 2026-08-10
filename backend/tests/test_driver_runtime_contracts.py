@@ -81,6 +81,7 @@ def test_driver_location_ack_contract(client, db):
     assert data.get("ack_status") in {
         "accepted",
         "duplicate",
+        "persisted",
         "stale",
         "ignored",
         "rejected",

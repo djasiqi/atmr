@@ -9,7 +9,7 @@ jusqu'à la sélection des chauffeurs éligibles dans l'heuristique.
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -17,6 +17,18 @@ from services.unified_dispatch import data, heuristics
 from services.unified_dispatch.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+
+def _setup_loader_company_mocks(mock_company_class, mock_company, mock_repo_class):
+    """Mock CompanyRepository + Company.query sans contexte Flask."""
+    company_dto = MagicMock()
+    company_dto.id = mock_company.id
+    mock_repo_instance = MagicMock()
+    mock_repo_instance.find_by_id.return_value = company_dto
+    mock_repo_class.return_value = mock_repo_instance
+    mock_query = MagicMock()
+    mock_query.get.return_value = mock_company
+    mock_company_class.query = mock_query
 
 
 @pytest.fixture
@@ -84,16 +96,18 @@ def mock_bookings():
 class TestPreferredDriverPropagation:
     """Tests de propagation de preferred_driver_id."""
 
-    @patch("services.unified_dispatch.data.get_bookings_for_dispatch")
-    @patch("services.unified_dispatch.data.get_available_drivers_split")
-    @patch("services.unified_dispatch.data.Company.query")
-    @patch("services.unified_dispatch.data.build_time_matrix")
+    @patch("repositories.company_repository.CompanyRepository")
+    @patch("services.unified_dispatch.data.loader.get_bookings_for_dispatch")
+    @patch("services.unified_dispatch.data.loader.get_available_drivers_split")
+    @patch("services.unified_dispatch.data.loader.Company")
+    @patch("services.unified_dispatch.data.loader.build_time_matrix")
     def test_preferred_driver_propagates_to_problem(
         self,
         mock_build_matrix,
-        mock_company_query,
+        mock_company_class,
         mock_get_drivers,
         mock_get_bookings,
+        mock_repo_class,
         mock_company,
         mock_drivers,
         mock_bookings,
@@ -103,12 +117,7 @@ class TestPreferredDriverPropagation:
         # Setup mocks
         mock_get_bookings.return_value = mock_bookings
         mock_get_drivers.return_value = (mock_drivers, [])
-        # Utiliser un MagicMock pour éviter le problème de contexte Flask
-        from unittest.mock import MagicMock
-
-        mock_query = MagicMock()
-        mock_query.get.return_value = mock_company
-        mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
+        _setup_loader_company_mocks(mock_company_class, mock_company, mock_repo_class)
 
         # Mock de la matrice de temps
         # ✅ FIX: build_time_matrix retourne (time_matrix, coords, matrix_meta)
@@ -137,16 +146,18 @@ class TestPreferredDriverPropagation:
             "✅ preferred_driver_id propagé: %s", problem["preferred_driver_id"]
         )
 
-    @patch("services.unified_dispatch.data.get_bookings_for_dispatch")
-    @patch("services.unified_dispatch.data.get_available_drivers_split")
-    @patch("services.unified_dispatch.data.Company.query")
-    @patch("services.unified_dispatch.data.build_time_matrix")
+    @patch("repositories.company_repository.CompanyRepository")
+    @patch("services.unified_dispatch.data.loader.get_bookings_for_dispatch")
+    @patch("services.unified_dispatch.data.loader.get_available_drivers_split")
+    @patch("services.unified_dispatch.data.loader.Company")
+    @patch("services.unified_dispatch.data.loader.build_time_matrix")
     def test_preferred_driver_none_when_not_in_overrides(
         self,
         mock_build_matrix,
-        mock_company_query,
+        mock_company_class,
         mock_get_drivers,
         mock_get_bookings,
+        mock_repo_class,
         mock_company,
         mock_drivers,
         mock_bookings,
@@ -156,12 +167,7 @@ class TestPreferredDriverPropagation:
         # Setup mocks
         mock_get_bookings.return_value = mock_bookings
         mock_get_drivers.return_value = (mock_drivers, [])
-        # Utiliser un MagicMock pour éviter le problème de contexte Flask
-        from unittest.mock import MagicMock
-
-        mock_query = MagicMock()
-        mock_query.get.return_value = mock_company
-        mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
+        _setup_loader_company_mocks(mock_company_class, mock_company, mock_repo_class)
 
         # ✅ FIX: build_time_matrix retourne (time_matrix, coords, matrix_meta)
         n = len(mock_bookings) + len(mock_drivers)
@@ -185,16 +191,18 @@ class TestPreferredDriverPropagation:
         assert "preferred_driver_id" in problem
         assert problem["preferred_driver_id"] is None
 
-    @patch("services.unified_dispatch.data.get_bookings_for_dispatch")
-    @patch("services.unified_dispatch.data.get_available_drivers_split")
-    @patch("services.unified_dispatch.data.Company.query")
-    @patch("services.unified_dispatch.data.build_time_matrix")
+    @patch("repositories.company_repository.CompanyRepository")
+    @patch("services.unified_dispatch.data.loader.get_bookings_for_dispatch")
+    @patch("services.unified_dispatch.data.loader.get_available_drivers_split")
+    @patch("services.unified_dispatch.data.loader.Company")
+    @patch("services.unified_dispatch.data.loader.build_time_matrix")
     def test_preferred_driver_invalid_value_ignored(
         self,
         mock_build_matrix,
-        mock_company_query,
+        mock_company_class,
         mock_get_drivers,
         mock_get_bookings,
+        mock_repo_class,
         mock_company,
         mock_drivers,
         mock_bookings,
@@ -204,12 +212,7 @@ class TestPreferredDriverPropagation:
         # Setup mocks
         mock_get_bookings.return_value = mock_bookings
         mock_get_drivers.return_value = (mock_drivers, [])
-        # Utiliser un MagicMock pour éviter le problème de contexte Flask
-        from unittest.mock import MagicMock
-
-        mock_query = MagicMock()
-        mock_query.get.return_value = mock_company
-        mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
+        _setup_loader_company_mocks(mock_company_class, mock_company, mock_repo_class)
 
         # ✅ FIX: build_time_matrix retourne (time_matrix, coords, matrix_meta)
         n = len(mock_bookings) + len(mock_drivers)
@@ -240,16 +243,18 @@ class TestPreferredDriverPropagation:
             )
         assert problem["preferred_driver_id"] is None
 
-    @patch("services.unified_dispatch.data.get_bookings_for_dispatch")
-    @patch("services.unified_dispatch.data.get_available_drivers_split")
-    @patch("services.unified_dispatch.data.Company.query")
-    @patch("services.unified_dispatch.data.build_time_matrix")
+    @patch("repositories.company_repository.CompanyRepository")
+    @patch("services.unified_dispatch.data.loader.get_bookings_for_dispatch")
+    @patch("services.unified_dispatch.data.loader.get_available_drivers_split")
+    @patch("services.unified_dispatch.data.loader.Company")
+    @patch("services.unified_dispatch.data.loader.build_time_matrix")
     def test_preferred_driver_not_in_available_drivers_ignored(
         self,
         mock_build_matrix,
-        mock_company_query,
+        mock_company_class,
         mock_get_drivers,
         mock_get_bookings,
+        mock_repo_class,
         mock_company,
         mock_drivers,
         mock_bookings,
@@ -260,12 +265,7 @@ class TestPreferredDriverPropagation:
         # Setup mocks
         mock_get_bookings.return_value = mock_bookings
         mock_get_drivers.return_value = (mock_drivers, [])
-        # Utiliser un MagicMock pour éviter le problème de contexte Flask
-        from unittest.mock import MagicMock
-
-        mock_query = MagicMock()
-        mock_query.get.return_value = mock_company
-        mock_company_query.__get__ = lambda self, obj, _objtype: mock_query
+        _setup_loader_company_mocks(mock_company_class, mock_company, mock_repo_class)
 
         # ✅ FIX: build_time_matrix retourne (time_matrix, coords, matrix_meta)
         n = len(mock_bookings) + len(mock_drivers)

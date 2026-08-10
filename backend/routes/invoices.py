@@ -1359,7 +1359,6 @@ class ClinicMonthlyTotals(Resource):
                     )
                 )
                 & stay_overlaps_booking
-                & (Booking.is_return == False)  # noqa: E712 — SQLAlchemy column comparison
             )
             eligible_query = Booking.query.filter(
                 Booking.company_id == company_id,
@@ -2961,7 +2960,13 @@ class InvoicePayments(Resource):
                             "invoice_id": invoice_id,
                         },
                     )
-                    return cached_response[1], 200
+                    cached_payload = cached_response[1] or {}
+                    if isinstance(cached_payload, dict) and "response" in cached_payload:
+                        return (
+                            cached_payload["response"],
+                            cached_payload.get("status_code", 200),
+                        )
+                    return cached_payload, 200
 
             # ✅ DDD: Utilise use-case au lieu de service directement
             from routes.companies import _get_current_company_via_use_case
@@ -3290,9 +3295,7 @@ class InvoicePayments(Resource):
             payment = InvoicePayment()
             payment.invoice_id = invoice.id
             payment.amount = amount  # Montant total payé (pour export CSV)
-            payment.method = (
-                method_value  # passer la valeur ENUM attendue par la colonne SAEnum
-            )
+            payment.method = method_value
             payment.paid_at = datetime.now(UTC)
             payment.reminder_id = reminder_id  # Lien vers le rappel si applicable
             db.session.add(payment)

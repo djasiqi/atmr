@@ -20,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     func,
     text,
 )
@@ -182,6 +183,23 @@ class Client(db.Model):
     )
 
     # Validators
+    @staticmethod
+    def _align_type_invariants(_mapper, _connection, target: Client) -> None:
+        """Aligne les attributs de classification avant chaque écriture.
+
+        Un client rattaché à une entreprise est toujours un client TRANSPORT.
+        Un client sans entreprise appartient au portail et ne porte pas de
+        mode de gestion lié au transport.
+        """
+        if target.company_id is None:
+            target.client_type = ClientType.PORTAL
+            target.management_mode = None
+            return
+
+        target.client_type = ClientType.TRANSPORT
+        if target.management_mode is None:
+            target.management_mode = ManagementMode.MANAGED
+
     @validates("contact_email")
     def validate_contact_email(self, _key: str, email: str) -> str:
         if self.management_mode == ManagementMode.SELF_SERVICE and not email:
@@ -471,3 +489,7 @@ class Client(db.Model):
             f"<Client id={self.id}, user_id={self.user_id}, "
             f"type={self.client_type}, active={self.is_active}>"
         )
+
+
+event.listen(Client, "before_insert", Client._align_type_invariants)
+event.listen(Client, "before_update", Client._align_type_invariants)

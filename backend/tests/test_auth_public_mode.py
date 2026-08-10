@@ -1,4 +1,5 @@
 import hashlib
+import uuid
 from datetime import UTC, datetime
 
 import pytest
@@ -71,7 +72,7 @@ def test_service_area_check_invalid_payload(client):
 
 
 def test_pre_request_draft_create_fetch_update_consume(client):
-    draft_id = "draft_test_public_001"
+    draft_id = f"draft_test_public_{uuid.uuid4().hex}"
     create_response = client.post(
         "/api/v1/auth/public/pre-request/draft",
         json={

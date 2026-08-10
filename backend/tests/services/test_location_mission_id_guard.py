@@ -8,7 +8,7 @@ from services.geolocation.location import LocationService
 def test_mission_live_without_mission_id_downgraded_to_availability(app) -> None:
     svc = LocationService(redis_client_instance=None)
     mock_store = MagicMock(
-        return_value=("accepted_canonical", "", "2026-06-17T12:00:00Z")
+        return_value=("accepted_canonical", "", "2026-06-17T12:00:00Z", True, True)
     )
     mock_driver = MagicMock()
     mock_driver.company_id = 1

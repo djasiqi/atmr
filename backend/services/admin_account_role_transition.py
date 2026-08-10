@@ -549,7 +549,7 @@ class AdminAccountRoleTransitionService:
         # --- Projection CP ---
         get_projector().sync_user_role_transition(
             user,
-            old_role=old_role,
+            _old_role=old_role,
             old_company_id=old_company_id,
             old_institution_id=old_institution_id,
             old_driver_id=old_driver_id,

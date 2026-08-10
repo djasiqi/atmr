@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from unittest.mock import patch
 
@@ -19,6 +20,10 @@ from services.saferpay.assert_response_status import (
     SAFERPAY_FINALIZE_PAYMENT_FAILED,
 )
 from services.saferpay.finalize_payment import finalize_saferpay_payment
+
+
+def _tx_id(prefix: str = "tx") -> str:
+    return f"{prefix}-{uuid.uuid4().hex[:12]}"
 
 
 @pytest.fixture(autouse=True)
@@ -95,12 +100,13 @@ def test_finalize_capture_failed_persists_tx(
     db.session.add(pay)
     db.session.commit()
     pid = pay.id
+    tx_id = _tx_id("capture-fail")
 
     def fake_post(subpath, payload):
         if "Assert" in subpath:
             return (
                 200,
-                {"Transaction": {"Id": "tx-123", "Status": "AUTHORIZED"}},
+                {"Transaction": {"Id": tx_id, "Status": "AUTHORIZED"}},
                 "{}",
             )
         if "Capture" in subpath:
@@ -116,7 +122,7 @@ def test_finalize_capture_failed_persists_tx(
     db.session.expire_all()
     pay2 = db.session.get(Payment, pid)
     assert pay2.status == PaymentStatus.PENDING
-    assert pay2.saferpay_transaction_id == "tx-123"
+    assert pay2.saferpay_transaction_id == tx_id
 
 
 @pytest.mark.integration
@@ -240,12 +246,13 @@ def test_finalize_payment_failed_tx(
     pay.saferpay_token = "session-token"
     db.session.add(pay)
     db.session.commit()
+    failed_tx = _tx_id("failed")
 
     with patch(
         "services.saferpay.finalize_payment.saferpay_post_json",
         return_value=(
             200,
-            {"Transaction": {"Id": "tx", "Status": "FAILED"}},
+            {"Transaction": {"Id": failed_tx, "Status": "FAILED"}},
             "{}",
         ),
     ):
@@ -286,12 +293,13 @@ def test_finalize_completed_happy_path(
     pay.saferpay_token = "session-token"
     db.session.add(pay)
     db.session.commit()
+    ok_tx = _tx_id("ok")
 
     def fake_post(subpath, payload):
         if "Assert" in subpath:
             return (
                 200,
-                {"Transaction": {"Id": "tx-ok", "Status": "AUTHORIZED"}},
+                {"Transaction": {"Id": ok_tx, "Status": "AUTHORIZED"}},
                 "{}",
             )
         if "Capture" in subpath:

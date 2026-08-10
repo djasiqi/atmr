@@ -73,7 +73,10 @@ def _auth_headers(client, email, password="SecurePass1!"):
     resp = client.post(
         "/api/v1/auth/login",
         json={"email": email, "password": password},
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "X-Requested-With": "Expo",
+        },
     )
     assert resp.status_code == 200, resp.get_json()
     data = resp.get_json()

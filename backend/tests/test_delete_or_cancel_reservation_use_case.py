@@ -34,8 +34,8 @@ class FakeBooking:
         self.cancellation_display_label = None
 
 
-def test_cancel_assigned_persists_cancellation_fields_without_reason():
-    """Sans body → reason_code=None → Annulation (historique), non facturé."""
+def test_cancel_assigned_requires_reason():
+    """Une annulation explicite doit fournir un motif pour l'audit."""
     booking = FakeBooking(status="ASSIGNED", driver_id=1)
     uc = DeleteOrCancelCompanyReservationUseCase()
     result = uc.execute(
@@ -45,15 +45,10 @@ def test_cancel_assigned_persists_cancellation_fields_without_reason():
         reason_code=None,
         reason_text=None,
     )
-    assert result.ok is True
-    assert result.action == "cancel"
-    assert str(booking.status).upper() == "CANCELED"
-    assert booking.driver_id is None
-    assert booking.cancelled_at is not None
-    assert booking.cancelled_by_role == "company"
-    assert booking.cancellation_reason_code == "OTHER"
-    assert booking.is_cancellation_billable is False
-    assert booking.cancellation_display_label == "Annulation (historique)"
+    assert result.ok is False
+    assert result.status_code == 400
+    assert result.error == {"error": "Motif d'annulation requis (reason_code)."}
+    assert str(booking.status).upper() == "ASSIGNED"
 
 
 def test_cancel_assigned_persists_cancellation_fields_with_reason():

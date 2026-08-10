@@ -158,7 +158,11 @@ def test_lifecycle_company(db_session, seeded):
 def test_projector_tenant_and_shadow_entitlement(db_session, seeded):
     owner = _user(role=UserRole.COMPANY)
     company = _company(owner, is_approved=True)
-    driver_user = _user(role=UserRole.DRIVER, username="drv2", email="drv2@x.ch")
+    driver_user = _user(
+        role=UserRole.DRIVER,
+        username=f"drv2_{uuid.uuid4().hex[:8]}",
+        email=f"drv2_{uuid.uuid4().hex[:8]}@x.ch",
+    )
     d = Driver()
     d.user_id = driver_user.id
     d.company_id = company.id

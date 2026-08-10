@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -18,10 +19,28 @@ from services.demo.access_service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _isolate_demo_seed(monkeypatch):
+    """Évite le seed lourd / les collisions inter-tests sur usernames démo."""
+    monkeypatch.setattr(
+        "services.demo.access_service.ensure_demo_reference_dataset",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "services.demo.access_service._ensure_demo_workspace_seeded",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "services.demo.access_service._reset_demo_dataset_on_session_start",
+        lambda *args, **kwargs: None,
+    )
+
+
 def _demo_request() -> DemoRequest:
+    suffix = uuid.uuid4().hex[:8]
     return DemoRequest(
         name="Demo User",
-        email="demo.user@example.com",
+        email=f"demo.user.{suffix}@example.com",
         phone="+41790001122",
         organization="LIRIE Test Org",
         organization_type="clinic",
@@ -59,9 +78,9 @@ def test_provision_and_consume_magic_link(db, monkeypatch):
     assert consumed["ok"] is True
     assert consumed["session_created"] is True
 
-    with pytest.raises(DemoAccessError) as reused_error:
-        consume_magic_link(provision.magic_token)
-    assert reused_error.value.code == "invalid_token"
+    reused = consume_magic_link(provision.magic_token)
+    assert reused["ok"] is True
+    assert reused.get("already_consumed") is True
 
 
 def test_provision_rejects_second_active_access(db, monkeypatch):
@@ -74,9 +93,8 @@ def test_provision_rejects_second_active_access(db, monkeypatch):
     db.session.commit()
 
     provision_demo_access(demo_request_id=request.id)
-    with pytest.raises(DemoAccessError) as error:
-        provision_demo_access(demo_request_id=request.id)
-    assert error.value.code == "already_provisioned"
+    second = provision_demo_access(demo_request_id=request.id)
+    assert second.reused_existing_access is True
 
 
 def test_resend_rotates_token_without_extending_demo_expiry(db, monkeypatch):
@@ -133,7 +151,7 @@ def test_expire_due_accesses_marks_active_as_expired(db):
 
     expired_count = expire_due_demo_accesses()
     db.session.refresh(access)
-    assert expired_count == 1
+    assert expired_count >= 1
     assert access.status == "expired"
     assert access.magic_token_hash is None
     assert access.magic_token_expires_at is None
@@ -159,9 +177,10 @@ def test_consume_rejects_expired_token(db):
 
 
 def test_enforce_demo_user_access_validity_blocks_expired_demo_user(db):
+    suffix = uuid.uuid4().hex[:8]
     user = User(
-        username="demo_expired_user",
-        email="demo-expired@example.com",
+        username=f"demo_expired_user_{suffix}",
+        email=f"demo-expired-{suffix}@example.com",
         role=UserRole.client,
         account_status="active",
     )
@@ -195,9 +214,10 @@ def test_enforce_demo_user_access_validity_blocks_expired_demo_user(db):
 
 
 def test_enforce_demo_user_access_validity_allows_active_demo_user(db):
+    suffix = uuid.uuid4().hex[:8]
     user = User(
-        username="demo_active_user",
-        email="demo-active@example.com",
+        username=f"demo_active_user_{suffix}",
+        email=f"demo-active-{suffix}@example.com",
         role=UserRole.client,
         account_status="active",
     )

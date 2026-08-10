@@ -12,144 +12,169 @@ logger = logging.getLogger(__name__)
 
 try:
     from prometheus_client import (  # pyright: ignore[reportMissingImports]
+        REGISTRY,
         Counter,
         Gauge,
         Histogram,
     )
 
+    def _counter(name: str, documentation: str, labelnames: tuple[str, ...] = ()):
+        existing = REGISTRY._names_to_collectors.get(name)
+        if existing is not None:
+            return existing
+        return Counter(name, documentation, labelnames)
+
+    def _gauge(name: str, documentation: str, labelnames: tuple[str, ...] = ()):
+        existing = REGISTRY._names_to_collectors.get(name)
+        if existing is not None:
+            return existing
+        return Gauge(name, documentation, labelnames)
+
+    def _histogram(
+        name: str,
+        documentation: str,
+        labelnames: tuple[str, ...] = (),
+        *,
+        buckets: tuple[float, ...],
+    ):
+        existing = REGISTRY._names_to_collectors.get(name)
+        if existing is not None:
+            return existing
+        return Histogram(name, documentation, labelnames, buckets=buckets)
+
     # Compteurs
-    NOTIFICATIONS_SENT = Counter(
+    NOTIFICATIONS_SENT = _counter(
         "notifications_sent_total",
         "Total notifications envoyées",
-        ["channel", "notification_type", "region"],
+        ("channel", "notification_type", "region"),
     )
 
-    NOTIFICATIONS_FAILED = Counter(
+    NOTIFICATIONS_FAILED = _counter(
         "notifications_failed_total",
         "Total notifications échouées",
-        ["channel", "notification_type", "reason", "region"],
+        ("channel", "notification_type", "reason", "region"),
     )
 
-    NOTIFICATIONS_DEDUPLICATED = Counter(
+    NOTIFICATIONS_DEDUPLICATED = _counter(
         "notifications_deduplicated_total",
         "Notifications déduplicatées",
-        ["notification_type", "region"],
+        ("notification_type", "region"),
     )
 
-    PUSH_TOKENS_INVALIDATED = Counter(
+    PUSH_TOKENS_INVALIDATED = _counter(
         "push_tokens_invalidated_total",
         "Tokens push invalidés",
-        ["reason", "region"],
+        ("reason", "region"),
     )
 
-    CIRCUIT_BREAKER_OPENED = Counter(
+    CIRCUIT_BREAKER_OPENED = _counter(
         "circuit_breaker_opened_total",
         "Nombre de fois où le circuit breaker s'est ouvert",
-        ["service", "region"],
+        ("service", "region"),
     )
 
-    REGION_FAILOVERS = Counter(
+    REGION_FAILOVERS = _counter(
         "region_failovers_total",
         "Nombre de failovers entre régions",
-        ["from_region", "to_region"],
+        ("from_region", "to_region"),
     )
 
     # Gauges
-    CIRCUIT_BREAKER_STATE = Gauge(
+    CIRCUIT_BREAKER_STATE = _gauge(
         "circuit_breaker_state",
         "État du circuit breaker (0=CLOSED, 1=OPEN, 2=HALF_OPEN)",
-        ["service", "region"],
+        ("service", "region"),
     )
 
-    ACTIVE_REGION = Gauge(
+    ACTIVE_REGION = _gauge(
         "active_region",
         "Région active (1=eu-west-1, 2=eu-central-1)",
-        ["region"],
+        ("region",),
     )
 
-    REDIS_QUEUE_LENGTH = Gauge(
+    REDIS_QUEUE_LENGTH = _gauge(
         "redis_queue_length",
         "Longueur de la queue Redis",
-        ["queue", "region"],
+        ("queue", "region"),
     )
 
-    KAFKA_CONSUMER_LAG = Gauge(
+    KAFKA_CONSUMER_LAG = _gauge(
         "kafka_consumer_lag",
         "Lag du consumer Kafka",
-        ["topic", "partition", "consumer_group"],
+        ("topic", "partition", "consumer_group"),
     )
 
-    DLQ_MESSAGES = Gauge(
+    DLQ_MESSAGES = _gauge(
         "dlq_messages_total",
         "Nombre de messages en Dead Letter Queue",
-        ["source", "region"],
+        ("source", "region"),
     )
 
     # Histogrammes (latence)
-    PUSH_NOTIFICATION_DURATION = Histogram(
+    PUSH_NOTIFICATION_DURATION = _histogram(
         "push_notification_duration_seconds",
         "Durée d'envoi d'une notification push",
-        ["region"],
-        buckets=[0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10],
+        ("region",),
+        buckets=(0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10),
     )
 
-    SMS_NOTIFICATION_DURATION = Histogram(
+    SMS_NOTIFICATION_DURATION = _histogram(
         "sms_notification_duration_seconds",
         "Durée d'envoi d'un SMS",
-        ["region"],
-        buckets=[0.1, 0.5, 1, 2, 5, 10, 30],
+        ("region",),
+        buckets=(0.1, 0.5, 1, 2, 5, 10, 30),
     )
 
-    EMAIL_NOTIFICATION_DURATION = Histogram(
+    EMAIL_NOTIFICATION_DURATION = _histogram(
         "email_notification_duration_seconds",
         "Durée d'envoi d'un email",
-        ["region"],
-        buckets=[0.1, 0.5, 1, 2, 5, 10, 30],
+        ("region",),
+        buckets=(0.1, 0.5, 1, 2, 5, 10, 30),
     )
 
     PROMETHEUS_AVAILABLE = True
 
-    NOTIFICATIONS_CREATED = Counter(
+    NOTIFICATIONS_CREATED = _counter(
         "notifications_created_total",
         "Notifications créées dans le pipeline",
-        ["notification_type"],
+        ("notification_type",),
     )
 
-    NOTIFICATIONS_DELIVERED = Counter(
+    NOTIFICATIONS_DELIVERED = _counter(
         "notifications_delivered_total",
         "Notifications délivrées côté mobile (ack reçu)",
-        ["notification_type"],
+        ("notification_type",),
     )
 
-    NOTIFICATION_E2E_LATENCY = Histogram(
+    NOTIFICATION_E2E_LATENCY = _histogram(
         "notification_e2e_latency_seconds",
         "Latence bout-en-bout notification (created -> fcm_sent)",
-        buckets=[0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60],
+        buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60),
     )
 
-    DEDUP_HITS = Counter(
+    DEDUP_HITS = _counter(
         "notifications_dedup_hits_total",
         "Notifications bloquées par dedup Redis",
-        ["notification_type"],
+        ("notification_type",),
     )
 
-    THROTTLE_BLOCKS = Counter(
+    THROTTLE_BLOCKS = _counter(
         "notifications_throttle_blocks_total",
         "Notifications bloquées par throttle Redis",
-        ["notification_type"],
+        ("notification_type",),
     )
 
     # Cardinalité maîtrisée — pas de correlation_id / device_token_id / failure_reason
-    PUSH_ATTEMPT_STATUS = Counter(
+    PUSH_ATTEMPT_STATUS = _counter(
         "push_attempt_status_total",
         "Tentatives push par statut de livraison canonique",
-        [
+        (
             "platform",
             "provider",
             "delivery_status",
             "notification_type",
             "error_category",
-        ],
+        ),
     )
 
 except ImportError:

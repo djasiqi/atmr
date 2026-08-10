@@ -27,7 +27,7 @@ class TestPasswordlessDebugCode:
         from models.enums import UserRole
 
         user = User(
-            username=email.split("@")[0],
+            username=email.split("@", maxsplit=1)[0],
             email=email,
             role=UserRole.CLIENT,
         )
@@ -98,6 +98,7 @@ class TestChangePasswordTokenVersion:
         login = client.post(
             "/api/v1/auth/login",
             json={"email": user.email, "password": "OldSecurePass1!"},
+            headers={"X-Requested-With": "Expo"},
         )
         assert login.status_code == 200, login.get_json()
         token = login.get_json().get("access_token") or login.get_json().get("token")

@@ -7,70 +7,95 @@ Permet de suivre l'efficacité et la performance des notifications.
 
 from typing import Any
 
-from prometheus_client import Counter, Histogram  # type: ignore[import-untyped]
+from prometheus_client import (  # type: ignore[import-untyped]
+    REGISTRY,
+    Counter,
+    Histogram,
+)
+
+
+def _counter(name: str, documentation: str, labelnames: tuple[str, ...] = ()):
+    existing = REGISTRY._names_to_collectors.get(name)
+    if existing is not None:
+        return existing
+    return Counter(name, documentation, labelnames)
+
+
+def _histogram(
+    name: str,
+    documentation: str,
+    labelnames: tuple[str, ...] = (),
+    *,
+    buckets: tuple[float, ...],
+):
+    existing = REGISTRY._names_to_collectors.get(name)
+    if existing is not None:
+        return existing
+    return Histogram(name, documentation, labelnames, buckets=buckets)
+
 
 # ✅ Compteurs de notifications envoyées
-notifications_sent_total = Counter(
+notifications_sent_total = _counter(
     "notifications_sent_total",
     "Nombre total de notifications envoyées",
-    ["notification_type", "channel", "status"],
+    ("notification_type", "channel", "status"),
 )
 
 # ✅ Compteurs d'actions sur notifications
-notification_actions_total = Counter(
+notification_actions_total = _counter(
     "notification_actions_total",
     "Actions effectuées sur les notifications",
-    ["notification_type", "action_type"],
+    ("notification_type", "action_type"),
 )
 
 # ✅ Compteurs d'ouvertures
-notifications_opened_total = Counter(
+notifications_opened_total = _counter(
     "notifications_opened_total",
     "Notifications ouvertes par les utilisateurs",
-    ["notification_type"],
+    ("notification_type",),
 )
 
 # ✅ Compteurs d'échecs
-notifications_failed_total = Counter(
+notifications_failed_total = _counter(
     "notifications_failed_total",
     "Notifications en échec",
-    ["notification_type", "error_reason"],
+    ("notification_type", "error_reason"),
 )
 
 # ✅ Compteurs mode nuit
-notifications_skipped_night_total = Counter(
+notifications_skipped_night_total = _counter(
     "notifications_skipped_night_total",
     "Notifications bloquées par le mode nuit",
-    ["notification_type", "reason"],
+    ("notification_type", "reason"),
 )
 
 # ✅ Histogramme temps de délivrance
-notification_delivery_duration_seconds = Histogram(
+notification_delivery_duration_seconds = _histogram(
     "notification_delivery_duration_seconds",
     "Temps de délivrance des notifications",
-    ["notification_type"],
+    ("notification_type",),
     buckets=(0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0),
 )
 
 # ✅ Histogramme temps de réponse (action)
-notification_action_response_duration_seconds = Histogram(
+notification_action_response_duration_seconds = _histogram(
     "notification_action_response_duration_seconds",
     "Temps entre notification et action utilisateur",
-    ["notification_type", "action_type"],
+    ("notification_type", "action_type"),
     buckets=(1.0, 5.0, 10.0, 30.0, 60.0, 300.0, 600.0, 1800.0),
 )
 
 # ✅ Métriques notifications silencieuses (Phase 2.6)
-silent_notifications_sent_total = Counter(
+silent_notifications_sent_total = _counter(
     "silent_notifications_sent_total",
     "Notifications silencieuses envoyées pour sync données",
-    ["sync_type", "status"],
+    ("sync_type", "status"),
 )
 
-silent_sync_duration_seconds = Histogram(
+silent_sync_duration_seconds = _histogram(
     "silent_sync_duration_seconds",
     "Durée de synchronisation données silencieuses",
-    ["sync_type"],
+    ("sync_type",),
     buckets=(0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0),
 )
 

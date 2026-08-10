@@ -141,10 +141,9 @@ class TestComputeCancellationFields:
 class TestGetAllReasonCodes:
     """Tests pour get_all_reason_codes()."""
 
-    def test_returns_seven_codes(self) -> None:
-        """Retourne les 7 motifs."""
+    def test_returns_all_current_codes(self) -> None:
+        """Retourne les motifs actuellement exposés au sélecteur."""
         codes = get_all_reason_codes()
-        assert len(codes) == 7
         assert set(codes) == set(CANCELLATION_REASON_LABELS.keys())
 
 

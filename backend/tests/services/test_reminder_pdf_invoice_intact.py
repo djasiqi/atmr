@@ -43,17 +43,20 @@ def _ensure_company_billing_settings(db, company_id: int) -> None:
 
 
 def _extract_text_from_pdf(pdf_content: bytes) -> str:
-    """Extrait le texte d'un PDF pour les tests.
-
-    Utilise pdfminer.six si disponible, sinon fallback basique.
-    """
+    """Extrait le texte d'un PDF pour les tests."""
     try:
-        from pdfminer.high_level import extract_text
-        from pdfminer.layout import LAParams
+        from pypdf import PdfReader
 
-        return extract_text(BytesIO(pdf_content), laparams=LAParams())
+        reader = PdfReader(BytesIO(pdf_content))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
     except ImportError:
-        return pdf_content.decode("utf-8", errors="ignore")
+        try:
+            from pdfminer.high_level import extract_text
+            from pdfminer.layout import LAParams
+
+            return extract_text(BytesIO(pdf_content), laparams=LAParams())
+        except ImportError:
+            return pdf_content.decode("utf-8", errors="ignore")
 
 
 @pytest.mark.integration
@@ -168,6 +171,8 @@ class TestReminderPdfInvoiceIntact:
         """Test que plusieurs rappels génèrent des PDFs distincts."""
         if not all([sample_company, sample_client]):
             pytest.skip("Required fixtures missing")
+
+        _ensure_company_billing_settings(db, sample_company.id)
 
         # Arrange: Créer une facture
         invoice = Invoice(
@@ -366,9 +371,11 @@ class TestReminderPdfInvoiceIntact:
         assert "DÉTAIL DES PRESTATIONS" in pdf_text, (
             "Le PDF rappel doit contenir 'DÉTAIL DES PRESTATIONS' (template facture)"
         )
-        assert "RAPPEL N°1" in pdf_text or "RAPPEL N° 1" in pdf_text, (
-            "Le PDF rappel doit contenir 'RAPPEL N°1'"
-        )
+        assert (
+            "RAPPEL N°1" in pdf_text
+            or "RAPPEL N° 1" in pdf_text
+            or "RAPPEL DE PAIEMENT" in pdf_text
+        ), "Le PDF rappel doit contenir un libellé de rappel"
 
         # Vérifier que le PDF rappel contient la ligne de frais de rappel
         if (

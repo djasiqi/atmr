@@ -51,13 +51,16 @@ def test_version_check_includes_startup_runtime(client, monkeypatch):
     assert payload["startup_runtime"]["ios_startup_fatal_recovery_disabled"] is True
 
 
-def test_feature_flags_runtime_status_endpoint(client, monkeypatch):
+def test_feature_flags_runtime_status_endpoint(client, admin_headers, monkeypatch):
     from services.infrastructure.runtime_flags import (
         IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV,
     )
 
     monkeypatch.setenv(IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV, "1")
-    response = client.get("/api/feature-flags/runtime-status")
+    response = client.get(
+        "/api/feature-flags/runtime-status",
+        headers=admin_headers,
+    )
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["mobile_startup"]["ios_startup_fatal_recovery_disabled"] is True

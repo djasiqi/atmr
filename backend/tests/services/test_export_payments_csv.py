@@ -7,10 +7,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
-from models import Invoice, InvoicePayment, db
+from models import Company, Invoice, InvoicePayment, db
 from models.enums import (
     InvoiceBillingStrategy,
     InvoiceStatus,
@@ -26,33 +27,32 @@ from tests.factories import (
 
 
 @pytest.fixture
-def company(app):
-    """Créer une entreprise de test."""
+def company(app, db):
+    """Créer une entreprise de test (id stable hors session)."""
     with app.app_context():
-        company = CompanyFactory()
+        created = CompanyFactory()
         db.session.commit()
-        return company
+        return SimpleNamespace(id=created.id)
 
 
 @pytest.fixture
-def billing_client(app):
-    """Créer un client facturation (évite le shadowing du Flask test client)."""
+def billing_client(app, db, company):
+    """Créer un client facturation rattaché à l'entreprise de test."""
     with app.app_context():
         user = UserFactory(role=UserRole.CLIENT)
         db.session.flush()
-        client = ClientFactory(user_id=user.id)
+        client = ClientFactory(user_id=user.id, company_id=company.id)
         db.session.commit()
-        db.session.refresh(client)
-        return client
+        return SimpleNamespace(id=client.id)
 
 
 @pytest.fixture
-def clinic_company(app):
+def clinic_company(app, db):
     """Créer une clinique (S2)."""
     with app.app_context():
         clinic = CompanyFactory(name="Clinique Test S2")
         db.session.commit()
-        return clinic
+        return SimpleNamespace(id=clinic.id)
 
 
 class TestExportPaymentsCSV:
@@ -61,9 +61,10 @@ class TestExportPaymentsCSV:
     def test_export_includes_payment_in_month(self, app, company, billing_client):
         """Test 1: Paiement janvier inclus dans export janvier."""
         with app.app_context():
+            company_obj = db.session.get(Company, company.id)
             # Créer une facture avec un paiement en janvier 2026
             invoice = InvoiceFactory(
-                company_id=company.id,
+                company=company_obj,
                 client_id=billing_client.id,
                 invoice_number="INV-2026-01-0001",
                 status=InvoiceStatus.PAID,
@@ -101,8 +102,9 @@ class TestExportPaymentsCSV:
         """Test 2: Paiement février exclu de l'export janvier."""
         with app.app_context():
             # Créer une facture avec un paiement en février 2026
+            company_obj = db.session.get(Company, company.id)
             invoice = InvoiceFactory(
-                company_id=company.id,
+                company=company_obj,
                 client_id=billing_client.id,
                 invoice_number="INV-2026-02-0001",
                 status=InvoiceStatus.PAID,
@@ -138,8 +140,9 @@ class TestExportPaymentsCSV:
         """Test 3: Paiement partiel => 2 lignes dans le CSV."""
         with app.app_context():
             # Créer une facture avec 2 paiements partiels
+            company_obj = db.session.get(Company, company.id)
             invoice = InvoiceFactory(
-                company_id=company.id,
+                company=company_obj,
                 client_id=billing_client.id,
                 invoice_number="INV-2026-01-0002",
                 status=InvoiceStatus.PARTIALLY_PAID,
@@ -157,7 +160,7 @@ class TestExportPaymentsCSV:
                 invoice_id=invoice.id,
                 amount=Decimal("30.00"),
                 paid_at=datetime(2026, 1, 20, 12, 0, 0, tzinfo=UTC),
-                method=PaymentMethod.CARD,
+                method=PaymentMethod.CASH,
             )
             db.session.add(payment1)
             db.session.add(payment2)
@@ -183,8 +186,9 @@ class TestExportPaymentsCSV:
         """Test 4: Facture non payée => exclue de l'export."""
         with app.app_context():
             # Créer une facture non payée (sans paiement)
+            company_obj = db.session.get(Company, company.id)
             invoice = InvoiceFactory(
-                company_id=company.id,
+                company=company_obj,
                 client_id=billing_client.id,
                 invoice_number="INV-2026-01-0003",
                 status=InvoiceStatus.SENT,
@@ -209,8 +213,9 @@ class TestExportPaymentsCSV:
         """Test 5: Facture annulée => exclue même si payée."""
         with app.app_context():
             # Créer une facture annulée avec un paiement
+            company_obj = db.session.get(Company, company.id)
             invoice = InvoiceFactory(
-                company_id=company.id,
+                company=company_obj,
                 client_id=billing_client.id,
                 invoice_number="INV-2026-01-0004",
                 status=InvoiceStatus.CANCELLED,
@@ -246,8 +251,9 @@ class TestExportPaymentsCSV:
         """Test 6: Facture S2 => utilise nom clinique (pas nom client)."""
         with app.app_context():
             # Créer une facture S2 (clinique)
+            company_obj = db.session.get(Company, company.id)
             invoice = InvoiceFactory(
-                company_id=company.id,
+                company=company_obj,
                 client_id=billing_client.id,
                 invoice_number="INV-2026-01-0005",
                 status=InvoiceStatus.PAID,
@@ -288,8 +294,9 @@ class TestExportPaymentsCSV:
         """Test 7: Vérifier que le CSV contient toutes les colonnes requises."""
         with app.app_context():
             # Créer une facture avec un paiement
+            company_obj = db.session.get(Company, company.id)
             invoice = InvoiceFactory(
-                company_id=company.id,
+                company=company_obj,
                 client_id=billing_client.id,
                 invoice_number="INV-2026-01-0006",
                 status=InvoiceStatus.PAID,

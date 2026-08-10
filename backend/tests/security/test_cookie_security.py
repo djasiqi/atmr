@@ -244,9 +244,10 @@ def test_cookies_have_max_age(
     # Vérifier que Max-Age ou expires est présent
     assert "Max-Age" in combined_cookies or "expires" in combined_cookies.lower()
 
-    # Vérifier que chaque cookie sensible a une expiration
+    # L'access token est persistant. Le refresh sans remember_me est
+    # volontairement un cookie de session : ne pas lui imposer une expiration.
     for cookie_header in set_cookie_headers:
-        if "access_token=" in cookie_header or "refresh_token=" in cookie_header:
+        if "access_token=" in cookie_header:
             assert "Max-Age" in cookie_header or "expires" in cookie_header.lower(), (
                 f"Cookie devrait avoir une expiration: {cookie_header}"
             )

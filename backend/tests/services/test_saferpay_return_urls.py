@@ -22,7 +22,7 @@ def test_validate_return_url_override_rejects_unknown(monkeypatch):
     monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
     monkeypatch.delenv("SAFERPAY_CHECKOUT_PUBLIC_BASE_URL", raising=False)
     monkeypatch.delenv("WORLDLINE_CHECKOUT_PUBLIC_BASE_URL", raising=False)
-    with pytest.raises(ValueError, match="return_url personnalisee interdite"):
+    with pytest.raises(ValueError, match="return_url non autorisée"):
         ru.validate_return_url_override("https://evil.com/phish")
 
 

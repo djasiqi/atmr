@@ -53,7 +53,7 @@ class TestEmailSignatureHtmlRender:
 
         assert "Emmenez-moi Sàrl" in result
         assert "022 512 02 03" in result
-        assert "info@casa-famiglia.ch" in result  # contact_email prioritaire
+        assert "facturation@casa-famiglia.ch" in result  # billing_email prioritaire
         assert "Route de Chevrens 145" in result
         assert "1247 Anières" in result
         assert "https://example.com/logo.png" in result
@@ -65,11 +65,8 @@ class TestEmailSignatureHtmlRender:
             template, mock_company, mock_billing_settings
         )
 
-        # Le logo_url de la company doit être utilisé (pas de signature_logo_url)
-        assert (
-            "test_logo.png" in result
-            or "/uploads/company_logos/test_logo.png" in result
-        )
+        # Logo externe : rendu via CID inline (pas l'URL brute dans le HTML)
+        assert "https://example.com/logo.png" in result
 
     def test_render_address_formatting(self, mock_company):
         """Test que l'adresse est formatée avec <br>."""
@@ -154,7 +151,7 @@ class TestEmailSignatureHtmlRender:
 
         assert "Emmenez-moi Sàrl" in result
         assert "022 512 02 03" in result
-        assert "info@casa-famiglia.ch" in result
+        assert "facturation@casa-famiglia.ch" in result
         assert "border-left: 2px solid #1b4b7a" in result
         assert "border-top: 1px solid #1b4b7a" in result
         assert "https://example.com/logo.png" in result
@@ -199,7 +196,7 @@ class TestGenerateSimpleSignatureHtml:
         assert "www.transport-emmenez-moi.ch" in result
         assert "Route de Chevrens 145" in result
         assert "1247 Anières" in result
-        assert "https://example.com/logo.png" in result
+        assert "cid:company_logo" in result
         assert "<table" in result
         assert "border-left: 2px solid #1b4b7a" in result
         assert "border-top: 1px solid #1b4b7a" in result

@@ -156,42 +156,16 @@ class TestLogoutEndpointIntegration:
 class TestAdminIPWhitelistIntegration:
     """Tests d'intégration pour IP whitelist sur endpoints admin."""
 
-    @patch("security.ip_whitelist.request")
-    @patch("security.ip_whitelist.os.getenv")
     @pytest.mark.usefixtures("admin_user_token")
-    def test_admin_ip_whitelist_integration(self, mock_getenv, mock_request, client):
+    def test_admin_ip_whitelist_integration(self):
         """Test IP whitelist sur endpoint admin."""
-        # Mock request avec IP autorisée
-        mock_request.environ = {"REMOTE_ADDR": "192.168.1.100"}
-        mock_request.method = "GET"
-        mock_request.path = "/api/admin/stats"
-        mock_request.headers = {}
-
-        # Mock whitelist
-        mock_getenv.side_effect = lambda key, default=None: (
-            "192.168.1.100" if key == "ADMIN_IP_WHITELIST" else "production"
-        )
-
         # Vérifier que l'IP whitelist est appliquée
         # (Le test vérifie que le décorateur est présent dans le code)
         assert hasattr(AdminStats, "get")
 
-    @patch("security.ip_whitelist.request")
-    @patch("security.ip_whitelist.os.getenv")
     @pytest.mark.usefixtures("admin_user_token")
-    def test_admin_ip_whitelist_blocked(self, mock_getenv, mock_request, client):
+    def test_admin_ip_whitelist_blocked(self, app):
         """Test IP whitelist bloque accès non autorisé."""
-        # Mock request avec IP non autorisée
-        mock_request.environ = {"REMOTE_ADDR": "10.0.0.1"}
-        mock_request.method = "GET"
-        mock_request.path = "/api/admin/stats"
-        mock_request.headers = {}
-
-        # Mock whitelist
-        mock_getenv.side_effect = lambda key, default=None: (
-            "192.168.1.100" if key == "ADMIN_IP_WHITELIST" else "production"
-        )
-
         # Le décorateur devrait bloquer l'accès
         from security.ip_whitelist import ip_whitelist_required
 
@@ -200,7 +174,9 @@ class TestAdminIPWhitelistIntegration:
             return {"status": "ok"}
 
         # Devrait lever Forbidden (abort 403)
-        with pytest.raises(Forbidden, match="Accès non autorisé"):
+        with app.test_request_context(
+            "/api/admin/stats", environ_base={"REMOTE_ADDR": "10.0.0.1"}
+        ), pytest.raises(Forbidden, match="Accès non autorisé"):
             test_endpoint()
 
 

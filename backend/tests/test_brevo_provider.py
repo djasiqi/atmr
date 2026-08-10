@@ -147,16 +147,17 @@ class TestBrevoEmailProvider:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "domains": [
-                {
-                    "domain_name": "test.ch",
-                    "verified": True,
-                    "dns_records": {
-                        "spf_record": "v=spf1 include:spf.brevo.com ~all",
-                        "dkim_record": "k=rsa; p=MIGfMA...",
-                    },
-                }
-            ]
+            "verified": True,
+            "dns_records": {
+                "dkim1Record": {
+                    "host_name": "mail._domainkey.test.ch",
+                    "value": "k=rsa; p=MIGfMA...",
+                },
+                "brevo_code": {
+                    "host_name": "@",
+                    "value": "v=spf1 include:spf.brevo.com ~all",
+                },
+            },
         }
         mock_get.return_value = mock_response
 
@@ -165,7 +166,9 @@ class TestBrevoEmailProvider:
 
         assert result.verified is True
         assert result.domain == "test.ch"
+        assert result.spf_record is not None
         assert "spf.brevo.com" in result.spf_record
+        assert result.dkim_record is not None
         assert "k=rsa" in result.dkim_record
 
     @patch("services.email.brevo_provider.requests.get")
@@ -174,16 +177,17 @@ class TestBrevoEmailProvider:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "domains": [
-                {
-                    "domain_name": "test.ch",
-                    "verified": False,
-                    "dns_records": {
-                        "spf_record": "v=spf1 include:spf.brevo.com ~all",
-                        "dkim_record": "k=rsa; p=MIGfMA...",
-                    },
-                }
-            ]
+            "verified": False,
+            "dns_records": {
+                "dkim1Record": {
+                    "host_name": "mail._domainkey.test.ch",
+                    "value": "k=rsa; p=MIGfMA...",
+                },
+                "brevo_code": {
+                    "host_name": "@",
+                    "value": "v=spf1 include:spf.brevo.com ~all",
+                },
+            },
         }
         mock_get.return_value = mock_response
 
@@ -199,15 +203,17 @@ class TestBrevoEmailProvider:
     def test_verify_domain_not_found(self, mock_get):
         """Test vérification domaine non configuré."""
         mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"domains": []}
+        mock_response.status_code = 404
+        mock_response.text = "Not found"
         mock_get.return_value = mock_response
 
-        provider = BrevoEmailProvider(api_key="test_key")
-        result = provider.verify_domain("notfound.ch")
+        with patch.object(BrevoEmailProvider, "_add_domain_to_brevo", return_value=None):
+            provider = BrevoEmailProvider(api_key="test_key")
+            result = provider.verify_domain("notfound.ch")
 
         assert result.verified is False
         assert result.domain == "notfound.ch"
+        assert result.error is not None
         assert "non configuré" in result.error
 
     @patch("services.email.brevo_provider.requests.get")
@@ -216,16 +222,17 @@ class TestBrevoEmailProvider:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "domains": [
-                {
-                    "domain_name": "test.ch",
-                    "verified": False,
-                    "dns_records": {
-                        "spf_record": "v=spf1 include:spf.brevo.com ~all",
-                        "dkim_record": "k=rsa; p=MIGfMA...",
-                    },
-                }
-            ]
+            "verified": False,
+            "dns_records": {
+                "dkim1Record": {
+                    "host_name": "mail._domainkey.test.ch",
+                    "value": "k=rsa; p=MIGfMA...",
+                },
+                "brevo_code": {
+                    "host_name": "@",
+                    "value": "v=spf1 include:spf.brevo.com ~all",
+                },
+            },
         }
         mock_get.return_value = mock_response
 

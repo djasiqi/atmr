@@ -30,7 +30,7 @@ def _app_context(app: Flask):
 class TestAnalyzeUnassignedReasons:
     """Tests pour la méthode _analyze_unassigned_reasons."""
 
-    @patch("services.unified_dispatch.analysis.UnassignedAnalyzer")
+    @patch("services.unified_dispatch.validation.analysis.UnassignedAnalyzer")
     def test_analyze_unassigned_reasons_success(self, mock_analyzer_class):
         """Test : Analyse réussie avec UnassignedAnalyzer."""
         finalizer = MetricsFinalizer()
@@ -56,7 +56,7 @@ class TestAnalyzeUnassignedReasons:
         )
 
     @patch(
-        "services.unified_dispatch.analysis.UnassignedAnalyzer",
+        "services.unified_dispatch.validation.analysis.UnassignedAnalyzer",
         side_effect=ImportError("Module not found"),
     )
     def test_analyze_unassigned_reasons_import_error(self, mock_analyzer_class):

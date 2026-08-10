@@ -1415,6 +1415,8 @@ class GenerateInvoiceUseCase:
                 else:
                     mark_pdf_failed(invoice, "PDF_EMPTY")
                 db.session.commit()
+            except (KeyError, AttributeError):
+                raise
             except Exception as pdf_err:
                 logger.exception(
                     "Échec génération ou persistance PDF après création facture invoice_id=%s",

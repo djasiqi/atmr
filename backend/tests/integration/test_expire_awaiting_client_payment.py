@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+import uuid
+
 import pytest
 
 from models import Booking, Payment
@@ -171,7 +173,7 @@ class TestExpireAwaitingClientPayment:
             payment_provider="saferpay",
         )
         pay.saferpay_token = None
-        pay.saferpay_transaction_id = "tx-orphan"
+        pay.saferpay_transaction_id = f"tx-orphan-{uuid.uuid4().hex[:12]}"
         db.session.add(pay)
         db.session.commit()
 

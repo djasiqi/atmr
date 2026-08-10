@@ -29,6 +29,9 @@ class TestExecutionTime:
         db.session.add(company)
         db.session.commit()
 
+        future_day = datetime.now(UTC) + timedelta(days=14)
+        for_date = future_day.strftime("%Y-%m-%d")
+
         # Créer 10 bookings
         bookings = []
         for i in range(10):
@@ -37,7 +40,10 @@ class TestExecutionTime:
             booking.pickup_lon = 6.1 + (i * 0.01)
             booking.dropoff_lat = 46.3 + (i * 0.01)
             booking.dropoff_lon = 6.2 + (i * 0.01)
-            booking.scheduled_time = datetime(2026, 1, 15, 12 + i, 0, 0, tzinfo=UTC)
+            hour = min(12 + i, 23)
+            booking.scheduled_time = future_day.replace(
+                hour=hour, minute=0, second=0, microsecond=0
+            )
             bookings.append(booking)
 
         # Créer 5 drivers
@@ -60,7 +66,7 @@ class TestExecutionTime:
         start_time = time.time()
         result = orchestrator.execute(
             company_id=company.id,
-            for_date="2025-01-14",
+            for_date=for_date,
             mode="auto",
         )
         execution_time = time.time() - start_time
@@ -80,6 +86,9 @@ class TestExecutionTime:
         db.session.add(company)
         db.session.commit()
 
+        future_day = datetime.now(UTC) + timedelta(days=14)
+        for_date = future_day.strftime("%Y-%m-%d")
+
         # Créer 100 bookings
         bookings = []
         for i in range(100):
@@ -88,8 +97,9 @@ class TestExecutionTime:
             booking.pickup_lon = 6.1 + ((i % 10) * 0.01)
             booking.dropoff_lat = 46.3 + ((i % 10) * 0.01)
             booking.dropoff_lon = 6.2 + ((i % 10) * 0.01)
-            booking.scheduled_time = datetime(
-                2026, 1, 15, 12 + (i // 10), 0, 0, tzinfo=UTC
+            hour = min(12 + (i // 10), 23)
+            booking.scheduled_time = future_day.replace(
+                hour=hour, minute=0, second=0, microsecond=0
             )
             bookings.append(booking)
 
@@ -113,7 +123,7 @@ class TestExecutionTime:
         start_time = time.time()
         result = orchestrator.execute(
             company_id=company.id,
-            for_date="2025-01-14",
+            for_date=for_date,
             mode="auto",
         )
         execution_time = time.time() - start_time
@@ -137,6 +147,9 @@ class TestExecutionTime:
         db.session.add(company)
         db.session.commit()
 
+        future_day = datetime.now(UTC) + timedelta(days=14)
+        for_date = future_day.strftime("%Y-%m-%d")
+
         # Créer 1000 bookings (par batch pour éviter la lenteur)
         bookings = []
         for i in range(1000):
@@ -145,8 +158,9 @@ class TestExecutionTime:
             booking.pickup_lon = 6.1 + ((i % 20) * 0.01)
             booking.dropoff_lat = 46.3 + ((i % 20) * 0.01)
             booking.dropoff_lon = 6.2 + ((i % 20) * 0.01)
-            booking.scheduled_time = datetime(
-                2026, 1, 15, 12 + ((i // 50) % 12), 0, 0, tzinfo=UTC
+            hour = min(12 + ((i // 50) % 12), 23)
+            booking.scheduled_time = future_day.replace(
+                hour=hour, minute=0, second=0, microsecond=0
             )
             bookings.append(booking)
 
@@ -170,7 +184,7 @@ class TestExecutionTime:
         start_time = time.time()
         result = orchestrator.execute(
             company_id=company.id,
-            for_date="2025-01-14",
+            for_date=for_date,
             mode="auto",
         )
         execution_time = time.time() - start_time
@@ -204,13 +218,15 @@ class TestMemoryUsage:
         mock_lock_manager.return_value = mock_lock_instance
 
         orchestrator = DispatchOrchestrator()
+        future_day = datetime.now(UTC) + timedelta(days=14)
+        for_date = future_day.strftime("%Y-%m-%d")
 
         # Démarrer le traçage mémoire
         tracemalloc.start()
 
         result = orchestrator.execute(
             company_id=company.id,
-            for_date="2025-01-14",
+            for_date=for_date,
             mode="auto",
         )
 
@@ -241,12 +257,14 @@ class TestPerformanceRegression:
         mock_lock_manager.return_value = mock_lock_instance
 
         orchestrator = DispatchOrchestrator()
+        future_day = datetime.now(UTC) + timedelta(days=14)
+        for_date = future_day.strftime("%Y-%m-%d")
 
         # Mesurer le temps d'exécution
         start_time = time.time()
         result = orchestrator.execute(
             company_id=company.id,
-            for_date="2025-01-14",
+            for_date=for_date,
             mode="auto",
         )
         execution_time = time.time() - start_time

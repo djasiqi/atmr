@@ -5,7 +5,6 @@ from typing import Any
 
 import pytest
 
-from services import eta_service
 from services.geolocation.routing_interface import set_routing_service
 from services.unified_dispatch.data import build_time_matrix, calculate_eta
 from services.unified_dispatch.settings import Settings
@@ -82,7 +81,8 @@ def test_calculate_eta_fallback_uses_routing_service_eta_seconds(monkeypatch) ->
 
     # Forcer l'échec de EtaService pour prendre le chemin "legacy fallback"
     monkeypatch.setattr(
-        eta_service, "get_eta_service", lambda: (_ for _ in ()).throw(Exception("boom"))
+        "services.business.eta.get_eta_service",
+        lambda: (_ for _ in ()).throw(Exception("boom")),
     )
 
     settings = Settings()

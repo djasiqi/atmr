@@ -249,7 +249,7 @@ def operational_status(
 def resolve_actions(
     *,
     status: str,
-    _statement: PlatformInvoice | None,
+    statement: PlatformInvoice | None = None,
     primary_invoice: PlatformIssuedInvoice | None,
     credit_note_id: int | None,
     issuable: bool,
@@ -258,6 +258,7 @@ def resolve_actions(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Calcule primary_action, allowed_actions, blocked_actions."""
+    _ = statement  # réservé compat API / évolutions dossier
     now = now or datetime.now(UTC)
     caps = caps if caps is not None else set()
     allowed: list[str] = []

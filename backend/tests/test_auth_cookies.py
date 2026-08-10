@@ -301,9 +301,11 @@ class TestRefreshTokenCookies:
 class TestLogoutCookies:
     """Tests pour l'endpoint /auth/logout avec suppression de cookies."""
 
-    def test_logout_clears_domain_and_host_only_cookies(self, client, sample_user, app):
+    def test_logout_clears_domain_and_host_only_cookies(
+        self, client, sample_user, app, monkeypatch
+    ):
         """Logout doit expirer Domain configuré ET host-only (pas de session fantôme)."""
-        app.config["COOKIE_DOMAIN"] = ".lirie.ch"
+        monkeypatch.setitem(app.config, "COOKIE_DOMAIN", ".lirie.ch")
 
         login_response = client.post(
             "/api/v1/auth/login",
@@ -326,9 +328,9 @@ class TestLogoutCookies:
         ]
         assert len(access_headers) >= 2
 
-    def test_logout_clears_cookies_without_jwt(self, client, app):
+    def test_logout_clears_cookies_without_jwt(self, client, app, monkeypatch):
         """Sans JWT, logout reste 200 et efface quand même les cookies web."""
-        app.config["COOKIE_DOMAIN"] = ".lirie.ch"
+        monkeypatch.setitem(app.config, "COOKIE_DOMAIN", ".lirie.ch")
         logout_response = client.post("/api/v1/auth/logout")
         assert logout_response.status_code == 200
         set_cookie_headers = logout_response.headers.getlist("Set-Cookie")
@@ -659,22 +661,25 @@ class TestCookieSecurityAttributes:
 
         assert response.status_code == 200
 
-        # Vérifier que max_age est défini (dans Set-Cookie)
+        # L'access token est persistant ; le refresh sans remember_me est un
+        # cookie de session et les en-têtes de nettoyage portent Max-Age=0.
         set_cookie_headers = response.headers.getlist("Set-Cookie")
-        set_cookie_combined = ", ".join(set_cookie_headers)
-        # Flask peut utiliser Max-Age ou expires
-        # On vérifie juste que quelque chose est défini
-        assert (
-            "Max-Age" in set_cookie_combined or "expires" in set_cookie_combined.lower()
+        access_cookie = next(
+            (
+                header
+                for header in set_cookie_headers
+                if header.startswith("access_token=")
+                and header.split("=", 1)[1].split(";", 1)[0]
+            ),
+            None,
         )
+        assert access_cookie is not None, "Cookie access_token manquant"
+        assert "Max-Age" in access_cookie or "expires" in access_cookie.lower()
 
-        # Vérifier que les cookies ont un max_age valide (positif)
-        # Les cookies devraient avoir un max_age > 0 (pas expirés immédiatement)
-        if "Max-Age" in set_cookie_combined:
-            # Extraire Max-Age et vérifier qu'il est > 0
-            import re
+        import re
 
-            max_age_match = re.search(r"Max-Age=(\d+)", set_cookie_combined)
-            if max_age_match:
-                max_age = int(max_age_match.group(1))
-                assert max_age > 0, "Max-Age devrait être > 0 pour les cookies de login"
+        max_age_match = re.search(r"Max-Age=(\d+)", access_cookie)
+        if max_age_match:
+            assert int(max_age_match.group(1)) > 0, (
+                "Max-Age devrait être > 0 pour le cookie access_token"
+            )

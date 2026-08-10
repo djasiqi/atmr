@@ -100,11 +100,12 @@ class TestInstitutionPatientsCRUD:
 
         assert response.status_code == 201
         data = response.get_json()
-        assert data["first_name"] == "Jean"
-        assert data["last_name"] == "Dupont"
-        assert data["dob"] == "1985-03-15"
-        assert "id" in data
-        assert "public_id" in data
+        patient = data["patient"]
+        assert patient["first_name"] == "Jean"
+        assert patient["last_name"] == "Dupont"
+        assert patient["dob"] == "1985-03-15"
+        assert "id" in patient
+        assert "public_id" in patient
 
     def test_create_patient_api_key(
         self, client, db, sample_api_key, sample_institution
@@ -122,8 +123,9 @@ class TestInstitutionPatientsCRUD:
 
         assert response.status_code == 201
         data = response.get_json()
-        assert data["first_name"] == "Marie"
-        assert data["external_reference"] == "PAT-001"
+        patient = data["patient"]
+        assert patient["first_name"] == "Marie"
+        assert patient["external_reference"] == "PAT-001"
 
     def test_create_patient_duplicate_external_reference(
         self, client, db, admin_auth_headers, sample_institution

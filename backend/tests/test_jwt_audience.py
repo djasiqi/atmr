@@ -160,8 +160,8 @@ class TestJwtAudienceIntegration:
         # Utiliser le refresh token
         refresh_response = client.post(
             "/api/v1/auth/refresh-token",
-            headers={"Authorization": f"Bearer {refresh_token}"},
-            json={},
+            headers={"X-Requested-With": "Expo"},
+            json={"refresh_token": refresh_token},
         )
 
         assert refresh_response.status_code == 200

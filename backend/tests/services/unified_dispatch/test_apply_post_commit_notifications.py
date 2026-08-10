@@ -53,8 +53,8 @@ def bookings(db, company):
 class TestPostCommitNotifications:
     """Tests pour vérifier que les notifications sont émises APRÈS commit uniquement."""
 
-    @patch("services.unified_dispatch.apply.publish_event")
-    @patch("services.unified_dispatch.apply._in_tx", return_value=False)
+    @patch("services.unified_dispatch.optimization.assignment_applier.publish_event")
+    @patch("services.unified_dispatch.optimization.assignment_applier._in_tx", return_value=False)
     def test_notifications_emises_apres_commit_reussi(
         self, mock_in_tx, mock_publish_event, db, company, driver, bookings
     ):
@@ -173,8 +173,8 @@ class TestPostCommitNotifications:
         assert booking0.driver_id == driver.id
         assert booking1.driver_id == driver.id
 
-    @patch("services.unified_dispatch.apply.publish_event")
-    @patch("services.unified_dispatch.apply._in_tx", return_value=False)
+    @patch("services.unified_dispatch.optimization.assignment_applier.publish_event")
+    @patch("services.unified_dispatch.optimization.assignment_applier._in_tx", return_value=False)
     def test_aucune_notification_si_rollback(
         self, mock_in_tx, mock_publish_event, db, company, driver, bookings
     ):
@@ -235,7 +235,7 @@ class TestPostCommitNotifications:
             "Booking should not be assigned after rollback"
         )
 
-    @patch("services.unified_dispatch.apply.publish_event")
+    @patch("services.unified_dispatch.optimization.assignment_applier.publish_event")
     def test_notifications_deferred_si_transaction_externe(
         self, mock_publish_event, db, company, driver, bookings
     ):
@@ -288,8 +288,8 @@ class TestPostCommitNotifications:
         booking0 = db.session.query(Booking).filter_by(id=bookings[0].id).first()
         assert booking0.driver_id == driver.id
 
-    @patch("services.unified_dispatch.apply.publish_event")
-    @patch("services.unified_dispatch.apply._in_tx", return_value=False)
+    @patch("services.unified_dispatch.optimization.assignment_applier.publish_event")
+    @patch("services.unified_dispatch.optimization.assignment_applier._in_tx", return_value=False)
     def test_idempotence_driver_changed(
         self, mock_in_tx, mock_publish_event, db, company, driver, bookings
     ):
@@ -354,8 +354,8 @@ class TestPostCommitNotifications:
             f"got {final_call_count} calls (was {initial_call_count})"
         )
 
-    @patch("services.unified_dispatch.apply.publish_event")
-    @patch("services.unified_dispatch.apply._in_tx", return_value=False)
+    @patch("services.unified_dispatch.optimization.assignment_applier.publish_event")
+    @patch("services.unified_dispatch.optimization.assignment_applier._in_tx", return_value=False)
     def test_notifications_idempotentes_pas_de_duplication(
         self, mock_in_tx, mock_publish_event, db, company, driver, bookings
     ):
@@ -412,8 +412,8 @@ class TestPostCommitNotifications:
         assert event.driver_id == driver.id
         assert event.company_id == company.id
 
-    @patch("services.unified_dispatch.apply.publish_event")
-    @patch("services.unified_dispatch.apply._in_tx", return_value=False)
+    @patch("services.unified_dispatch.optimization.assignment_applier.publish_event")
+    @patch("services.unified_dispatch.optimization.assignment_applier._in_tx", return_value=False)
     def test_metriques_prometheus_si_disponible(
         self, mock_in_tx, mock_publish_event, db, company, driver, bookings
     ):
@@ -482,8 +482,8 @@ class TestPostCommitNotifications:
             NOTIF_EMITTED.labels = original_emitted_labels
             NOTIF_LATENCY.labels = original_latency_labels
 
-    @patch("services.unified_dispatch.apply.publish_event")
-    @patch("services.unified_dispatch.apply._in_tx", return_value=True)
+    @patch("services.unified_dispatch.optimization.assignment_applier.publish_event")
+    @patch("services.unified_dispatch.optimization.assignment_applier._in_tx", return_value=True)
     def test_logs_ameliores_contexte_supplementaire(
         self, mock_in_tx, mock_publish_event, db, company, driver, bookings, caplog
     ):
@@ -513,7 +513,7 @@ class TestPostCommitNotifications:
             raise IntegrityError("Simulated DB error", None, None)
 
         with patch(
-            "services.unified_dispatch.apply._apply_assignments_inner",
+            "services.unified_dispatch.optimization.assignment_applier._apply_assignments_inner",
             side_effect=mock_apply_inner,
         ):
             try:

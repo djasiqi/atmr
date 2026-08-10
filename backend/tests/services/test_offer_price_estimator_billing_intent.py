@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -207,7 +208,9 @@ class _AcceptTransportRequest:
     dropoff_location: str = "B"
     dropoff_lat: float | None = 46.3
     dropoff_lng: float | None = 6.2
-    scheduled_time: Any = None
+    scheduled_time: Any = field(
+        default_factory=lambda: datetime.now(UTC) + timedelta(days=1)
+    )
     is_round_trip: bool = False
     return_time: Any = None
     mission_type: str = "patient_transport"

@@ -605,7 +605,7 @@ def get_company_from_token() -> tuple[
         )
 
     uc = GetCurrentCompanyOrCreateUseCase(
-        get_current_company_fn=lambda: _get_current_company_via_use_case(),
+        get_current_company_fn=_get_current_company_via_use_case,
         get_current_user_fn=get_current_user_via_use_case,
         is_company_user_fn=_is_company_user,
         user_repo=UserRepository(),
@@ -4772,7 +4772,13 @@ class CompanyClients(Resource):
                         "idempotency_key": idempotency_key,
                     },
                 )
-                return cached_response[1], 201
+                cached_payload = cached_response[1] or {}
+                if isinstance(cached_payload, dict) and "response" in cached_payload:
+                    return (
+                        cached_payload["response"],
+                        cached_payload.get("status_code", 201),
+                    )
+                return cached_payload, 201
 
         # ✅ DDD: Utilise use-case au lieu de service directement
         company, err, code = _get_current_company_via_use_case()
@@ -4794,6 +4800,18 @@ class CompanyClients(Resource):
             )
 
         data = request.get_json() or {}
+        from shared.input_sanitizer import HTML_TAG_PATTERN
+
+        # Les champs d'identité et d'adresse sont du texte brut : refuser le
+        # HTML plutôt que de stocker une charge XSS potentiellement réexposée.
+        for field in ("first_name", "last_name", "address"):
+            value = data.get(field)
+            if isinstance(value, str) and HTML_TAG_PATTERN.search(value):
+                return APIErrorHandler.handle_validation_error(
+                    "Les balises HTML ne sont pas autorisées",
+                    field=field,
+                    logger_instance=logger,
+                )
 
         # ✅ Log pour diagnostic (sans données sensibles)
         logger.info(

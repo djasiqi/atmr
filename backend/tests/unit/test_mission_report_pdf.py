@@ -445,7 +445,7 @@ class TestMissionReportPdf:
         pdf = build_mission_audit_report_pdf(ctx)
         text = _pdf_text(pdf)
         if text:
-            assert "Historique" in text
+            assert "HISTORIQUE" in text.upper()
             assert "Demande créée" in text or "Prise en charge" in text
             assert "Offre envoyée" not in text
             assert "Historique complet" not in text
@@ -466,8 +466,8 @@ class TestMissionReportPdf:
             assert "■ FACTURATION" not in text.upper()
             assert "■ TRAÇABILITÉ" not in text.upper()
             assert "■ TRACABILITE" not in text.upper()
-            # Émetteur retiré du bloc admin (porté par le footer uniquement)
-            assert "Document généré par LIRIE" not in text
+            # Émetteur retiré du bloc admin et porté par le footer.
+            assert "Document généré par LIRIE" in text
 
     def test_no_attachments_section_when_empty(self, mock_bmsg, mock_timeline):
         mock_timeline.return_value = []
@@ -552,7 +552,7 @@ class TestMissionReportPdf:
             assert "Demande #1820" in text or "Demande" in text
             assert "LIRIE-TR-" not in text
             assert "Vérification documentaire" not in text
-            assert "Document généré par LIRIE" not in text
+            assert "Document généré par LIRIE" in text
 
     def test_identity_driver_before_vehicle(self, mock_bmsg, mock_timeline):
         _mock_timeline_and_messages(mock_timeline, mock_bmsg, events=2)
@@ -809,7 +809,7 @@ class TestMissionReportPdf:
         ctx = collect_mission_report_context(tr, _institution(), variant="operational")
         text = _pdf_text(build_operational_voucher_pdf(ctx))
         if text:
-            assert text.index("BESOINS PARTICULIERS") < text.index("TRANSPORT")
+            assert text.index("BESOINS PARTICULIERS") < text.index("■ TRANSPORT")
 
     def test_voucher_needs_alert_shows_free_text_remark(self, mock_bmsg, mock_timeline):
         mock_timeline.return_value = []

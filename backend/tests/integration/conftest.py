@@ -53,47 +53,25 @@ def requires_postgresql(db):
 
 
 @pytest.fixture
-def test_company(db, sample_user):
-    """Entreprise de test avec toutes les données nécessaires."""
-    # Vérifier si une company existe déjà
-    existing_company = db.session.query(User).filter_by(id=sample_user.id).first()
-    if (
-        existing_company
-        and hasattr(existing_company, "companies")
-        and existing_company.companies
-    ):
-        return existing_company.companies[0]
+def test_company(db, sample_company):
+    """Entreprise autorisée par le jeton d'authentification d'intégration."""
+    billing_settings = CompanyBillingSettings.query.filter_by(
+        company_id=sample_company.id
+    ).first()
+    if billing_settings is None:
+        billing_settings = CompanyBillingSettings(
+            company_id=sample_company.id,
+            payment_terms_days=30,
+            invoice_prefix="INV",
+            overdue_fee=Decimal("10.00"),
+            reminder1_fee=Decimal("5.00"),
+            reminder2_fee=Decimal("10.00"),
+            reminder3_fee=Decimal("15.00"),
+        )
+        db.session.add(billing_settings)
+        db.session.flush()
 
-    company = db.session.query(User).filter_by(id=sample_user.id).first()
-    if not company:
-        return None
-
-    # Créer l'entreprise si elle n'existe pas
-    from models import Company
-
-    unique_suffix = str(uuid.uuid4())[:8]
-    test_company = Company()
-    test_company.name = f"Test Company {unique_suffix}"
-    test_company.address = "Rue de Test 1, 1000 Lausanne"
-    test_company.contact_phone = "0211234567"
-    test_company.contact_email = f"company_{unique_suffix}@test.ch"
-    test_company.user_id = sample_user.id
-    db.session.add(test_company)
-    db.session.flush()
-
-    # Créer les paramètres de facturation
-    billing_settings = CompanyBillingSettings()
-    billing_settings.company_id = test_company.id
-    billing_settings.payment_terms_days = 30
-    billing_settings.invoice_prefix = "INV"
-    billing_settings.overdue_fee = Decimal("10.00")
-    billing_settings.reminder1_fee = Decimal("5.00")
-    billing_settings.reminder2_fee = Decimal("10.00")
-    billing_settings.reminder3_fee = Decimal("15.00")
-    db.session.add(billing_settings)
-    db.session.flush()
-
-    return test_company
+    return sample_company
 
 
 @pytest.fixture

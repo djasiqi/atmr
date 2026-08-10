@@ -14,6 +14,14 @@ from routes.api_error_models import (
 )
 
 
+def _schema_properties(model) -> tuple[dict, set[str]]:
+    """Extrait propriétés et champs requis (OpenAPI 3 ou legacy Flask-RESTX)."""
+    schema = model.__schema__
+    if isinstance(schema, dict) and "properties" in schema:
+        return schema["properties"], set(schema.get("required") or [])
+    return schema, {k for k, v in schema.items() if getattr(v, "required", False)}
+
+
 class TestAPIErrorModels:
     """Tests pour les modèles d'erreur API."""
 
@@ -33,17 +41,15 @@ class TestAPIErrorModels:
         assert hasattr(model, "name")
         assert model.name == "APIError"
 
-        # Vérifier les champs
-        fields = model.__schema__
-        assert "error" in fields
-        assert "message" in fields
-        assert "trace_id" in fields
-        assert "details" in fields
+        props, required = _schema_properties(model)
+        assert "error" in props
+        assert "message" in props
+        assert "trace_id" in props
+        assert "details" in props
 
-        # Vérifier que error et message sont requis
-        assert fields["error"].required is True
-        assert fields["message"].required is True
-        assert fields["trace_id"].required is False
+        assert "error" in required
+        assert "message" in required
+        assert "trace_id" not in required
 
     def test_create_validation_error_model(self, api):
         """Test création modèle ValidationError."""
@@ -52,14 +58,14 @@ class TestAPIErrorModels:
         assert model is not None
         assert model.name == "ValidationError"
 
-        fields = model.__schema__
-        assert "error" in fields
-        assert "message" in fields
-        assert "trace_id" in fields
-        assert "fields" in fields
+        props, required = _schema_properties(model)
+        assert "error" in props
+        assert "message" in props
+        assert "trace_id" in props
+        assert "fields" in props
 
-        assert fields["error"].required is True
-        assert fields["message"].required is True
+        assert "error" in required
+        assert "message" in required
 
     def test_create_not_found_error_model(self, api):
         """Test création modèle NotFoundError."""
@@ -68,17 +74,17 @@ class TestAPIErrorModels:
         assert model is not None
         assert model.name == "NotFoundError"
 
-        fields = model.__schema__
-        assert "error" in fields
-        assert "message" in fields
-        assert "trace_id" in fields
-        assert "resource" in fields
-        assert "resource_id" in fields
+        props, required = _schema_properties(model)
+        assert "error" in props
+        assert "message" in props
+        assert "trace_id" in props
+        assert "resource" in props
+        assert "resource_id" in props
 
-        assert fields["error"].required is True
-        assert fields["message"].required is True
-        assert fields["resource"].required is False
-        assert fields["resource_id"].required is False
+        assert "error" in required
+        assert "message" in required
+        assert "resource" not in required
+        assert "resource_id" not in required
 
     def test_create_permission_error_model(self, api):
         """Test création modèle PermissionError."""
@@ -87,15 +93,15 @@ class TestAPIErrorModels:
         assert model is not None
         assert model.name == "PermissionError"
 
-        fields = model.__schema__
-        assert "error" in fields
-        assert "message" in fields
-        assert "trace_id" in fields
-        assert "required_role" in fields
+        props, required = _schema_properties(model)
+        assert "error" in props
+        assert "message" in props
+        assert "trace_id" in props
+        assert "required_role" in props
 
-        assert fields["error"].required is True
-        assert fields["message"].required is True
-        assert fields["required_role"].required is False
+        assert "error" in required
+        assert "message" in required
+        assert "required_role" not in required
 
     def test_all_models_have_trace_id(self, api):
         """Test que tous les modèles incluent trace_id."""
@@ -107,17 +113,16 @@ class TestAPIErrorModels:
         ]
 
         for model in models:
-            fields = model.__schema__
-            assert "trace_id" in fields, f"Modèle {model.name} manque trace_id"
-            assert fields["trace_id"].required is False
+            props, required = _schema_properties(model)
+            assert "trace_id" in props, f"Modèle {model.name} manque trace_id"
+            assert "trace_id" not in required
 
     def test_error_models_consistency(self, api):
         """Test cohérence entre les modèles d'erreur."""
         api_error = create_api_error_model(api)
         validation_error = create_validation_error_model(api)
 
-        # Tous devraient avoir error et message requis
         for model in [api_error, validation_error]:
-            fields = model.__schema__
-            assert fields["error"].required is True
-            assert fields["message"].required is True
+            _props, required = _schema_properties(model)
+            assert "error" in required
+            assert "message" in required

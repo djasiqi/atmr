@@ -225,7 +225,13 @@ class TestFlaskSecurityConfig:
         # l'app avec init des routes peut échouer (setup finished).
         # On force donc SKIP_ROUTES_INIT pour ne tester que la config cookies.
         with patch.dict(
-            os.environ, {"FLASK_ENV": "production", "SKIP_ROUTES_INIT": "true"}
+            os.environ,
+            {
+                "FLASK_ENV": "production",
+                "SKIP_ROUTES_INIT": "true",
+                "SOCKETIO_CORS_ORIGINS": "https://app.example.test",
+                "INTERNAL_TRACKING_INGEST_ENABLED": "false",
+            },
         ):
             from app import create_app
 
@@ -250,7 +256,13 @@ class TestFlaskSecurityConfig:
     def test_talisman_hsts_configured(self):
         """Test que HSTS est configuré dans Talisman."""
         with patch.dict(
-            os.environ, {"FLASK_ENV": "production", "SKIP_ROUTES_INIT": "true"}
+            os.environ,
+            {
+                "FLASK_ENV": "production",
+                "SKIP_ROUTES_INIT": "true",
+                "SOCKETIO_CORS_ORIGINS": "https://app.example.test",
+                "INTERNAL_TRACKING_INGEST_ENABLED": "false",
+            },
         ):
             from app import create_app
 
@@ -262,7 +274,13 @@ class TestFlaskSecurityConfig:
     def test_csp_configured(self):
         """Test que CSP est configuré."""
         with patch.dict(
-            os.environ, {"FLASK_ENV": "production", "SKIP_ROUTES_INIT": "true"}
+            os.environ,
+            {
+                "FLASK_ENV": "production",
+                "SKIP_ROUTES_INIT": "true",
+                "SOCKETIO_CORS_ORIGINS": "https://app.example.test",
+                "INTERNAL_TRACKING_INGEST_ENABLED": "false",
+            },
         ):
             from app import create_app
 

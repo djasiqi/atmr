@@ -130,7 +130,7 @@ def test_get_booking_details(
     data = response.get_json()
     # La réponse peut avoir une structure avec "data" ou être directement l'objet
     booking_data = data.get("data", data)
-    assert booking_data["customer_name"] == "Jean Dupont"
+    assert booking_data.get("client_name") == "Jean Dupont"
     assert booking_data["pickup_location"] == "Lausanne Gare"
 
 
@@ -931,7 +931,7 @@ def test_saferpay_assert_returns_finalize_payload(
 
     headers = _client_auth_headers(client, sample_client)
     with patch(
-        "services.saferpay.finalize_payment.finalize_saferpay_payment",
+        "routes.bookings.finalize_saferpay_payment",
         return_value={"status": "already_completed", "payment_id": pid},
     ):
         rv = client.post(

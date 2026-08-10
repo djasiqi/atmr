@@ -9,7 +9,7 @@ from unittest.mock import patch
 from tasks import request_offer_tasks
 
 
-def test_notify_company_new_offer_skips_push_when_inbox_deduped():
+def test_notify_company_new_offer_skips_push_when_inbox_deduped(app):
     transport_request = SimpleNamespace(
         id=456,
         public_id="pub-456",
@@ -19,6 +19,11 @@ def test_notify_company_new_offer_skips_push_when_inbox_deduped():
     )
 
     with (
+        app.app_context(),
+        patch(
+            "services.platform_billing.capabilities.is_billing_capability_allowed",
+            return_value=True,
+        ),
         patch(
             "services.events.institution_events.persist_company_notification",
             return_value=None,

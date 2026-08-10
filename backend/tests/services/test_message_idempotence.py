@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from unittest.mock import patch
 
@@ -16,7 +17,7 @@ from services.messaging.message_idempotence import find_idempotent_message
 def test_find_idempotent_message(app):
     with app.app_context():
         sender_id = 9001
-        cid = "local-test-idempotence-1"
+        cid = f"local-test-idempotence-{uuid.uuid4().hex}"
         existing = Message(
             sender_id=sender_id,
             company_id=1,

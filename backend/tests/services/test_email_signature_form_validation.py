@@ -19,12 +19,13 @@ class TestEmailSignatureFormValidation:
 
     def test_truncate_long_email(self):
         """Test que les emails trop longs sont tronqués."""
-        long_email = "a" * 150 + "@example.com"  # Plus long que MAX_LENGTH_EMAIL (200)
+        long_email = "a" * 189 + "@example.com"  # 201 chars → tronqué à 200, @ conservé
         result = generate_signature_html_from_form(email=long_email)
 
-        # L'email doit être tronqué
-        assert "@example.com" in result
-        assert len([c for c in result if c == "a"]) < 150  # Moins de 'a' que l'original
+        assert 'href="mailto:' in result
+        mailto = result.split('href="mailto:')[1].split('"')[0]
+        assert "@example" in mailto
+        assert len(mailto) <= 200
 
     def test_validate_email_requires_at(self):
         """Test que les emails sans @ sont rejetés."""

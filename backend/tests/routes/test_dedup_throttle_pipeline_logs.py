@@ -10,7 +10,7 @@ def test_should_skip_dedup_emits_pipeline_log(caplog):
     from services.notifications.dedup_throttle import should_skip_dedup
 
     mock_redis = MagicMock()
-    mock_redis.set.return_value = None
+    mock_redis.set.return_value = False
 
     with (
         patch(

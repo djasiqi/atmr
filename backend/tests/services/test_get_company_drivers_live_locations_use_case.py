@@ -34,4 +34,6 @@ def test_returns_only_drivers_with_locations() -> None:
     )
     res = uc.execute(company_id=10)
     assert res.status_code == 200
-    assert res.response == {"items": [{"driver_id": 1, "lat": 1.0, "lon": 2.0}]}
+    assert res.response["items"] == [
+        {"driver_id": 1, "lat": 1.0, "lon": 2.0, "first_name": None, "last_name": None}
+    ]

@@ -9,6 +9,8 @@ Ce module contient :
 Créé lors du refactoring B1 - 7 janvier 2025
 """
 
+from models import Company
+
 # ✅ Imports depuis loader.py pour compatibilité avec les anciens imports
 from .loader import (
     FALLBACK_COORD_DEFAULT,
@@ -34,6 +36,7 @@ from .loader import (
 # Exports publics
 __all__ = [
     "FALLBACK_COORD_DEFAULT",
+    "Company",
     "_company_latlon_optional",
     "_configured_fallback_coords",
     "acquire_dispatch_lock",

@@ -10,7 +10,7 @@ Couvre:
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -110,17 +110,17 @@ class TestAutonomousActionModel:
 
     def test_count_actions_today(self, db, company_fully_auto):
         """Test comptage des actions aujourd'hui."""
-        today = datetime.utcnow()
+        today = datetime.now(UTC).replace(tzinfo=None)
         yesterday = today - timedelta(days=1)
 
-        # Créer 5 actions aujourd'hui
+        # Créer 5 actions aujourd'hui (minutes, pas heures — stable près de minuit UTC)
         for i in range(5):
             action = AutonomousAction(
                 company_id=company_fully_auto.id,
                 action_type="notify_customer",
                 action_description=f"Action today {i}",
                 success=True,
-                created_at=today - timedelta(hours=i),
+                created_at=today - timedelta(minutes=i * 10),
             )
             db.session.add(action)
 
@@ -220,13 +220,16 @@ class TestSafetyLimits:
     def test_daily_limit_reached(self, db, company_fully_auto):
         """Test limite journalière atteinte."""
         # Créer 20 actions (limite configurée)
+        today_start = datetime.now(UTC).replace(tzinfo=None).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         for i in range(20):
             action = AutonomousAction(
                 company_id=company_fully_auto.id,
                 action_type="notify_customer",
                 action_description=f"Action {i}",
                 success=True,
-                created_at=datetime.utcnow() - timedelta(hours=i % 12),
+                created_at=today_start + timedelta(hours=1, minutes=i),
             )
             db.session.add(action)
         db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
@@ -260,20 +263,24 @@ class TestSafetyLimits:
 
     def test_action_type_daily_limit(self, db, company_fully_auto):
         """Test limite journalière par type d'action."""
-        # Créer 10 actions "reassign" sur la journée
+        today_start = datetime.now(UTC).replace(tzinfo=None).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         for i in range(10):
             action = AutonomousAction(
                 company_id=company_fully_auto.id,
                 action_type="reassign",
                 action_description=f"Reassign {i}",
                 success=True,
-                created_at=datetime.utcnow() - timedelta(hours=i),
+                created_at=today_start + timedelta(hours=1 + i),
             )
             db.session.add(action)
-        db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
+        db.session.flush()
 
         manager = AutonomousDispatchManager(company_fully_auto.id)
-        can_proceed, reason = manager.check_safety_limits("reassign")
+        # Ne pas dépendre de l'heure courante pour la limite horaire globale
+        with patch.object(AutonomousAction, "count_actions_last_hour", return_value=0):
+            can_proceed, reason = manager.check_safety_limits("reassign")
 
         assert can_proceed is False
         assert "Limite journalière pour 'reassign' atteinte" in reason
@@ -415,7 +422,7 @@ class TestSafetyLimitsIntegration:
 class TestActionLogging:
     """Tests du logging automatique des actions."""
 
-    @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
+    @patch("services.unified_dispatch.utils.autonomous.apply_suggestion")
     def test_successful_action_logged(self, mock_apply, db, company_fully_auto):
         """Test qu'une action réussie est loggée."""
         # Créer un booking et un driver réels pour éviter FK violations
@@ -460,7 +467,7 @@ class TestActionLogging:
         assert actions[0].success is True
         assert actions[0].execution_time_ms is not None
 
-    @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
+    @patch("services.unified_dispatch.utils.autonomous.apply_suggestion")
     def test_failed_action_logged(self, mock_apply, db, company_fully_auto):
         """Test qu'une action échouée est loggée."""
         # Créer un booking et un driver réels pour éviter FK violations
@@ -509,7 +516,7 @@ class TestActionLogging:
         assert len(actions) == 1
         assert actions[0].error_message == "Test error message"
 
-    @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
+    @patch("services.unified_dispatch.utils.autonomous.apply_suggestion")
     def test_action_blocked_by_limits_not_logged(
         self, mock_apply, db, company_fully_auto
     ):

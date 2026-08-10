@@ -97,36 +97,23 @@ class TestIdempotencyService:
             # Ne devrait pas lever d'exception
             IdempotencyService.store_response("test-key", {"id": 1}, 200)
 
-    def test_get_idempotency_key_from_request_with_header(self):
+    def test_get_idempotency_key_from_request_with_header(self, app):
         """Test extraction clé depuis header Idempotency-Key."""
-        with patch("services.security.idempotency.request") as mock_request:
-            mock_request.headers.get.side_effect = lambda key: (
-                "test-key-123" if key == "Idempotency-Key" else None
-            )
-
+        with app.test_request_context(headers={"Idempotency-Key": "test-key-123"}):
             key = IdempotencyService.get_idempotency_key_from_request()
+        assert key == "test-key-123"
 
-            assert key == "test-key-123"
-
-    def test_get_idempotency_key_from_request_with_x_header(self):
+    def test_get_idempotency_key_from_request_with_x_header(self, app):
         """Test extraction clé depuis header X-Idempotency-Key."""
-        with patch("services.security.idempotency.request") as mock_request:
-            mock_request.headers.get.side_effect = lambda key: (
-                "test-key-456" if key == "X-Idempotency-Key" else None
-            )
-
+        with app.test_request_context(headers={"X-Idempotency-Key": "test-key-456"}):
             key = IdempotencyService.get_idempotency_key_from_request()
+        assert key == "test-key-456"
 
-            assert key == "test-key-456"
-
-    def test_get_idempotency_key_from_request_missing(self):
+    def test_get_idempotency_key_from_request_missing(self, app):
         """Test extraction clé absente."""
-        with patch("services.security.idempotency.request") as mock_request:
-            mock_request.headers.get.return_value = None
-
+        with app.test_request_context():
             key = IdempotencyService.get_idempotency_key_from_request()
-
-            assert key is None
+        assert key is None
 
     def test_idempotency_roundtrip(self):
         """Test cycle complet: stockage puis récupération."""

@@ -200,12 +200,15 @@ class SqlAlchemyBookingWriter:
                 )
                 db.session.add(return_booking)
 
-        get_transaction = getattr(db.session, "get_transaction", None)
-        owns_transaction = not bool(
-            get_transaction() if callable(get_transaction) else False
+        session = db.session()
+        in_transaction = getattr(session, "in_transaction", None)
+        get_transaction = getattr(session, "get_transaction", None)
+        owns_transaction = not (
+            bool(in_transaction() if callable(in_transaction) else False)
+            or bool(get_transaction() if callable(get_transaction) else False)
         )
         if owns_transaction:
-            with db.session.begin():
+            with session.begin():
                 _write_core()
         else:
             _write_core()

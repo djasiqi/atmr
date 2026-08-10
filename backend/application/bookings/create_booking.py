@@ -431,11 +431,16 @@ class CreateBookingUseCase:
             validated_data["amount"] = manual_amount_value
 
         if has_app_context():
-            get_transaction = getattr(db.session, "get_transaction", None)
+            session = db.session()
+            in_transaction = getattr(session, "in_transaction", None)
+            get_transaction = getattr(session, "get_transaction", None)
+            # Les fixtures de test ouvrent une transaction sans toujours la
+            # rendre visible via get_transaction(); in_transaction est la
+            # source de vérité avant d'ouvrir un nouveau contexte.
             has_transaction = bool(
-                get_transaction() if callable(get_transaction) else False
-            )
-            tx_context = nullcontext() if has_transaction else db.session.begin()
+                in_transaction() if callable(in_transaction) else False
+            ) or bool(get_transaction() if callable(get_transaction) else False)
+            tx_context = nullcontext() if has_transaction else session.begin()
         else:
             tx_context = nullcontext()
         with tx_context:

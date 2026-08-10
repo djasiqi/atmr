@@ -251,7 +251,7 @@ class TestBookingTransferService:
             booking = BookingFactory(
                 company=company_a,
                 client=client,
-                status=BookingStatus.COMPLETED,  # Course complétée
+                status=BookingStatus.ACCEPTED,
             )
             db.session.commit()
 
@@ -266,6 +266,10 @@ class TestBookingTransferService:
                 transfer_id=transfer.id,
                 executing_company_id=company_b.id,
             )
+            db.session.commit()
+
+            # Compléter la course avant validation
+            booking.status = BookingStatus.COMPLETED
             db.session.commit()
 
             # Valider la complétion

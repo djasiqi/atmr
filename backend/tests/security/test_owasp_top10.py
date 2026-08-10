@@ -163,9 +163,12 @@ class TestA04InsecureDesign:
         json_data = response.get_json()
         # ✅ FIX: Vérifier "errors" seulement si le status code est 400
         if response.status_code == 400:
-            assert "errors" in json_data
+            errors = json_data.get("errors") or json_data.get("details", {}).get(
+                "errors"
+            )
+            assert errors
             # Vérifier que plusieurs erreurs sont retournées
-            assert len(json_data["errors"]) > 0
+            assert len(errors) > 0
 
     def test_permissions_are_properly_managed(self, client, auth_headers):
         """Test que les permissions sont bien gérées."""

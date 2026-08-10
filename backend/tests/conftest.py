@@ -84,6 +84,8 @@ os.environ["API_LEGACY_ENABLED"] = "false"
 # Socket.IO test_client ne supporte pas message_queue broker.
 # Override strictement pour les tests backend.
 os.environ["SOCKETIO_TEST_DISABLE_MESSAGE_QUEUE"] = "1"
+os.environ.setdefault("DEMO_DEFAULT_PASSWORD", "test-demo-password-for-pytest")
+os.environ.setdefault("ALLOW_NON_DEMO_SEED", "true")
 
 from app import create_app  # noqa: E402
 from ext import db as _db  # noqa: E402
@@ -161,6 +163,9 @@ def _build_session_flask_app() -> Flask:
             "CSRF_ENABLED": False,  # ✅ S1: Désactiver CSRF en tests
             "JWT_SECRET_KEY": "test-secret-key",
             "SECRET_KEY": "test-secret-key",
+            # Les cookies de test doivent être host-only afin que le client Flask
+            # les renvoie à localhost (un domaine de production les ignorerait).
+            "COOKIE_DOMAIN": None,
             "SQLALCHEMY_ECHO": False,  # Pas de logs SQL verbeux en tests
             # Socket.IO test_client ne supporte pas message_queue.
             # Override strictement en tests, sans impact prod.
@@ -168,6 +173,8 @@ def _build_session_flask_app() -> Flask:
             # ✅ FIX: Configurer pour éviter les redirections 302 dans les tests E2E
             "SERVER_NAME": "localhost:5000",
             "PREFERRED_URL_SCHEME": "http",
+            # Pas de tolérance JWT en tests : les tokens expirés doivent être rejetés.
+            "JWT_DECODE_LEEWAY": 0,
         }
     )
     return app
@@ -408,8 +415,8 @@ def sample_admin_user(db):
 
 
 @pytest.fixture
-def auth_headers(client, sample_user):
-    """Génère un token JWT valide pour l'utilisateur test sans appeler /login."""
+def auth_headers(client, sample_user, sample_company):
+    """Génère un token JWT valide pour l'entreprise de test."""
     from flask_jwt_extended import create_access_token
 
     cache_key = f"token_{sample_user.id}"
@@ -421,7 +428,7 @@ def auth_headers(client, sample_user):
 
     claims = {
         "role": sample_user.role.value,
-        "company_id": getattr(sample_user, "company_id", None),
+        "company_id": sample_company.id,
         "driver_id": getattr(sample_user, "driver_id", None),
         "aud": "atmr-api",
     }

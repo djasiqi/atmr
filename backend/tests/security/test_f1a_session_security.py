@@ -123,9 +123,12 @@ def test_logout_without_proof_rejected(client, app, session_user):
         sid = str(session.session_id)
 
     resp = client.post(
-        "/auth/logout",
+        "/api/v1/auth/logout",
         json={"session_id": sid},
-        headers={"Content-Type": "application/json", "X-Client": "mobile"},
+        headers={
+            "Content-Type": "application/json",
+            "X-Requested-With": "Expo",
+        },
     )
     assert resp.status_code == 401
     body = resp.get_json() or {}

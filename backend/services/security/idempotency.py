@@ -7,6 +7,8 @@ import json
 import logging
 from typing import Any
 
+from flask import request
+
 from ext import redis_client
 
 logger = logging.getLogger(__name__)
@@ -16,18 +18,19 @@ class IdempotencyService:
     """Service pour gérer l'idempotence des requêtes."""
 
     @staticmethod
-    def check_key(key: str, _ttl: int = 86400) -> tuple[bool, dict[str, Any] | None]:
+    def check_key(key: str, ttl: int = 86400) -> tuple[bool, dict[str, Any] | None]:
         """Vérifie si une clé d'idempotence existe et retourne la réponse précédente.
 
         Args:
             key: Clé d'idempotence (généralement un UUID)
-            _ttl: Time-to-live en secondes (défaut: 24h) - non utilisé actuellement
+            ttl: Time-to-live en secondes (défaut: 24h) - non utilisé actuellement
 
         Returns:
             Tuple (exists, previous_response):
             - exists: True si la clé existe
             - previous_response: Réponse précédente si existe, None sinon
         """
+        _ = ttl
         if not redis_client:
             logger.warning("Redis non disponible, idempotency désactivé")
             return False, None
@@ -86,8 +89,6 @@ class IdempotencyService:
         Returns:
             Clé d'idempotence ou None si absente
         """
-        from flask import request
-
         return request.headers.get("Idempotency-Key") or request.headers.get(
             "X-Idempotency-Key"
         )
