@@ -331,6 +331,128 @@ def legs_snapshot(legs: list[TransportRequestLeg]) -> list[dict[str, Any]]:
     ]
 
 
+def _leg_stop_with_billing_override(
+    stop: LegStop, override: str | None
+) -> LegStop:
+    """Retourne un LegStop avec override si l'entrant n'en a pas encore."""
+    if stop.destination_billing_override is not None or not override:
+        return stop
+    return LegStop(
+        dropoff_location=stop.dropoff_location,
+        dropoff_lat=stop.dropoff_lat,
+        dropoff_lng=stop.dropoff_lng,
+        scheduled_time=stop.scheduled_time,
+        time_confirmed=stop.time_confirmed,
+        dropoff_establishment=stop.dropoff_establishment,
+        dropoff_service=stop.dropoff_service,
+        dropoff_doctor=stop.dropoff_doctor,
+        destination_billing_override=override,
+        is_return_stop=stop.is_return_stop,
+    )
+
+
+def preserve_billing_overrides_from_existing(
+    existing_legs: list[Any],
+    intermediate_stops: list[LegStop],
+    *,
+    return_to_institution: bool,
+    return_stop: LegStop | None,
+    return_scheduled_time: Any = None,
+    return_time_confirmed: bool = False,
+    institution_return_location: str | None = None,
+    institution_return_lat: float | None = None,
+    institution_return_lng: float | None = None,
+) -> tuple[list[LegStop], LegStop | None]:
+    """Préserve destination_billing_override si absent du payload entrant.
+
+    Évite d'effacer silencieusement les payeurs lors d'une modification
+    opérationnelle (adresse/horaire) qui reconstruit les legs.
+    """
+    sorted_existing = sorted(
+        list(existing_legs or []),
+        key=lambda leg: int(getattr(leg, "sequence_index", 0) or 0),
+    )
+    if not sorted_existing:
+        return intermediate_stops, return_stop
+
+    has_return_flag = any(
+        getattr(leg, "is_return_stop", False) for leg in sorted_existing
+    )
+    return_leg = None
+    if return_to_institution:
+        if has_return_flag:
+            return_leg = next(
+                (
+                    leg
+                    for leg in sorted_existing
+                    if getattr(leg, "is_return_stop", False)
+                ),
+                None,
+            )
+            dest_legs = [
+                leg
+                for leg in sorted_existing
+                if not getattr(leg, "is_return_stop", False)
+            ]
+        else:
+            dest_legs = sorted_existing[:-1]
+            return_leg = sorted_existing[-1]
+    else:
+        dest_legs = sorted_existing
+
+    preserved_stops = [
+        _leg_stop_with_billing_override(
+            stop,
+            (
+                getattr(dest_legs[i], "destination_billing_override", None)
+                if i < len(dest_legs)
+                else None
+            ),
+        )
+        for i, stop in enumerate(intermediate_stops)
+    ]
+
+    preserved_return = return_stop
+    if return_to_institution and return_leg is not None:
+        existing_override = getattr(return_leg, "destination_billing_override", None)
+        if return_stop is None:
+            if existing_override:
+                ret_loc = (
+                    institution_return_location
+                    or getattr(return_leg, "dropoff_location", None)
+                    or ""
+                )
+                preserved_return = LegStop(
+                    dropoff_location=ret_loc,
+                    dropoff_lat=(
+                        institution_return_lat
+                        if institution_return_lat is not None
+                        else getattr(return_leg, "dropoff_lat", None)
+                    ),
+                    dropoff_lng=(
+                        institution_return_lng
+                        if institution_return_lng is not None
+                        else getattr(return_leg, "dropoff_lng", None)
+                    ),
+                    scheduled_time=return_scheduled_time
+                    if return_scheduled_time is not None
+                    else getattr(return_leg, "scheduled_time", None),
+                    time_confirmed=bool(
+                        return_time_confirmed
+                        if return_scheduled_time is not None
+                        else getattr(return_leg, "time_confirmed", False)
+                    ),
+                    destination_billing_override=existing_override,
+                    is_return_stop=True,
+                )
+        else:
+            preserved_return = _leg_stop_with_billing_override(
+                return_stop, existing_override
+            )
+
+    return preserved_stops, preserved_return
+
+
 def reorganize_multi_stop_legs(
     transport_request: Any,
     *,
@@ -346,26 +468,41 @@ def reorganize_multi_stop_legs(
     before = legs_snapshot(existing)
 
     origin = transport_request.pickup_location
-    legs_data = build_legs_chain(
-        origin_location=origin,
-        origin_lat=float(transport_request.pickup_lat)
+    origin_lat = (
+        float(transport_request.pickup_lat)
         if transport_request.pickup_lat is not None
-        else None,
-        origin_lng=float(transport_request.pickup_lng)
+        else None
+    )
+    origin_lng = (
+        float(transport_request.pickup_lng)
         if transport_request.pickup_lng is not None
-        else None,
-        stops=intermediate_stops,
+        else None
+    )
+
+    preserved_stops, preserved_return = preserve_billing_overrides_from_existing(
+        existing,
+        intermediate_stops,
         return_to_institution=return_to_institution,
-        institution_return_location=origin,
-        institution_return_lat=float(transport_request.pickup_lat)
-        if transport_request.pickup_lat is not None
-        else None,
-        institution_return_lng=float(transport_request.pickup_lng)
-        if transport_request.pickup_lng is not None
-        else None,
+        return_stop=return_stop,
         return_scheduled_time=return_scheduled_time,
         return_time_confirmed=return_time_confirmed,
-        return_stop=return_stop,
+        institution_return_location=origin,
+        institution_return_lat=origin_lat,
+        institution_return_lng=origin_lng,
+    )
+
+    legs_data = build_legs_chain(
+        origin_location=origin,
+        origin_lat=origin_lat,
+        origin_lng=origin_lng,
+        stops=preserved_stops,
+        return_to_institution=return_to_institution,
+        institution_return_location=origin,
+        institution_return_lat=origin_lat,
+        institution_return_lng=origin_lng,
+        return_scheduled_time=return_scheduled_time,
+        return_time_confirmed=return_time_confirmed,
+        return_stop=preserved_return,
     )
     new_legs = persist_legs(int(transport_request.id), legs_data)
     after = legs_snapshot(new_legs)

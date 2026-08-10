@@ -9,8 +9,10 @@ import { combineMissionDateTime, extractHHMM } from '../../../utils/missionSched
 import { extractWallClockDate } from '../../../utils/missionTimeDisplay';
 import {
   buildInitialDestinations,
+  buildInitialReturnBilling,
   extractAddressFromPlace,
   extractPlaceDetails,
+  mapDestinationsToIntermediateStops,
 } from '../../../utils/institutionRouteForm';
 import s from './RequestDetailPanel.module.css';
 
@@ -30,6 +32,7 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
   const [returnToInstitution, setReturnToInstitution] = useState(
     Boolean(request?.return_to_institution),
   );
+  const returnBilling = useMemo(() => buildInitialReturnBilling(request), [request]);
 
   const [pickupLocation, setPickupLocation] = useState(request.pickup_location || '');
   const [destinations, setDestinations] = useState(() => buildInitialDestinations(request));
@@ -85,6 +88,8 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
         doctor: '',
         scheduled_time: '',
         time_confirmed: false,
+        use_custom_billing: false,
+        destination_billing_override: 'patient',
       },
     ]);
   };
@@ -139,15 +144,7 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
       payload.multi_stop = true;
       payload.return_to_institution = returnToInstitution;
       payload.is_round_trip = false;
-      payload.intermediate_stops = cleanedDestinations.map((d, i) => ({
-        dropoff_location: d.address,
-        sequence: i,
-        ...(d.scheduled_time ? { scheduled_time: d.scheduled_time } : {}),
-        time_confirmed: Boolean(d.time_confirmed),
-        ...(d.establishment ? { dropoff_establishment: d.establishment } : {}),
-        ...(d.service ? { dropoff_service: d.service } : {}),
-        ...(d.doctor ? { dropoff_doctor: d.doctor } : {}),
-      }));
+      payload.intermediate_stops = mapDestinationsToIntermediateStops(cleanedDestinations);
 
       const pickupIso = combineMissionDateTime(missionDate, pickupTime);
       if (pickupIso) {
@@ -159,6 +156,12 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
         const retIso = combineMissionDateTime(missionDate, returnTime);
         if (retIso) payload.return_scheduled_time = retIso;
         payload.return_time_confirmed = returnTimeConfirmed;
+        payload.return_stop = {
+          use_custom_billing: Boolean(returnBilling.use_custom_billing),
+          destination_billing_override: returnBilling.use_custom_billing
+            ? (returnBilling.destination_billing_override || 'patient')
+            : null,
+        };
       }
     } else {
       const dest = cleanedDestinations[0];

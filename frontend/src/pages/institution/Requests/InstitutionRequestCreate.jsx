@@ -31,7 +31,7 @@ import {
 } from '../../../hooks/useInstitutionData';
 import { listPatients, exportRequestMissionPdf } from '../../../services/institutionService';
 import { buildCarrierMailto } from '../../../utils/externalCarrierEmail';
-import { canEditBilling } from '../../../utils/institutionPermissions';
+import { canSetRequestBillingOnCreate } from '../../../utils/institutionPermissions';
 import AddressAutocomplete from '../../../components/common/AddressAutocomplete';
 import PatientFormModal from '../Patients/PatientFormModal';
 import { toast } from 'sonner';
@@ -177,7 +177,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
 
   const institutionRole = meData?.institution_role;
   const institutionType = meData?.institution_type;
-  const canBilling = canEditBilling(institutionRole);
+  const canSetBillingOnCreate = canSetRequestBillingOnCreate(institutionRole);
   const patientsItems = patientsData?.patients || patientsData?.items;
   const patients = useMemo(() => patientsItems || [], [patientsItems]);
 
@@ -1594,9 +1594,9 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               value={formData.billing_intent}
               onChange={(val) => handleChange('billing_intent', val)}
               placeholder="Facturé à"
-              disabled={!canBilling}
+              disabled={!canSetBillingOnCreate}
             />
-            {!canBilling && <span className={styles.billingHint}>Géré par l'institution</span>}
+            {!canSetBillingOnCreate && <span className={styles.billingHint}>Géré par l'institution</span>}
           </div>
 
           {/* Contact demandeur */}
@@ -1772,14 +1772,14 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               </>
             )}
 
-            {canBilling && (hasExtraStops || journeyReturnEnabled) && (
+            {canSetBillingOnCreate && (hasExtraStops || journeyReturnEnabled) && (
               <DestinationBillingOverride
                 idPrefix="dropoff-billing"
                 useCustomBilling={formData.dropoff_use_custom_billing}
                 billingOverride={formData.dropoff_destination_billing_override}
                 onUseCustomBillingChange={(checked) => handleChange('dropoff_use_custom_billing', checked)}
                 onBillingOverrideChange={(val) => handleChange('dropoff_destination_billing_override', val)}
-                disabled={!canBilling}
+                disabled={!canSetBillingOnCreate}
               />
             )}
 
@@ -1806,20 +1806,20 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                     onChange={(e) => setStopField(idx, 'dropoff_doctor', e.target.value)}
                     placeholder="Ex: Dr. Martin, Prof. Dupont" className={styles.detailsInput} />
                 </div>
-                {canBilling && (
+                {canSetBillingOnCreate && (
                   <DestinationBillingOverride
                     idPrefix={`stop-billing-${idx}`}
                     useCustomBilling={stop.use_custom_billing}
                     billingOverride={stop.destination_billing_override}
                     onUseCustomBillingChange={(checked) => setStopField(idx, 'use_custom_billing', checked)}
                     onBillingOverrideChange={(val) => setStopField(idx, 'destination_billing_override', val)}
-                    disabled={!canBilling}
+                    disabled={!canSetBillingOnCreate}
                   />
                 )}
               </React.Fragment>
             ))}
 
-            {canBilling && journeyReturnEnabled && (
+            {canSetBillingOnCreate && journeyReturnEnabled && (
               <>
                 <hr className={styles.detailsDivider} />
                 <h2 className={styles.detailsPanelTitle}>⇄ Retour institution</h2>
@@ -1835,7 +1835,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                     ...prev,
                     return_stop: { ...prev.return_stop, destination_billing_override: val },
                   }))}
-                  disabled={!canBilling}
+                  disabled={!canSetBillingOnCreate}
                 />
               </>
             )}

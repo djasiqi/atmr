@@ -436,6 +436,58 @@ request_list_model = institution_requests_ns.model(
 )
 
 
+def _billing_details_equivalent(existing: Any, incoming: Any) -> bool:
+    """Compare billing_details en ignorant l'ordre des clés JSON."""
+    if existing == incoming:
+        return True
+    if existing is None and incoming in (None, {}):
+        return True
+    if incoming is None and existing in (None, {}):
+        return True
+    return False
+
+
+def _guard_requester_billing_on_update(
+    transport_req: TransportRequest, validated: dict[str, Any]
+) -> tuple[dict[str, Any], int] | None:
+    """Empêche institution_requester de changer la facturation après création.
+
+    - Valeurs identiques aux existantes : strip (ignore, pas d'erreur)
+    - Valeurs différentes : 403
+    """
+    role = AuthorizationService.get_institution_role_from_jwt()
+    if role != InstitutionRole.REQUESTER.value:
+        return None
+
+    if "billing_intent" in validated:
+        incoming = validated.get("billing_intent")
+        existing = transport_req.billing_intent or "patient"
+        if incoming != existing:
+            return {
+                "error": (
+                    "Le destinataire de facturation ne peut être modifié que "
+                    "par un rôle facturation ou administrateur."
+                ),
+                "code": "billing_edit_forbidden",
+            }, 403
+        validated.pop("billing_intent", None)
+
+    if "billing_details" in validated:
+        if not _billing_details_equivalent(
+            transport_req.billing_details, validated.get("billing_details")
+        ):
+            return {
+                "error": (
+                    "Les détails de facturation ne peuvent être modifiés que "
+                    "par un rôle facturation ou administrateur."
+                ),
+                "code": "billing_edit_forbidden",
+            }, 403
+        validated.pop("billing_details", None)
+
+    return None
+
+
 def get_institution_context():
     """Récupère le contexte institution pour actions d'écriture (JWT ou API Key).
 
@@ -948,6 +1000,10 @@ class TransportRequestDetail(Resource):
                     "code": "carrier_ack_required",
                 }, 400
 
+            billing_guard = _guard_requester_billing_on_update(transport_req, validated)
+            if billing_guard is not None:
+                return billing_guard
+
             operational_fields = [
                 k for k in validated if k != "acknowledge_carrier_impact"
             ]
@@ -1053,6 +1109,7 @@ class TransportRequestDetail(Resource):
                     is_multi_stop_enabled,
                     new_route_group_id,
                     reorganize_multi_stop_legs,
+                    return_stop_from_validated,
                     stops_from_validated,
                 )
 
@@ -1081,12 +1138,31 @@ class TransportRequestDetail(Resource):
                     return {"error": "Au moins une étape intermédiaire requise."}, 400
 
                 return_raw, return_confirmed = _return_leg_schedule(validated)
+                return_stop = None
+                if bool(return_to_inst):
+                    return_stop = return_stop_from_validated(
+                        validated,
+                        return_location=transport_req.pickup_location,
+                        return_lat=(
+                            float(transport_req.pickup_lat)
+                            if transport_req.pickup_lat is not None
+                            else None
+                        ),
+                        return_lng=(
+                            float(transport_req.pickup_lng)
+                            if transport_req.pickup_lng is not None
+                            else None
+                        ),
+                        return_scheduled_time=return_raw,
+                        return_time_confirmed=return_confirmed,
+                    )
                 reorganize_multi_stop_legs(
                     transport_req,
                     intermediate_stops=stops,
                     return_to_institution=bool(return_to_inst),
                     return_scheduled_time=return_raw,
                     return_time_confirmed=return_confirmed,
+                    return_stop=return_stop,
                     actor_user_id=user_id,
                 )
             elif "return_to_institution" in validated and getattr(

@@ -10,6 +10,7 @@ from services.institutions.transport_request_legs_service import (
     LegStop,
     build_legs_chain,
     parse_leg_scheduled_time,
+    preserve_billing_overrides_from_existing,
     remove_stop_at_index,
     stops_from_validated,
 )
@@ -176,3 +177,73 @@ def test_build_legs_chain_marks_return_stop():
     assert len(legs) == 3
     assert legs[-1]["is_return_stop"] is True
     assert legs[1]["destination_billing_override"] == "patient"
+
+
+class _ExistingLeg:
+    def __init__(
+        self,
+        *,
+        sequence_index: int,
+        dropoff_location: str,
+        destination_billing_override: str | None = None,
+        is_return_stop: bool = False,
+    ):
+        self.sequence_index = sequence_index
+        self.dropoff_location = dropoff_location
+        self.destination_billing_override = destination_billing_override
+        self.is_return_stop = is_return_stop
+        self.dropoff_lat = None
+        self.dropoff_lng = None
+        self.scheduled_time = None
+        self.time_confirmed = False
+
+
+def test_preserve_billing_overrides_from_existing_when_absent():
+    existing = [
+        _ExistingLeg(
+            sequence_index=0,
+            dropoff_location="HUG",
+            destination_billing_override="patient",
+        ),
+        _ExistingLeg(
+            sequence_index=1,
+            dropoff_location="EMS",
+            destination_billing_override="institution",
+            is_return_stop=True,
+        ),
+    ]
+    stops = [LegStop(dropoff_location="HUG Updated")]
+    preserved_stops, preserved_return = preserve_billing_overrides_from_existing(
+        existing,
+        stops,
+        return_to_institution=True,
+        return_stop=None,
+        institution_return_location="EMS",
+    )
+    assert preserved_stops[0].destination_billing_override == "patient"
+    assert preserved_return is not None
+    assert preserved_return.destination_billing_override == "institution"
+    assert preserved_return.is_return_stop is True
+
+
+def test_preserve_billing_overrides_keeps_explicit_incoming():
+    existing = [
+        _ExistingLeg(
+            sequence_index=0,
+            dropoff_location="HUG",
+            destination_billing_override="patient",
+        ),
+    ]
+    stops = [
+        LegStop(
+            dropoff_location="HUG",
+            destination_billing_override="insurance",
+        )
+    ]
+    preserved_stops, _ = preserve_billing_overrides_from_existing(
+        existing,
+        stops,
+        return_to_institution=False,
+        return_stop=None,
+    )
+    assert preserved_stops[0].destination_billing_override == "insurance"

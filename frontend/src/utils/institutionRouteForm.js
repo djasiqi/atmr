@@ -64,8 +64,46 @@ export const buildInitialDestinations = (request, bookingSummary = null) => {
     time_confirmed: arrivalOnRequest && Boolean(request?.scheduled_time),
     booking_id: bs.id || request?.booking_id || null,
     leg_index: 0,
+    use_custom_billing: false,
+    destination_billing_override: 'patient',
   }];
 };
+
+/** Override facturation du leg retour (A/R) depuis les legs existants. */
+export const buildInitialReturnBilling = (request) => {
+  const legs = Array.isArray(request?.legs)
+    ? [...request.legs].sort((a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0))
+    : [];
+  if (!request?.return_to_institution || legs.length === 0) {
+    return { use_custom_billing: false, destination_billing_override: 'patient' };
+  }
+  const returnLeg = legs.find((leg) => leg.is_return_stop) || legs[legs.length - 1];
+  return {
+    use_custom_billing: Boolean(returnLeg?.destination_billing_override),
+    destination_billing_override: returnLeg?.destination_billing_override || 'patient',
+  };
+};
+
+/**
+ * Mapping destinations UI → intermediate_stops API (préserve la facturation spécifique).
+ */
+export const mapDestinationsToIntermediateStops = (destinations) =>
+  (destinations || []).map((d, i) => {
+    const entry = {
+      dropoff_location: d.address,
+      sequence: i,
+      time_confirmed: Boolean(d.time_confirmed),
+    };
+    if (d.scheduled_time) entry.scheduled_time = d.scheduled_time;
+    if (d.establishment) entry.dropoff_establishment = d.establishment;
+    if (d.service) entry.dropoff_service = d.service;
+    if (d.doctor) entry.dropoff_doctor = d.doctor;
+    if (d.use_custom_billing) {
+      entry.use_custom_billing = true;
+      entry.destination_billing_override = d.destination_billing_override || 'patient';
+    }
+    return entry;
+  });
 
 export const DOCTOR_NAME_PATTERN = /^(dr\.?|prof\.?|méd\.?|med\.?|docteur|professeur)\s/i;
 

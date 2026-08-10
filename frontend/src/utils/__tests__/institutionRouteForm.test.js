@@ -1,7 +1,9 @@
 import {
   buildInitialDestinations,
+  buildInitialReturnBilling,
   extractAddressFromPlace,
   filterTripTypesForInstitution,
+  mapDestinationsToIntermediateStops,
   routingDropoffDetails,
 } from '../institutionRouteForm';
 
@@ -59,6 +61,28 @@ describe('institutionRouteForm', () => {
       expect(dests[0].address).toBe('HUG');
     });
 
+    it('conserve destination_billing_override depuis les legs', () => {
+      const request = {
+        return_to_institution: true,
+        legs: [
+          {
+            sequence_index: 0,
+            dropoff_location: 'HUG',
+            destination_billing_override: 'patient',
+          },
+          {
+            sequence_index: 1,
+            dropoff_location: 'Clinique',
+            is_return_stop: true,
+            destination_billing_override: 'institution',
+          },
+        ],
+      };
+      const dests = buildInitialDestinations(request);
+      expect(dests[0].use_custom_billing).toBe(true);
+      expect(dests[0].destination_billing_override).toBe('patient');
+    });
+
     it('retombe sur booking_summary sans legs', () => {
       const request = { dropoff_location: 'Clinique' };
       const bs = {
@@ -73,6 +97,57 @@ describe('institutionRouteForm', () => {
       expect(dests[0].establishment).toBe('HUG');
       expect(dests[0].service).toBe('Radio');
       expect(dests[0].doctor).toBe('Dr. Martin');
+    });
+  });
+
+  describe('buildInitialReturnBilling', () => {
+    it('lit l’override du leg retour', () => {
+      const request = {
+        return_to_institution: true,
+        legs: [
+          { sequence_index: 0, dropoff_location: 'HUG', destination_billing_override: 'patient' },
+          {
+            sequence_index: 1,
+            dropoff_location: 'Clinique',
+            is_return_stop: true,
+            destination_billing_override: 'institution',
+          },
+        ],
+      };
+      expect(buildInitialReturnBilling(request)).toEqual({
+        use_custom_billing: true,
+        destination_billing_override: 'institution',
+      });
+    });
+  });
+
+  describe('mapDestinationsToIntermediateStops', () => {
+    it('retransmet use_custom_billing et destination_billing_override', () => {
+      const stops = mapDestinationsToIntermediateStops([
+        {
+          address: 'HUG',
+          scheduled_time: '2026-06-15T10:00:00',
+          time_confirmed: true,
+          establishment: 'HUG',
+          use_custom_billing: true,
+          destination_billing_override: 'patient',
+        },
+        {
+          address: 'Cabinet',
+          time_confirmed: false,
+          use_custom_billing: false,
+          destination_billing_override: 'patient',
+        },
+      ]);
+      expect(stops[0]).toMatchObject({
+        dropoff_location: 'HUG',
+        sequence: 0,
+        use_custom_billing: true,
+        destination_billing_override: 'patient',
+        dropoff_establishment: 'HUG',
+      });
+      expect(stops[1].use_custom_billing).toBeUndefined();
+      expect(stops[1].destination_billing_override).toBeUndefined();
     });
   });
 

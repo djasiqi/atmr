@@ -632,3 +632,250 @@ class TestTransportRequestsForcePasswordChange:
         assert response.status_code == 403
         data = response.get_json()
         assert data["error"] == "password_change_required"
+
+
+class TestRequesterBillingOnCreateAndUpdate:
+    """Requester peut fixer la facturation à la création, pas au PUT."""
+
+    @pytest.fixture
+    def sample_institution(self, db):
+        institution = Institution()
+        institution.name = "Clinique Billing Requester"
+        institution.institution_type = "clinic"
+        institution.public_id = str(uuid.uuid4())
+        db.session.add(institution)
+        db.session.flush()
+        db.session.refresh(institution)
+        return institution
+
+    @pytest.fixture
+    def sample_requester(self, db, sample_institution):
+        unique_suffix = str(uuid.uuid4())[:8]
+        user = User()
+        user.username = f"request_requester_{unique_suffix}"
+        user.email = f"requester-{unique_suffix}@clinic.test"
+        user.role = UserRole.INSTITUTION
+        user.public_id = str(uuid.uuid4())
+        user.institution_id = sample_institution.id
+        user.institution_role = InstitutionRole.REQUESTER.value
+        user.set_password("password123", force_change=False)
+        db.session.add(user)
+        db.session.flush()
+        db.session.refresh(user)
+        return user
+
+    @pytest.fixture
+    def requester_auth_headers(self, client, sample_requester, sample_institution):
+        claims = {
+            "role": sample_requester.role.value,
+            "institution_id": sample_institution.id,
+            "institution_role": sample_requester.institution_role,
+            "aud": "atmr-api",
+        }
+        with client.application.app_context():
+            token = create_access_token(
+                identity=str(sample_requester.public_id),
+                additional_claims=claims,
+            )
+        return {"Authorization": f"Bearer {token}"}
+
+    def _future_iso(self) -> str:
+        return (datetime.now(UTC) + timedelta(hours=24)).isoformat()
+
+    def test_requester_can_create_with_institution_billing_intent(
+        self, client, db, requester_auth_headers
+    ):
+        response = client.post(
+            "/api/v1/institutions/requests",
+            json={
+                "external_reference": f"REQ-BILL-{uuid.uuid4().hex[:8]}",
+                "scheduled_time": self._future_iso(),
+                "pickup_location": "Clinique",
+                "dropoff_location": "HUG",
+                "billing_intent": "institution",
+            },
+            headers=requester_auth_headers,
+        )
+        assert response.status_code == 201
+        data = response.get_json()
+        assert data["billing_intent"] == "institution"
+
+    def test_requester_put_cannot_change_billing_intent(
+        self, client, db, requester_auth_headers, sample_institution
+    ):
+        req = TransportRequest()
+        req.institution_id = sample_institution.id
+        req.external_reference = f"PUT-BILL-{uuid.uuid4().hex[:8]}"
+        req.pickup_location = "Clinique"
+        req.dropoff_location = "HUG"
+        scheduled = datetime.now(UTC) + timedelta(hours=24)
+        req.scheduled_time = scheduled
+        req.mission_date = scheduled.date()
+        req.pickup_time_confirmed = True
+        req.billing_intent = "institution"
+        req.status = RequestStatus.DRAFT.value
+        req.public_id = str(uuid.uuid4())
+        db.session.add(req)
+        db.session.commit()
+
+        response = client.put(
+            f"/api/v1/institutions/requests/{req.id}",
+            json={"billing_intent": "patient", "pickup_location": "Clinique Updated"},
+            headers=requester_auth_headers,
+        )
+        assert response.status_code == 403
+        body = response.get_json()
+        assert body.get("code") == "billing_edit_forbidden"
+
+        db.session.refresh(req)
+        assert req.billing_intent == "institution"
+        assert req.pickup_location == "Clinique"
+
+    def test_requester_put_same_billing_intent_is_stripped(
+        self, client, db, requester_auth_headers, sample_institution
+    ):
+        req = TransportRequest()
+        req.institution_id = sample_institution.id
+        req.external_reference = f"PUT-SAME-{uuid.uuid4().hex[:8]}"
+        req.pickup_location = "Clinique"
+        req.dropoff_location = "HUG"
+        scheduled = datetime.now(UTC) + timedelta(hours=24)
+        req.scheduled_time = scheduled
+        req.mission_date = scheduled.date()
+        req.pickup_time_confirmed = True
+        req.billing_intent = "institution"
+        req.status = RequestStatus.DRAFT.value
+        req.public_id = str(uuid.uuid4())
+        db.session.add(req)
+        db.session.commit()
+
+        response = client.put(
+            f"/api/v1/institutions/requests/{req.id}",
+            json={
+                "billing_intent": "institution",
+                "pickup_location": "Clinique Updated",
+            },
+            headers=requester_auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["billing_intent"] == "institution"
+        assert data["pickup_location"] == "Clinique Updated"
+
+    def test_requester_put_without_billing_preserves_intent(
+        self, client, db, requester_auth_headers, sample_institution
+    ):
+        req = TransportRequest()
+        req.institution_id = sample_institution.id
+        req.external_reference = f"PUT-OPS-{uuid.uuid4().hex[:8]}"
+        req.pickup_location = "Clinique"
+        req.dropoff_location = "HUG"
+        scheduled = datetime.now(UTC) + timedelta(hours=24)
+        req.scheduled_time = scheduled
+        req.mission_date = scheduled.date()
+        req.pickup_time_confirmed = True
+        req.billing_intent = "institution"
+        req.status = RequestStatus.DRAFT.value
+        req.public_id = str(uuid.uuid4())
+        db.session.add(req)
+        db.session.commit()
+
+        response = client.put(
+            f"/api/v1/institutions/requests/{req.id}",
+            json={"notes": "Correction horaire uniquement"},
+            headers=requester_auth_headers,
+        )
+        assert response.status_code == 200
+        db.session.refresh(req)
+        assert req.billing_intent == "institution"
+        assert req.notes == "Correction horaire uniquement"
+
+    def test_requester_multi_stop_overrides_survive_operational_put(
+        self, client, db, requester_auth_headers, monkeypatch
+    ):
+        monkeypatch.setenv("INSTITUTION_MULTI_STOP_ENABLED", "true")
+        mission_day = (datetime.now(UTC) + timedelta(days=2)).date()
+        hug_time = f"{mission_day.isoformat()}T10:00:00"
+        return_time = f"{mission_day.isoformat()}T12:00:00"
+        pickup_time = f"{mission_day.isoformat()}T09:00:00"
+
+        create_resp = client.post(
+            "/api/v1/institutions/requests",
+            json={
+                "external_reference": f"REQ-OV-{uuid.uuid4().hex[:8]}",
+                "mission_date": mission_day.isoformat(),
+                "scheduled_time": pickup_time,
+                "scheduled_time_type": "departure",
+                "pickup_time_confirmed": True,
+                "pickup_location": "Clinique",
+                "dropoff_location": "HUG",
+                "billing_intent": "institution",
+                "multi_stop": True,
+                "return_to_institution": True,
+                "intermediate_stops": [
+                    {
+                        "sequence": 0,
+                        "dropoff_location": "HUG",
+                        "scheduled_time": hug_time,
+                        "time_confirmed": True,
+                        "use_custom_billing": True,
+                        "destination_billing_override": "patient",
+                    }
+                ],
+                "return_scheduled_time": return_time,
+                "return_time_confirmed": True,
+                "return_stop": {
+                    "use_custom_billing": True,
+                    "destination_billing_override": "institution",
+                },
+            },
+            headers=requester_auth_headers,
+        )
+        assert create_resp.status_code == 201, create_resp.get_json()
+        created = create_resp.get_json()
+        request_id = created["id"]
+        assert created["billing_intent"] == "institution"
+
+        from models.transport_request_leg import TransportRequestLeg
+
+        legs = (
+            TransportRequestLeg.query.filter_by(transport_request_id=request_id)
+            .order_by(TransportRequestLeg.sequence_index)
+            .all()
+        )
+        assert len(legs) >= 2
+        assert legs[0].destination_billing_override == "patient"
+        assert legs[-1].destination_billing_override == "institution"
+
+        put_resp = client.put(
+            f"/api/v1/institutions/requests/{request_id}",
+            json={
+                "multi_stop": True,
+                "return_to_institution": True,
+                "pickup_location": "Clinique Updated",
+                "intermediate_stops": [
+                    {
+                        "sequence": 0,
+                        "dropoff_location": "HUG",
+                        "scheduled_time": hug_time,
+                        "time_confirmed": True,
+                    }
+                ],
+                "return_scheduled_time": return_time,
+                "return_time_confirmed": True,
+            },
+            headers=requester_auth_headers,
+        )
+        assert put_resp.status_code == 200, put_resp.get_json()
+
+        db.session.expire_all()
+        req = TransportRequest.query.get(request_id)
+        assert req.billing_intent == "institution"
+        assert req.pickup_location == "Clinique Updated"
+        legs_after = (
+            TransportRequestLeg.query.filter_by(transport_request_id=request_id)
+            .order_by(TransportRequestLeg.sequence_index)
+            .all()
+        )
+        assert legs_after[0].destination_billing_override == "patient"
+        assert legs_after[-1].destination_billing_override == "institution"

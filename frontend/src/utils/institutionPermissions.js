@@ -1,10 +1,11 @@
 // utils/institutionPermissions.js
 /**
  * ÉTAPE 6: Gestion des permissions UI pour le portail Institution
- * 
+ *
  * Rôles institution_role:
  * - institution_admin: Tous droits
  * - institution_requester: Créer/modifier/envoyer/annuler les demandes
+ *   (+ destinataire de facturation à la création uniquement)
  * - institution_reader: Lecture seule
  * - institution_billing: Mêmes droits que demandeur + facturation (destinataire, montants)
  * - institution_curator: Curateur (curatelle) — gère demandes + facturation pour ses protégés
@@ -35,6 +36,8 @@ export const INSTITUTION_ACTIONS = {
   // Billing
   EDIT_BILLING: 'edit_billing',
   EDIT_REQUEST_BILLING: 'edit_request_billing', // Changer facturation institution/patient sur une demande
+  /** Destinataire + overrides par trajet, uniquement à la création de la demande */
+  SET_REQUEST_BILLING_ON_CREATE: 'set_request_billing_on_create',
 
   // Données administratives sensibles (AVS, assurance, curatelle)
   VIEW_ADMIN_DATA: 'view_admin_data',
@@ -67,6 +70,7 @@ const ROLE_PERMISSIONS = {
     INSTITUTION_ACTIONS.MANAGE_API_KEYS,
     INSTITUTION_ACTIONS.EDIT_BILLING,
     INSTITUTION_ACTIONS.EDIT_REQUEST_BILLING,
+    INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE,
     INSTITUTION_ACTIONS.VIEW_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_PATIENT_BILLING_DATA,
@@ -74,7 +78,7 @@ const ROLE_PERMISSIONS = {
   ],
   
   institution_requester: [
-    // CRUD demandes + patients + voir settings
+    // CRUD demandes + patients + voir settings + facturation à la création
     INSTITUTION_ACTIONS.CREATE_REQUEST,
     INSTITUTION_ACTIONS.EDIT_REQUEST,
     INSTITUTION_ACTIONS.SEND_REQUEST,
@@ -84,6 +88,7 @@ const ROLE_PERMISSIONS = {
     INSTITUTION_ACTIONS.EDIT_PATIENT,
     INSTITUTION_ACTIONS.VIEW_PATIENT,
     INSTITUTION_ACTIONS.VIEW_SETTINGS,
+    INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE,
   ],
   
   institution_reader: [
@@ -106,6 +111,7 @@ const ROLE_PERMISSIONS = {
     INSTITUTION_ACTIONS.VIEW_SETTINGS,
     INSTITUTION_ACTIONS.EDIT_BILLING,
     INSTITUTION_ACTIONS.EDIT_REQUEST_BILLING,
+    INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE,
     INSTITUTION_ACTIONS.VIEW_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_PATIENT_BILLING_DATA,
@@ -132,6 +138,7 @@ const ROLE_PERMISSIONS = {
     INSTITUTION_ACTIONS.VIEW_PATIENT,
     INSTITUTION_ACTIONS.EDIT_BILLING,
     INSTITUTION_ACTIONS.EDIT_REQUEST_BILLING,
+    INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE,
     INSTITUTION_ACTIONS.VIEW_SETTINGS,
     INSTITUTION_ACTIONS.VIEW_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_ADMIN_DATA,
@@ -229,6 +236,16 @@ export function canEditRequestBilling(institutionRole) {
 }
 
 /**
+ * Destinataire de facturation + overrides par trajet à la création uniquement
+ * (sans accès comptable avancé EDIT_BILLING).
+ * @param {string} institutionRole
+ * @returns {boolean}
+ */
+export function canSetRequestBillingOnCreate(institutionRole) {
+  return can(institutionRole, INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE);
+}
+
+/**
  * Vérifie si l'utilisateur peut voir les données administratives sensibles (AVS, assurance, curatelle)
  * @param {string} institutionRole
  * @returns {boolean}
@@ -320,6 +337,7 @@ const institutionPermissions = {
   canViewFinancialAmounts,
   canViewBillingSection,
   canEditRequestBilling,
+  canSetRequestBillingOnCreate,
   canViewAdminData,
   canEditAdminData,
   canEditPatientBillingData,

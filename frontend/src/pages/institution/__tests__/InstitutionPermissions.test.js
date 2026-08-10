@@ -8,6 +8,9 @@ import {
   isAdmin,
   canManageRequests,
   canEditBilling,
+  canEditRequestBilling,
+  canSetRequestBillingOnCreate,
+  canViewFinancialAmounts,
   canViewSettings,
   getRoleLabel,
   INSTITUTION_ACTIONS,
@@ -20,13 +23,16 @@ describe('Institution Permissions', () => {
       expect(can('institution_admin', INSTITUTION_ACTIONS.EDIT_BILLING)).toBe(true);
       expect(can('institution_admin', INSTITUTION_ACTIONS.MANAGE_API_KEYS)).toBe(true);
       expect(can('institution_admin', INSTITUTION_ACTIONS.VIEW_REQUEST)).toBe(true);
+      expect(can('institution_admin', INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE)).toBe(true);
     });
 
-    it('requester can manage requests but not billing', () => {
+    it('requester can manage requests and set billing on create, not advanced billing', () => {
       expect(can('institution_requester', INSTITUTION_ACTIONS.CREATE_REQUEST)).toBe(true);
       expect(can('institution_requester', INSTITUTION_ACTIONS.SEND_REQUEST)).toBe(true);
       expect(can('institution_requester', INSTITUTION_ACTIONS.CANCEL_REQUEST)).toBe(true);
+      expect(can('institution_requester', INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE)).toBe(true);
       expect(can('institution_requester', INSTITUTION_ACTIONS.EDIT_BILLING)).toBe(false);
+      expect(can('institution_requester', INSTITUTION_ACTIONS.EDIT_REQUEST_BILLING)).toBe(false);
       expect(can('institution_requester', INSTITUTION_ACTIONS.MANAGE_API_KEYS)).toBe(false);
     });
 
@@ -35,6 +41,7 @@ describe('Institution Permissions', () => {
       expect(can('institution_reader', INSTITUTION_ACTIONS.VIEW_PATIENT)).toBe(true);
       expect(can('institution_reader', INSTITUTION_ACTIONS.CREATE_REQUEST)).toBe(false);
       expect(can('institution_reader', INSTITUTION_ACTIONS.EDIT_BILLING)).toBe(false);
+      expect(can('institution_reader', INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE)).toBe(false);
     });
 
     it('billing has requester rights plus billing', () => {
@@ -43,7 +50,19 @@ describe('Institution Permissions', () => {
       expect(can('institution_billing', INSTITUTION_ACTIONS.CREATE_REQUEST)).toBe(true);
       expect(can('institution_billing', INSTITUTION_ACTIONS.SEND_REQUEST)).toBe(true);
       expect(can('institution_billing', INSTITUTION_ACTIONS.EDIT_REQUEST_BILLING)).toBe(true);
+      expect(can('institution_billing', INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE)).toBe(true);
       expect(can('institution_billing', INSTITUTION_ACTIONS.MANAGE_API_KEYS)).toBe(false);
+    });
+
+    it('curator can set billing on create and edit billing UI permissions', () => {
+      expect(can('institution_curator', INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE)).toBe(true);
+      expect(can('institution_curator', INSTITUTION_ACTIONS.EDIT_BILLING)).toBe(true);
+      expect(can('institution_curator', INSTITUTION_ACTIONS.EDIT_REQUEST_BILLING)).toBe(true);
+    });
+
+    it('reception cannot set billing on create', () => {
+      expect(can('institution_reception', INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE)).toBe(false);
+      expect(can('institution_reception', INSTITUTION_ACTIONS.EDIT_BILLING)).toBe(false);
     });
 
     it('returns false for unknown role', () => {
@@ -97,6 +116,32 @@ describe('Institution Permissions', () => {
     });
   });
 
+  describe('canSetRequestBillingOnCreate()', () => {
+    it('admin, requester, billing and curator can set billing on create', () => {
+      expect(canSetRequestBillingOnCreate('institution_admin')).toBe(true);
+      expect(canSetRequestBillingOnCreate('institution_requester')).toBe(true);
+      expect(canSetRequestBillingOnCreate('institution_billing')).toBe(true);
+      expect(canSetRequestBillingOnCreate('institution_curator')).toBe(true);
+    });
+
+    it('reader and reception cannot', () => {
+      expect(canSetRequestBillingOnCreate('institution_reader')).toBe(false);
+      expect(canSetRequestBillingOnCreate('institution_reception')).toBe(false);
+    });
+  });
+
+  describe('canEditRequestBilling / canViewFinancialAmounts()', () => {
+    it('requester has no post-create billing or financial amounts access', () => {
+      expect(canEditRequestBilling('institution_requester')).toBe(false);
+      expect(canViewFinancialAmounts('institution_requester')).toBe(false);
+    });
+
+    it('billing role can edit request billing and view amounts', () => {
+      expect(canEditRequestBilling('institution_billing')).toBe(true);
+      expect(canViewFinancialAmounts('institution_billing')).toBe(true);
+    });
+  });
+
   describe('canViewSettings()', () => {
     it('institution roles with VIEW_SETTINGS can view settings', () => {
       expect(canViewSettings('institution_admin')).toBe(true);
@@ -123,7 +168,7 @@ describe('Institution Permissions', () => {
 describe('Protected Route - Institution', () => {
   // Note: These are integration tests that would require testing-library/react
   // For now, we document what should be tested
-  
+
   it.todo('should redirect to /unauthorized if user role is not INSTITUTION');
   it.todo('should render dashboard if user role is INSTITUTION');
   it.todo('reader should not see Create Request button');
