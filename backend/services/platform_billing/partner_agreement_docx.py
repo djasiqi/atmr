@@ -23,10 +23,10 @@ from services.platform_billing.partner_agreement_compliance import (
 )
 
 # Source unique des versions du contrat partenaire (v1.20).
-# GENERATOR_VERSION et TEMPLATE_VERSION sont ré-exportés ici pour compatibilité
+# GENERATOR_VERSION est ré-exporté ici pour compatibilité
 # (`from partner_agreement_docx import GENERATOR_VERSION, TEMPLATE_VERSION`).
-from services.platform_billing.partner_agreement_versions import (
-    GENERATOR_VERSION,  # noqa: F401
+from services.platform_billing.partner_agreement_versions import (  # noqa: F401
+    GENERATOR_VERSION,
     PACK_SCHEMA_VERSION,
     PENALTY_CALCULATION_VERSION,
     PENALTY_CURRENCY,

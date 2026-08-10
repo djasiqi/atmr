@@ -79,6 +79,9 @@ ignore = [
 [lint.per-file-ignores]
 "__init__.py" = ["F401", "D104"]  # Imports inutilisés OK dans __init__
 "manage.py" = ["RUF100"]  # noqa: E402 nécessaire pour Flake8 (eventlet monkey patch)
+"services/unified_dispatch/apply.py" = ["RUF100"]  # noqa F401 pour Flake8 (re-export *)
+"services/unified_dispatch/dispatch_prometheus_metrics.py" = ["RUF100"]  # noqa F401 pour Flake8
+"services/unified_dispatch/ml_predictor.py" = ["RUF100"]  # noqa F401 pour Flake8
 "migrations/**/*.py" = ["E501", "F401", "N999", "D", "I001"]  # Alembic auto-generated (I001: import sorting peut varier)
 "scripts/**/*.py" = [
     "T201",     # Print statements OK dans scripts

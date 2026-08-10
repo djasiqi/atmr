@@ -468,7 +468,6 @@ class UpdateDriverBookingStatusUseCase:
                             "unchanged": True,
                         }
                     elif (data.get("scope") or "").strip().lower() == "reservation":
-                        _scope = "reservation"
                         # Annulation multi-segments (aller + retour)
                         root = (
                             self._booking_repo.find_model_by_id(

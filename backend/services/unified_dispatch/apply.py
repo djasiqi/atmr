@@ -6,4 +6,4 @@ Réexporte l'intégralité du module pour que les patches de tests sur
 
 from __future__ import annotations
 
-from services.unified_dispatch.optimization.assignment_applier import *  # noqa: F403
+from services.unified_dispatch.optimization.assignment_applier import *  # noqa: F401,F403

@@ -6,4 +6,4 @@ sur l'ancien chemin ``ml_predictor`` restent valides.
 
 from __future__ import annotations
 
-from services.unified_dispatch.ml.predictor import *  # noqa: F403
+from services.unified_dispatch.ml.predictor import *  # noqa: F401,F403
