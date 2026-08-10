@@ -62,12 +62,12 @@
           ]
         }
       ],
-      "versionCode": 124
+      "versionCode": 125
     },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "ch.liri.operations",
-      "buildNumber": "68",
+      "buildNumber": "69",
       "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": [
         "applinks:app.lirie.ch"
