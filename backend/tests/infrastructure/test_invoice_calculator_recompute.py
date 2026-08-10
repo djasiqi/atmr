@@ -13,6 +13,7 @@ Contexte:
 """
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -25,6 +26,14 @@ from infrastructure.invoices.invoice_calculator import (
 from models import Client, Company, User
 from models.enums import InvoiceBillingStrategy, InvoiceStatus, UserRole
 from models.invoice import Invoice, InvoiceLine
+
+
+def _attach_invoice_dates(invoice: Invoice) -> None:
+    """Assure issued_at / due_date NOT NULL (contrainte modèle)."""
+    if invoice.issued_at is None:
+        invoice.issued_at = datetime.now(UTC)
+    if invoice.due_date is None:
+        invoice.due_date = invoice.issued_at + timedelta(days=30)
 
 
 class TestRecomputeInvoiceTotals:
@@ -96,6 +105,7 @@ class TestRecomputeInvoiceTotals:
         invoice.balance_due = Decimal("0.00")
         invoice.period_month = 1
         invoice.period_year = 2026
+        _attach_invoice_dates(invoice)
         db.session.add(invoice)
         db.session.flush()
 
@@ -179,6 +189,7 @@ class TestRecomputeInvoiceTotals:
         invoice.balance_due = Decimal("0.00")
         invoice.period_month = 1
         invoice.period_year = 2026
+        _attach_invoice_dates(invoice)
         db.session.add(invoice)
         db.session.flush()
 
@@ -207,6 +218,7 @@ class TestRecomputeInvoiceTotals:
         invoice.balance_due = Decimal("0.00")
         invoice.period_month = 1
         invoice.period_year = 2026
+        _attach_invoice_dates(invoice)
         db.session.add(invoice)
         db.session.flush()
 
@@ -270,6 +282,7 @@ class TestRecomputeInvoiceTotals:
         invoice.amount_paid = Decimal("50.00")  # Paiement partiel existant
         invoice.period_month = 1
         invoice.period_year = 2026
+        _attach_invoice_dates(invoice)
         db.session.add(invoice)
         db.session.flush()
 

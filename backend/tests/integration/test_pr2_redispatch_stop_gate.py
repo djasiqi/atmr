@@ -15,7 +15,7 @@ schéma de test n'est pas disponible.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
@@ -72,6 +72,12 @@ def transport_request(db, institution, committed_booking):
     tr.public_id = str(uuid.uuid4())
     tr.institution_id = institution.id
     tr.scheduled_time = committed_booking.scheduled_time
+    tr.mission_date = (
+        committed_booking.scheduled_time.date()
+        if committed_booking.scheduled_time
+        else date.today()
+    )
+    tr.pickup_time_confirmed = True
     tr.pickup_location = committed_booking.pickup_location
     tr.dropoff_location = committed_booking.dropoff_location
     tr.status = RequestStatus.CONVERTED.value
@@ -480,6 +486,8 @@ class TestCancelMultiStopCascade:
         tr.public_id = str(uuid.uuid4())
         tr.institution_id = institution.id
         tr.scheduled_time = base_time
+        tr.mission_date = base_time.date()
+        tr.pickup_time_confirmed = True
         tr.pickup_location = principal.pickup_location
         tr.dropoff_location = principal.dropoff_location
         tr.status = RequestStatus.CONVERTED.value

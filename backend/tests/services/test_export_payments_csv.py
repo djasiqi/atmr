@@ -1,4 +1,7 @@
-"""Tests pour l'export CSV des paiements encaissés."""
+"""Tests pour l'export CSV des paiements encaissés.
+
+Utilise l'app Postgres de conftest (pas SQLite : JSONB booking.rejected_by).
+"""
 
 from __future__ import annotations
 
@@ -6,9 +9,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from flask import Flask
 
-from models import Company, Invoice, InvoicePayment, User, db
+from models import Invoice, InvoicePayment, db
 from models.enums import (
     InvoiceBillingStrategy,
     InvoiceStatus,
@@ -21,21 +23,6 @@ from tests.factories import (
     InvoiceFactory,
     UserFactory,
 )
-
-
-@pytest.fixture
-def app():
-    """Créer une application Flask pour les tests."""
-    app = Flask(__name__)
-    app.config["TESTING"] = True
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-    db.init_app(app)
-    with app.app_context():
-        db.create_all()
-        yield app
-        db.drop_all()
 
 
 @pytest.fixture
@@ -57,8 +44,8 @@ def client_user(app):
 
 
 @pytest.fixture
-def client(app, client_user):
-    """Créer un client."""
+def billing_client(app, client_user):
+    """Créer un client facturation (évite le shadowing du Flask test client)."""
     with app.app_context():
         client = ClientFactory(user_id=client_user.id)
         db.session.commit()
@@ -77,13 +64,13 @@ def clinic_company(app):
 class TestExportPaymentsCSV:
     """Tests pour l'export CSV des paiements."""
 
-    def test_export_includes_payment_in_month(self, app, company, client):
+    def test_export_includes_payment_in_month(self, app, company, billing_client):
         """Test 1: Paiement janvier inclus dans export janvier."""
         with app.app_context():
             # Créer une facture avec un paiement en janvier 2026
             invoice = InvoiceFactory(
                 company_id=company.id,
-                client_id=client.id,
+                client_id=billing_client.id,
                 invoice_number="INV-2026-01-0001",
                 status=InvoiceStatus.PAID,
             )
@@ -116,13 +103,13 @@ class TestExportPaymentsCSV:
             assert payments[0].amount == Decimal("100.00")
             assert payments[0].paid_at.month == 1
 
-    def test_export_excludes_payment_outside_month(self, app, company, client):
+    def test_export_excludes_payment_outside_month(self, app, company, billing_client):
         """Test 2: Paiement février exclu de l'export janvier."""
         with app.app_context():
             # Créer une facture avec un paiement en février 2026
             invoice = InvoiceFactory(
                 company_id=company.id,
-                client_id=client.id,
+                client_id=billing_client.id,
                 invoice_number="INV-2026-02-0001",
                 status=InvoiceStatus.PAID,
             )
@@ -151,13 +138,15 @@ class TestExportPaymentsCSV:
 
             assert len(payments) == 0
 
-    def test_export_partial_payment_creates_multiple_lines(self, app, company, client):
+    def test_export_partial_payment_creates_multiple_lines(
+        self, app, company, billing_client
+    ):
         """Test 3: Paiement partiel => 2 lignes dans le CSV."""
         with app.app_context():
             # Créer une facture avec 2 paiements partiels
             invoice = InvoiceFactory(
                 company_id=company.id,
-                client_id=client.id,
+                client_id=billing_client.id,
                 invoice_number="INV-2026-01-0002",
                 status=InvoiceStatus.PARTIALLY_PAID,
             )
@@ -196,13 +185,13 @@ class TestExportPaymentsCSV:
             assert payments[0].amount == Decimal("50.00")
             assert payments[1].amount == Decimal("30.00")
 
-    def test_export_excludes_unpaid_invoice(self, app, company, client):
+    def test_export_excludes_unpaid_invoice(self, app, company, billing_client):
         """Test 4: Facture non payée => exclue de l'export."""
         with app.app_context():
             # Créer une facture non payée (sans paiement)
             invoice = InvoiceFactory(
                 company_id=company.id,
-                client_id=client.id,
+                client_id=billing_client.id,
                 invoice_number="INV-2026-01-0003",
                 status=InvoiceStatus.SENT,
             )
@@ -222,13 +211,13 @@ class TestExportPaymentsCSV:
 
             assert len(payments) == 0
 
-    def test_export_excludes_cancelled_invoice(self, app, company, client):
+    def test_export_excludes_cancelled_invoice(self, app, company, billing_client):
         """Test 5: Facture annulée => exclue même si payée."""
         with app.app_context():
             # Créer une facture annulée avec un paiement
             invoice = InvoiceFactory(
                 company_id=company.id,
-                client_id=client.id,
+                client_id=billing_client.id,
                 invoice_number="INV-2026-01-0004",
                 status=InvoiceStatus.CANCELLED,
             )
@@ -258,14 +247,14 @@ class TestExportPaymentsCSV:
             assert len(payments) == 0
 
     def test_export_s2_invoice_uses_clinic_name(
-        self, app, company, client, clinic_company
+        self, app, company, billing_client, clinic_company
     ):
         """Test 6: Facture S2 => utilise nom clinique (pas nom client)."""
         with app.app_context():
             # Créer une facture S2 (clinique)
             invoice = InvoiceFactory(
                 company_id=company.id,
-                client_id=client.id,
+                client_id=billing_client.id,
                 invoice_number="INV-2026-01-0005",
                 status=InvoiceStatus.PAID,
                 billing_strategy=InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
@@ -301,13 +290,13 @@ class TestExportPaymentsCSV:
             )
             assert payments[0].invoice.billed_to_company_id == clinic_company.id
 
-    def test_export_csv_format_includes_all_columns(self, app, company, client):
+    def test_export_csv_format_includes_all_columns(self, app, company, billing_client):
         """Test 7: Vérifier que le CSV contient toutes les colonnes requises."""
         with app.app_context():
             # Créer une facture avec un paiement
             invoice = InvoiceFactory(
                 company_id=company.id,
-                client_id=client.id,
+                client_id=billing_client.id,
                 invoice_number="INV-2026-01-0006",
                 status=InvoiceStatus.PAID,
             )

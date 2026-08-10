@@ -169,6 +169,8 @@ class TestCancelConvertedRequest:
         transport_req.pickup_location = "123 Rue Test"
         transport_req.dropoff_location = "456 Avenue Dest"
         transport_req.scheduled_time = datetime.now(UTC) + timedelta(days=2)
+        transport_req.mission_date = transport_req.scheduled_time.date()
+        transport_req.pickup_time_confirmed = True
         transport_req.status = RequestStatus.CONVERTED.value
         transport_req.booking_id = 99999  # ID fictif pour le test
         db.session.add(transport_req)
@@ -204,6 +206,8 @@ class TestCancelConvertedRequest:
         transport_req.pickup_location = "123 Rue Test"
         transport_req.dropoff_location = "456 Avenue Dest"
         transport_req.scheduled_time = datetime.now(UTC) + timedelta(days=2)
+        transport_req.mission_date = transport_req.scheduled_time.date()
+        transport_req.pickup_time_confirmed = True
         transport_req.status = RequestStatus.DRAFT.value
         db.session.add(transport_req)
         db.session.commit()
@@ -292,6 +296,8 @@ class TestBillingPermissions:
         transport_req.pickup_location = "123 Rue Test"
         transport_req.dropoff_location = "456 Avenue Dest"
         transport_req.scheduled_time = datetime.now(UTC) + timedelta(days=2)
+        transport_req.mission_date = transport_req.scheduled_time.date()
+        transport_req.pickup_time_confirmed = True
         transport_req.status = RequestStatus.SENT.value
         transport_req.billing_intent = "patient"
         db.session.add(transport_req)

@@ -28,10 +28,15 @@ from models.enums import (
     DispatchStatus,
     DriverType,
     InvoiceStatus,
+    MissionType,
+    RequestStatus,
+    ScheduledTimeType,
     UserRole,
 )
+from models.institution import Institution
 from models.invoice import Invoice
 from models.ml_prediction import MLPrediction
+from models.transport_request import TransportRequest
 from models.user import User
 from models.vehicle import Vehicle
 
@@ -187,6 +192,52 @@ class VehicleFactory(SQLAlchemyModelFactory):
 
     is_active = True
     has_medical_equipment = False
+
+
+# ========== INSTITUTION & TRANSPORT REQUEST ==========
+
+
+class InstitutionFactory(SQLAlchemyModelFactory):
+    """Factory minimale pour Institution (sans graphe User/Company)."""
+
+    class Meta:  # type: ignore[misc]
+        model = Institution
+
+    name = factory.LazyAttribute(lambda _: f"Institution {fake.company()}"[:200])
+    institution_type = "clinic"
+    address = factory.LazyAttribute(lambda _: fake.address().replace("\n", ", ")[:255])
+    contact_email = factory.LazyAttribute(lambda _: fake.company_email())
+    contact_phone = factory.LazyAttribute(lambda _: fake.phone_number()[:50])
+
+
+class TransportRequestFactory(SQLAlchemyModelFactory):
+    """Factory minimale pour TransportRequest (mission_date NOT NULL).
+
+    Passer ``institution=...`` si une fixture existe déjà pour éviter
+    de créer une institution inutile via SubFactory.
+    """
+
+    class Meta:  # type: ignore[misc]
+        model = TransportRequest
+
+    institution = factory.SubFactory(InstitutionFactory)
+    mission_type = MissionType.PATIENT_TRANSPORT.value
+    mission_date = factory.LazyFunction(lambda: date.today() + timedelta(days=1))
+    scheduled_time = factory.LazyAttribute(
+        lambda obj: datetime.combine(obj.mission_date, datetime.min.time()).replace(
+            hour=10, minute=0
+        )
+    )
+    pickup_time_confirmed = True
+    scheduled_time_type = ScheduledTimeType.DEPARTURE.value
+    pickup_location = factory.LazyAttribute(
+        lambda _: fake.address().replace("\n", ", ")[:255]
+    )
+    dropoff_location = factory.LazyAttribute(
+        lambda _: fake.address().replace("\n", ", ")[:255]
+    )
+    status = RequestStatus.DRAFT.value
+    public_id = factory.LazyFunction(lambda: str(uuid.uuid4()))
 
 
 # ========== BOOKING ==========

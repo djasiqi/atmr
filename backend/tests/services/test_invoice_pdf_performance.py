@@ -31,7 +31,9 @@ class TestInvoicePdfPerformance:
         # Arrange
         company = Company(name="Test Company", uid_ide="CHE-123.456.789")
         user = User(username="testuser", email="test@example.com")
+        user.set_password("password123", force_change=False)
         client_user = User(username="clientuser", email="client@example.com")
+        client_user.set_password("password123", force_change=False)
         client = Client(user=client_user, company=company)
         db.session.add_all([company, user, client_user, client])
         db.session.commit()
@@ -104,7 +106,9 @@ class TestInvoicePdfPerformance:
         # Arrange
         company = Company(name="Test Company", uid_ide="CHE-123.456.789")
         user = User(username="testuser", email="test@example.com")
+        user.set_password("password123", force_change=False)
         client_user = User(username="clientuser", email="client@example.com")
+        client_user.set_password("password123", force_change=False)
         client = Client(user=client_user, company=company)
         db.session.add_all([company, user, client_user, client])
         db.session.commit()

@@ -644,9 +644,12 @@ class TestP0StabilizationE2E:
     def test_e2e_payment_flow(self, client, auth_headers, sample_company, db):
         """Test E2E complet: paiement avec idempotency (CRITIQUE)."""
         # Créer une facture de test
+        from datetime import UTC, datetime, timedelta
+
         from models.enums import InvoiceStatus
         from models.invoice import Invoice
 
+        _issued = datetime.now(UTC)
         invoice = Invoice(
             company_id=sample_company.id,
             client_id=1,  # ID fictif pour le test
@@ -659,6 +662,8 @@ class TestP0StabilizationE2E:
             amount_paid=0.0,
             balance_due=100.0,
             status=InvoiceStatus.PENDING,
+            issued_at=_issued,
+            due_date=_issued + timedelta(days=30),
         )
         db.session.add(invoice)
         db.session.commit()
