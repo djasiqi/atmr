@@ -11,6 +11,8 @@ test_delete.py
 check_*.py
 # Use case métier (nom check_* historique), pas un script jetable
 !application/invoices/check_overdue_invoices.py
+# Script CI couverture (référencé par .github/workflows/backend-tests.yml)
+!scripts/check_coverage.py
 
 # Celery Beat persistence
 celerybeat-schedule*
