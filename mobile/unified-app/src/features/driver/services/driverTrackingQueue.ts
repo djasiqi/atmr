@@ -7,8 +7,13 @@ import { formatTrackingSendError } from "./driverTrackingSendErrorFormat";
 import {
   QueueSuspendReason,
   QueueSuspendState,
+  isContextInactiveApiError,
   resolveQueueSuspendMs,
 } from "./driverTrackingQueueBackoff";
+import {
+  leaseAllowsTransport,
+  readTrackingContextLease,
+} from "./trackingContextLease";
 import { onAuthRefreshSuccess } from "../../../core/auth/authRefreshListeners";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { realtimeManager } from "../../../core/realtime/realtimeManager";
@@ -227,8 +232,15 @@ class DriverTrackingQueue {
     }
     const suspendDelay =
       this.suspendActive() && this.queueSuspend
-        ? Math.max(delayMs, this.queueSuspend.untilMs - nowMs())
+        ? this.queueSuspend.reason === "context_inactive" ||
+          this.queueSuspend.untilMs == null
+          ? null
+          : Math.max(delayMs, this.queueSuspend.untilMs - nowMs())
         : delayMs;
+    if (suspendDelay == null) {
+      this.clearDrainTimer();
+      return;
+    }
     if (this.drainTimer) {
       return;
     }
@@ -616,14 +628,21 @@ class DriverTrackingQueue {
     const parsed = safeJsonParse<QueueSuspendState>(
       await this.readStorage(QUEUE_SUSPEND_STORAGE_KEY)
     );
-    if (
-      parsed &&
-      typeof parsed.untilMs === "number" &&
-      typeof parsed.reason === "string" &&
-      parsed.untilMs > nowMs()
-    ) {
-      this.queueSuspend = parsed;
-      return;
+    if (parsed && typeof parsed.reason === "string") {
+      if (parsed.reason === "context_inactive") {
+        this.queueSuspend = {
+          untilMs: null,
+          reason: "context_inactive",
+        };
+        return;
+      }
+      if (
+        typeof parsed.untilMs === "number" &&
+        parsed.untilMs > nowMs()
+      ) {
+        this.queueSuspend = parsed;
+        return;
+      }
     }
     // P0.3 : ne pas effacer une suspension mémoire encore active (miss AsyncStorage)
     if (this.suspendActive()) {
@@ -641,7 +660,12 @@ class DriverTrackingQueue {
   }
 
   private suspendActive(): boolean {
-    return this.queueSuspend !== null && nowMs() < this.queueSuspend.untilMs;
+    if (!this.queueSuspend) return false;
+    if (this.queueSuspend.reason === "context_inactive") {
+      return true;
+    }
+    if (this.queueSuspend.untilMs == null) return true;
+    return nowMs() < this.queueSuspend.untilMs;
   }
 
   async clearSuspension(source = "manual"): Promise<void> {
@@ -659,10 +683,34 @@ class DriverTrackingQueue {
     await this.clearSuspension(source);
   }
 
+  /** Gate sans timer — libérée uniquement par clearContextInactiveGate / resumeAfterDriverContext. */
+  async activateContextInactiveGate(source = "context_inactive"): Promise<void> {
+    this.queueSuspend = { untilMs: null, reason: "context_inactive" };
+    await this.persistSuspendState();
+    emitDriverTelemetry("tracking.queue.transport_blocked_context", {
+      source: "driver.tracking.queue",
+      reason: source,
+      queue_depth: this.items.length,
+    });
+  }
+
+  async clearContextInactiveGate(source = "driver_context_restored"): Promise<void> {
+    if (this.queueSuspend?.reason !== "context_inactive") return;
+    await this.clearSuspension(source);
+    emitDriverTelemetry("tracking.queue.transport_unblock", {
+      source: "driver.tracking.queue",
+      reason: source,
+    });
+  }
+
   private async activateSuspension(
     suspendMs: number,
     reason: QueueSuspendReason
   ): Promise<void> {
+    if (reason === "context_inactive") {
+      await this.activateContextInactiveGate("activate_suspension");
+      return;
+    }
     const untilMs = nowMs() + Math.max(1_000, suspendMs);
     this.queueSuspend = { untilMs, reason };
     await this.persistSuspendState();
@@ -692,6 +740,16 @@ class DriverTrackingQueue {
     const sessionIdAtStart = this.trackingSessionId;
     if (!sessionIdAtStart) return;
     try {
+      const lease = await readTrackingContextLease();
+      if (!leaseAllowsTransport(lease)) {
+        await this.activateContextInactiveGate("register_session_lease");
+        emitDriverTelemetry("tracking.session.context_inactive", {
+          source: "driver.tracking.queue",
+          tracking_session_id: sessionIdAtStart,
+          lease_state: lease?.state ?? "absent",
+        });
+        return;
+      }
       const res = await registerTrackingSession({
         tracking_session_id: sessionIdAtStart,
         tracking_session_started_at: new Date(this.sessionCreatedAt).toISOString(),
@@ -723,7 +781,17 @@ class DriverTrackingQueue {
       );
       await this.persistSession();
       await this.persist();
-    } catch {
+    } catch (error) {
+      const meta = formatTrackingSendError(error);
+      if (isContextInactiveApiError(meta)) {
+        await this.activateContextInactiveGate("register_session_context");
+        emitDriverTelemetry("tracking.session.context_inactive", {
+          source: "driver.tracking.queue",
+          tracking_session_id: sessionIdAtStart,
+          api_error_code: meta.api_error_code,
+        });
+        return;
+      }
       // Offline : capture locale continue ; génération injectée au retour réseau
       emitDriverTelemetry("tracking.session.register_deferred", {
         source: "driver.tracking.queue",
@@ -805,6 +873,8 @@ class DriverTrackingQueue {
       return false;
     }
     this.identityKey = key;
+
+    await this.clearContextInactiveGate("resume_after_auth_recovery");
 
     const preserve = options.preservePendingTrackingSessions !== false;
     const pendingCount = this.items.filter(
@@ -1278,6 +1348,34 @@ class DriverTrackingQueue {
     const retryEventIds: string[] = [];
     try {
       await this.loadSuspendState();
+      const lease = await readTrackingContextLease();
+      if (!leaseAllowsTransport(lease)) {
+        await this.activateContextInactiveGate("flush_lease");
+        emitDriverTelemetry("tracking.queue.transport_blocked_context", {
+          source: "driver.tracking.queue",
+          reason: "lease_not_driver_active",
+          lease_state: lease?.state ?? "absent",
+          queue_depth: this.items.length,
+        });
+        return {
+          sent: 0,
+          backendAcked: 0,
+          socketEmitted: 0,
+          dropped: 0,
+          retried: 0,
+          queueDepth: this.items.length,
+          flushPathUsed,
+          lastBackendAckAt: null,
+          lastBackendAckStatus: null,
+          lastBackendAckRequestEventId: null,
+          lastBackendAckServerEventId: null,
+          oldestItemAgeMs: this.items[0]
+            ? Math.max(0, nowMs() - this.items[0].queuedAt)
+            : null,
+          networkProfile,
+          ...this.emptyFlushIdLists(),
+        };
+      }
       const transport = await this.prepareFlushTransport();
       const effectiveForceHttp =
         options?.forceHttpFallback === true ||
@@ -1285,14 +1383,22 @@ class DriverTrackingQueue {
         !transport.socketReady ||
         !isFeatureEnabled("tracking_socket_gps_ingest_enabled");
       if (this.suspendActive() && this.queueSuspend) {
-        const waitMs = Math.max(0, this.queueSuspend.untilMs - nowMs());
+        const waitMs =
+          this.queueSuspend.untilMs == null
+            ? 0
+            : Math.max(0, this.queueSuspend.untilMs - nowMs());
         emitDriverTelemetry("tracking.queue.suspend_wait", {
           source: "driver.tracking.queue",
           reason: this.queueSuspend.reason,
           wait_ms: waitMs,
           queue_depth: this.items.length,
         });
-        if (this.items.length > 0 && waitMs > 0) {
+        // context_inactive : pas de retry timer — reprise uniquement via clearContextInactiveGate
+        if (
+          this.queueSuspend.reason !== "context_inactive" &&
+          this.items.length > 0 &&
+          waitMs > 0
+        ) {
           setTimeout(() => {
             void this.flush(options);
           }, waitMs);
@@ -1844,6 +1950,14 @@ class DriverTrackingQueue {
             force_http_fallback: effectiveForceHttp,
           });
           const suspendPlan = resolveQueueSuspendMs(meta, meta.retry_after_seconds);
+          if (isContextInactiveApiError(meta)) {
+            await this.activateContextInactiveGate("http_send_context");
+            stopHttpDrain = true;
+            item.deliveryState = "retry_pending";
+            item.lastError = "context_inactive";
+            remaining.push(item);
+            continue;
+          }
           if (suspendPlan) {
             await this.activateSuspension(suspendPlan.suspendMs, suspendPlan.reason);
             stopHttpDrain = true;

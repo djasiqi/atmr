@@ -537,6 +537,42 @@ export function SessionProvider({ children }: PropsWithChildren) {
         },
         resolved?.context_id ?? null
       );
+      // Réconciliation lease crash-safe (switching → inactive ou restore)
+      void import("../features/driver/services/trackingContextLease")
+        .then(async ({ reconcileTrackingContextLeaseFromBootstrap, setTrackingContextLeaseDriverActive }) => {
+          const lease = await reconcileTrackingContextLeaseFromBootstrap({
+            activeContextId: resolved?.context_id ?? null,
+            activeContextType: resolved?.context_type ?? null,
+            isAuthenticated: Boolean(data.is_authenticated),
+          });
+          if (
+            resolved?.context_type === "driver" &&
+            data.is_authenticated &&
+            lease.state !== "driver_active"
+          ) {
+            const driverIdRaw = getDriverIdFromContext(resolved);
+            const driverId = driverIdRaw != null ? Number(driverIdRaw) : NaN;
+            if (Number.isFinite(driverId)) {
+              const { startOrJoinTrackingRuntime } = await import(
+                "../features/driver/services/trackingRuntimeRegistry"
+              );
+              const runtime = await startOrJoinTrackingRuntime({
+                driverId,
+                companyId: getCompanyIdFromContext(resolved),
+                missionId: null,
+                missionStatus: null,
+              });
+              await setTrackingContextLeaseDriverActive({
+                contextId: resolved.context_id,
+                driverId,
+                sessionGenerationId: runtime.identity.sessionGenerationId,
+                trackingGenerationId: runtime.identity.trackingGenerationId,
+                trackingIdentityId: runtime.identity.trackingIdentityId,
+              });
+            }
+          }
+        })
+        .catch(() => undefined);
       // Socket en dernier
       syncDriverRealtimeForContext(resolved, {
         enableSocket: isFeatureEnabled("realtime_socket_enabled"),
@@ -648,7 +684,30 @@ export function SessionProvider({ children }: PropsWithChildren) {
     }
 
     setContextSwitchInFlight(true);
+    const leavingDriver = previousContext?.context_type === "driver";
+    const enteringDriver = toCtx?.context_type === "driver";
+    let leaseArmedSwitching = false;
     try {
+      if (leavingDriver || enteringDriver) {
+        const {
+          readTrackingContextLease,
+          setTrackingContextLeaseSwitching,
+        } = await import("../features/driver/services/trackingContextLease");
+        const previousLease = await readTrackingContextLease();
+        await setTrackingContextLeaseSwitching({
+          fromDriver: leavingDriver,
+          previousDriverActive:
+            previousLease?.state === "driver_active" ? previousLease : null,
+        });
+        leaseArmedSwitching = true;
+        if (leavingDriver) {
+          const { driverTrackingQueue } = await import(
+            "../features/driver/services/driverTrackingQueue"
+          );
+          await driverTrackingQueue.activateContextInactiveGate("context_switching");
+        }
+      }
+
       const response = await switchContext(targetContextId, {
         sourceContextId: previousContextId,
       });
@@ -674,6 +733,22 @@ export function SessionProvider({ children }: PropsWithChildren) {
           (ctx: AuthContext) => ctx.context_id === response.active_context_id
         ) ?? toCtx ?? null;
       assertContextRuntimeInvariants(nextContext);
+
+      // Header API immédiatement (coupe /driver/me/* dès COMPANY)
+      if (nextContext) {
+        setActiveContextIdForApi(nextContext.context_id);
+      }
+
+      const {
+        setTrackingContextLeaseInactive,
+        setTrackingContextLeaseDriverActive,
+        reconcileTrackingContextLeaseFromBootstrap,
+      } = await import("../features/driver/services/trackingContextLease");
+
+      if (nextContext?.context_type !== "driver") {
+        await setTrackingContextLeaseInactive();
+      }
+
       setBootstrap((prev: BootstrapResponse | null) =>
         prev
           ? {
@@ -687,12 +762,75 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setRuntimeFeatureFlagOverrides(response.feature_flags ?? {});
       if (nextContext) {
         setActiveContext(nextContext);
-        setActiveContextIdForApi(nextContext.context_id);
         contextRealtimeRouter.setActiveContext(nextContext.context_type);
         if (crossWorkspaceSwitch) {
           prefetchContextTarget(queryClient, nextContext);
         }
       }
+
+      // Persist SessionEnvelope immédiatement (autorité auth headless)
+      if (previousBootstrap && nextContext) {
+        await persistOfflineSnapshot(
+          {
+            ...previousBootstrap,
+            active_context_id: response.active_context_id,
+            available_contexts: nextAvailableContexts,
+            feature_flags: response.feature_flags ?? previousBootstrap.feature_flags,
+          },
+          nextContext
+        ).catch(() => undefined);
+      }
+
+      // Hard stop local sans flush après sortie chauffeur
+      if (leavingDriver && nextContext?.context_type !== "driver") {
+        const { hardStopDriverContextRuntime } = await import(
+          "../features/driver/services/driverTrackingBridge"
+        );
+        await hardStopDriverContextRuntime("context_left_driver");
+      }
+
+      // Entrée chauffeur : lease driver_active avant toute /driver/me/*
+      if (nextContext?.context_type === "driver") {
+        const driverIdRaw = getDriverIdFromContext(nextContext);
+        const driverId = driverIdRaw != null ? Number(driverIdRaw) : NaN;
+        if (Number.isFinite(driverId)) {
+          const {
+            startOrJoinTrackingRuntime,
+            resolveTrackingIdentityId,
+          } = await import("../features/driver/services/trackingRuntimeRegistry");
+          const runtime = await startOrJoinTrackingRuntime({
+            driverId,
+            companyId: getCompanyIdFromContext(nextContext),
+            missionId: null,
+            missionStatus: null,
+          });
+          await setTrackingContextLeaseDriverActive({
+            contextId: nextContext.context_id,
+            driverId,
+            sessionGenerationId: runtime.identity.sessionGenerationId,
+            trackingGenerationId: runtime.identity.trackingGenerationId,
+            trackingIdentityId:
+              runtime.identity.trackingIdentityId ||
+              resolveTrackingIdentityId(driverId),
+          });
+          const { driverTrackingQueue } = await import(
+            "../features/driver/services/driverTrackingQueue"
+          );
+          await driverTrackingQueue.clearContextInactiveGate("context_entered_driver");
+          await driverTrackingQueue.resumeAfterAuthRecovery({
+            userId: nextContext.context_id,
+            driverId,
+            companyId: getCompanyIdFromContext(nextContext) ?? "unknown",
+          });
+        } else {
+          await reconcileTrackingContextLeaseFromBootstrap({
+            activeContextId: nextContext.context_id,
+            activeContextType: nextContext.context_type,
+            isAuthenticated: true,
+          });
+        }
+      }
+
       if (opId) {
         clearContextSwitchOperationIfCurrent(opId);
       }
@@ -762,6 +900,25 @@ export function SessionProvider({ children }: PropsWithChildren) {
         runPostSwitchSideEffects();
       }
     } catch (e) {
+      if (leaseArmedSwitching) {
+        const {
+          restoreTrackingContextLeaseDriverActiveFromSwitching,
+          setTrackingContextLeaseInactive,
+        } = await import("../features/driver/services/trackingContextLease");
+        if (leavingDriver) {
+          const restored = await restoreTrackingContextLeaseDriverActiveFromSwitching();
+          if (restored) {
+            const { driverTrackingQueue } = await import(
+              "../features/driver/services/driverTrackingQueue"
+            );
+            await driverTrackingQueue.clearContextInactiveGate("switch_failed_restore");
+          } else {
+            await setTrackingContextLeaseInactive();
+          }
+        } else {
+          await setTrackingContextLeaseInactive();
+        }
+      }
       if (usedOptimistic) {
         rollbackOptimistic();
       }
@@ -803,6 +960,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
         setAutoBootstrapAllowedSync(false);
         setMobileSessionStatus("logging_out");
         setTrackingAuthAvailability({ kind: "TRACKING_IDENTITY_UNAVAILABLE" });
+        void import("../features/driver/services/trackingContextLease").then(
+          ({ setTrackingContextLeaseInactive }) => setTrackingContextLeaseInactive()
+        );
         emitTrackingAuthTerminalEvent({
           kind: "EXPLICIT_LOGOUT",
           sourceSessionGenerationId: sourceGeneration,

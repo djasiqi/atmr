@@ -984,6 +984,18 @@ def role_required(*roles):
                     + "à une route restreinte."
                 )
                 app_logger.warning(warning_msg, user.username, user.role)
+                # Payload machine pour le mobile (403 inchangé, sécu non assouplie)
+                if (
+                    UserRole.driver in allowed_roles
+                    and user.driver is not None
+                    and user.role == UserRole.company
+                ):
+                    return {
+                        "error": "active_driver_context_required",
+                        "error_code": "ACTIVE_DRIVER_CONTEXT_REQUIRED",
+                        "message": "Le contexte chauffeur doit être actif.",
+                        "retryable": False,
+                    }, 403
                 abort(403, description="Accès non autorisé")
 
             return fn(*args, **kwargs)

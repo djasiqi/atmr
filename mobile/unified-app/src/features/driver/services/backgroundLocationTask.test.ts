@@ -76,6 +76,50 @@ jest.mock("./trackingQueueStore", () => ({
   },
 }));
 
+const mockReadLease = jest.fn();
+jest.mock("./trackingContextLease", () => ({
+  readTrackingContextLease: (...args: unknown[]) => mockReadLease(...args),
+  leaseAllowsCapture: (lease: { state?: string; fromDriver?: boolean } | null) => {
+    if (!lease) return false;
+    if (lease.state === "driver_active") return true;
+    if (lease.state === "switching" && lease.fromDriver === true) return true;
+    return false;
+  },
+  leaseAllowsTransport: (lease: { state?: string } | null) => lease?.state === "driver_active",
+}));
+
+jest.mock("../../../core/auth/sessionAuthDecision", () => ({
+  getTrackingAuthAvailability: () => ({
+    kind: "SESSION_AVAILABLE",
+    sessionGenerationId: 1,
+    trackingIdentityId: "driver:42:company:1",
+    driverId: 42,
+  }),
+}));
+
+jest.mock("./trackingRuntimeRegistry", () => ({
+  validateNativeOwnerForHeadless: ({
+    owner,
+    lease,
+    authUsable,
+  }: {
+    owner: { trackingGenerationId?: string } | null;
+    lease: { state?: string; trackingGenerationId?: string } | null;
+    authUsable: boolean;
+  }) => {
+    if (!lease || lease.state !== "driver_active") {
+      return { ok: false, reason: "lease_not_driver_active" };
+    }
+    if (!owner) return { ok: false, reason: "missing_native_owner" };
+    if (!authUsable) return { ok: false, reason: "auth_not_usable" };
+    if (owner.trackingGenerationId !== lease.trackingGenerationId) {
+      return { ok: false, reason: "tracking_generation_mismatch" };
+    }
+    return { ok: true };
+  },
+  isNativeOwnerCurrent: () => true,
+}));
+
 const mockDefineTask = jest.fn();
 
 jest.mock("expo-task-manager", () => ({
@@ -112,8 +156,46 @@ function getDefinedTaskHandler(): TaskHandler {
   return call[1] as TaskHandler;
 }
 
-async function seedEligibleMissionContext(): Promise<void> {
-   
+async function seedEligibleMissionContext(opts?: {
+  leaseState?: "driver_active" | "switching" | "inactive" | "absent";
+  fromDriver?: boolean;
+  includeOwner?: boolean;
+  staleOwner?: boolean;
+}): Promise<void> {
+  const leaseState = opts?.leaseState ?? "driver_active";
+  const includeOwner = opts?.includeOwner !== false;
+  const owner = includeOwner
+    ? {
+        trackingGenerationId: opts?.staleOwner ? "stale" : "trk-1",
+        sessionGenerationId: 1,
+        trackingIdentityId: "driver:42:company:1",
+        missionContextVersion: 1,
+        driverId: 42,
+      }
+    : null;
+
+  if (leaseState === "absent") {
+    mockReadLease.mockResolvedValue(null);
+  } else if (leaseState === "switching") {
+    mockReadLease.mockResolvedValue({
+      state: "switching",
+      fromDriver: opts?.fromDriver === true,
+      updatedAt: Date.now(),
+    });
+  } else if (leaseState === "inactive") {
+    mockReadLease.mockResolvedValue({ state: "inactive", updatedAt: Date.now() });
+  } else {
+    mockReadLease.mockResolvedValue({
+      state: "driver_active",
+      contextId: "driver:42",
+      driverId: 42,
+      sessionGenerationId: 1,
+      trackingGenerationId: "trk-1",
+      trackingIdentityId: "driver:42:company:1",
+      updatedAt: Date.now(),
+    });
+  }
+
   const asyncStorage = require("@react-native-async-storage/async-storage") as {
     getItem: jest.Mock;
   };
@@ -124,6 +206,7 @@ async function seedEligibleMissionContext(): Promise<void> {
         missionStatus: "EN_ROUTE",
         taskMode: "mission",
         updatedAt: new Date().toISOString(),
+        nativeOwner: owner,
       });
     }
     return null;
@@ -157,6 +240,16 @@ describe("backgroundLocationTask", () => {
       durable: true,
       schemaReady: true,
       recovered: false,
+    });
+    mockReadLease.mockReset();
+    mockReadLease.mockResolvedValue({
+      state: "driver_active",
+      contextId: "driver:42",
+      driverId: 42,
+      sessionGenerationId: 1,
+      trackingGenerationId: "trk-1",
+      trackingIdentityId: "driver:42:company:1",
+      updatedAt: Date.now(),
     });
     driverTrackingQueue.enqueue.mockReset();
     driverTrackingQueue.enqueue.mockResolvedValue(undefined);
@@ -370,5 +463,84 @@ describe("backgroundLocationTask", () => {
     expect(mockInitAndHealthcheckHeadless).toHaveBeenCalledTimes(1);
     expect(driverTrackingQueue.enqueue).toHaveBeenCalledTimes(3);
     expect(driverTrackingQueue.flush).toHaveBeenCalledTimes(1);
+  });
+
+  it("company cold start (lease inactive) → 0 enqueue, 0 flush", async () => {
+    await seedEligibleMissionContext({ leaseState: "inactive" });
+    const handler = getDefinedTaskHandler();
+    await handler({ data: { locations: [sampleLocation(0)] } });
+    expect(driverTrackingQueue.enqueue).not.toHaveBeenCalled();
+    expect(driverTrackingQueue.flush).not.toHaveBeenCalled();
+    expect(mockInitAndHealthcheckHeadless).not.toHaveBeenCalled();
+  });
+
+  it("switching fromDriver → enqueue OK, flush=0", async () => {
+    await seedEligibleMissionContext({ leaseState: "switching", fromDriver: true });
+    const handler = getDefinedTaskHandler();
+    await handler({ data: { locations: [sampleLocation(0), sampleLocation(1)] } });
+    expect(driverTrackingQueue.enqueue).toHaveBeenCalledTimes(2);
+    expect(driverTrackingQueue.flush).not.toHaveBeenCalled();
+  });
+
+  it("owner génération obsolète → 0 réseau", async () => {
+    await seedEligibleMissionContext({ staleOwner: true });
+    const handler = getDefinedTaskHandler();
+    await handler({ data: { locations: [sampleLocation(0)] } });
+    expect(driverTrackingQueue.enqueue).not.toHaveBeenCalled();
+    expect(driverTrackingQueue.flush).not.toHaveBeenCalled();
+  });
+
+  it("nativeOwner undefined conserve l'owner existant", async () => {
+    const asyncStorage = require("@react-native-async-storage/async-storage") as {
+      getItem: jest.Mock;
+      setItem: jest.Mock;
+    };
+    const owner = {
+      trackingGenerationId: "trk-keep",
+      sessionGenerationId: 2,
+      trackingIdentityId: "driver:1:company:1",
+      missionContextVersion: 3,
+      driverId: 1,
+    };
+    asyncStorage.getItem.mockResolvedValue(
+      JSON.stringify({
+        missionId: 10,
+        missionStatus: "EN_ROUTE",
+        taskMode: "mission",
+        updatedAt: new Date().toISOString(),
+        nativeOwner: owner,
+      })
+    );
+    asyncStorage.setItem.mockClear();
+    await bgTask.setBackgroundTrackingMissionContext(10, "EN_ROUTE", "mission", null);
+    const written = JSON.parse(String(asyncStorage.setItem.mock.calls[0]?.[1] ?? "{}"));
+    expect(written.nativeOwner.trackingGenerationId).toBe("trk-keep");
+    expect(written.nativeOwner.driverId).toBe(1);
+  });
+
+  it("nativeOwner null efface explicitement", async () => {
+    const asyncStorage = require("@react-native-async-storage/async-storage") as {
+      getItem: jest.Mock;
+      setItem: jest.Mock;
+    };
+    asyncStorage.getItem.mockResolvedValue(
+      JSON.stringify({
+        missionId: 10,
+        missionStatus: "EN_ROUTE",
+        taskMode: "mission",
+        updatedAt: new Date().toISOString(),
+        nativeOwner: {
+          trackingGenerationId: "trk",
+          sessionGenerationId: 1,
+          trackingIdentityId: "driver:1:company:1",
+          missionContextVersion: 1,
+          driverId: 1,
+        },
+      })
+    );
+    asyncStorage.setItem.mockClear();
+    await bgTask.setBackgroundTrackingMissionContext(10, "EN_ROUTE", "mission", null, null);
+    const written = JSON.parse(String(asyncStorage.setItem.mock.calls[0]?.[1] ?? "{}"));
+    expect(written.nativeOwner).toBeNull();
   });
 });

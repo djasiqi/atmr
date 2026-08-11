@@ -375,6 +375,16 @@ function isDriverEndpoint(url: string): boolean {
   return url.startsWith("/driver/") || url.startsWith("driver/");
 }
 
+/** Endpoints personnels chauffeur — exigent un contexte driver actif. */
+function isDriverSelfEndpoint(url: string): boolean {
+  const normalized = url.startsWith("/") ? url : `/${url}`;
+  return (
+    normalized.startsWith("/driver/me/") ||
+    normalized === "/driver/me" ||
+    normalized.startsWith("driver/me/")
+  );
+}
+
 function resolveAdaptiveTimeoutMs(url: string, defaultTimeoutMs: number): number {
   if (!isFeatureEnabled("driver_http_adaptive_timeout_enabled") || !isDriverEndpoint(url)) {
     return defaultTimeoutMs;
@@ -622,6 +632,15 @@ apiClient.interceptors.request.use(async (config) => {
     // optional perf instrumentation
   }
   const requestUrl = String(config.url ?? "");
+  if (
+    isDriverSelfEndpoint(requestUrl) &&
+    !(typeof activeContextIdForApi === "string" && activeContextIdForApi.startsWith("driver:"))
+  ) {
+    throw new AuthContractError(
+      "DRIVER_CONTEXT_INACTIVE",
+      "Driver context is not active"
+    );
+  }
   const effectiveTimeoutMs = resolveAdaptiveTimeoutMs(requestUrl, Number(config.timeout ?? 15000));
   config.timeout = effectiveTimeoutMs;
   try {

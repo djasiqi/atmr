@@ -176,6 +176,20 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
   }
 
   if (error instanceof Error) {
+    const maybeAuth = error as Error & { code?: string; name?: string };
+    if (
+      maybeAuth.name === "AuthContractError" &&
+      maybeAuth.code === "DRIVER_CONTEXT_INACTIVE"
+    ) {
+      return {
+        error_class: "http",
+        error_message: sanitizePublicMessage(error.message),
+        http_status: null,
+        api_error_code: "DRIVER_CONTEXT_INACTIVE",
+        transport_code: null,
+        retry_after_seconds: null,
+      };
+    }
     return unknownMeta(error.message);
   }
 

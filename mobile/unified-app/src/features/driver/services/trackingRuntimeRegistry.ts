@@ -52,6 +52,7 @@ export type NativeTrackingOwner = {
   sessionGenerationId: number;
   trackingIdentityId: string;
   missionContextVersion: number;
+  driverId: number;
 };
 
 let activeRuntime: ActiveTrackingRuntime | null = null;
@@ -245,6 +246,7 @@ export function toNativeTrackingOwner(
     sessionGenerationId: runtime.identity.sessionGenerationId,
     trackingIdentityId: runtime.identity.trackingIdentityId,
     missionContextVersion: runtime.missionContext.missionContextVersion,
+    driverId: runtime.identity.driverId,
   };
 }
 
@@ -255,8 +257,53 @@ export function isNativeOwnerCurrent(
   return (
     owner.trackingGenerationId === activeRuntime.identity.trackingGenerationId &&
     owner.trackingIdentityId === activeRuntime.identity.trackingIdentityId &&
-    owner.sessionGenerationId === activeRuntime.identity.sessionGenerationId
+    owner.sessionGenerationId === activeRuntime.identity.sessionGenerationId &&
+    owner.driverId === activeRuntime.identity.driverId
   );
+}
+
+/**
+ * Validation headless durable — n'utilise PAS activeRuntime (null après process death iOS).
+ */
+export function validateNativeOwnerForHeadless(params: {
+  owner: NativeTrackingOwner | null | undefined;
+  lease: {
+    state: string;
+    driverId?: number;
+    sessionGenerationId?: number;
+    trackingGenerationId?: string;
+    trackingIdentityId?: string;
+    contextId?: string;
+  } | null;
+  authUsable: boolean;
+}): { ok: true } | { ok: false; reason: string } {
+  const { owner, lease, authUsable } = params;
+  if (!lease || lease.state !== "driver_active") {
+    return { ok: false, reason: "lease_not_driver_active" };
+  }
+  if (!owner) {
+    return { ok: false, reason: "missing_native_owner" };
+  }
+  if (!authUsable) {
+    return { ok: false, reason: "auth_not_usable" };
+  }
+  if (owner.driverId !== lease.driverId) {
+    return { ok: false, reason: "driver_id_mismatch" };
+  }
+  if (owner.sessionGenerationId !== lease.sessionGenerationId) {
+    return { ok: false, reason: "session_generation_mismatch" };
+  }
+  if (owner.trackingGenerationId !== lease.trackingGenerationId) {
+    return { ok: false, reason: "tracking_generation_mismatch" };
+  }
+  if (owner.trackingIdentityId !== lease.trackingIdentityId) {
+    return { ok: false, reason: "tracking_identity_mismatch" };
+  }
+  const expectedContext = `driver:${owner.driverId}`;
+  if (lease.contextId !== expectedContext) {
+    return { ok: false, reason: "context_id_mismatch" };
+  }
+  return { ok: true };
 }
 
 /**

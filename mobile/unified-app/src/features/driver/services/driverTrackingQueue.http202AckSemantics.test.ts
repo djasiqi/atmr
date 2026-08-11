@@ -48,6 +48,21 @@ jest.mock("../../../core/observability/driverTelemetry", () => ({
   emitDriverTelemetry: jest.fn(),
 }));
 
+jest.mock("./trackingContextLease", () => ({
+  readTrackingContextLease: async () => ({
+    state: "driver_active",
+    contextId: "driver:1",
+    driverId: 1,
+    sessionGenerationId: 1,
+    trackingGenerationId: "trk-test",
+    trackingIdentityId: "driver:1:company:1",
+    updatedAt: Date.now(),
+  }),
+  leaseAllowsTransport: (lease: { state?: string } | null) =>
+    Boolean(lease && lease.state === "driver_active"),
+  leaseAllowsCapture: () => true,
+}));
+
 jest.mock("../../../core/featureFlags/registry", () => ({
   isFeatureEnabled: () => false,
 }));

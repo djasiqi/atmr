@@ -18,6 +18,17 @@ jest.mock("../api/driverHttp", () => ({
   sendDriverLocation: (...args: unknown[]) => mockSendDriverLocation(...args),
 }));
 
+jest.mock("./trackingSessionsApi", () => ({
+  registerTrackingSession: jest.fn(async () => ({
+    session_generation: 1,
+    first_sequence_id: 1,
+  })),
+  fetchTrackingWatermark: jest.fn(async () => ({
+    last_acked_sequence_id: 0,
+    tracking_session_id: null,
+  })),
+}));
+
 jest.mock("../../../core/realtime/realtimeManager", () => ({
   realtimeManager: {
     sendDriverLocationBatch: (...args: unknown[]) => mockSendDriverLocationBatch(...args),
@@ -27,6 +38,21 @@ jest.mock("../../../core/realtime/realtimeManager", () => ({
 
 jest.mock("../../../core/observability/driverTelemetry", () => ({
   emitDriverTelemetry: jest.fn(),
+}));
+
+jest.mock("./trackingContextLease", () => ({
+  readTrackingContextLease: async () => ({
+    state: "driver_active",
+    contextId: "driver:1",
+    driverId: 1,
+    sessionGenerationId: 1,
+    trackingGenerationId: "trk-test",
+    trackingIdentityId: "driver:1:company:1",
+    updatedAt: Date.now(),
+  }),
+  leaseAllowsTransport: (lease: { state?: string } | null) =>
+    Boolean(lease && lease.state === "driver_active"),
+  leaseAllowsCapture: () => true,
 }));
 
 jest.mock("../../../core/featureFlags/registry", () => ({
@@ -54,6 +80,7 @@ describe("P0 file GPS — preuve durable + restart", () => {
     mockIsDriverSocketReady.mockReturnValue(false);
     trackingQueueStore._resetMemoryForTests();
     await driverTrackingQueue.resetForTests();
+    await driverTrackingQueue.clearContextInactiveGate("test_setup");
   });
 
   afterEach(async () => {

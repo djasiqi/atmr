@@ -67,6 +67,7 @@ import {
 } from "./trackingRuntimeRegistry";
 import { getTrackingAuthAvailability } from "../../../core/auth/sessionAuthDecision";
 import { computeFixAgeMs, WATCH_STALE_MS } from "./driverTrackingFixAge";
+import { setTrackingContextLeaseDriverActive } from "./trackingContextLease";
 
 export { computeFixAgeMs, WATCH_STALE_MS } from "./driverTrackingFixAge";
 
@@ -1285,12 +1286,70 @@ async function ensurePresenceTrackingState(): Promise<void> {
 }
 
 async function stopTrackingRuntime(): Promise<void> {
-  void setBackgroundTrackingMissionContext(null, null);
+  await setBackgroundTrackingMissionContext(null, null);
   await stopBackgroundLocationTask("tracking_bridge_stopped");
   stopLocationWatch();
   trackingManager.stop();
   state.trackingStartedAtMs = null;
   notifyTrackingBridgeListeners();
+}
+
+/**
+ * Arrêt local sans flush réseau — obligatoire après switch vers COMPANY.
+ * Conserve SQLite ; n'appelle jamais flushDriverTrackingQueueNow.
+ */
+export async function hardStopDriverContextRuntime(reason = "context_left_driver"): Promise<void> {
+  clearNoLocationCallbackWatchdog();
+  void hideMissionBarAndroid();
+  const missionIdForBar = state.missionId;
+  if (missionIdForBar != null && isFeatureEnabled("driver_mission_bar_enabled")) {
+    void stopMissionLiveActivity(missionIdForBar);
+  }
+
+  const expectedGenId = captureActiveRuntime()?.identity.trackingGenerationId;
+  if (expectedGenId) {
+    clearActiveRuntimeIfGeneration(expectedGenId);
+  }
+
+  // Reset mission state SANS flush réseau
+  state.missionId = null;
+  state.missionStatus = null;
+  state.missionScheduling = null;
+  state.lastSentAt = null;
+  state.lastCapturedAt = null;
+  state.lastEnqueuedAt = null;
+  state.lastTransportAttemptAt = null;
+  state.lastIngestedAt = null;
+  state.lastPersistedAt = null;
+  state.lastAckAt = null;
+  state.lastAckIsQueued = false;
+  state.lastAckStatus = null;
+  state.lastAckError = null;
+  state.lastAckAttemptSeq = null;
+  state.lastAckEventId = null;
+  state.currentAttemptEventId = null;
+  state.lastBackendAckLatencyMs = null;
+  state.networkProfile = "normal";
+  state.profileSinceMs = Date.now();
+  state.staleFallbackBlockedUntilMs = 0;
+  state.staleFallbackTimeouts = 0;
+  state.lastStaleFallbackAttemptMs = null;
+  state.lastHttpFallbackTrackingEventId = null;
+  resetPermissionState();
+
+  // Await obligatoire : taskContext effacé avant resolve
+  await setBackgroundTrackingMissionContext(null, null);
+  await stopBackgroundLocationTask(reason);
+  stopLocationWatch();
+  trackingManager.stop();
+  state.trackingStartedAtMs = null;
+  await syncBridgeQueueDepthFromPersistence();
+  notifyTrackingBridgeListeners();
+
+  emitDriverTelemetry("tracking.context.hard_stop", {
+    source: "driver.tracking.bridge",
+    reason,
+  });
 }
 
 function ensureManagerState(appStateOverride?: AppStateStatus) {
@@ -1410,6 +1469,13 @@ export function startDriverTrackingBridge(
     missionId,
     missionStatus: status,
   }).then((runtime) => {
+    void setTrackingContextLeaseDriverActive({
+      contextId: `driver:${driverId}`,
+      driverId,
+      sessionGenerationId: runtime.identity.sessionGenerationId,
+      trackingGenerationId: runtime.identity.trackingGenerationId,
+      trackingIdentityId: runtime.identity.trackingIdentityId,
+    });
     void setBackgroundTrackingMissionContext(
       missionId,
       status,
@@ -1463,9 +1529,15 @@ export async function stopDriverTrackingBridge(opts?: {
     | "identity_changed"
     | "manual_stop"
     | "forced_recovery"
-    | "runtime_replaced";
+    | "runtime_replaced"
+    | "context_left_driver";
   skipRegistryStop?: boolean;
 }): Promise<void> {
+  if (opts?.reason === "context_left_driver") {
+    await hardStopDriverContextRuntime("context_left_driver");
+    return;
+  }
+
   const stopGeneration = lifecycleGeneration;
   const expectedGenId =
     opts?.expectedTrackingGenerationId ??

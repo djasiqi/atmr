@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import {
   getDriverTrackingBridgeSnapshot,
+  hardStopDriverContextRuntime,
   setDriverTrackingPresenceContext,
   startDriverTrackingBridge,
   stopDriverTrackingBridge,
@@ -149,6 +150,22 @@ jest.mock("./backgroundLocationTask", () => ({
   resumePendingNativeTrackingIfNeeded: jest.fn().mockResolvedValue(undefined),
   setBackgroundTrackingMissionContext: jest.fn().mockResolvedValue(undefined),
   stopBackgroundLocationTask: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("./trackingContextLease", () => ({
+  setTrackingContextLeaseDriverActive: jest.fn().mockResolvedValue(undefined),
+  setTrackingContextLeaseInactive: jest.fn().mockResolvedValue(undefined),
+  readTrackingContextLease: jest.fn().mockResolvedValue({
+    state: "driver_active",
+    contextId: "driver:1",
+    driverId: 1,
+    sessionGenerationId: 1,
+    trackingGenerationId: "trk-test",
+    trackingIdentityId: "driver:1:company:1",
+    updatedAt: Date.now(),
+  }),
+  leaseAllowsTransport: () => true,
+  leaseAllowsCapture: () => true,
 }));
 
 describe("driver tracking bridge", () => {
@@ -400,5 +417,53 @@ describe("driver tracking bridge", () => {
       expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
       expect(getDriverTrackingBridgeSnapshot().appState).toBe("active");
     });
+  });
+
+  it("hardStopDriverContextRuntime n'appelle pas flush et await clear taskContext", async () => {
+    const flushSpy = jest.spyOn(driverTrackingQueue, "flush").mockResolvedValue({
+      sent: 0,
+      backendAcked: 0,
+      socketEmitted: 0,
+      dropped: 0,
+      retried: 0,
+      queueDepth: 0,
+      flushPathUsed: "http_fallback",
+      lastBackendAckAt: null,
+      lastBackendAckStatus: null,
+      lastBackendAckRequestEventId: null,
+      lastBackendAckServerEventId: null,
+      oldestItemAgeMs: null,
+      networkProfile: "normal",
+      socketEmittedEventIds: [],
+      ingestedEventIds: [],
+      persistedEventIds: [],
+      retryEventIds: [],
+    });
+    const bg = require("./backgroundLocationTask") as {
+      setBackgroundTrackingMissionContext: jest.Mock;
+      stopBackgroundLocationTask: jest.Mock;
+    };
+    let clearResolved = false;
+    bg.setBackgroundTrackingMissionContext.mockImplementation(async () => {
+      clearResolved = true;
+    });
+    bg.stopBackgroundLocationTask.mockClear();
+
+    startDriverTrackingBridge(99, "EN_ROUTE" as never);
+    await jest.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+    flushSpy.mockClear();
+
+    await hardStopDriverContextRuntime("context_left_driver");
+
+    expect(flushSpy).not.toHaveBeenCalled();
+    expect(clearResolved).toBe(true);
+    expect(bg.setBackgroundTrackingMissionContext).toHaveBeenCalledWith(null, null);
+    expect(bg.stopBackgroundLocationTask).toHaveBeenCalledWith("context_left_driver");
+    expect(mockEmitDriverTelemetry).toHaveBeenCalledWith(
+      "tracking.context.hard_stop",
+      expect.objectContaining({ reason: "context_left_driver" })
+    );
+    flushSpy.mockRestore();
   });
 });
