@@ -38,15 +38,16 @@ def test_register_and_http_bridge_converge_same_sid(app, db, sample_company):
 
     # Évite commit/remove du bridge (savepoint) et un 2e app_context
     # qui ouvrirait une autre connexion → deadlock advisory xact.
-    db.session.commit = MagicMock()  # type: ignore[method-assign]
-    db.session.remove = MagicMock()  # type: ignore[method-assign]
-    db.session.rollback = MagicMock()  # type: ignore[method-assign]
-
+    # patch.object restaure les méthodes — un assign MagicMock permanent
+    # polluait le teardown db et faisait ERROR toute la suite suivante.
     with (
         patch("celery_app.get_flask_app", return_value=app),
         patch.object(app, "app_context", return_value=nullcontext()),
         patch("ext.db", db),
         patch("ext.redis_client", redis),
+        patch.object(db.session, "commit", MagicMock()),
+        patch.object(db.session, "remove", MagicMock()),
+        patch.object(db.session, "rollback", MagicMock()),
     ):
         bridged = ensure_http_tracking_session_fields(
             driver_id=driver_id,

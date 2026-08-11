@@ -8,11 +8,10 @@ Ces tests vérifient les performances du système :
 """
 
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
+from datetime import UTC, date, datetime, timedelta
+from unittest.mock import MagicMock, patch
+from zoneinfo import ZoneInfo
 
-import pytest
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 
@@ -27,6 +26,8 @@ from tests.e2e.helpers.e2e_helpers import (
     create_test_driver,
 )
 
+_ZURICH = ZoneInfo("Europe/Zurich")
+
 
 class TestDispatchPerformance:
     """Tests : Performance du dispatch avec volumes importants."""
@@ -36,9 +37,26 @@ class TestDispatchPerformance:
 
         Note: Ce test vérifie principalement la performance du dispatch (temps d'exécution).
         Le taux d'assignation peut varier selon la configuration des données de test.
+
+        Les horaires sont ancrés sur Europe/Zurich (même référentiel que
+        ``get_bookings_for_day``) et confinés à une seule journée locale — un
+        ``datetime.now(UTC).date()`` diverge du jour métier en soirée UTC.
         """
+        # CI E2E n'a pas de broker AMQP : neutraliser tout enqueue collatéral
+        # (event bus / trigger auto) pour éviter Connection refused bruyant.
+        with patch(
+            "tasks.dispatch_tasks.run_dispatch_task.apply_async",
+            return_value=MagicMock(id="test-task-id", state="PENDING"),
+        ):
+            self._run_dispatch_performance_100_bookings(db)
+
+    def _run_dispatch_performance_100_bookings(self, db):
         # Setup : Créer company, client, drivers
         company = create_test_company(db)
+        # Ancrer le dépôt dans la même zone que bookings/drivers (Genève)
+        company.latitude = 46.2044
+        company.longitude = 6.1432
+        company.max_daily_bookings = 200
         client = create_test_client(db, company=company)
 
         # Créer un nombre réaliste de drivers pour 100 bookings
@@ -55,21 +73,32 @@ class TestDispatchPerformance:
         db.session.commit()
         db.session.refresh(company)
 
-        # Créer 100 bookings pour demain, espacés de 30 minutes
-        # Exemple : si scheduled_time = 08h00, les bookings seront à :
-        # 08h00, 08h30, 09h00, 09h30, 10h00, 10h30, 11h00, etc.
-        # Cet espacement permet aux drivers de terminer une course avant d'en commencer une autre
-        scheduled_time = datetime.now(UTC) + timedelta(days=1, hours=2)
+        # Demain 08h00 Europe/Zurich — tous les bookings restent sur ce jour local
+        # (100 × 5 min = ~8h20, fin vers 16h20).
+        dispatch_day: date = (datetime.now(_ZURICH) + timedelta(days=1)).date()
+        scheduled_start = datetime(
+            dispatch_day.year,
+            dispatch_day.month,
+            dispatch_day.day,
+            8,
+            0,
+            tzinfo=_ZURICH,
+        )
         bookings = []
 
         for i in range(100):
-            # Espacement de 30 minutes entre chaque booking
-            booking_time = scheduled_time + timedelta(minutes=i * 30)
+            booking_time = scheduled_start + timedelta(minutes=i * 5)
             booking = create_test_booking(
                 db,
                 client=client,
                 scheduled_time=booking_time,
-                status=BookingStatus.PENDING,
+                # Aligné sur les autres E2E dispatch (éligible + réaliste)
+                status=BookingStatus.ACCEPTED,
+                duration_seconds=900,
+                pickup_lat=46.2044,
+                pickup_lon=6.1432,
+                dropoff_lat=46.2100,
+                dropoff_lon=6.1500,
             )
             bookings.append(booking)
 
@@ -111,8 +140,7 @@ class TestDispatchPerformance:
         # Ajouter l'event listener
         event.listen(Engine, "before_cursor_execute", count_query)
 
-        # Mesurer le temps d'exécution du dispatch
-        dispatch_date = scheduled_time.date()
+        # Mesurer le temps d'exécution du dispatch (jour métier Zurich)
         start_time = time.time()
 
         try:
@@ -135,7 +163,7 @@ class TestDispatchPerformance:
             ):
                 result = dispatch_run(
                     company_id=company.id,
-                    for_date=dispatch_date.isoformat(),
+                    for_date=dispatch_day.isoformat(),
                     mode="heuristic_only",
                 )
 
@@ -184,10 +212,11 @@ class TestDispatchPerformance:
             )
 
         # ✅ Phase 6 N+1: Vérifier que le nombre de requêtes SQL respecte les optimisations
-        # Pour 100 bookings (batch moyen), seuil = 150 requêtes SELECT
-        # (hors INSERT/UPDATE/DELETE/SAVEPOINT qui sont normaux pour un dispatch complet)
+        # Pour 100 bookings réellement chargés sur un jour Zurich (batch moyen),
+        # seuil = 200 SELECT (hors INSERT/UPDATE/DELETE/SAVEPOINT).
+        # Un vrai N+1 serait ~O(n) (centaines/milliers de SELECT supplémentaires).
         # Note: Le seuil inclut les requêtes des event handlers, notifications, etc.
-        QUERY_THRESHOLD_MEDIUM = 150
+        QUERY_THRESHOLD_MEDIUM = 200
         assert query_count <= QUERY_THRESHOLD_MEDIUM, (
             f"Trop de requêtes SQL SELECT ({query_count}) pour 100 bookings. "
             f"Seuil: {QUERY_THRESHOLD_MEDIUM}. "

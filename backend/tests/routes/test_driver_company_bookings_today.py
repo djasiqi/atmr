@@ -61,6 +61,8 @@ def test_company_bookings_today_includes_untimed_returns(client, db):
     db.session.add(pending_return)
     db.session.commit()
 
+    # La route importe now_local dans le handler ; patcher le module source
+    # (et non un binding déjà importé) pour geler le jour métier Zurich.
     with patch("shared.time_utils.now_local", return_value=frozen_now):
         response = client.get(
             "/api/v1/driver/me/company-bookings/today",

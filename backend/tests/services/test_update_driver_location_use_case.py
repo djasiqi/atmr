@@ -90,7 +90,12 @@ def test_update_driver_location_accepts_offset_recorded_at() -> None:
         )
     assert captured["recorded_at"].tzinfo is not None
     assert captured["recorded_at"].hour == 18
-    assert captured["recorded_at"].tzinfo.utcoffset(captured["recorded_at"]).total_seconds() == 0
+    assert (
+        captured["recorded_at"]
+        .tzinfo.utcoffset(captured["recorded_at"])
+        .total_seconds()
+        == 0
+    )
 
 
 def test_update_driver_location_use_case_emits_geofence_when_enabled() -> None:

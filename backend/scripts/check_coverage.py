@@ -336,10 +336,7 @@ def print_report(report: dict[str, Any]) -> None:
     print(
         f"Modules < {summary['report_threshold']:.1f}%: {summary['low_coverage_count']}"
     )
-    print(
-        "Modules critiques sous seuil: "
-        f"{summary['critical_low_coverage_count']}"
-    )
+    print(f"Modules critiques sous seuil: {summary['critical_low_coverage_count']}")
     print(f"Modules non testés (0%): {summary['untested_count']}")
     if summary.get("critical_missing_from_xml_count"):
         print(
@@ -472,9 +469,7 @@ def main() -> int:
     args = parser.parse_args()
 
     report_threshold = (
-        args.fail_under
-        if args.fail_under is not None
-        else DEFAULT_REPORT_THRESHOLD
+        args.fail_under if args.fail_under is not None else DEFAULT_REPORT_THRESHOLD
     )
 
     coverage_data = parse_coverage_xml(args.coverage_xml)

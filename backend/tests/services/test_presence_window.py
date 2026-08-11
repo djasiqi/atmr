@@ -31,9 +31,13 @@ def test_winter_16z_inside() -> None:
 
 
 def test_service_window_status_three_states() -> None:
-    assert resolve_service_window_status(in_window=True, has_active_mission=False) == "in_window"
     assert (
-        resolve_service_window_status(in_window=False, has_active_mission=False) == "off_duty"
+        resolve_service_window_status(in_window=True, has_active_mission=False)
+        == "in_window"
+    )
+    assert (
+        resolve_service_window_status(in_window=False, has_active_mission=False)
+        == "off_duty"
     )
     assert (
         resolve_service_window_status(in_window=False, has_active_mission=True)

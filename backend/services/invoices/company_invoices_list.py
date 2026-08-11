@@ -234,9 +234,9 @@ def list_company_invoices_unified(
     # deux listes déjà paginées indépendamment)
     # ------------------------------------------------------------------
     # cast(Any): stubs SQLAlchemy refusent Query.statement (Row[...]) pour _TP de union_all
-    unified = cast(
-        Any, union_all(regular_q.statement, partner_q.statement)
-    ).subquery("inv_union")
+    unified = cast(Any, union_all(regular_q.statement, partner_q.statement)).subquery(
+        "inv_union"
+    )
 
     total_count = int(db.session.query(func.count()).select_from(unified).scalar() or 0)
 
