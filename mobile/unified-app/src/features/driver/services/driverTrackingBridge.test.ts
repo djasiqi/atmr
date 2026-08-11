@@ -342,32 +342,30 @@ describe("driver tracking bridge", () => {
     flushSpy.mockRestore();
   });
 
-  describe("présence FG hors fenêtre + transitions AppState", () => {
-    it("available + FG hors fenêtre + disclosure => tracking ON High", async () => {
+  describe("présence bornée par fenêtre (P0-F TIME) + transitions AppState", () => {
+    it("available + FG hors fenêtre + disclosure => tracking OFF", async () => {
       markPresenceDisclosureAccepted();
       setDriverTrackingPresenceContext({ available: true, windowOpen: false });
       await jest.advanceTimersByTimeAsync(0);
       await Promise.resolve();
 
-      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
-      expect(mockWatchPositionAsync).toHaveBeenCalled();
-      const watchOpts = mockWatchPositionAsync.mock.calls[0]?.[0] as { accuracy?: string };
-      expect(watchOpts?.accuracy).toBe("high");
+      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(false);
+      expect(mockWatchPositionAsync).not.toHaveBeenCalled();
     });
 
-    it("FG → BG hors fenêtre => tracking OFF", async () => {
+    it("FG → BG hors fenêtre => reste OFF", async () => {
       markPresenceDisclosureAccepted();
       setDriverTrackingPresenceContext({ available: true, windowOpen: false });
       await jest.advanceTimersByTimeAsync(0);
       await Promise.resolve();
-      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
+      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(false);
 
       emitAppState("background");
       await Promise.resolve();
       expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(false);
     });
 
-    it("BG → FG hors fenêtre => tracking redémarre High", async () => {
+    it("BG → FG hors fenêtre => ne redémarre pas", async () => {
       markPresenceDisclosureAccepted();
       setDriverTrackingPresenceContext({ available: true, windowOpen: false });
       await jest.advanceTimersByTimeAsync(0);
@@ -381,9 +379,8 @@ describe("driver tracking bridge", () => {
       emitAppState("active");
       await jest.advanceTimersByTimeAsync(0);
       await Promise.resolve();
-      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
-      const watchOpts = mockWatchPositionAsync.mock.calls.at(-1)?.[0] as { accuracy?: string };
-      expect(watchOpts?.accuracy).toBe("high");
+      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(false);
+      expect(mockWatchPositionAsync).not.toHaveBeenCalled();
     });
 
     it("dans la fenêtre FG → BG => reste ON et passe High → Balanced", async () => {
@@ -404,7 +401,7 @@ describe("driver tracking bridge", () => {
       expect(bgOpts?.accuracy).toBe("balanced");
     });
 
-    it("windowOpen=false ne stoppe pas si FG + available", async () => {
+    it("windowOpen=false stoppe la présence même en FG + available", async () => {
       emitAppState("active");
       markPresenceDisclosureAccepted();
       setDriverTrackingPresenceContext({ available: true, windowOpen: true });
@@ -414,7 +411,7 @@ describe("driver tracking bridge", () => {
 
       setDriverTrackingPresenceContext({ available: true, windowOpen: false });
       await Promise.resolve();
-      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
+      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(false);
       expect(getDriverTrackingBridgeSnapshot().appState).toBe("active");
     });
   });
