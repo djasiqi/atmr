@@ -104,4 +104,36 @@ def test_event_id_duplicate_same_hash_returns_duplicate():
         recorded_at="2026-01-01T00:00:00+00:00",
         source="http",
     )
-    assert result == {"status": "duplicate", "location_event_id": "eid-1"}
+    assert result == {
+        "status": "duplicate",
+        "reason": "same_event_already_persisted",
+        "location_event_id": "eid-1",
+    }
+
+
+def test_conflict_without_owner_returns_duplicate_unproven():
+    session = MagicMock()
+    session.execute.side_effect = [
+        MagicMock(),  # FOR UPDATE
+        SimpleNamespace(first=lambda: None),  # INSERT
+        _mappings_first(None),  # by event_id
+        _mappings_first(None),  # by session/sequence
+    ]
+
+    result = persist_location_event_with_outbox(
+        session,
+        driver_id=3,
+        company_id=1,
+        location_event_id="eid-orphan",
+        tracking_session_id="http-legacy-3",
+        session_generation=1,
+        sequence_id=9,
+        latitude=46.1,
+        longitude=6.1,
+        recorded_at="2026-08-03T05:59:08.114870+00:00",
+        source="http",
+    )
+
+    assert result["status"] == "duplicate"
+    assert result["reason"] == "duplicate_unproven"
+    assert result["location_event_id"] == "eid-orphan"

@@ -2016,10 +2016,20 @@ class DriverLocation(Resource):
                                                 "ack_status": "duplicate",
                                                 "durability": "persisted_sync",
                                                 "location_event_id": location_event_id,
+                                                "tracking_session_id": proven.get(
+                                                    "tracking_session_id"
+                                                ),
+                                                "session_generation": proven.get(
+                                                    "session_generation"
+                                                ),
+                                                "sequence_id": proven.get(
+                                                    "sequence_id"
+                                                ),
                                                 "canonical_updated": bool(
                                                     proven.get("canonical_updated")
                                                 ),
                                                 "db_persisted": True,
+                                                "ledger_persisted": True,
                                             }
                                         else:
                                             # Claim orphelin (ex. PG KO avant release) → libérer
@@ -2043,6 +2053,7 @@ class DriverLocation(Resource):
                                                 "location_event_id": location_event_id,
                                                 "canonical_updated": False,
                                                 "db_persisted": False,
+                                                "ledger_persisted": False,
                                                 "retryable": True,
                                             }
                                     else:
@@ -2060,6 +2071,7 @@ class DriverLocation(Resource):
                                             "location_event_id": location_event_id,
                                             "canonical_updated": False,
                                             "db_persisted": False,
+                                            "ledger_persisted": False,
                                         }
                                 elif (
                                     uc_result.accept_status == "accepted_canonical"
@@ -2086,6 +2098,7 @@ class DriverLocation(Resource):
                                             uc_result.canonical_updated
                                         ),
                                         "db_persisted": False,
+                                        "ledger_persisted": False,
                                         "location_event_id": location_event_id,
                                         "ack_status": "ingested_non_persisted",
                                     }
@@ -2242,52 +2255,36 @@ class DriverLocation(Resource):
                                     )
 
                             if result is None:
-                                tracking_session_id_out = (
-                                    p.get("tracking_session_id")
-                                    if isinstance(p, dict)
-                                    else None
+                                from ext import db as flask_db
+                                from services.geolocation.driver_location_dedup import (
+                                    release_location_event_id,
                                 )
-                                sequence_id_out = (
-                                    p.get("sequence_id")
-                                    if isinstance(p, dict)
-                                    else None
+                                from services.tracking.sync_ledger_ack import (
+                                    extract_sync_ledger_ids,
+                                    try_commit_sync_ledger_ack,
+                                )
+
+                                (
+                                    tracking_session_id_out,
+                                    session_generation_out,
+                                    sequence_id_out,
+                                ) = extract_sync_ledger_ids(
+                                    p if isinstance(p, dict) else None
                                 )
                                 persisted_at = datetime.now(UTC).isoformat()
-                                # P0.1 : persisted_sync uniquement si PG a réellement commit
-                                durable_ok = (
+                                # P0-E : projection Driver seule ≠ persisted_sync.
+                                # Preuve = ledger (inserted | same_event) + commit PG.
+                                projection_ok = (
                                     accept_status == "accepted_canonical"
                                     and sync_db_persisted is True
                                 )
-                                if durable_ok:
+                                if not projection_ok:
                                     result = {
                                         "ok": True,
                                         "source": source,
-                                        "message": "Location updated",
-                                        "location_mode": location_mode,
-                                        "accept_status": accept_status,
-                                        "accept_reason": accept_reason,
-                                        "received_at": received_at,
-                                        "ack_status": "persisted",
-                                        "durability": "persisted_sync",
-                                        "location_event_id": location_event_id,
-                                        "tracking_session_id": tracking_session_id_out,
-                                        "sequence_id": sequence_id_out,
-                                        "canonical_updated": sync_canonical_updated,
-                                        "db_persisted": True,
-                                        "persisted_at": persisted_at,
-                                    }
-                                    # P0.2 : cache durable sous Idempotency-Key et event id
-                                    for _store_key in (idem_hdr, location_event_id):
-                                        if _store_key:
-                                            store_idempotent_response(
-                                                driver.id, str(_store_key), result
-                                            )
-                                else:
-                                    # Observabilité seule ou DB non confirmée → pas de tombstone mobile
-                                    result = {
-                                        "ok": True,
-                                        "source": source,
-                                        "message": "Location accepted without durable persist",
+                                        "message": (
+                                            "Location accepted without durable persist"
+                                        ),
                                         "location_mode": location_mode,
                                         "accept_status": accept_status,
                                         "accept_reason": accept_reason,
@@ -2296,10 +2293,233 @@ class DriverLocation(Resource):
                                         "durability": None,
                                         "location_event_id": location_event_id,
                                         "tracking_session_id": tracking_session_id_out,
+                                        "session_generation": session_generation_out,
                                         "sequence_id": sequence_id_out,
                                         "canonical_updated": sync_canonical_updated,
                                         "db_persisted": sync_db_persisted,
+                                        "ledger_persisted": False,
                                     }
+                                else:
+                                    company_id_for_ledger = (
+                                        int(driver.company_id)
+                                        if getattr(driver, "company_id", None)
+                                        is not None
+                                        else None
+                                    )
+                                    if company_id_for_ledger is None:
+                                        release_location_event_id(
+                                            driver.id, location_event_id
+                                        )
+                                        result = {
+                                            "error": "ledger_persist_failed",
+                                            "error_code": "ledger_persist_failed",
+                                            "message": (
+                                                "Persistance ledger impossible "
+                                                "(company_id manquant)."
+                                            ),
+                                            "retryable": True,
+                                            "accept_status": accept_status,
+                                            "accept_reason": "ledger_persist_failed",
+                                            "ack_status": "ingested_non_persisted",
+                                            "durability": None,
+                                            "location_event_id": location_event_id,
+                                            "tracking_session_id": (
+                                                tracking_session_id_out
+                                            ),
+                                            "session_generation": (
+                                                session_generation_out
+                                            ),
+                                            "sequence_id": sequence_id_out,
+                                            "canonical_updated": (
+                                                sync_canonical_updated
+                                            ),
+                                            "db_persisted": True,
+                                            "ledger_persisted": False,
+                                        }
+                                        status_code = 503
+                                    else:
+                                        ledger_ack = try_commit_sync_ledger_ack(
+                                            flask_db.session,
+                                            driver_id=int(driver.id),
+                                            company_id=company_id_for_ledger,
+                                            location_event_id=str(location_event_id),
+                                            tracking_session_id=(
+                                                tracking_session_id_out
+                                            ),
+                                            session_generation=(
+                                                session_generation_out
+                                            ),
+                                            sequence_id=sequence_id_out,
+                                            latitude=float(lat),
+                                            longitude=float(lon),
+                                            recorded_at=recorded_at,
+                                            source="http",
+                                            location_mode=str(
+                                                location_mode or "mission_live"
+                                            ),
+                                            accuracy_m=(
+                                                float(accuracy)
+                                                if accuracy and accuracy > 0
+                                                else None
+                                            ),
+                                            speed_mps=(
+                                                float(speed) if speed > 0 else None
+                                            ),
+                                            heading=(
+                                                float(heading)
+                                                if heading >= 0
+                                                else None
+                                            ),
+                                            mission_id=(
+                                                int(mission_id)
+                                                if isinstance(mission_id, int)
+                                                else None
+                                            ),
+                                        )
+                                        if ledger_ack.kind == "durable_ok":
+                                            result = {
+                                                "ok": True,
+                                                "source": source,
+                                                "message": "Location updated",
+                                                "location_mode": location_mode,
+                                                "accept_status": accept_status,
+                                                "accept_reason": accept_reason,
+                                                "received_at": received_at,
+                                                "ack_status": "persisted",
+                                                "durability": "persisted_sync",
+                                                "location_event_id": location_event_id,
+                                                "tracking_session_id": (
+                                                    ledger_ack.tracking_session_id
+                                                ),
+                                                "session_generation": (
+                                                    ledger_ack.session_generation
+                                                ),
+                                                "sequence_id": ledger_ack.sequence_id,
+                                                "canonical_updated": (
+                                                    sync_canonical_updated
+                                                ),
+                                                "db_persisted": True,
+                                                "ledger_persisted": True,
+                                                "ledger_reason": ledger_ack.reason,
+                                                "persisted_at": persisted_at,
+                                            }
+                                            for _store_key in (
+                                                idem_hdr,
+                                                location_event_id,
+                                            ):
+                                                if _store_key:
+                                                    store_idempotent_response(
+                                                        driver.id,
+                                                        str(_store_key),
+                                                        result,
+                                                    )
+                                        elif ledger_ack.kind == "ids_missing":
+                                            # Projection OK, IDs incomplets → 200 non durable
+                                            result = {
+                                                "ok": True,
+                                                "source": source,
+                                                "message": (
+                                                    "Location accepted without "
+                                                    "durable persist"
+                                                ),
+                                                "location_mode": location_mode,
+                                                "accept_status": accept_status,
+                                                "accept_reason": (
+                                                    "ledger_ids_missing"
+                                                ),
+                                                "received_at": received_at,
+                                                "ack_status": (
+                                                    "ingested_non_persisted"
+                                                ),
+                                                "durability": None,
+                                                "location_event_id": (
+                                                    location_event_id
+                                                ),
+                                                "tracking_session_id": (
+                                                    tracking_session_id_out
+                                                ),
+                                                "session_generation": (
+                                                    session_generation_out
+                                                ),
+                                                "sequence_id": sequence_id_out,
+                                                "canonical_updated": (
+                                                    sync_canonical_updated
+                                                ),
+                                                "db_persisted": True,
+                                                "ledger_persisted": False,
+                                            }
+                                        elif ledger_ack.kind == "conflict_409":
+                                            release_location_event_id(
+                                                driver.id, location_event_id
+                                            )
+                                            result = {
+                                                "error": ledger_ack.reason,
+                                                "error_code": ledger_ack.reason,
+                                                "message": (
+                                                    "Conflit ledger déterministe "
+                                                    "(pas de retry indéfini)."
+                                                ),
+                                                "retryable": False,
+                                                "accept_status": accept_status,
+                                                "accept_reason": ledger_ack.reason,
+                                                "ack_status": "conflict",
+                                                "durability": None,
+                                                "location_event_id": (
+                                                    location_event_id
+                                                ),
+                                                "tracking_session_id": (
+                                                    ledger_ack.tracking_session_id
+                                                ),
+                                                "session_generation": (
+                                                    ledger_ack.session_generation
+                                                ),
+                                                "sequence_id": ledger_ack.sequence_id,
+                                                "existing_location_event_id": (
+                                                    ledger_ack.existing_location_event_id
+                                                ),
+                                                "canonical_updated": (
+                                                    sync_canonical_updated
+                                                ),
+                                                "db_persisted": True,
+                                                "ledger_persisted": False,
+                                            }
+                                            status_code = 409
+                                        else:
+                                            # 503 ledger / commit KO / unproven
+                                            release_location_event_id(
+                                                driver.id, location_event_id
+                                            )
+                                            result = {
+                                                "error": "ledger_persist_failed",
+                                                "error_code": "ledger_persist_failed",
+                                                "message": (
+                                                    "Persistance ledger échouée. "
+                                                    "Réessayez."
+                                                ),
+                                                "retryable": True,
+                                                "accept_status": accept_status,
+                                                "accept_reason": ledger_ack.reason,
+                                                "ack_status": (
+                                                    "ingested_non_persisted"
+                                                ),
+                                                "durability": None,
+                                                "location_event_id": (
+                                                    location_event_id
+                                                ),
+                                                "tracking_session_id": (
+                                                    ledger_ack.tracking_session_id
+                                                ),
+                                                "session_generation": (
+                                                    ledger_ack.session_generation
+                                                ),
+                                                "sequence_id": ledger_ack.sequence_id,
+                                                "canonical_updated": (
+                                                    sync_canonical_updated
+                                                ),
+                                                "db_persisted": True,
+                                                "ledger_persisted": False,
+                                            }
+                                            status_code = 503
                 except (ValueError, TypeError):
                     result = {"error": "Invalid coordinate format"}
                     status_code = 400
@@ -2334,9 +2554,14 @@ class DriverLocation(Resource):
             result_payload["tracking_event_id"] = (
                 str(tracking_event_id) if tracking_event_id else None
             )
-            # Contrat P0.1 : ne jamais inventer persisted_sync ici
+            # Contrat P0-E : ne jamais inventer persisted_sync sans ledger_persisted
             if result_payload.get("durability") == "persisted_sync":
-                result_payload["ack_status"] = "persisted"
+                if result_payload.get("ledger_persisted") is not True:
+                    result_payload["durability"] = None
+                    result_payload["ack_status"] = "ingested_non_persisted"
+                    result_payload["ledger_persisted"] = False
+                else:
+                    result_payload["ack_status"] = "persisted"
             elif result_payload.get("ack_status") is None:
                 result_payload["ack_status"] = _resolve_tracking_ack_status(
                     accept_status=accept_status_value,

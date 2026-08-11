@@ -173,7 +173,7 @@ Fenêtre atomique obligatoire :
 
 ✅ **Implémenté** (P0.1 — vérité ACK + circuit Redis + deploy digest) :
 
-1. `persisted_sync` uniquement si PG commit OK (`db_persisted=True`) ; Redis OK + PG KO → **503** `db_persist_failed` (mobile conserve SQLite) — [`location.py`](../../backend/services/geolocation/location.py), [`driver.py`](../../backend/routes/driver.py).
+1. Projection PG KO → **503** `db_persist_failed` (`db_persisted=False`, mobile conserve SQLite) — [`location.py`](../../backend/services/geolocation/location.py). **Supersédé pour l’ACK durable** par **P0-E** : `persisted_sync` exige désormais la preuve ledger + commit (voir section P0-E).
 2. Tombstone mobile strict : `ack_status=persisted` + `durability=persisted_sync` + `location_event_id === item.id` ; `api.ts` n’invente jamais `persisted_sync`.
 3. Circuit async : compteurs + état entièrement dans Redis ; route = GET only ; `open_circuit_immediate` au shutdown consumer ; lag dans heartbeat — [`async_circuit.py`](../../backend/services/tracking/async_circuit.py).
 4. [`ops-gps-deploy-a.sh`](../../scripts/ops-gps-deploy-a.sh) : `BACKEND_IMAGE_REF` obligatoire (digest) + vérif post-deploy ; purge Redis avec `REDISCLI_AUTH`.
@@ -199,6 +199,61 @@ Fenêtre atomique obligatoire :
 3. Limiteur métier Lua (`HTTP_DRIVER_LOCATION_*`) reste autoritaire.
 4. Tests : [`test_driver_location_flask_limiter_p04a.py`](../../backend/tests/test_driver_location_flask_limiter_p04a.py) (A/B/C/D + preuve RESTX isolée).
 5. Déploiement : backend only + `TRACKING_INGEST_ASYNC_ENABLED=false` + purge ciblée `LIMITS:*driver_driver_location*` **après** image en service — Kafka inchangé.
+
+### ✅ **Implémenté** : P0-E — contrat `persisted_sync` = preuve ledger
+
+**Invariant :**
+
+```text
+persisted_sync
+  ⇔
+  location_event_id exact
+  + session exacte
+  + génération exacte
+  + séquence exacte
+  + ledger prouvé (inserted OU same_event_already_persisted)
+  + TX commit PG réussi
+```
+
+**Jamais** : projection `Driver` commitée ⇒ `persisted_sync`.
+
+| Champ | Signification |
+|---|---|
+| `db_persisted: true` | projection `Driver` commitée (carte / live) |
+| `ledger_persisted: true` | **uniquement** avec `ack_status=persisted` + `durability=persisted_sync` |
+
+Diagnostic : `db_persisted=true` + `ledger_persisted=false` → carte éventuellement à jour, **mobile ne doit pas** supprimer SQLite.
+
+**Reasons** [`persist_with_outbox.py`](../../backend/services/tracking/persist_with_outbox.py) :
+
+| Cas | `status` | `reason` |
+|---|---|---|
+| Insertion réelle | `persisted` | `inserted` |
+| Même event_id + même payload | `duplicate` | `same_event_already_persisted` |
+| Séquence déjà possédée par un **autre** event | `duplicate` | `session_sequence_already_persisted` |
+| Conflit non prouvé / fallback | `duplicate` | `duplicate_unproven` |
+
+Preuve durable autorisée uniquement : `(persisted, inserted)` ou `(duplicate, same_event_already_persisted)` **et** commit PG OK — helper [`sync_ledger_ack.py`](../../backend/services/tracking/sync_ledger_ack.py).
+
+**Matrice HTTP** ([`driver.py`](../../backend/routes/driver.py) PUT sync) :
+
+| Situation | HTTP | `persisted_sync` | SQLite |
+|---|---:|---|---|
+| Projection OK, IDs manquants | 200 `ingested_non_persisted` | non | conservée |
+| Ledger insert + commit OK | 200 | oui | supprimable |
+| Même event déjà durable + commit | 200 | oui | supprimable |
+| Même séquence, autre event | **409** | non | conservée |
+| Payload conflict même event_id | **409** | non | conservée |
+| Ledger SQL KO / commit KO | **503** `ledger_persist_failed` | non | conservée |
+| Projection Driver KO | **503** `db_persist_failed` | non | conservée |
+
+- **409** = conflits déterministes (pas de retry indéfini mobile)
+- **503** = pannes DB/infra retryables (+ `release_location_event_id`)
+- Cache idempotent Redis : uniquement après `persisted_sync`
+- ACK durable echo : `location_event_id`, `tracking_session_id`, `session_generation`, `sequence_id`
+- Tests : [`test_location_persisted_sync_p0e.py`](../../backend/tests/services/test_location_persisted_sync_p0e.py)
+
+Outbox → topic processed via `outbox_publisher.py` : **inchangé** (P1).
 
 Si les positions ne persistent pas malgré des HTTP 202 (historique) :
 

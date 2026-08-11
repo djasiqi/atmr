@@ -147,10 +147,14 @@ def persist_location_event_with_outbox(
         if existing is not None:
             if str(existing["event_payload_hash"]) != phash:
                 raise PersistConflictError("event_id_payload_conflict")
-            return {"status": "duplicate", "location_event_id": location_event_id}
+            return {
+                "status": "duplicate",
+                "reason": "same_event_already_persisted",
+                "location_event_id": location_event_id,
+            }
 
         # Même (driver, session, sequence) déjà pris par un autre location_event_id
-        # (rejeu Kafka / recyclage compteur Redis http-legacy) → skip idempotent.
+        # (rejeu Kafka / recyclage compteur Redis http-legacy).
         seq_owner = (
             session.execute(
                 text(
@@ -173,7 +177,7 @@ def persist_location_event_with_outbox(
         if seq_owner is not None:
             logger.warning(
                 "[persist_outbox] sequence déjà persistée driver_id=%s sid=%s "
-                "seq=%s existing_eid=%s new_eid=%s — skip idempotent",
+                "seq=%s existing_eid=%s new_eid=%s — conflit déterministe",
                 driver_id,
                 tracking_session_id,
                 sequence_id,
@@ -182,20 +186,24 @@ def persist_location_event_with_outbox(
             )
             return {
                 "status": "duplicate",
-                "location_event_id": location_event_id,
                 "reason": "session_sequence_already_persisted",
+                "location_event_id": location_event_id,
                 "existing_location_event_id": str(seq_owner["location_event_id"]),
             }
 
         logger.warning(
             "[persist_outbox] INSERT DO NOTHING sans ligne lisible "
-            "driver_id=%s eid=%s sid=%s seq=%s — skip safe",
+            "driver_id=%s eid=%s sid=%s seq=%s — duplicate_unproven",
             driver_id,
             location_event_id,
             tracking_session_id,
             sequence_id,
         )
-        return {"status": "duplicate", "location_event_id": location_event_id}
+        return {
+            "status": "duplicate",
+            "reason": "duplicate_unproven",
+            "location_event_id": location_event_id,
+        }
 
     session.execute(
         text(
@@ -398,6 +406,7 @@ def persist_location_event_with_outbox(
 
     return {
         "status": "persisted",
+        "reason": "inserted",
         "location_event_id": location_event_id,
         "contiguous_persisted_through": contiguous,
         "publish_realtime": publish_realtime,
