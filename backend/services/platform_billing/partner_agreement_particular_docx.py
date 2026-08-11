@@ -6,6 +6,7 @@ import io
 from pathlib import Path
 
 from docx import Document
+from docx.document import Document as DocxDocument
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -33,7 +34,7 @@ def _set_run(run, *, size: float = 9.5, bold: bool = False):
 
 
 def _para(
-    doc: Document,
+    doc: DocxDocument,
     text: str,
     *,
     size: float = 9.5,
@@ -56,7 +57,7 @@ def _para(
     return p
 
 
-def _heading(doc: Document, text: str) -> None:
+def _heading(doc: DocxDocument, text: str) -> None:
     _para(
         doc,
         text,
@@ -68,7 +69,7 @@ def _heading(doc: Document, text: str) -> None:
     )
 
 
-def _page_break(doc: Document) -> None:
+def _page_break(doc: DocxDocument) -> None:
     p = doc.add_paragraph()
     run = p.add_run()
     br = OxmlElement("w:br")

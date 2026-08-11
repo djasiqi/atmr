@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.document import Document as DocxDocument
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -381,7 +382,7 @@ def _apply_lirie_run(
         run.font.color.rgb = color
 
 
-def _configure_lirie_styles(doc: Document) -> None:
+def _configure_lirie_styles(doc: DocxDocument) -> None:
     """Styles document : police LIRIE + titres en vert (pas le bleu accent Word)."""
     for name in ("Normal", "List Bullet", "List Number"):
         try:
@@ -419,7 +420,7 @@ def _compact_paragraph(
 
 
 def _add_heading(
-    doc: Document,
+    doc: DocxDocument,
     text: str,
     level: int = 1,
     *,
@@ -445,7 +446,7 @@ def _add_heading(
 
 
 def _add_para(
-    doc: Document,
+    doc: DocxDocument,
     text: str,
     *,
     bold: bool = False,
@@ -470,7 +471,7 @@ def _add_para(
     return p
 
 
-def _add_bullets(doc: Document, items: list[str]) -> None:
+def _add_bullets(doc: DocxDocument, items: list[str]) -> None:
     for i, item in enumerate(items):
         p = doc.add_paragraph(item, style="List Bullet")
         for run in p.runs:
@@ -514,7 +515,7 @@ def _add_field_run(paragraph: Paragraph, instr: str) -> None:
     r.append(end)
 
 
-def _configure_section_and_footer(doc: Document, *, reference: str) -> None:
+def _configure_section_and_footer(doc: DocxDocument, *, reference: str) -> None:
     """Marges + pied de page (référence + pagination) sur toutes les pages."""
     section = doc.sections[0]
     section.page_width = Cm(21.0)
@@ -601,7 +602,7 @@ def _add_signature_cell(cell: Any, *, label: str, signatory: str) -> None:
 
 
 def _add_signatures_table(
-    doc: Document,
+    doc: DocxDocument,
     *,
     operator_signatory: str,
     partner_signatory: str | None,
@@ -641,7 +642,7 @@ def _add_signatures_table(
 
 
 def _add_simple_table(
-    doc: Document,
+    doc: DocxDocument,
     *,
     headers: list[str],
     rows: list[list[str]],
@@ -668,7 +669,7 @@ def _add_simple_table(
     _add_para(doc, "", space_after_pt=4)
 
 
-def _add_logo_header(doc: Document) -> bool:
+def _add_logo_header(doc: DocxDocument) -> bool:
     """Insère le logo LIRIE centré en tête de page 1. Retourne True si ajouté."""
     logo_path = _resolve_lirie_logo_path()
     if logo_path is None:
@@ -682,7 +683,7 @@ def _add_logo_header(doc: Document) -> bool:
     return True
 
 
-def _section_page_break(doc: Document, *, label: str) -> None:
+def _section_page_break(doc: DocxDocument, *, label: str) -> None:
     """Saut de page contrôlé (pagination contractuelle recommandée)."""
     # label réservé au debug / lecture du code (ex. « page 3 — art. 5-6 »)
     _ = label

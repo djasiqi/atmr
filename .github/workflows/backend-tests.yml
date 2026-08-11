@@ -242,16 +242,17 @@ jobs:
         timeout-minutes: 30
         run: |
           # Lancer pytest depuis la racine pour que les imports 'backend' fonctionnent
-          # ✅ OPTIM: Ajout timeout pour éviter blocage (120s par test, 30min total)
+          # Politique de mesure : backend/.coveragerc uniquement (--cov-config)
           pytest backend/tests -v \
             --cov=backend \
+            --cov-config=backend/.coveragerc \
             --cov-report=xml:backend/coverage.xml \
             --cov-report=html:backend/htmlcov \
             --cov-report=term-missing \
             --timeout=120 \
             --timeout-method=thread
 
-      # ✅ 3.1: Vérifier couverture globale ≥ 70% (bloquant)
+      # Gate GLOBAL uniquement (--fail-under). Les critiques sont un step séparé.
       - name: Check global coverage >= 70%
         run: |
           cd backend
@@ -259,44 +260,51 @@ jobs:
           python scripts/check_coverage.py --coverage-xml coverage.xml --fail-under 70.0 --json coverage_report.json
           echo "✅ Couverture globale >= 70%"
 
-      # ✅ 3.1: Vérifier couverture modules critiques >= 80%
-      - name: Check critical modules coverage >= 80%
+      # Plancher partiel dispatch (80%) ≠ cibles 95% du script check_coverage.
+      # Rapport critiques non bloquant tant que --require-critical n'est pas promu.
+      - name: Report critical module coverage
         run: |
-          echo "🚨 Vérification couverture modules critiques >= 80%..."
+          echo "📋 Rapport couverture modules critiques (non bloquant)..."
 
-          # Vérifier dispatch modules critiques (déjà vérifiés séparément)
           pytest backend/tests/test_heuristics.py backend/tests/test_solver.py backend/tests/test_autonomous_manager.py \
             --cov=backend/services/unified_dispatch/heuristics.py \
             --cov=backend/services/unified_dispatch/solver.py \
             --cov=backend/services/unified_dispatch/autonomous_manager.py \
+            --cov-config=backend/.coveragerc \
             --cov-report=term-missing \
             --cov-fail-under=80 \
             --timeout=120 \
             --timeout-method=thread \
             -v
 
-          # Vérifier autres modules critiques via script
           cd backend
+          # Rapport seul (pas de --fail-under, pas de --require-critical) → exit 0
           python scripts/check_coverage.py \
             --coverage-xml coverage.xml \
-            --fail-under 80.0 \
-            --quiet || true
+            --quiet \
+            --json coverage_report.json
 
-          # Afficher rapport modules critiques uniquement
           python -c "
           import json
           with open('coverage_report.json') as f:
               report = json.load(f)
-          critical_low = report['critical_low_coverage']
+          critical_low = report.get('critical_low_coverage') or {}
           if critical_low:
-              print('⚠️ Modules critiques < 80%:')
-              for path, stats in list(critical_low.items())[:10]:
-                  print(f'  {path}: {stats[\"percentage\"]:.2f}%')
+              print('⚠️ Modules critiques sous leur seuil (rapport):')
+              for path, stats in list(critical_low.items())[:15]:
+                  req = stats.get('required_threshold', 80)
+                  print(f'  {path}: {stats[\"percentage\"]:.2f}% (requis {req:.0f}%)')
           else:
-              print('✅ Tous les modules critiques >= 80%')
+              print('✅ Tous les modules critiques mesurés respectent leur seuil')
+          missing = report.get('critical_missing_from_xml') or []
+          if missing:
+              print('ℹ️ Critiques absents du XML (omis / hors mesure):')
+              for path in missing[:10]:
+                  print(f'  {path}')
           "
 
-          echo "✅ Vérification modules critiques terminée"
+          echo "✅ Rapport modules critiques terminé"
+          echo "ℹ️ Promotion bloquante: check_coverage.py --require-critical (voir docs/backend/coverage-policy.md)"
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4

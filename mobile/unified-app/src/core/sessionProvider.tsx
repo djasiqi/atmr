@@ -20,6 +20,7 @@ import {
 } from "./contracts/clientSurfaceVersions";
 import {
   fetchBootstrap,
+  getLastRefreshErrorCode,
   hasAuthToken,
   login,
   setActiveContextIdForApi,
@@ -73,6 +74,30 @@ import {
 } from "./contextSwitchPolicy";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ReactRuntime: any = require("react");
+
+/**
+ * Chargement lazy via require (compatible Jest) — `import()` dynamique échoue avec
+ * ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING_FLAG sans --experimental-vm-modules.
+ */
+function loadTrackingContextLease(): typeof import("../features/driver/services/trackingContextLease") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("../features/driver/services/trackingContextLease");
+}
+
+function loadDriverTrackingQueue(): typeof import("../features/driver/services/driverTrackingQueue") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("../features/driver/services/driverTrackingQueue");
+}
+
+function loadTrackingRuntimeRegistry(): typeof import("../features/driver/services/trackingRuntimeRegistry") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("../features/driver/services/trackingRuntimeRegistry");
+}
+
+function loadDriverTrackingBridge(): typeof import("../features/driver/services/driverTrackingBridge") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("../features/driver/services/driverTrackingBridge");
+}
 
 type SessionStatus = "idle" | "bootstrapping" | "ready" | "error";
 
@@ -237,9 +262,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       identity: { userId: string; driverId: string; companyId: string };
       lifecycleOperationId: string;
     }) => {
-      const { driverTrackingQueue } = await import(
-        "../features/driver/services/driverTrackingQueue"
-      );
+      const { driverTrackingQueue } = loadDriverTrackingQueue();
       await driverTrackingQueue.quarantineOnLogout({
         userId: args.identity.userId,
         driverId: args.identity.driverId,
@@ -340,9 +363,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       try {
         const ctx = activeContextRef.current;
         if (ctx?.context_type === "driver") {
-          const { driverTrackingQueue } = await import(
-            "../features/driver/services/driverTrackingQueue"
-          );
+          const { driverTrackingQueue } = loadDriverTrackingQueue();
           await driverTrackingQueue.resumeAfterAuthRecovery({
             userId: ctx.context_id,
             driverId: getDriverIdFromContext(ctx) ?? ctx.context_id,
@@ -359,7 +380,6 @@ export function SessionProvider({ children }: PropsWithChildren) {
       return;
     }
     if (outcome === "terminal") {
-      const { getLastRefreshErrorCode } = await import("./api/client");
       await applyTerminalRevocationIfCurrent(
         resumeGeneration,
         getLastRefreshErrorCode() ?? "session_revoked",
@@ -538,8 +558,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
         resolved?.context_id ?? null
       );
       // Réconciliation lease crash-safe (switching → inactive ou restore)
-      void import("../features/driver/services/trackingContextLease")
-        .then(async ({ reconcileTrackingContextLeaseFromBootstrap, setTrackingContextLeaseDriverActive }) => {
+      void Promise.resolve()
+        .then(async () => {
+          const {
+            reconcileTrackingContextLeaseFromBootstrap,
+            setTrackingContextLeaseDriverActive,
+          } = loadTrackingContextLease();
           const lease = await reconcileTrackingContextLeaseFromBootstrap({
             activeContextId: resolved?.context_id ?? null,
             activeContextType: resolved?.context_type ?? null,
@@ -553,9 +577,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
             const driverIdRaw = getDriverIdFromContext(resolved);
             const driverId = driverIdRaw != null ? Number(driverIdRaw) : NaN;
             if (Number.isFinite(driverId)) {
-              const { startOrJoinTrackingRuntime } = await import(
-                "../features/driver/services/trackingRuntimeRegistry"
-              );
+              const { startOrJoinTrackingRuntime } = loadTrackingRuntimeRegistry();
               const runtime = await startOrJoinTrackingRuntime({
                 driverId,
                 companyId: getCompanyIdFromContext(resolved),
@@ -579,14 +601,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
       });
       // Reprise GPS après bootstrap auth
       if (resolved?.context_type === "driver" && data.is_authenticated) {
-        void import("../features/driver/services/driverTrackingQueue")
-          .then(({ driverTrackingQueue }) =>
-            driverTrackingQueue.resumeAfterAuthRecovery({
+        void Promise.resolve()
+          .then(() => {
+            const { driverTrackingQueue } = loadDriverTrackingQueue();
+            return driverTrackingQueue.resumeAfterAuthRecovery({
               userId: resolved.context_id,
               driverId: getDriverIdFromContext(resolved) ?? resolved.context_id,
               companyId: String(getCompanyIdFromContext(resolved) ?? "unknown"),
-            })
-          )
+            });
+          })
           .catch(() => undefined);
       }
       } catch (e) {
@@ -692,7 +715,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         const {
           readTrackingContextLease,
           setTrackingContextLeaseSwitching,
-        } = await import("../features/driver/services/trackingContextLease");
+        } = loadTrackingContextLease();
         const previousLease = await readTrackingContextLease();
         await setTrackingContextLeaseSwitching({
           fromDriver: leavingDriver,
@@ -701,9 +724,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         });
         leaseArmedSwitching = true;
         if (leavingDriver) {
-          const { driverTrackingQueue } = await import(
-            "../features/driver/services/driverTrackingQueue"
-          );
+          const { driverTrackingQueue } = loadDriverTrackingQueue();
           await driverTrackingQueue.activateContextInactiveGate("context_switching");
         }
       }
@@ -743,7 +764,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         setTrackingContextLeaseInactive,
         setTrackingContextLeaseDriverActive,
         reconcileTrackingContextLeaseFromBootstrap,
-      } = await import("../features/driver/services/trackingContextLease");
+      } = loadTrackingContextLease();
 
       if (nextContext?.context_type !== "driver") {
         await setTrackingContextLeaseInactive();
@@ -783,9 +804,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
       // Hard stop local sans flush après sortie chauffeur
       if (leavingDriver && nextContext?.context_type !== "driver") {
-        const { hardStopDriverContextRuntime } = await import(
-          "../features/driver/services/driverTrackingBridge"
-        );
+        const { hardStopDriverContextRuntime } = loadDriverTrackingBridge();
         await hardStopDriverContextRuntime("context_left_driver");
       }
 
@@ -797,7 +816,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
           const {
             startOrJoinTrackingRuntime,
             resolveTrackingIdentityId,
-          } = await import("../features/driver/services/trackingRuntimeRegistry");
+          } = loadTrackingRuntimeRegistry();
           const runtime = await startOrJoinTrackingRuntime({
             driverId,
             companyId: getCompanyIdFromContext(nextContext),
@@ -813,9 +832,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
               runtime.identity.trackingIdentityId ||
               resolveTrackingIdentityId(driverId),
           });
-          const { driverTrackingQueue } = await import(
-            "../features/driver/services/driverTrackingQueue"
-          );
+          const { driverTrackingQueue } = loadDriverTrackingQueue();
           await driverTrackingQueue.clearContextInactiveGate("context_entered_driver");
           await driverTrackingQueue.resumeAfterAuthRecovery({
             userId: nextContext.context_id,
@@ -904,13 +921,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
         const {
           restoreTrackingContextLeaseDriverActiveFromSwitching,
           setTrackingContextLeaseInactive,
-        } = await import("../features/driver/services/trackingContextLease");
+        } = loadTrackingContextLease();
         if (leavingDriver) {
           const restored = await restoreTrackingContextLeaseDriverActiveFromSwitching();
           if (restored) {
-            const { driverTrackingQueue } = await import(
-              "../features/driver/services/driverTrackingQueue"
-            );
+            const { driverTrackingQueue } = loadDriverTrackingQueue();
             await driverTrackingQueue.clearContextInactiveGate("switch_failed_restore");
           } else {
             await setTrackingContextLeaseInactive();
@@ -960,9 +975,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
         setAutoBootstrapAllowedSync(false);
         setMobileSessionStatus("logging_out");
         setTrackingAuthAvailability({ kind: "TRACKING_IDENTITY_UNAVAILABLE" });
-        void import("../features/driver/services/trackingContextLease").then(
-          ({ setTrackingContextLeaseInactive }) => setTrackingContextLeaseInactive()
-        );
+        try {
+          void loadTrackingContextLease().setTrackingContextLeaseInactive();
+        } catch {
+          /* best-effort */
+        }
         emitTrackingAuthTerminalEvent({
           kind: "EXPLICIT_LOGOUT",
           sourceSessionGenerationId: sourceGeneration,
@@ -974,9 +991,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       },
       runQuarantine: runDriverQuarantine,
       clearQuarantineIfOperationMatches: async (opId) => {
-        const { driverTrackingQueue } = await import(
-          "../features/driver/services/driverTrackingQueue"
-        );
+        const { driverTrackingQueue } = loadDriverTrackingQueue();
         await driverTrackingQueue.clearQuarantineIfOperationMatches(opId);
       },
       commitSessionStateIfCurrent: (logoutGeneration) => {

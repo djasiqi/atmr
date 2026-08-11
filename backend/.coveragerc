@@ -1,6 +1,14 @@
-# Configuration coverage.py
+# Configuration coverage.py — source de vérité unique (CI: --cov-config=backend/.coveragerc)
+# Les omits ici définissent le PÉRIMÈTRE mesuré. check_coverage.py analyse le XML
+# sans redéfinir ce périmètre.
+#
+# Catégories d'omit autorisées: legacy | training | demo | tooling
+# Voir docs/backend/coverage-policy.md
+
 [run]
-source = .
+# Le package mesuré est fourni par le CLI (--cov=backend depuis la racine monorepo,
+# ou --cov=. depuis backend/). Ne pas figer source= ici pour éviter un dénominateur faux.
+relative_files = True
 omit =
     */tests/*
     */test_*
@@ -13,6 +21,18 @@ omit =
     */conftest.py
     */factories.py
     */.venv/*
+    */htmlcov/*
+    */instance/*
+    */temp_*/*
+    */docs/*
+    # legacy — shim post-migration services.ml.rl (pas d'implémentation canonique)
+    */services/rl/*
+    # training / tooling ML — hors chemin requête API (runtime RL reste mesuré)
+    */services/ml/rl/hyperparameter_tuner.py
+    */services/ml/rl/optimal_hyperparameters.py
+    # tooling — seed démo (hors requête HTTP courante ; access_service / scoring restent mesurés)
+    */services/demo/seed_service.py
+    */services/demo/seed_spec.py
 
 [report]
 precision = 2
@@ -28,23 +48,20 @@ exclude_lines =
     @abstractmethod
     @abc.abstract
 
-# ✅ 3.1: Seuils de couverture par module (optionnel)
-# Ces seuils sont utilisés par le script check_coverage.py
-# Modules critiques définis dans scripts/check_coverage.py (CRITICAL_MODULES)
+# Seuils par module : scripts/check_coverage.py (CRITICAL_MODULES / THRESHOLDS)
+# - unified_dispatch core/optimization/utils (engine, solver, heuristics, autonomous,
+#   assignment_applier, settings, queue) ≥95% (+ shims apply/solver/settings/autonomous_manager)
+# - routes/auth.py ≥95%
+# - services/geolocation/osrm.py ≥90%
+# - routes/dispatch/rl_helpers.py, services/ml/rl/suggestion_generator.py ≥80%
+# - autres critiques ≥80%
 #
-# Seuils spécifiques par module (selon plan d'audit):
-# - backend/services/unified_dispatch/* : ≥95%
-#   (engine.py, solver.py, heuristics.py, autonomous_manager.py, queue.py, data.py, apply.py, settings.py)
-# - backend/routes/auth.py : ≥95%
-# - backend/services/osrm_client.py : ≥90%
-# - backend/services/rl/dispatch_env.py : ≥85%
-# - Autres modules critiques : ≥80% (seuil par défaut)
-#
-# Vérification automatique via: python scripts/check_coverage.py --coverage-xml coverage.xml
+# Vérification:
+#   python scripts/check_coverage.py --coverage-xml coverage.xml --fail-under 70
+#   python scripts/check_coverage.py --coverage-xml coverage.xml --require-critical
 
 [html]
 directory = htmlcov
 
 [xml]
 output = coverage.xml
-

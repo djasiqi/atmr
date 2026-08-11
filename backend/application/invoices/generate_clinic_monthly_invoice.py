@@ -113,7 +113,7 @@ class GenerateClinicMonthlyInvoiceOutput:
     success: bool
     invoice_id: int | None = None
     invoice: Any | None = None  # Invoice model
-    error: dict[str, str] | None = None
+    error: dict[str, Any] | None = None
     status_code: int | None = None
 
 

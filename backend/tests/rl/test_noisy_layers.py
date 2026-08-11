@@ -461,6 +461,8 @@ class TestComparisonFunctions:
 
     def test_compare_noisy_vs_standard(self):
         """Teste la comparaison entre réseaux avec et sans bruit."""
+        torch.manual_seed(42)
+
         # Créer les réseaux
         noisy_network = NoisyQNetwork(
             state_size=10, action_size=5, hidden_sizes=[128, 64], std_init=0.5
@@ -491,12 +493,14 @@ class TestComparisonFunctions:
         assert "standard_variance" in comparison_stats
         assert "exploration_gain" in comparison_stats
 
-        # Gain = std_noisy / std_standard (std globale, pas seulement inter-échantillons).
-        # Le ratio n'est pas garanti > 1 ; on vérifie qu'il est fini et positif,
-        # et que le réseau bruité produit bien de la variance.
-        assert comparison_stats["exploration_gain"] > 0
+        # Gain = std inter-échantillons noisy / standard (réseau std déterministe
+        # => dénominateur ~0 => +inf). Vérifier finitude positive ou +inf,
+        # et variance réelle du réseau bruité.
+        gain = comparison_stats["exploration_gain"]
+        assert gain > 1.0 or gain == float("inf")
         assert comparison_stats["noisy_std"] > 0
         assert comparison_stats["noisy_variance"] > 0
+        assert comparison_stats["noisy_sample_std"] > 0
 
 
 class TestIntegration:

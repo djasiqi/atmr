@@ -433,7 +433,8 @@ def compare_noisy_vs_standard(
         Dictionnaire avec les métriques de comparaison
 
     """
-    noisy_network.eval()
+    # Le bruit NoisyLinear n'est actif qu'en mode training ; eval() utilise μ seuls.
+    noisy_network.train()
     standard_network.eval()
 
     noisy_outputs = []
@@ -442,7 +443,8 @@ def compare_noisy_vs_standard(
     with torch.no_grad():
         for _ in range(num_samples):
             # Réinitialiser le bruit pour chaque échantillon
-            noisy_network.reset_noise()
+            if hasattr(noisy_network, "reset_noise"):
+                noisy_network.reset_noise()
 
             # Forward pass
             noisy_output = noisy_network(state)
@@ -452,15 +454,32 @@ def compare_noisy_vs_standard(
             standard_outputs.append(standard_output.clone())
 
     # Calculer les statistiques
+    # Shape attendue : [num_samples, ..., action_dim]
     noisy_tensor = torch.stack(noisy_outputs)
     standard_tensor = torch.stack(standard_outputs)
 
+    # Std globale (tous éléments) — utile pour le reporting
+    noisy_std = float(noisy_tensor.std().item())
+    standard_std = float(standard_tensor.std().item())
+
+    # Gain d'exploration = ratio des écarts-types *inter-échantillons*
+    # (dim 0), moyenné sur les actions. Un réseau déterministe a une std
+    # inter-échantillons ~0 ; le réseau bruité doit être strictement plus élevé.
+    noisy_sample_std = float(noisy_tensor.std(dim=0).mean().item())
+    standard_sample_std = float(standard_tensor.std(dim=0).mean().item())
+    if standard_sample_std > 1e-12:
+        exploration_gain = noisy_sample_std / standard_sample_std
+    else:
+        exploration_gain = float("inf") if noisy_sample_std > 0 else 0.0
+
     return {
         "noisy_mean": noisy_tensor.mean().item(),
-        "noisy_std": noisy_tensor.std().item(),
+        "noisy_std": noisy_std,
         "standard_mean": standard_tensor.mean().item(),
-        "standard_std": standard_tensor.std().item(),
+        "standard_std": standard_std,
         "noisy_variance": noisy_tensor.var().item(),
         "standard_variance": standard_tensor.var().item(),
-        "exploration_gain": noisy_tensor.std().item() / standard_tensor.std().item(),
+        "exploration_gain": exploration_gain,
+        "noisy_sample_std": noisy_sample_std,
+        "standard_sample_std": standard_sample_std,
     }

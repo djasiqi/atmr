@@ -49,9 +49,47 @@ jest.mock("./api/client", () => ({
   login: (email: string, password: string) => mockLogin(email, password),
   logoutSession: () => mockLogoutSession(),
   refreshAuthTokenNow: () => mockRefreshAuthTokenNow(),
-  switchContext: (targetContextId: string) => mockSwitchContext(targetContextId),
+  switchContext: (...args: unknown[]) =>
+    mockSwitchContext(...(args as Parameters<typeof mockSwitchContext>)),
   setActiveContextIdForApi: (contextId: string | null) => mockSetActiveContextIdForApi(contextId),
   getLastRefreshErrorCode: () => null,
+}));
+
+jest.mock("../features/driver/services/trackingContextLease", () => ({
+  readTrackingContextLease: jest.fn(async () => ({ state: "inactive", updatedAt: 0 })),
+  setTrackingContextLeaseSwitching: jest.fn(async () => undefined),
+  setTrackingContextLeaseInactive: jest.fn(async () => undefined),
+  setTrackingContextLeaseDriverActive: jest.fn(async () => undefined),
+  restoreTrackingContextLeaseDriverActiveFromSwitching: jest.fn(async () => false),
+  reconcileTrackingContextLeaseFromBootstrap: jest.fn(async () => ({
+    state: "inactive",
+    updatedAt: 0,
+  })),
+}));
+
+jest.mock("../features/driver/services/driverTrackingQueue", () => ({
+  driverTrackingQueue: {
+    quarantineOnLogout: jest.fn(async () => undefined),
+    resumeAfterAuthRecovery: jest.fn(async () => undefined),
+    activateContextInactiveGate: jest.fn(async () => undefined),
+    clearContextInactiveGate: jest.fn(async () => undefined),
+    clearQuarantineIfOperationMatches: jest.fn(async () => undefined),
+  },
+}));
+
+jest.mock("../features/driver/services/trackingRuntimeRegistry", () => ({
+  startOrJoinTrackingRuntime: jest.fn(async () => ({
+    identity: {
+      sessionGenerationId: 1,
+      trackingGenerationId: "trk-test",
+      trackingIdentityId: "driver:42:company:1",
+    },
+  })),
+  resolveTrackingIdentityId: (driverId: number) => `driver:${driverId}:company:unknown`,
+}));
+
+jest.mock("../features/driver/services/driverTrackingBridge", () => ({
+  hardStopDriverContextRuntime: jest.fn(async () => undefined),
 }));
 
 jest.mock("./auth/authRecoveryCoordinator", () => ({
@@ -317,7 +355,10 @@ describe("session provider gates", () => {
       await handle.current?.changeContext("client:self");
     });
 
-    expect(mockSwitchContext).toHaveBeenCalledWith("client:self");
+    expect(mockSwitchContext).toHaveBeenCalledWith(
+      "client:self",
+      expect.objectContaining({ sourceContextId: "driver:42" })
+    );
     expect(mockApplyContextCachePolicyOnSwitch).toHaveBeenCalledWith(queryClient, "driver:42");
     expect(handle.current?.activeContext?.context_id).toBe("client:self");
     expect(mockDisconnect).toHaveBeenCalled();

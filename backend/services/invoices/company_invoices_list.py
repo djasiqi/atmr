@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import and_, case, desc, exists, func, literal, or_, select, union_all
 from sqlalchemy.orm import aliased, joinedload, subqueryload
@@ -233,7 +233,10 @@ def list_company_invoices_unified(
     # UNION ALL + tri déterministe + pagination SQL (pas de fusion Python de
     # deux listes déjà paginées indépendamment)
     # ------------------------------------------------------------------
-    unified = union_all(regular_q.statement, partner_q.statement).subquery("inv_union")
+    # cast(Any): stubs SQLAlchemy refusent Query.statement (Row[...]) pour _TP de union_all
+    unified = cast(
+        Any, union_all(regular_q.statement, partner_q.statement)
+    ).subquery("inv_union")
 
     total_count = int(db.session.query(func.count()).select_from(unified).scalar() or 0)
 
