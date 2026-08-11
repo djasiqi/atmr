@@ -553,6 +553,12 @@ start_application() {
             _gunicorn_extra=(--threads "$_threads")
             echo "  Threads gthread: $_threads"
         fi
+        # Prometheus multiprocess : dir partagé entre workers du même conteneur,
+        # nettoyé à chaque démarrage (évite fichiers zombies après crash).
+        export PROMETHEUS_MULTIPROC_DIR="${PROMETHEUS_MULTIPROC_DIR:-/tmp/prometheus_multiproc}"
+        mkdir -p "$PROMETHEUS_MULTIPROC_DIR"
+        rm -rf "${PROMETHEUS_MULTIPROC_DIR:?}/"*
+        echo "  PROMETHEUS_MULTIPROC_DIR: $PROMETHEUS_MULTIPROC_DIR"
         exec gunicorn wsgi:app \
             --config gunicorn.conf.py \
             --bind 0.0.0.0:5000 \

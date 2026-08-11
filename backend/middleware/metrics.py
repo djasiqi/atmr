@@ -22,14 +22,11 @@ try:
         Counter,
         Gauge,
         Histogram,
-        generate_latest,
     )
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
-    # Fallback si prometheus_client n'est pas installé
-    generate_latest = None
     Counter = None
     Histogram = None
     Gauge = None
@@ -55,10 +52,12 @@ if (
         ["method", "endpoint", "status"],
     )
 
+    # livesum : agrégation correcte sous Gunicorn multi-workers
     REQUEST_IN_PROGRESS = Gauge(
         "http_requests_in_progress",
         "Nombre de requêtes en cours",
         ["method", "endpoint"],
+        multiprocess_mode="livesum",
     )
 
     HTTP_REQUEST_DB_QUERIES = Histogram(
@@ -204,7 +203,7 @@ def prom_middleware(app: Flask) -> Flask:
     @app.route("/prometheus/metrics-http")
     def metrics_http():  # pyright: ignore[reportUnusedFunction]
         """Exporte les métriques HTTP au format Prometheus."""
-        if not PROMETHEUS_AVAILABLE or generate_latest is None:
+        if not PROMETHEUS_AVAILABLE:
             from flask import jsonify
 
             return jsonify(
@@ -216,9 +215,10 @@ def prom_middleware(app: Flask) -> Flask:
 
         from flask import Response
 
-        return Response(
-            generate_latest(), mimetype="text/plain; version=0.0.4; charset=utf-8"
-        )
+        from services.monitoring.prometheus_export import generate_prometheus_latest
+
+        payload, content_type = generate_prometheus_latest()
+        return Response(payload, mimetype=content_type)
 
     return app
 

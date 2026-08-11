@@ -125,6 +125,46 @@ const BACKGROUND_INTERVAL_LOW_BATTERY_MS = Number(
   process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_INTERVAL_LOW_BATTERY_MS ?? "60000"
 );
 
+/**
+ * P0-F — qualité GPS BG : mission_live ignore la dégradation basse batterie
+ * (Accuracy.High + cadence mission). Seule availability_presence peut assouplir.
+ */
+export function resolveBackgroundGpsQuality(input: {
+  trackingMode: string;
+  isLowBattery: boolean;
+  missionIntervalMs?: number;
+  presenceMinIntervalMs?: number;
+  lowBatteryIntervalMs?: number;
+}): { accuracy: Location.Accuracy; timeIntervalMs: number; batteryDegradesGps: boolean } {
+  const missionIntervalMs = input.missionIntervalMs ?? BACKGROUND_INTERVAL_MS;
+  const presenceMinIntervalMs = input.presenceMinIntervalMs ?? 90_000;
+  const lowBatteryIntervalMs =
+    input.lowBatteryIntervalMs ?? BACKGROUND_INTERVAL_LOW_BATTERY_MS;
+  const isMissionLive = input.trackingMode === "mission_live";
+  const isPresence = input.trackingMode === "availability_presence";
+
+  if (isMissionLive) {
+    return {
+      accuracy: Location.Accuracy.High,
+      timeIntervalMs: missionIntervalMs,
+      batteryDegradesGps: false,
+    };
+  }
+
+  const intervalBase = isPresence
+    ? Math.max(missionIntervalMs, presenceMinIntervalMs)
+    : missionIntervalMs;
+  const batteryDegradesGps = input.isLowBattery;
+  const timeIntervalMs = batteryDegradesGps
+    ? Math.max(intervalBase, lowBatteryIntervalMs)
+    : intervalBase;
+  const accuracy = batteryDegradesGps
+    ? Location.Accuracy.Low
+    : Location.Accuracy.Balanced;
+
+  return { accuracy, timeIntervalMs, batteryDegradesGps };
+}
+
 let taskDefined = false;
 let bgStartInProgress = false;
 let watchdogActive = false;
@@ -789,14 +829,11 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     taskMode,
     options.scheduling ?? null
   );
-  const isMissionLiveMode = resolvedTrackingMode === "mission_live";
-  const intervalBase =
-    resolvedTrackingMode === "availability_presence"
-      ? Math.max(BACKGROUND_INTERVAL_MS, 90_000)
-      : BACKGROUND_INTERVAL_MS;
-  const effectiveIntervalMs = isLowBattery
-    ? Math.max(intervalBase, BACKGROUND_INTERVAL_LOW_BATTERY_MS)
-    : intervalBase;
+  const gpsQuality = resolveBackgroundGpsQuality({
+    trackingMode: resolvedTrackingMode,
+    isLowBattery,
+  });
+  const effectiveIntervalMs = gpsQuality.timeIntervalMs;
 
   emitDriverTelemetry("tracking.background.start_requested", {
     source: "driver.services.backgroundLocationTask",
@@ -813,13 +850,9 @@ async function startBackgroundLocationTaskIfEligibleInternal(
   const effectiveDistanceMeters = resolveBackgroundDistanceMeters(taskMode);
 
   const locationOptions: Location.LocationTaskOptions = {
-    // mission_live = navigation active → GPS précis (High). Présence/batterie faible → coarse pour
-    // économiser. Sans ça, expo-location renvoyait du réseau/wifi (~100 m) même en course.
-    accuracy: isLowBattery
-      ? Location.Accuracy.Low
-      : isMissionLiveMode
-        ? Location.Accuracy.High
-        : Location.Accuracy.Balanced,
+    // P0-F : mission_live = High + cadence mission même batterie faible.
+    // Présence flotte : Low/Balanced + cadence allongée si batterie ≤20 %.
+    accuracy: gpsQuality.accuracy,
     timeInterval: effectiveIntervalMs,
     distanceInterval: effectiveDistanceMeters,
     pausesUpdatesAutomatically: false,
@@ -894,6 +927,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       interval_ms: effectiveIntervalMs,
       distance_m: effectiveDistanceMeters,
       low_battery_mode: isLowBattery,
+      battery_degrades_gps: gpsQuality.batteryDegradesGps,
       battery_level: batteryLevel,
     });
     return true;

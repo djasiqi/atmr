@@ -253,13 +253,58 @@ Preuve durable autorisée uniquement : `(persisted, inserted)` ou `(duplicate, s
 - ACK durable echo : `location_event_id`, `tracking_session_id`, `session_generation`, `sequence_id`
 - Tests : [`test_location_persisted_sync_p0e.py`](../../backend/tests/services/test_location_persisted_sync_p0e.py)
 
+#### ✅ **Implémenté** : Canary P0-E (chemin SYNC réel)
+
+**Prérequis** : exercer le chemin **sync HTTP**. Si `TRACKING_INGEST_ASYNC_ENABLED` + `should_use_async_ingest()` → Kafka, la route peut répondre **202 `queued_async`** sans passer par P0-E sync.
+
+| Réponse | Verdict canary P0-E |
+|---|---|
+| `202 queued_async` | **Ni PASS ni FAIL** — chemin non exercé → rejouer en sync contrôlé |
+| `200` + champs ci-dessous | Candidat GO Preuve A |
+
+**Ne pas** casser Kafka ni ouvrir le circuit async volontairement pour forcer un fallback.
+
+**GO Preuve A** — nouvel `location_event_id` unique :
+
+```text
+HTTP 200
+ack_status=persisted
+durability=persisted_sync
+ledger_persisted=true
+ledger_reason=inserted
+location_event_id echo identique
+```
+
+Puis le **même ID** dans `tracking_ingest_events`, `driver_location_events`, watermark `tracking_session_state`, `tracking_event_outbox`.
+
+**GO Preuve B** — cohérence globale (ne prouve pas seule l’absence de faux ACK HTTP) :
+
+```sql
+-- count attendu = 0 (fenêtre 1h)
+SELECT COUNT(*) FROM driver_location_events d
+LEFT JOIN tracking_ingest_events t
+  ON t.driver_id = d.driver_id AND t.location_event_id = d.location_event_id
+WHERE d.recorded_at > NOW() - INTERVAL '1 hour' AND t.location_event_id IS NULL;
+```
+
+Script : [`scripts/ops-gps-p0e-canary.sh`](../../scripts/ops-gps-p0e-canary.sh)
+
+```bash
+# Après ACK sync pilote (ledger_reason=inserted) :
+LOCATION_EVENT_ID=<uuid> DRIVER_ID=<id> bash scripts/ops-gps-p0e-canary.sh
+# Preuve B seule :
+bash scripts/ops-gps-p0e-canary.sh --proof-b-only
+```
+
+Compléter manuellement : **0 × 429** GPS pilote ; 409/503 sans purge SQLite prématurée.
+
 Outbox → topic processed via `outbox_publisher.py` : **inchangé** (P1).
 
 Si les positions ne persistent pas malgré des HTTP 202 (historique) :
 
 1. `TRACKING_INGEST_ASYNC_ENABLED=false` **avec** limiteur GPS corrigé (même fenêtre).
 2. Noter l'état des **5 flags** Kafka (`KAFKA_ENABLED`, `ASYNC`, `PROCESSED_FANOUT`, `WS_KAFKA`, `PERSIST`) — `PERSIST=true` sans `ASYNC=true` est un **no-op** (consumer exit).
-3. Valider : PUT location → **200** + `durability=persisted_sync`, `trip_tracking` alimenté.
+3. Valider : PUT location → **200** + `durability=persisted_sync` + `ledger_persisted=true`, tables ledger/DLE/session/outbox (canary P0-E ci-dessus).
 4. Gap historique : les positions perdues avant mitigation ne sont pas récupérables automatiquement.
 
 Fanout/DLQ (async OFF) : [`scripts/ops-gps-pr2-fanout-dlq.sh`](../../scripts/ops-gps-pr2-fanout-dlq.sh) — manifests prod réels via `compose config`.
@@ -432,9 +477,41 @@ Panneaux ajoutés / durcis dans le JSON canonique (sync via `scripts/ops/sync-gr
 | `GPS accuracy observations (10m)` | Volume d’obs. (panneau séparé — pas le même axe que p50/p99) |
 | `Heartbeats received (5m)` | `increase` métier zero-safe (pas `timestamp()` scrape) |
 | `GPS pipeline activity (10m)` | received → processed → accepted_canonical → Redis write |
-| STOP GATE forbidden / mission_live / invariants / FCM | `or vector(0)` pour afficher **0** au lieu de No data |
+| STOP GATE forbidden / presence success / invariants / FCM / volumes | Zéro **conditionné** par série témoin (pas `or vector(0)` aveugle) |
+
+**Sémantique STOP GATES (Phase 2 observabilité)** :
+
+```text
+0       = zéro prouvé (famille de métriques vivante)
+NO DATA = information insuffisante (scrape / multiproc / métrique absente)
+>0      = événement réellement observé
+```
+
+Exemple forbidden :
+
+```promql
+sum(increase(tracking_delivery_result_total{result="forbidden"}[48h]))
+or on()
+(0 * sum(increase(tracking_delivery_result_total[48h])))
+```
+
+**Prometheus multiprocess** (backend Gunicorn multi-workers) : `PROMETHEUS_MULTIPROC_DIR` partagé dans le conteneur, nettoyé au démarrage entrypoint, export via `CollectorRegistry` + `MultiProcessCollector`, `child_exit` → `mark_process_dead`. Critère : métriques GPS Driver Tracking Health agrégées correctement (pas toutes les SLO appendées en texte). Gauge HTTP `http_requests_in_progress` : `multiprocess_mode=livesum`.
 
 Renommages : `% heartbeats battery_optimized` / `% heartbeats tracking_active` (ratio de heartbeats, pas de chauffeurs distincts).
+
+### ✅ **Implémenté** : P0-F — Mission Live BG (accuracy + cadence)
+
+Invariants BG `mission_live` ([`backgroundLocationTask.ts`](../../mobile/unified-app/src/features/driver/services/backgroundLocationTask.ts)) :
+
+| Mode | Batterie | Accuracy | Cadence |
+|---|---|---|---|
+| `mission_live` | normale ou faible | **High** | cadence mission (~20 s) — **pas** de passage auto à 60 s |
+| `availability_presence` | faible | Low/Balanced autorisé | 60–90 s autorisé |
+| `availability_presence` | normale | Balanced | ≥90 s |
+
+Autres invariants : contexte DRIVER + mission active ; SQLite avant réseau ; HTTP = transport principal BG (`forceHttpFallback`) ; ACK non durable → SQLite conservée ; `persisted_sync` → SQLite supprimable.
+
+**Canary** : mission active, écran verrouillé ; points `is_background` ; High + cadence mission même basse batterie ; file drainée après `persisted_sync`.
 
 
 ## Sprint 1 — Pipeline OSRM + DLQ (S1.4)

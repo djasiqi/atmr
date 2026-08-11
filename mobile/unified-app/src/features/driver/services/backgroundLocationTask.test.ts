@@ -27,7 +27,7 @@ jest.mock("expo-location", () => ({
   getBackgroundPermissionsAsync: () => mockGetBg(),
   requestForegroundPermissionsAsync: () => mockRequestFg(),
   requestBackgroundPermissionsAsync: () => mockRequestBg(),
-  Accuracy: { Balanced: "balanced", Low: "low" },
+  Accuracy: { Balanced: "balanced", Low: "low", High: "high" },
 }));
 
 jest.mock("@react-native-async-storage/async-storage", () => ({
@@ -542,5 +542,54 @@ describe("backgroundLocationTask", () => {
     await bgTask.setBackgroundTrackingMissionContext(10, "EN_ROUTE", "mission", null, null);
     const written = JSON.parse(String(asyncStorage.setItem.mock.calls[0]?.[1] ?? "{}"));
     expect(written.nativeOwner).toBeNull();
+  });
+});
+
+describe("resolveBackgroundGpsQuality (P0-F)", () => {
+  it("mission_live batterie faible : High + cadence mission (pas 60s)", () => {
+    const q = bgTask.resolveBackgroundGpsQuality({
+      trackingMode: "mission_live",
+      isLowBattery: true,
+      missionIntervalMs: 20_000,
+      lowBatteryIntervalMs: 60_000,
+    });
+    expect(q.accuracy).toBe("high");
+    expect(q.timeIntervalMs).toBe(20_000);
+    expect(q.batteryDegradesGps).toBe(false);
+  });
+
+  it("mission_live batterie normale : High + cadence mission", () => {
+    const q = bgTask.resolveBackgroundGpsQuality({
+      trackingMode: "mission_live",
+      isLowBattery: false,
+      missionIntervalMs: 20_000,
+    });
+    expect(q.accuracy).toBe("high");
+    expect(q.timeIntervalMs).toBe(20_000);
+  });
+
+  it("availability_presence batterie faible : Low + cadence allongée", () => {
+    const q = bgTask.resolveBackgroundGpsQuality({
+      trackingMode: "availability_presence",
+      isLowBattery: true,
+      missionIntervalMs: 20_000,
+      presenceMinIntervalMs: 90_000,
+      lowBatteryIntervalMs: 60_000,
+    });
+    expect(q.accuracy).toBe("low");
+    expect(q.timeIntervalMs).toBe(90_000);
+    expect(q.batteryDegradesGps).toBe(true);
+  });
+
+  it("availability_presence batterie normale : Balanced + ≥90s", () => {
+    const q = bgTask.resolveBackgroundGpsQuality({
+      trackingMode: "availability_presence",
+      isLowBattery: false,
+      missionIntervalMs: 20_000,
+      presenceMinIntervalMs: 90_000,
+    });
+    expect(q.accuracy).toBe("balanced");
+    expect(q.timeIntervalMs).toBe(90_000);
+    expect(q.batteryDegradesGps).toBe(false);
   });
 });

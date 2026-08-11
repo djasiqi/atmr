@@ -109,7 +109,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "(sum(rate(driver_device_health_reports_total[1m])) * 60) or vector(0)",
+          "expr": "(sum(rate(driver_device_health_reports_total[1m])) * 60) or on() (0 * sum(rate(driver_device_health_reports_total[5m])))",
           "legendFormat": "heartbeats/min"
         }
       ],
@@ -124,7 +124,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(increase(driver_device_health_reports_total[5m])) or vector(0)",
+          "expr": "sum(increase(driver_device_health_reports_total[5m])) or on() (0 * sum(increase(driver_device_health_reports_total[5m])))",
           "legendFormat": "heartbeats 5m"
         }
       ],
@@ -139,7 +139,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(rate(push_fcm_background_handler_no_callback_total[5m])) or vector(0)",
+          "expr": "sum(rate(push_fcm_background_handler_no_callback_total[5m])) or on() (0 * sum(rate(driver_device_health_reports_total[5m])))",
           "legendFormat": "fcm no callback/s"
         }
       ],
@@ -184,7 +184,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(rate(tracking_mission_live_missing_mission_id_total[5m])) or vector(0)",
+          "expr": "sum(rate(tracking_mission_live_missing_mission_id_total[5m])) or on() (0 * sum(rate(driver_location_received_total[5m])))",
           "legendFormat": "missing mission_id/s"
         }
       ],
@@ -213,7 +213,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(increase(tracking_delivery_result_total{mode=\"availability_presence\",transport=\"http\",result=\"success\"}[48h])) or vector(0)",
+          "expr": "sum(increase(tracking_delivery_result_total{mode=\"availability_presence\",transport=\"http\",result=\"success\"}[48h])) or on() (0 * sum(increase(tracking_delivery_result_total{mode=\"availability_presence\",transport=\"http\"}[48h])))",
           "legendFormat": "presence http success (gate #2)"
         }
       ],
@@ -228,7 +228,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(increase(tracking_delivery_result_total{result=\"forbidden\"}[48h])) or vector(0)",
+          "expr": "sum(increase(tracking_delivery_result_total{result=\"forbidden\"}[48h])) or on() (0 * sum(increase(tracking_delivery_result_total[48h])))",
           "legendFormat": "forbidden (gate #5 alerte)"
         }
       ],
@@ -275,7 +275,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(increase(driver_location_received_total[10m])) or vector(0)",
+          "expr": "sum(increase(driver_location_received_total[10m])) or on() (0 * sum(increase(driver_location_received_total[10m])))",
           "legendFormat": "locations received"
         }
       ],
@@ -290,7 +290,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(increase(tracking_invariant_violation_total[1h])) or vector(0)",
+          "expr": "sum(increase(tracking_invariant_violation_total[1h])) or on() (0 * sum(increase(driver_location_received_total[1h])))",
           "legendFormat": "violations 1h"
         }
       ],
@@ -337,7 +337,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(increase(driver_location_gps_accuracy_meters_count[10m])) or vector(0)",
+          "expr": "sum(increase(driver_location_gps_accuracy_meters_count[10m])) or on() (0 * sum(increase(driver_location_received_total[10m])))",
           "legendFormat": "accuracy observations 10m"
         }
       ],
@@ -352,19 +352,19 @@
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
         {
-          "expr": "sum(increase(driver_location_received_total[10m])) or vector(0)",
+          "expr": "sum(increase(driver_location_received_total[10m])) or on() (0 * sum(increase(driver_location_received_total[10m])))",
           "legendFormat": "received"
         },
         {
-          "expr": "sum(increase(driver_location_processed_total[10m])) or vector(0)",
+          "expr": "sum(increase(driver_location_processed_total[10m])) or on() (0 * sum(increase(driver_location_received_total[10m])))",
           "legendFormat": "processed total"
         },
         {
-          "expr": "sum(increase(driver_location_processed_total{accept_status=\"accepted_canonical\"}[10m])) or vector(0)",
+          "expr": "sum(increase(driver_location_processed_total{accept_status=\"accepted_canonical\"}[10m])) or on() (0 * sum(increase(driver_location_processed_total[10m])))",
           "legendFormat": "accepted_canonical"
         },
         {
-          "expr": "sum(increase(driver_location_canonical_redis_write_total[10m])) or vector(0)",
+          "expr": "sum(increase(driver_location_canonical_redis_write_total[10m])) or on() (0 * sum(increase(driver_location_received_total[10m])))",
           "legendFormat": "canonical Redis write"
         }
       ],

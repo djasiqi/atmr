@@ -59,9 +59,11 @@ class PrometheusMetrics(Resource):
             Response avec text/plain content-type et métriques Prometheus
         """
         try:
-            # ✅ Exporter toutes les métriques prometheus_client via generate_latest()
+            # Exporter prometheus_client (multiprocess si PROMETHEUS_MULTIPROC_DIR)
             try:
-                from prometheus_client import CONTENT_TYPE_LATEST, generate_latest  # pyright: ignore[reportMissingImports]
+                from services.monitoring.prometheus_export import (
+                    generate_prometheus_latest,
+                )
 
                 # ✅ P3: Mettre à jour la métrique de longueur de queue Celery avant export
                 try:
@@ -72,10 +74,7 @@ class PrometheusMetrics(Resource):
                         e,
                     )
 
-                # Générer toutes les métriques enregistrées (dispatch, OSRM, WebSocket, etc.)
-                # Note: generate_latest() exporte automatiquement toutes les métriques
-                # Prometheus enregistrées, y compris celles de websocket_metrics.py
-                metrics_output = generate_latest()
+                metrics_output, content_type_latest = generate_prometheus_latest()
 
                 # Ajouter les métriques SLO personnalisées
                 current_time = time.time()
@@ -146,7 +145,7 @@ class PrometheusMetrics(Resource):
                 # Utiliser make_response pour éviter la sérialisation JSON
                 # de Flask-RESTX
                 response = make_response(full_metrics, 200)
-                response.mimetype = CONTENT_TYPE_LATEST
+                response.mimetype = content_type_latest
                 return response
 
             except ImportError:

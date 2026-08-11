@@ -183,6 +183,7 @@ if Counter is not None:
         "tracking_kafka_consumer_lag",
         "Lag du consumer tracking (end_offset - position), agrégé par partition",
         ["group", "topic", "partition"],
+        multiprocess_mode="livemax",
     )
     _TRACKING_PROCESSED_FANOUT_FAILURES = Counter(
         "tracking_processed_fanout_failures_total",
