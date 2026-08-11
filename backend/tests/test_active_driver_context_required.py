@@ -29,17 +29,17 @@ def test_role_required_returns_active_driver_context_required_for_company_with_d
     mock_query = MagicMock()
     mock_query.filter_by.return_value.first.return_value = user
 
-    with app.test_request_context(
-        "/api/v1/driver/me/location",
-        method="PUT",
-        headers={"X-Active-Context-Id": "company:1"},
+    with (
+        app.test_request_context(
+            "/api/v1/driver/me/location",
+            method="PUT",
+            headers={"X-Active-Context-Id": "company:1"},
+        ),
+        patch("ext.get_jwt_identity", return_value="pub-1"),
+        patch("flask_jwt_extended.get_jwt", return_value={}),
+        patch("models.User.query", mock_query),
     ):
-        with (
-            patch("ext.get_jwt_identity", return_value="pub-1"),
-            patch("flask_jwt_extended.get_jwt", return_value={}),
-            patch("models.User.query", mock_query),
-        ):
-            result = protected()
+        result = protected()
 
     assert isinstance(result, tuple)
     body, status = result
@@ -65,16 +65,16 @@ def test_role_required_allows_company_when_active_context_is_driver(app):
     mock_query = MagicMock()
     mock_query.filter_by.return_value.first.return_value = user
 
-    with app.test_request_context(
-        "/api/v1/driver/me/location",
-        method="PUT",
-        headers={"X-Active-Context-Id": "driver:7514"},
+    with (
+        app.test_request_context(
+            "/api/v1/driver/me/location",
+            method="PUT",
+            headers={"X-Active-Context-Id": "driver:7514"},
+        ),
+        patch("ext.get_jwt_identity", return_value="pub-1"),
+        patch("flask_jwt_extended.get_jwt", return_value={}),
+        patch("models.User.query", mock_query),
     ):
-        with (
-            patch("ext.get_jwt_identity", return_value="pub-1"),
-            patch("flask_jwt_extended.get_jwt", return_value={}),
-            patch("models.User.query", mock_query),
-        ):
-            result = protected()
+        result = protected()
 
     assert result == ({"ok": True}, 200)

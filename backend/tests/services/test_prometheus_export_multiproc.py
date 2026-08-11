@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 
 def test_generate_prometheus_latest_without_multiproc_dir(monkeypatch):
     monkeypatch.delenv("PROMETHEUS_MULTIPROC_DIR", raising=False)
@@ -24,4 +22,4 @@ def test_generate_prometheus_latest_with_multiproc_dir(monkeypatch, tmp_path):
     assert isinstance(payload, (bytes, bytearray))
     assert "text/plain" in content_type
     # Dir toujours présent (pas de crash MultiProcessCollector sur dir vide)
-    assert os.path.isdir(str(multiproc))
+    assert multiproc.is_dir()

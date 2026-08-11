@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -45,7 +45,7 @@ def test_parse_naive_datetime_rejected() -> None:
 
 
 def test_format_plus_zero_becomes_z() -> None:
-    dt = datetime(2026, 8, 11, 18, 0, 0, tzinfo=timezone.utc)
+    dt = datetime(2026, 8, 11, 18, 0, 0, tzinfo=UTC)
     assert format_tracking_instant_utc_z(dt).endswith("Z")
     assert "+00:00" not in format_tracking_instant_utc_z(dt)
 

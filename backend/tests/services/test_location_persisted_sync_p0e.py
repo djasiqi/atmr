@@ -279,11 +279,13 @@ def test_route_guard_strips_invented_persisted_sync() -> None:
         "ledger_persisted": False,
         "db_persisted": True,
     }
-    if result_payload.get("durability") == "persisted_sync":
-        if result_payload.get("ledger_persisted") is not True:
-            result_payload["durability"] = None
-            result_payload["ack_status"] = "ingested_non_persisted"
-            result_payload["ledger_persisted"] = False
+    if (
+        result_payload.get("durability") == "persisted_sync"
+        and result_payload.get("ledger_persisted") is not True
+    ):
+        result_payload["durability"] = None
+        result_payload["ack_status"] = "ingested_non_persisted"
+        result_payload["ledger_persisted"] = False
     assert result_payload["durability"] is None
     assert result_payload["ack_status"] == "ingested_non_persisted"
 

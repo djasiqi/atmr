@@ -50,11 +50,9 @@ def durable_proof(persist_result: dict[str, Any] | None) -> bool:
         return False
     status = str(persist_result.get("status") or "")
     reason = str(persist_result.get("reason") or "")
-    if status == "persisted" and reason == "inserted":
-        return True
-    if status == "duplicate" and reason == "same_event_already_persisted":
-        return True
-    return False
+    return (status == "persisted" and reason == "inserted") or (
+        status == "duplicate" and reason == "same_event_already_persisted"
+    )
 
 
 def _parse_optional_int(raw: Any) -> int | None:
