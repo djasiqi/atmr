@@ -374,7 +374,10 @@ def test_session_resume_concurrent_same_idempotency_key(app, db, resume_session)
     assert not any(status >= 500 for status, _ in results)
 
     bodies = [body for _, body in results]
-    tokens = {(b.get("access_token"), b.get("refresh_token"), b.get("recovery_credential")) for b in bodies}
+    tokens = {
+        (b.get("access_token"), b.get("refresh_token"), b.get("recovery_credential"))
+        for b in bodies
+    }
     assert len(tokens) == 1, "les deux réponses doivent rejouer le même payload gagnant"
     assert any(b.get("error_code") == "refresh_duplicate" for b in bodies) or all(
         b.get("access_token") for b in bodies

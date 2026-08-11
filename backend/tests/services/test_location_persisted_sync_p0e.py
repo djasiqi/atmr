@@ -18,9 +18,7 @@ from services.tracking.sync_ledger_ack import (
 def test_durable_proof_only_inserted_or_same_event() -> None:
     assert durable_proof({"status": "persisted", "reason": "inserted"}) is True
     assert (
-        durable_proof(
-            {"status": "duplicate", "reason": "same_event_already_persisted"}
-        )
+        durable_proof({"status": "duplicate", "reason": "same_event_already_persisted"})
         is True
     )
     assert (
@@ -33,8 +31,7 @@ def test_durable_proof_only_inserted_or_same_event() -> None:
         is False
     )
     assert (
-        durable_proof({"status": "duplicate", "reason": "duplicate_unproven"})
-        is False
+        durable_proof({"status": "duplicate", "reason": "duplicate_unproven"}) is False
     )
     assert durable_proof({"status": "persisted"}) is False
     assert durable_proof({"status": "duplicate"}) is False

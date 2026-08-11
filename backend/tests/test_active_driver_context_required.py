@@ -1,4 +1,5 @@
 """P0 — ACTIVE_DRIVER_CONTEXT_REQUIRED sans assouplir role_required."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace

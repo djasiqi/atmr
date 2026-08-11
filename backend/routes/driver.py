@@ -2346,9 +2346,7 @@ class DriverLocation(Resource):
                                             tracking_session_id=(
                                                 tracking_session_id_out
                                             ),
-                                            session_generation=(
-                                                session_generation_out
-                                            ),
+                                            session_generation=(session_generation_out),
                                             sequence_id=sequence_id_out,
                                             latitude=float(lat),
                                             longitude=float(lon),
@@ -2366,9 +2364,7 @@ class DriverLocation(Resource):
                                                 float(speed) if speed > 0 else None
                                             ),
                                             heading=(
-                                                float(heading)
-                                                if heading >= 0
-                                                else None
+                                                float(heading) if heading >= 0 else None
                                             ),
                                             mission_id=(
                                                 int(mission_id)
@@ -2424,9 +2420,7 @@ class DriverLocation(Resource):
                                                 ),
                                                 "location_mode": location_mode,
                                                 "accept_status": accept_status,
-                                                "accept_reason": (
-                                                    "ledger_ids_missing"
-                                                ),
+                                                "accept_reason": ("ledger_ids_missing"),
                                                 "received_at": received_at,
                                                 "ack_status": (
                                                     "ingested_non_persisted"
