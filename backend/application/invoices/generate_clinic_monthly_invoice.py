@@ -211,6 +211,7 @@ class GenerateClinicMonthlyInvoiceUseCase:
                         period_month=input_data.period_month,
                         include_client_ids=include_ids,
                         exclude_client_ids=input_data.exclude_client_ids,
+                        reservation_ids=input_data.reservation_ids,
                         overrides=input_data.overrides,
                     )
                 except (ValueError, TypeError):
@@ -252,6 +253,7 @@ class GenerateClinicMonthlyInvoiceUseCase:
                         period_month=input_data.period_month,
                         include_client_ids=input_data.include_client_ids,
                         exclude_client_ids=exclude_ids,
+                        reservation_ids=input_data.reservation_ids,
                         overrides=input_data.overrides,
                     )
                 except (ValueError, TypeError):

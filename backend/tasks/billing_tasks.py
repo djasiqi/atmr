@@ -46,7 +46,7 @@ celery_app = Celery("billing")
     max_retries=2,
     autoretry_for=(Exception,),
 )
-def check_overdues_and_trigger_reminders():
+def check_overdues_and_trigger_reminders(self):  # noqa: ARG001
     """Tâche quotidienne pour vérifier les factures en retard
     et déclencher les rappels automatiques."""
     try:
@@ -96,7 +96,7 @@ def check_overdues_and_trigger_reminders():
     max_retries=2,
     autoretry_for=(Exception,),
 )
-def send_reminder_notifications() -> None:
+def send_reminder_notifications(self) -> None:  # noqa: ARG001
     """Tâche pour envoyer automatiquement les rappels par email.
 
     Cette tâche :
@@ -210,7 +210,7 @@ def send_reminder_notifications() -> None:
     max_retries=1,
     autoretry_for=(Exception,),
 )
-def generate_monthly_invoices():
+def generate_monthly_invoices(self):  # noqa: ARG001
     """Tâche mensuelle pour générer automatiquement les factures des clients actifs."""
     try:
         app_logger.info("Début de la génération mensuelle des factures")
@@ -229,7 +229,7 @@ def generate_monthly_invoices():
         # Récupérer toutes les entreprises avec des clients actifs
         companies_with_clients = (
             db.session.query(Company)
-            .join(Client)
+            .join(Client, Client.company_id == Company.id)
             .filter(Client.is_active)
             .distinct()
             .all()
@@ -461,7 +461,7 @@ def generate_monthly_invoices():
     max_retries=1,
     autoretry_for=(Exception,),
 )
-def cleanup_old_invoices():
+def cleanup_old_invoices(self):  # noqa: ARG001
     """Tâche de nettoyage pour archiver les anciennes factures."""
     try:
         app_logger.info("Début du nettoyage des anciennes factures")
@@ -514,7 +514,7 @@ def cleanup_old_invoices():
     max_retries=2,
     autoretry_for=(Exception,),
 )
-def send_invoice_summary() -> None:
+def send_invoice_summary(self) -> None:  # noqa: ARG001
     """Tâche pour envoyer un résumé mensuel des factures aux entreprises."""
     try:
         app_logger.info("Début de l'envoi des résumés mensuels")
