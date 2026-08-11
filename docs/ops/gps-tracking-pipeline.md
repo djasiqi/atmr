@@ -503,6 +503,36 @@ or on()
 
 Renommages : `% heartbeats battery_optimized` / `% heartbeats tracking_active` (ratio de heartbeats, pas de chauffeurs distincts).
 
+### ✅ **Implémenté** : Control-plane session — race `register_tracking_session` (PYTHON-FLASK-E3)
+
+**Bug** : `UniqueViolation` sur `uq_tracking_sessions_driver_session` quand `POST /driver/me/tracking/sessions` et `PUT /location` (`http_session_bridge`) enregistrent le même SID en parallèle. `SELECT … FOR UPDATE` ne protège pas une ligne absente.
+
+**Correctif** ([`session_registry.py`](../../backend/services/tracking/session_registry.py)) :
+
+1. `pg_advisory_xact_lock(42002, driver_id)` **avant** le SELECT (namespace distinct de l’outbox `42001`)
+2. Supersede défensif : `status='active' AND tracking_session_id <> :sid`
+3. `INSERT … ON CONFLICT DO NOTHING RETURNING …` + relecture génération **canonique** (jamais le `nextval` gaspillé)
+4. `_ensure_tracking_session_state` sur **tous** les chemins de succès (données registre : `company_id` / `started_at` / `session_generation`)
+
+**Infra** : `xact_lock` = compatible PgBouncer **transaction** en prod (contrairement à l’outbox session-level qui exige PG direct). Tests concurrence = PG direct.
+
+**Tests** : `tests/integration/test_tracking_session_registry_concurrency_pg.py` (A–E) + `test_tracking_session_register_bridge_converge.py`.
+
+**Statut canary P0-F** : control-plane session en **WARN** jusqu’au gate prod ci-dessous ; ne pas lancer une journée complète de canary avant déploiement de ce correctif.
+
+#### Gate production (après deploy)
+
+```text
+1. SHA runtime = SHA correctif
+2. Double register même SID → 200/200, même generation
+3. PG : tracking_sessions COUNT=1 ; tracking_session_state COUNT=1
+4. Sentry (nouveau release) : uq_tracking_sessions_driver_session = 0
+5. Logs : [tracking_sessions] register failed = 0
+6. Audit SID incident (registre / state / ledger / gaps)
+→ CONTROL-PLANE SESSION : PASS
+→ reprise canary P0-F
+```
+
 ### ✅ **Implémenté** : P0-F — Mission Live BG (accuracy + cadence)
 
 Invariants BG `mission_live` ([`backgroundLocationTask.ts`](../../mobile/unified-app/src/features/driver/services/backgroundLocationTask.ts)) :

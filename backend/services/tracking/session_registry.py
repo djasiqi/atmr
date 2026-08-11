@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime
 from typing import Any
 
@@ -10,6 +11,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+# Distinct de TRACKING_OUTBOX_LOCK_NAMESPACE (42001, session-level).
+# xact lock = compatible PgBouncer transaction pooling en production.
+SESSION_REGISTRY_LOCK_NAMESPACE = int(
+    os.getenv("TRACKING_SESSION_REGISTRY_LOCK_NAMESPACE", "42002")
+)
 
 
 class SessionRegistryError(Exception):
@@ -34,83 +41,16 @@ def _parse_started_at(raw: str | None) -> datetime:
         ) from exc
 
 
-def register_tracking_session(
+def _ensure_tracking_session_state(
     session: Session,
     *,
     driver_id: int,
     company_id: int,
-    tracking_session_id: str,
-    tracking_session_started_at: str | None,
-) -> dict[str, Any]:
-    """Ouverture idempotente. Supersede l'ancienne session active (multi-appareils)."""
-    sid = (tracking_session_id or "").strip()
-    if not sid:
-        raise SessionRegistryError(
-            "tracking_session_id_missing", "tracking_session_id requis"
-        )
-
-    existing = (
-        session.execute(
-            text(
-                """
-            SELECT tracking_session_id, session_generation, status, final_sequence_id
-            FROM tracking_sessions
-            WHERE driver_id = :driver_id AND tracking_session_id = :sid
-            FOR UPDATE
-            """
-            ),
-            {"driver_id": driver_id, "sid": sid},
-        )
-        .mappings()
-        .first()
-    )
-
-    if existing is not None:
-        return {
-            "tracking_session_id": existing["tracking_session_id"],
-            "session_generation": int(existing["session_generation"]),
-            "first_sequence_id": 1,
-            "status": str(existing["status"]),
-        }
-
-    # Supersede session active éventuelle
-    session.execute(
-        text(
-            """
-            UPDATE tracking_sessions
-            SET status = 'superseded', updated_at = NOW()
-            WHERE driver_id = :driver_id AND status = 'active'
-            """
-        ),
-        {"driver_id": driver_id},
-    )
-
-    generation = session.execute(
-        text("SELECT nextval('tracking_session_generation_seq')")
-    ).scalar_one()
-    started_at = _parse_started_at(tracking_session_started_at)
-
-    session.execute(
-        text(
-            """
-            INSERT INTO tracking_sessions (
-                driver_id, company_id, tracking_session_id, session_generation,
-                status, started_at
-            ) VALUES (
-                :driver_id, :company_id, :sid, :generation,
-                'active', :started_at
-            )
-            """
-        ),
-        {
-            "driver_id": driver_id,
-            "company_id": company_id,
-            "sid": sid,
-            "generation": int(generation),
-            "started_at": started_at,
-        },
-    )
-
+    sid: str,
+    generation: int,
+    started_at: datetime,
+) -> None:
+    """Garantit tracking_session_state pour un register réussi (données canoniques)."""
     session.execute(
         text(
             """
@@ -134,12 +74,180 @@ def register_tracking_session(
         },
     )
 
+
+def _success_payload(
+    *,
+    tracking_session_id: str,
+    session_generation: int,
+    status: str,
+) -> dict[str, Any]:
     return {
-        "tracking_session_id": sid,
-        "session_generation": int(generation),
+        "tracking_session_id": tracking_session_id,
+        "session_generation": int(session_generation),
         "first_sequence_id": 1,
-        "status": "active",
+        "status": str(status),
     }
+
+
+def register_tracking_session(
+    session: Session,
+    *,
+    driver_id: int,
+    company_id: int,
+    tracking_session_id: str,
+    tracking_session_started_at: str | None,
+) -> dict[str, Any]:
+    """Ouverture idempotente. Supersede l'ancienne session active (multi-appareils).
+
+    Sérialise les ouvertures par chauffeur via pg_advisory_xact_lock (ns=42002).
+    Invariant : succès ⇒ tracking_sessions + tracking_session_state cohérents.
+    """
+    sid = (tracking_session_id or "").strip()
+    if not sid:
+        raise SessionRegistryError(
+            "tracking_session_id_missing", "tracking_session_id requis"
+        )
+
+    session.execute(
+        text("SELECT pg_advisory_xact_lock(:ns, :driver_id)"),
+        {"ns": SESSION_REGISTRY_LOCK_NAMESPACE, "driver_id": int(driver_id)},
+    )
+
+    existing = (
+        session.execute(
+            text(
+                """
+            SELECT tracking_session_id, session_generation, status, final_sequence_id,
+                   company_id, started_at
+            FROM tracking_sessions
+            WHERE driver_id = :driver_id AND tracking_session_id = :sid
+            FOR UPDATE
+            """
+            ),
+            {"driver_id": driver_id, "sid": sid},
+        )
+        .mappings()
+        .first()
+    )
+
+    if existing is not None:
+        canon_gen = int(existing["session_generation"])
+        canon_company = int(existing["company_id"])
+        canon_started = existing["started_at"]
+        _ensure_tracking_session_state(
+            session,
+            driver_id=driver_id,
+            company_id=canon_company,
+            sid=sid,
+            generation=canon_gen,
+            started_at=canon_started,
+        )
+        return _success_payload(
+            tracking_session_id=str(existing["tracking_session_id"]),
+            session_generation=canon_gen,
+            status=str(existing["status"]),
+        )
+
+    # Supersede les autres sessions actives (exclure le SID cible — défense ON CONFLICT)
+    session.execute(
+        text(
+            """
+            UPDATE tracking_sessions
+            SET status = 'superseded', updated_at = NOW()
+            WHERE driver_id = :driver_id
+              AND status = 'active'
+              AND tracking_session_id <> :sid
+            """
+        ),
+        {"driver_id": driver_id, "sid": sid},
+    )
+
+    generation = session.execute(
+        text("SELECT nextval('tracking_session_generation_seq')")
+    ).scalar_one()
+    started_at = _parse_started_at(tracking_session_started_at)
+
+    inserted = (
+        session.execute(
+            text(
+                """
+            INSERT INTO tracking_sessions (
+                driver_id, company_id, tracking_session_id, session_generation,
+                status, started_at
+            ) VALUES (
+                :driver_id, :company_id, :sid, :generation,
+                'active', :started_at
+            )
+            ON CONFLICT (driver_id, tracking_session_id) DO NOTHING
+            RETURNING tracking_session_id, session_generation, status,
+                      started_at, company_id
+            """
+            ),
+            {
+                "driver_id": driver_id,
+                "company_id": company_id,
+                "sid": sid,
+                "generation": int(generation),
+                "started_at": started_at,
+            },
+        )
+        .mappings()
+        .first()
+    )
+
+    if inserted is None:
+        # Défense : writer non coopératif — relecture canonique, ignorer nextval gaspillé
+        canonical = (
+            session.execute(
+                text(
+                    """
+                SELECT tracking_session_id, session_generation, status,
+                       company_id, started_at
+                FROM tracking_sessions
+                WHERE driver_id = :driver_id AND tracking_session_id = :sid
+                FOR UPDATE
+                """
+                ),
+                {"driver_id": driver_id, "sid": sid},
+            )
+            .mappings()
+            .first()
+        )
+        if canonical is None:
+            raise SessionRegistryError(
+                "tracking_session_register_invariant",
+                "INSERT conflict sans ligne canonique",
+                http_status=500,
+            )
+        canon_gen = int(canonical["session_generation"])
+        _ensure_tracking_session_state(
+            session,
+            driver_id=driver_id,
+            company_id=int(canonical["company_id"]),
+            sid=sid,
+            generation=canon_gen,
+            started_at=canonical["started_at"],
+        )
+        return _success_payload(
+            tracking_session_id=str(canonical["tracking_session_id"]),
+            session_generation=canon_gen,
+            status=str(canonical["status"]),
+        )
+
+    canon_gen = int(inserted["session_generation"])
+    _ensure_tracking_session_state(
+        session,
+        driver_id=driver_id,
+        company_id=int(inserted["company_id"]),
+        sid=sid,
+        generation=canon_gen,
+        started_at=inserted["started_at"],
+    )
+    return _success_payload(
+        tracking_session_id=sid,
+        session_generation=canon_gen,
+        status=str(inserted["status"]),
+    )
 
 
 def close_tracking_session(
