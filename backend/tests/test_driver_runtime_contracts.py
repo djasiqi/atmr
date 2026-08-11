@@ -78,6 +78,7 @@ def test_driver_location_ack_contract(client, db):
     )
     assert response.status_code == 200
     data = response.get_json()
+    # P0-E : sans session/seq ledger → ingested_non_persisted (pas de tombstone mobile)
     assert data.get("ack_status") in {
         "accepted",
         "duplicate",
@@ -85,8 +86,11 @@ def test_driver_location_ack_contract(client, db):
         "stale",
         "ignored",
         "rejected",
+        "ingested_non_persisted",
     }
     assert data.get("tracking_event_id") == "evt-contract-001"
+    assert data.get("ledger_persisted") is False
+    assert data.get("durability") in (None, "ingested_non_persisted")
     assert isinstance(data.get("trace_id"), str)
     assert data["trace_id"]
 
