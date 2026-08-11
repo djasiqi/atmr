@@ -147,6 +147,8 @@ backend/celerybeat-schedule*
 !/docs/operations/**
 !/docs/development/
 !/docs/development/**
+!/docs/backend/
+!/docs/backend/coverage-policy.md
 !/docs/
 !/docs/gate-session-permanente-gps.md
 # Exception: journal pilote requis par CI (prefill-pilot-log)

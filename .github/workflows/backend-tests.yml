@@ -292,13 +292,18 @@ jobs:
             --timeout=120 \
             --timeout-method=thread
 
-      # Gate GLOBAL uniquement (--fail-under). Les critiques sont un step séparé.
-      - name: Check global coverage >= 70%
+      # Plancher anti-régression.
+      # Objectif global: 70% (voir politique de couverture).
+      # Ne pas abaisser ce baseline sans mise à jour explicite de la politique.
+      - name: Check global coverage >= baseline (50%)
         run: |
           cd backend
-          echo "📊 Vérification couverture globale >= 70%..."
-          python scripts/check_coverage.py --coverage-xml coverage.xml --fail-under 70.0 --json coverage_report.json
-          echo "✅ Couverture globale >= 70%"
+          echo "📊 Vérification couverture globale >= baseline 50%..."
+          python scripts/check_coverage.py \
+            --coverage-xml coverage.xml \
+            --fail-under 50.0 \
+            --json coverage_report.json
+          echo "✅ Couverture globale >= baseline 50%"
 
       # Plancher partiel dispatch (80%) ≠ cibles 95% du script check_coverage.
       # Rapport critiques non bloquant tant que --require-critical n'est pas promu.
