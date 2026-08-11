@@ -46,6 +46,10 @@ HIGH_DELAY_TRAFFIC_THRESHOLD = 30  # Retard > 30 min = probablement trafic
 BOOKING_TIME_DIFF_THRESHOLD = (
     5  # Booking créé/modifié dans les ±5 min = probablement retard booking
 )
+# Sévérité des retards (minutes positives uniquement ; avances → low)
+SEVERITY_MEDIUM_THRESHOLD = ABS_DELAY_THRESHOLD  # 10
+SEVERITY_HIGH_THRESHOLD = 20
+SEVERITY_CRITICAL_THRESHOLD = HIGH_DELAY_TRAFFIC_THRESHOLD  # 30
 
 # ✅ P1: Constantes pour optimisations performance
 REALTIME_OPTIMIZER_TIME_WINDOW_HOURS = 2  # Fenêtre temporelle ±2h pour requêtes DB
@@ -723,30 +727,33 @@ class RealtimeOptimizer:
                 distance_matrix_seconds = durations_matrix
 
                 # ✅ Mapper les résultats aux assignations et remplir le cache
-                for item in batch_items:
+                # La matrice OSRM est sources×destinations (réduite), pas coords×coords.
+                # Les ETA correctes sont sur la diagonale (même ordre que batch_items).
+                for matrix_idx, item in enumerate(batch_items):
                     try:
-                        driver_idx = item["driver_idx"]
-                        pickup_idx = item["pickup_idx"]
                         assignment = item["assignment"]
                         booking = item["booking"]
                         driver = item["driver"]
                         scheduled_time = item["scheduled_time"]
 
-                        # Récupérer ETA depuis la matrice
-                        if driver_idx < len(
-                            distance_matrix_seconds
-                        ) and pickup_idx < len(distance_matrix_seconds[driver_idx]):
+                        if (
+                            matrix_idx < len(distance_matrix_seconds)
+                            and matrix_idx < len(distance_matrix_seconds[matrix_idx])
+                        ):
                             eta_seconds = int(
-                                distance_matrix_seconds[driver_idx][pickup_idx]
+                                distance_matrix_seconds[matrix_idx][matrix_idx]
                             )
                         else:
                             logger.warning(
                                 (
                                     "[RealtimeOptimizer] Invalid matrix indices: "
-                                    "driver_idx=%d, pickup_idx=%d"
+                                    "matrix_idx=%d, matrix_shape=%s"
                                 ),
-                                driver_idx,
-                                pickup_idx,
+                                matrix_idx,
+                                (
+                                    f"{len(distance_matrix_seconds)}x"
+                                    f"{len(distance_matrix_seconds[0]) if distance_matrix_seconds else 0}"
+                                ),
                             )
                             continue
 
@@ -1033,25 +1040,30 @@ class RealtimeOptimizer:
         return None
 
     def _determine_severity(self, delay_minutes: int, booking: Booking) -> str:
-        """Détermine la sévérité basée sur le retard et le type de booking."""
-        abs_delay = abs(delay_minutes)
+        """Détermine la sévérité basée sur le retard et le type de booking.
 
-        # Retard critique si booking urgent ou médical
+        Une avance (delay ≤ 0) n'est pas un incident : severity=low.
+        Les suggestions peuvent quand même être générées en amont.
+        """
+        # Une avance n'est pas un incident de retard.
+        if delay_minutes <= 0:
+            return "low"
+
         is_urgent = getattr(booking, "is_urgent", False)
         is_medical = bool(getattr(booking, "medical_facility", None))
 
         if is_urgent or is_medical:
-            if abs_delay >= ABS_DELAY_THRESHOLD:
+            if delay_minutes >= SEVERITY_MEDIUM_THRESHOLD:
                 return "critical"
-            if abs_delay >= ABS_DELAY_THRESHOLD:
+            if delay_minutes >= MIN_DETECTION_THRESHOLD:
                 return "high"
+            return "low"
 
-        # Sévérité normale
-        if abs_delay >= ABS_DELAY_THRESHOLD:
+        if delay_minutes >= SEVERITY_CRITICAL_THRESHOLD:
             return "critical"
-        if abs_delay >= ABS_DELAY_THRESHOLD:
+        if delay_minutes >= SEVERITY_HIGH_THRESHOLD:
             return "high"
-        if abs_delay >= ABS_DELAY_THRESHOLD:
+        if delay_minutes >= SEVERITY_MEDIUM_THRESHOLD:
             return "medium"
         return "low"
 

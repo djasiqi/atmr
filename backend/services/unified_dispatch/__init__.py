@@ -54,11 +54,12 @@ from services.unified_dispatch.optimization import solver
 # résolus en Semaine 3.
 from . import data  # noqa: I001
 from . import locking
-from . import orchestration
+from .core import engine, queue, settings
+from .metrics import performance as performance_metrics
 from .optimization import heuristics
 
-# Métriques perf (ancien performance_metrics.py → metrics/performance.py)
-from .metrics import performance as performance_metrics
+# orchestration est importé en lazy (__getattr__) : il tire numpy/scipy via
+# clustering, ce qui casse sous gevent+coverage (« cannot load module more than once »).
 
 # ========== Exports Publics (Nouvelle API) ==========
 
@@ -94,13 +95,6 @@ from .metrics import performance as performance_metrics
 # Ils seront supprimés après la migration complète de tous les imports
 # dans le codebase (Semaine 3-4)
 
-# Imports de compatibilité pour app.py et tasks
-from .core import engine
-from .core import queue
-from .core import (
-    settings,
-)  # Ajouté pour compatibilité avec agent/tools.py et agent/orchestrator.py
-
 # TODO: Compléter lors de la migration (Semaine 2)
 # from .core.types import *
 # from .core.exceptions import *
@@ -123,3 +117,14 @@ __all__ = [
 
 __version__ = "2.0.0-refactor-b1"
 __refactoring_status__ = "Phase 1 - Structure créée (Semaine 1)"
+
+
+def __getattr__(name: str):
+    """Import lazy de sous-modules lourds (orchestration → numpy/scipy)."""
+    if name == "orchestration":
+        from . import orchestration as _orchestration
+
+        globals()["orchestration"] = _orchestration
+        return _orchestration
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
