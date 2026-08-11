@@ -53,6 +53,8 @@ jobs:
           fi
 
       - name: Ruff format check
+        id: ruff_format
+        continue-on-error: true
         run: |
           cd backend
           # Vérifier que le code est bien formaté (fail si des changements sont nécessaires)
@@ -64,16 +66,22 @@ jobs:
           }
 
       - name: Ruff lint
+        id: ruff_lint
+        continue-on-error: true
         run: |
           cd backend
           ruff check . --output-format=github
 
       - name: Flake8 check
+        id: flake8
+        continue-on-error: true
         run: |
           cd backend
           flake8 .
 
       - name: MyPy type check
+        id: mypy
+        continue-on-error: true
         run: |
           cd backend
           mypy --install-types --non-interactive --ignore-missing-imports \
@@ -81,6 +89,8 @@ jobs:
             models/ routes/ services/ tasks/ shared/
 
       - name: Check dead code (vulture)
+        id: vulture
+        continue-on-error: true
         run: |
           cd backend
           vulture . \
@@ -90,11 +100,41 @@ jobs:
             --exclude venv,__pycache__,migrations,htmlcov,.pytest_cache,temp_*,instance,uploads,static/qrcodes,scripts/profiling,data/ml,data/rl,tests,test_b2_imports.py,.local,.cursor-server
 
       - name: Detect broad exceptions
+        id: broad_exceptions
         working-directory: .
         run: |
           # Rapport progressif (hors tests/scripts) — ne bloque pas la CI tant que la dette n'est pas soldée
           python scripts/detect_broad_exceptions.py --path backend || true
         continue-on-error: true
+
+      - name: Final lint gate
+        if: ${{ always() }}
+        run: |
+          echo "========================================"
+          echo "Résultat des contrôles qualité"
+          echo "========================================"
+          echo "Ruff format      : ${{ steps.ruff_format.outcome }}"
+          echo "Ruff lint        : ${{ steps.ruff_lint.outcome }}"
+          echo "Flake8           : ${{ steps.flake8.outcome }}"
+          echo "MyPy             : ${{ steps.mypy.outcome }}"
+          echo "Vulture          : ${{ steps.vulture.outcome }}"
+          echo "Broad exceptions : ${{ steps.broad_exceptions.outcome }}"
+          echo "========================================"
+
+          FAILED=0
+
+          [[ "${{ steps.ruff_format.outcome }}" == "success" ]] || FAILED=1
+          [[ "${{ steps.ruff_lint.outcome }}" == "success" ]] || FAILED=1
+          [[ "${{ steps.flake8.outcome }}" == "success" ]] || FAILED=1
+          [[ "${{ steps.mypy.outcome }}" == "success" ]] || FAILED=1
+          [[ "${{ steps.vulture.outcome }}" == "success" ]] || FAILED=1
+
+          if [[ "$FAILED" -ne 0 ]]; then
+            echo "❌ Un ou plusieurs contrôles qualité bloquants ont échoué."
+            exit 1
+          fi
+
+          echo "✅ Tous les contrôles qualité bloquants sont passés."
 
   test:
     name: Tests (pytest)
