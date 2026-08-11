@@ -4,6 +4,11 @@ import type { DashboardLiveOverlay } from "../../dashboard/companyDashboardViewM
 
 import { resolveDriverDisplayName } from "../../utils/companyDriverMapStatus";
 import { isFleetDriverConstrained } from "./fleetMapStatusContract";
+import {
+  matchesFleetGpsFilter,
+  resolveDriverLocationPresence,
+  type DriverLocationPresence,
+} from "./driverLocationPresence";
 
 import {
 
@@ -226,16 +231,9 @@ export function pickPrimaryFleetDriver(drivers: FleetDriverMapItem[]): FleetDriv
 
 export { isFleetDriverConstrained } from "./fleetMapStatusContract";
 
-/** Compteur « localisés » carte — parité web (hors offline / offline_unknown). */
+/** Compteur « en direct » — live | recent uniquement (machine d’état présence GPS). */
 export function isFleetDriverLocated(driver: CompanyDriverLiveLocation): boolean {
-  const lat = Number(driver.latitude);
-  const lon = Number(driver.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
-  const tracking = String(driver.tracking_display_status ?? "").toLowerCase();
-  if (tracking === "offline_unknown") return false;
-  const status = String(driver.location_status ?? "").toLowerCase();
-  if (status === "offline") return false;
-  return true;
+  return resolveDriverLocationPresence(driver).countedAsLocated;
 }
 
 const CONSTRAINT_REASON_LABELS: Record<string, string> = {
@@ -266,7 +264,7 @@ export function resolveFleetOperationalStatus(
   driver: CompanyDriverLiveLocation,
   linkedMission: CompanyDispatchMission | null
 ): FleetOperationalStatus {
-  if (driver.location_status === "last_known") return "last_known";
+  // last_known appartient exclusivement à DriverLocationPresence (pas au métier).
 
   const activeMission =
     linkedMission && isMissionInFlight(linkedMission.status) ? linkedMission : null;
@@ -476,6 +474,8 @@ export function countActiveFleetFilters(filters: FleetMapFiltersState): number {
 
   if (filters.status !== "all") n += 1;
 
+  if (filters.gps != null && filters.gps !== "all") n += 1;
+
   if (filters.vehicleType !== "all") n += 1;
 
   if (filters.driverId != null) n += 1;
@@ -501,10 +501,13 @@ export function filterFleetDrivers(
 ): FleetDriverMapItem[] {
 
   const search = filters.driverSearch.trim().toLowerCase();
+  const gpsFilter = filters.gps ?? "all";
 
   return drivers.filter((d) => {
 
     const { operationalStatus, linkedMission } = d.enrichment;
+    const presence = resolveDriverLocationPresence(d).presence;
+    if (!matchesFleetGpsFilter(presence, gpsFilter)) return false;
 
     if (filters.driverId != null && d.driver_id !== filters.driverId) return false;
 
@@ -566,17 +569,35 @@ export function filterFleetDrivers(
 
 }
 
+/** Chauffeurs avec marker (coords finies) — seule entrée des calculs géographiques. */
+export type SpatialFleetDriverMapItem = FleetDriverMapItem & {
+  latitude: number;
+  longitude: number;
+};
+
+export function toSpatialFleetDrivers(drivers: FleetDriverMapItem[]): SpatialFleetDriverMapItem[] {
+  return drivers.filter((d): d is SpatialFleetDriverMapItem => {
+    if (!resolveDriverLocationPresence(d).showMarker) return false;
+    return Number.isFinite(Number(d.latitude)) && Number.isFinite(Number(d.longitude));
+  });
+}
+
+export function resolveDriverPresence(driver: FleetDriverMapItem | CompanyDriverLiveLocation): DriverLocationPresence {
+  return resolveDriverLocationPresence(driver).presence;
+}
+
 
 
 export function computeFleetClusterCentroid(drivers: FleetDriverMapItem[]): {
   latitude: number;
   longitude: number;
 } {
-  if (drivers.length === 0) {
-    return { latitude: 0, longitude: 0 };
+  const spatial = toSpatialFleetDrivers(drivers);
+  if (spatial.length === 0) {
+    return { latitude: 46.2044, longitude: 6.1432 };
   }
-  const latitude = drivers.reduce((sum, driver) => sum + driver.latitude, 0) / drivers.length;
-  const longitude = drivers.reduce((sum, driver) => sum + driver.longitude, 0) / drivers.length;
+  const latitude = spatial.reduce((sum, driver) => sum + driver.latitude, 0) / spatial.length;
+  const longitude = spatial.reduce((sum, driver) => sum + driver.longitude, 0) / spatial.length;
   return { latitude, longitude };
 }
 
@@ -603,7 +624,9 @@ export function clusterFleetMarkers(
 
   for (const d of drivers) {
 
-    const key = `${Math.floor(d.latitude / cellDeg)}:${Math.floor(d.longitude / cellDeg)}`;
+    if (!Number.isFinite(Number(d.latitude)) || !Number.isFinite(Number(d.longitude))) continue;
+
+    const key = `${Math.floor(Number(d.latitude) / cellDeg)}:${Math.floor(Number(d.longitude) / cellDeg)}`;
 
     const list = buckets.get(key) ?? [];
 
@@ -625,9 +648,9 @@ export function clusterFleetMarkers(
 
     }
 
-    const latitude = list.reduce((s, x) => s + x.latitude, 0) / list.length;
+    const latitude = list.reduce((s, x) => s + Number(x.latitude), 0) / list.length;
 
-    const longitude = list.reduce((s, x) => s + x.longitude, 0) / list.length;
+    const longitude = list.reduce((s, x) => s + Number(x.longitude), 0) / list.length;
 
     markers.push({
 
@@ -838,7 +861,11 @@ export function computeFleetRegion(
 
 ) {
 
-  if (drivers.length === 0) {
+  const spatial = drivers.filter(
+    (d) => Number.isFinite(Number(d.latitude)) && Number.isFinite(Number(d.longitude))
+  );
+
+  if (spatial.length === 0) {
 
     return {
 
@@ -854,9 +881,9 @@ export function computeFleetRegion(
 
   }
 
-  const latitudes = drivers.map((d) => d.latitude);
+  const latitudes = spatial.map((d) => Number(d.latitude));
 
-  const longitudes = drivers.map((d) => d.longitude);
+  const longitudes = spatial.map((d) => Number(d.longitude));
 
   const minLat = Math.min(...latitudes);
 

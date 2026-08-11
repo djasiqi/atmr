@@ -4,6 +4,11 @@
  * résolution position chauffeur, options par défaut.
  */
 
+import {
+  BUSINESS_TZ,
+  formatBusinessAbsoluteDayTime,
+} from './businessTime';
+
 // Centre par défaut : Suisse
 export const SWITZERLAND_CENTER = { lat: 46.8182, lng: 8.2275 };
 
@@ -200,7 +205,13 @@ export const formatLastSeen = (lastSeenSeconds) => {
     const m = Math.floor(lastSeenSeconds / 60);
     return m === 1 ? 'il y a 1 min' : `il y a ${m} min`;
   }
-  return '> 1h';
+  const h = Math.floor(lastSeenSeconds / 3600);
+  const remMin = Math.floor((lastSeenSeconds % 3600) / 60);
+  if (h < 24) {
+    if (remMin === 0) return h === 1 ? 'il y a 1 h' : `il y a ${h} h`;
+    return `il y a ${h} h ${remMin.toString().padStart(2, '0')}`;
+  }
+  return `il y a ${h} h`;
 };
 
 export const getFreshnessStatus = (driver) => {
@@ -245,45 +256,56 @@ export const getDriverFreshnessLabel = (driver) => {
   const status = getFreshnessStatus(driver);
   const recordedAt = driver?.recorded_at ?? driver?.timestamp ?? null;
   const absoluteSuffix = formatAbsolutePositionTime(recordedAt);
+  const relative = formatLastSeen(driver?.last_seen_seconds);
+  const lastPosLine = absoluteSuffix
+    ? relative && relative !== 'Dernier signal inconnu'
+      ? `Dernière position ${absoluteSuffix} · ${relative}`
+      : `Dernière position ${absoluteSuffix}`
+    : null;
+
   if (status === 'offline_unknown' && isDeviceHealthSignalActive(driver)) {
     return 'Signal actif · position non synchronisée';
   }
-  if (status === 'live') return `Live · ${formatLastSeen(driver.last_seen_seconds)}`;
-  if (status === 'recent') return `Recent · ${formatLastSeen(driver.last_seen_seconds)}`;
+  if (status === 'live') return `Live · ${relative}`;
+  if (status === 'recent') return `Recent · ${relative}`;
   if (status === 'stale') {
-    return absoluteSuffix
-      ? `Signal ancien · dernière position ${absoluteSuffix}`
-      : `Stale · ${formatLastSeen(driver.last_seen_seconds)}`;
+    return lastPosLine
+      ? `Signal ancien · ${lastPosLine}`
+      : `Stale · ${relative}`;
   }
   if (status === 'last_known') {
-    return absoluteSuffix
-      ? `GPS hors ligne — dernière position ${absoluteSuffix}`
+    return lastPosLine
+      ? `GPS hors ligne — ${lastPosLine}`
       : 'GPS hors ligne — dernière position connue';
   }
   if (status === 'offline_unknown') return 'Offline';
   if (status === 'offline' || String(driver?.position_source || '').toLowerCase() === 'db_fallback') {
-    return absoluteSuffix
-      ? `GPS hors ligne — dernière position ${absoluteSuffix}`
+    return lastPosLine
+      ? `GPS hors ligne — ${lastPosLine}`
       : 'GPS hors ligne';
   }
   return 'Offline';
 };
 
-function formatAbsolutePositionTime(iso) {
+/**
+ * Instant GPS → libellé absolu Europe/Zurich (sans suffixe UTC/CEST).
+ * Ex. "aujourd'hui à 20:00"
+ * @param {string|null|undefined} iso
+ * @param {Date} [now]
+ */
+export function formatAbsolutePositionTime(iso, now = new Date()) {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   try {
-    return new Intl.DateTimeFormat('fr-CH', {
-      day: 'numeric',
-      month: 'long',
+    return formatBusinessAbsoluteDayTime(d, now);
+  } catch {
+    return d.toLocaleTimeString('fr-CH', {
       hour: '2-digit',
       minute: '2-digit',
-      timeZone: 'UTC',
-      timeZoneName: 'short',
-    }).format(d);
-  } catch {
-    return d.toISOString();
+      hour12: false,
+      timeZone: BUSINESS_TZ,
+    });
   }
 }
 

@@ -1,6 +1,6 @@
 import type { CompanyDriverLiveLocation } from "../api/contracts";
 import { FLEET_WEB_STATUS_COLORS } from "../components/maps/fleetMapStatusContract";
-import { resolveLocalLocationFreshnessStatus } from "./localDriverLocationFreshness";
+import { resolveDriverLocationPresence } from "../components/maps/driverLocationPresence";
 
 export const STALE_SECONDS_THRESHOLD = 120;
 
@@ -24,10 +24,15 @@ export function resolveDriverStatus(
   driver: CompanyDriverLiveLocation,
   options?: { hasActiveMission?: boolean }
 ): CompanyDriverMapCategory {
-  if (driver.location_status === "last_known") return "last_known";
-  if (isDriverPositionStale(driver)) return "offline";
+  // Métier d'abord — last_known GPS n'écrase plus le statut opérationnel.
   if (options?.hasActiveMission === false) return "available";
   if (driver.mission_id != null) return "en_mission";
+  const backendStatus = String(driver.status ?? "").toLowerCase();
+  if (backendStatus === "busy" || backendStatus === "assigned") return "en_mission";
+  const presence = resolveDriverLocationPresence(driver).presence;
+  if (presence === "last_known") return "last_known";
+  if (presence === "stale" || presence === "offline_unknown") return "offline";
+  if (backendStatus === "available") return "available";
   return "available";
 }
 
@@ -111,15 +116,6 @@ export function driverFleetMarkerDescription(driver: CompanyDriverLiveLocation):
 }
 
 export function isDriverPositionStale(driver: CompanyDriverLiveLocation): boolean {
-  if (driver.location_status === "last_known") return false;
-  const localStatus = resolveLocalLocationFreshnessStatus(
-    driver.recorded_at ?? driver.timestamp ?? null
-  );
-  if (localStatus === "stale" || localStatus === "offline" || localStatus === "offline_unknown") {
-    return true;
-  }
-  const lastSeen = Number(driver.last_seen_seconds);
-  const byAge = Number.isFinite(lastSeen) && lastSeen > STALE_SECONDS_THRESHOLD;
-  const byStatus = driver.location_status === "stale" || driver.location_status === "offline";
-  return byAge || byStatus;
+  const presence = resolveDriverLocationPresence(driver).presence;
+  return presence === "stale" || presence === "last_known" || presence === "offline_unknown";
 }

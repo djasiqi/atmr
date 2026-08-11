@@ -39,6 +39,7 @@ from services.monitoring.driver_location_metrics import (
     inc_processed,
     observe_osrm_request,
 )
+from services.tracking.time_contract import format_tracking_instant_utc_z
 
 logger = logging.getLogger(__name__)
 
@@ -545,7 +546,7 @@ class LocationService:
             # Ajouter point actuel au ring buffer
             ring_key = f"driver:{driver_id}:ring"
             point = {
-                "ts": datetime.now(UTC).isoformat(),
+                "ts": format_tracking_instant_utc_z(datetime.now(UTC)),
                 "lat": latitude,
                 "lon": longitude,
             }
@@ -634,11 +635,11 @@ class LocationService:
             ``db_persisted`` est ``None`` si aucune écriture PG n'a été tentée,
             ``True`` si commit OK, ``False`` si échec (rollback).
         """
-        ts_iso = timestamp.isoformat()
-        recorded_iso = recorded_at.isoformat()
-        sent_iso = sent_at.isoformat()
+        ts_iso = format_tracking_instant_utc_z(timestamp)
+        recorded_iso = format_tracking_instant_utc_z(recorded_at)
+        sent_iso = format_tracking_instant_utc_z(sent_at)
         received_dt = datetime.now(UTC)
-        received_iso = received_dt.isoformat()
+        received_iso = format_tracking_instant_utc_z(received_dt)
         canonical_updated = False
         try:
             from services.monitoring.driver_location_metrics import (

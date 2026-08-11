@@ -97,6 +97,14 @@ describe("company contracts", () => {
         locations: [{ driver_id: 5, latitude: null, longitude: 6.6, timestamp: "2026-01-01T10:00:00Z" }],
       })
     ).toBe(false);
+    // Roster sans GPS (les deux coords absentes) — accepté.
+    expect(
+      validateCompanyDriverLocationsResponse({
+        context_id: "company:42",
+        refreshed_at: new Date().toISOString(),
+        locations: [{ driver_id: 5 }],
+      })
+    ).toBe(true);
   });
 
   it("rejects semantically ambiguous payloads", () => {

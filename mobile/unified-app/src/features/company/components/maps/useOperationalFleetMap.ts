@@ -16,8 +16,11 @@ import {
   findUrgentFleetDriver,
   pickPrimaryFleetDriver,
   resolveClusterCellDeg,
-  isFleetDriverLocated,
+  toSpatialFleetDrivers,
 } from "./fleetMapLogic";
+import {
+  resolveDriverLocationPresence,
+} from "./driverLocationPresence";
 import { FLEET_MISSION_MAP_POLICY } from "./fleetMapMissionPolicies";
 import {
   buildFleetMissionOverlays,
@@ -54,6 +57,8 @@ type Options = {
   drivers: CompanyDriverLiveLocation[];
   missions?: CompanyDispatchMission[];
   clusteringEnabled?: boolean;
+  /** Roster flotte résolu (snapshot chargé) — gate badge N/T. */
+  rosterResolved?: boolean;
   /** Décale le chauffeur vers le haut de l’écran quand la sheet masque le bas. */
   driverFocusVerticalBias?: number;
   onDriverSheetChange?: (open: boolean) => void;
@@ -122,6 +127,7 @@ export function useOperationalFleetMap({
   drivers,
   missions = [],
   clusteringEnabled = true,
+  rosterResolved = false,
   driverFocusVerticalBias = 0,
   onDriverSheetChange,
   onSelectedDriverIdChange,
@@ -227,12 +233,20 @@ export function useOperationalFleetMap({
   }, [drivers, missions, organizationName, missionIndex]);
   const filtered = useMemo(() => filterFleetDrivers(enriched, filters), [enriched, filters]);
 
-  const locatedCount = useMemo(
-    () => filtered.filter((driver) => isFleetDriverLocated(driver)).length,
-    [filtered],
+  /** Flotte complète (roster) — dénominateur T ; pas filtered. */
+  const totalCount = enriched.length;
+  const liveCount = useMemo(
+    () =>
+      enriched.filter((driver) => resolveDriverLocationPresence(driver).countedAsLocated).length,
+    [enriched],
   );
-  const showNoGpsBanner = drivers.length > 0 && locatedCount === 0;
+  /** @deprecated alias liveCount — compat appelants. */
+  const locatedCount = liveCount;
+  const showNoGpsBanner = rosterResolved && totalCount > 0 && liveCount === 0;
   const activeFilterCount = useMemo(() => countActiveFleetFilters(filters), [filters]);
+
+  /** Uniquement chauffeurs avec marker — clustering / fit / recenter. */
+  const spatialDrivers = useMemo(() => toSpatialFleetDrivers(filtered), [filtered]);
 
   const selectedDriver = useMemo(() => {
     if (sheetDriver && sheetDriver.driver_id === selectedDriverId) return sheetDriver;
@@ -417,11 +431,11 @@ export function useOperationalFleetMap({
   );
 
   const markers = useMemo(() => {
-    if (!clusteringEnabled || filtered.length <= 1) {
-      return filtered.map((driver) => ({ kind: "driver" as const, driver }));
+    if (!clusteringEnabled || spatialDrivers.length <= 1) {
+      return spatialDrivers.map((driver) => ({ kind: "driver" as const, driver }));
     }
-    return clusterFleetMarkers(filtered, clusterCellDeg);
-  }, [clusterCellDeg, clusteringEnabled, filtered]);
+    return clusterFleetMarkers(spatialDrivers, clusterCellDeg);
+  }, [clusterCellDeg, clusteringEnabled, spatialDrivers]);
 
   const heatmapPoints = useMemo(() => {
     if (layers.heatmapMode !== "delays") return [];
@@ -852,7 +866,12 @@ export function useOperationalFleetMap({
     cockpitMapPolicy,
     imminentDepartures,
     applySearchContext,
+    liveCount,
+    totalCount,
     locatedCount,
+    rosterResolved,
+    spatialDrivers,
+    filteredDisplayedCount: filtered.length,
     showNoGpsBanner,
     mapSignals: {
       filtersOpen,

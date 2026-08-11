@@ -7,12 +7,22 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
+from services.tracking.time_contract import (
+    TrackingInstantError,
+    format_tracking_instant_utc_z,
+    parse_tracking_instant_strict,
+)
+
 _MAX_EVENT_ID_LEN = 128
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def normalize_recorded_at_utc_canonical(recorded_at: Any) -> str | None:
-    """Normalise ``recorded_at`` en UTC ISO8601 canonique (même instant ⇒ même chaîne)."""
+    """Normalise ``recorded_at`` en UTC ISO8601 canonique ``…Z``.
+
+    Les chaînes / datetime naïfs sont rejetés (``None``) — contrat P0-F TIME.
+    Les epoch numériques restent acceptés (instant absolu).
+    """
     if recorded_at is None:
         return None
     if isinstance(recorded_at, (int, float)) and not isinstance(recorded_at, bool):
@@ -21,22 +31,26 @@ def normalize_recorded_at_utc_canonical(recorded_at: Any) -> str | None:
             if ts > 1e12:  # millisecondes
                 ts = ts / 1000.0
             dt = datetime.fromtimestamp(ts, tz=UTC)
-            return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+            return format_tracking_instant_utc_z(dt)
         except (OverflowError, OSError, ValueError):
+            return None
+    if isinstance(recorded_at, datetime):
+        if recorded_at.tzinfo is None:
+            return None
+        try:
+            return format_tracking_instant_utc_z(recorded_at)
+        except TrackingInstantError:
             return None
     if not isinstance(recorded_at, str):
         return None
     text = recorded_at.strip()
     if not text:
         return None
-    # Remplacer Z / espace pour fromisoformat
-    candidate = text.replace("Z", "+00:00") if text.endswith("Z") else text
     try:
-        dt = datetime.fromisoformat(candidate)
-    except ValueError:
+        dt = parse_tracking_instant_strict(text)
+    except TrackingInstantError:
         return None
-    dt = dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
-    return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    return format_tracking_instant_utc_z(dt)
 
 
 def validate_raw_location_event_id(raw: Any) -> tuple[str | None, str | None]:

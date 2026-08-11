@@ -1,6 +1,6 @@
 /**
  * Vieillissement local des positions flotte (parité mobile).
- * live 0–30s, recent 30–120s, stale >120s, timestamp invalide → offline_unknown.
+ * Dégrade location_status sans promotion ; ne touche pas tracking_display_status.
  */
 
 export const LOCAL_LIVE_MAX_SECONDS = 30;
@@ -26,15 +26,59 @@ export function resolveLocalLocationFreshnessStatus(recordedAt, nowMs = Date.now
   return 'stale';
 }
 
+function normalizeStatus(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+function ageToFreshStatus(age) {
+  if (age <= LOCAL_LIVE_MAX_SECONDS) return 'live';
+  if (age <= LOCAL_RECENT_MAX_SECONDS) return 'recent';
+  return 'stale';
+}
+
+/**
+ * Recalcule last_seen_seconds ; peut dégrader location_status live/recent.
+ * Ne promeut jamais stale/last_known/offline.
+ * Ne doit plus écraser tracking_display_status ni position_source.
+ */
 export function applyLocalLocationFreshness(driver, nowMs = Date.now()) {
   if (!driver || typeof driver !== 'object') return driver;
   const recordedAt = driver.recorded_at ?? driver.timestamp ?? null;
-  const age = localAgeSecondsFromRecordedAt(recordedAt, nowMs);
-  const status = resolveLocalLocationFreshnessStatus(recordedAt, nowMs);
+  const ageFromTs = localAgeSecondsFromRecordedAt(recordedAt, nowMs);
+  const age =
+    ageFromTs != null
+      ? ageFromTs
+      : typeof driver.last_seen_seconds === 'number' &&
+          Number.isFinite(driver.last_seen_seconds) &&
+          driver.last_seen_seconds >= 0
+        ? Math.floor(driver.last_seen_seconds)
+        : null;
+
+  const current = normalizeStatus(driver.location_status);
+  let nextLocationStatus = driver.location_status;
+
+  if (current === 'stale' || current === 'last_known') {
+    nextLocationStatus = current;
+  } else if (current === 'offline') {
+    nextLocationStatus = 'last_known';
+  } else if (current === 'live' || current === 'recent') {
+    if (age != null) {
+      const fromAge = ageToFreshStatus(age);
+      if (current === 'recent' && fromAge === 'live') {
+        nextLocationStatus = 'recent';
+      } else {
+        nextLocationStatus = fromAge;
+      }
+    }
+  } else if (!current && age != null) {
+    nextLocationStatus = ageToFreshStatus(age);
+  }
+
   return {
     ...driver,
     last_seen_seconds: age,
-    location_status: status,
-    tracking_display_status: status,
+    location_status: nextLocationStatus,
   };
 }

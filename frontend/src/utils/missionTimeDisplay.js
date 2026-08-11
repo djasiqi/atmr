@@ -3,7 +3,9 @@
  * Évite les décalages liés au fuseau du navigateur.
  */
 
-export const BUSINESS_TZ = 'Europe/Zurich';
+import { BUSINESS_TZ } from './businessTime';
+
+export { BUSINESS_TZ };
 
 const NAIVE_ISO_RE = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})/;
 const HAS_TZ_RE = /(Z|[+-]\d{2}:\d{2})$/;

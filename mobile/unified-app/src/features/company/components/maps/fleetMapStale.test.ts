@@ -29,7 +29,7 @@ describe("fleetMapStale", () => {
     ).toBe(true);
   });
 
-  it("recorded_at frais → pas stale même si serveur dit stale", () => {
+  it("serveur stale + recorded_at frais → reste stale (non-promotion)", () => {
     expect(
       isFleetDriverMarkerStale({
         driver_id: 3,
@@ -38,18 +38,25 @@ describe("fleetMapStale", () => {
         timestamp: new Date().toISOString(),
         location_status: "stale",
       })
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("blend stale sur busy sans changer le statut", () => {
-    const visual = resolveMarkerVisual("busy", true);
+  it("blend stale sur busy via présence", () => {
+    const visual = resolveMarkerVisual("busy", "stale");
     expect(visual.opacity).toBe(0.88);
     expect(visual.fill).not.toBe("#00796B");
   });
 
-  it("constrained exempt du blend stale", () => {
-    const visual = resolveMarkerVisual("constrained", true);
-    expect(visual.fill).toBe("#f97316");
-    expect(visual.opacity).toBe(1);
+  it("recent atténue la couleur métier", () => {
+    const live = resolveMarkerVisual("busy", "live");
+    const recent = resolveMarkerVisual("busy", "recent");
+    expect(live.opacity).toBe(1);
+    expect(recent.opacity).toBeLessThan(1);
+    expect(recent.fill).toBe(live.fill);
+  });
+
+  it("last_known fantôme", () => {
+    const visual = resolveMarkerVisual("available", "last_known");
+    expect(visual.opacity).toBeLessThan(0.5);
   });
 });

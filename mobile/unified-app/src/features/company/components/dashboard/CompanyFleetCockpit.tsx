@@ -31,6 +31,8 @@ import { UrgencyBottomSheet } from "./UrgencyBottomSheet";
 export type CompanyFleetCockpitProps = {
   drivers: CompanyDriverLiveLocation[];
   missions: CompanyDispatchMission[];
+  /** Snapshot flotte résolu — gate badge N/T. */
+  rosterResolved?: boolean;
   date: string;
   headerMode: string | null;
   /** Transport Socket.IO (`healthy`, `reconnecting`, …). */
@@ -51,6 +53,7 @@ function CockpitMapBlock({
   cameraVerticalBias,
   drivers,
   missions,
+  rosterResolved = false,
   simplifyClustering,
   onDriverSheetChange,
   onViewMission,
@@ -73,6 +76,7 @@ function CockpitMapBlock({
   cameraVerticalBias: number;
   drivers: CompanyDriverLiveLocation[];
   missions: CompanyDispatchMission[];
+  rosterResolved?: boolean;
   simplifyClustering?: boolean;
   onDriverSheetChange: (open: boolean) => void;
   onViewMission?: (missionId: number) => void;
@@ -99,6 +103,7 @@ function CockpitMapBlock({
         cockpitExpanded
         drivers={drivers}
         missions={missions}
+        rosterResolved={rosterResolved}
         mapHeight={layout.mapHeight}
         cameraInsets={cameraInsets}
         cameraVerticalBias={cameraVerticalBias}
@@ -130,6 +135,7 @@ function CockpitMapBlock({
 export function CompanyFleetCockpit({
   drivers,
   missions,
+  rosterResolved = false,
   date,
   headerMode,
   realtimeStatus,
@@ -336,6 +342,7 @@ export function CompanyFleetCockpit({
         cameraVerticalBias={uiState.cameraVerticalBias}
         drivers={drivers}
         missions={missions}
+        rosterResolved={rosterResolved}
         simplifyClustering={uiState.simplifyClustering}
         onDriverSheetChange={onDriverSheetChange}
         onViewMission={onViewMission}

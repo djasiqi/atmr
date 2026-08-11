@@ -34,7 +34,7 @@ describe("localDriverLocationFreshness", () => {
     expect(resolveLocalLocationFreshnessStatus("not-a-date", now)).toBe("offline_unknown");
   });
 
-  it("écrase un statut serveur live figé", () => {
+  it("dégrade un statut serveur live figé sans écraser tracking_display", () => {
     const aged = applyLocalLocationFreshness(
       {
         recorded_at: new Date(now - 45_000).toISOString(),
@@ -45,7 +45,20 @@ describe("localDriverLocationFreshness", () => {
       now
     );
     expect(aged.location_status).toBe("recent");
-    expect(aged.tracking_display_status).toBe("recent");
+    expect(aged.tracking_display_status).toBe("live");
     expect(aged.last_seen_seconds).toBe(45);
+  });
+
+  it("ne promeut pas stale", () => {
+    const aged = applyLocalLocationFreshness(
+      {
+        recorded_at: new Date(now - 5_000).toISOString(),
+        location_status: "stale",
+        tracking_display_status: "degraded_constrained",
+      },
+      now
+    );
+    expect(aged.location_status).toBe("stale");
+    expect(aged.tracking_display_status).toBe("degraded_constrained");
   });
 });

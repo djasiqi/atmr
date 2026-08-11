@@ -35,6 +35,10 @@ from services.geolocation.presence import (
     presence_status_from_location_status,
 )
 from services.realtime.live_driver_status import resolve_driver_status_for_fanout
+from services.tracking.presence_window import (
+    is_within_presence_window,
+    resolve_service_window_status,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -285,6 +289,12 @@ def build_company_driver_locations_items(
             tracking_display_status = "degraded_constrained"
         is_available = status == "available"
 
+        in_service_window = is_within_presence_window(now)
+        service_window_status = resolve_service_window_status(
+            in_window=in_service_window,
+            has_active_mission=has_active_booking,
+        )
+
         first_name = getattr(getattr(driver, "user", None), "first_name", None)
         last_name = getattr(getattr(driver, "user", None), "last_name", None)
         accuracy_m: float | None = None
@@ -314,6 +324,8 @@ def build_company_driver_locations_items(
             "is_available": is_available,
             "offline_reason": offline_reason,
             "tracking_display_status": tracking_display_status,
+            "in_service_window": in_service_window,
+            "service_window_status": service_window_status,
         }
         if used_db_fallback:
             loc_item["position_source"] = "db_fallback"

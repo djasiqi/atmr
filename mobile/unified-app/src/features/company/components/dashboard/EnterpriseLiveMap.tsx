@@ -14,6 +14,8 @@ type Props = {
 
   missions?: CompanyDispatchMission[];
 
+  rosterResolved?: boolean;
+
   mapHeight?: number;
 
   onViewMission?: (missionId: number) => void;
@@ -29,6 +31,8 @@ export function EnterpriseLiveMap({
   drivers,
 
   missions = [],
+
+  rosterResolved = false,
 
   mapHeight = 248,
 
@@ -47,6 +51,8 @@ export function EnterpriseLiveMap({
         drivers={drivers}
 
         missions={missions}
+
+        rosterResolved={rosterResolved}
 
         mapHeight={mapHeight}
 

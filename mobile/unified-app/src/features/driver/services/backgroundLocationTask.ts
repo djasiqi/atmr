@@ -32,6 +32,7 @@ import {
 } from "./trackingContextLease";
 import { validateNativeOwnerForHeadless } from "./trackingRuntimeRegistry";
 import { getTrackingAuthAvailability } from "../../../core/auth/sessionAuthDecision";
+import { isWithinTrackingWindow } from "./trackingWindow";
 
 /**
  * Notifie le heartbeat de santé tracking en cas d'échec de démarrage natif —
@@ -174,6 +175,25 @@ let watchdogMissionId: number | null = null;
 let watchdogMissionStatus: DriverMissionStatus | null = null;
 let watchdogPresenceWindow = false;
 let watchdogReason = "watchdog";
+
+/** Sérialise start/stop/mutations de contexte (anti-TOCTOU présence ↔ mission). */
+let lifecycleLockTail: Promise<void> = Promise.resolve();
+
+async function withBackgroundTrackingLifecycleLock<T>(
+  fn: () => Promise<T>
+): Promise<T> {
+  const previous = lifecycleLockTail;
+  let release!: () => void;
+  lifecycleLockTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
 
 const inMemoryStorage = new Map<string, string>();
 
@@ -569,6 +589,25 @@ function defineTaskIfNeeded() {
         return;
       }
 
+      // TIME-3D : présence hors fenêtre Zurich → aucune capture + arrêt conditionnel (génération)
+      if (isPresenceContext && !isWithinTrackingWindow(new Date())) {
+        const expectedGenerationId =
+          context.nativeOwner?.trackingGenerationId ?? null;
+        const expectedMissionContextVersion =
+          context.nativeOwner?.missionContextVersion ?? null;
+        emitDriverTelemetry("tracking.background.task.skipped", {
+          source: "driver.services.backgroundLocationTask",
+          reason: "presence_window_closed",
+          task_name: BACKGROUND_LOCATION_TASK_NAME,
+        });
+        await stopPresenceWindowIfStillCurrent({
+          expectedGenerationId,
+          expectedMissionContextVersion,
+          reason: "presence_window_closed",
+        });
+        return;
+      }
+
       // Sondage headless AVANT tout enfilage/flush : un handle SQLite non durable ou un schéma
       // pas prêt doit bloquer net (jamais de fallback HTTP silencieux depuis le background task).
       const health = await trackingQueueStore.initAndHealthcheckHeadless();
@@ -746,6 +785,19 @@ async function startBackgroundLocationTaskIfEligibleInternal(
   const isPresenceWindow = options.presenceWindow === true;
   const taskMode: BackgroundTrackingTaskMode = isPresenceWindow ? "presence_window" : "mission";
   if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) {
+    return false;
+  }
+  // TIME-3C : refuser tout start/reprise présence hors fenêtre Europe/Zurich
+  if (isPresenceWindow && !isWithinTrackingWindow(new Date())) {
+    emitDriverTelemetry("tracking.background.task.skipped", {
+      source: "driver.services.backgroundLocationTask",
+      reason: "presence_window_closed",
+      runtime: describeBackgroundRuntime(),
+      mission_id: missionId,
+      task_mode: taskMode,
+      task_name: BACKGROUND_LOCATION_TASK_NAME,
+      start_reason: startReason,
+    });
     return false;
   }
   if (!canUseBackgroundLocation()) {
@@ -955,6 +1007,18 @@ async function runWatchdogTick(): Promise<void> {
   if (!watchdogActive) return;
   if (bgStartInProgress) return;
 
+  // TIME-3C : ne pas relancer une présence hors fenêtre
+  if (watchdogPresenceWindow && !isWithinTrackingWindow(new Date())) {
+    stopNativeTrackingWatchdog();
+    clearPendingFgsStart();
+    emitDriverTelemetry("tracking.background.task.skipped", {
+      source: "driver.services.backgroundLocationTask",
+      reason: "presence_window_closed_watchdog",
+      mission_id: watchdogMissionId,
+    });
+    return;
+  }
+
   const lifecycle = await getNativeTaskLifecycleStatus();
   if (lifecycle.taskStarted) {
     stopNativeTrackingWatchdog();
@@ -1050,17 +1114,30 @@ export async function ensureNativeTrackingWhileForeground(
   if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) {
     return;
   }
+  // TIME-3C : ne pas écrire/reprendre un contexte présence hors fenêtre
+  if (isPresenceWindow && !isWithinTrackingWindow(new Date())) {
+    emitDriverTelemetry("tracking.background.task.skipped", {
+      source: "driver.services.backgroundLocationTask",
+      reason: "presence_window_closed",
+      mission_id: missionId,
+      task_mode: "presence_window",
+      start_reason: reason,
+    });
+    return;
+  }
 
   const lifecycle = await getNativeTaskLifecycleStatus();
   const taskMode: BackgroundTrackingTaskMode = isPresenceWindow ? "presence_window" : "mission";
   const priorContext = await readTaskContext();
 
-  await setBackgroundTrackingMissionContext(
-    missionId,
-    missionStatus,
-    taskMode,
-    options.scheduling ?? null
-  );
+  await withBackgroundTrackingLifecycleLock(async () => {
+    await setBackgroundTrackingMissionContext(
+      missionId,
+      missionStatus,
+      taskMode,
+      options.scheduling ?? null
+    );
+  });
 
   const contextUpgradedToMission =
     lifecycle.taskStarted &&
@@ -1123,8 +1200,8 @@ export async function ensureNativeTrackingWhileForeground(
   bgStartInProgress = true;
   try {
     await startBackgroundLocationTaskIfEligibleInternal(missionId, missionStatus, options, reason);
-    const lifecycle = await getNativeTaskLifecycleStatus();
-    if (lifecycle.taskStarted) {
+    const lifecycleAfter = await getNativeTaskLifecycleStatus();
+    if (lifecycleAfter.taskStarted) {
       stopNativeTrackingWatchdog();
       return;
     }
@@ -1140,6 +1217,14 @@ export async function restartNativeTrackingFromWake(reason = "silent_push_wake")
     await resumePendingNativeTrackingIfNeeded();
     const ctx = await readTaskContext();
     if (ctx?.taskMode === "presence_window") {
+      if (!isWithinTrackingWindow(new Date())) {
+        await stopPresenceWindowIfStillCurrent({
+          expectedGenerationId: ctx.nativeOwner?.trackingGenerationId ?? null,
+          expectedMissionContextVersion: ctx.nativeOwner?.missionContextVersion ?? null,
+          reason: "presence_window_closed_wake",
+        });
+        return;
+      }
       await ensureNativeTrackingWhileForeground(null, null, { presenceWindow: true }, reason);
       return;
     }
@@ -1216,6 +1301,14 @@ export async function resumePendingNativeTrackingIfNeeded(): Promise<void> {
     return;
   }
   if (ctx?.taskMode === "presence_window") {
+    if (!isWithinTrackingWindow(new Date())) {
+      await stopPresenceWindowIfStillCurrent({
+        expectedGenerationId: ctx.nativeOwner?.trackingGenerationId ?? null,
+        expectedMissionContextVersion: ctx.nativeOwner?.missionContextVersion ?? null,
+        reason: "presence_window_closed_resume",
+      });
+      return;
+    }
     await ensureNativeTrackingWhileForeground(null, null, { presenceWindow: true }, "app_resume");
     return;
   }
@@ -1242,14 +1335,77 @@ export async function startBackgroundLocationTaskIfEligible(
   );
 }
 
+/**
+ * Arrêt présence race-safe : no-op si le contexte n'est plus presence_window
+ * ou si la génération / missionContextVersion a changé (mission devenue active).
+ */
+export async function stopPresenceWindowIfStillCurrent(opts: {
+  expectedGenerationId: string | null;
+  expectedMissionContextVersion: number | null;
+  reason: string;
+}): Promise<boolean> {
+  return withBackgroundTrackingLifecycleLock(async () => {
+    const ctx = await readTaskContext();
+    if (!ctx || ctx.taskMode !== "presence_window") {
+      emitDriverTelemetry("tracking.background.presence_stop_noop", {
+        source: "driver.services.backgroundLocationTask",
+        reason: opts.reason,
+        noop_reason: "not_presence_window",
+        current_task_mode: ctx?.taskMode ?? null,
+      });
+      return false;
+    }
+    const gen = ctx.nativeOwner?.trackingGenerationId ?? null;
+    const ver = ctx.nativeOwner?.missionContextVersion ?? null;
+    if (
+      opts.expectedGenerationId != null &&
+      gen !== opts.expectedGenerationId
+    ) {
+      emitDriverTelemetry("tracking.background.presence_stop_noop", {
+        source: "driver.services.backgroundLocationTask",
+        reason: opts.reason,
+        noop_reason: "generation_mismatch",
+        expected_generation: opts.expectedGenerationId,
+        current_generation: gen,
+      });
+      return false;
+    }
+    if (
+      opts.expectedMissionContextVersion != null &&
+      ver !== opts.expectedMissionContextVersion
+    ) {
+      emitDriverTelemetry("tracking.background.presence_stop_noop", {
+        source: "driver.services.backgroundLocationTask",
+        reason: opts.reason,
+        noop_reason: "mission_context_version_mismatch",
+        expected_version: opts.expectedMissionContextVersion,
+        current_version: ver,
+      });
+      return false;
+    }
+    stopNativeTrackingWatchdog();
+    await writeTaskContext(null);
+    await stopNativeBackgroundLocationUpdatesSafely();
+    emitDriverTelemetry("tracking.background.task.stopped", {
+      source: "driver.services.backgroundLocationTask",
+      task_name: BACKGROUND_LOCATION_TASK_NAME,
+      reason: opts.reason,
+      presence_stop: true,
+    });
+    return true;
+  });
+}
+
 export async function stopBackgroundLocationTask(reason: string) {
-  stopNativeTrackingWatchdog();
-  await setBackgroundTrackingMissionContext(null, null);
-  await stopNativeBackgroundLocationUpdatesSafely();
-  emitDriverTelemetry("tracking.background.task.stopped", {
-    source: "driver.services.backgroundLocationTask",
-    task_name: BACKGROUND_LOCATION_TASK_NAME,
-    reason,
+  await withBackgroundTrackingLifecycleLock(async () => {
+    stopNativeTrackingWatchdog();
+    await setBackgroundTrackingMissionContext(null, null);
+    await stopNativeBackgroundLocationUpdatesSafely();
+    emitDriverTelemetry("tracking.background.task.stopped", {
+      source: "driver.services.backgroundLocationTask",
+      task_name: BACKGROUND_LOCATION_TASK_NAME,
+      reason,
+    });
   });
 }
 
@@ -1272,5 +1428,6 @@ export function initializeBackgroundLocationTask() {
 export function __resetBackgroundLocationTaskStateForTests(): void {
   taskDefined = false;
   bgStartInProgress = false;
+  lifecycleLockTail = Promise.resolve();
   stopNativeTrackingWatchdog();
 }

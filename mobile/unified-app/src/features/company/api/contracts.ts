@@ -89,13 +89,14 @@ export type CompanyDriverLiveLocation = {
   first_name?: string | null;
   last_name?: string | null;
   mission_id?: number | null;
-  latitude: number;
-  longitude: number;
+  /** Coords optionnelles côté roster sans GPS — jamais placeholder 0,0. */
+  latitude?: number | null;
+  longitude?: number | null;
   accuracy?: number | null;
   heading?: number | null;
   speed?: number | null;
   is_background?: boolean;
-  timestamp: string;
+  timestamp?: string;
   recorded_at?: string | null;
   received_at?: string | null;
   last_seen_seconds?: number | null;
@@ -103,6 +104,8 @@ export type CompanyDriverLiveLocation = {
   is_stale?: boolean | null;
   accept_status?: string | null;
   tracking_display_status?: string | null;
+  /** Origine position (db_fallback / company_fallback / …) — à conserver sur tout le pipeline client. */
+  position_source?: string | null;
   presence_status?: string | null;
   status?: string | null;
   device_health?: {
@@ -208,13 +211,19 @@ export function validateCompanyDriverLocationsResponse(
   return (
     isString(candidate.context_id) &&
     Array.isArray(candidate.locations) &&
-    candidate.locations.every(
-      (location) =>
-        isFiniteNumber(location.driver_id) &&
-        isFiniteNumber(location.latitude) &&
-        isFiniteNumber(location.longitude) &&
-        isString(location.timestamp)
-    ) &&
+    candidate.locations.every((location) => {
+      if (!isFiniteNumber(location.driver_id)) return false;
+      // Coords optionnelles (roster sans GPS) — si présentes, doivent être finies.
+      const hasLat = location.latitude != null;
+      const hasLon = location.longitude != null;
+      if (hasLat !== hasLon) return false;
+      if (hasLat && !isFiniteNumber(location.latitude)) return false;
+      if (hasLon && !isFiniteNumber(location.longitude)) return false;
+      if (location.timestamp != null && location.timestamp !== "" && !isString(location.timestamp)) {
+        return false;
+      }
+      return true;
+    }) &&
     isString(candidate.refreshed_at)
   );
 }

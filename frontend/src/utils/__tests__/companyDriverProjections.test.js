@@ -95,6 +95,8 @@ describe('découplage métier / GPS', () => {
       status: 'busy',
       location_status: 'last_known',
       position_source: 'db_fallback',
+      latitude: 46.2,
+      longitude: 6.1,
       recorded_at: '2026-07-29T09:47:47Z',
     };
     const projection = resolveDriverMapProjection(driver);
@@ -123,6 +125,9 @@ describe('découplage métier / GPS', () => {
     const driver = {
       status: 'assigned',
       location_status: 'stale',
+      latitude: 46.2,
+      longitude: 6.1,
+      recorded_at: new Date(Date.now() - 300_000).toISOString(),
     };
     const projection = resolveDriverMapProjection(driver);
     expect(projection.businessStatus).toBe('assigned');
@@ -135,6 +140,9 @@ describe('découplage métier / GPS', () => {
       location_status: 'last_known',
       presence_status: 'degraded_constrained',
       status: 'assigned',
+      latitude: 46.2,
+      longitude: 6.1,
+      recorded_at: new Date(Date.now() - 600_000).toISOString(),
     };
     expect(resolveDriverMapVisualStatus(driver)).toBe('offline');
     expect(resolveDriverMapProjection(driver).visualTreatment).toBe('gps_stale_constrained');
@@ -145,6 +153,9 @@ describe('découplage métier / GPS', () => {
       location_status: 'live',
       presence_status: 'degraded_constrained',
       status: 'assigned',
+      latitude: 46.2,
+      longitude: 6.1,
+      recorded_at: new Date().toISOString(),
     };
     expect(resolveDriverMapVisualStatus(driver)).toBe('constrained');
   });
@@ -186,6 +197,9 @@ describe('degraded_constrained / batterie restreinte', () => {
       status: 'assigned',
       presence_status: 'degraded_constrained',
       location_status: 'live',
+      latitude: 46.2,
+      longitude: 6.1,
+      recorded_at: new Date().toISOString(),
     };
     expect(resolveDriverMapVisualStatus(driver)).toBe('constrained');
     expect(resolveDriverMapVisualStatus(driver, { isFallback: true })).toBe('offline');

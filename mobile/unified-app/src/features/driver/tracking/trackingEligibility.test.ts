@@ -13,15 +13,15 @@ describe("resolveTrackingEligibility", () => {
     hasActiveMission: false,
   };
 
-  it("1. available + FG + 03:40 hors fenêtre => eligible PRESENCE_FG", () => {
+  it("1. available + FG + hors fenêtre => OFF (P0-F TIME)", () => {
     const r = resolveTrackingEligibility(base);
-    expect(r.trackingEligible).toBe(true);
-    expect(r.mode).toBe("PRESENCE_FG");
-    expect(r.foregroundPresenceEligible).toBe(true);
+    expect(r.trackingEligible).toBe(false);
+    expect(r.mode).toBe("OFF");
+    expect(r.foregroundPresenceEligible).toBe(false);
     expect(r.backgroundPresenceEligible).toBe(false);
   });
 
-  it("2. FG → BG à 03:40 hors fenêtre => ineligible", () => {
+  it("2. FG → BG hors fenêtre => ineligible", () => {
     const r = resolveTrackingEligibility({
       ...base,
       appForeground: false,
@@ -31,23 +31,17 @@ describe("resolveTrackingEligibility", () => {
     expect(r.mode).toBe("OFF");
   });
 
-  it("3. BG 03:40 → FG => redémarre PRESENCE_FG", () => {
+  it("3. available + fenêtre + FG => PRESENCE_FG", () => {
     const r = resolveTrackingEligibility({
       ...base,
+      presenceWindowOpen: true,
       appForeground: true,
-      presenceWindowOpen: false,
     });
     expect(r.trackingEligible).toBe(true);
     expect(r.mode).toBe("PRESENCE_FG");
   });
 
-  it("4. available + 10:00 + FG → BG => PRESENCE_BG", () => {
-    const fg = resolveTrackingEligibility({
-      ...base,
-      presenceWindowOpen: true,
-      appForeground: true,
-    });
-    expect(fg.mode).toBe("PRESENCE_FG");
+  it("4. available + fenêtre + FG → BG => PRESENCE_BG", () => {
     const bg = resolveTrackingEligibility({
       ...base,
       presenceWindowOpen: true,
@@ -57,7 +51,7 @@ describe("resolveTrackingEligibility", () => {
     expect(bg.mode).toBe("PRESENCE_BG");
   });
 
-  it("5. mission + 03:40 + BG => MISSION (fenêtre sans effet)", () => {
+  it("5. mission + hors fenêtre + BG => MISSION (fenêtre sans effet)", () => {
     const r = resolveTrackingEligibility({
       ...base,
       hasActiveMission: true,
@@ -68,9 +62,10 @@ describe("resolveTrackingEligibility", () => {
     expect(r.mode).toBe("MISSION");
   });
 
-  it("disclosure refusée => pas de présence même disponible FG", () => {
+  it("disclosure refusée => pas de présence même disponible FG + fenêtre", () => {
     const r = resolveTrackingEligibility({
       ...base,
+      presenceWindowOpen: true,
       presenceDisclosureAccepted: false,
     });
     expect(r.trackingEligible).toBe(false);

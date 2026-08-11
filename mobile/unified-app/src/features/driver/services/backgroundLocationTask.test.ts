@@ -543,6 +543,67 @@ describe("backgroundLocationTask", () => {
     const written = JSON.parse(String(asyncStorage.setItem.mock.calls[0]?.[1] ?? "{}"));
     expect(written.nativeOwner).toBeNull();
   });
+
+  it("stopPresenceWindowIfStillCurrent : gen 41 vs 42 → NO-OP", async () => {
+    const asyncStorage = require("@react-native-async-storage/async-storage") as {
+      getItem: jest.Mock;
+      setItem: jest.Mock;
+      removeItem: jest.Mock;
+    };
+    asyncStorage.getItem.mockResolvedValue(
+      JSON.stringify({
+        missionId: 99,
+        missionStatus: "EN_ROUTE",
+        taskMode: "mission",
+        updatedAt: new Date().toISOString(),
+        nativeOwner: {
+          trackingGenerationId: "gen-42",
+          sessionGenerationId: 1,
+          trackingIdentityId: "driver:1:company:1",
+          missionContextVersion: 42,
+          driverId: 1,
+        },
+      })
+    );
+    asyncStorage.setItem.mockClear();
+    const stopped = await bgTask.stopPresenceWindowIfStillCurrent({
+      expectedGenerationId: "gen-41",
+      expectedMissionContextVersion: 41,
+      reason: "presence_window_closed",
+    });
+    expect(stopped).toBe(false);
+    // Contexte mission intact (pas d'écriture null)
+    expect(asyncStorage.setItem).not.toHaveBeenCalled();
+  });
+
+  it("stopPresenceWindowIfStillCurrent : même génération presence → stop", async () => {
+    const asyncStorage = require("@react-native-async-storage/async-storage") as {
+      getItem: jest.Mock;
+      setItem: jest.Mock;
+      removeItem: jest.Mock;
+    };
+    asyncStorage.getItem.mockResolvedValue(
+      JSON.stringify({
+        missionId: null,
+        missionStatus: null,
+        taskMode: "presence_window",
+        updatedAt: new Date().toISOString(),
+        nativeOwner: {
+          trackingGenerationId: "gen-41",
+          sessionGenerationId: 1,
+          trackingIdentityId: "driver:1:company:1",
+          missionContextVersion: 41,
+          driverId: 1,
+        },
+      })
+    );
+    const stopped = await bgTask.stopPresenceWindowIfStillCurrent({
+      expectedGenerationId: "gen-41",
+      expectedMissionContextVersion: 41,
+      reason: "presence_window_closed",
+    });
+    expect(stopped).toBe(true);
+  });
 });
 
 describe("resolveBackgroundGpsQuality (P0-F)", () => {

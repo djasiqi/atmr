@@ -7,13 +7,18 @@ import { formatMissionTime } from "../../dashboard/companyDashboardMissionUi";
 import { resolveGoogleMapsNativeApiKey } from "../../../../config/googleMapsKeys";
 import {
   driverFleetMarkerInitials,
-  isDriverPositionStale,
   resolveDriverDisplayName,
 } from "../../utils/companyDriverMapStatus";
 import type { FleetDriverMapItem } from "./fleetMapTypes";
 import type { FleetOperationalStatus } from "./mapStatusTheme";
 import { FLEET_MAP_COLORS, FLEET_STATUS_THEME } from "./mapStatusTheme";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
+import {
+  formatDriverLocationPresenceLabel,
+  matchesFleetGpsFilter,
+  resolveDriverLocationPresence,
+  type FleetGpsFilter,
+} from "./driverLocationPresence";
 
 type Props = {
   visible: boolean;
@@ -36,6 +41,12 @@ const STATUS_CHIPS: SearchStatusFilter[] = [
   "offline",
 ];
 
+const GPS_CHIPS: { id: FleetGpsFilter; label: string }[] = [
+  { id: "all", label: "GPS : Tous" },
+  { id: "live", label: "En direct" },
+  { id: "not_recent", label: "Non récent" },
+];
+
 const ETA_CACHE_TTL_MS = 2 * 60 * 1000;
 const etaRouteCache = new Map<string, { minutes: number; distanceKm: number; atMs: number }>();
 
@@ -45,18 +56,23 @@ function resolveSearchFilterLabel(filter: SearchStatusFilter): string {
   return FLEET_STATUS_THEME[filter].label;
 }
 
+/** Statut métier uniquement — ne mélange pas la présence GPS. */
 function normalizeOperationalStatus(status: FleetOperationalStatus): SearchStatusFilter {
   if (status === "incident" || status === "emergency") return "delayed";
   if (status === "delayed") return "delayed";
-  if (status === "constrained" || status === "last_known") return "offline";
   if (status === "busy" || status === "assigned" || status === "available" || status === "break" || status === "offline") {
     return status;
   }
+  // constrained / last_known legacy : pas un filtre métier « offline »
+  if (status === "constrained" || status === "last_known") return "available";
   return "available";
 }
 
 function isDriverInStatusFilter(driver: FleetDriverMapItem, filter: SearchStatusFilter): boolean {
   if (filter === "all") return true;
+  if (filter === "offline") {
+    return driver.enrichment.operationalStatus === "offline";
+  }
   return normalizeOperationalStatus(driver.enrichment.operationalStatus) === filter;
 }
 
@@ -149,12 +165,9 @@ function resolveSecondLine(driver: FleetDriverMapItem): string {
     driver.enrichment.linkedMission?.pickup_label?.trim() ??
     driver.enrichment.linkedMission?.dropoff_label?.trim() ??
     null;
-  const stale = isDriverPositionStale(driver);
-  const freshness = stale
-    ? `Dernier signal ${Math.max(1, Math.round((driver.last_seen_seconds ?? 0) / 60))} min`
-    : "GPS Live";
-  if (address) return `${address} · ${freshness}`;
-  return freshness;
+  const gpsLabel = formatDriverLocationPresenceLabel(resolveDriverLocationPresence(driver));
+  if (address) return `${address}\nGPS : ${gpsLabel}`;
+  return `GPS : ${gpsLabel}`;
 }
 
 function extractMinutes(value: string | null | undefined): number | null {
@@ -216,6 +229,7 @@ export function MapDriverSearchSheet({
   onClose,
 }: Props) {
   const [statusFilter, setStatusFilter] = useState<SearchStatusFilter>("all");
+  const [gpsFilter, setGpsFilter] = useState<FleetGpsFilter>("all");
   const [liveEtaByDriverId, setLiveEtaByDriverId] = useState<Record<number, number>>({});
   const [liveDistanceByDriverId, setLiveDistanceByDriverId] = useState<Record<number, number>>({});
   const nativeMapsApiKey = useMemo(() => resolveGoogleMapsNativeApiKey(), []);
@@ -249,14 +263,23 @@ export function MapDriverSearchSheet({
       offline: 0,
     };
     for (const driver of drivers) {
+      if (driver.enrichment.operationalStatus === "offline") {
+        counts.offline += 1;
+        continue;
+      }
       const normalized = normalizeOperationalStatus(driver.enrichment.operationalStatus);
-      counts[normalized] += 1;
+      if (normalized !== "offline") counts[normalized] += 1;
     }
     return counts;
   }, [drivers]);
   const results = useMemo(
-    () => matches.filter((driver) => isDriverInStatusFilter(driver, statusFilter)),
-    [matches, statusFilter]
+    () =>
+      matches.filter((driver) => {
+        if (!isDriverInStatusFilter(driver, statusFilter)) return false;
+        const presence = resolveDriverLocationPresence(driver).presence;
+        return matchesFleetGpsFilter(presence, gpsFilter);
+      }),
+    [matches, statusFilter, gpsFilter]
   );
   const trimmed = query.trim();
 
@@ -407,6 +430,31 @@ export function MapDriverSearchSheet({
                   {count}
                 </AppText>
               </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      <ScrollView
+        horizontal
+        style={s.chipsWrap}
+        contentContainerStyle={s.chipsContent}
+        keyboardShouldPersistTaps="handled"
+        showsHorizontalScrollIndicator={false}
+      >
+        {GPS_CHIPS.map((chip) => {
+          const active = gpsFilter === chip.id;
+          return (
+            <Pressable
+              key={chip.id}
+              onPress={() => setGpsFilter(chip.id)}
+              style={({ pressed }) => [s.chip, active && s.chipActive, pressed && s.chipPressed]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+            >
+              <AppText variant="caption" style={[s.chipLabel, active && s.chipLabelActive]}>
+                {chip.label}
+              </AppText>
             </Pressable>
           );
         })}

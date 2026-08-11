@@ -41,6 +41,8 @@ export type FleetVehicleFilter = "all" | "berline" | "van" | "vsl" | "urgence";
 
 export type FleetMapFiltersState = {
   status: FleetMapStatusFilter;
+  /** Filtre GPS distinct du statut métier. */
+  gps: "all" | "live" | "not_recent";
   vehicleType: FleetVehicleFilter;
   driverSearch: string;
   driverId: number | null;
@@ -50,6 +52,7 @@ export type FleetMapFiltersState = {
 
 export const DEFAULT_FLEET_MAP_FILTERS: FleetMapFiltersState = {
   status: "all",
+  gps: "all",
   vehicleType: "all",
   driverSearch: "",
   driverId: null,

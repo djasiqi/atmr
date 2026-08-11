@@ -3,7 +3,8 @@
  * l'objet driver complet à la carte quand seuls lat/lng changent côté métier.
  */
 
-import { getDriverStatus, getFreshnessStatus } from './mapUtils';
+import { getDriverStatus } from './mapUtils';
+import { resolveDriverLocationPresence } from './fleetDriverLocationPresence';
 
 /** Couleur marqueur carte pour chauffeur en mode batterie restreinte (Tailwind orange-500). */
 export const CONSTRAINED_MARKER_COLOR = '#f97316';
@@ -28,12 +29,6 @@ const CONSTRAINED_DRIVER_STATUSES = new Set([
 ]);
 
 const FRESH_GPS = new Set(['live', 'recent']);
-const NON_LIVE_GPS = new Set([
-  'stale',
-  'last_known',
-  'offline',
-  'offline_unknown',
-]);
 
 /**
  * Détecte si un chauffeur est en mode "contraint" (app figée / position figée à cause
@@ -60,19 +55,13 @@ export function getDriverConstraintReason(driver) {
 }
 
 /**
- * Résout la fraîcheur GPS pour la carte (tracking_display_status / location_status / âge).
+ * Résout la fraîcheur GPS flotte (seuils 30/120, dégrade sans promotion).
+ * Ne passe pas par getFreshnessStatus (20/90/300).
  * @param {object} driver
  */
 export function resolveGpsFreshness(driver) {
-  if (!driver) return 'offline';
-  const source = String(driver.position_source || '').toLowerCase();
-  if (source === 'company_fallback') return 'company_fallback';
-  if (source === 'db_fallback') {
-    const freshness = getFreshnessStatus(driver);
-    if (freshness === 'live' || freshness === 'recent') return 'last_known';
-    return freshness === 'offline' || freshness === 'offline_unknown' ? freshness : 'last_known';
-  }
-  return getFreshnessStatus(driver);
+  if (!driver) return 'offline_unknown';
+  return resolveDriverLocationPresence(driver).presence;
 }
 
 /**
@@ -104,7 +93,7 @@ export function resolveDriverMapProjection(driver, { isFallback = false } = {}) 
   let visualTreatment = 'business';
   let visualStatus = businessStatus;
 
-  if (isFallback || gpsFreshness === 'company_fallback') {
+  if (isFallback || positionSource === 'company_fallback' || gpsFreshness === 'company_fallback') {
     visualTreatment = 'company_fallback';
     visualStatus = 'offline';
   } else if (
@@ -164,12 +153,10 @@ export function resolveDriverMapMarkerColor(visualStatus, statusColors = {}) {
   return statusColors[visualStatus] ?? statusColors.available ?? CONSTRAINED_MARKER_COLOR;
 }
 
-/** True si la position ne doit pas compter comme « localisée live ». */
+/** True si la position ne doit pas compter comme « en direct » (live|recent). */
 export function isNonLiveGpsPosition(driver, { isFallback = false } = {}) {
   if (isFallback) return true;
-  const { gpsFreshness, positionSource } = resolveDriverMapProjection(driver, { isFallback });
-  if (positionSource === 'db_fallback' || positionSource === 'company_fallback') return true;
-  return NON_LIVE_GPS.has(gpsFreshness) || gpsFreshness === 'company_fallback';
+  return !resolveDriverLocationPresence(driver).countedAsLocated;
 }
 
 /** Champs minimaux pour DriverLiveMap (position + statut visuel + fraîcheur GPS). */

@@ -6,6 +6,11 @@ from typing import Callable
 
 from services.geolocation.driver_location_dedup import should_skip_location_ingest
 from services.monitoring.driver_location_metrics import inc_dedup_skipped
+from services.tracking.time_contract import (
+    TrackingInstantError,
+    format_tracking_instant_utc_z,
+    parse_tracking_instant_strict,
+)
 
 LAT_THRESHOLD = 90.0
 LON_THRESHOLD = 180.0
@@ -129,7 +134,13 @@ class UpdateDriverLocationUseCase:
         )
         accept_reason = str(getattr(res, "accept_reason", ""))
         received_at = getattr(res, "received_at", None)
-        received_at_str = str(received_at) if received_at is not None else None
+        if received_at is None:
+            received_at_str = None
+        elif isinstance(received_at, datetime):
+            received_at_str = format_tracking_instant_utc_z(received_at)
+        else:
+            # LocationService renvoie déjà une chaîne …Z après TIME-1
+            received_at_str = str(received_at)
 
         if cmd.emit_geofence and geofence_events:
             from services.tracking.geofence_emit import emit_driver_geofence_events
@@ -160,10 +171,10 @@ class UpdateDriverLocationUseCase:
         )
 
     def _parse_ts(self, ts: str | None) -> datetime:
-        if not ts:
+        """Parse un instant tracking. Absent → now UTC ; naïf/invalide → REJET."""
+        if ts is None or (isinstance(ts, str) and not ts.strip()):
             return self._now_utc()
         try:
-            # Support "Z"
-            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        except Exception:
-            return self._now_utc()
+            return parse_tracking_instant_strict(ts)
+        except TrackingInstantError as exc:
+            raise ValueError(str(exc)) from exc

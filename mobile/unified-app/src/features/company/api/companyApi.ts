@@ -447,12 +447,20 @@ function normalizeMission(raw: RawRide): CompanyDispatchMission | null {
 }
 
 function normalizeLocation(
-  raw: NonNullable<RawDriversResponse["locations"]>[number] & { id?: number | string }
+  raw: NonNullable<RawDriversResponse["locations"]>[number] & {
+    id?: number | string;
+    status?: string | null;
+    tracking_display_status?: string | null;
+    position_source?: string | null;
+    presence_status?: string | null;
+    device_health?: CompanyDriverLiveLocation["device_health"];
+  }
 ): CompanyDriverLiveLocation | null {
   const driverId = toFiniteNumber(raw.driver_id ?? raw.id);
+  // Roster sans GPS autorisé — jamais de placeholder 0,0.
   const latitude = toFiniteNumber(raw.latitude ?? raw.lat);
   const longitude = toFiniteNumber(raw.longitude ?? raw.lon ?? raw.lng);
-  if (driverId == null || latitude == null || longitude == null) return null;
+  if (driverId == null) return null;
   const firstName =
     typeof raw.first_name === "string" && raw.first_name.trim()
       ? raw.first_name.trim()
@@ -484,6 +492,22 @@ function normalizeLocation(
     typeof (raw as { is_stale?: unknown }).is_stale === "boolean"
       ? Boolean((raw as { is_stale: boolean }).is_stale)
       : locationStatus === "stale" || locationStatus === "offline";
+  const positionSource =
+    typeof raw.position_source === "string" && raw.position_source.trim()
+      ? raw.position_source.trim().toLowerCase()
+      : null;
+  const trackingDisplay =
+    typeof raw.tracking_display_status === "string" && raw.tracking_display_status.trim()
+      ? raw.tracking_display_status.trim().toLowerCase()
+      : null;
+  const presenceStatus =
+    typeof raw.presence_status === "string" && raw.presence_status.trim()
+      ? raw.presence_status.trim().toLowerCase()
+      : null;
+  const status =
+    typeof raw.status === "string" && raw.status.trim()
+      ? raw.status.trim().toLowerCase()
+      : null;
   return {
     driver_id: driverId,
     driver_name: driverName,
@@ -492,18 +516,26 @@ function normalizeLocation(
     last_name: lastName,
     mission_id:
       toFiniteNumber(raw.mission_id ?? raw.current_booking_id) ?? null,
-    latitude,
-    longitude,
-    timestamp,
-    recorded_at: recordedAt || timestamp,
-    received_at: receivedAt,
+    latitude: latitude,
+    longitude: longitude,
+    timestamp: timestamp || undefined,
+    recorded_at: recordedAt || timestamp || null,
+    received_at: receivedAt || null,
     last_seen_seconds: lastSeenSeconds,
-    location_status: locationStatus,
+    location_status: locationStatus as CompanyDriverLiveLocation["location_status"],
     is_stale: isStale,
     accept_status:
       typeof (raw as { accept_status?: unknown }).accept_status === "string"
         ? String((raw as { accept_status: string }).accept_status)
         : null,
+    position_source: positionSource,
+    tracking_display_status: trackingDisplay,
+    presence_status: presenceStatus,
+    status: status,
+    device_health:
+      raw.device_health && typeof raw.device_health === "object"
+        ? raw.device_health
+        : undefined,
   };
 }
 

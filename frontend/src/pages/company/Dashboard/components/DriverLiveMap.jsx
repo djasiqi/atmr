@@ -288,6 +288,7 @@ const createStyledTooltip = (driver, opts = {}) => {
     constraintReason,
     businessStatus,
     gpsLabel,
+    serviceWindowStatus,
   } = opts;
   const status = statusOverride ?? getDriverStatus(driver);
   const biz = businessStatus ?? getDriverStatus(driver);
@@ -299,9 +300,14 @@ const createStyledTooltip = (driver, opts = {}) => {
     offline:     { label: 'Hors-ligne',         dot: '#91A3A0',             bg: '#f1f5f9', color: '#64748b' },
     emergency:   { label: 'Urgence',            dot: '#ef4444',             bg: '#fee2e2', color: '#dc2626' },
     constrained: { label: 'Batterie restreinte', dot: CONSTRAINED_MARKER_COLOR,   bg: '#ffedd5', color: '#9a3412' },
+    off_duty:    { label: 'Hors service',       dot: '#91A3A0',             bg: '#f1f5f9', color: '#64748b' },
   };
   // Badge principal = métier si en course/assigné, sinon statut visuel GPS.
-  const badgeKey = (biz === 'busy' || biz === 'assigned') ? biz : status;
+  // TIME-4 : « Hors service » uniquement si service_window_status=off_duty (pas mission_override).
+  const isOffDuty = String(serviceWindowStatus || driver?.service_window_status || '') === 'off_duty';
+  const badgeKey = (biz === 'busy' || biz === 'assigned')
+    ? biz
+    : (isOffDuty ? 'off_duty' : status);
   const conf = { ...(statusConf[badgeKey] || statusConf.offline) };
   if (noGps) conf.label = 'Sans GPS';
 
@@ -976,6 +982,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
             constraintReason,
             gpsLabel,
             isApproximate,
+            serviceWindowStatus: d.service_window_status,
           };
       // accuracy > 50 m → rendu approximatif uniquement ; coords jamais corrigées.
       upsertMarker(d.id, coords, visualStatus, isStaleMarker, d, tooltipOpts);
@@ -1254,7 +1261,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
               </span>
               <div style={{ lineHeight: 1.3, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, color: '#1E293B', fontSize: 11 }}>
-                  {locatedCount}/{totalCount} localisés
+                  {locatedCount}/{totalCount} en direct
                 </div>
                 {locatedCount === 0 && totalCount > 0 && (
                   <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 1 }}>

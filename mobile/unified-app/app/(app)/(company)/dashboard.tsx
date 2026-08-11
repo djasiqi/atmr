@@ -71,6 +71,7 @@ export default function CompanyDashboardScreen() {
         <CompanyFleetCockpit
           drivers={model.liveDrivers.drivers}
           missions={model.missions}
+          rosterResolved={model.liveDrivers.rosterResolved}
           date={model.selectedDate}
           headerMode={model.headerMode}
           realtimeStatus={model.realtime.transportStatus}

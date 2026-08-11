@@ -37,7 +37,9 @@ export function resolveTrackingEligibility(
   const foreground = Boolean(input.appForeground);
   const windowOpen = Boolean(input.presenceWindowOpen);
 
-  const foregroundPresenceEligible = available && foreground && disclosure;
+  // P0-F TIME : présence FG aussi bornée par la fenêtre 07–19 Europe/Zurich
+  const foregroundPresenceEligible =
+    available && foreground && disclosure && windowOpen;
   const backgroundPresenceEligible =
     available && !foreground && windowOpen && disclosure;
 

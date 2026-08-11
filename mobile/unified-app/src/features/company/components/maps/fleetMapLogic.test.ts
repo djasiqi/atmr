@@ -104,13 +104,23 @@ describe("fleetMapLogic", () => {
     expect(resolveFleetOperationalStatus(driver, null)).toBe("emergency");
   });
 
-  it("last_known distinct de offline", () => {
+  it("last_known GPS n'écrase plus le statut opérationnel", () => {
+    const driver: CompanyDriverLiveLocation = {
+      ...baseDriver(1, 46.2, 6.14),
+      location_status: "last_known",
+      last_seen_seconds: 900,
+      status: "busy",
+    };
+    expect(resolveFleetOperationalStatus(driver, null)).toBe("busy");
+  });
+
+  it("last_known sans statut métier → available", () => {
     const driver: CompanyDriverLiveLocation = {
       ...baseDriver(1, 46.2, 6.14),
       location_status: "last_known",
       last_seen_seconds: 900,
     };
-    expect(resolveFleetOperationalStatus(driver, null)).toBe("last_known");
+    expect(resolveFleetOperationalStatus(driver, null)).toBe("available");
   });
 
   it("constrained avant mission active", () => {

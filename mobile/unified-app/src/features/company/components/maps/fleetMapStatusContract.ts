@@ -1,5 +1,6 @@
 import type { CompanyDriverLiveLocation } from "../../api/contracts";
 import type { FleetOperationalStatus } from "./mapStatusTheme";
+import type { DriverLocationPresence } from "./driverLocationPresence";
 
 /** Palette marqueurs carte — parité web (DriverLiveMap + mapUtils). */
 export const FLEET_WEB_STATUS_COLORS = {
@@ -38,6 +39,8 @@ export function blendHexColors(hexA: string, hexB: string, amount: number): stri
 export function isFleetDriverConstrained(driver: CompanyDriverLiveLocation): boolean {
   const presence = String(driver.presence_status ?? "").toLowerCase();
   if (presence === "degraded_constrained") return true;
+  const tracking = String(driver.tracking_display_status ?? "").toLowerCase();
+  if (tracking === "degraded_constrained") return true;
   const status = String(driver.status ?? "").toLowerCase();
   return CONSTRAINED_DRIVER_STATUSES.has(status);
 }
@@ -66,16 +69,43 @@ export function resolveFleetMarkerFillColor(status: FleetOperationalStatus): str
   }
 }
 
+/**
+ * Visuel marqueur — machine d’état présence GPS canonique.
+ * live 100 % métier | recent atténué | stale gris | last_known fantôme.
+ */
 export function resolveMarkerVisual(
   status: FleetOperationalStatus,
-  isStale: boolean
+  locationPresence: DriverLocationPresence | boolean
 ): { fill: string; opacity: number } {
   const base = resolveFleetMarkerFillColor(status);
-  if (isStale && status !== "constrained") {
+  const presence: DriverLocationPresence =
+    typeof locationPresence === "boolean"
+      ? locationPresence
+        ? "stale"
+        : "live"
+      : locationPresence;
+
+  if (presence === "offline_unknown") {
+    return { fill: FLEET_WEB_STATUS_COLORS.staleMuted, opacity: 0 };
+  }
+  if (presence === "last_known") {
+    return {
+      fill: FLEET_WEB_STATUS_COLORS.staleMuted,
+      opacity: 0.45,
+    };
+  }
+  if (presence === "stale") {
     return {
       fill: blendHexColors(base, FLEET_WEB_STATUS_COLORS.staleMuted, 0.55),
       opacity: 0.88,
     };
   }
+  if (presence === "recent") {
+    return {
+      fill: base,
+      opacity: 0.72,
+    };
+  }
+  // live — couleur métier pleine (contrainte garde sa couleur orange)
   return { fill: base, opacity: 1 };
 }

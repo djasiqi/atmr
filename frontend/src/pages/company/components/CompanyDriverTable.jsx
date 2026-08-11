@@ -38,6 +38,10 @@ const CompanyDriverTable = ({ drivers, onEdit, onToggleStatus, onDeleteRequest }
     const backendStatus = String(driver?.status || '').toLowerCase();
     if (backendStatus === 'busy') return { label: 'En course', className: s.statusOnTrip };
     if (backendStatus === 'assigned') return { label: 'Assigné', className: s.statusOnTrip };
+    // TIME-4 : axe temporel séparé — ne pas falsifier busy/assigned
+    if (String(driver?.service_window_status || '') === 'off_duty') {
+      return { label: 'Hors service', className: s.statusOffline };
+    }
     if (backendStatus === 'offline') return { label: 'Hors ligne', className: s.statusOffline };
     return { label: 'Disponible', className: s.statusAvailable };
   };

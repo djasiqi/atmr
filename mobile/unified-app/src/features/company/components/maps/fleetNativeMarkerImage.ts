@@ -21,6 +21,7 @@ import {
 } from "./fleetLirieMarkerSizing";
 import type { FleetOperationalStatus } from "./mapStatusTheme";
 import { resolveMarkerVisual } from "./fleetMapStatusContract";
+import { resolveDriverLocationPresence } from "./driverLocationPresence";
 import { isFleetDriverMarkerStale } from "./fleetMapStale";
 import { driverFleetMarkerInitials } from "../../utils/companyDriverMapStatus";
 
@@ -51,7 +52,8 @@ function buildFleetDriverAndroidPngMarkerSource(
 ): FleetNativeMarkerImageSource {
   const sizePx = FLEET_NATIVE_DRIVER_MARKER_SIZE_PX;
   const isStale = options?.isStale ?? isFleetDriverMarkerStale(driver);
-  const visual = resolveMarkerVisual(status, isStale);
+  void isStale;
+  const visual = resolveMarkerVisual(status, resolveDriverLocationPresence(driver).presence);
   const initials = driverFleetMarkerInitials(driver);
   return {
     uri: buildDriverMarkerPngUri({
@@ -72,7 +74,8 @@ function buildFleetDriverCircleMarkerSource(
 ): FleetNativeMarkerImageSource {
   const sizePx = FLEET_NATIVE_DRIVER_MARKER_SIZE_PX;
   const isStale = options?.isStale ?? isFleetDriverMarkerStale(driver);
-  const visual = resolveMarkerVisual(status, isStale);
+  void isStale;
+  const visual = resolveMarkerVisual(status, resolveDriverLocationPresence(driver).presence);
   const initials = driverFleetMarkerInitials(driver);
   return {
     uri: makeFleetCircleMarkerDataUrl(visual.fill, sizePx, visual.opacity, {

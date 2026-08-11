@@ -60,6 +60,9 @@ export type OperationalFleetMapProps = {
 
   missions?: CompanyDispatchMission[];
 
+  /** Roster flotte résolu — gate badge N/T (évite 0/0 ou T partiel). */
+  rosterResolved?: boolean;
+
   mapHeight?: number;
 
   /** `cockpit` : carte plein écran (canvas principal). `inline` : carte dans une page scrollable. */
@@ -287,7 +290,7 @@ function FleetMapSurface({
 
       <EnterpriseDriversMap
 
-        drivers={fleet.filtered}
+        drivers={fleet.spatialDrivers}
 
         markers={fleet.markers}
 
@@ -345,6 +348,36 @@ function FleetMapSurface({
       />
 
       </FleetMapErrorBoundary>
+
+      {fleet.rosterResolved ? (
+        <View
+          style={s.liveBadge}
+          accessibilityRole="text"
+          accessibilityLabel={`${fleet.liveCount} sur ${fleet.totalCount} en direct`}
+        >
+          <View
+            style={[
+              s.liveBadgeDot,
+              { backgroundColor: fleet.liveCount > 0 ? "#00796B" : "#91A3A0" },
+            ]}
+          />
+          <AppText variant="caption" style={s.liveBadgeText}>
+            {fleet.liveCount}/{fleet.totalCount} en direct
+          </AppText>
+          {fleet.filteredDisplayedCount !== fleet.totalCount ? (
+            <AppText variant="caption" style={s.liveBadgeFilterHint}>
+              · {fleet.filteredDisplayedCount} affiché
+              {fleet.filteredDisplayedCount > 1 ? "s" : ""}
+            </AppText>
+          ) : null}
+        </View>
+      ) : (
+        <View style={s.liveBadge} accessibilityLabel="Localisation en cours">
+          <AppText variant="caption" style={s.liveBadgeText}>
+            Localisation…
+          </AppText>
+        </View>
+      )}
 
       {fleet.showNoGpsBanner ? (
         <View style={s.noGpsBanner} pointerEvents="none">
@@ -535,6 +568,8 @@ export function OperationalFleetMap({
 
   missions = [],
 
+  rosterResolved = false,
+
   mapHeight = 248,
 
   layout = "inline",
@@ -601,6 +636,8 @@ export function OperationalFleetMap({
     drivers,
 
     missions,
+
+    rosterResolved,
 
     clusteringEnabled,
 
@@ -911,11 +948,39 @@ const s = StyleSheet.create({
 
   },
 
+  liveBadge: {
+    position: "absolute",
+    top: 10,
+    left: 12,
+    zIndex: 110,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  liveBadgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  liveBadgeText: {
+    color: FLEET_MAP_COLORS.text,
+    fontWeight: "600",
+  },
+  liveBadgeFilterHint: {
+    color: FLEET_MAP_COLORS.textMuted,
+  },
+
   noGpsBanner: {
 
     position: "absolute",
 
-    top: 10,
+    top: 44,
 
     alignSelf: "center",
 

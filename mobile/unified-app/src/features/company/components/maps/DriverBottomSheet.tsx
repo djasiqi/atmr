@@ -16,6 +16,10 @@ import { FLEET_STATUS_THEME, FLEET_MAP_COLORS } from "./mapStatusTheme";
 
 import { driverFleetMarkerInitials, resolveDriverDisplayName } from "../../utils/companyDriverMapStatus";
 import { formatFleetConstraintReason } from "./fleetMapLogic";
+import {
+  formatDriverLocationPresenceLabel,
+  resolveDriverLocationPresence,
+} from "./driverLocationPresence";
 
 import {
   conciseRouteSegment,
@@ -1133,9 +1137,9 @@ function CompactDriverSheet({
         ? "Prêt pour une nouvelle course"
         : enrichment.operationalStatus === "break"
           ? "Pause en cours"
-          : enrichment.operationalStatus === "last_known"
-            ? "Dernière position connue (non active)"
-            : null;
+          : null;
+
+  const gpsPresenceLabel = `GPS : ${formatDriverLocationPresenceLabel(resolveDriverLocationPresence(driver))}`;
 
   const handleCall = () => {
     const phone = enrichment.phone?.trim();
@@ -1205,6 +1209,9 @@ function CompactDriverSheet({
               {subtitle}
             </AppText>
           ) : null}
+          <AppText variant="caption" style={s.subtitle} numberOfLines={1}>
+            {gpsPresenceLabel}
+          </AppText>
 
           {mission && !enrichment.etaLabel ? (
             <AppText variant="caption" style={s.routeHint} numberOfLines={1}>

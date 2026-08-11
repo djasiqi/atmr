@@ -517,6 +517,28 @@ Autres invariants : contexte DRIVER + mission active ; SQLite avant réseau ; HT
 
 **Canary** : mission active, écran verrouillé ; points `is_background` ; High + cadence mission même basse batterie ; file drainée après `persisted_sync`.
 
+### ✅ **Implémenté** : P0-F TIME — Cohérence temporelle tracking
+
+Contrats :
+
+- **UTC technique** : [`time_contract.py`](../../backend/services/tracking/time_contract.py) — `parse_tracking_instant_strict` / `format_tracking_instant_utc_z` ; naïf/invalide = REJET (jamais `now`, jamais Genève silencieux). Wire Redis/API en `…Z`.
+- **Affichage Europe/Zurich** : [`businessTime.js`](../../frontend/src/utils/businessTime.js) + `formatAbsolutePositionTime` (sans `timeZoneName`) ; « aujourd’hui/hier » = calendrier Zurich.
+- **Fenêtre 07–19 figée** Europe/Zurich (mobile = backend) ; env `EXPO_PUBLIC_DRIVER_TRACKING_WINDOW_*` ≠ 7/19 → erreur log, pas de divergence silencieuse.
+- **Présence FG+BG** bornée par la fenêtre ; mission via `isTrackingActiveStatus` (mobile) / `BookingStatus` actifs (backend).
+- **Gardes** start/resume/wake/watchdog + callback ; arrêt `stopPresenceWindowIfStillCurrent` (génération / `missionContextVersion`).
+- **TIME-4** : `in_service_window` + `service_window_status` ∈ `{in_window, mission_override, off_duty}` — **séparé** du `status` métier ; « Hors service » seulement pour `off_duty`. Hors scope : N/T, live/recent/stale.
+
+**Canary frontière 19:00** : verrouiller ~18:55 sans mission → 19:05 → aucun nouveau point présence ; carte `service_window_status=off_duty`.
+
+### ✅ **Implémenté** : P0-F UI — Présence GPS flotte
+
+Machine d’état 5 états (`live` | `recent` | `stale` | `last_known` | `offline_unknown`), axes métier / GPS / device séparés, compteur `N/T en direct` sur roster complet, `spatialDrivers` pour la géométrie.
+
+- Spec + détail : [`docs/ops/gps-p0f-ui-fleet-presence.md`](./gps-p0f-ui-fleet-presence.md)
+- Mobile : `driverLocationPresence.ts`, badge OperationalFleetMap, filtres GPS distincts
+- Web : `fleetDriverLocationPresence.js`, libellé DriverLiveMap « en direct »
+- **Merge UI** uniquement après canary téléphone P0-F (Android → analyse → iOS → UI)
+
 
 ## Sprint 1 — Pipeline OSRM + DLQ (S1.4)
 

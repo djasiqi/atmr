@@ -67,6 +67,7 @@ type DriverRealtimePayload = Partial<CompanyDriverLiveLocation> & {
   status?: string | null;
   presence_status?: string | null;
   tracking_display_status?: string | null;
+  position_source?: string | null;
   device_health?: CompanyDriverLiveLocation["device_health"];
   recorded_at?: string | null;
   received_at?: string | null;
@@ -158,6 +159,10 @@ export function normalizeRealtimeLocation(payload: DriverRealtimePayload): Compa
       typeof payload.tracking_display_status === "string"
         ? payload.tracking_display_status.trim().toLowerCase()
         : undefined,
+    position_source:
+      typeof payload.position_source === "string" && payload.position_source.trim()
+        ? payload.position_source.trim().toLowerCase()
+        : undefined,
     device_health:
       payload.device_health && typeof payload.device_health === "object"
         ? {
@@ -213,6 +218,7 @@ function mergeRealtimeDriver(
     presence_status: normalized.presence_status ?? existing?.presence_status ?? undefined,
     tracking_display_status:
       normalized.tracking_display_status ?? existing?.tracking_display_status ?? undefined,
+    position_source: normalized.position_source ?? existing?.position_source ?? undefined,
     device_health: normalized.device_health ?? existing?.device_health ?? undefined,
   };
   if (!shouldReplaceDriverLocation(existing, normalized)) return null;
@@ -232,6 +238,7 @@ function mergeRealtimeDriver(
     location_status: merged.location_status ?? existing.location_status,
     tracking_display_status:
       merged.tracking_display_status ?? existing.tracking_display_status,
+    position_source: merged.position_source ?? existing.position_source,
     last_seen_seconds: merged.last_seen_seconds ?? existing.last_seen_seconds,
     status: merged.status ?? existing.status,
     mission_id: merged.mission_id ?? existing.mission_id,
@@ -577,6 +584,8 @@ export function useCompanyDriverLiveTracking() {
   return {
     drivers,
     isLoading: snapshotQuery.isLoading,
+    /** Roster flotte résolu (snapshot /live chargé) — gate badge N/T. */
+    rosterResolved: snapshotQuery.isSuccess,
     error: snapshotQuery.error,
     refetch: snapshotQuery.refetch,
     snapshotRefreshedAt: snapshotQuery.data?.refreshed_at ?? null,
