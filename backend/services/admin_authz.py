@@ -19,7 +19,6 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any, TypeVar
 
-from flask import jsonify
 from sqlalchemy import select
 
 from ext import db
@@ -177,17 +176,16 @@ def require_admin_capability(capability: str) -> Callable[[F], F]:
 
             user = get_current_user_via_use_case()
             if not user:
-                return jsonify(
-                    {"error": "unauthorized", "message": "Utilisateur introuvable."}
-                ), 401
+                return {
+                    "error": "unauthorized",
+                    "message": "Utilisateur introuvable.",
+                }, 401
             if not user_has_admin_capability(user.id, capability):
-                return jsonify(
-                    {
-                        "error": "forbidden",
-                        "message": "Capacité administrateur insuffisante.",
-                        "capability": capability,
-                    }
-                ), 403
+                return {
+                    "error": "forbidden",
+                    "message": "Capacité administrateur insuffisante.",
+                    "capability": capability,
+                }, 403
             return fn(*args, **kwargs)
 
         return wrapper  # type: ignore[return-value]
@@ -209,18 +207,17 @@ def require_admin_capabilities_all(*capabilities: str) -> Callable[[F], F]:
 
             user = get_current_user_via_use_case()
             if not user:
-                return jsonify(
-                    {"error": "unauthorized", "message": "Utilisateur introuvable."}
-                ), 401
+                return {
+                    "error": "unauthorized",
+                    "message": "Utilisateur introuvable.",
+                }, 401
             for capability in caps:
                 if not user_has_admin_capability(user.id, capability):
-                    return jsonify(
-                        {
-                            "error": "forbidden",
-                            "message": "Capacité administrateur insuffisante.",
-                            "capability": capability,
-                        }
-                    ), 403
+                    return {
+                        "error": "forbidden",
+                        "message": "Capacité administrateur insuffisante.",
+                        "capability": capability,
+                    }, 403
             return fn(*args, **kwargs)
 
         return wrapper  # type: ignore[return-value]
