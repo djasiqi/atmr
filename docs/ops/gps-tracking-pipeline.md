@@ -253,6 +253,10 @@ Preuve durable autorisée uniquement : `(persisted, inserted)` ou `(duplicate, s
 - ACK durable echo : `location_event_id`, `tracking_session_id`, `session_generation`, `sequence_id`
 - Tests : [`test_location_persisted_sync_p0e.py`](../../backend/tests/services/test_location_persisted_sync_p0e.py)
 
+#### ✅ **Implémenté** : Réalignement Kafka prod + Preuve A (2026-08-11)
+
+Consumer RAW + outbox alignés sur image backend `390076ef` (digest `fb919878…`) via [`scripts/ops-tracking-p0-recreate-ingest.sh`](../../scripts/ops-tracking-p0-recreate-ingest.sh) + recreate ciblé outbox (`BACKEND_IMAGE_REF=`). Preuve A canary PASS (body `persisted_sync` + SQL A/B). Autopsie seq=3 : [`gps-p0e-seq3-autopsy.md`](gps-p0e-seq3-autopsy.md). Fiche exécution : [`gps-p0e-kafka-align-execution-2026-08-11.md`](gps-p0e-kafka-align-execution-2026-08-11.md).
+
 #### ✅ **Implémenté** : Canary P0-E (chemin SYNC réel)
 
 **Prérequis** : exercer le chemin **sync HTTP**. Si `TRACKING_INGEST_ASYNC_ENABLED` + `should_use_async_ingest()` → Kafka, la route peut répondre **202 `queued_async`** sans passer par P0-E sync.
