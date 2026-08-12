@@ -2244,6 +2244,19 @@ def init_chat_socket(socketio: SocketIO):
 
             latitude, longitude = lat, lon
 
+            # P0-A : enveloppe brute avant defaults (pas de changement de décision live).
+            from services.tracking.tracking_ingress_contract import (
+                build_tracking_ingress_envelope,
+                evaluate_event_contract,
+            )
+
+            _ = evaluate_event_contract(
+                build_tracking_ingress_envelope(
+                    data if isinstance(data, dict) else None,
+                    transport="socket",
+                )
+            )
+
             # ✅ 3.3.1: Utiliser LocationService pour centraliser la logique
             speed = data.get("speed")
             heading = data.get("heading")
@@ -2910,6 +2923,19 @@ def init_chat_socket(socketio: SocketIO):
                             }
                         )
                         continue
+
+                    # P0-A : enveloppe brute avant defaults (pas de changement live).
+                    from services.tracking.tracking_ingress_contract import (
+                        build_tracking_ingress_envelope,
+                        evaluate_event_contract,
+                    )
+
+                    _ = evaluate_event_contract(
+                        build_tracking_ingress_envelope(
+                            pos if isinstance(pos, dict) else None,
+                            transport="socket_batch",
+                        )
+                    )
 
                     # ✅ 3.3.1: Utiliser LocationService pour chaque position du batch
                     speed = pos.get("speed")

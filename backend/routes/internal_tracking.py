@@ -143,6 +143,20 @@ def _normalize_point(
     if not isinstance(raw, dict):
         return None, "invalid_point"
 
+    # P0-A : enveloppe brute avant normalisation (pas de changement de décision).
+    from services.tracking.tracking_ingress_contract import (
+        build_tracking_ingress_envelope,
+        evaluate_event_contract,
+    )
+
+    _ = evaluate_event_contract(
+        build_tracking_ingress_envelope(
+            raw,
+            transport="internal",
+            header_location_event_id=header_event_id,
+        )
+    )
+
     lat = _safe_finite_float(raw.get("latitude"), lo=_LAT_MIN, hi=_LAT_MAX)
     lon = _safe_finite_float(raw.get("longitude"), lo=_LON_MIN, hi=_LON_MAX)
     if lat is None or lon is None:

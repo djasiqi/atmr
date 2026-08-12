@@ -1715,6 +1715,29 @@ class DriverLocation(Resource):
                 }
                 status_code = 400
             else:
+                # P0-A : enveloppe brute AVANT defaults (pas de changement de décision live).
+                from services.tracking.tracking_ingress_contract import (
+                    build_tracking_ingress_envelope,
+                    evaluate_event_contract,
+                )
+
+                _ingress_envelope = build_tracking_ingress_envelope(
+                    p if isinstance(p, dict) else None,
+                    transport="http",
+                )
+                _ingress_contract = evaluate_event_contract(_ingress_envelope)
+                logger.debug(
+                    "tracking_ingress_envelope transport=http present=%s contract_ok=%s reasons=%s",
+                    {
+                        "recorded_at": _ingress_envelope.recorded_at_present,
+                        "location_event_id": (
+                            _ingress_envelope.location_event_id_present
+                        ),
+                        "mission_id": _ingress_envelope.mission_id_present,
+                    },
+                    _ingress_contract.ok,
+                    _ingress_contract.reasons,
+                )
                 # Valeurs par défaut pour compatibilité avec anciennes versions app
                 if "location_mode" not in p or not p.get("location_mode"):
                     p = dict(p)

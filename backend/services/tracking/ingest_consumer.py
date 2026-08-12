@@ -485,6 +485,26 @@ class TrackingIngestConsumer:
                 error_type="invalid_payload",
             )
 
+        # P0-A : enveloppe brute (pas de changement de décision live).
+        try:
+            from services.tracking.tracking_ingress_contract import (
+                build_tracking_ingress_envelope,
+                evaluate_event_contract,
+            )
+
+            payload_raw = message_obj.get("payload")
+            _ = evaluate_event_contract(
+                build_tracking_ingress_envelope(
+                    payload_raw if isinstance(payload_raw, dict) else message_obj,
+                    transport="kafka",
+                )
+            )
+        except Exception:
+            logger.debug(
+                "[tracking_consumer] ingress envelope skipped",
+                exc_info=True,
+            )
+
         for attempt in range(1, KAFKA_MAX_RETRIES + 1):
             try:
                 validated = {**message_obj, "validated_at_ms": record.timestamp}
