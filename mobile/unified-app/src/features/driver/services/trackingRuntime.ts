@@ -43,7 +43,7 @@ const listeners = new Set<TrackingRuntimeListener>();
 let lastNativeStartError: string | null = null;
 let lastNativeStartErrorAt: number | null = null;
 let lastTaskInvokedAt: number | null = null;
-let pendingFgsStart: PendingFgsStartState = { active: false };
+let pendingFgsStart: PendingFgsStartState = { active: false, missionId: null };
 let currentState: TrackingRuntimeState = { missionId: null, mode: "off" };
 let nativeStartDiagnostics: NativeStartDiagnostics = {
   native_start_phase: null,
@@ -142,7 +142,7 @@ export function setPendingFgsStart(state: PendingFgsStartState): void {
 
 export function clearPendingFgsStart(): void {
   if (!pendingFgsStart.active) return;
-  pendingFgsStart = { active: false };
+  pendingFgsStart = { active: false, missionId: null };
   notifyListeners();
 }
 
@@ -171,7 +171,7 @@ export function __resetTrackingRuntimeForTests(): void {
   lastNativeStartError = null;
   lastNativeStartErrorAt = null;
   lastTaskInvokedAt = null;
-  pendingFgsStart = { active: false };
+  pendingFgsStart = { active: false, missionId: null };
   currentState = { missionId: null, mode: "off" };
   clearNativeStartDiagnostics();
   listeners.clear();
