@@ -37,9 +37,7 @@ class TestAdminOpsInfra:
         )
         assert resp.status_code == 200
 
-    def test_indicative_fare_get(
-        self, client, app, admin_route_env, make_admin_user
-    ):
+    def test_indicative_fare_get(self, client, app, admin_route_env, make_admin_user):
         admin = make_admin_user()
         headers = admin_auth_headers(app, admin)
         resp = client.get(

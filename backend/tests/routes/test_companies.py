@@ -506,9 +506,7 @@ class TestCompaniesRoutes:
         resp = client.get("/api/v1/companies/me/vehicles", headers=headers)
         assert resp.status_code == 200
         body = resp.get_json()
-        assert isinstance(body, list) or (
-            isinstance(body, dict) and "data" in body
-        )
+        assert isinstance(body, list) or (isinstance(body, dict) and "data" in body)
 
     def test_vehicle_404(self, client, app, companies_world):
         world = companies_world

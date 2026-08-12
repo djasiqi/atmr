@@ -49,9 +49,7 @@ class TestAdminUsersCompanies:
         )
         assert resp.status_code == 200
 
-    def test_list_users_cap_denied_403(
-        self, client, app, make_admin_user, monkeypatch
-    ):
+    def test_list_users_cap_denied_403(self, client, app, make_admin_user, monkeypatch):
         monkeypatch.setenv("ADMIN_IP_WHITELIST", "127.0.0.1/32")
         monkeypatch.setenv("ADMIN_CAPABILITIES_ENFORCED", "true")
         admin = make_admin_user()

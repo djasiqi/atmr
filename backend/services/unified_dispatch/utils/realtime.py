@@ -736,10 +736,9 @@ class RealtimeOptimizer:
                         driver = item["driver"]
                         scheduled_time = item["scheduled_time"]
 
-                        if (
-                            matrix_idx < len(distance_matrix_seconds)
-                            and matrix_idx < len(distance_matrix_seconds[matrix_idx])
-                        ):
+                        if matrix_idx < len(
+                            distance_matrix_seconds
+                        ) and matrix_idx < len(distance_matrix_seconds[matrix_idx]):
                             eta_seconds = int(
                                 distance_matrix_seconds[matrix_idx][matrix_idx]
                             )
