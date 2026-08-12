@@ -1,11 +1,17 @@
 /**
  * Autorité opérationnelle « GPS autorisé à émettre maintenant ».
  * Persistée et lisible par TaskManager — indépendante de activeContextIdForApi (mémoire Axios).
+ *
+ * v2 : missionId + missionContextVersion sur driver_active.
+ * Legacy v1 : fail-closed (jamais réutilisé comme autorité).
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 
-export const TRACKING_CONTEXT_LEASE_STORAGE_KEY = "@driver:tracking_context_lease_v1";
+/** Clé actuelle (v2) — autorité opérationnelle. */
+export const TRACKING_CONTEXT_LEASE_STORAGE_KEY = "@driver:tracking_context_lease_v2";
+/** Legacy v1 — jamais promu en autorité (fail-closed). */
+export const TRACKING_CONTEXT_LEASE_LEGACY_V1_KEY = "@driver:tracking_context_lease_v1";
 
 export type TrackingContextLeaseDriverActive = {
   state: "driver_active";
@@ -14,6 +20,8 @@ export type TrackingContextLeaseDriverActive = {
   sessionGenerationId: number;
   trackingGenerationId: string;
   trackingIdentityId: string;
+  missionId: number | null;
+  missionContextVersion: number;
   updatedAt: number;
 };
 
@@ -38,6 +46,8 @@ export type TrackingContextLease =
 
 const inMemoryStorage = new Map<string, string>();
 let memoryLease: TrackingContextLease | null = null;
+/** true une fois le fail-closed v1 traité pour cette session mémoire. */
+let legacyV1FailClosedDone = false;
 
 async function readStorage(key: string): Promise<string | null> {
   const storage = AsyncStorage as unknown as {
@@ -60,8 +70,53 @@ async function writeStorage(key: string, value: string): Promise<void> {
   inMemoryStorage.set(key, value);
 }
 
+async function removeStorage(key: string): Promise<void> {
+  const storage = AsyncStorage as unknown as {
+    removeItem?: (k: string) => Promise<void>;
+  };
+  if (typeof storage?.removeItem === "function") {
+    await storage.removeItem(key);
+    return;
+  }
+  inMemoryStorage.delete(key);
+}
+
 function isDriverContextId(value: string): value is `driver:${string}` {
   return /^driver:\d+$/.test(value);
+}
+
+function parseDriverActiveSnapshot(
+  raw: Partial<TrackingContextLeaseDriverActive> | undefined
+): Omit<TrackingContextLeaseDriverActive, "state" | "updatedAt"> | undefined {
+  if (!raw) return undefined;
+  if (
+    typeof raw.contextId !== "string" ||
+    !isDriverContextId(raw.contextId) ||
+    typeof raw.driverId !== "number" ||
+    !Number.isFinite(raw.driverId) ||
+    typeof raw.sessionGenerationId !== "number" ||
+    typeof raw.trackingGenerationId !== "string" ||
+    typeof raw.trackingIdentityId !== "string" ||
+    typeof raw.missionContextVersion !== "number" ||
+    !Number.isFinite(raw.missionContextVersion)
+  ) {
+    return undefined;
+  }
+  const missionId =
+    raw.missionId === null || raw.missionId === undefined
+      ? null
+      : typeof raw.missionId === "number" && Number.isFinite(raw.missionId)
+        ? raw.missionId
+        : null;
+  return {
+    contextId: raw.contextId,
+    driverId: raw.driverId,
+    sessionGenerationId: raw.sessionGenerationId,
+    trackingGenerationId: raw.trackingGenerationId,
+    trackingIdentityId: raw.trackingIdentityId,
+    missionId,
+    missionContextVersion: raw.missionContextVersion,
+  };
 }
 
 function parseLease(raw: string | null): TrackingContextLease | null {
@@ -84,30 +139,22 @@ function parseLease(raw: string | null): TrackingContextLease | null {
         state: "switching",
         fromDriver: switching.fromDriver === true,
         updatedAt,
-        previousDriverActive: switching.previousDriverActive,
+        previousDriverActive: parseDriverActiveSnapshot(
+          switching.previousDriverActive as
+            | Partial<TrackingContextLeaseDriverActive>
+            | undefined
+        ),
       };
     }
     if (parsed.state === "driver_active") {
       const active = parsed as Partial<TrackingContextLeaseDriverActive>;
-      if (
-        typeof active.contextId === "string" &&
-        isDriverContextId(active.contextId) &&
-        typeof active.driverId === "number" &&
-        Number.isFinite(active.driverId) &&
-        typeof active.sessionGenerationId === "number" &&
-        typeof active.trackingGenerationId === "string" &&
-        typeof active.trackingIdentityId === "string"
-      ) {
-        return {
-          state: "driver_active",
-          contextId: active.contextId,
-          driverId: active.driverId,
-          sessionGenerationId: active.sessionGenerationId,
-          trackingGenerationId: active.trackingGenerationId,
-          trackingIdentityId: active.trackingIdentityId,
-          updatedAt,
-        };
-      }
+      const snapshot = parseDriverActiveSnapshot(active);
+      if (!snapshot) return null;
+      return {
+        state: "driver_active",
+        ...snapshot,
+        updatedAt,
+      };
     }
     return null;
   } catch {
@@ -115,11 +162,42 @@ function parseLease(raw: string | null): TrackingContextLease | null {
   }
 }
 
+/**
+ * Si seule la clé v1 existe : fail-closed → inactive v2, jamais réutiliser v1.
+ */
+async function failClosedLegacyV1IfNeeded(): Promise<TrackingContextLease | null> {
+  if (legacyV1FailClosedDone) return null;
+  const v2Raw = await readStorage(TRACKING_CONTEXT_LEASE_STORAGE_KEY);
+  if (v2Raw) {
+    legacyV1FailClosedDone = true;
+    return null;
+  }
+  const v1Raw = await readStorage(TRACKING_CONTEXT_LEASE_LEGACY_V1_KEY);
+  legacyV1FailClosedDone = true;
+  if (!v1Raw) return null;
+  emitDriverTelemetry("tracking.context.lease.legacy_v1_fail_closed", {
+    source: "driver.services.trackingContextLease",
+  });
+  await removeStorage(TRACKING_CONTEXT_LEASE_LEGACY_V1_KEY);
+  const inactive: TrackingContextLeaseInactive = {
+    state: "inactive",
+    updatedAt: Date.now(),
+  };
+  memoryLease = inactive;
+  await writeStorage(TRACKING_CONTEXT_LEASE_STORAGE_KEY, JSON.stringify(inactive));
+  return inactive;
+}
+
 export async function readTrackingContextLease(): Promise<TrackingContextLease | null> {
   if (memoryLease) return memoryLease;
   const parsed = parseLease(await readStorage(TRACKING_CONTEXT_LEASE_STORAGE_KEY));
-  memoryLease = parsed;
-  return parsed;
+  if (parsed) {
+    memoryLease = parsed;
+    return parsed;
+  }
+  const legacy = await failClosedLegacyV1IfNeeded();
+  if (legacy) return legacy;
+  return null;
 }
 
 async function persistLease(lease: TrackingContextLease): Promise<void> {
@@ -129,6 +207,9 @@ async function persistLease(lease: TrackingContextLease): Promise<void> {
     source: "driver.services.trackingContextLease",
     lease_state: lease.state,
     from_driver: lease.state === "switching" ? lease.fromDriver : undefined,
+    mission_id: lease.state === "driver_active" ? lease.missionId : undefined,
+    mission_context_version:
+      lease.state === "driver_active" ? lease.missionContextVersion : undefined,
   });
 }
 
@@ -138,10 +219,17 @@ export async function setTrackingContextLeaseDriverActive(params: {
   sessionGenerationId: number;
   trackingGenerationId: string;
   trackingIdentityId: string;
+  missionId?: number | null;
+  missionContextVersion?: number;
 }): Promise<TrackingContextLeaseDriverActive> {
   if (!isDriverContextId(params.contextId)) {
     throw new Error(`Invalid driver contextId for lease: ${params.contextId}`);
   }
+  const missionContextVersion =
+    typeof params.missionContextVersion === "number" &&
+    Number.isFinite(params.missionContextVersion)
+      ? params.missionContextVersion
+      : 0;
   const lease: TrackingContextLeaseDriverActive = {
     state: "driver_active",
     contextId: params.contextId,
@@ -149,6 +237,8 @@ export async function setTrackingContextLeaseDriverActive(params: {
     sessionGenerationId: params.sessionGenerationId,
     trackingGenerationId: params.trackingGenerationId,
     trackingIdentityId: params.trackingIdentityId,
+    missionId: params.missionId ?? null,
+    missionContextVersion,
     updatedAt: Date.now(),
   };
   await persistLease(lease);
@@ -171,6 +261,8 @@ export async function setTrackingContextLeaseSwitching(opts?: {
           sessionGenerationId: previous.sessionGenerationId,
           trackingGenerationId: previous.trackingGenerationId,
           trackingIdentityId: previous.trackingIdentityId,
+          missionId: previous.missionId,
+          missionContextVersion: previous.missionContextVersion,
         }
       : undefined,
   };
@@ -259,5 +351,6 @@ export async function reconcileTrackingContextLeaseFromBootstrap(params: {
 /** Reset mémoire (tests). */
 export function __resetTrackingContextLeaseForTests(): void {
   memoryLease = null;
+  legacyV1FailClosedDone = false;
   inMemoryStorage.clear();
 }

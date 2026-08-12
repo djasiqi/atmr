@@ -33,10 +33,12 @@ import {
   canFlushDurableEvent,
   captureActiveRuntime,
   clearActiveRuntimeIfGeneration,
+  isNativeOwnerCurrent,
   isRuntimeActive,
   runIfRuntimeActive,
   startOrJoinTrackingRuntime,
   stopTrackingRuntime,
+  toNativeTrackingOwner,
   updateMissionContext,
 } from "./trackingRuntimeRegistry";
 
@@ -63,6 +65,26 @@ describe("trackingRuntimeRegistry Phase 1C", () => {
     expect(r2.identity.trackingGenerationId).toBe(gen);
     expect(r2.missionContext.missionId).toBe(200);
     expect(r2.missionContext.missionContextVersion).toBeGreaterThan(versionBefore);
+  });
+
+  it("toNativeTrackingOwner inclut missionId et isNativeOwnerCurrent compare mission+version", async () => {
+    const r1 = await startOrJoinTrackingRuntime({
+      driverId: 1,
+      companyId: 9,
+      missionId: 10,
+      missionStatus: "EN_ROUTE" as never,
+    });
+    const owner = toNativeTrackingOwner(r1);
+    expect(owner.missionId).toBe(10);
+    expect(owner.missionContextVersion).toBe(r1.missionContext.missionContextVersion);
+    expect(isNativeOwnerCurrent(owner)).toBe(true);
+
+    updateMissionContext(20, "EN_ROUTE" as never);
+    expect(isNativeOwnerCurrent(owner)).toBe(false);
+
+    const ownerAfter = toNativeTrackingOwner(captureActiveRuntime()!);
+    expect(ownerAfter.missionId).toBe(20);
+    expect(isNativeOwnerCurrent(ownerAfter)).toBe(true);
   });
 
   it("stale stop is ignored after new generation", async () => {

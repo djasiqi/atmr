@@ -49,9 +49,13 @@ describe("trackingContextLease", () => {
       sessionGenerationId: 3,
       trackingGenerationId: "trk-a",
       trackingIdentityId: "driver:42:company:1",
+      missionId: 10,
+      missionContextVersion: 2,
     });
     expect(leaseAllowsCapture(lease)).toBe(true);
     expect(leaseAllowsTransport(lease)).toBe(true);
+    expect(lease.missionId).toBe(10);
+    expect(lease.missionContextVersion).toBe(2);
   });
 
   it("switching depuis driver : capture ON, transport OFF", async () => {
@@ -61,6 +65,8 @@ describe("trackingContextLease", () => {
       sessionGenerationId: 3,
       trackingGenerationId: "trk-a",
       trackingIdentityId: "driver:42:company:1",
+      missionId: 7,
+      missionContextVersion: 1,
     });
     const switching = await setTrackingContextLeaseSwitching({
       fromDriver: true,
@@ -84,6 +90,8 @@ describe("trackingContextLease", () => {
       sessionGenerationId: 1,
       trackingGenerationId: "trk-x",
       trackingIdentityId: "driver:7:company:1",
+      missionId: 3,
+      missionContextVersion: 4,
     });
     await setTrackingContextLeaseSwitching({
       fromDriver: true,
@@ -92,6 +100,7 @@ describe("trackingContextLease", () => {
     const restored = await restoreTrackingContextLeaseDriverActiveFromSwitching();
     expect(restored?.state).toBe("driver_active");
     expect(restored?.driverId).toBe(7);
+    expect(restored?.missionId).toBe(3);
     expect(leaseAllowsTransport(restored)).toBe(true);
   });
 
@@ -113,6 +122,8 @@ describe("trackingContextLease", () => {
       sessionGenerationId: 2,
       trackingGenerationId: "trk-y",
       trackingIdentityId: "driver:9:company:1",
+      missionId: null,
+      missionContextVersion: 1,
     });
     await setTrackingContextLeaseSwitching({
       fromDriver: true,
@@ -136,12 +147,40 @@ describe("trackingContextLease", () => {
       sessionGenerationId: 8,
       trackingGenerationId: "trk-persist",
       trackingIdentityId: "driver:5:company:1",
+      missionId: 55,
+      missionContextVersion: 9,
     });
     __resetTrackingContextLeaseForTests();
     const lease = await readTrackingContextLease();
     expect(lease?.state).toBe("driver_active");
     if (lease?.state === "driver_active") {
       expect(lease.trackingGenerationId).toBe("trk-persist");
+      expect(lease.missionId).toBe(55);
+      expect(lease.missionContextVersion).toBe(9);
     }
+  });
+
+  it("legacy v1 : fail-closed (jamais réutilisé comme autorité)", async () => {
+    const AsyncStorage = require("@react-native-async-storage/async-storage") as {
+      __store: Map<string, string>;
+      getItem: jest.Mock;
+      setItem: jest.Mock;
+    };
+    AsyncStorage.__store.set(
+      "@driver:tracking_context_lease_v1",
+      JSON.stringify({
+        state: "driver_active",
+        contextId: "driver:1",
+        driverId: 1,
+        sessionGenerationId: 1,
+        trackingGenerationId: "legacy",
+        trackingIdentityId: "driver:1:company:1",
+        updatedAt: Date.now(),
+      })
+    );
+    const lease = await readTrackingContextLease();
+    expect(lease?.state).toBe("inactive");
+    expect(leaseAllowsTransport(lease)).toBe(false);
+    expect(AsyncStorage.__store.has("@driver:tracking_context_lease_v1")).toBe(false);
   });
 });

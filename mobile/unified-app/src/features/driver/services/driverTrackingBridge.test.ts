@@ -155,6 +155,7 @@ jest.mock("./backgroundLocationTask", () => ({
 jest.mock("./trackingContextLease", () => ({
   setTrackingContextLeaseDriverActive: jest.fn().mockResolvedValue(undefined),
   setTrackingContextLeaseInactive: jest.fn().mockResolvedValue(undefined),
+  setTrackingContextLeaseSwitching: jest.fn().mockResolvedValue(undefined),
   readTrackingContextLease: jest.fn().mockResolvedValue({
     state: "driver_active",
     contextId: "driver:1",
@@ -162,10 +163,24 @@ jest.mock("./trackingContextLease", () => ({
     sessionGenerationId: 1,
     trackingGenerationId: "trk-test",
     trackingIdentityId: "driver:1:company:1",
+    missionId: null,
+    missionContextVersion: 1,
     updatedAt: Date.now(),
   }),
   leaseAllowsTransport: () => true,
   leaseAllowsCapture: () => true,
+}));
+
+jest.mock("../tracking/TrackingRecoveryOrchestrator", () => ({
+  tickTrackingRecovery: jest.fn().mockResolvedValue({
+    recoveryStage: "HEALTHY",
+    recoveryGeneration: 0,
+    startedAt: 0,
+    nextCheckAt: 0,
+    attemptCount: 0,
+    lastEvidence: null,
+  }),
+  runTrackingRecoveryCascade: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe("driver tracking bridge", () => {

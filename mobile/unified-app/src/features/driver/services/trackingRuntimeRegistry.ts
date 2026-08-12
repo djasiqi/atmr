@@ -52,6 +52,8 @@ export type NativeTrackingOwner = {
   sessionGenerationId: number;
   trackingIdentityId: string;
   missionContextVersion: number;
+  /** Mission portée par le propriétaire natif (null = présence / hors mission). */
+  missionId: number | null;
   driverId: number;
 };
 
@@ -246,6 +248,7 @@ export function toNativeTrackingOwner(
     sessionGenerationId: runtime.identity.sessionGenerationId,
     trackingIdentityId: runtime.identity.trackingIdentityId,
     missionContextVersion: runtime.missionContext.missionContextVersion,
+    missionId: runtime.missionContext.missionId,
     driverId: runtime.identity.driverId,
   };
 }
@@ -258,7 +261,9 @@ export function isNativeOwnerCurrent(
     owner.trackingGenerationId === activeRuntime.identity.trackingGenerationId &&
     owner.trackingIdentityId === activeRuntime.identity.trackingIdentityId &&
     owner.sessionGenerationId === activeRuntime.identity.sessionGenerationId &&
-    owner.driverId === activeRuntime.identity.driverId
+    owner.driverId === activeRuntime.identity.driverId &&
+    owner.missionId === activeRuntime.missionContext.missionId &&
+    owner.missionContextVersion === activeRuntime.missionContext.missionContextVersion
   );
 }
 
@@ -274,6 +279,8 @@ export function validateNativeOwnerForHeadless(params: {
     trackingGenerationId?: string;
     trackingIdentityId?: string;
     contextId?: string;
+    missionId?: number | null;
+    missionContextVersion?: number;
   } | null;
   authUsable: boolean;
 }): { ok: true } | { ok: false; reason: string } {
@@ -302,6 +309,17 @@ export function validateNativeOwnerForHeadless(params: {
   const expectedContext = `driver:${owner.driverId}`;
   if (lease.contextId !== expectedContext) {
     return { ok: false, reason: "context_id_mismatch" };
+  }
+  const leaseMissionId =
+    lease.missionId === undefined ? null : lease.missionId;
+  if (owner.missionId !== leaseMissionId) {
+    return { ok: false, reason: "mission_id_mismatch" };
+  }
+  if (
+    typeof lease.missionContextVersion !== "number" ||
+    owner.missionContextVersion !== lease.missionContextVersion
+  ) {
+    return { ok: false, reason: "mission_context_version_mismatch" };
   }
   return { ok: true };
 }

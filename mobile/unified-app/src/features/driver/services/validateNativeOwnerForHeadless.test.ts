@@ -46,6 +46,7 @@ describe("validateNativeOwnerForHeadless", () => {
     });
     const owner = toNativeTrackingOwner(runtime);
     expect(owner.driverId).toBe(42);
+    expect(owner.missionId).toBe(1);
     // Simule process death : clear runtime mémoire
     __resetTrackingRuntimeRegistryForTests();
     expect(captureActiveRuntime()).toBeNull();
@@ -60,6 +61,8 @@ describe("validateNativeOwnerForHeadless", () => {
         sessionGenerationId: owner.sessionGenerationId,
         trackingGenerationId: owner.trackingGenerationId,
         trackingIdentityId: owner.trackingIdentityId,
+        missionId: owner.missionId,
+        missionContextVersion: owner.missionContextVersion,
       },
       authUsable: true,
     });
@@ -74,6 +77,7 @@ describe("validateNativeOwnerForHeadless", () => {
         trackingGenerationId: "old",
         trackingIdentityId: "driver:42:company:1",
         missionContextVersion: 1,
+        missionId: 1,
       },
       lease: {
         state: "driver_active",
@@ -82,12 +86,53 @@ describe("validateNativeOwnerForHeadless", () => {
         sessionGenerationId: 1,
         trackingGenerationId: "new",
         trackingIdentityId: "driver:42:company:1",
+        missionId: 1,
+        missionContextVersion: 1,
       },
       authUsable: true,
     });
     expect(check.ok).toBe(false);
     if (!check.ok) {
       expect(check.reason).toBe("tracking_generation_mismatch");
+    }
+  });
+
+  it("refuse missionId / missionContextVersion mismatch vs lease", () => {
+    const baseOwner = {
+      driverId: 42,
+      sessionGenerationId: 1,
+      trackingGenerationId: "trk",
+      trackingIdentityId: "driver:42:company:1",
+      missionContextVersion: 2,
+      missionId: 10,
+    };
+    const baseLease = {
+      state: "driver_active" as const,
+      contextId: "driver:42",
+      driverId: 42,
+      sessionGenerationId: 1,
+      trackingGenerationId: "trk",
+      trackingIdentityId: "driver:42:company:1",
+      missionId: 10,
+      missionContextVersion: 2,
+    };
+    const missionMismatch = validateNativeOwnerForHeadless({
+      owner: { ...baseOwner, missionId: 99 },
+      lease: baseLease,
+      authUsable: true,
+    });
+    expect(missionMismatch.ok).toBe(false);
+    if (!missionMismatch.ok) {
+      expect(missionMismatch.reason).toBe("mission_id_mismatch");
+    }
+    const versionMismatch = validateNativeOwnerForHeadless({
+      owner: baseOwner,
+      lease: { ...baseLease, missionContextVersion: 1 },
+      authUsable: true,
+    });
+    expect(versionMismatch.ok).toBe(false);
+    if (!versionMismatch.ok) {
+      expect(versionMismatch.reason).toBe("mission_context_version_mismatch");
     }
   });
 
@@ -99,6 +144,7 @@ describe("validateNativeOwnerForHeadless", () => {
         trackingGenerationId: "trk",
         trackingIdentityId: "driver:42:company:1",
         missionContextVersion: 1,
+        missionId: 1,
       },
       lease: { state: "inactive" },
       authUsable: true,
@@ -116,6 +162,8 @@ describe("validateNativeOwnerForHeadless", () => {
         sessionGenerationId: 1,
         trackingGenerationId: "trk",
         trackingIdentityId: "driver:42:company:1",
+        missionId: 1,
+        missionContextVersion: 1,
       },
       authUsable: true,
     });

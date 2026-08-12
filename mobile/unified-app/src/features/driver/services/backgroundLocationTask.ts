@@ -60,6 +60,8 @@ type NativeTrackingOwnerPersist = {
   sessionGenerationId: number;
   trackingIdentityId: string;
   missionContextVersion: number;
+  /** Mission portée par le propriétaire natif (null = présence). */
+  missionId: number | null;
   driverId: number;
 };
 
@@ -285,6 +287,12 @@ async function readTaskContext(): Promise<BackgroundTaskRuntimeContext | null> {
                 typeof owner.missionContextVersion === "number"
                   ? owner.missionContextVersion
                   : 0,
+              missionId:
+                owner.missionId === null || owner.missionId === undefined
+                  ? null
+                  : typeof owner.missionId === "number" && Number.isFinite(owner.missionId)
+                    ? owner.missionId
+                    : null,
               driverId: owner.driverId,
             }
           : null,
@@ -555,6 +563,29 @@ function defineTaskIfNeeded() {
         });
         return;
       }
+      // Gate capture : contexte task vs owner (mission / version).
+      if (
+        lease?.state === "driver_active" &&
+        context.nativeOwner &&
+        (context.nativeOwner.missionId !== context.missionId ||
+          (lease.missionId !== undefined &&
+            context.nativeOwner.missionId !== lease.missionId) ||
+          (typeof lease.missionContextVersion === "number" &&
+            context.nativeOwner.missionContextVersion !== lease.missionContextVersion))
+      ) {
+        emitDriverTelemetry("tracking.background.task.skipped", {
+          source: "driver.services.backgroundLocationTask",
+          reason: "mission_or_version_mismatch",
+          task_name: BACKGROUND_LOCATION_TASK_NAME,
+          context_mission_id: context.missionId,
+          owner_mission_id: context.nativeOwner.missionId,
+          owner_mission_context_version: context.nativeOwner.missionContextVersion,
+          lease_mission_id: lease.state === "driver_active" ? lease.missionId : null,
+          lease_mission_context_version:
+            lease.state === "driver_active" ? lease.missionContextVersion : null,
+        });
+        return;
+      }
       if (lease?.state === "switching") {
         if (!context.nativeOwner) {
           emitDriverTelemetry("tracking.background.task.skipped", {
@@ -640,13 +671,27 @@ function defineTaskIfNeeded() {
       );
       for (const location of locations) {
         const timestamp = new Date(location.timestamp ?? Date.now()).toISOString();
+        const lat = location.coords.latitude;
+        const lon = location.coords.longitude;
+        const osIdRaw = (location as unknown as { id?: unknown }).id;
+        const osId = typeof osIdRaw === "string" ? osIdRaw : null;
+        const captureId = osId
+          ? `os:${osId}`
+          : `fix:${timestamp}:${Number(lat).toFixed(6)}:${Number(lon).toFixed(6)}`;
+        const trackingGenerationId =
+          context.nativeOwner?.trackingGenerationId ?? null;
+        const missionContextVersion =
+          context.nativeOwner?.missionContextVersion ?? null;
         await driverTrackingQueue.enqueue({
           missionId: context.missionId,
           appState: "background" as AppStateStatus,
           locationMode: mode,
+          captureId,
+          trackingGenerationId,
+          missionContextVersion,
           payload: {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
+            latitude: lat,
+            longitude: lon,
             accuracy: location.coords.accuracy ?? undefined,
             heading: location.coords.heading ?? undefined,
             speed: location.coords.speed ?? undefined,
@@ -654,6 +699,8 @@ function defineTaskIfNeeded() {
             isBackground: true,
             timestamp,
             locationMode: mode,
+            trackingGenerationId,
+            missionContextVersion,
           },
         });
       }
@@ -767,6 +814,8 @@ export async function setBackgroundTrackingMissionContext(
 type StartBackgroundOptions = {
   presenceWindow?: boolean;
   scheduling?: MissionSchedulingSnapshot | null;
+  /** Owner natif à persister avec le contexte (évite write sans owner pendant switch). */
+  nativeOwner?: NativeTrackingOwnerPersist | null;
 };
 
 async function startBackgroundLocationTaskIfEligibleInternal(
@@ -1129,15 +1178,60 @@ export async function ensureNativeTrackingWhileForeground(
   const lifecycle = await getNativeTaskLifecycleStatus();
   const taskMode: BackgroundTrackingTaskMode = isPresenceWindow ? "presence_window" : "mission";
   const priorContext = await readTaskContext();
+  const desiredOwner =
+    options.nativeOwner === undefined ? undefined : options.nativeOwner;
+
+  // Android : FGS déjà démarré avec owner mission/version obsolète → hard restart.
+  const ownerVersionMismatch =
+    Platform.OS === "android" &&
+    lifecycle.taskStarted &&
+    desiredOwner != null &&
+    priorContext?.nativeOwner != null &&
+    (priorContext.nativeOwner.missionId !== desiredOwner.missionId ||
+      priorContext.nativeOwner.missionContextVersion !==
+        desiredOwner.missionContextVersion);
 
   await withBackgroundTrackingLifecycleLock(async () => {
     await setBackgroundTrackingMissionContext(
       missionId,
       missionStatus,
       taskMode,
-      options.scheduling ?? null
+      options.scheduling ?? null,
+      desiredOwner
     );
   });
+
+  if (ownerVersionMismatch) {
+    emitDriverTelemetry("tracking.background.fgs_hard_restart", {
+      source: "driver.services.backgroundLocationTask",
+      reason: `${reason}:owner_version_mismatch`,
+      mission_id: missionId,
+      prior_mission_id: priorContext?.nativeOwner?.missionId ?? null,
+      prior_mission_context_version:
+        priorContext?.nativeOwner?.missionContextVersion ?? null,
+      desired_mission_id: desiredOwner?.missionId ?? null,
+      desired_mission_context_version: desiredOwner?.missionContextVersion ?? null,
+    });
+    await stopNativeBackgroundLocationUpdatesSafely();
+    clearPendingFgsStart();
+    stopNativeTrackingWatchdog();
+    if (AppState.currentState === "active") {
+      await startBackgroundLocationTaskIfEligibleInternal(
+        missionId,
+        missionStatus,
+        options,
+        `${reason}:owner_version_mismatch`
+      );
+    } else {
+      setPendingFgsStart({
+        active: true,
+        reason: "android_fgs_owner_version_mismatch",
+        missionId,
+        deferredAt: Date.now(),
+      });
+    }
+    return;
+  }
 
   const contextUpgradedToMission =
     lifecycle.taskStarted &&
@@ -1232,9 +1326,41 @@ export async function restartNativeTrackingFromWake(reason = "silent_push_wake")
       await ensureNativeTrackingWhileForeground(
         ctx.missionId,
         ctx.missionStatus,
-        {},
+        { nativeOwner: ctx.nativeOwner ?? undefined },
         reason
       );
+    }
+    // P6 : tick recovery au wake (event-driven).
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const recovery = require("../tracking/TrackingRecoveryOrchestrator") as typeof import("../tracking/TrackingRecoveryOrchestrator");
+      if (typeof recovery.tickTrackingRecovery === "function") {
+        void recovery
+          .tickTrackingRecovery(
+            Date.now(),
+            {
+              reason: `wake:${reason}`,
+              fixRecent: false,
+            },
+            {
+              restartWatch: async () => undefined,
+              restartFgs: async (r) => {
+                if (ctx?.missionId != null) {
+                  await ensureNativeTrackingWhileForeground(
+                    ctx.missionId,
+                    ctx.missionStatus,
+                    { nativeOwner: ctx.nativeOwner ?? undefined },
+                    r
+                  );
+                }
+              },
+              restartEngine: async () => undefined,
+            }
+          )
+          .catch(() => undefined);
+      }
+    } catch {
+      /* noop */
     }
     emitDriverTelemetry("tracking.background.wake_restart", {
       source: "driver.services.backgroundLocationTask",

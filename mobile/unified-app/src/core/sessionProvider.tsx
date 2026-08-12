@@ -590,6 +590,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
                 sessionGenerationId: runtime.identity.sessionGenerationId,
                 trackingGenerationId: runtime.identity.trackingGenerationId,
                 trackingIdentityId: runtime.identity.trackingIdentityId,
+                missionId: runtime.missionContext.missionId,
+                missionContextVersion: runtime.missionContext.missionContextVersion,
               });
             }
           }
@@ -831,6 +833,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
             trackingIdentityId:
               runtime.identity.trackingIdentityId ||
               resolveTrackingIdentityId(driverId),
+            missionId: runtime.missionContext.missionId,
+            missionContextVersion: runtime.missionContext.missionContextVersion,
           });
           const { driverTrackingQueue } = loadDriverTrackingQueue();
           await driverTrackingQueue.clearContextInactiveGate("context_entered_driver");

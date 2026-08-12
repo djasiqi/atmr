@@ -170,6 +170,7 @@ async function seedEligibleMissionContext(opts?: {
         sessionGenerationId: 1,
         trackingIdentityId: "driver:42:company:1",
         missionContextVersion: 1,
+        missionId: 42,
         driverId: 42,
       }
     : null;
@@ -192,6 +193,8 @@ async function seedEligibleMissionContext(opts?: {
       sessionGenerationId: 1,
       trackingGenerationId: "trk-1",
       trackingIdentityId: "driver:42:company:1",
+      missionId: 42,
+      missionContextVersion: 1,
       updatedAt: Date.now(),
     });
   }
@@ -500,6 +503,7 @@ describe("backgroundLocationTask", () => {
       sessionGenerationId: 2,
       trackingIdentityId: "driver:1:company:1",
       missionContextVersion: 3,
+      missionId: 10,
       driverId: 1,
     };
     asyncStorage.getItem.mockResolvedValue(
@@ -534,6 +538,7 @@ describe("backgroundLocationTask", () => {
           sessionGenerationId: 1,
           trackingIdentityId: "driver:1:company:1",
           missionContextVersion: 1,
+          missionId: 10,
           driverId: 1,
         },
       })
@@ -561,6 +566,7 @@ describe("backgroundLocationTask", () => {
           sessionGenerationId: 1,
           trackingIdentityId: "driver:1:company:1",
           missionContextVersion: 42,
+          missionId: 99,
           driverId: 1,
         },
       })
@@ -593,6 +599,7 @@ describe("backgroundLocationTask", () => {
           sessionGenerationId: 1,
           trackingIdentityId: "driver:1:company:1",
           missionContextVersion: 41,
+          missionId: null,
           driverId: 1,
         },
       })

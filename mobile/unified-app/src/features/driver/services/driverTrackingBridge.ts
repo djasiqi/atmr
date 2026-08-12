@@ -52,7 +52,7 @@ import {
   resolveTrackingEligibility,
   type TrackingEligibilityResult,
 } from "../tracking/trackingEligibility";
-import { runTrackingRecoveryCascade } from "../tracking/TrackingRecoveryOrchestrator";
+import { tickTrackingRecovery } from "../tracking/TrackingRecoveryOrchestrator";
 import {
   captureActiveRuntime,
   ensureTrackingAuthTerminalSubscription,
@@ -67,7 +67,11 @@ import {
 } from "./trackingRuntimeRegistry";
 import { getTrackingAuthAvailability } from "../../../core/auth/sessionAuthDecision";
 import { computeFixAgeMs, WATCH_STALE_MS } from "./driverTrackingFixAge";
-import { setTrackingContextLeaseDriverActive } from "./trackingContextLease";
+import {
+  readTrackingContextLease,
+  setTrackingContextLeaseDriverActive,
+  setTrackingContextLeaseSwitching,
+} from "./trackingContextLease";
 
 export { computeFixAgeMs, WATCH_STALE_MS } from "./driverTrackingFixAge";
 
@@ -510,23 +514,32 @@ async function handleAntiZombieIfNeeded(appState: AppStateStatus): Promise<void>
     fsm_state: state.fsmState,
   });
   getSelfHealActions().triggerDeviceHealth("anti_zombie_fix_stale");
-  if (isFeatureEnabled("tracking_recovery_cascade_enabled")) {
-    await runTrackingRecoveryCascade("anti_zombie_fix_stale", {
-      restartWatch: async (reason) => {
-        await forceRestartTrackingWatchFromBridge(reason, appState);
+  // P6 : tick FSM event-driven (pas de sleep long). Flag off → restartWatch seul.
+  await tickTrackingRecovery(
+    Date.now(),
+    {
+      reason: "anti_zombie_fix_stale",
+      fixRecent: false,
+      watchAlive: false,
+    },
+    {
+      restartWatch: async (r) => {
+        await forceRestartTrackingWatchFromBridge(r, appState);
       },
-      restartFgs: async (reason) => {
+      restartFgs: async (r) => {
         if (state.missionId != null && isFeatureEnabled("tracking_background_enabled")) {
+          const runtime = captureActiveRuntime();
           await ensureNativeTrackingWhileForeground(
             state.missionId,
             state.missionStatus,
-            {},
-            reason
+            {
+              nativeOwner: runtime ? toNativeTrackingOwner(runtime) : undefined,
+            },
+            r
           );
         }
       },
       restartEngine: async () => {
-        // Capturer la mission AVANT stop (sinon missionId=null après await).
         const capturedMissionId = state.missionId;
         const capturedStatus = state.missionStatus;
         const capturedScheduling = state.missionScheduling;
@@ -537,10 +550,14 @@ async function handleAntiZombieIfNeeded(appState: AppStateStatus): Promise<void>
           startDriverTrackingBridge(capturedMissionId, capturedStatus, capturedScheduling);
         }
       },
-    });
-  } else {
-    await forceRestartTrackingWatchFromBridge("anti_zombie_fix_stale", appState);
-  }
+      reconnectTransport: async () => {
+        const snap = realtimeManager.getSnapshot();
+        if (snap.activeContextId) {
+          realtimeManager.connect(snap.activeContextId, { enableSocket: true });
+        }
+      },
+    }
+  );
 }
 
 function resolvePayloadLocationMode(mode: DriverTrackingMode): DriverTrackingMode {
@@ -795,6 +812,9 @@ async function flushPoint(appState: AppStateStatus) {
     missionId: capturedMissionId,
     appState,
     locationMode: payloadMode,
+    captureId: `fix:${nowIso}:${Number(position.coords.latitude).toFixed(6)}:${Number(position.coords.longitude).toFixed(6)}`,
+    trackingGenerationId: identitySnapshot?.trackingGenerationId ?? null,
+    missionContextVersion: missionSnapshot?.missionContextVersion ?? null,
     payload: {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
@@ -1369,38 +1389,45 @@ function ensureManagerState(appStateOverride?: AppStateStatus) {
   ensureNativeTrackingAppStateListener();
 
   if (eligibility.missionEligible && state.missionId != null) {
+    const runtime = captureActiveRuntime();
+    const nativeOwner = runtime ? toNativeTrackingOwner(runtime) : undefined;
     void setBackgroundTrackingMissionContext(
       state.missionId,
       state.missionStatus,
       "mission",
-      state.missionScheduling
+      state.missionScheduling,
+      nativeOwner
     );
     if (isFeatureEnabled("tracking_background_enabled")) {
       void ensureNativeTrackingWhileForeground(
         state.missionId,
         state.missionStatus,
-        { scheduling: state.missionScheduling },
+        { scheduling: state.missionScheduling, nativeOwner },
         "ensure_manager_state"
       );
     }
   } else if (eligibility.backgroundPresenceEligible) {
-    void setBackgroundTrackingMissionContext(null, null, "presence_window");
+    const runtime = captureActiveRuntime();
+    const nativeOwner = runtime ? toNativeTrackingOwner(runtime) : undefined;
+    void setBackgroundTrackingMissionContext(null, null, "presence_window", null, nativeOwner);
     if (isFeatureEnabled("tracking_background_enabled")) {
       void ensureNativeTrackingWhileForeground(
         null,
         null,
-        { presenceWindow: true },
+        { presenceWindow: true, nativeOwner },
         "ensure_manager_presence"
       );
     }
   } else if (eligibility.foregroundPresenceEligible) {
     // Présence FG : watch High ; FGS uniquement si fenêtre ouverte (prépare le BG).
     if (state.presenceWindowOpen && isFeatureEnabled("tracking_background_enabled")) {
-      void setBackgroundTrackingMissionContext(null, null, "presence_window");
+      const runtime = captureActiveRuntime();
+      const nativeOwner = runtime ? toNativeTrackingOwner(runtime) : undefined;
+      void setBackgroundTrackingMissionContext(null, null, "presence_window", null, nativeOwner);
       void ensureNativeTrackingWhileForeground(
         null,
         null,
-        { presenceWindow: true },
+        { presenceWindow: true, nativeOwner },
         "ensure_manager_presence_fg"
       );
     } else {
@@ -1464,26 +1491,11 @@ export function startDriverTrackingBridge(
   lifecycleGeneration += 1;
   const operationGeneration = lifecycleGeneration;
   const driverId = resolveBridgeDriverId();
-  void startOrJoinTrackingRuntime({
-    driverId,
-    missionId,
-    missionStatus: status,
-  }).then((runtime) => {
-    void setTrackingContextLeaseDriverActive({
-      contextId: `driver:${driverId}`,
-      driverId,
-      sessionGenerationId: runtime.identity.sessionGenerationId,
-      trackingGenerationId: runtime.identity.trackingGenerationId,
-      trackingIdentityId: runtime.identity.trackingIdentityId,
-    });
-    void setBackgroundTrackingMissionContext(
-      missionId,
-      status,
-      "mission",
-      scheduling,
-      toNativeTrackingOwner(runtime)
-    );
-  });
+  const previousMissionId = state.missionId;
+  const isMissionSwitch =
+    previousMissionId != null && previousMissionId !== missionId;
+
+  // Mise à jour mémoire immédiate (évite race avec ticks concurrents).
   state.missionId = missionId;
   state.missionStatus = status;
   state.missionScheduling = scheduling ?? null;
@@ -1496,14 +1508,61 @@ export function startDriverTrackingBridge(
   resetPermissionState();
   void hideMissionBarAndroid();
   ensureNativeTrackingAppStateListener();
-  if (isFeatureEnabled("tracking_background_enabled")) {
-      void ensureNativeTrackingWhileForeground(
-        state.missionId,
-        state.missionStatus,
-        { scheduling: state.missionScheduling },
-        "mission_started"
+
+  void (async () => {
+    try {
+      // Switch A→B : lease switching avant mutation contexte/owner.
+      if (isMissionSwitch) {
+        const currentLease = await readTrackingContextLease();
+        await setTrackingContextLeaseSwitching({
+          fromDriver: true,
+          previousDriverActive:
+            currentLease?.state === "driver_active" ? currentLease : null,
+        });
+      }
+
+      const runtime = await startOrJoinTrackingRuntime({
+        driverId,
+        missionId,
+        missionStatus: status,
+      });
+      if (operationGeneration !== lifecycleGeneration) return;
+
+      const owner = toNativeTrackingOwner(runtime);
+      // Toujours écrire contexte + owner ensemble (jamais context sans owner pendant switch).
+      await setBackgroundTrackingMissionContext(
+        missionId,
+        status,
+        "mission",
+        scheduling,
+        owner
       );
-  }
+      await setTrackingContextLeaseDriverActive({
+        contextId: `driver:${driverId}`,
+        driverId,
+        sessionGenerationId: runtime.identity.sessionGenerationId,
+        trackingGenerationId: runtime.identity.trackingGenerationId,
+        trackingIdentityId: runtime.identity.trackingIdentityId,
+        missionId: runtime.missionContext.missionId,
+        missionContextVersion: runtime.missionContext.missionContextVersion,
+      });
+
+      if (
+        operationGeneration === lifecycleGeneration &&
+        isFeatureEnabled("tracking_background_enabled")
+      ) {
+        await ensureNativeTrackingWhileForeground(
+          missionId,
+          status,
+          { scheduling: scheduling ?? null, nativeOwner: owner },
+          isMissionSwitch ? "mission_switch" : "mission_started"
+        );
+      }
+    } catch {
+      /* best-effort : ensureManagerState reprendra */
+    }
+  })();
+
   ensureManagerState();
   armNoLocationCallbackWatchdog(missionId, operationGeneration);
   notifyTrackingBridgeListeners();
@@ -1511,7 +1570,28 @@ export function startDriverTrackingBridge(
 
 export function updateDriverTrackingBridgeStatus(status: DriverMissionStatus) {
   state.missionStatus = status;
-  updateMissionContext(state.missionId, status);
+  const runtime = updateMissionContext(state.missionId, status);
+  if (runtime) {
+    const owner = toNativeTrackingOwner(runtime);
+    void setTrackingContextLeaseDriverActive({
+      contextId: `driver:${runtime.identity.driverId}`,
+      driverId: runtime.identity.driverId,
+      sessionGenerationId: runtime.identity.sessionGenerationId,
+      trackingGenerationId: runtime.identity.trackingGenerationId,
+      trackingIdentityId: runtime.identity.trackingIdentityId,
+      missionId: runtime.missionContext.missionId,
+      missionContextVersion: runtime.missionContext.missionContextVersion,
+    });
+    if (state.missionId != null) {
+      void setBackgroundTrackingMissionContext(
+        state.missionId,
+        status,
+        "mission",
+        state.missionScheduling,
+        owner
+      );
+    }
+  }
   void hideMissionBarAndroid();
   if (!isEligible()) {
     void stopDriverTrackingBridge();
