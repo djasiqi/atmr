@@ -186,9 +186,8 @@ def test_kafka_preserves_missing_recorded_at_across_server_defaults() -> None:
 
 def test_teleport_rejected_forces_live_eligible_false() -> None:
     """INV-P0-2 : LocationService peut true→false après téléport."""
-    from services.geolocation.location import LocationService, LocationUpdateResult
+    from services.geolocation.location import LocationUpdateResult
 
-    svc = LocationService.__new__(LocationService)
     # Simule le post-traitement teleport dans update_driver_location
     effective_live_eligible = True
     accept_reason = "teleport_rejected"

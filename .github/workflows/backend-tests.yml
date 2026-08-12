@@ -311,13 +311,17 @@ jobs:
         run: |
           echo "📋 Rapport couverture modules critiques (non bloquant)..."
 
+          # Chemins module réels (heuristics vit sous optimization/ ; pas de
+          # backend/services/unified_dispatch/heuristics.py). Style dotted pour
+          # pytest-cov (les chemins .py donnent 0% / module-not-imported).
+          # Pas de --cov-fail-under ici : l'étape est un rapport (voir comment
+          # ci-dessus) ; le plancher global reste le step « baseline 50% ».
           pytest backend/tests/test_heuristics.py backend/tests/test_solver.py backend/tests/test_autonomous_manager.py \
-            --cov=backend/services/unified_dispatch/heuristics.py \
-            --cov=backend/services/unified_dispatch/solver.py \
-            --cov=backend/services/unified_dispatch/autonomous_manager.py \
+            --cov=backend.services.unified_dispatch.optimization.heuristics \
+            --cov=backend.services.unified_dispatch.solver \
+            --cov=backend.services.unified_dispatch.autonomous_manager \
             --cov-config=backend/.coveragerc \
             --cov-report=term-missing \
-            --cov-fail-under=80 \
             --timeout=120 \
             --timeout-method=thread \
             -v

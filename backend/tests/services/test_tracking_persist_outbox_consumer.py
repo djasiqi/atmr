@@ -160,7 +160,7 @@ def test_sequence_duplicate_skip_commits_offset(monkeypatch):
     assert commit_calls == [42]
 
 
-@pytest.mark.parametrize("mode", ("enforce_mission", "strict"))
+@pytest.mark.parametrize("mode", ["enforce_mission", "strict"])
 def test_firewall_exception_fail_closed_zero_pg_outbox(monkeypatch, mode: str):
     """Exception envelope/admit en enforce/strict → 0 PG, 0 outbox, 0 persist-success."""
     consumer = TrackingIngestConsumer()
