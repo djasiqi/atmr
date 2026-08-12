@@ -59,6 +59,11 @@ OSRM_SNAP_TIMEOUT_S = float(os.getenv("OSRM_SNAP_TIMEOUT_S", "1.5"))
 OSRM_SNAP_TIMEOUT_ENABLED = (
     os.getenv("OSRM_SNAP_TIMEOUT_ENABLED", "true").lower() != "false"
 )
+# P4 : split raw/OSRM + garde téléport (opt-in)
+TRACKING_RAW_OSRM_SPLIT_ENABLED = os.getenv(
+    "TRACKING_RAW_OSRM_SPLIT_ENABLED", "false"
+).lower() in ("1", "true", "yes", "on")
+TELEPORT_MAX_SPEED_M_S = 90.0  # ~324 km/h — au-delà = jump GPS irréaliste
 
 # Missions « en cours » : historique trajet pour tout le cycle actif, pas seulement ONBOARD
 # (sinon aucun point pendant EN_ROUTE_* alors que le transport est réel).
@@ -375,7 +380,9 @@ class LocationService:
                 logger.debug("[LocationService] Snap OSRM failed")
 
             try:
-                matched = self._map_match(driver_id, snapped_lon, snapped_lat)
+                matched = self._map_match(
+                    driver_id, snapped_lon, snapped_lat, mission_id=mission_id
+                )
                 if matched:
                     snapped_lon, snapped_lat = matched
                     snap_source = "osrm_match"
@@ -421,6 +428,8 @@ class LocationService:
             transport=transport,
             canonical_eligible=effective_canonical_eligible,
             admission_reason=effective_admission_reason,
+            raw_lat=latitude,
+            raw_lon=longitude,
         )
         # INV-P0-2 : ne jamais ré-autoriser le live après un bloc firewall
         if not effective_live_eligible:
@@ -434,9 +443,7 @@ class LocationService:
             and canonical_updated
             and effective_live_eligible
         )
-        should_persist_db = (
-            accept_status == "accepted_canonical" and effective_canonical_eligible
-        )
+        should_persist_db = accept_status == "accepted_canonical" and effective_canonical_eligible
 
         # 5. Détection geofencing (pickup/dropoff)
         geofencing_service = get_geofencing_service()
@@ -556,7 +563,12 @@ class LocationService:
         return None
 
     def _map_match(
-        self, driver_id: int, longitude: float, latitude: float
+        self,
+        driver_id: int,
+        longitude: float,
+        latitude: float,
+        *,
+        mission_id: int | None = None,
     ) -> Tuple[float, float] | None:
         """Map-matching avec ring buffer de positions récentes.
 
@@ -564,6 +576,7 @@ class LocationService:
             driver_id: ID du chauffeur
             longitude: Longitude
             latitude: Latitude
+            mission_id: si présent, ring isolé par mission (P4)
 
         Returns:
             Tuple (lon, lat) matchée ou None si échec
@@ -574,8 +587,11 @@ class LocationService:
         try:
             if self._is_osrm_circuit_open():
                 return None
-            # Ajouter point actuel au ring buffer
-            ring_key = f"driver:{driver_id}:ring"
+            # Ring par mission si connu, sinon fallback legacy
+            if mission_id is not None:
+                ring_key = f"driver:{driver_id}:ring:{mission_id}"
+            else:
+                ring_key = f"driver:{driver_id}:ring"
             point = {
                 "ts": format_tracking_instant_utc_z(datetime.now(UTC)),
                 "lat": latitude,
@@ -660,6 +676,8 @@ class LocationService:
         transport: str = "http",
         canonical_eligible: bool = True,
         admission_reason: str = "",
+        raw_lat: float | None = None,
+        raw_lon: float | None = None,
     ) -> tuple[str, str, str, bool, bool | None]:
         """Stocke la position dans Redis et DB.
 
@@ -667,12 +685,18 @@ class LocationService:
             (accept_status, accept_reason, received_at, canonical_updated, db_persisted)
             ``db_persisted`` est ``None`` si aucune écriture PG n'a été tentée,
             ``True`` si commit OK, ``False`` si échec (rollback).
+
+        ``raw_lat`` / ``raw_lon`` : coords pré-snap (P4) pour ``last_raw`` ;
+        si absents, on stocke les coords passées (souvent déjà snappées).
         """
         ts_iso = format_tracking_instant_utc_z(timestamp)
         recorded_iso = format_tracking_instant_utc_z(recorded_at)
         sent_iso = format_tracking_instant_utc_z(sent_at)
         received_dt = datetime.now(UTC)
         received_iso = format_tracking_instant_utc_z(received_dt)
+        # Preférer le brut pour last_raw / téléport ; canon utilise latitude/longitude
+        last_raw_lat = latitude if raw_lat is None else float(raw_lat)
+        last_raw_lon = longitude if raw_lon is None else float(raw_lon)
         canonical_updated = False
         try:
             from services.monitoring.driver_location_metrics import (
@@ -765,14 +789,63 @@ class LocationService:
                 ):
                     accept_reason = "mission_live_missing_mission_id"
 
-                # last_raw toujours mis à jour pour observabilité.
+                # last_raw toujours mis à jour pour observabilité (coords pré-snap si fournies).
                 raw_key = f"driver:{driver_id}:loc:last_raw"
+                # P4 : garde téléport (opt-in) — même mission, vitesse implicite > 90 m/s
+                if (
+                    TRACKING_RAW_OSRM_SPLIT_ENABLED
+                    and accept_status == "accepted_canonical"
+                    and mission_id is not None
+                ):
+                    try:
+                        prev_raw = self.redis_client.hgetall(raw_key) or {}
+                        prev: dict[str, str] = {}
+                        for pk, pv in prev_raw.items():
+                            prev[
+                                pk.decode() if isinstance(pk, bytes) else str(pk)
+                            ] = pv.decode() if isinstance(pv, bytes) else str(pv)
+                        prev_mid = str(prev.get("mission_id") or "")
+                        if prev_mid == str(mission_id):
+                            prev_lat = float(prev["lat"])
+                            prev_lon = float(prev["lon"])
+                            prev_ts = prev.get("recorded_at") or prev.get("ts")
+                            from shared.geo_utils import haversine_distance_meters
+
+                            dist_m = haversine_distance_meters(
+                                prev_lat, prev_lon, last_raw_lat, last_raw_lon
+                            )
+                            prev_dt = None
+                            if prev_ts:
+                                try:
+                                    prev_dt = datetime.fromisoformat(
+                                        str(prev_ts).replace("Z", "+00:00")
+                                    )
+                                    if prev_dt.tzinfo is None:
+                                        prev_dt = prev_dt.replace(tzinfo=UTC)
+                                except (ValueError, TypeError):
+                                    prev_dt = None
+                            cur_dt = (
+                                recorded_at
+                                if recorded_at.tzinfo
+                                else recorded_at.replace(tzinfo=UTC)
+                            )
+                            if prev_dt is not None:
+                                dt_s = (cur_dt - prev_dt).total_seconds()
+                                if dt_s > 0 and (dist_m / dt_s) > TELEPORT_MAX_SPEED_M_S:
+                                    accept_status = "accepted_observability_only"
+                                    accept_reason = "teleport_rejected"
+                    except Exception:
+                        logger.debug(
+                            "[LocationService] teleport check skipped",
+                            exc_info=True,
+                        )
+
                 self.redis_client.hset(
                     raw_key,
                     mapping={
                         "company_id": str(company_id) if company_id else "",
-                        "lat": str(latitude),
-                        "lon": str(longitude),
+                        "lat": str(last_raw_lat),
+                        "lon": str(last_raw_lon),
                         "speed": str(speed) if speed is not None else "",
                         "heading": str(heading) if heading is not None else "",
                         "accuracy": str(accuracy) if accuracy is not None else "",

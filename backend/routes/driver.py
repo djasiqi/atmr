@@ -2605,6 +2605,26 @@ class DriverLocation(Resource):
                     mode=loc_mode, transport="http", result="failure"
                 )
 
+        # P5-A : canonical sans ledger durable (200 ids_missing, 409/503, etc.)
+        if isinstance(result, dict) and str(result.get("accept_status") or "") == (
+            "accepted_canonical"
+        ):
+            _ar = (
+                str(result.get("accept_reason"))
+                if result.get("accept_reason") is not None
+                else None
+            )
+            if _ar == "ledger_ids_missing" or result.get("ledger_persisted") is not True:
+                with contextlib.suppress(Exception):
+                    from services.monitoring.driver_location_metrics import (
+                        inc_tracking_pipeline_divergence,
+                    )
+
+                    inc_tracking_pipeline_divergence(
+                        kind="canonical_without_ledger",
+                        transport="http",
+                    )
+
         return result, status_code
 
 

@@ -843,3 +843,19 @@ Critères PASS :
 | `SOCKETIO_CORS_ORIGINS... production` | `FLASK_CONFIG=production` sans CORS sur worker | `FLASK_CONFIG=development` ou CORS explicite |
 | `TRACKING_INGEST_PERSIST_ENABLED=false` | Consumer refuse le start | Ne jamais activer async sans persist |
 
+## PIPELINE_DIVERGENCE + AdmissionDecision (P5-A)
+
+Métrique Prometheus : `inc_tracking_pipeline_divergence(kind=…, transport=…)`.
+
+| `kind` | Signification | Instrumentation |
+|--------|---------------|-----------------|
+| `canonical_without_ledger` | Point `accepted_canonical` sans `ledger_persisted` (ex. `ledger_ids_missing`) | `routes/driver.py` (HTTP) |
+| `socket_batch_skip_persist` | Message Kafka `source=socket_batch` : pas de re-persist PG (déjà live socket) | `ingest_consumer.py` |
+| `stream_without_ledger` / `ledger_without_canonical` | Réservés (autres divergences stream/ledger) | à brancher |
+
+`AdmissionDecision` (`mission_tracking_firewall.py`) reste **orthogonal** à `accept_status` :
+- `live_eligible` / `canonical_eligible` / `disposition` / `reason`
+- Une admission bloquée peut produire de l’observabilité sans canonical ; une divergence P5-A signale un écart **après** acceptation canonique (ledger manquant) ou un chemin volontaire sans persist (`socket_batch`).
+
+Checklist OTA Gate B : [`gps-gate-b-ota-checklist.md`](./gps-gate-b-ota-checklist.md).
+

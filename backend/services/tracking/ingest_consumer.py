@@ -510,6 +510,23 @@ class TrackingIngestConsumer:
                 validated = {**message_obj, "validated_at_ms": record.timestamp}
                 _msg_source = str(message_obj.get("source") or "")
 
+                # P5-A : miroir socket_batch → Kafka sans re-persist PG (déjà fait en live)
+                if _msg_source == "socket_batch":
+                    try:
+                        from services.monitoring.driver_location_metrics import (
+                            inc_tracking_pipeline_divergence,
+                        )
+
+                        inc_tracking_pipeline_divergence(
+                            kind="socket_batch_skip_persist",
+                            transport="kafka",
+                        )
+                    except Exception:
+                        logger.debug(
+                            "[tracking_consumer] divergence metric unavailable",
+                            exc_info=True,
+                        )
+
                 if TRACKING_PERSIST_WITH_OUTBOX and _msg_source != "socket_batch":
                     # Annexe A.1 : TX PG+outbox → COMMIT offset RAW (pas de publish processed)
                     from services.tracking.persist_kafka_outbox import (

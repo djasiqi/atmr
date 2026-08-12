@@ -102,6 +102,7 @@ _TRACKING_INVALID_CONFIG = None
 _TRACKING_RATE_LIMIT_FALLBACK = None
 _STALE_FIX_WATCHDOG_KICK = None
 _TRACKING_MISSION_FIREWALL = None
+_TRACKING_PIPELINE_DIVERGENCE = None
 
 _VALID_TRANSPORTS = frozenset({"http", "socket", "socket_batch", "kafka"})
 
@@ -315,6 +316,11 @@ if Counter is not None:
         "tracking_mission_firewall_total",
         "Décisions firewall mission_live (observe/enforce)",
         ["mode", "reason", "would_block", "enforced", "transport"],
+    )
+    _TRACKING_PIPELINE_DIVERGENCE = Counter(
+        "tracking_pipeline_divergence_total",
+        "Divergence mesurée entre stream / canonical / ledger / transport (P5-A)",
+        ["kind", "transport"],
     )
 
 if Histogram is not None:
@@ -1025,3 +1031,22 @@ def inc_tracking_mission_firewall(
         enforced="1" if enforced else "0",
         transport=t,
     ).inc()
+
+
+_PIPELINE_DIVERGENCE_KINDS = frozenset(
+    {
+        "stream_without_ledger",
+        "canonical_without_ledger",
+        "socket_batch_skip_persist",
+        "ledger_without_canonical",
+    }
+)
+
+
+def inc_tracking_pipeline_divergence(*, kind: str, transport: str) -> None:
+    """Instrumentation P5-A — divergence stream/canonical/ledger."""
+    if not _metrics_enabled() or _TRACKING_PIPELINE_DIVERGENCE is None:
+        return
+    k = kind if kind in _PIPELINE_DIVERGENCE_KINDS else "_unknown"
+    t = _norm_transport(transport)
+    _TRACKING_PIPELINE_DIVERGENCE.labels(kind=k, transport=t).inc()
