@@ -145,9 +145,13 @@ def evaluate_mission_live_admission(
 
     if effective_mode == "strict":
         if not envelope.location_event_id_present:
-            return _block_decision(reason="missing_location_event_id", mode=effective_mode)
+            return _block_decision(
+                reason="missing_location_event_id", mode=effective_mode
+            )
         if not envelope.tracking_session_id_present:
-            return _block_decision(reason="missing_tracking_session_id", mode=effective_mode)
+            return _block_decision(
+                reason="missing_tracking_session_id", mode=effective_mode
+            )
         if not envelope.session_generation_present:
             return _block_decision(
                 reason="missing_session_generation", mode=effective_mode

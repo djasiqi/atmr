@@ -109,9 +109,7 @@ def test_assigned_window_helper() -> None:
     now = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
     assert assigned_in_tracking_window(now, True, now) is True
     assert assigned_in_tracking_window(now, False, now) is False
-    assert (
-        assigned_in_tracking_window(now - timedelta(days=5), True, now) is False
-    )
+    assert assigned_in_tracking_window(now - timedelta(days=5), True, now) is False
 
 
 def test_assigned_naive_geneva_summer_is_zurich_not_utc() -> None:

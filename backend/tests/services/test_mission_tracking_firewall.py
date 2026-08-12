@@ -36,9 +36,7 @@ def test_firewall_off_always_allows() -> None:
         "services.tracking.mission_tracking_firewall.get_mission_firewall_mode",
         return_value="off",
     ):
-        d = evaluate_mission_live_admission(
-            driver_id=1, envelope=_env(), mode="off"
-        )
+        d = evaluate_mission_live_admission(driver_id=1, envelope=_env(), mode="off")
     assert d.live_eligible is True
     assert d.would_block is False
 

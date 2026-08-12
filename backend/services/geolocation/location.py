@@ -311,7 +311,9 @@ class LocationService:
         sent_dt = sent_at or datetime.now(UTC)
         # INV-P0-2 : live_eligible=false est monotone (jamais ré-autorisé ici)
         effective_live_eligible = bool(live_eligible)
-        effective_canonical_eligible = bool(canonical_eligible) and effective_live_eligible
+        effective_canonical_eligible = (
+            bool(canonical_eligible) and effective_live_eligible
+        )
         effective_admission_reason = admission_reason or ""
         driver_repo = DriverRepository()
         driver_dto = driver_repo.find_by_id(driver_id)
@@ -455,7 +457,9 @@ class LocationService:
             and canonical_updated
             and effective_live_eligible
         )
-        should_persist_db = accept_status == "accepted_canonical" and effective_canonical_eligible
+        should_persist_db = (
+            accept_status == "accepted_canonical" and effective_canonical_eligible
+        )
 
         # 5. Détection geofencing (pickup/dropoff)
         geofencing_service = get_geofencing_service()
@@ -602,10 +606,7 @@ class LocationService:
             if self._is_osrm_circuit_open():
                 return None
             # P4 : ring mission+version uniquement derrière le flag (sinon legacy)
-            if (
-                TRACKING_RAW_OSRM_SPLIT_ENABLED
-                and mission_id is not None
-            ):
+            if TRACKING_RAW_OSRM_SPLIT_ENABLED and mission_id is not None:
                 version = (
                     int(mission_context_version)
                     if mission_context_version is not None
@@ -823,9 +824,9 @@ class LocationService:
                         prev_raw = self.redis_client.hgetall(raw_key) or {}
                         prev: dict[str, str] = {}
                         for pk, pv in prev_raw.items():
-                            prev[
-                                pk.decode() if isinstance(pk, bytes) else str(pk)
-                            ] = pv.decode() if isinstance(pv, bytes) else str(pv)
+                            prev[pk.decode() if isinstance(pk, bytes) else str(pk)] = (
+                                pv.decode() if isinstance(pv, bytes) else str(pv)
+                            )
                         prev_mid = str(prev.get("mission_id") or "")
                         if prev_mid == str(mission_id):
                             prev_lat = float(prev["lat"])
@@ -853,7 +854,10 @@ class LocationService:
                             )
                             if prev_dt is not None:
                                 dt_s = (cur_dt - prev_dt).total_seconds()
-                                if dt_s > 0 and (dist_m / dt_s) > TELEPORT_MAX_SPEED_M_S:
+                                if (
+                                    dt_s > 0
+                                    and (dist_m / dt_s) > TELEPORT_MAX_SPEED_M_S
+                                ):
                                     accept_status = "accepted_observability_only"
                                     accept_reason = "teleport_rejected"
                     except Exception:

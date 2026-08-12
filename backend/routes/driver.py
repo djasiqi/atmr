@@ -2615,7 +2615,10 @@ class DriverLocation(Resource):
                 if result.get("accept_reason") is not None
                 else None
             )
-            if _ar == "ledger_ids_missing" or result.get("ledger_persisted") is not True:
+            if (
+                _ar == "ledger_ids_missing"
+                or result.get("ledger_persisted") is not True
+            ):
                 with contextlib.suppress(Exception):
                     from services.monitoring.driver_location_metrics import (
                         inc_tracking_pipeline_divergence,

@@ -497,9 +497,7 @@ class TrackingIngestConsumer:
             )
 
             payload_raw = message_obj.get("payload")
-            payload_dict = (
-                payload_raw if isinstance(payload_raw, dict) else message_obj
-            )
+            payload_dict = payload_raw if isinstance(payload_raw, dict) else message_obj
             ingress_contract = message_obj.get("ingress_contract")
             envelope = rebuild_envelope_with_ingress_contract(
                 payload_dict if isinstance(payload_dict, dict) else None,

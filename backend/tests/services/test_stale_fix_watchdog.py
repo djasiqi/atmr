@@ -183,8 +183,12 @@ def test_freshness_no_kick_when_canonical_fresh(
     mock_health,
     mock_emit,
 ) -> None:
-    """Mission live + position canonical fraîche → pas de kick."""
+    """Mission live + position canonical fraîche (mission SINGLE alignée) → pas de kick."""
     from models.enums import BookingStatus
+    from services.realtime.live_driver_status import (
+        TrackingMissionResolution,
+        TrackingMissionResolutionState,
+    )
     from services.tracking.stale_fix_watchdog import run_stale_fix_watchdog_tick
 
     mock_redis.get.return_value = None
@@ -192,6 +196,7 @@ def test_freshness_no_kick_when_canonical_fresh(
         "received_at": datetime.now(UTC).isoformat(),
         "lat": "46.2",
         "lon": "6.1",
+        "mission_id": "42",
     }
     mock_booking.query.filter.return_value.with_entities.return_value.all.return_value = [
         _make_row(7514, status=BookingStatus.EN_ROUTE.value)
@@ -203,9 +208,72 @@ def test_freshness_no_kick_when_canonical_fresh(
         "last_heartbeat_at": int(time.time() * 1000),
     }
 
-    result = run_stale_fix_watchdog_tick()
+    single = TrackingMissionResolution(
+        state=TrackingMissionResolutionState.SINGLE,
+        mission_id=42,
+        status=BookingStatus.EN_ROUTE.value,
+        trackable_now=True,
+        reason="ok",
+        candidate_ids=(42,),
+    )
+    with patch(
+        "services.realtime.live_driver_status.authoritative_tracking_mission",
+        return_value=single,
+    ):
+        result = run_stale_fix_watchdog_tick()
     assert result["sent"] == 0
     mock_emit.assert_not_called()
+
+
+@patch("services.realtime.socketio.emit_force_tracking_restart")
+@patch("services.driver_device_health.read_driver_device_health_snapshot")
+@patch("ext.redis_client")
+@patch("models.Booking")
+def test_freshness_kick_when_canonical_mission_mismatch(
+    mock_booking,
+    mock_redis,
+    mock_health,
+    mock_emit,
+) -> None:
+    """Canonical frais mais mission_id ≠ SINGLE authoritative → kick (P7)."""
+    from models.enums import BookingStatus
+    from services.realtime.live_driver_status import (
+        TrackingMissionResolution,
+        TrackingMissionResolutionState,
+    )
+    from services.tracking.stale_fix_watchdog import run_stale_fix_watchdog_tick
+
+    mock_redis.get.return_value = None
+    mock_redis.hgetall.return_value = {
+        "received_at": datetime.now(UTC).isoformat(),
+        "lat": "46.2",
+        "lon": "6.1",
+        "mission_id": "999",
+    }
+    mock_booking.query.filter.return_value.with_entities.return_value.all.return_value = [
+        _make_row(7514, status=BookingStatus.IN_PROGRESS.value)
+    ]
+    mock_health.return_value = {
+        "constraint_reason": "",
+        "tracking_active": True,
+        "fgs_running": True,
+        "last_heartbeat_at": int(time.time() * 1000),
+    }
+    single = TrackingMissionResolution(
+        state=TrackingMissionResolutionState.SINGLE,
+        mission_id=42,
+        status=BookingStatus.IN_PROGRESS.value,
+        trackable_now=True,
+        reason="ok",
+        candidate_ids=(42,),
+    )
+    with patch(
+        "services.realtime.live_driver_status.authoritative_tracking_mission",
+        return_value=single,
+    ):
+        result = run_stale_fix_watchdog_tick()
+    assert result["sent"] == 1
+    assert "server_watchdog_no_fresh_position" in str(mock_emit.call_args)
 
 
 @patch("services.realtime.socketio.emit_force_tracking_restart")

@@ -2892,7 +2892,9 @@ def init_chat_socket(socketio: SocketIO):
                         continue
 
                     # P0-A/D : enveloppe + firewall AVANT dedup (INV-P0-3).
-                    from services.tracking.admission_gate import admit_mission_live_payload
+                    from services.tracking.admission_gate import (
+                        admit_mission_live_payload,
+                    )
 
                     _ingress_envelope_b, _admission_b = admit_mission_live_payload(
                         driver_id=driver.id,
