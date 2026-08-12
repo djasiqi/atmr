@@ -6,10 +6,19 @@ from typing import Callable
 
 from services.geolocation.driver_location_dedup import should_skip_location_ingest
 from services.monitoring.driver_location_metrics import inc_dedup_skipped
+from services.tracking.mission_tracking_firewall import (
+    evaluate_mission_live_admission,
+    record_admission_metrics,
+)
 from services.tracking.time_contract import (
     TrackingInstantError,
     format_tracking_instant_utc_z,
     parse_tracking_instant_strict,
+)
+from services.tracking.tracking_ingress_contract import (
+    TrackingIngressEnvelope,
+    build_tracking_ingress_envelope,
+    evaluate_event_contract,
 )
 
 LAT_THRESHOLD = 90.0
@@ -34,6 +43,11 @@ class UpdateDriverLocationCommand:
     location_event_id: str | None = None
     emit_geofence: bool = True
     company_id: int | None = None
+    # P0-A/D : enveloppe brute (présence avant defaults). Si None, reconstruite.
+    ingress_envelope: TrackingIngressEnvelope | None = None
+    tracking_session_id: str | None = None
+    session_generation: int | None = None
+    sequence_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +63,9 @@ class UpdateDriverLocationResult:
     dedup_reason: str | None = None
     canonical_updated: bool = False
     db_persisted: bool | None = None
+    live_eligible: bool = True
+    canonical_eligible: bool = True
+    admission_reason: str = ""
 
 
 class UpdateDriverLocationUseCase:
@@ -56,6 +73,7 @@ class UpdateDriverLocationUseCase:
 
     Ce use-case encapsule la validation d'entrée et délègue l'exécution à une
     dépendance injectée (typiquement `LocationService.update_driver_location`).
+    INV-P0-3 : EventContract + MissionFirewall avant dedup.
     """
 
     def __init__(
@@ -74,9 +92,32 @@ class UpdateDriverLocationUseCase:
         ):
             raise ValueError("Coordinates out of valid range")
 
+        envelope = cmd.ingress_envelope or build_tracking_ingress_envelope(
+            {
+                "latitude": cmd.latitude,
+                "longitude": cmd.longitude,
+                "location_event_id": cmd.location_event_id,
+                "recorded_at": cmd.recorded_at,
+                "mission_id": cmd.mission_id,
+                "location_mode": cmd.location_mode,
+                "tracking_session_id": cmd.tracking_session_id,
+                "session_generation": cmd.session_generation,
+                "sequence_id": cmd.sequence_id,
+            },
+            transport=cmd.metrics_transport,
+        )
+        contract = evaluate_event_contract(envelope)
+        admission = evaluate_mission_live_admission(
+            driver_id=cmd.driver_id,
+            envelope=envelope,
+            contract=contract,
+        )
+        record_admission_metrics(admission, transport=cmd.metrics_transport)
+
         timestamp = self._parse_ts(cmd.ts)
         recorded_dt = self._parse_ts(cmd.recorded_at) if cmd.recorded_at else timestamp
 
+        # INV-P0-3 : dedup APRÈS firewall (évite claim event_id sur stale_mission)
         skip, skip_reason = should_skip_location_ingest(
             cmd.driver_id,
             cmd.latitude,
@@ -103,6 +144,9 @@ class UpdateDriverLocationUseCase:
                 dedup_reason=skip_reason,
                 canonical_updated=False,
                 db_persisted=None,
+                live_eligible=admission.live_eligible,
+                canonical_eligible=admission.canonical_eligible,
+                admission_reason=admission.reason,
             )
 
         # On garde la signature la plus permissive possible (typage runtime via attrs).
@@ -123,6 +167,9 @@ class UpdateDriverLocationUseCase:
             is_background=bool(cmd.is_background),
             mission_id=cmd.mission_id,
             transport=cmd.metrics_transport,
+            live_eligible=admission.live_eligible,
+            canonical_eligible=admission.canonical_eligible,
+            admission_reason=admission.reason,
         )
 
         snapped_lat = getattr(res, "snapped_lat", cmd.latitude)
@@ -156,6 +203,16 @@ class UpdateDriverLocationUseCase:
         db_persisted: bool | None
         db_persisted = None if db_persisted_raw is None else bool(db_persisted_raw)
 
+        live_eligible = bool(getattr(res, "live_eligible", admission.live_eligible))
+        # INV-P0-2 : jamais remonter live_eligible à true
+        if not admission.live_eligible:
+            live_eligible = False
+        canonical_eligible = bool(
+            getattr(res, "canonical_eligible", admission.canonical_eligible)
+        )
+        if not admission.canonical_eligible:
+            canonical_eligible = False
+
         return UpdateDriverLocationResult(
             snapped_lat=float(snapped_lat),
             snapped_lon=float(snapped_lon),
@@ -166,8 +223,11 @@ class UpdateDriverLocationUseCase:
             received_at=received_at_str,
             dedup_skipped=False,
             dedup_reason=None,
-            canonical_updated=canonical_updated,
+            canonical_updated=canonical_updated and canonical_eligible,
             db_persisted=db_persisted,
+            live_eligible=live_eligible,
+            canonical_eligible=canonical_eligible,
+            admission_reason=admission.reason,
         )
 
     def _parse_ts(self, ts: str | None) -> datetime:

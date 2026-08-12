@@ -101,6 +101,7 @@ _TRACKING_SHADOW_PUBLISH_FAILED = None
 _TRACKING_INVALID_CONFIG = None
 _TRACKING_RATE_LIMIT_FALLBACK = None
 _STALE_FIX_WATCHDOG_KICK = None
+_TRACKING_MISSION_FIREWALL = None
 
 _VALID_TRANSPORTS = frozenset({"http", "socket", "socket_batch", "kafka"})
 
@@ -309,6 +310,11 @@ if Counter is not None:
             "raison (fix_stale | mobile_tracking_down)"
         ),
         ["reason"],
+    )
+    _TRACKING_MISSION_FIREWALL = Counter(
+        "tracking_mission_firewall_total",
+        "Décisions firewall mission_live (observe/enforce)",
+        ["mode", "reason", "would_block", "enforced", "transport"],
     )
 
 if Histogram is not None:
@@ -996,3 +1002,26 @@ def inc_stale_fix_watchdog_kick(*, reason: str) -> None:
         return
     r = reason if reason in _STALE_FIX_WATCHDOG_KICK_REASONS else "_unknown"
     _STALE_FIX_WATCHDOG_KICK.labels(reason=r).inc()
+
+
+def inc_tracking_mission_firewall(
+    *,
+    mode: str,
+    reason: str,
+    would_block: bool,
+    enforced: bool,
+    transport: str,
+) -> None:
+    """Compteur décisions firewall mission (P0-C/D)."""
+    if not _metrics_enabled() or _TRACKING_MISSION_FIREWALL is None:
+        return
+    m = mode if mode in ("off", "observe", "enforce_mission", "strict") else "off"
+    t = _norm_transport(transport)
+    r = (reason or "_unknown")[:64]
+    _TRACKING_MISSION_FIREWALL.labels(
+        mode=m,
+        reason=r,
+        would_block="1" if would_block else "0",
+        enforced="1" if enforced else "0",
+        transport=t,
+    ).inc()

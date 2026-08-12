@@ -120,6 +120,10 @@ class LocationUpdateResult:
     # P0.1 — vérité durable : Redis et PG doivent être reportés séparément
     canonical_updated: bool = False
     db_persisted: bool | None = None
+    # P0-D — décision d'admission (monotone vers le fanout)
+    live_eligible: bool = True
+    canonical_eligible: bool = True
+    admission_reason: str = ""
 
 
 # Sentinel : None explicite = pas de Redis (observability-only) ; défaut = client global.
@@ -263,6 +267,9 @@ class LocationService:
         mission_id: int | None = None,
         db_session: Session | None = None,
         transport: str = "http",
+        live_eligible: bool = True,
+        canonical_eligible: bool = True,
+        admission_reason: str = "",
     ) -> LocationUpdateResult:
         """Met à jour la position d'un chauffeur (snap OSRM + map-matching + stockage).
 
@@ -276,6 +283,8 @@ class LocationService:
             source: Source de la position ("gps", "network", etc.)
             timestamp: Timestamp de la position (défaut: maintenant)
             db_session: Session DB (optionnel, pour transactions)
+            live_eligible: P0-D — si False, pas de fanout carte (monotone)
+            canonical_eligible: P0-D — si False, pas d'écriture loc:canonical
 
         Returns:
             LocationUpdateResult avec position snapée et métadonnées
@@ -293,6 +302,10 @@ class LocationService:
             timestamp = datetime.now(UTC)
         recorded_dt = recorded_at or timestamp
         sent_dt = sent_at or datetime.now(UTC)
+        # INV-P0-2 : live_eligible=false est monotone (jamais ré-autorisé ici)
+        effective_live_eligible = bool(live_eligible)
+        effective_canonical_eligible = bool(canonical_eligible) and effective_live_eligible
+        effective_admission_reason = admission_reason or ""
         driver_repo = DriverRepository()
         driver_dto = driver_repo.find_by_id(driver_id)
         company_id = driver_dto.company_id if driver_dto else None
@@ -406,9 +419,24 @@ class LocationService:
             degraded_context=degraded_context,
             company_id=company_id,
             transport=transport,
+            canonical_eligible=effective_canonical_eligible,
+            admission_reason=effective_admission_reason,
         )
-        should_fanout = accept_status == "accepted_canonical" and canonical_updated
-        should_persist_db = accept_status == "accepted_canonical"
+        # INV-P0-2 : ne jamais ré-autoriser le live après un bloc firewall
+        if not effective_live_eligible:
+            if accept_status == "accepted_canonical":
+                accept_status = "accepted_observability_only"
+            if not accept_reason:
+                accept_reason = effective_admission_reason or "admission_blocked"
+            canonical_updated = False
+        should_fanout = (
+            accept_status == "accepted_canonical"
+            and canonical_updated
+            and effective_live_eligible
+        )
+        should_persist_db = (
+            accept_status == "accepted_canonical" and effective_canonical_eligible
+        )
 
         # 5. Détection geofencing (pickup/dropoff)
         geofencing_service = get_geofencing_service()
@@ -492,6 +520,9 @@ class LocationService:
             degraded_context=degraded_context,
             canonical_updated=canonical_updated,
             db_persisted=db_persisted,
+            live_eligible=effective_live_eligible,
+            canonical_eligible=effective_canonical_eligible,
+            admission_reason=effective_admission_reason,
         )
 
     def _snap_to_road(
@@ -627,6 +658,8 @@ class LocationService:
         degraded_context: bool = False,
         company_id: int | None = None,
         transport: str = "http",
+        canonical_eligible: bool = True,
+        admission_reason: str = "",
     ) -> tuple[str, str, str, bool, bool | None]:
         """Stocke la position dans Redis et DB.
 
@@ -657,6 +690,9 @@ class LocationService:
             pass
         accept_status = "accepted_canonical"
         accept_reason = ""
+        if not canonical_eligible:
+            accept_status = "accepted_observability_only"
+            accept_reason = admission_reason or "admission_not_canonical_eligible"
         if not self.redis_client:
             # Sans Redis, aucun arbitrage canonique fiable n'est possible.
             accept_status = "accepted_observability_only"
@@ -688,6 +724,11 @@ class LocationService:
                     recorded_at=recorded_at,
                     accuracy=accuracy,
                 )
+                if not canonical_eligible:
+                    accept_status = "accepted_observability_only"
+                    accept_reason = (
+                        admission_reason or "admission_not_canonical_eligible"
+                    )
                 try:
                     from services.monitoring.driver_location_metrics import (
                         inc_canonical_overwrite,

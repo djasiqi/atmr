@@ -2005,6 +2005,7 @@ class DriverLocation(Resource):
                                         metrics_transport="http",
                                         location_event_id=loc_ev_str,
                                         company_id=driver_company_id,
+                                        ingress_envelope=_ingress_envelope,
                                     )
                                 )
 
@@ -2270,6 +2271,9 @@ class DriverLocation(Resource):
                                         canonical_payload,
                                         canonical_payload,
                                         accept_status=accept_status,
+                                        live_eligible=bool(
+                                            getattr(uc_result, "live_eligible", True)
+                                        ),
                                     )
                                 except Exception as fanout_err:
                                     logger.warning(

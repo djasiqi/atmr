@@ -2244,17 +2244,13 @@ def init_chat_socket(socketio: SocketIO):
 
             latitude, longitude = lat, lon
 
-            # P0-A : enveloppe brute avant defaults (pas de changement de décision live).
-            from services.tracking.tracking_ingress_contract import (
-                build_tracking_ingress_envelope,
-                evaluate_event_contract,
-            )
+            # P0-A/D : enveloppe + firewall AVANT dedup (INV-P0-3).
+            from services.tracking.admission_gate import admit_mission_live_payload
 
-            _ = evaluate_event_contract(
-                build_tracking_ingress_envelope(
-                    data if isinstance(data, dict) else None,
-                    transport="socket",
-                )
+            _ingress_envelope, _admission = admit_mission_live_payload(
+                driver_id=driver.id,
+                payload=data if isinstance(data, dict) else None,
+                transport="socket",
             )
 
             # ✅ 3.3.1: Utiliser LocationService pour centraliser la logique
@@ -2360,6 +2356,9 @@ def init_chat_socket(socketio: SocketIO):
                     is_background=is_background,
                     mission_id=mission_id if isinstance(mission_id, int) else None,
                     transport="socket",
+                    live_eligible=_admission.live_eligible,
+                    canonical_eligible=_admission.canonical_eligible,
+                    admission_reason=_admission.reason,
                 )
 
                 # Utiliser position snapée
@@ -2473,6 +2472,7 @@ def init_chat_socket(socketio: SocketIO):
                     "received_at": received_at,
                 },
                 accept_status=accept_status,
+                live_eligible=_admission.live_eligible,
             )
             if accept_status == "accepted_canonical":
                 from services.geolocation.driver_eta_socket_fanout import (
@@ -2924,17 +2924,13 @@ def init_chat_socket(socketio: SocketIO):
                         )
                         continue
 
-                    # P0-A : enveloppe brute avant defaults (pas de changement live).
-                    from services.tracking.tracking_ingress_contract import (
-                        build_tracking_ingress_envelope,
-                        evaluate_event_contract,
-                    )
+                    # P0-A/D : enveloppe + firewall AVANT dedup (INV-P0-3).
+                    from services.tracking.admission_gate import admit_mission_live_payload
 
-                    _ = evaluate_event_contract(
-                        build_tracking_ingress_envelope(
-                            pos if isinstance(pos, dict) else None,
-                            transport="socket_batch",
-                        )
+                    _ingress_envelope_b, _admission_b = admit_mission_live_payload(
+                        driver_id=driver.id,
+                        payload=pos if isinstance(pos, dict) else None,
+                        transport="socket_batch",
                     )
 
                     # ✅ 3.3.1: Utiliser LocationService pour chaque position du batch
@@ -3063,6 +3059,9 @@ def init_chat_socket(socketio: SocketIO):
                             if isinstance(mission_id, int)
                             else None,
                             transport="socket_batch",
+                            live_eligible=_admission_b.live_eligible,
+                            canonical_eligible=_admission_b.canonical_eligible,
+                            admission_reason=_admission_b.reason,
                         )
 
                         # Utiliser position snapée
@@ -3198,6 +3197,7 @@ def init_chat_socket(socketio: SocketIO):
                         location_payload,
                         live_state_payload,
                         accept_status=accept_status,
+                        live_eligible=_admission_b.live_eligible,
                     )
 
                     # Option A — miroir Kafka fire-and-forget (voie durable secondaire,

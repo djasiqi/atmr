@@ -608,6 +608,7 @@ def fanout_driver_location_update(
     *,
     accept_status: str,
     namespace: str = DEFAULT_NAMESPACE,
+    live_eligible: bool = True,
 ) -> None:
     """P2: Fanout realtime — room entreprise.
 
@@ -620,6 +621,9 @@ def fanout_driver_location_update(
 
     - ``accepted_canonical`` : les deux événements ci-dessus.
     - ``accepted_observability_only`` : **uniquement** ``driver_location_update``.
+
+    P0-D / INV-P0-2 : ``live_eligible=false`` est monotone — aucun emit carte
+    ni live_state (last_raw / stream ops restent possibles hors de cette fonction).
     """
     if company_id <= 0:
         app_logger.error(
@@ -628,6 +632,15 @@ def fanout_driver_location_update(
         return
     if not accept_status.strip():
         raise ValueError("accept_status is required for fanout_driver_location_update")
+    # INV-P0-2 : firewall blocked → jamais de carte
+    if not live_eligible:
+        drv = location_payload.get("driver_id") or live_state_payload.get("driver_id")
+        app_logger.info(
+            "[socketio] fanout skipped live_eligible=false driver_id=%s company_id=%s",
+            drv,
+            company_id,
+        )
+        return
     # Canonique OU observabilité : les deux doivent pouvoir alimenter la carte entreprise.
     # Avant : seul accepted_canonical fanoutait → la plupart des points (arbitrage, clé Redis
     # legacy sans :canonical, précision GPS médiocre, etc.) n'atteignaient jamais le frontend.
