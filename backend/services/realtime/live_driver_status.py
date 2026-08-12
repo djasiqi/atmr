@@ -46,18 +46,16 @@ class TrackingMissionResolution:
 
 
 def _parse_dt(value) -> datetime | None:
+    """Normalise un datetime métier en UTC aware.
+
+    Les ``DateTime(timezone=False)`` Postgres (ex. ``Booking.scheduled_time``)
+    sont naïfs **Europe/Zurich**, pas UTC — utiliser ``to_utc_from_db``.
+    """
     if value is None or value == "":
         return None
-    if isinstance(value, datetime):
-        dt = value
-    else:
-        try:
-            dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt
+    from shared.time_utils import to_utc_from_db
+
+    return to_utc_from_db(value)
 
 
 def assigned_in_tracking_window(

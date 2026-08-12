@@ -102,19 +102,15 @@ def _coerce_int(value) -> int | None:
 
 
 def _parse_dt(value) -> datetime | None:
-    """Parse un datetime (objet ou ISO string) en tz-aware UTC. None si invalide."""
+    """Parse un datetime (objet ou ISO string) en tz-aware UTC. None si invalide.
+
+    Datetimes naïfs DB = Europe/Zurich (pas UTC) — via ``to_utc_from_db``.
+    """
     if value is None or value == "":
         return None
-    if isinstance(value, datetime):
-        dt = value
-    else:
-        try:
-            dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt
+    from shared.time_utils import to_utc_from_db
+
+    return to_utc_from_db(value)
 
 
 def _assigned_in_tracking_window(scheduled_at, time_confirmed, now: datetime) -> bool:
@@ -209,10 +205,13 @@ def _canonical_freshness_sec(
 def _canonical_mission_matches_authoritative(
     driver_id: int, canonical_mission_id: str | None
 ) -> bool:
-    """True si pas de SINGLE authoritative, ou si mission_id canonical == SINGLE.
+    """True seulement si le live mission est cohérent avec l'autorité.
 
-    En cas d'échec de résolution / pas de mission_id sur canonical : fail-open
-    (conserve le comportement historique de fraîcheur).
+    Contrat P7 (mode mission) :
+    - AMBIGUOUS → unhealthy (False)
+    - SINGLE + mission canonical absente / mismatch → unhealthy
+    - NONE → OK pour contexte présence (pas d'exigence de mission)
+    - échec de résolution → fail-closed (unhealthy)
     """
     try:
         from services.realtime.live_driver_status import (
@@ -222,17 +221,21 @@ def _canonical_mission_matches_authoritative(
 
         resolution = authoritative_tracking_mission(driver_id)
     except Exception:
+        return False
+    if resolution.state == TrackingMissionResolutionState.AMBIGUOUS:
+        return False
+    if resolution.state == TrackingMissionResolutionState.NONE:
         return True
     if resolution.state != TrackingMissionResolutionState.SINGLE:
-        return True
+        return False
     if resolution.mission_id is None:
-        return True
+        return False
     if not canonical_mission_id:
-        return True
+        return False
     try:
         return int(canonical_mission_id) == int(resolution.mission_id)
     except (TypeError, ValueError):
-        return True
+        return False
 
 
 def _resolve_freshness_kick(

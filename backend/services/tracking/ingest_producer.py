@@ -167,6 +167,7 @@ class TrackingIngestProducer:
         payload: dict[str, Any],
         source: str = "http",
         company_id: int | None = None,
+        ingress_contract: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Tente d'envoyer un point GPS vers Kafka.
 
@@ -192,6 +193,8 @@ class TrackingIngestProducer:
             message["company_id"] = int(company_id)
         if payload_event_id is not None and str(payload_event_id).strip():
             message["location_event_id"] = str(payload_event_id).strip()
+        if isinstance(ingress_contract, dict) and ingress_contract:
+            message["ingress_contract"] = dict(ingress_contract)
 
         self._maybe_init_producer()
 
@@ -296,6 +299,7 @@ class TrackingIngestProducer:
         source: str,
         company_id: int | None,
         trace_id: str,
+        ingress_contract: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Construit le message ``raw`` et la clé de partition (par driver_id)."""
         now_ms = int(time.time() * 1000)
@@ -313,6 +317,8 @@ class TrackingIngestProducer:
             message["company_id"] = int(company_id)
         if payload_event_id is not None and str(payload_event_id).strip():
             message["location_event_id"] = str(payload_event_id).strip()
+        if isinstance(ingress_contract, dict) and ingress_contract:
+            message["ingress_contract"] = dict(ingress_contract)
 
         payload_region_id_obj = payload.get("region_id")
         payload_company_id_obj = payload.get("company_id")
@@ -351,6 +357,7 @@ class TrackingIngestProducer:
         payload: dict[str, Any],
         source: str = "socket_batch",
         company_id: int | None = None,
+        ingress_contract: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Publie dans ``raw`` SANS attendre l'ACK broker (voie durable secondaire).
 
@@ -374,6 +381,7 @@ class TrackingIngestProducer:
                 source=source,
                 company_id=company_id,
                 trace_id=trace_id,
+                ingress_contract=ingress_contract,
             )
             future = self._producer.send(
                 TOPIC_DRIVER_LOCATION_RAW, value=message, key=key
@@ -443,12 +451,14 @@ def enqueue_tracking_event(
     payload: dict[str, Any],
     source: str = "http",
     company_id: int | None = None,
+    ingress_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return tracking_ingest_producer.enqueue(
         driver_id=driver_id,
         payload=payload,
         source=source,
         company_id=company_id,
+        ingress_contract=ingress_contract,
     )
 
 
@@ -458,6 +468,7 @@ def enqueue_tracking_event_nowait(
     payload: dict[str, Any],
     source: str = "socket_batch",
     company_id: int | None = None,
+    ingress_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Variante non bloquante (fire-and-forget) — voie durable socket → Kafka."""
     return tracking_ingest_producer.enqueue_fire_and_forget(
@@ -465,4 +476,5 @@ def enqueue_tracking_event_nowait(
         payload=payload,
         source=source,
         company_id=company_id,
+        ingress_contract=ingress_contract,
     )

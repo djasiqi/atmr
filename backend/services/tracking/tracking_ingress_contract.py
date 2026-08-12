@@ -6,8 +6,19 @@ Capture la *présence* des champs avant tout default / repair legacy
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 from typing import Any
+
+# Clés de présence sérialisées à travers Kafka (contrat brut survivant aux defaults).
+_INGRESS_PRESENCE_KEYS = (
+    "recorded_at_present",
+    "location_event_id_present",
+    "mission_id_present",
+    "tracking_session_id_present",
+    "session_generation_present",
+    "sequence_id_present",
+)
 
 
 def _is_present(value: Any) -> bool:
@@ -87,6 +98,17 @@ class TrackingIngressEnvelope:
             "location_mode": self.location_mode,
             "location_mode_present": self.location_mode_present,
             "transport": self.transport,
+        }
+
+    def to_ingress_contract(self) -> dict[str, bool]:
+        """Flags de présence à propager Kafka → consumer (avant defaults)."""
+        return {
+            "recorded_at_present": self.recorded_at_present,
+            "location_event_id_present": self.location_event_id_present,
+            "mission_id_present": self.mission_id_present,
+            "tracking_session_id_present": self.tracking_session_id_present,
+            "session_generation_present": self.session_generation_present,
+            "sequence_id_present": self.sequence_id_present,
         }
 
 
@@ -169,6 +191,44 @@ def build_tracking_ingress_envelope(
     )
 
 
+def _recorded_at_is_parseable(value: str | None) -> bool:
+    if value is None or not str(value).strip():
+        return False
+    try:
+        datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
+def rebuild_envelope_with_ingress_contract(
+    payload: dict[str, Any] | None,
+    *,
+    transport: str,
+    ingress_contract: dict[str, Any] | None,
+    header_location_event_id: str | None = None,
+) -> TrackingIngressEnvelope:
+    """Reconstruit l'enveloppe en restaurant les presence flags d'origine.
+
+    Le payload Kafka peut contenir des defaults serveur (``recorded_at=now``) :
+    les flags ``ingress_contract`` restent l'autorité sur la présence client.
+    """
+    env = build_tracking_ingress_envelope(
+        payload,
+        transport=transport,
+        header_location_event_id=header_location_event_id,
+    )
+    if not isinstance(ingress_contract, dict):
+        return env
+    overrides: dict[str, Any] = {}
+    for key in _INGRESS_PRESENCE_KEYS:
+        if key in ingress_contract:
+            overrides[key] = bool(ingress_contract[key])
+    if not overrides:
+        return env
+    return replace(env, **overrides)
+
+
 def evaluate_event_contract(envelope: TrackingIngressEnvelope) -> EventContractResult:
     """Contrôle d'enveloppe (informational en P0-A ; enforce en P0-D/strict)."""
     reasons: list[str] = []
@@ -176,6 +236,8 @@ def evaluate_event_contract(envelope: TrackingIngressEnvelope) -> EventContractR
         reasons.append("missing_coordinates")
     if not envelope.recorded_at_present:
         reasons.append("missing_recorded_at")
+    elif not _recorded_at_is_parseable(envelope.recorded_at):
+        reasons.append("invalid_recorded_at")
     if not envelope.location_event_id_present:
         reasons.append("missing_location_event_id")
     mode = (envelope.location_mode or "mission_live").strip().lower()

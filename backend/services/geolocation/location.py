@@ -270,6 +270,7 @@ class LocationService:
         sent_at: datetime | None = None,
         is_background: bool = False,
         mission_id: int | None = None,
+        mission_context_version: int | None = None,
         db_session: Session | None = None,
         transport: str = "http",
         live_eligible: bool = True,
@@ -290,6 +291,7 @@ class LocationService:
             db_session: Session DB (optionnel, pour transactions)
             live_eligible: P0-D — si False, pas de fanout carte (monotone)
             canonical_eligible: P0-D — si False, pas d'écriture loc:canonical
+            mission_context_version: version de contexte mission (ring P4, opt-in)
 
         Returns:
             LocationUpdateResult avec position snapée et métadonnées
@@ -381,7 +383,11 @@ class LocationService:
 
             try:
                 matched = self._map_match(
-                    driver_id, snapped_lon, snapped_lat, mission_id=mission_id
+                    driver_id,
+                    snapped_lon,
+                    snapped_lat,
+                    mission_id=mission_id,
+                    mission_context_version=mission_context_version,
                 )
                 if matched:
                     snapped_lon, snapped_lat = matched
@@ -437,6 +443,12 @@ class LocationService:
                 accept_status = "accepted_observability_only"
             if not accept_reason:
                 accept_reason = effective_admission_reason or "admission_blocked"
+        # Downstream peut uniquement true→false (téléport, intégrité future)
+        if accept_reason == "teleport_rejected":
+            effective_live_eligible = False
+            effective_canonical_eligible = False
+            if accept_status == "accepted_canonical":
+                accept_status = "accepted_observability_only"
             canonical_updated = False
         should_fanout = (
             accept_status == "accepted_canonical"
@@ -569,6 +581,7 @@ class LocationService:
         latitude: float,
         *,
         mission_id: int | None = None,
+        mission_context_version: int | None = None,
     ) -> Tuple[float, float] | None:
         """Map-matching avec ring buffer de positions récentes.
 
@@ -576,7 +589,8 @@ class LocationService:
             driver_id: ID du chauffeur
             longitude: Longitude
             latitude: Latitude
-            mission_id: si présent, ring isolé par mission (P4)
+            mission_id: si P4 actif + présent, ring isolé par mission+version
+            mission_context_version: version de contexte (défaut 0 si P4)
 
         Returns:
             Tuple (lon, lat) matchée ou None si échec
@@ -587,9 +601,17 @@ class LocationService:
         try:
             if self._is_osrm_circuit_open():
                 return None
-            # Ring par mission si connu, sinon fallback legacy
-            if mission_id is not None:
-                ring_key = f"driver:{driver_id}:ring:{mission_id}"
+            # P4 : ring mission+version uniquement derrière le flag (sinon legacy)
+            if (
+                TRACKING_RAW_OSRM_SPLIT_ENABLED
+                and mission_id is not None
+            ):
+                version = (
+                    int(mission_context_version)
+                    if mission_context_version is not None
+                    else 0
+                )
+                ring_key = f"driver:{driver_id}:ring:{mission_id}:{version}"
             else:
                 ring_key = f"driver:{driver_id}:ring"
             point = {

@@ -1918,6 +1918,7 @@ class DriverLocation(Resource):
                                     payload=ingest_payload,
                                     source="http",
                                     company_id=company_id_value,
+                                    ingress_contract=_ingress_envelope.to_ingress_contract(),
                                 )
                                 if ingest_result.get("queued"):
                                     try:

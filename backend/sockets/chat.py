@@ -2339,6 +2339,7 @@ def init_chat_socket(socketio: SocketIO):
             snapped_lat, snapped_lon = latitude, longitude
             accept_status = "accepted_observability_only"
             received_at = datetime.now(UTC).isoformat()
+            final_live_eligible = _admission.live_eligible
             try:
                 location_service = get_location_service()
                 result = location_service.update_driver_location(
@@ -2366,6 +2367,7 @@ def init_chat_socket(socketio: SocketIO):
                 snapped_lon = result.snapped_lon
                 accept_status = result.accept_status
                 received_at = result.received_at or received_at
+                final_live_eligible = bool(result.live_eligible)
 
                 log_driver_location_processed(
                     driver_id=driver.id,
@@ -2472,7 +2474,7 @@ def init_chat_socket(socketio: SocketIO):
                     "received_at": received_at,
                 },
                 accept_status=accept_status,
-                live_eligible=_admission.live_eligible,
+                live_eligible=final_live_eligible,
             )
             if accept_status == "accepted_canonical":
                 from services.geolocation.driver_eta_socket_fanout import (
@@ -2853,43 +2855,8 @@ def init_chat_socket(socketio: SocketIO):
             company_room = f"company_{company_id_val}"
             now_iso = datetime.now(UTC).isoformat()
 
-            # ✅ P2: Déduplication - vérifier si batch déjà traité
-            if positions and redis_client:
-                try:
-                    first_ts = positions[0].get("timestamp")
-                    batch_id = f"{driver.id}:{first_ts}"
-                    processed_key = f"driver:{driver.id}:processed_batch"
-
-                    # Vérifier si batch déjà traité
-                    if redis_client.exists(processed_key):
-                        batch_ids = cast(
-                            set[bytes], redis_client.smembers(processed_key)
-                        )
-                        if batch_id.encode() in batch_ids:
-                            logger.info(
-                                "⚠️ [Déduplication] Batch déjà traité: driver=%s, batch_id=%s",
-                                driver.id,
-                                batch_id,
-                            )
-                            # ✅ P0: Envoyer ACK de succès avec flag duplicate
-                            return {
-                                "success": True,
-                                "positions_count": len(positions),
-                                "driver_id": driver.id,
-                                "timestamp": now_iso,
-                                "duplicate": True,
-                            }
-
-                    # Marquer batch comme traité (TTL 5 min)
-                    redis_client.sadd(processed_key, batch_id)
-                    redis_client.expire(processed_key, 300)
-
-                except Exception as dedup_err:
-                    # Ne pas faire échouer l'envoi pour une erreur de déduplication
-                    logger.warning(
-                        "⚠️ [Déduplication] Erreur lors de la vérification: %s",
-                        dedup_err,
-                    )
+            # Note P0 : pas de dedup batch ``processed_batch`` avant firewall
+            # (INV-P0-3). L'idempotence repose sur location_event_id durable.
 
             # Traiter chaque position du batch
             rejected_positions: list[dict[str, Any]] = []  # ✅ P2: Bug #7
@@ -3040,6 +3007,7 @@ def init_chat_socket(socketio: SocketIO):
                     snapped_lat, snapped_lon = latitude, longitude
                     accept_status = "accepted_observability_only"
                     received_at = datetime.now(UTC).isoformat()
+                    final_live_eligible_b = _admission_b.live_eligible
                     try:
                         location_service = get_location_service()
                         result = location_service.update_driver_location(
@@ -3069,6 +3037,7 @@ def init_chat_socket(socketio: SocketIO):
                         snapped_lon = result.snapped_lon
                         accept_status = result.accept_status
                         received_at = result.received_at or received_at
+                        final_live_eligible_b = bool(result.live_eligible)
                         if accept_status == "accepted_canonical":
                             inc_batch_points_canonical(location_mode=norm_mode_batch)
                         elif accept_status == "accepted_observability_only":
@@ -3197,7 +3166,7 @@ def init_chat_socket(socketio: SocketIO):
                         location_payload,
                         live_state_payload,
                         accept_status=accept_status,
-                        live_eligible=_admission_b.live_eligible,
+                        live_eligible=final_live_eligible_b,
                     )
 
                     # Option A — miroir Kafka fire-and-forget (voie durable secondaire,

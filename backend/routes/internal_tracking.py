@@ -307,7 +307,28 @@ def tracking_ingest():
 
     normalized: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
+    admission_rejected: list[dict[str, Any]] = []
     for raw in points:
+        # P0 : firewall avant reserve/persist/canonical (INV-P0-3)
+        from services.tracking.admission_gate import admit_mission_live_payload
+
+        _env, _adm = admit_mission_live_payload(
+            driver_id=driver_id,
+            payload=raw if isinstance(raw, dict) else None,
+            transport="internal",
+            header_location_event_id=header_event_raw if len(points) == 1 else None,
+        )
+        if not _adm.canonical_eligible:
+            admission_rejected.append(
+                {
+                    "reason": _adm.reason,
+                    "location_event_id": (
+                        raw.get("location_event_id") if isinstance(raw, dict) else None
+                    ),
+                }
+            )
+            continue
+
         payload, err = _normalize_point(
             raw,
             driver_id=driver_id,
@@ -321,6 +342,15 @@ def tracking_ingest():
             return jsonify({"error": "duplicate_location_event_id_in_batch"}), 400
         seen_ids.add(eid)
         normalized.append(payload)
+
+    if not normalized:
+        return jsonify(
+            {
+                "ok": False,
+                "error": "admission_blocked",
+                "rejected": admission_rejected,
+            }
+        ), 422
 
     client_batch_id = data.get("batch_id")
     try:

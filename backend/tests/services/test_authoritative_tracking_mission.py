@@ -112,3 +112,42 @@ def test_assigned_window_helper() -> None:
     assert (
         assigned_in_tracking_window(now - timedelta(days=5), True, now) is False
     )
+
+
+def test_assigned_naive_geneva_summer_is_zurich_not_utc() -> None:
+    """15:00 naïf Genève (août CEST) = 13:00 UTC, pas 15:00 UTC."""
+    # Été 2026 : Europe/Zurich = UTC+2
+    now_utc = datetime(2026, 8, 12, 13, 0, tzinfo=UTC)
+    scheduled_naive_geneva = datetime(2026, 8, 12, 15, 0)  # naïf DB
+    assert assigned_in_tracking_window(scheduled_naive_geneva, True, now_utc) is True
+    # Si on traitait à tort comme UTC, 15:00 UTC serait 2h trop tard vs now 13:00
+    # et resterait dans la fenêtre T+60 — on vérifie aussi le bord T−30 :
+    now_before_window = datetime(2026, 8, 12, 10, 0, tzinfo=UTC)  # 12:00 Genève
+    assert (
+        assigned_in_tracking_window(scheduled_naive_geneva, True, now_before_window)
+        is False
+    )
+
+
+def test_assigned_naive_geneva_winter_is_zurich_not_utc() -> None:
+    """15:00 naïf Genève (janvier CET) = 14:00 UTC."""
+    now_utc = datetime(2026, 1, 15, 14, 0, tzinfo=UTC)
+    scheduled_naive_geneva = datetime(2026, 1, 15, 15, 0)
+    assert assigned_in_tracking_window(scheduled_naive_geneva, True, now_utc) is True
+    now_before_window = datetime(2026, 1, 15, 11, 0, tzinfo=UTC)  # 12:00 Genève
+    assert (
+        assigned_in_tracking_window(scheduled_naive_geneva, True, now_before_window)
+        is False
+    )
+
+
+def test_assigned_dst_spring_forward_boundary() -> None:
+    """Changement d'heure printemps CH (dernier dimanche mars) — naïf local → UTC."""
+    # 2026-03-29 02:00 → 03:00 Europe/Zurich ; 10:00 local = 08:00 UTC (CEST)
+    now_utc = datetime(2026, 3, 29, 8, 0, tzinfo=UTC)
+    scheduled_naive = datetime(2026, 3, 29, 10, 0)
+    assert assigned_in_tracking_window(scheduled_naive, True, now_utc) is True
+    # 10:00 traité comme UTC serait à +2h de now → encore dans fenêtre, donc
+    # on vérifie le bord lead : 2h avant l'heure locale réelle = hors fenêtre.
+    now_early = datetime(2026, 3, 29, 5, 0, tzinfo=UTC)  # 07:00 Genève CEST
+    assert assigned_in_tracking_window(scheduled_naive, True, now_early) is False

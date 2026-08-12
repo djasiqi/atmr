@@ -485,23 +485,44 @@ class TrackingIngestConsumer:
                 error_type="invalid_payload",
             )
 
-        # P0-A : enveloppe brute (pas de changement de décision live).
+        # P0 : consumer = autorité finale avant PG/outbox.
+        # Restaure les presence flags d'origine (ingress_contract) puis firewall.
+        admission_blocked = False
         try:
+            from services.tracking.admission_gate import admit_mission_live_payload
             from services.tracking.tracking_ingress_contract import (
-                build_tracking_ingress_envelope,
-                evaluate_event_contract,
+                rebuild_envelope_with_ingress_contract,
             )
 
             payload_raw = message_obj.get("payload")
-            _ = evaluate_event_contract(
-                build_tracking_ingress_envelope(
-                    payload_raw if isinstance(payload_raw, dict) else message_obj,
-                    transport="kafka",
-                )
+            payload_dict = (
+                payload_raw if isinstance(payload_raw, dict) else message_obj
             )
+            ingress_contract = message_obj.get("ingress_contract")
+            envelope = rebuild_envelope_with_ingress_contract(
+                payload_dict if isinstance(payload_dict, dict) else None,
+                transport="kafka",
+                ingress_contract=(
+                    ingress_contract if isinstance(ingress_contract, dict) else None
+                ),
+            )
+            _, admission = admit_mission_live_payload(
+                driver_id=driver_id,
+                payload=payload_dict if isinstance(payload_dict, dict) else None,
+                transport="kafka",
+                envelope=envelope,
+            )
+            if not admission.canonical_eligible:
+                admission_blocked = True
+                logger.info(
+                    "[tracking_consumer] admission blocked driver_id=%s reason=%s mode=%s",
+                    driver_id,
+                    admission.reason,
+                    admission.mode,
+                )
         except Exception:
             logger.debug(
-                "[tracking_consumer] ingress envelope skipped",
+                "[tracking_consumer] ingress/firewall skipped",
                 exc_info=True,
             )
 
@@ -527,7 +548,11 @@ class TrackingIngestConsumer:
                             exc_info=True,
                         )
 
-                if TRACKING_PERSIST_WITH_OUTBOX and _msg_source != "socket_batch":
+                if (
+                    TRACKING_PERSIST_WITH_OUTBOX
+                    and _msg_source != "socket_batch"
+                    and not admission_blocked
+                ):
                     # Annexe A.1 : TX PG+outbox → COMMIT offset RAW (pas de publish processed)
                     from services.tracking.persist_kafka_outbox import (
                         PersistKafkaOutboxError,
@@ -590,6 +615,12 @@ class TrackingIngestConsumer:
                             "[tracking_consumer] persist heartbeat failed",
                             exc_info=True,
                         )
+                    return True
+
+                if admission_blocked:
+                    # Firewall enforce : commit offset sans PG/outbox/canonical
+                    self._commit_record(record)
+                    self._observe_e2e_latency(message_obj)
                     return True
 
                 # Legacy : persist use-case + publish processed (avant bascule Phase 1)

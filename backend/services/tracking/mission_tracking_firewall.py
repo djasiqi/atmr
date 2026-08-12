@@ -139,11 +139,19 @@ def evaluate_mission_live_admission(
     if not envelope.recorded_at_present:
         return _block_decision(reason="missing_recorded_at", mode=effective_mode)
 
+    # Présent mais non parseable → même gravité (pas de fake-now silencieux)
+    if "invalid_recorded_at" in contract_result.reasons:
+        return _block_decision(reason="invalid_recorded_at", mode=effective_mode)
+
     if effective_mode == "strict":
         if not envelope.location_event_id_present:
             return _block_decision(reason="missing_location_event_id", mode=effective_mode)
         if not envelope.tracking_session_id_present:
             return _block_decision(reason="missing_tracking_session_id", mode=effective_mode)
+        if not envelope.session_generation_present:
+            return _block_decision(
+                reason="missing_session_generation", mode=effective_mode
+            )
         if not envelope.sequence_id_present:
             return _block_decision(reason="missing_sequence_id", mode=effective_mode)
 
