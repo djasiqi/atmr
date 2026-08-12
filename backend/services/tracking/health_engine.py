@@ -23,6 +23,14 @@ class TrackingHealthState(StrEnum):
     BROKEN = "BROKEN"
 
 
+# Raisons documentées (P7) — labels ops / admission, pas tous des états StrEnum.
+TRACKING_HEALTH_REASON_LABELS: dict[str, str] = {
+    "STALE_MISSION": "Mission active sans fix frais (canonical périmé ou absent)",
+    "PIPELINE_DIVERGENCE": "Divergence stream / canonical / ledger (voir métrique P5-A)",
+    "AMBIGUOUS_MISSION": "Plusieurs missions trackables pour le même chauffeur (P1)",
+}
+
+
 def _parse_age_seconds(health: dict, key: str) -> float | None:
     raw = health.get(key)
     if raw is None:
@@ -69,6 +77,25 @@ def compute_driver_health_state(
     return TrackingHealthState.HEALTHY
 
 
+def _derive_admission_reason(
+    *,
+    state: TrackingHealthState,
+    mission_active: bool,
+    health: dict,
+) -> str | None:
+    """Raison ops légère pour l'API tracking-health (P7)."""
+    if state == TrackingHealthState.BROKEN and mission_active:
+        return "STALE_MISSION"
+    resolution = str(
+        health.get("resolution_state") or health.get("mission_resolution") or ""
+    )
+    if resolution.upper() == "AMBIGUOUS":
+        return "AMBIGUOUS_MISSION"
+    if str(health.get("pipeline_divergence") or "").strip() in ("1", "true", "True"):
+        return "PIPELINE_DIVERGENCE"
+    return None
+
+
 def run_health_engine_tick(company_id: int | None = None) -> dict:
     """Tick agrégé (Celery) — compteurs par état."""
     if not ENABLED:
@@ -76,6 +103,7 @@ def run_health_engine_tick(company_id: int | None = None) -> dict:
 
     from models import Booking
     from models.enums import BookingStatus
+    from services.driver_device_health import read_driver_device_health_snapshot
 
     active_statuses = (
         BookingStatus.EN_ROUTE.value,
@@ -87,12 +115,35 @@ def run_health_engine_tick(company_id: int | None = None) -> dict:
     rows = q.with_entities(Booking.driver_id).distinct().all()
 
     counts = {s.value: 0 for s in TrackingHealthState}
+    sample_reasons: list[dict] = []
     for row in rows:
         did = getattr(row, "driver_id", None)
         if not did:
             continue
-        state = compute_driver_health_state(driver_id=int(did), mission_active=True)
+        did_i = int(did)
+        health = read_driver_device_health_snapshot(did_i) or {}
+        state = compute_driver_health_state(
+            driver_id=did_i,
+            health_snapshot=health,
+            mission_active=True,
+        )
         counts[state.value] += 1
+        reason = _derive_admission_reason(
+            state=state, mission_active=True, health=health
+        )
+        if reason and len(sample_reasons) < 20:
+            sample_reasons.append(
+                {
+                    "driver_id": did_i,
+                    "state": state.value,
+                    "admission_reason": reason,
+                }
+            )
 
     logger.info("[health_engine] tick counts=%s", counts)
-    return {"ok": True, "counts": counts}
+    return {
+        "ok": True,
+        "counts": counts,
+        "admission_reasons": sample_reasons,
+        "reason_labels": TRACKING_HEALTH_REASON_LABELS,
+    }

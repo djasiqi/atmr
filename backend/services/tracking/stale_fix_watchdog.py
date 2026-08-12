@@ -178,6 +178,10 @@ def _canonical_freshness_sec(
     Lit ``driver:{id}:loc:canonical`` (rempli uniquement sur ``accepted_canonical``).
     Priorité ``received_at`` (horodatage backend, immune au skew device) puis
     ``recorded_at`` / ``ts``.
+
+    Gate B : si ``mission_id`` sur le hash diverge de la mission authoritative
+    SINGLE, on ne traite pas comme fraîcheur saine (retourne None → kick
+    ``no_fresh_position`` possible).
     """
     try:
         raw = redis_client.hgetall(f"driver:{driver_id}:loc:canonical")
@@ -193,11 +197,42 @@ def _canonical_freshness_sec(
             data[kk] = vv
     except Exception:
         return None
+    if not _canonical_mission_matches_authoritative(driver_id, data.get("mission_id")):
+        return None
     for field in ("received_at", "recorded_at", "ts"):
         dt = _parse_dt(data.get(field))
         if dt is not None:
             return max(0.0, (now - dt).total_seconds())
     return None
+
+
+def _canonical_mission_matches_authoritative(
+    driver_id: int, canonical_mission_id: str | None
+) -> bool:
+    """True si pas de SINGLE authoritative, ou si mission_id canonical == SINGLE.
+
+    En cas d'échec de résolution / pas de mission_id sur canonical : fail-open
+    (conserve le comportement historique de fraîcheur).
+    """
+    try:
+        from services.realtime.live_driver_status import (
+            TrackingMissionResolutionState,
+            authoritative_tracking_mission,
+        )
+
+        resolution = authoritative_tracking_mission(driver_id)
+    except Exception:
+        return True
+    if resolution.state != TrackingMissionResolutionState.SINGLE:
+        return True
+    if resolution.mission_id is None:
+        return True
+    if not canonical_mission_id:
+        return True
+    try:
+        return int(canonical_mission_id) == int(resolution.mission_id)
+    except (TypeError, ValueError):
+        return True
 
 
 def _resolve_freshness_kick(
