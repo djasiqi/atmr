@@ -219,17 +219,20 @@ export async function setTrackingContextLeaseDriverActive(params: {
   sessionGenerationId: number;
   trackingGenerationId: string;
   trackingIdentityId: string;
-  missionId?: number | null;
-  missionContextVersion?: number;
+  missionId: number | null;
+  missionContextVersion: number;
 }): Promise<TrackingContextLeaseDriverActive> {
   if (!isDriverContextId(params.contextId)) {
     throw new Error(`Invalid driver contextId for lease: ${params.contextId}`);
   }
-  const missionContextVersion =
-    typeof params.missionContextVersion === "number" &&
-    Number.isFinite(params.missionContextVersion)
-      ? params.missionContextVersion
-      : 0;
+  if (
+    typeof params.missionContextVersion !== "number" ||
+    !Number.isFinite(params.missionContextVersion)
+  ) {
+    throw new Error(
+      `missionContextVersion must be a finite number, got: ${String(params.missionContextVersion)}`
+    );
+  }
   const lease: TrackingContextLeaseDriverActive = {
     state: "driver_active",
     contextId: params.contextId,
@@ -237,8 +240,8 @@ export async function setTrackingContextLeaseDriverActive(params: {
     sessionGenerationId: params.sessionGenerationId,
     trackingGenerationId: params.trackingGenerationId,
     trackingIdentityId: params.trackingIdentityId,
-    missionId: params.missionId ?? null,
-    missionContextVersion,
+    missionId: params.missionId,
+    missionContextVersion: params.missionContextVersion,
     updatedAt: Date.now(),
   };
   await persistLease(lease);

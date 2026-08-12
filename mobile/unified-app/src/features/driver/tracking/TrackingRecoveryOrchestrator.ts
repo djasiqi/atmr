@@ -3,6 +3,7 @@
  *
  * Stages : HEALTHY → VERIFY_WATCH → RESTART_FGS → VERIFY_FGS →
  *          RECONNECT_TRANSPORT → VERIFY_ACK → REBUILD_RUNTIME → HEALTHY
+ *          (ou DEGRADED_EXHAUSTED avec backoff 30 min si non résolu)
  *
  * Avance sur heartbeat / callback / foreground / wake via tickTrackingRecovery.
  * Feature flag `tracking_recovery_cascade_enabled` false → restartWatch seul.
@@ -19,7 +20,8 @@ export type RecoveryStage =
   | "VERIFY_FGS"
   | "RECONNECT_TRANSPORT"
   | "VERIFY_ACK"
-  | "REBUILD_RUNTIME";
+  | "REBUILD_RUNTIME"
+  | "DEGRADED_EXHAUSTED";
 
 /** Étapes legacy (compat runTrackingRecoveryCascade). */
 export type RecoveryStep =
@@ -32,6 +34,8 @@ const RECOVERY_STORAGE_KEY = "@driver:tracking_recovery_fsm_v1";
 /** Fenêtre de vérification courte — pas de sleep 60s+. */
 const VERIFY_WINDOW_MS = 5_000;
 const MAX_ATTEMPTS_PER_GENERATION = 8;
+/** Backoff après cascade non résolue — pas de nouvelle cascade avant. */
+export const EXHAUSTED_BACKOFF_MS = 30 * 60 * 1000;
 
 export type TrackingRecoveryPersistedState = {
   recoveryStage: RecoveryStage;
@@ -49,6 +53,8 @@ export type RecoveryEvidence = {
   transportOk?: boolean;
   ackRecent?: boolean;
   fixRecent?: boolean;
+  /** Signal explicite optionnel pour démarrer / poursuivre une cascade. */
+  triggerUnhealthy?: boolean;
 };
 
 export type RecoveryHandlers = {
@@ -61,14 +67,32 @@ export type RecoveryHandlers = {
 const inMemoryStorage = new Map<string, string>();
 let memoryState: TrackingRecoveryPersistedState | null = null;
 
-function healthyState(now: number): TrackingRecoveryPersistedState {
+function healthyState(
+  now: number,
+  previousGeneration = 0
+): TrackingRecoveryPersistedState {
   return {
     recoveryStage: "HEALTHY",
-    recoveryGeneration: 0,
+    recoveryGeneration: previousGeneration,
     startedAt: now,
     nextCheckAt: 0,
     attemptCount: 0,
     lastEvidence: null,
+  };
+}
+
+function exhaustedState(
+  now: number,
+  state: TrackingRecoveryPersistedState,
+  evidence: RecoveryEvidence
+): TrackingRecoveryPersistedState {
+  return {
+    recoveryStage: "DEGRADED_EXHAUSTED",
+    recoveryGeneration: state.recoveryGeneration,
+    startedAt: state.startedAt,
+    nextCheckAt: now + EXHAUSTED_BACKOFF_MS,
+    attemptCount: state.attemptCount,
+    lastEvidence: evidenceKey(evidence),
   };
 }
 
@@ -106,6 +130,7 @@ function parseState(raw: string | null): TrackingRecoveryPersistedState | null {
       "RECONNECT_TRANSPORT",
       "VERIFY_ACK",
       "REBUILD_RUNTIME",
+      "DEGRADED_EXHAUSTED",
     ];
     if (!stages.includes(parsed.recoveryStage as RecoveryStage)) return null;
     return {
@@ -143,11 +168,12 @@ async function persistRecoveryState(
 function evidenceKey(evidence: RecoveryEvidence): string {
   return [
     evidence.reason ?? "",
-    evidence.fixRecent === true ? "fix1" : "fix0",
-    evidence.watchAlive === true ? "w1" : "w0",
-    evidence.fgsAlive === true ? "f1" : "f0",
-    evidence.transportOk === true ? "t1" : "t0",
-    evidence.ackRecent === true ? "a1" : "a0",
+    evidence.fixRecent === true ? "fix1" : evidence.fixRecent === false ? "fix0" : "fix?",
+    evidence.watchAlive === true ? "w1" : evidence.watchAlive === false ? "w0" : "w?",
+    evidence.fgsAlive === true ? "f1" : evidence.fgsAlive === false ? "f0" : "f?",
+    evidence.transportOk === true ? "t1" : evidence.transportOk === false ? "t0" : "t?",
+    evidence.ackRecent === true ? "a1" : evidence.ackRecent === false ? "a0" : "a?",
+    evidence.triggerUnhealthy === true ? "tu1" : "tu0",
   ].join("|");
 }
 
@@ -155,6 +181,10 @@ function looksHealthy(evidence: RecoveryEvidence): boolean {
   return evidence.fixRecent === true || (evidence.watchAlive === true && evidence.ackRecent === true);
 }
 
+/**
+ * Unhealthy uniquement via signaux booléens explicites à false
+ * (ou triggerUnhealthy). Une `reason` seule n'est PAS unhealthy.
+ */
 function looksUnhealthy(evidence: RecoveryEvidence): boolean {
   if (looksHealthy(evidence)) return false;
   return (
@@ -163,8 +193,33 @@ function looksUnhealthy(evidence: RecoveryEvidence): boolean {
     evidence.fgsAlive === false ||
     evidence.transportOk === false ||
     evidence.ackRecent === false ||
-    Boolean(evidence.reason)
+    evidence.triggerUnhealthy === true
   );
+}
+
+async function startCascade(
+  now: number,
+  evidence: RecoveryEvidence,
+  handlers: RecoveryHandlers,
+  previousGeneration: number
+): Promise<TrackingRecoveryPersistedState> {
+  const reason = evidence.reason ?? "tracking_recovery_tick";
+  await handlers.restartWatch(reason);
+  const state = await persistRecoveryState({
+    recoveryStage: "VERIFY_WATCH",
+    recoveryGeneration: previousGeneration + 1,
+    startedAt: now,
+    nextCheckAt: now + VERIFY_WINDOW_MS,
+    attemptCount: 1,
+    lastEvidence: evidenceKey(evidence),
+  });
+  emitDriverTelemetry("tracking.recovery.tick", {
+    source: "driver.tracking.recovery",
+    stage: state.recoveryStage,
+    reason,
+    attempt_count: state.attemptCount,
+  });
+  return state;
 }
 
 /**
@@ -180,6 +235,7 @@ export async function tickTrackingRecovery(
 
   // Flag off : comportement historique (restartWatch seul).
   if (!isFeatureEnabled("tracking_recovery_cascade_enabled")) {
+    const prev = await loadRecoveryState(now);
     if (looksUnhealthy(evidence)) {
       await handlers.restartWatch(reason);
       emitDriverTelemetry("tracking.recovery.tick", {
@@ -189,7 +245,7 @@ export async function tickTrackingRecovery(
         cascade_enabled: false,
       });
     }
-    return persistRecoveryState(healthyState(now));
+    return persistRecoveryState(healthyState(now, prev.recoveryGeneration));
   }
 
   let state = await loadRecoveryState(now);
@@ -200,30 +256,27 @@ export async function tickTrackingRecovery(
       previous_stage: state.recoveryStage,
       reason,
       attempt_count: state.attemptCount,
+      recovery_generation: state.recoveryGeneration,
     });
-    return persistRecoveryState(healthyState(now));
+    return persistRecoveryState(healthyState(now, state.recoveryGeneration));
   }
 
   if (state.recoveryStage === "HEALTHY") {
     if (!looksUnhealthy(evidence)) {
       return state;
     }
-    await handlers.restartWatch(reason);
-    state = await persistRecoveryState({
-      recoveryStage: "VERIFY_WATCH",
-      recoveryGeneration: state.recoveryGeneration + 1,
-      startedAt: now,
-      nextCheckAt: now + VERIFY_WINDOW_MS,
-      attemptCount: 1,
-      lastEvidence: evidenceKey(evidence),
-    });
-    emitDriverTelemetry("tracking.recovery.tick", {
-      source: "driver.tracking.recovery",
-      stage: state.recoveryStage,
-      reason,
-      attempt_count: state.attemptCount,
-    });
-    return state;
+    return startCascade(now, evidence, handlers, state.recoveryGeneration);
+  }
+
+  if (state.recoveryStage === "DEGRADED_EXHAUSTED") {
+    // Cooldown : pas de nouvelle cascade avant nextCheckAt.
+    if (now < state.nextCheckAt) {
+      return state;
+    }
+    if (!looksUnhealthy(evidence)) {
+      return persistRecoveryState(healthyState(now, state.recoveryGeneration));
+    }
+    return startCascade(now, evidence, handlers, state.recoveryGeneration);
   }
 
   // Fenêtre de verify non écoulée → no-op (pas de sleep).
@@ -237,14 +290,15 @@ export async function tickTrackingRecovery(
       stage: state.recoveryStage,
       reason,
       attempt_count: state.attemptCount,
+      recovery_generation: state.recoveryGeneration,
     });
-    return persistRecoveryState(healthyState(now));
+    return persistRecoveryState(exhaustedState(now, state, evidence));
   }
 
   switch (state.recoveryStage) {
     case "VERIFY_WATCH": {
       if (evidence.watchAlive === true || evidence.fixRecent === true) {
-        return persistRecoveryState(healthyState(now));
+        return persistRecoveryState(healthyState(now, state.recoveryGeneration));
       }
       await handlers.restartFgs(reason);
       return persistRecoveryState({
@@ -258,7 +312,7 @@ export async function tickTrackingRecovery(
     case "RESTART_FGS":
     case "VERIFY_FGS": {
       if (evidence.fgsAlive === true || evidence.fixRecent === true) {
-        return persistRecoveryState(healthyState(now));
+        return persistRecoveryState(healthyState(now, state.recoveryGeneration));
       }
       if (handlers.reconnectTransport) {
         await handlers.reconnectTransport(reason);
@@ -284,7 +338,7 @@ export async function tickTrackingRecovery(
     case "RECONNECT_TRANSPORT":
     case "VERIFY_ACK": {
       if (evidence.ackRecent === true || evidence.transportOk === true) {
-        return persistRecoveryState(healthyState(now));
+        return persistRecoveryState(healthyState(now, state.recoveryGeneration));
       }
       await handlers.restartEngine(reason);
       return persistRecoveryState({
@@ -297,18 +351,19 @@ export async function tickTrackingRecovery(
     }
     case "REBUILD_RUNTIME": {
       if (looksHealthy(evidence)) {
-        return persistRecoveryState(healthyState(now));
+        return persistRecoveryState(healthyState(now, state.recoveryGeneration));
       }
-      // Cycle terminé sans preuve de santé → reset pour éviter boucle infinie.
+      // Cycle terminé sans preuve de santé → cooldown (pas de reset gen / pas de re-cascade immédiate).
       emitDriverTelemetry("tracking.recovery.rebuild_unresolved", {
         source: "driver.tracking.recovery",
         reason,
         attempt_count: state.attemptCount,
+        recovery_generation: state.recoveryGeneration,
       });
-      return persistRecoveryState(healthyState(now));
+      return persistRecoveryState(exhaustedState(now, state, evidence));
     }
     default:
-      return persistRecoveryState(healthyState(now));
+      return persistRecoveryState(healthyState(now, state.recoveryGeneration));
   }
 }
 

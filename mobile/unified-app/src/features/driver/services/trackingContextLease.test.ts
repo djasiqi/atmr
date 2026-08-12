@@ -58,6 +58,20 @@ describe("trackingContextLease", () => {
     expect(lease.missionContextVersion).toBe(2);
   });
 
+  it("refuse missionContextVersion non fini", async () => {
+    await expect(
+      setTrackingContextLeaseDriverActive({
+        contextId: "driver:42",
+        driverId: 42,
+        sessionGenerationId: 3,
+        trackingGenerationId: "trk-a",
+        trackingIdentityId: "driver:42:company:1",
+        missionId: null,
+        missionContextVersion: Number.NaN,
+      })
+    ).rejects.toThrow(/missionContextVersion must be a finite number/);
+  });
+
   it("switching depuis driver : capture ON, transport OFF", async () => {
     const previous = await setTrackingContextLeaseDriverActive({
       contextId: "driver:42",

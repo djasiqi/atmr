@@ -1339,8 +1339,8 @@ export async function restartNativeTrackingFromWake(reason = "silent_push_wake")
           .tickTrackingRecovery(
             Date.now(),
             {
+              // Tick neutre : reason seule ne démarre pas de cascade (P6).
               reason: `wake:${reason}`,
-              fixRecent: false,
             },
             {
               restartWatch: async () => undefined,
