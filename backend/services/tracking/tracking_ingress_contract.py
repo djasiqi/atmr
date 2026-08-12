@@ -13,9 +13,7 @@ from typing import Any
 def _is_present(value: Any) -> bool:
     if value is None:
         return False
-    if isinstance(value, str) and not value.strip():
-        return False
-    return True
+    return not (isinstance(value, str) and not value.strip())
 
 
 def _coerce_optional_int(value: Any) -> int | None:
