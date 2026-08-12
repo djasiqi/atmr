@@ -72,6 +72,8 @@ export type DriverLocationPayload = {
   trackingGenerationId?: string | null;
   missionContextVersion?: number | null;
   trackingIdentityId?: string | null;
+  /** Identité stable du fix natif (hash timestamp+lat+lon ou id OS). */
+  captureId?: string | null;
 };
 
 export type DriverLocationAckStatus =

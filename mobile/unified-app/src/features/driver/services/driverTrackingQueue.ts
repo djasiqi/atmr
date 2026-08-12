@@ -71,6 +71,12 @@ export type DriverTrackingQueueItem = {
   lastAttemptAt: number | null;
   ackedAt: number | null;
   lastError: string | null;
+  /** Identité stable du fix (P3) — optionnelle, ne remplace pas eventId ACK. */
+  captureId?: string | null;
+  /** Génération runtime au moment de la capture. */
+  trackingGenerationId?: string | null;
+  /** Version contexte mission au moment de la capture. */
+  missionContextVersion?: number | null;
   /** État de conservation jusqu'au watermark PG (Annexe A.4). */
   persistState?:
     | "non_ingested"
@@ -1206,6 +1212,10 @@ class DriverTrackingQueue {
     appState: AppStateStatus;
     locationMode: DriverTrackingMode;
     payload: DriverLocationPayload;
+    /** Identité stable du fix natif (optionnel). */
+    captureId?: string | null;
+    trackingGenerationId?: string | null;
+    missionContextVersion?: number | null;
   }): Promise<DriverTrackingQueueItem> {
     await this.ensureLoaded();
     this.ensureSessionFresh();
@@ -1217,6 +1227,18 @@ class DriverTrackingQueue {
     this.sequenceCounter = sequenceId;
     const positionId = `trk_pos_${sequenceId}_${Math.random().toString(36).slice(2, 8)}`;
     const batchId = `trk_batch_${Math.floor(sequenceId / Math.max(1, DRAIN_BATCH_SIZE))}_${nowMs()}`;
+    const trackingGenerationId =
+      entry.trackingGenerationId ??
+      entry.payload.trackingGenerationId ??
+      null;
+    const missionContextVersion =
+      entry.missionContextVersion ??
+      entry.payload.missionContextVersion ??
+      null;
+    const captureId =
+      entry.captureId ??
+      entry.payload.captureId ??
+      null;
     const item: DriverTrackingQueueItem = {
       id: buildQueueId(),
       sequenceId,
@@ -1227,10 +1249,16 @@ class DriverTrackingQueue {
       missionId: entry.missionId,
       appState: entry.appState,
       locationMode,
+      captureId,
+      trackingGenerationId,
+      missionContextVersion,
       payload: {
         ...entry.payload,
         locationMode,
         trackingEventId: undefined,
+        captureId: captureId ?? entry.payload.captureId,
+        trackingGenerationId,
+        missionContextVersion,
       },
       queuedAt: nowMs(),
       retryCount: 0,
