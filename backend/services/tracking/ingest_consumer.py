@@ -487,6 +487,8 @@ class TrackingIngestConsumer:
 
         # P0 : consumer = autorité finale avant PG/outbox.
         # Restaure les presence flags d'origine (ingress_contract) puis firewall.
+        # INV : en enforce/strict, une exception firewall est fail-closed
+        # (jamais de PG/outbox par défaut).
         admission_blocked = False
         try:
             from services.tracking.admission_gate import admit_mission_live_payload
@@ -521,10 +523,32 @@ class TrackingIngestConsumer:
                     admission.mode,
                 )
         except Exception:
-            logger.debug(
-                "[tracking_consumer] ingress/firewall skipped",
-                exc_info=True,
-            )
+            # Fail-closed uniquement en enforce/strict — off/observe restent fail-open
+            # (firewall no-op / non bloquant).
+            try:
+                from services.tracking.mission_tracking_firewall import (
+                    get_mission_firewall_mode,
+                )
+
+                _fw_mode = get_mission_firewall_mode()
+            except Exception:
+                _fw_mode = "strict"  # indéterminé → fail-closed
+            if _fw_mode in ("enforce_mission", "strict"):
+                admission_blocked = True
+                logger.warning(
+                    "[tracking_consumer] firewall exception → fail-closed "
+                    "driver_id=%s mode=%s (0 PG/outbox)",
+                    driver_id,
+                    _fw_mode,
+                    exc_info=True,
+                )
+            else:
+                logger.warning(
+                    "[tracking_consumer] ingress/firewall exception ignored "
+                    "(mode=%s fail-open)",
+                    _fw_mode,
+                    exc_info=True,
+                )
 
         for attempt in range(1, KAFKA_MAX_RETRIES + 1):
             try:
