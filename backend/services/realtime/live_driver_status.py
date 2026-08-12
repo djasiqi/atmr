@@ -3,8 +3,9 @@
 Même logique que l'historique dans sockets/chat.py — centralisée pour éviter
 « busy » dès qu'un mission_id est présent alors que la course est seulement ASSIGNED.
 
-P0-B : ajoute ``authoritative_tracking_mission`` (NONE | SINGLE | AMBIGUOUS)
-sans brancher encore les hot paths (P1 / P0-C) — zéro changement de comportement live.
+P1 : ``resolve_active_booking_id_for_driver`` / ``sanitize_fanout_mission_id``
+passent par ``authoritative_tracking_mission`` (SINGLE uniquement, pas de pick
+silencieux par ``updated_at``).
 """
 
 from __future__ import annotations
@@ -108,34 +109,15 @@ def resolve_mission_status_for_driver(driver_id: int) -> str:
 
 
 def resolve_active_booking_id_for_driver(driver_id: int) -> int | None:
-    """ID de la course active la plus récente (ASSIGNED / EN_ROUTE / IN_PROGRESS), ou None.
+    """ID de la mission trackable authoritative, ou None.
 
-    Legacy P0-B : conserve ``updated_at.desc()``. Migration vers
-    ``authoritative_tracking_mission`` en P1.
+    P1 : délègue à ``authoritative_tracking_mission`` — retourne ``mission_id``
+    seulement si état ``SINGLE`` (pas de sélection silencieuse par ``updated_at``).
     """
-    statuses = (
-        BookingStatus.ASSIGNED.value,
-        BookingStatus.EN_ROUTE.value,
-        BookingStatus.IN_PROGRESS.value,
-    )
-    row = (
-        Booking.query.filter(
-            Booking.driver_id == driver_id,
-            Booking.status.in_(statuses),
-        )
-        .with_entities(Booking.id)
-        .order_by(Booking.updated_at.desc())
-        .first()
-    )
-    if row is None:
-        return None
-    bid = getattr(row, "id", None)
-    if bid is None:
-        return None
-    try:
-        return int(bid)
-    except (TypeError, ValueError):
-        return None
+    resolution = authoritative_tracking_mission(driver_id)
+    if resolution.state == TrackingMissionResolutionState.SINGLE:
+        return resolution.mission_id
+    return None
 
 
 def authoritative_tracking_mission(
@@ -152,7 +134,6 @@ def authoritative_tracking_mission(
     4. sinon NONE
 
     ``IN_PROGRESS`` + ``ASSIGNED`` ⇒ SINGLE sur ``IN_PROGRESS`` (pas AMBIGUOUS).
-    Non branché sur le hot path live en P0-B (voir P1 / P0-C).
     """
     ref = now or datetime.now(UTC)
     statuses = (
@@ -275,19 +256,17 @@ def authoritative_tracking_mission(
 
 def sanitize_fanout_mission_id(
     driver_id: int,
-    client_mission_id: int | None,
+    client_mission_id: int | None,  # noqa: ARG001 — conservé pour signature hot path
 ) -> int | None:
-    """Ne fanoute pas un ``mission_id`` GPS obsolète après fin de course."""
-    active_id = resolve_active_booking_id_for_driver(driver_id)
-    if active_id is None:
+    """Ne fanoute un ``mission_id`` que si la résolution authoritative est SINGLE.
+
+    P1 : ``resolution.mission_id`` si SINGLE, sinon None (AMBIGUOUS / NONE).
+    Le ``client_mission_id`` n'est plus utilisé pour choisir une mission.
+    """
+    resolution = authoritative_tracking_mission(driver_id)
+    if resolution.state != TrackingMissionResolutionState.SINGLE:
         return None
-    if client_mission_id is None:
-        return active_id
-    try:
-        int(client_mission_id)
-    except (TypeError, ValueError):
-        return active_id
-    return active_id
+    return resolution.mission_id
 
 
 def resolve_driver_status_for_fanout(
