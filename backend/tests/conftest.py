@@ -55,6 +55,9 @@ def test_nested_transaction(db):
 ```
 """
 
+# Plugins de fixtures routes admin (doit être dans un conftest top-level du package tests).
+pytest_plugins = ["tests.routes.admin_route_fixtures"]
+
 import importlib.util
 import os
 from unittest import mock

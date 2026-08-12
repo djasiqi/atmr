@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-pytest_plugins = ["tests.routes.admin_route_fixtures"]
-
 
 @pytest.fixture
 def admin_tenant_client(client, admin_headers):
