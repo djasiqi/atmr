@@ -23,9 +23,9 @@ def user(app):
 
 def test_set_password_sans_id_ni_expiration(user, monkeypatch):
     monkeypatch.delenv("PASSWORD_EXPIRATION_DAYS", raising=False)
-    user.set_password("Secret123!", force_change=True)
+    user.set_password("password123", force_change=True)
     assert user.force_password_change is True
-    assert user.check_password("Secret123!") is True
+    assert user.check_password("password123") is True
     assert user.check_password("mauvais") is False
     assert user.password_expires_at is None
 
@@ -42,7 +42,7 @@ def test_set_password_historique_et_expiration(user, monkeypatch):
     monkeypatch.setattr("security.password_history.PasswordHistoryService", FakeHistory)
     user.id = 42
     user.password = "ancien-hash"
-    user.set_password("Nouveau123!", force_change=False)
+    user.set_password("password123", force_change=False)
     assert added == [(42, "ancien-hash")]
     assert user.force_password_change is False
     assert user.password_expires_at is not None
@@ -58,8 +58,8 @@ def test_set_password_historique_en_echec_ne_bloque_pas(user, monkeypatch):
     monkeypatch.setattr("security.password_history.PasswordHistoryService", BoomHistory)
     user.id = 7
     user.password = "ancien"
-    user.set_password("Toujours123!")
-    assert user.check_password("Toujours123!") is True
+    user.set_password("password123")
+    assert user.check_password("password123") is True
 
 
 def test_check_password_branches_vides_et_invalides(monkeypatch):

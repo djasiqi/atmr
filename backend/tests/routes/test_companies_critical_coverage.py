@@ -24,8 +24,9 @@ from models.enums import (
 )
 from tests.routes.test_companies import _auth_headers, companies_world
 
-# Mot de passe unique non listé HIBP (évite faux négatifs create/reset driver)
-_SAFE_PASSWORD = "Cov3rAge!Xy9zQ2mK"
+# Fixture de test uniquement (politique ≥12, maj/min/chiffre/spécial).
+# Valeur unique à l'import : pas de littéral haute-entropie (GitGuardian) ni collision HIBP.
+_SAFE_PASSWORD = f"AtmrTest-{uuid.uuid4().hex[:10]}-Aa1!"
 
 
 def _fresh_headers(app, user: User, *, company_id: int) -> dict[str, str]:

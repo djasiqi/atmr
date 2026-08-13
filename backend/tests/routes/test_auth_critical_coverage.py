@@ -301,7 +301,7 @@ def test_mot_de_passe_oublie_et_ancien_reset(client, sample_user, monkeypatch):
     assert forgot.status_code == 200
     removed = client.post(
         f"/api/v1/auth/reset-password/{sample_user.public_id}",
-        json={"new_password": "NouveauMotDePasse123!"},
+        json={"new_password": "password123"},
     )
     assert removed.status_code == 410
 

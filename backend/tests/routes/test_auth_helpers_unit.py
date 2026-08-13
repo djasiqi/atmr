@@ -1,5 +1,6 @@
 """Couverture unitaire des helpers critiques de ``routes.auth``."""
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -503,7 +504,9 @@ def test_helpers_branches_rares_et_reinitialisation(app, monkeypatch):
     )
     monkeypatch.setattr(auth.db.session, "commit", lambda: None)
     with app.test_request_context("/"):
-        body, status = auth._reset_user_password_with_policy(user, "Nouveau123!")
+        body, status = auth._reset_user_password_with_policy(
+            user, f"AtmrTest-{uuid.uuid4().hex[:10]}-Aa1!"
+        )
     assert status == 200
     assert body["require_relogin"] is True
     assert user.first_login_completed_at is not None

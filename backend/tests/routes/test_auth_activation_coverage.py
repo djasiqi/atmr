@@ -1551,7 +1551,7 @@ def test_changement_mot_de_passe_branches(client, app, sample_user, monkeypatch)
     assert missing.status_code == 400
     mismatch = client.post(
         "/api/v1/auth/change-password",
-        json={"new_password": "Nouveau123!", "confirm_password": "Autre123!"},
+        json={"new_password": "password123", "confirm_password": "password456"},
         headers=headers,
     )
     assert mismatch.status_code == 400
@@ -1559,8 +1559,8 @@ def test_changement_mot_de_passe_branches(client, app, sample_user, monkeypatch)
     denied = client.post(
         "/api/v1/auth/change-password",
         json={
-            "new_password": "Nouveau123!",
-            "confirm_password": "Nouveau123!",
+            "new_password": "password123",
+            "confirm_password": "password123",
             "current_password": "incorrect",
         },
         headers=headers,
@@ -1574,7 +1574,7 @@ def test_changement_mot_de_passe_branches(client, app, sample_user, monkeypatch)
     )
     success = client.post(
         "/api/v1/auth/change-password",
-        json={"new_password": "Nouveau123!", "confirm_password": "Nouveau123!"},
+        json={"new_password": "password123", "confirm_password": "password123"},
         headers=headers,
     )
     assert success.status_code == 200
@@ -2631,7 +2631,7 @@ def test_exceptions_fresh_me_sessions_et_mots_de_passe(
     assert (
         client.post(
             "/api/v1/auth/change-password",
-            json={"new_password": "Nouveau123!"},
+            json={"new_password": "password123"},
             headers=headers,
         ).status_code
         == 500
@@ -2644,7 +2644,7 @@ def test_exceptions_fresh_me_sessions_et_mots_de_passe(
     assert (
         client.post(
             "/api/v1/auth/reset-password",
-            json={"token": "token", "new_password": "Nouveau123!"},
+            json={"token": "token", "new_password": "password123"},
         ).status_code
         == 500
     )
