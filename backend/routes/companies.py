@@ -1847,11 +1847,11 @@ class CompanyDashboardBootstrap(Resource):
                 logger,
             )
 
-        from shared.time_utils import day_local_bounds
+        from shared.time_utils import day_local_bounds, now_local
 
         day_str = (request.args.get("date") or "").strip()
         if not day_str:
-            day_str = datetime.now(UTC).strftime("%Y-%m-%d")
+            day_str = now_local().strftime("%Y-%m-%d")
         try:
             day_local_bounds(day_str)
         except ValueError:
@@ -7341,8 +7341,9 @@ class CompanyBookingChangeEvents(Resource):
 class CompanyBookingChangeAck(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def post(self, _booking_id: int, event_id: int):
+    def post(self, booking_id: int, event_id: int):
         """Accusé de réception dispatch pour événement critique."""
+        _ = booking_id
         company, err, code = _get_current_company_via_use_case()
         if err:
             return err, code

@@ -4,9 +4,8 @@ from typing import Any, cast
 
 from ext import db
 from models import DriverVacation
-
-from .holidays_service import (
-    is_holiday_in_geneva,  # par ex. un module qui wrap python-holidays
+from services.external.holidays import (
+    is_holiday_in_geneva,  # wrap python-holidays (Genève)
 )
 
 DEFAULT_ANNUAL_VACATION_DAYS = 20
@@ -58,8 +57,8 @@ def create_vacation(
     DV = cast("Any", DriverVacation)
     new_vac = DV(
         driver_id=driver_id,
-        start_date=None,
-        end_date=None,
+        start_date=start_date,
+        end_date=end_date,
         vacation_type=str(vacation_type),
     )
 

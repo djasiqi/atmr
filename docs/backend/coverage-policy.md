@@ -91,7 +91,7 @@ Les seuils critiques suivent le **chemin d’exécution produit**, pas l’ancie
 ## Gates CI
 
 1. **Check global coverage >= baseline (50%)** — `check_coverage.py --fail-under 50.0` (bloquant, anti-régression).
-2. **Report critical module coverage** — rapport non bloquant + plancher partiel `pytest --cov-fail-under=80` sur heuristics/solver/autonomous_manager (≠ cibles 95 % du script).
+2. **Report critical module coverage** — rapport non bloquant (`continue-on-error`) sur `services.unified_dispatch.optimization.heuristics`, `optimization.solver` et `utils.autonomous` (sans `--cov-fail-under` ; ≠ cibles 95 % du script).
 3. **Promotion** — step dédié `check_coverage.py --require-critical` lorsque la baseline critique le permet (sans `|| true`).
 
 ## Baseline historique

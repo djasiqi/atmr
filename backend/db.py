@@ -61,7 +61,7 @@ def une_fonction_qui_cree_une_reservation(data: Dict[str, Any]):
         db.session.add(nouvelle_reservation)
         db.session.commit()
         app_logger.info(
-            "Nouvelle réservation {nouvelle_reservation.id} créée avec succès."
+            f"Nouvelle réservation {nouvelle_reservation.id} créée avec succès."
         )
 
         return {
@@ -69,8 +69,8 @@ def une_fonction_qui_cree_une_reservation(data: Dict[str, Any]):
             "booking_id": nouvelle_reservation.id,
         }, 201
 
-    except Exception:
+    except Exception as e:
         db.session.rollback()
-        app_logger.error("Erreur lors de la création de la réservation : {e}")
+        app_logger.error(f"Erreur lors de la création de la réservation : {e}")
         # Gérer l'erreur (ex: retourner une réponse d'erreur 500)
         return {"error": "Une erreur interne est survenue"}, 500

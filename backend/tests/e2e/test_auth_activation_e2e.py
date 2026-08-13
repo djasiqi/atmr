@@ -503,7 +503,9 @@ class TestAuthActivationFlow:
         session.email_verified_at = None
         _mark_current_delivery_sent(db, session)
         # Bypass cooldown mais dépassement certain du quota journalier.
-        session.last_email_sent_at = datetime.now(UTC) - timedelta(minutes=10)
+        session.last_email_sent_at = datetime.now(UTC).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         session.resend_count_email = 9999
         db.session.commit()
 
@@ -554,7 +556,9 @@ class TestAuthActivationFlow:
         assert session is not None, "Session d'activation introuvable en base"
         session.phone_verified_at = None
         # Bypass cooldown mais dépassement certain du quota journalier.
-        session.last_sms_sent_at = datetime.now(UTC) - timedelta(minutes=10)
+        session.last_sms_sent_at = datetime.now(UTC).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         session.resend_count_sms = 9999
         db.session.commit()
 

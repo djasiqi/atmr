@@ -3175,6 +3175,17 @@ def assign_urgent(
                     )
                     emergency_candidate_logged = True
 
+            cand = HeuristicAssignment(
+                booking_id=int(cast("Any", b.id)),
+                driver_id=did,
+                score=sc,
+                reason="urgent_preassign",
+                estimated_start_min=est_s,
+                estimated_finish_min=est_f,
+            )
+            if best is None or sc > best[0]:
+                best = (sc, cand)
+
         return best[1] if best else None
 
     # Ordonner les urgents par horaire (si dispo)
