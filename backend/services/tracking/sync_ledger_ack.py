@@ -83,6 +83,7 @@ def _maybe_promote_sync_ledger(
             exc_info=True,
         )
 
+
 OutcomeKind = Literal[
     "durable_ok",
     "conflict_409",

@@ -2360,7 +2360,9 @@ def init_chat_socket(socketio: SocketIO):
                     live_eligible=_admission.live_eligible,
                     canonical_eligible=_admission.canonical_eligible,
                     admission_reason=_admission.reason,
-                    capture_id=str(data.get("capture_id") or data.get("captureId") or "")
+                    capture_id=str(
+                        data.get("capture_id") or data.get("captureId") or ""
+                    )
                     or None,
                     location_event_id=str(leid_sock) if leid_sock else None,
                     tracking_session_id=(

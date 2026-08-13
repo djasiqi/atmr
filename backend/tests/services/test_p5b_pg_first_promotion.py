@@ -219,7 +219,10 @@ def test_case3_duplicate_persist_does_not_promote(monkeypatch) -> None:
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("promote")),
     )
     _maybe_promote_after_pg(
-        persist_result={"status": "duplicate", "reason": "same_event_already_persisted"},
+        persist_result={
+            "status": "duplicate",
+            "reason": "same_event_already_persisted",
+        },
         driver_id=1,
         company_id=9,
         capture_id="fix-1",

@@ -175,6 +175,7 @@ def test_persist_driver_location_logs_correlation_for_kafka(monkeypatch):
         accept_status="accepted_canonical",
         accept_reason="",
         location_event_id="ev-1",
+        capture_id="ev-1",
     )
 
 
