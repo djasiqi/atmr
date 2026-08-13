@@ -122,9 +122,7 @@ def test_period_annual_monthly_periodic_et_erreurs(db, tmp_path):
     assert december["label"] == "Décembre 2030"
     assert december["end"] == datetime(2031, 1, 1, tzinfo=UTC)
 
-    monthly_default = service._calculate_period_dates(
-        "monthly", None, None, None, None
-    )
+    monthly_default = service._calculate_period_dates("monthly", None, None, None, None)
     assert monthly_default["start"].day == 1
 
     with pytest.raises(ValueError, match="mois doit être"):
@@ -187,7 +185,9 @@ def test_partnership_statement_erreurs_et_ok(db, tmp_path):
             world.partnership.id, world.owner.id, "weekly"
         )
     with pytest.raises(ValueError, match="introuvable"):
-        service.generate_partnership_statement(999999, world.owner.id, "monthly", 2030, 6)
+        service.generate_partnership_statement(
+            999999, world.owner.id, "monthly", 2030, 6
+        )
     with pytest.raises(ValueError, match="autorisé"):
         service.generate_partnership_statement(
             world.partnership.id, stranger.id, "monthly", 2030, 6

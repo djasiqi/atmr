@@ -518,9 +518,7 @@ def test_try_run_branches(monkeypatch):
         lambda *a, **k: None,
     )
     enqueued.clear()
-    monkeypatch.setattr(
-        ud_queue, "_schedule_run", lambda s, mode: None
-    )
+    monkeypatch.setattr(ud_queue, "_schedule_run", lambda s, mode: None)
     ud_queue._try_run(st, "semi")
     assert enqueued == ["semi"]
 

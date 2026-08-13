@@ -386,6 +386,7 @@ def test_saferpay_initialize_and_assert(
     headers = _headers(app, user, role="client")
 
     monkeypatch.setattr("services.saferpay.config.saferpay_configured", lambda: False)
+    monkeypatch.setattr("routes.bookings.saferpay_configured", lambda: False)
     init = client.post(
         f"/api/v1/bookings/{booking.id}/saferpay/initialize",
         headers=headers,
@@ -394,6 +395,7 @@ def test_saferpay_initialize_and_assert(
     assert init.status_code == 503
 
     monkeypatch.setattr("services.saferpay.config.saferpay_configured", lambda: True)
+    monkeypatch.setattr("routes.bookings.saferpay_configured", lambda: True)
     monkeypatch.setattr(
         "routes.bookings.create_saferpay_payment_page_initialize",
         lambda **_k: {"redirect_url": "https://pay.test"},

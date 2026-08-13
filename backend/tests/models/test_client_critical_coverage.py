@@ -98,9 +98,7 @@ def test_validate_billing_address(client_row):
 
     client_row.company_id = 8
     client_row.domicile_address = "Domicile 12"
-    assert (
-        client_row.validate_billing_address("billing_address", None) == "Domicile 12"
-    )
+    assert client_row.validate_billing_address("billing_address", None) == "Domicile 12"
     assert client_row.validate_billing_address("billing_address", "  ") == "Domicile 12"
     assert (
         client_row.validate_billing_address("billing_address", "Facturation 1")
@@ -141,7 +139,12 @@ def test_validate_default_billed_to_type(client_row):
 @pytest.mark.parametrize(
     ("plain_attr", "enc_attr", "prop", "fallback"),
     [
-        ("contact_phone", "contact_phone_encrypted", "contact_phone_secure", "+41790001111"),
+        (
+            "contact_phone",
+            "contact_phone_encrypted",
+            "contact_phone_secure",
+            "+41790001111",
+        ),
         ("gp_name", "gp_name_encrypted", "gp_name_secure", "Dr House"),
         ("gp_phone", "gp_phone_encrypted", "gp_phone_secure", "+41790002222"),
         (

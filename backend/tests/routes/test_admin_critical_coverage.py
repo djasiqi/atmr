@@ -54,11 +54,11 @@ def admin_ctx(client, app, admin_route_env, make_admin_user):
     return client, app, admin, _headers(app, admin)
 
 
-def test_users_liste_complete_et_filtres(
-    admin_ctx, sample_company, simple_driver, db
-):
+def test_users_liste_complete_et_filtres(admin_ctx, sample_company, simple_driver, db):
     client, _app, admin, headers = admin_ctx
-    resp = client.get("/api/v1/admin/users", headers=headers, environ_base=ADMIN_ENVIRON)
+    resp = client.get(
+        "/api/v1/admin/users", headers=headers, environ_base=ADMIN_ENVIRON
+    )
     assert resp.status_code == 200
     assert "users" in resp.get_json()
 
@@ -258,9 +258,7 @@ def test_optuna_optimize_redirects_et_erreurs(admin_ctx, monkeypatch):
     assert looped.status_code == 500
     assert "redirections" in (looped.get_json() or {}).get("error", "")
 
-    monkeypatch.setattr(
-        "requests.post", lambda *a, **k: _FakeResp(400, text="refusé")
-    )
+    monkeypatch.setattr("requests.post", lambda *a, **k: _FakeResp(400, text="refusé"))
     rejected = _post_optuna(client, headers)
     assert rejected.status_code == 500
 

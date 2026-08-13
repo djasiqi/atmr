@@ -225,9 +225,7 @@ def test_start_persist_echec_pas_de_commit(consumer):
 
 def test_start_poll_race_et_commit_race(consumer, monkeypatch):
     consumer._initialized = True
-    record = SimpleNamespace(
-        topic="t", partition=0, offset=2, key=None, value={"v": 1}
-    )
+    record = SimpleNamespace(topic="t", partition=0, offset=2, key=None, value={"v": 1})
     mock_c = MagicMock()
     state = {"n": 0}
 
@@ -272,11 +270,10 @@ def test_start_commit_runtime_autre_et_connexion(consumer, monkeypatch):
     mock_c.commit.side_effect = RuntimeError("commit boom")
     consumer._consumer = mock_c
     captured = {"n": 0}
+    monkeypatch.setattr("shared.sentry_init.is_kafka_connection_error", lambda _e: True)
     monkeypatch.setattr(
-        "shared.sentry_init.is_kafka_connection_error", lambda _e: True
-    )
-    monkeypatch.setattr(
-        "shared.sentry_init.capture_kafka_error", lambda _e: captured.__setitem__("n", 1)
+        "shared.sentry_init.capture_kafka_error",
+        lambda _e: captured.__setitem__("n", 1),
     )
     with pytest.raises(RuntimeError, match="commit boom"):
         consumer.start()

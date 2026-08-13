@@ -81,7 +81,9 @@ def test_alert_to_dict_metadata():
 
 def test_check_all_alerts_agregue(service, monkeypatch):
     alerts = [_alert(title=f"a{i}") for i in range(5)]
-    monkeypatch.setattr(service, "_check_websocket_disconnection_rate", lambda: alerts[0])
+    monkeypatch.setattr(
+        service, "_check_websocket_disconnection_rate", lambda: alerts[0]
+    )
     monkeypatch.setattr(service, "_check_eta_accuracy", lambda: alerts[1])
     monkeypatch.setattr(service, "_check_dispatch_delay_rate", lambda: alerts[2])
     monkeypatch.setattr(service, "_check_osrm_health", lambda: alerts[3])
@@ -122,11 +124,15 @@ def test_websocket_taux_et_erreurs(service, monkeypatch):
     assert critical is not None
     assert critical.severity == "critical"
 
-    monkeypatch.setattr(system_mod.ws_metrics, "get_stats", lambda: (_ for _ in ()).throw(KeyError("x")))
+    monkeypatch.setattr(
+        system_mod.ws_metrics, "get_stats", lambda: (_ for _ in ()).throw(KeyError("x"))
+    )
     assert service._check_websocket_disconnection_rate() is None
 
     monkeypatch.setattr(
-        system_mod.ws_metrics, "get_stats", lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+        system_mod.ws_metrics,
+        "get_stats",
+        lambda: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     assert service._check_websocket_disconnection_rate() is None
 
@@ -279,12 +285,16 @@ def test_osrm_sante(service, monkeypatch):
     assert critical.severity == "critical"
 
     monkeypatch.setattr(
-        system_mod.os, "getenv", lambda *_a, **_k: (_ for _ in ()).throw(RequestException("env"))
+        system_mod.os,
+        "getenv",
+        lambda *_a, **_k: (_ for _ in ()).throw(RequestException("env")),
     )
     assert service._check_osrm_health() is None
 
     monkeypatch.setattr(
-        system_mod.os, "getenv", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("env"))
+        system_mod.os,
+        "getenv",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("env")),
     )
     assert service._check_osrm_health() is None
 

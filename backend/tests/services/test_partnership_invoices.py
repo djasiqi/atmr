@@ -312,7 +312,9 @@ def test_generate_pdf_reel_mocke(db, monkeypatch):
         "services.partnerships.invoices_pdf.generate_partner_invoice_pdf_content",
         lambda *_a, **_k: b"%PDF-fake",
     )
-    monkeypatch.setattr("shared.upload_write.write_upload_bytes", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "shared.upload_write.write_upload_bytes", lambda *_a, **_k: None
+    )
     invoice = service.generate_monthly_invoice(
         world.partnership.id, world.year, world.month, world.executing.id
     )
@@ -388,7 +390,10 @@ def test_mark_as_sent_et_paid(db, monkeypatch):
 def test_get_monthly_et_pending(db, monkeypatch):
     world = _world()
     service = _svc(monkeypatch)
-    assert service.get_monthly_invoice(world.partnership.id, world.year, world.month) is None
+    assert (
+        service.get_monthly_invoice(world.partnership.id, world.year, world.month)
+        is None
+    )
     invoice = service.generate_monthly_invoice(
         world.partnership.id, world.year, world.month, world.executing.id
     )
@@ -421,9 +426,7 @@ def test_get_monthly_et_pending(db, monkeypatch):
         when=later + timedelta(hours=2),
         cost=None,
     )
-    assert (
-        service.get_pending_transfers_count(world.partnership.id, 2030, 12) == 2
-    )
+    assert service.get_pending_transfers_count(world.partnership.id, 2030, 12) == 2
     assert service.get_pending_amount(world.partnership.id, 2030, 12) == Decimal(
         "15.50"
     )

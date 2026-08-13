@@ -39,9 +39,7 @@ def test_set_password_historique_et_expiration(user, monkeypatch):
         def add_password_to_history(user_id, old_hash):
             added.append((user_id, old_hash))
 
-    monkeypatch.setattr(
-        "security.password_history.PasswordHistoryService", FakeHistory
-    )
+    monkeypatch.setattr("security.password_history.PasswordHistoryService", FakeHistory)
     user.id = 42
     user.password = "ancien-hash"
     user.set_password("Nouveau123!", force_change=False)
@@ -57,9 +55,7 @@ def test_set_password_historique_en_echec_ne_bloque_pas(user, monkeypatch):
         def add_password_to_history(_user_id, _old_hash):
             raise RuntimeError("historique indisponible")
 
-    monkeypatch.setattr(
-        "security.password_history.PasswordHistoryService", BoomHistory
-    )
+    monkeypatch.setattr("security.password_history.PasswordHistoryService", BoomHistory)
     user.id = 7
     user.password = "ancien"
     user.set_password("Toujours123!")
@@ -82,7 +78,9 @@ def test_check_password_branches_vides_et_invalides(monkeypatch):
         raise ValueError("hash legacy")
 
     monkeypatch.setattr("models.user.check_password_hash", _raise_value_error)
-    assert User.check_password(SimpleNamespace(password="pbkdf2:sha256:x"), "x") is False
+    assert (
+        User.check_password(SimpleNamespace(password="pbkdf2:sha256:x"), "x") is False
+    )
 
 
 def test_validate_phone(user):
@@ -136,9 +134,7 @@ def test_validate_role(user):
 def test_validate_institution_role(user):
     assert user.validate_institution_role("institution_role", None) is None
     assert (
-        user.validate_institution_role(
-            "institution_role", InstitutionRole.ADMIN.value
-        )
+        user.validate_institution_role("institution_role", InstitutionRole.ADMIN.value)
         == "institution_admin"
     )
     with pytest.raises(ValueError, match="Invalid institution_role"):
