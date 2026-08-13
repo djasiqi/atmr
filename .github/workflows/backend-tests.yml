@@ -305,29 +305,16 @@ jobs:
             --json coverage_report.json
           echo "✅ Couverture globale >= baseline 50%"
 
-      # Plancher partiel dispatch (80%) ≠ cibles 95% du script check_coverage.
-      # Rapport critiques non bloquant tant que --require-critical n'est pas promu.
+      # Rapport dispatch / modules critiques. Non bloquant :
+      # le plancher CI reste le step « baseline 50% ». Ne PAS relancer pytest
+      # ici (2e session après 5k+ tests → hang / sortie bufferisée ~1h).
       - name: Report critical module coverage
+        timeout-minutes: 3
+        continue-on-error: true
         run: |
           echo "📋 Rapport couverture modules critiques (non bloquant)..."
-
-          # Chemins module réels (heuristics vit sous optimization/ ; pas de
-          # backend/services/unified_dispatch/heuristics.py). Style dotted pour
-          # pytest-cov (les chemins .py donnent 0% / module-not-imported).
-          # Pas de --cov-fail-under ici : l'étape est un rapport (voir comment
-          # ci-dessus) ; le plancher global reste le step « baseline 50% ».
-          pytest backend/tests/test_heuristics.py backend/tests/test_solver.py backend/tests/test_autonomous_manager.py \
-            --cov=backend.services.unified_dispatch.optimization.heuristics \
-            --cov=backend.services.unified_dispatch.solver \
-            --cov=backend.services.unified_dispatch.autonomous_manager \
-            --cov-config=backend/.coveragerc \
-            --cov-report=term-missing \
-            --timeout=120 \
-            --timeout-method=thread \
-            -v
-
           cd backend
-          # Rapport seul (pas de --fail-under, pas de --require-critical) → exit 0
+          # Rapport seul sur le XML déjà produit par « Run pytest with coverage ».
           python scripts/check_coverage.py \
             --coverage-xml coverage.xml \
             --quiet \
