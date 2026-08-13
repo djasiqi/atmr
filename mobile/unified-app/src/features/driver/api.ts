@@ -250,6 +250,7 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
       tracking_session_id: payload.trackingSessionId ?? null,
       session_generation: payload.sessionGeneration ?? null,
       sequence_id: payload.sequenceId ?? null,
+      capture_id: payload.captureId ?? null,
     }, {
       headers: {
         "X-Allow-Offline-Attempt": "1",

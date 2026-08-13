@@ -148,12 +148,14 @@ class DriverLocationEvent(db.Model):
     __table_args__ = (
         Index("ix_dle_driver_recorded", "driver_id", "recorded_at"),
         Index("ix_dle_driver_event", "driver_id", "location_event_id"),
+        Index("ix_dle_driver_capture", "driver_id", "capture_id"),
     )
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     driver_id = db.Column(db.Integer, nullable=False)
     company_id = db.Column(db.Integer, nullable=False)
     location_event_id = db.Column(db.String(64), nullable=False)
+    capture_id = db.Column(db.String(64), nullable=True)
     tracking_session_id = db.Column(db.String(128), nullable=False)
     session_generation = db.Column(db.BigInteger, nullable=False)
     sequence_id = db.Column(db.BigInteger, nullable=False)

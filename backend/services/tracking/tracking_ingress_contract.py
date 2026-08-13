@@ -18,6 +18,7 @@ _INGRESS_PRESENCE_KEYS = (
     "tracking_session_id_present",
     "session_generation_present",
     "sequence_id_present",
+    "capture_id_present",
 )
 
 
@@ -75,6 +76,8 @@ class TrackingIngressEnvelope:
     session_generation_present: bool
     sequence_id: int | None
     sequence_id_present: bool
+    capture_id: str | None
+    capture_id_present: bool
     location_mode: str | None
     location_mode_present: bool
     transport: str
@@ -95,6 +98,8 @@ class TrackingIngressEnvelope:
             "session_generation_present": self.session_generation_present,
             "sequence_id": self.sequence_id,
             "sequence_id_present": self.sequence_id_present,
+            "capture_id": self.capture_id,
+            "capture_id_present": self.capture_id_present,
             "location_mode": self.location_mode,
             "location_mode_present": self.location_mode_present,
             "transport": self.transport,
@@ -109,6 +114,7 @@ class TrackingIngressEnvelope:
             "tracking_session_id_present": self.tracking_session_id_present,
             "session_generation_present": self.session_generation_present,
             "sequence_id_present": self.sequence_id_present,
+            "capture_id_present": self.capture_id_present,
         }
 
 
@@ -170,6 +176,12 @@ def build_tracking_ingress_envelope(
     mode_present = _is_present(mode_raw)
     location_mode = _coerce_optional_str(mode_raw) if mode_present else None
 
+    capture_raw = data.get("capture_id")
+    if capture_raw is None:
+        capture_raw = data.get("captureId")
+    capture_present = _is_present(capture_raw)
+    capture_id = _coerce_optional_str(capture_raw) if capture_present else None
+
     return TrackingIngressEnvelope(
         latitude=_coerce_optional_float(lat_raw),
         longitude=_coerce_optional_float(lon_raw),
@@ -185,6 +197,8 @@ def build_tracking_ingress_envelope(
         session_generation_present=gen_present,
         sequence_id=sequence_id,
         sequence_id_present=seq_present,
+        capture_id=capture_id,
+        capture_id_present=capture_present,
         location_mode=location_mode,
         location_mode_present=mode_present,
         transport=str(transport or "unknown"),

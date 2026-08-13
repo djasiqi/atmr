@@ -11,6 +11,7 @@ from application.drivers.update_driver_location import (
     UpdateDriverLocationUseCase,
 )
 from drivers.infrastructure.adapters.location_adapter import create_location_update_fn
+from services.tracking.capture_id import resolve_effective_capture_id
 from services.tracking.location_event_id import resolve_location_event_id
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,10 @@ def persist_driver_location_from_kafka(
                     location_event_id=location_event_id,
                     emit_geofence=True,
                     company_id=company_id,
+                    capture_id=resolve_effective_capture_id(
+                        payload if isinstance(payload, dict) else None,
+                        location_event_id=location_event_id,
+                    ),
                 )
             )
             if not uc_result.dedup_skipped:
@@ -144,6 +149,10 @@ def persist_driver_location_from_kafka(
                     accept_status=uc_result.accept_status,
                     accept_reason=uc_result.accept_reason,
                     location_event_id=location_event_id,
+                    capture_id=resolve_effective_capture_id(
+                        payload if isinstance(payload, dict) else None,
+                        location_event_id=location_event_id,
+                    ),
                 )
                 if (
                     uc_result.accept_status == "accepted_canonical"

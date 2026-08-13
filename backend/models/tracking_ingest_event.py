@@ -21,6 +21,7 @@ class TrackingIngestEvent(db.Model):
             name="uq_tracking_ingest_driver_event",
         ),
         Index("ix_tracking_ingest_received_at", "received_at"),
+        Index("ix_tracking_ingest_driver_capture", "driver_id", "capture_id"),
         ForeignKeyConstraint(
             ["driver_id", "tracking_session_id"],
             ["tracking_sessions.driver_id", "tracking_sessions.tracking_session_id"],
@@ -36,6 +37,7 @@ class TrackingIngestEvent(db.Model):
         db.Integer, db.ForeignKey("company.id"), nullable=False, index=True
     )
     location_event_id = db.Column(db.String(64), nullable=False)
+    capture_id = db.Column(db.String(64), nullable=True)
     event_payload_hash = db.Column(db.String(64), nullable=False)
     payload_schema_version = db.Column(
         db.String(32), nullable=False, default="tracking-event-payload-v1"

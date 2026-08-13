@@ -2360,6 +2360,24 @@ def init_chat_socket(socketio: SocketIO):
                     live_eligible=_admission.live_eligible,
                     canonical_eligible=_admission.canonical_eligible,
                     admission_reason=_admission.reason,
+                    capture_id=str(data.get("capture_id") or data.get("captureId") or "")
+                    or None,
+                    location_event_id=str(leid_sock) if leid_sock else None,
+                    tracking_session_id=(
+                        str(data.get("tracking_session_id")).strip()
+                        if data.get("tracking_session_id")
+                        else None
+                    ),
+                    session_generation=(
+                        int(data["session_generation"])
+                        if data.get("session_generation") is not None
+                        else None
+                    ),
+                    sequence_id=(
+                        int(data["sequence_id"])
+                        if data.get("sequence_id") is not None
+                        else None
+                    ),
                 )
 
                 # Utiliser position snapée
@@ -2377,6 +2395,10 @@ def init_chat_socket(socketio: SocketIO):
                     accept_status=accept_status,
                     accept_reason=result.accept_reason,
                     location_event_id=str(leid_sock) if leid_sock else None,
+                    capture_id=str(
+                        data.get("capture_id") or data.get("captureId") or ""
+                    )
+                    or None,
                 )
 
                 # Émettre events geofencing si détectés
@@ -3032,6 +3054,28 @@ def init_chat_socket(socketio: SocketIO):
                             live_eligible=_admission_b.live_eligible,
                             canonical_eligible=_admission_b.canonical_eligible,
                             admission_reason=_admission_b.reason,
+                            capture_id=str(
+                                pos_with_ts.get("capture_id")
+                                or pos_with_ts.get("captureId")
+                                or ""
+                            )
+                            or None,
+                            location_event_id=str(leid_b) if leid_b else None,
+                            tracking_session_id=(
+                                str(pos_with_ts.get("tracking_session_id")).strip()
+                                if pos_with_ts.get("tracking_session_id")
+                                else None
+                            ),
+                            session_generation=(
+                                int(pos_with_ts["session_generation"])
+                                if pos_with_ts.get("session_generation") is not None
+                                else None
+                            ),
+                            sequence_id=(
+                                int(pos_with_ts["sequence_id"])
+                                if pos_with_ts.get("sequence_id") is not None
+                                else None
+                            ),
                         )
 
                         # Utiliser position snapée
@@ -3055,6 +3099,12 @@ def init_chat_socket(socketio: SocketIO):
                             accept_status=accept_status,
                             accept_reason=result.accept_reason,
                             location_event_id=str(leid_b) if leid_b else None,
+                            capture_id=str(
+                                pos_with_ts.get("capture_id")
+                                or pos_with_ts.get("captureId")
+                                or ""
+                            )
+                            or None,
                         )
                         inc_tracking_delivery_result(
                             mode=norm_mode_batch,

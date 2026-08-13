@@ -46,6 +46,7 @@ def log_driver_location_processed(
     accept_status: str,
     accept_reason: str,
     location_event_id: str | None,
+    capture_id: str | None = None,
 ) -> None:
     """Une ligne JSON (sans lat/lon). Throttle 1/s/chauffeur sauf mode verbose."""
     if not _enabled() or not _throttle_allows(driver_id):
@@ -53,6 +54,7 @@ def log_driver_location_processed(
     payload: dict[str, Any] = {
         "event": "driver_location_processed",
         "location_event_id": location_event_id or "",
+        "capture_id": capture_id or "",
         "driver_id": driver_id,
         "company_id": company_id if company_id is not None else 0,
         "transport": transport,

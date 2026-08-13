@@ -24,6 +24,7 @@ import {
   recordSocketBatchSent,
 } from "./socketBatchPacing";
 import { trackingQueueStore } from "./trackingQueueStore";
+import { createCaptureId } from "./captureId";
 import { fetchTrackingWatermark, registerTrackingSession } from "./trackingSessionsApi";
 
 function allowMemoryFallback(): boolean {
@@ -352,6 +353,7 @@ class DriverTrackingQueue {
         location_mode: item.locationMode,
         is_background: item.payload.isBackground,
         platform: Platform.OS === "ios" ? "ios" : "android",
+        capture_id: item.captureId ?? item.payload.captureId ?? null,
       }))
     );
     if (!sentViaSocket) {
@@ -1238,7 +1240,7 @@ class DriverTrackingQueue {
     const captureId =
       entry.captureId ??
       entry.payload.captureId ??
-      null;
+      createCaptureId();
     const item: DriverTrackingQueueItem = {
       id: buildQueueId(),
       sequenceId,
@@ -1660,6 +1662,7 @@ class DriverTrackingQueue {
             trackingSessionId: item.trackingSessionId,
             sessionGeneration: item.sessionGeneration,
             sequenceId: item.sequenceId,
+            captureId: item.captureId ?? item.payload.captureId ?? null,
           });
           sent += 1;
           lastBackendAckRequestEventId = item.id;

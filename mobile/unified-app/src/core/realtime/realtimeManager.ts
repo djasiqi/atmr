@@ -527,6 +527,7 @@ class RealtimeManager {
       timestamp?: string;
       location_mode?: string;
       is_background?: boolean;
+      capture_id?: string | null;
     }[]
   ): boolean {
     if (!this.isDriverSocketReady() || !this.socket) return false;

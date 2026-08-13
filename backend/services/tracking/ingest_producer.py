@@ -89,6 +89,26 @@ def _kafka_security_config() -> dict[str, Any]:
     return cfg
 
 
+def _attach_capture_id(
+    message: dict[str, Any],
+    payload: dict[str, Any],
+    payload_event_id: Any,
+) -> None:
+    from services.tracking.capture_id import resolve_effective_capture_id
+
+    event_id = (
+        str(payload_event_id).strip()
+        if payload_event_id is not None and str(payload_event_id).strip()
+        else None
+    )
+    capture_id = resolve_effective_capture_id(payload, location_event_id=event_id)
+    if not capture_id:
+        return
+    message["capture_id"] = capture_id
+    if not payload.get("capture_id"):
+        payload["capture_id"] = capture_id
+
+
 class TrackingIngestProducer:
     def __init__(self) -> None:
         super().__init__()
@@ -195,6 +215,7 @@ class TrackingIngestProducer:
             message["location_event_id"] = str(payload_event_id).strip()
         if isinstance(ingress_contract, dict) and ingress_contract:
             message["ingress_contract"] = dict(ingress_contract)
+        _attach_capture_id(message, payload, payload_event_id)
 
         self._maybe_init_producer()
 
@@ -319,6 +340,7 @@ class TrackingIngestProducer:
             message["location_event_id"] = str(payload_event_id).strip()
         if isinstance(ingress_contract, dict) and ingress_contract:
             message["ingress_contract"] = dict(ingress_contract)
+        _attach_capture_id(message, payload, payload_event_id)
 
         payload_region_id_obj = payload.get("region_id")
         payload_company_id_obj = payload.get("company_id")

@@ -13,6 +13,7 @@ import { realtimeManager } from "../../../core/realtime/realtimeManager";
 import { TrackingManager } from "../../../core/tracking/trackingManager";
 import { resolveTrackingCadence, TrackingNetworkProfile } from "../../../core/tracking/cadenceResolver";
 import { driverTrackingQueue, DriverTrackingMode } from "./driverTrackingQueue";
+import { createCaptureId } from "./captureId";
 import { resolveBridgeAckFields } from "./bridgeAckSemantics";
 import { hideMissionBarAndroid } from "../missionBarAndroid";
 import { stopMissionLiveActivity } from "../missionBarIOS";
@@ -812,7 +813,7 @@ async function flushPoint(appState: AppStateStatus) {
     missionId: capturedMissionId,
     appState,
     locationMode: payloadMode,
-    captureId: `fix:${nowIso}:${Number(position.coords.latitude).toFixed(6)}:${Number(position.coords.longitude).toFixed(6)}`,
+    captureId: createCaptureId(),
     trackingGenerationId: identitySnapshot?.trackingGenerationId ?? null,
     missionContextVersion: missionSnapshot?.missionContextVersion ?? null,
     payload: {
@@ -919,6 +920,7 @@ async function flushPoint(appState: AppStateStatus) {
         timestamp: nowIso,
         locationMode: payloadMode,
         trackingEventId: fallbackTrackingEventId,
+        captureId: enqueuedItem.captureId ?? enqueuedItem.payload.captureId ?? null,
       });
       if (
         response.tracking_event_id != null &&
@@ -1149,6 +1151,7 @@ async function sendLegacyPoint(appState: AppStateStatus, nowIso: string) {
       timestamp: nowIso,
       locationMode: resolveTrackingMode(appState),
       trackingEventId: legacyEventId,
+      captureId: createCaptureId(),
     });
     if (
       response.tracking_event_id != null &&

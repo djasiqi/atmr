@@ -6,6 +6,7 @@ import { DriverMissionStatus, type DriverMission } from "../types";
 import { isTrackingActiveStatus } from "../domain/status";
 import { resolveMissionTrackingMode } from "../domain/resolveMissionTrackingMode";
 import { driverTrackingQueue } from "./driverTrackingQueue";
+import { createCaptureId } from "./captureId";
 import { trackingQueueStore } from "./trackingQueueStore";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { PRODUCTION_LOCALE } from "../../../i18n/productionLocale";
@@ -675,9 +676,7 @@ function defineTaskIfNeeded() {
         const lon = location.coords.longitude;
         const osIdRaw = (location as unknown as { id?: unknown }).id;
         const osId = typeof osIdRaw === "string" ? osIdRaw : null;
-        const captureId = osId
-          ? `os:${osId}`
-          : `fix:${timestamp}:${Number(lat).toFixed(6)}:${Number(lon).toFixed(6)}`;
+        const captureId = osId ? `os:${osId}` : createCaptureId();
         const trackingGenerationId =
           context.nativeOwner?.trackingGenerationId ?? null;
         const missionContextVersion =

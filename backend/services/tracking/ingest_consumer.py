@@ -515,10 +515,13 @@ class TrackingIngestConsumer:
             if not admission.canonical_eligible:
                 admission_blocked = True
                 logger.info(
-                    "[tracking_consumer] admission blocked driver_id=%s reason=%s mode=%s",
+                    "[tracking_consumer] admission blocked driver_id=%s "
+                    "reason=%s mode=%s capture_id=%s event_id=%s",
                     driver_id,
                     admission.reason,
                     admission.mode,
+                    envelope.capture_id,
+                    envelope.location_event_id,
                 )
         except Exception:
             # Fail-closed uniquement en enforce/strict — off/observe restent fail-open
