@@ -259,6 +259,7 @@ backend/.gunicorn/
 
 # Artefacts CI deploy (env + manifeste) ù jamais committer
 deploy-staging/
+staging/output/
 .gitleaks-workdir/
 gitleaks-report.json
 deploy-release-bundle.tar.gz
