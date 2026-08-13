@@ -56,6 +56,7 @@ def persist_location_event_with_outbox(
     speed_mps: float | None = None,
     heading: float | None = None,
     mission_id: int | None = None,
+    capture_id: str | None = None,
     schema_version: str = "tracking-event-payload-v1",
     extra_payload: dict[str, Any] | None = None,
     publish_realtime: bool = True,
@@ -65,10 +66,21 @@ def persist_location_event_with_outbox(
     ``publish_realtime=False`` : session superseded — persistée mais pas Redis/fanout.
     """
     recorded = _parse_recorded_at(recorded_at)
+    from services.tracking.capture_id import resolve_effective_capture_id
+    from services.tracking.processed_envelope import build_persisted_location_envelope
+
+    merged_extra = dict(extra_payload or {})
+    if capture_id:
+        merged_extra["capture_id"] = capture_id
+    effective_capture = resolve_effective_capture_id(
+        merged_extra,
+        location_event_id=location_event_id,
+    )
     payload = {
         "driver_id": driver_id,
         "company_id": company_id,
         "location_event_id": location_event_id,
+        "capture_id": effective_capture,
         "tracking_session_id": tracking_session_id,
         "session_generation": session_generation,
         "sequence_id": sequence_id,
@@ -82,8 +94,10 @@ def persist_location_event_with_outbox(
         "heading": heading,
         "mission_id": mission_id,
         "schema_version": schema_version,
-        **(extra_payload or {}),
+        **merged_extra,
     }
+    payload["capture_id"] = effective_capture
+    payload["location_event_id"] = location_event_id
     phash = _payload_hash(payload)
 
     # Lock watermark session
@@ -104,11 +118,11 @@ def persist_location_event_with_outbox(
         text(
             """
             INSERT INTO tracking_ingest_events (
-                driver_id, company_id, location_event_id,
+                driver_id, company_id, location_event_id, capture_id,
                 event_payload_hash, payload_schema_version, source, recorded_at,
                 tracking_session_id, sequence_id, session_generation
             ) VALUES (
-                :driver_id, :company_id, :eid,
+                :driver_id, :company_id, :eid, :capture_id,
                 :phash, :schema, :source, :recorded_at,
                 :sid, :seq, :gen
             )
@@ -120,6 +134,7 @@ def persist_location_event_with_outbox(
             "driver_id": driver_id,
             "company_id": company_id,
             "eid": location_event_id,
+            "capture_id": effective_capture,
             "phash": phash,
             "schema": schema_version,
             "source": source,
@@ -209,13 +224,14 @@ def persist_location_event_with_outbox(
         text(
             """
             INSERT INTO driver_location_events (
-                driver_id, company_id, location_event_id, tracking_session_id,
+                driver_id, company_id, location_event_id, capture_id,
+                tracking_session_id,
                 session_generation, sequence_id, recorded_at,
                 raw_latitude, raw_longitude, accuracy_m, speed_mps, heading,
                 location_mode, mission_id, source, event_payload_hash,
                 payload_schema_version
             ) VALUES (
-                :driver_id, :company_id, :eid, :sid,
+                :driver_id, :company_id, :eid, :capture_id, :sid,
                 :gen, :seq, :recorded_at,
                 :lat, :lon, :acc, :spd, :hdg,
                 :mode, :mission_id, :source, :phash, :schema
@@ -226,6 +242,7 @@ def persist_location_event_with_outbox(
             "driver_id": driver_id,
             "company_id": company_id,
             "eid": location_event_id,
+            "capture_id": effective_capture,
             "sid": tracking_session_id,
             "gen": session_generation,
             "seq": sequence_id,
@@ -381,6 +398,25 @@ def persist_location_event_with_outbox(
     )
 
     if publish_realtime:
+        envelope = build_persisted_location_envelope(
+            driver_id=driver_id,
+            company_id=company_id,
+            capture_id=effective_capture,
+            location_event_id=location_event_id,
+            tracking_session_id=tracking_session_id,
+            session_generation=session_generation,
+            sequence_id=sequence_id,
+            latitude=latitude,
+            longitude=longitude,
+            recorded_at=recorded.isoformat(),
+            mission_id=mission_id,
+            location_mode=location_mode,
+            source=source,
+            accuracy_m=accuracy_m,
+            speed_mps=speed_mps,
+            heading=heading,
+            extra_payload=extra_payload,
+        )
         session.execute(
             text(
                 """
@@ -400,7 +436,7 @@ def persist_location_event_with_outbox(
                 "eid": location_event_id,
                 "gen": session_generation,
                 "seq": sequence_id,
-                "payload": json.dumps(payload, default=str),
+                "payload": json.dumps(envelope, default=str),
             },
         )
 
@@ -408,6 +444,7 @@ def persist_location_event_with_outbox(
         "status": "persisted",
         "reason": "inserted",
         "location_event_id": location_event_id,
+        "capture_id": effective_capture,
         "contiguous_persisted_through": contiguous,
         "publish_realtime": publish_realtime,
     }

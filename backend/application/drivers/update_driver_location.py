@@ -48,6 +48,8 @@ class UpdateDriverLocationCommand:
     tracking_session_id: str | None = None
     session_generation: int | None = None
     sequence_id: int | None = None
+    capture_id: str | None = None
+    defer_canonical_promotion: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +105,7 @@ class UpdateDriverLocationUseCase:
                 "tracking_session_id": cmd.tracking_session_id,
                 "session_generation": cmd.session_generation,
                 "sequence_id": cmd.sequence_id,
+                "capture_id": cmd.capture_id,
             },
             transport=cmd.metrics_transport,
         )
@@ -170,6 +173,12 @@ class UpdateDriverLocationUseCase:
             live_eligible=admission.live_eligible,
             canonical_eligible=admission.canonical_eligible,
             admission_reason=admission.reason,
+            capture_id=cmd.capture_id or envelope.capture_id,
+            location_event_id=cmd.location_event_id,
+            tracking_session_id=cmd.tracking_session_id,
+            session_generation=cmd.session_generation,
+            sequence_id=cmd.sequence_id,
+            defer_canonical_promotion=cmd.defer_canonical_promotion,
         )
 
         snapped_lat = getattr(res, "snapped_lat", cmd.latitude)

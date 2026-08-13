@@ -1734,6 +1734,7 @@ class DriverLocation(Resource):
                             _ingress_envelope.location_event_id_present
                         ),
                         "mission_id": _ingress_envelope.mission_id_present,
+                        "capture_id": _ingress_envelope.capture_id_present,
                     },
                     _ingress_contract.ok,
                     _ingress_contract.reasons,
@@ -1880,6 +1881,10 @@ class DriverLocation(Resource):
                                     "is_background": is_background,
                                     "mission_id": mission_id,
                                     "location_event_id": location_event_id,
+                                    "capture_id": (
+                                        _ingress_envelope.capture_id
+                                        or location_event_id
+                                    ),
                                 }
                                 # Pass-through session/seq si l'app les fournit (1.0.10+)
                                 if isinstance(p, dict):
@@ -1985,6 +1990,10 @@ class DriverLocation(Resource):
                             sync_db_persisted: bool | None = None
                             try:
                                 # ✅ DDD: Utilise adapter au lieu de service directement
+                                from services.tracking.location_candidate import (
+                                    is_pg_first_canonical_enabled,
+                                )
+
                                 uc = UpdateDriverLocationUseCase(
                                     update_location_fn=create_location_update_fn()
                                 )
@@ -2007,6 +2016,20 @@ class DriverLocation(Resource):
                                         location_event_id=loc_ev_str,
                                         company_id=driver_company_id,
                                         ingress_envelope=_ingress_envelope,
+                                        capture_id=_ingress_envelope.capture_id,
+                                        tracking_session_id=(
+                                            _ingress_envelope.tracking_session_id
+                                        ),
+                                        session_generation=(
+                                            _ingress_envelope.session_generation
+                                        ),
+                                        sequence_id=_ingress_envelope.sequence_id,
+                                        defer_canonical_promotion=(
+                                            is_pg_first_canonical_enabled()
+                                            and bool(
+                                                _ingress_envelope.tracking_session_id
+                                            )
+                                        ),
                                     )
                                 )
 
@@ -2371,6 +2394,10 @@ class DriverLocation(Resource):
                                             driver_id=int(driver.id),
                                             company_id=company_id_for_ledger,
                                             location_event_id=str(location_event_id),
+                                            capture_id=(
+                                                _ingress_envelope.capture_id
+                                                or str(location_event_id)
+                                            ),
                                             tracking_session_id=(
                                                 tracking_session_id_out
                                             ),

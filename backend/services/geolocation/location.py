@@ -276,6 +276,12 @@ class LocationService:
         live_eligible: bool = True,
         canonical_eligible: bool = True,
         admission_reason: str = "",
+        capture_id: str | None = None,
+        location_event_id: str | None = None,
+        tracking_session_id: str | None = None,
+        session_generation: int | None = None,
+        sequence_id: int | None = None,
+        defer_canonical_promotion: bool = False,
     ) -> LocationUpdateResult:
         """Met à jour la position d'un chauffeur (snap OSRM + map-matching + stockage).
 
@@ -438,6 +444,12 @@ class LocationService:
             admission_reason=effective_admission_reason,
             raw_lat=latitude,
             raw_lon=longitude,
+            capture_id=capture_id,
+            location_event_id=location_event_id,
+            tracking_session_id=tracking_session_id,
+            session_generation=session_generation,
+            sequence_id=sequence_id,
+            defer_canonical_promotion=defer_canonical_promotion,
         )
         # INV-P0-2 : ne jamais ré-autoriser le live après un bloc firewall
         if not effective_live_eligible:
@@ -701,6 +713,12 @@ class LocationService:
         admission_reason: str = "",
         raw_lat: float | None = None,
         raw_lon: float | None = None,
+        capture_id: str | None = None,
+        location_event_id: str | None = None,
+        tracking_session_id: str | None = None,
+        session_generation: int | None = None,
+        sequence_id: int | None = None,
+        defer_canonical_promotion: bool = False,
     ) -> tuple[str, str, str, bool, bool | None]:
         """Stocke la position dans Redis et DB.
 
@@ -721,6 +739,9 @@ class LocationService:
         last_raw_lat = latitude if raw_lat is None else float(raw_lat)
         last_raw_lon = longitude if raw_lon is None else float(raw_lon)
         canonical_updated = False
+        from services.tracking.location_candidate import is_pg_first_canonical_enabled
+
+        pg_first = is_pg_first_canonical_enabled()
         try:
             from services.monitoring.driver_location_metrics import (
                 MAX_CLOCK_SKEW_RECORD_SEC,
@@ -886,6 +907,8 @@ class LocationService:
                         "source": source,
                         "accept_status": accept_status,
                         "accept_reason": accept_reason,
+                        "capture_id": str(capture_id or ""),
+                        "location_event_id": str(location_event_id or ""),
                     },
                 )
                 self.redis_client.expire(raw_key, DEFAULT_DRIVER_LOC_TTL_SEC)
@@ -894,7 +917,7 @@ class LocationService:
                 # ``driver:{id}:loc:canonical`` et ``driver:{id}:loc`` (legacy).
                 # L'observabilité met à jour ``:last_raw`` mais pas ces hashes → snapshots
                 # REST (canon) peuvent diverger du dernier point brut si tout est observabilité.
-                if accept_status == "accepted_canonical":
+                if accept_status == "accepted_canonical" and not pg_first:
                     canonical_mapping = {
                         "company_id": str(company_id) if company_id else "",
                         "lat": str(latitude),
@@ -946,7 +969,11 @@ class LocationService:
                         pass
 
                 # P2: GEO index Redis — index spatial par entreprise pour GEORADIUS/GEOSEARCH
-                if company_id is not None and accept_status == "accepted_canonical":
+                if (
+                    company_id is not None
+                    and accept_status == "accepted_canonical"
+                    and not pg_first
+                ):
                     try:
                         geo_key = f"driver_locations:geo:{company_id}"
                         self.redis_client.geoadd(
@@ -1075,6 +1102,58 @@ class LocationService:
             logger.warning(
                 "[LocationService] DB store failed (unexpected)", exc_info=True
             )
+        if (
+            pg_first
+            and db_persisted is True
+            and accept_status == "accepted_canonical"
+            and not defer_canonical_promotion
+            and company_id is not None
+        ):
+            try:
+                from services.tracking.capture_id import resolve_effective_capture_id
+                from services.tracking.location_candidate import (
+                    build_durable_location_proof,
+                    promote_location_candidate,
+                )
+
+                proof = build_durable_location_proof(
+                    pg_committed=True,
+                    driver_id=driver_id,
+                    company_id=int(company_id),
+                    capture_id=resolve_effective_capture_id(
+                        None,
+                        location_event_id=capture_id or location_event_id,
+                    ),
+                    location_event_id=str(location_event_id or capture_id or ""),
+                    tracking_session_id=tracking_session_id,
+                    session_generation=session_generation,
+                    sequence_id=sequence_id,
+                    mission_id=mission_id,
+                    recorded_at=recorded_at,
+                    latitude=latitude,
+                    longitude=longitude,
+                    accept_status=accept_status,
+                    admission_reason=accept_reason,
+                    location_mode=location_mode,
+                    speed=speed,
+                    heading=heading,
+                    accuracy=accuracy,
+                    source=source,
+                    received_at=received_dt,
+                    sent_at=sent_at,
+                    is_background=is_background,
+                    transport=transport,
+                )
+                promoted = promote_location_candidate(
+                    proof, redis_client=self.redis_client
+                )
+                canonical_updated = bool(promoted.get("promoted"))
+            except Exception:
+                logger.warning(
+                    "[LocationService] promotion PG-first échouée driver_id=%s",
+                    driver_id,
+                    exc_info=True,
+                )
         return (
             accept_status,
             accept_reason,

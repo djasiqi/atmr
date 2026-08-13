@@ -117,7 +117,12 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
         return
     driver_id = int(driver_id_obj)
 
-    p = envelope.get("payload")
+    from services.tracking.processed_envelope import (
+        resolve_processed_accept_status,
+        resolve_processed_payload,
+    )
+
+    p = resolve_processed_payload(envelope)
     if not isinstance(p, dict):
         return
 
@@ -265,6 +270,9 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
             "source": f"kafka_processed:{envelope.get('source', 'unknown')}",
             "first_name": first_name,
             "last_name": last_name,
+            "capture_id": envelope.get("capture_id") or p.get("capture_id"),
+            "location_event_id": envelope.get("location_event_id")
+            or p.get("location_event_id"),
         }
         if device_health is not None:
             canonical_payload["device_health"] = device_health
@@ -272,11 +280,7 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
             canonical_payload["event_id"] = event_id
 
         persist_result = envelope.get("persist_result")
-        accept_status = "accepted_observability_only"
-        if isinstance(persist_result, dict):
-            pr_status = persist_result.get("accept_status")
-            if isinstance(pr_status, str) and pr_status.strip():
-                accept_status = pr_status.strip()
+        accept_status = resolve_processed_accept_status(envelope)
 
         fanout_driver_location_update(
             company_id,

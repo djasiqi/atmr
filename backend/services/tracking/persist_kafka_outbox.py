@@ -27,6 +27,74 @@ class PersistKafkaOutboxError(Exception):
         self.code = code
 
 
+def _maybe_promote_after_pg(
+    *,
+    persist_result: dict[str, Any],
+    driver_id: int,
+    company_id: int,
+    capture_id: str | None,
+    location_event_id: str,
+    tracking_session_id: str,
+    session_generation: int,
+    sequence_id: int,
+    mission_id: int | None,
+    recorded_at: Any,
+    latitude: float,
+    longitude: float,
+    location_mode: str,
+    speed: float | None,
+    heading: float | None,
+    accuracy: float | None,
+    source: str,
+    publish_realtime: bool,
+) -> None:
+    """Promotion Redis uniquement après commit PG (flag P5-B)."""
+    from services.tracking.location_candidate import (
+        build_durable_location_proof,
+        is_pg_first_canonical_enabled,
+        promote_location_candidate,
+    )
+    from services.tracking.persist_with_outbox import _parse_recorded_at
+
+    if not is_pg_first_canonical_enabled():
+        return
+    if not publish_realtime:
+        return
+    if persist_result.get("status") != "persisted":
+        return
+    try:
+        proof = build_durable_location_proof(
+            pg_committed=True,
+            driver_id=driver_id,
+            company_id=company_id,
+            capture_id=capture_id or persist_result.get("capture_id"),
+            location_event_id=location_event_id,
+            tracking_session_id=tracking_session_id,
+            session_generation=session_generation,
+            sequence_id=sequence_id,
+            mission_id=mission_id,
+            recorded_at=_parse_recorded_at(recorded_at),
+            latitude=latitude,
+            longitude=longitude,
+            accept_status="accepted_canonical",
+            location_mode=location_mode,
+            speed=speed,
+            heading=heading,
+            accuracy=accuracy,
+            source=source,
+            transport="kafka",
+        )
+        promote_location_candidate(proof)
+    except Exception:
+        logger.warning(
+            "[persist_kafka_outbox] promotion canonical échouée driver_id=%s "
+            "capture_id=%s (PG déjà commité)",
+            driver_id,
+            capture_id,
+            exc_info=True,
+        )
+
+
 def _payload_coords(payload: dict[str, Any]) -> tuple[float, float]:
     lat_val = payload.get("latitude", payload.get("lat"))
     lon_val = payload.get("longitude", payload.get("lon"))
@@ -129,6 +197,16 @@ def persist_driver_location_with_outbox_from_kafka(
         mission_id = int(mission_id_raw)
 
     source = str(message_obj.get("source") or payload.get("source") or "kafka")
+    from services.tracking.capture_id import resolve_effective_capture_id
+
+    capture_source = dict(payload)
+    top_capture = message_obj.get("capture_id")
+    if top_capture:
+        capture_source["capture_id"] = top_capture
+    capture_id = resolve_effective_capture_id(
+        capture_source,
+        location_event_id=location_event_id,
+    )
 
     app = get_flask_app()
     with app.app_context():
@@ -171,9 +249,30 @@ def persist_driver_location_with_outbox_from_kafka(
                     speed_mps=speed,
                     heading=heading,
                     mission_id=mission_id,
+                    capture_id=capture_id,
                     publish_realtime=publish_realtime,
                 )
                 db.session.commit()
+                _maybe_promote_after_pg(
+                    persist_result=result,
+                    driver_id=driver_id,
+                    company_id=company_id,
+                    capture_id=capture_id,
+                    location_event_id=location_event_id,
+                    tracking_session_id=tracking_session_id,
+                    session_generation=session_generation,
+                    sequence_id=sequence_id,
+                    mission_id=mission_id,
+                    recorded_at=recorded_at,
+                    latitude=lat,
+                    longitude=lon,
+                    location_mode=location_mode,
+                    speed=speed,
+                    heading=heading,
+                    accuracy=accuracy,
+                    source=source,
+                    publish_realtime=publish_realtime,
+                )
             except PersistConflictError as exc:
                 db.session.rollback()
                 raise PersistKafkaOutboxError(exc.code, str(exc)) from exc
@@ -186,6 +285,7 @@ def persist_driver_location_with_outbox_from_kafka(
     enriched_payload = {
         **payload,
         "location_event_id": location_event_id,
+        "capture_id": capture_id,
         "session_generation": session_generation,
         "tracking_session_id": tracking_session_id,
         "sequence_id": sequence_id,

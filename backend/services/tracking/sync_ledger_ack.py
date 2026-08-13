@@ -19,6 +19,70 @@ from services.tracking.persist_with_outbox import (
 
 logger = logging.getLogger(__name__)
 
+
+def _maybe_promote_sync_ledger(
+    *,
+    persist_result: dict[str, Any],
+    driver_id: int,
+    company_id: int,
+    capture_id: str | None,
+    location_event_id: str,
+    tracking_session_id: str | None,
+    session_generation: int | None,
+    sequence_id: int | None,
+    mission_id: int | None,
+    recorded_at: Any,
+    latitude: float,
+    longitude: float,
+    location_mode: str,
+    speed_mps: float | None,
+    heading: float | None,
+    accuracy_m: float | None,
+    source: str,
+) -> None:
+    from services.tracking.location_candidate import (
+        build_durable_location_proof,
+        is_pg_first_canonical_enabled,
+        promote_location_candidate,
+    )
+    from services.tracking.persist_with_outbox import _parse_recorded_at
+
+    if not is_pg_first_canonical_enabled():
+        return
+    if persist_result.get("status") != "persisted":
+        return
+    try:
+        proof = build_durable_location_proof(
+            pg_committed=True,
+            driver_id=driver_id,
+            company_id=company_id,
+            capture_id=capture_id or persist_result.get("capture_id"),
+            location_event_id=location_event_id,
+            tracking_session_id=tracking_session_id,
+            session_generation=session_generation,
+            sequence_id=sequence_id,
+            mission_id=mission_id,
+            recorded_at=_parse_recorded_at(recorded_at),
+            latitude=latitude,
+            longitude=longitude,
+            accept_status="accepted_canonical",
+            location_mode=location_mode,
+            speed=speed_mps,
+            heading=heading,
+            accuracy=accuracy_m,
+            source=source,
+            transport="http",
+        )
+        promote_location_candidate(proof)
+    except Exception:
+        logger.warning(
+            "[sync_ledger_ack] promotion canonical échouée driver_id=%s "
+            "capture_id=%s (PG déjà commité)",
+            driver_id,
+            capture_id,
+            exc_info=True,
+        )
+
 OutcomeKind = Literal[
     "durable_ok",
     "conflict_409",
@@ -95,6 +159,7 @@ def try_commit_sync_ledger_ack(
     speed_mps: float | None = None,
     heading: float | None = None,
     mission_id: int | None = None,
+    capture_id: str | None = None,
 ) -> SyncLedgerAckResult:
     """Persiste le ledger + commit. Jamais ``durable_ok`` si commit KO.
 
@@ -136,6 +201,7 @@ def try_commit_sync_ledger_ack(
             speed_mps=speed_mps,
             heading=heading,
             mission_id=mission_id,
+            capture_id=capture_id,
         )
     except PersistConflictError as exc:
         try:
@@ -234,6 +300,25 @@ def try_commit_sync_ledger_ack(
             persist_result=persist_result,
         )
 
+    _maybe_promote_sync_ledger(
+        persist_result=persist_result,
+        driver_id=driver_id,
+        company_id=company_id,
+        capture_id=capture_id,
+        location_event_id=location_event_id,
+        tracking_session_id=tracking_session_id,
+        session_generation=session_generation,
+        sequence_id=sequence_id,
+        mission_id=mission_id,
+        recorded_at=recorded_at,
+        latitude=latitude,
+        longitude=longitude,
+        location_mode=location_mode,
+        speed_mps=speed_mps,
+        heading=heading,
+        accuracy_m=accuracy_m,
+        source=source,
+    )
     return SyncLedgerAckResult(
         kind="durable_ok",
         reason=str(persist_result.get("reason") or "inserted"),

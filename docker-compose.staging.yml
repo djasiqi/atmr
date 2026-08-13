@@ -39,7 +39,7 @@ services:
       - atmrstg
 
   pgbouncer:
-    image: edoburu/pgbouncer:1.24.1-p0
+    image: edoburu/pgbouncer:v1.24.1-p0
     restart: unless-stopped
     environment:
       DB_HOST: postgres
@@ -157,16 +157,19 @@ services:
       POSTGRES_PORT: "6432"
       POSTGRES_DB: ${POSTGRES_DB:-atmrstg}
       POSTGRES_SSLMODE: disable
-      DATABASE_URL: ""
-      SQLALCHEMY_DATABASE_URI: ""
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-atmrstg}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-atmrstg}
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://${POSTGRES_USER:-atmrstg}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-atmrstg}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      API_DOCS: "off"
+      API_LEGACY_ENABLED: "false"
       KAFKA_ENABLED: "true"
       TRACKING_INGEST_ASYNC_ENABLED: "true"
       TRACKING_INGEST_PERSIST_ENABLED: "true"
       TRACKING_SOCKET_KAFKA_MIRROR_ENABLED: "false"
       TRACKING_PROCESSED_FANOUT_ENABLED: "false"
+      TRACKING_PG_FIRST_CANONICAL_ENABLED: ${TRACKING_PG_FIRST_CANONICAL_ENABLED:-false}
       TRACKING_MISSION_FIREWALL_MODE: ${TRACKING_MISSION_FIREWALL_MODE:-off}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TRACKING_CONSUMER_GROUP: ${KAFKA_TRACKING_CONSUMER_GROUP:-atmrstg-tracking-ingest}
@@ -219,12 +222,13 @@ services:
       POSTGRES_PORT: "6432"
       POSTGRES_DB: ${POSTGRES_DB:-atmrstg}
       POSTGRES_SSLMODE: disable
-      DATABASE_URL: ""
-      SQLALCHEMY_DATABASE_URI: ""
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-atmrstg}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-atmrstg}
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://${POSTGRES_USER:-atmrstg}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-atmrstg}
       REDIS_URL: redis://redis:6379/0
       KAFKA_ENABLED: "true"
       TRACKING_INGEST_ASYNC_ENABLED: "true"
       TRACKING_INGEST_PERSIST_ENABLED: "true"
+      TRACKING_PG_FIRST_CANONICAL_ENABLED: ${TRACKING_PG_FIRST_CANONICAL_ENABLED:-false}
       TRACKING_MISSION_FIREWALL_MODE: ${TRACKING_MISSION_FIREWALL_MODE:-off}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TRACKING_CONSUMER_GROUP: ${KAFKA_TRACKING_CONSUMER_GROUP:-atmrstg-tracking-ingest}
@@ -304,12 +308,21 @@ services:
     environment:
       APP_ENV: staging
       FLASK_CONFIG: production
+      FLASK_ENV: production
       STAGING_API_URL: http://backend:5000
       PYTHONPATH: /app
       REDIS_URL: redis://redis:6379/0
+      POSTGRES_USER: ${POSTGRES_USER:-atmrstg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD staging requis}
       POSTGRES_HOST: pgbouncer
       POSTGRES_PORT: "6432"
+      POSTGRES_DB: ${POSTGRES_DB:-atmrstg}
       POSTGRES_SSLMODE: disable
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-atmrstg}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-atmrstg}
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://${POSTGRES_USER:-atmrstg}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-atmrstg}
+      API_DOCS: "off"
+      API_LEGACY_ENABLED: "false"
+      HIBP_ENABLED: "false"
     volumes:
       - ./scripts/staging:/opt/staging:ro
       - staging_output:/output
