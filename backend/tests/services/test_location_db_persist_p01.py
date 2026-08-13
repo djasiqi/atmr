@@ -88,6 +88,133 @@ def test_store_location_db_failure_sets_db_persisted_false(monkeypatch) -> None:
     session.rollback.assert_called()
 
 
+def test_store_location_pg_first_failure_does_not_write_canonical(
+    monkeypatch,
+) -> None:
+    """CASE 2 — flag P5-B : échec PG → canonical Redis inchangé."""
+    redis = _OkRedis()
+    service = LocationService(redis_client_instance=redis)
+    now = datetime.now(UTC)
+
+    class _Repo:
+        def find_by_id(self, driver_id):  # type: ignore[no-untyped-def]
+            return MagicMock(id=driver_id, company_id=1)
+
+    session = MagicMock()
+    session.commit.side_effect = OperationalError("stmt", {}, Exception("pg down"))
+    monkeypatch.setenv("TRACKING_PG_FIRST_CANONICAL_ENABLED", "true")
+    monkeypatch.setattr(
+        "services.geolocation.location.DriverRepository",
+        _Repo,
+    )
+
+    class _Q:
+        @staticmethod
+        def get(_id):  # type: ignore[no-untyped-def]
+            return MagicMock()
+
+    monkeypatch.setattr(
+        "services.geolocation.location.Driver",
+        type("DriverFake", (), {"query": _Q}),
+    )
+    monkeypatch.setattr("services.geolocation.location.db", MagicMock(session=session))
+
+    (
+        accept_status,
+        _reason,
+        _received,
+        canonical_updated,
+        db_persisted,
+    ) = service._store_location(
+        driver_id=7,
+        latitude=46.2,
+        longitude=6.1,
+        speed=None,
+        heading=None,
+        accuracy=5.0,
+        source="raw",
+        timestamp=now,
+        location_mode="availability_presence",
+        recorded_at=now,
+        sent_at=now,
+        is_background=False,
+        mission_id=None,
+        company_id=1,
+        location_event_id="evt-1",
+        capture_id="fix-1",
+        session_generation=1,
+        sequence_id=1,
+        tracking_session_id="sess",
+    )
+    assert accept_status == "accepted_canonical"
+    assert db_persisted is False
+    assert canonical_updated is False
+    assert "driver:7:loc:canonical" not in redis._hashes
+
+
+def test_store_location_pg_first_success_promotes_canonical(monkeypatch) -> None:
+    """CASE 1 / CASE 8 — HTTP sync : PG OK → canonical Redis."""
+    redis = _OkRedis()
+    service = LocationService(redis_client_instance=redis)
+    now = datetime.now(UTC)
+
+    class _Repo:
+        def find_by_id(self, driver_id):  # type: ignore[no-untyped-def]
+            return MagicMock(id=driver_id, company_id=1)
+
+    session = MagicMock()
+    monkeypatch.setenv("TRACKING_PG_FIRST_CANONICAL_ENABLED", "true")
+    monkeypatch.setattr(
+        "services.geolocation.location.DriverRepository",
+        _Repo,
+    )
+
+    class _Q:
+        @staticmethod
+        def get(_id):  # type: ignore[no-untyped-def]
+            return MagicMock()
+
+    monkeypatch.setattr(
+        "services.geolocation.location.Driver",
+        type("DriverFake", (), {"query": _Q}),
+    )
+    monkeypatch.setattr("services.geolocation.location.db", MagicMock(session=session))
+
+    (
+        _status,
+        _reason,
+        _received,
+        canonical_updated,
+        db_persisted,
+    ) = service._store_location(
+        driver_id=7,
+        latitude=46.2,
+        longitude=6.1,
+        speed=None,
+        heading=None,
+        accuracy=5.0,
+        source="raw",
+        timestamp=now,
+        location_mode="availability_presence",
+        recorded_at=now,
+        sent_at=now,
+        is_background=False,
+        mission_id=None,
+        company_id=1,
+        location_event_id="evt-1",
+        capture_id="fix-http",
+        session_generation=2,
+        sequence_id=8,
+        tracking_session_id="sess",
+    )
+    assert db_persisted is True
+    assert canonical_updated is True
+    mapping = redis._hashes["driver:7:loc:canonical"]
+    assert mapping["capture_id"] == "fix-http"
+    assert mapping["session_generation"] == "2"
+    assert mapping["sequence_id"] == "8"
+
+
 def test_update_result_exposes_db_persisted_false(monkeypatch) -> None:
     service = LocationService(redis_client_instance=_OkRedis())
     now = datetime.now(UTC)

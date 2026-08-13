@@ -378,4 +378,47 @@ describe("driverTrackingQueue", () => {
     expect(flush.queueDepth).toBe(1);
     expect(flush.lastBackendAckStatus).toBe("partially_ingested");
   });
+
+  it("conserve le même capture_id socket → HTTP retry", async () => {
+    await driverTrackingQueue.enqueue({
+      missionId: 42,
+      appState: "active",
+      locationMode: "mission_live",
+      captureId: "fix-stable-p3",
+      payload: {
+        latitude: 46.2,
+        longitude: 6.1,
+        missionId: 42,
+        locationMode: "mission_live",
+        captureId: "fix-stable-p3",
+      },
+    });
+    mockSendDriverLocationBatch.mockReturnValueOnce(true);
+    await driverTrackingQueue.flush({
+      ackStaleMs: 1,
+      networkProfile: "normal",
+    });
+    const socketPayload = mockSendDriverLocationBatch.mock.calls[0]?.[0] as Array<{
+      capture_id?: string | null;
+    }>;
+    expect(socketPayload[0]?.capture_id).toBe("fix-stable-p3");
+
+    mockSendDriverLocation.mockImplementation(async (payload: unknown) => {
+      const p = payload as { trackingEventId?: string; captureId?: string };
+      return {
+        ack_status: "persisted",
+        durability: "persisted_sync",
+        location_event_id: p.trackingEventId ?? null,
+        tracking_event_id: p.trackingEventId ?? null,
+      };
+    });
+    await driverTrackingQueue.flush({
+      ackStaleMs: 1,
+      networkProfile: "poor",
+      forceHttpFallback: true,
+    });
+    expect(mockSendDriverLocation).toHaveBeenCalledWith(
+      expect.objectContaining({ captureId: "fix-stable-p3" })
+    );
+  });
 });

@@ -154,7 +154,9 @@ describe("driver secondary api contracts", () => {
     expect(ack.retry_event_ids).toEqual(["b"]);
     expect(mockPut).toHaveBeenCalledWith(
       "/driver/me/location",
-      expect.any(Object),
+      expect.objectContaining({
+        capture_id: null,
+      }),
       expect.objectContaining({
         headers: expect.objectContaining({
           "X-Location-Event-Id": "evt-1",

@@ -62,6 +62,7 @@ def test_event_id_duplicate_same_hash_returns_duplicate():
         "driver_id": 1,
         "company_id": 1,
         "location_event_id": "eid-1",
+        "capture_id": "eid-1",
         "tracking_session_id": "s1",
         "session_generation": 1,
         "sequence_id": 1,
@@ -109,6 +110,59 @@ def test_event_id_duplicate_same_hash_returns_duplicate():
         "reason": "same_event_already_persisted",
         "location_event_id": "eid-1",
     }
+
+
+def test_persisted_outbox_uses_nested_processed_envelope():
+    import json
+
+    calls: list[tuple[str, dict]] = []
+
+    def _execute(stmt, params=None):
+        sql = str(stmt)
+        calls.append((sql, params or {}))
+        if "FOR UPDATE" in sql:
+            return MagicMock()
+        if "INSERT INTO tracking_ingest_events" in sql:
+            assert "capture_id" in sql
+            return SimpleNamespace(first=lambda: ("eid-1",))
+        if "INSERT INTO driver_location_events" in sql:
+            assert "capture_id" in sql
+            return MagicMock()
+        if "SELECT contiguous_persisted_through" in sql:
+            return _mappings_first(
+                {"contiguous_persisted_through": 0, "max_seen_sequence": 0}
+            )
+        if "SELECT 1 FROM driver_location_events" in sql:
+            return SimpleNamespace(first=lambda: None)
+        return MagicMock()
+
+    session = MagicMock()
+    session.execute.side_effect = _execute
+    result = persist_location_event_with_outbox(
+        session,
+        driver_id=1,
+        company_id=9,
+        location_event_id="eid-1",
+        tracking_session_id="sess-1",
+        session_generation=1,
+        sequence_id=1,
+        latitude=46.2,
+        longitude=6.1,
+        recorded_at="2026-08-13T12:00:00+00:00",
+        source="kafka",
+        capture_id="fix-stable",
+        mission_id=42,
+    )
+    assert result["status"] == "persisted"
+    assert result["capture_id"] == "fix-stable"
+    outbox = [c for c in calls if "tracking_event_outbox" in c[0]]
+    assert outbox
+    envelope = json.loads(outbox[0][1]["payload"])
+    assert envelope["event_type"] == "persisted_location"
+    assert envelope["capture_id"] == "fix-stable"
+    assert envelope["durable"]["postgres_committed"] is True
+    assert envelope["payload"]["latitude"] == 46.2
+    assert envelope["payload"]["mission_id"] == 42
 
 
 def test_conflict_without_owner_returns_duplicate_unproven():
