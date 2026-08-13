@@ -5,14 +5,22 @@ Teste que get_bookings_for_day() charge les relations (driver, client, company)
 en une seule requête avec JOIN, évitant ainsi les requêtes N+1.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, time, timedelta
 
 import pytest
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 
 from services.unified_dispatch.data import get_available_drivers, get_bookings_for_day
+from shared.time_utils import now_local
 from tests.factories import BookingFactory, ClientFactory, CompanyFactory, DriverFactory
+
+
+def _tomorrow_local_midday() -> tuple[str, datetime]:
+    """Jour calendaire Zurich + midi naïf (loin des frontières de jour UTC/CI)."""
+    target_day = now_local().date() + timedelta(days=1)
+    midday = datetime.combine(target_day, time(hour=12))
+    return target_day.strftime("%Y-%m-%d"), midday
 
 
 class TestGetBookingsForDayEagerLoading:
@@ -41,9 +49,14 @@ class TestGetBookingsForDayEagerLoading:
 
     @pytest.fixture
     def test_bookings(self, db, test_company, test_client, test_driver):
-        """Crée plusieurs bookings avec relations pour les tests."""
-        tomorrow = (datetime.now(UTC) + timedelta(days=1)).date()
-        day_str = tomorrow.strftime("%Y-%m-%d")
+        """Crée plusieurs bookings avec relations pour les tests.
+
+        Heure métier locale déterministe (12:00–16:00 Genève), loin des
+        frontières de jour UTC que la CI traverse en soirée.
+        """
+        target_day = now_local().date() + timedelta(days=1)
+        day_str = target_day.strftime("%Y-%m-%d")
+        base_time = datetime.combine(target_day, time(hour=12))
 
         bookings = []
         for i in range(5):
@@ -51,7 +64,7 @@ class TestGetBookingsForDayEagerLoading:
                 company=test_company,
                 client=test_client,
                 driver=test_driver if i % 2 == 0 else None,  # Alterner avec/sans driver
-                scheduled_time=datetime.now(UTC) + timedelta(days=1, hours=i),
+                scheduled_time=base_time + timedelta(hours=i),
             )
             bookings.append(booking)
 
@@ -303,13 +316,14 @@ class TestBuildVrptwProblemRelations:
     @pytest.fixture
     def test_bookings(self, db, test_company, test_client, test_driver):
         """Crée des bookings avec relations pour les tests."""
+        _day_str, midday = _tomorrow_local_midday()
         bookings = []
         for _ in range(3):
             booking = BookingFactory(
                 company=test_company,
                 client=test_client,
                 driver=test_driver,
-                scheduled_time=datetime.now(UTC) + timedelta(days=1),
+                scheduled_time=midday,
             )
             bookings.append(booking)
         db.session.commit()
@@ -326,8 +340,7 @@ class TestBuildVrptwProblemRelations:
         )
 
         # Récupérer les bookings avec relations chargées (Phase 2)
-        tomorrow = (datetime.now(UTC) + timedelta(days=1)).date()
-        day_str = tomorrow.strftime("%Y-%m-%d")
+        day_str, _midday = _tomorrow_local_midday()
         bookings = get_bookings_for_day(test_company.id, day_str)
 
         # Récupérer les drivers avec relations chargées (Phase 3)

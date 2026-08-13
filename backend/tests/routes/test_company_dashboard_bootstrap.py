@@ -8,6 +8,7 @@ notifications + curseur temps réel) et la présence de `snapshot_cursor`
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 import pytest
 from flask_jwt_extended import create_access_token
@@ -153,15 +154,25 @@ class TestCompanyDashboardBootstrap:
         assert data["bookings_total"] >= 1
 
     def test_defaults_to_today_without_date_param(
-        self, client, sample_user, bootstrap_company
+        self, client, sample_user, bootstrap_company, monkeypatch
     ):
+        """Date défaut = jour métier Europe/Zurich (horloge figée, pas 2 lectures).
+
+        ``CompanyDashboardBootstrap.get`` importe ``now_local`` depuis
+        ``shared.time_utils`` au moment de la requête.
+        """
+        fixed_now = datetime(2026, 8, 13, 12, 0, 0)
+        monkeypatch.setattr(
+            "shared.time_utils.now_local",
+            lambda: fixed_now,
+        )
         headers = _company_headers(client, sample_user, bootstrap_company.id)
         response = client.get(
             "/api/v1/companies/me/dashboard/bootstrap", headers=headers
         )
         assert response.status_code == 200
         data = response.get_json()
-        assert data["date"] == now_local().strftime("%Y-%m-%d")
+        assert data["date"] == "2026-08-13"
 
     def test_rejects_invalid_date_format(self, client, sample_user, bootstrap_company):
         headers = _company_headers(client, sample_user, bootstrap_company.id)
