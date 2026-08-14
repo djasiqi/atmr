@@ -34,6 +34,17 @@ import {
 import { validateNativeOwnerForHeadless } from "./trackingRuntimeRegistry";
 import { getTrackingAuthAvailability } from "../../../core/auth/sessionAuthDecision";
 import { isWithinTrackingWindow } from "./trackingWindow";
+import {
+  canAttemptNativeStartNow,
+  ensureNativeLifecycleAppStateBridge,
+  getNativeLifecycleInFlight,
+  requestNativeRecover,
+  requestNativeStart,
+  requestNativeStop,
+  __resetNativeTrackingLifecycleForTests,
+  type NativeStartRunResult,
+  type NativeStopRunResult,
+} from "./nativeTrackingLifecycle";
 
 /**
  * Notifie le heartbeat de santé tracking en cas d'échec de démarrage natif —
@@ -50,6 +61,49 @@ function notifyDeviceHealthOnNativeStartFailure(reason: string): void {
   } catch {
     /* noop */
   }
+}
+
+/** P0-A instrumentation — corrélation START/STOP (pas de changement de décision métier). */
+type NativeLifecycleErrorFields = {
+  error_name: string | null;
+  error_code: string | null;
+  error_message: string;
+  error_stack: string | null;
+};
+
+function createNativeLifecycleOpId(kind: "start" | "stop"): string {
+  return `nlo_${kind}_${createCaptureId()}`;
+}
+
+function extractNativeLifecycleError(error: unknown): NativeLifecycleErrorFields {
+  if (error instanceof Error) {
+    const withCode = error as Error & { code?: unknown };
+    const rawCode = withCode.code;
+    const error_code =
+      typeof rawCode === "string" || typeof rawCode === "number" ? String(rawCode) : null;
+    return {
+      error_name: error.name || null,
+      error_code,
+      error_message: error.message,
+      error_stack: typeof error.stack === "string" ? error.stack.slice(0, 1500) : null,
+    };
+  }
+  return {
+    error_name: null,
+    error_code: null,
+    error_message: String(error),
+    error_stack: null,
+  };
+}
+
+function formatNativeStartErrorForHealth(
+  opId: string,
+  reason: string,
+  fields: Pick<NativeLifecycleErrorFields, "error_name" | "error_code" | "error_message">
+): string {
+  const name = fields.error_name ?? "Error";
+  const code = fields.error_code ? `/${fields.error_code}` : "";
+  return `[${opId}] ${reason}: ${name}${code}: ${fields.error_message}`;
 }
 
 type BackgroundTrackingTaskMode = "mission" | "presence_window";
@@ -384,46 +438,148 @@ async function isBackgroundLocationTaskRegistered(): Promise<boolean> {
   return TaskManager.isTaskRegisteredAsync(BACKGROUND_LOCATION_TASK_NAME).catch(() => false);
 }
 
-async function stopNativeBackgroundLocationUpdatesSafely(): Promise<void> {
+/**
+ * STOP Expo Location — corps exécuté uniquement via requestNativeStop (P0-A).
+ * Ne jamais appeler directement depuis un run() imbriqué d'un autre requestNative*.
+ */
+async function stopNativeBackgroundLocationUpdatesUnlocked(
+  stopReason = "stop_native_background"
+): Promise<NativeStopRunResult> {
   if (
     typeof Location.hasStartedLocationUpdatesAsync !== "function" ||
     typeof Location.stopLocationUpdatesAsync !== "function"
   ) {
-    return;
+    return { ok: true, nativeStopped: false };
   }
 
   defineTaskIfNeeded();
 
-  const [hasStarted, isRegistered] = await Promise.all([
+  const stopAttemptId = createNativeLifecycleOpId("stop");
+  const stopRequestedAt = Date.now();
+  const appStateAtRequest = AppState.currentState;
+  const priorContext = await readTaskContext();
+  const inFlight = getNativeLifecycleInFlight();
+
+  const [hasStartedBefore, isRegisteredBefore] = await Promise.all([
     readNativeLocationUpdatesStarted(),
     isBackgroundLocationTaskRegistered(),
   ]);
 
-  if (!isRegistered && !hasStarted) {
-    return;
+  if (!isRegisteredBefore && !hasStartedBefore) {
+    return { ok: true, nativeStopped: false };
   }
 
-  if (!isRegistered) {
+  if (!isRegisteredBefore) {
     emitDriverTelemetry("tracking.background.task.stop_skipped", {
       source: "driver.services.backgroundLocationTask",
       task_name: BACKGROUND_LOCATION_TASK_NAME,
       reason: "task_not_registered",
-      has_started_flag: hasStarted,
+      stop_attempt_id: stopAttemptId,
+      stop_requested_at: stopRequestedAt,
+      stop_reason: stopReason,
+      app_state_at_request: appStateAtRequest,
+      has_started_flag: hasStartedBefore,
+      isTaskRegisteredAsync_before: false,
+      hasStartedLocationUpdatesAsync_before: hasStartedBefore,
+      stop_in_flight: inFlight.stop_in_flight,
+      start_in_flight: inFlight.start_in_flight,
+      native_owner: priorContext?.nativeOwner ?? null,
+      mission_id: priorContext?.missionId ?? null,
     });
-    return;
+    return { ok: true, nativeStopped: false };
   }
+
+  emitDriverTelemetry("tracking.background.stop_requested", {
+    source: "driver.services.backgroundLocationTask",
+    task_name: BACKGROUND_LOCATION_TASK_NAME,
+    stop_attempt_id: stopAttemptId,
+    stop_requested_at: stopRequestedAt,
+    stop_reason: stopReason,
+    app_state_at_request: appStateAtRequest,
+    isTaskRegisteredAsync_before: isRegisteredBefore,
+    hasStartedLocationUpdatesAsync_before: hasStartedBefore,
+    stop_in_flight: inFlight.stop_in_flight,
+    start_in_flight: inFlight.start_in_flight,
+    native_owner: priorContext?.nativeOwner ?? null,
+    mission_id: priorContext?.missionId ?? null,
+  });
 
   try {
     await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME);
+    const [hasStartedAfter, isRegisteredAfter] = await Promise.all([
+      readNativeLocationUpdatesStarted(),
+      isBackgroundLocationTaskRegistered(),
+    ]);
+    const inFlightAfter = getNativeLifecycleInFlight();
+    emitDriverTelemetry("tracking.background.stop_success", {
+      source: "driver.services.backgroundLocationTask",
+      task_name: BACKGROUND_LOCATION_TASK_NAME,
+      stop_attempt_id: stopAttemptId,
+      stop_requested_at: stopRequestedAt,
+      stop_reason: stopReason,
+      app_state_at_request: appStateAtRequest,
+      app_state_at_resolve: AppState.currentState,
+      isTaskRegisteredAsync_before: isRegisteredBefore,
+      hasStartedLocationUpdatesAsync_before: hasStartedBefore,
+      isTaskRegisteredAsync_after: isRegisteredAfter,
+      hasStartedLocationUpdatesAsync_after: hasStartedAfter,
+      stop_in_flight: inFlightAfter.stop_in_flight,
+      start_in_flight: inFlightAfter.start_in_flight,
+      native_owner: priorContext?.nativeOwner ?? null,
+      mission_id: priorContext?.missionId ?? null,
+    });
+    return { ok: true, nativeStopped: true };
   } catch (error) {
+    const errFields = extractNativeLifecycleError(error);
     if (!isBenignTaskLifecycleError(error)) {
+      const inFlightFail = getNativeLifecycleInFlight();
+      emitDriverTelemetry("tracking.background.stop_failed", {
+        source: "driver.services.backgroundLocationTask",
+        task_name: BACKGROUND_LOCATION_TASK_NAME,
+        stop_attempt_id: stopAttemptId,
+        stop_requested_at: stopRequestedAt,
+        stop_reason: stopReason,
+        app_state_at_request: appStateAtRequest,
+        app_state_at_resolve: AppState.currentState,
+        isTaskRegisteredAsync_before: isRegisteredBefore,
+        hasStartedLocationUpdatesAsync_before: hasStartedBefore,
+        stop_in_flight: inFlightFail.stop_in_flight,
+        start_in_flight: inFlightFail.start_in_flight,
+        native_owner: priorContext?.nativeOwner ?? null,
+        mission_id: priorContext?.missionId ?? null,
+        error: errFields.error_message,
+        error_name: errFields.error_name,
+        error_code: errFields.error_code,
+        error_stack: errFields.error_stack,
+      });
+      // Alias historique (listeners / dashboards existants)
       emitDriverTelemetry("tracking.background.task.stop_failed", {
         source: "driver.services.backgroundLocationTask",
         task_name: BACKGROUND_LOCATION_TASK_NAME,
-        error: error instanceof Error ? error.message : String(error),
+        stop_attempt_id: stopAttemptId,
+        error: errFields.error_message,
+        error_name: errFields.error_name,
+        error_code: errFields.error_code,
       });
+      return {
+        ok: false,
+        nativeStopped: false,
+        errorCode: errFields.error_code,
+        errorName: errFields.error_name,
+        errorMessage: errFields.error_message,
+      };
     }
+    return { ok: true, nativeStopped: true };
   }
+}
+
+async function stopNativeBackgroundLocationUpdatesSafely(
+  stopReason = "stop_native_background"
+): Promise<void> {
+  await requestNativeStop({
+    reason: stopReason,
+    run: () => stopNativeBackgroundLocationUpdatesUnlocked(stopReason),
+  });
 }
 
 async function readNativeLocationUpdatesStarted(): Promise<boolean> {
@@ -822,18 +978,20 @@ async function startBackgroundLocationTaskIfEligibleInternal(
   missionStatus: DriverMissionStatus | null,
   options: StartBackgroundOptions = {},
   startReason: string
-): Promise<boolean> {
+): Promise<NativeStartRunResult> {
   if (
     typeof Location.hasStartedLocationUpdatesAsync !== "function" ||
     typeof Location.startLocationUpdatesAsync !== "function"
   ) {
-    return false;
+    return { ok: false, nativeStarted: false };
   }
-  if (!isFeatureEnabled("tracking_background_enabled")) return false;
+  if (!isFeatureEnabled("tracking_background_enabled")) {
+    return { ok: false, nativeStarted: false };
+  }
   const isPresenceWindow = options.presenceWindow === true;
   const taskMode: BackgroundTrackingTaskMode = isPresenceWindow ? "presence_window" : "mission";
   if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) {
-    return false;
+    return { ok: false, nativeStarted: false };
   }
   // TIME-3C : refuser tout start/reprise présence hors fenêtre Europe/Zurich
   if (isPresenceWindow && !isWithinTrackingWindow(new Date())) {
@@ -846,7 +1004,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       task_name: BACKGROUND_LOCATION_TASK_NAME,
       start_reason: startReason,
     });
-    return false;
+    return { ok: false, nativeStarted: false };
   }
   if (!canUseBackgroundLocation()) {
     emitDriverTelemetry("tracking.background.task.skipped", {
@@ -857,7 +1015,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       task_mode: taskMode,
       task_name: BACKGROUND_LOCATION_TASK_NAME,
     });
-    return false;
+    return { ok: false, nativeStarted: false };
   }
   if (await isKillSwitchEnabled()) {
     emitDriverTelemetry("tracking.background.task.skipped", {
@@ -867,7 +1025,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       task_mode: taskMode,
       task_name: BACKGROUND_LOCATION_TASK_NAME,
     });
-    return false;
+    return { ok: false, nativeStarted: false };
   }
 
   defineTaskIfNeeded();
@@ -905,7 +1063,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       bg_permission: perms.bg,
       mission_id: missionId,
     });
-    return false;
+    return { ok: false, nativeStarted: false, errorMessage: "permission_denied" };
   }
 
   await setBackgroundTrackingMissionContext(
@@ -914,12 +1072,59 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     taskMode,
     options.scheduling ?? null
   );
-  const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME);
-  if (hasStarted) {
+
+  const startAttemptId = createNativeLifecycleOpId("start");
+  const startRequestedAt = Date.now();
+  const appStateAtRequest = AppState.currentState;
+  const priorContext = await readTaskContext();
+  const [hasStartedBefore, isRegisteredBefore] = await Promise.all([
+    readNativeLocationUpdatesStarted(),
+    isBackgroundLocationTaskRegistered(),
+  ]);
+
+  const inFlightAtRequest = getNativeLifecycleInFlight();
+  const lifecycleCorrelationBase = {
+    start_attempt_id: startAttemptId,
+    start_requested_at: startRequestedAt,
+    start_reason: startReason,
+    app_state_at_request: appStateAtRequest,
+    isTaskRegisteredAsync_before: isRegisteredBefore,
+    hasStartedLocationUpdatesAsync_before: hasStartedBefore,
+    stop_in_flight: inFlightAtRequest.stop_in_flight,
+    start_in_flight: inFlightAtRequest.start_in_flight,
+    native_owner: priorContext?.nativeOwner ?? null,
+    mission_id: missionId,
+    task_mode: taskMode,
+  };
+
+  if (hasStartedBefore) {
     clearNativeStartFailure();
     clearNativeStartDiagnostics();
     clearPendingFgsStart();
-    return true;
+    emitDriverTelemetry("tracking.background.start_requested", {
+      source: "driver.services.backgroundLocationTask",
+      reason: startReason,
+      ...lifecycleCorrelationBase,
+      outcome: "already_started",
+      task_defined: lifecycleBefore.taskDefined,
+      task_started: true,
+      app_state: appStateAtRequest,
+      fg_permission: perms.fg,
+      bg_permission: perms.bg,
+    });
+    emitDriverTelemetry("tracking.background.start_success", {
+      source: "driver.services.backgroundLocationTask",
+      reason: startReason,
+      ...lifecycleCorrelationBase,
+      outcome: "already_started",
+      app_state_at_resolve: AppState.currentState,
+      isTaskRegisteredAsync_after: isRegisteredBefore,
+      hasStartedLocationUpdatesAsync_after: true,
+      task_defined: lifecycleBefore.taskDefined,
+      task_started: true,
+      app_state: AppState.currentState,
+    });
+    return { ok: true, nativeStarted: true, invokedNativeStart: false };
   }
 
   const batteryLevel = await Battery.getBatteryLevelAsync().catch(() => null);
@@ -938,13 +1143,12 @@ async function startBackgroundLocationTaskIfEligibleInternal(
   emitDriverTelemetry("tracking.background.start_requested", {
     source: "driver.services.backgroundLocationTask",
     reason: startReason,
+    ...lifecycleCorrelationBase,
     task_defined: lifecycleBefore.taskDefined,
     task_started: lifecycleBefore.taskStarted,
-    app_state: AppState.currentState,
+    app_state: appStateAtRequest,
     fg_permission: perms.fg,
     bg_permission: perms.bg,
-    mission_id: missionId,
-    task_mode: taskMode,
   });
 
   const effectiveDistanceMeters = resolveBackgroundDistanceMeters(taskMode);
@@ -974,7 +1178,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
   recordNativeStartDiagnostics({
     native_start_phase: "before_startLocationUpdatesAsync",
     native_task_defined: lifecycleBefore.taskDefined || isTaskManagerTaskDefined(),
-    native_started_before: lifecycleBefore.taskStarted,
+    native_started_before: hasStartedBefore,
     native_started_after: null,
     native_start_error: null,
   });
@@ -983,7 +1187,12 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     recordNativeStartDiagnostics({ native_start_phase: "startLocationUpdatesAsync" });
     await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME, locationOptions);
 
+    const [hasStartedAfter, isRegisteredAfter] = await Promise.all([
+      readNativeLocationUpdatesStarted(),
+      isBackgroundLocationTaskRegistered(),
+    ]);
     const lifecycleAfter = await getNativeTaskLifecycleStatus();
+    const inFlightAfter = getNativeLifecycleInFlight();
     recordNativeStartDiagnostics({
       native_start_phase: "after_startLocationUpdatesAsync",
       native_task_defined: lifecycleAfter.taskDefined,
@@ -993,26 +1202,62 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     emitDriverTelemetry("tracking.background.start_success", {
       source: "driver.services.backgroundLocationTask",
       reason: startReason,
+      ...lifecycleCorrelationBase,
+      start_in_flight: inFlightAfter.start_in_flight,
+      stop_in_flight: inFlightAfter.stop_in_flight,
+      outcome: "started",
+      app_state_at_resolve: AppState.currentState,
+      isTaskRegisteredAsync_after: isRegisteredAfter,
+      hasStartedLocationUpdatesAsync_after: hasStartedAfter,
       task_defined: lifecycleAfter.taskDefined,
       task_started: lifecycleAfter.taskStarted,
       app_state: AppState.currentState,
-      mission_id: missionId,
-      task_mode: taskMode,
     });
 
     if (!lifecycleAfter.taskStarted) {
       const inactiveError = "startLocationUpdatesAsync returned without active native task";
+      const healthError = formatNativeStartErrorForHealth(startAttemptId, startReason, {
+        error_name: "NativeTaskInactive",
+        error_code: null,
+        error_message: inactiveError,
+      });
       recordNativeStartDiagnostics({
         native_start_phase: "after_startLocationUpdatesAsync",
-        native_start_error: inactiveError,
+        native_start_error: healthError,
         native_started_after: false,
       });
       recordNativeStartFailure({
         reason: startReason,
-        error: inactiveError,
+        error: `[${startAttemptId}] ${inactiveError}`,
       });
       notifyDeviceHealthOnNativeStartFailure("native_task_inactive");
-      return false;
+      emitDriverTelemetry("tracking.background.start_failed", {
+        source: "driver.services.backgroundLocationTask",
+        reason: startReason,
+        failure_reason: "native_task_inactive",
+        ...lifecycleCorrelationBase,
+        start_in_flight: inFlightAfter.start_in_flight,
+        stop_in_flight: inFlightAfter.stop_in_flight,
+        app_state_at_resolve: AppState.currentState,
+        isTaskRegisteredAsync_after: isRegisteredAfter,
+        hasStartedLocationUpdatesAsync_after: hasStartedAfter,
+        error: inactiveError,
+        error_name: "NativeTaskInactive",
+        error_code: null,
+        error_stack: null,
+        task_defined: lifecycleAfter.taskDefined,
+        task_started: false,
+        app_state: AppState.currentState,
+        fg_permission: perms.fg,
+        bg_permission: perms.bg,
+      });
+      return {
+        ok: false,
+        nativeStarted: false,
+        invokedNativeStart: true,
+        errorName: "NativeTaskInactive",
+        errorMessage: inactiveError,
+      };
     }
 
     clearNativeStartFailure();
@@ -1022,6 +1267,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     emitDriverTelemetry("tracking.background.task.started", {
       source: "driver.services.backgroundLocationTask",
       task_name: BACKGROUND_LOCATION_TASK_NAME,
+      start_attempt_id: startAttemptId,
       mission_id: missionId,
       task_mode: taskMode,
       interval_ms: effectiveIntervalMs,
@@ -1030,25 +1276,86 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       battery_degrades_gps: gpsQuality.batteryDegradesGps,
       battery_level: batteryLevel,
     });
-    return true;
+    return { ok: true, nativeStarted: true, invokedNativeStart: true };
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    recordNativeStartFailure({ reason: startReason, error: message });
+    const errFields = extractNativeLifecycleError(error);
+    const healthError = formatNativeStartErrorForHealth(startAttemptId, startReason, errFields);
+    const inFlightFail = getNativeLifecycleInFlight();
+    recordNativeStartDiagnostics({
+      native_start_phase: "startLocationUpdatesAsync",
+      native_start_error: healthError,
+      native_started_after: false,
+    });
+    recordNativeStartFailure({
+      reason: startReason,
+      error: healthError,
+    });
     notifyDeviceHealthOnNativeStartFailure("start_exception");
     emitDriverTelemetry("tracking.background.start_failed", {
       source: "driver.services.backgroundLocationTask",
       reason: startReason,
       failure_reason: "start_exception",
-      error: message,
+      ...lifecycleCorrelationBase,
+      start_in_flight: inFlightFail.start_in_flight,
+      stop_in_flight: inFlightFail.stop_in_flight,
+      app_state_at_resolve: AppState.currentState,
+      error: errFields.error_message,
+      error_name: errFields.error_name,
+      error_code: errFields.error_code,
+      error_stack: errFields.error_stack,
       task_defined: lifecycleBefore.taskDefined,
       task_started: false,
       app_state: AppState.currentState,
       fg_permission: perms.fg,
       bg_permission: perms.bg,
-      mission_id: missionId,
     });
-    return false;
+    return {
+      ok: false,
+      nativeStarted: false,
+      invokedNativeStart: true,
+      errorCode: errFields.error_code,
+      errorName: errFields.error_name,
+      errorMessage: errFields.error_message,
+    };
   }
+}
+
+function isRecoverStartReason(reason: string): boolean {
+  return (
+    reason.includes("fgs_recover") ||
+    reason.includes("anti_zombie") ||
+    reason.includes("recover") ||
+    reason.includes("watchdog")
+  );
+}
+
+/**
+ * Point d'entrée sérialisé P0-A pour tout START/RECOVER natif.
+ * Ne jamais appeler startBackgroundLocationTaskIfEligibleInternal hors de ce helper
+ * (sauf depuis le `run` injecté ici).
+ */
+async function requestEligibleNativeStart(
+  missionId: number | null,
+  missionStatus: DriverMissionStatus | null,
+  options: StartBackgroundOptions,
+  startReason: string
+): Promise<NativeStartRunResult> {
+  const run = () =>
+    startBackgroundLocationTaskIfEligibleInternal(
+      missionId,
+      missionStatus,
+      options,
+      startReason
+    );
+  const ctrl = isRecoverStartReason(startReason)
+    ? await requestNativeRecover({ reason: startReason, run })
+    : await requestNativeStart({ reason: startReason, run });
+  if (ctrl.result) return ctrl.result;
+  return {
+    ok: false,
+    nativeStarted: false,
+    errorMessage: ctrl.outcome,
+  };
 }
 
 async function runWatchdogTick(): Promise<void> {
@@ -1098,10 +1405,15 @@ async function runWatchdogTick(): Promise<void> {
     return;
   }
 
+  // P0-A : pas de spam START sous BLOCKED / op en cours
+  if (!canAttemptNativeStartNow()) {
+    return;
+  }
+
   if (bgStartInProgress) return;
   bgStartInProgress = true;
   try {
-    await startBackgroundLocationTaskIfEligibleInternal(
+    await requestEligibleNativeStart(
       watchdogMissionId,
       watchdogMissionStatus,
       { presenceWindow: watchdogPresenceWindow },
@@ -1211,11 +1523,12 @@ export async function ensureNativeTrackingWhileForeground(
       desired_mission_id: desiredOwner?.missionId ?? null,
       desired_mission_context_version: desiredOwner?.missionContextVersion ?? null,
     });
-    await stopNativeBackgroundLocationUpdatesSafely();
+    // P0-A : STOP puis START sérialisés (jamais imbriqués dans un même run)
+    await stopNativeBackgroundLocationUpdatesSafely(`${reason}:owner_version_mismatch`);
     clearPendingFgsStart();
     stopNativeTrackingWatchdog();
     if (AppState.currentState === "active") {
-      await startBackgroundLocationTaskIfEligibleInternal(
+      await requestEligibleNativeStart(
         missionId,
         missionStatus,
         options,
@@ -1251,7 +1564,7 @@ export async function ensureNativeTrackingWhileForeground(
         mission_id: missionId,
         task_mode: taskMode,
       });
-      await startBackgroundLocationTaskIfEligibleInternal(
+      await requestEligibleNativeStart(
         missionId,
         missionStatus,
         options,
@@ -1262,7 +1575,7 @@ export async function ensureNativeTrackingWhileForeground(
   }
 
   if (contextUpgradedToMission && AppState.currentState === "active") {
-    await stopNativeBackgroundLocationUpdatesSafely();
+    await stopNativeBackgroundLocationUpdatesSafely(`${reason}:context_upgrade_to_mission`);
   }
 
   if (AppState.currentState !== "active") {
@@ -1292,7 +1605,7 @@ export async function ensureNativeTrackingWhileForeground(
 
   bgStartInProgress = true;
   try {
-    await startBackgroundLocationTaskIfEligibleInternal(missionId, missionStatus, options, reason);
+    await requestEligibleNativeStart(missionId, missionStatus, options, reason);
     const lifecycleAfter = await getNativeTaskLifecycleStatus();
     if (lifecycleAfter.taskStarted) {
       stopNativeTrackingWatchdog();
@@ -1510,7 +1823,7 @@ export async function stopPresenceWindowIfStillCurrent(opts: {
     }
     stopNativeTrackingWatchdog();
     await writeTaskContext(null);
-    await stopNativeBackgroundLocationUpdatesSafely();
+    await stopNativeBackgroundLocationUpdatesSafely(opts.reason);
     emitDriverTelemetry("tracking.background.task.stopped", {
       source: "driver.services.backgroundLocationTask",
       task_name: BACKGROUND_LOCATION_TASK_NAME,
@@ -1525,7 +1838,7 @@ export async function stopBackgroundLocationTask(reason: string) {
   await withBackgroundTrackingLifecycleLock(async () => {
     stopNativeTrackingWatchdog();
     await setBackgroundTrackingMissionContext(null, null);
-    await stopNativeBackgroundLocationUpdatesSafely();
+    await stopNativeBackgroundLocationUpdatesSafely(reason);
     emitDriverTelemetry("tracking.background.task.stopped", {
       source: "driver.services.backgroundLocationTask",
       task_name: BACKGROUND_LOCATION_TASK_NAME,
@@ -1545,6 +1858,7 @@ export function initializeBackgroundLocationTask() {
     });
     return;
   }
+  ensureNativeLifecycleAppStateBridge();
   defineTaskIfNeeded();
   void emitRegistrationStatus();
 }
@@ -1555,4 +1869,5 @@ export function __resetBackgroundLocationTaskStateForTests(): void {
   bgStartInProgress = false;
   lifecycleLockTail = Promise.resolve();
   stopNativeTrackingWatchdog();
+  __resetNativeTrackingLifecycleForTests();
 }
