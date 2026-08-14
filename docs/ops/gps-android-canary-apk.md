@@ -163,13 +163,16 @@ Si `api.lirie.ch` → **STOP**.
 ## Build canary P0-A
 
 ```text
-EAS build URL      = (en cours — mis à jour au lancement)
+EAS build URL      = https://expo.dev/accounts/drinjasiqi/projects/operations-app/builds/d85e3254-9f24-43fc-9218-0d281858b960
 GIT TAG            = gps-canary-p0a-2026-08-14
-MOBILE CODE SHA    = (rempli après commit)
+MOBILE CODE SHA    = 479cd60d560385b8609e9d93b5c50334ce1edd22
+MOBILE CODE SHORT  = 479cd60d
 profile            = staging-canary
 APP_VARIANT        = dev
 developmentClient  = true
 APK                = internal
+FGS title          = Lirie Canary P0-A
+health.release_sha = 479cd60d… (Metro: EXPO_PUBLIC_RELEASE_SHA ; EAS: EAS_BUILD_GIT_COMMIT_HASH)
 ```
 
 ⚠️ Dev client : JS P0-A servi par **Metro** sur le commit tagué. L’APK porte le shell + `release_sha` EAS.
