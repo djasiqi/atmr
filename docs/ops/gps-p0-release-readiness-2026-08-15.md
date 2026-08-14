@@ -22,37 +22,46 @@ Freeze amont : [gps-p0-global-freeze-2026-08-15.md](gps-p0-global-freeze-2026-08
 
 | Gate | Objet | Statut | Commentaire |
 |------|--------|--------|-------------|
-| **G0** | tests / CI / canaries | **JAUNE** | Packs P0 **commités** (SHAs ci-dessous) ; **pas encore** branche `release/gps-p0-*` ni SHA unique cherry-pick ni CI sur ce SHA |
-| **G1** | migrations | **JAUNE** | `25ce766952e2` listée ; **current prod non capturé** (SSH absent) ; Alembic prod **NO-GO** |
-| **G2** | config prod | **ROUGE** | Snapshot live **bloqué** — pas de `.local.deploy.env` ; fragment local ≠ serveur |
-| **G3** | compat N/N-1 | **JAUNE** | Matrice rédigée ; insiste `generation=null` → `422 invalid_ledger_ids` ; non prouvée |
-| **G4** | rollback | **JAUNE** | Procédure connue ; non testée hors prod |
-| **G5** | monitoring | **JAUNE** | Checklist prête ; baseline live absente |
+| **G0** | SHA P0 individuels | **✅** | Voir table freeze ci-dessous |
+| **G0** | SHA release unique (TIP RC) | **⏳** | Après `release/gps-p0-*` depuis **prod-current-SHA** |
+| **G1** | inventaire migration | **✅** | `25ce766952e2` documentée (nullable / réversible) |
+| **G1** | prod `alembic current` | **⏳** | Snapshot manquant ; **ALEMBIC PROD = NO-GO** |
+| **G2** | config prod | **❌** | Snapshot live manquant (SSH / `SERVER_HOST` absent) |
+| **G3** | N/N-1 | **⏳** | Après branche release + preuves vieux clients `422` |
+| **G4** | rollback | **⏳** | Après `prod-current-SHA` + images + `previous-release.json` |
+| **G5** | checklist monitoring | **✅** | Liste signaux prête |
+| **G5** | baseline prod | **⏳** | Snapshot / capture T-30 manquante |
 
 ```text
 G0–G5 tous VERTS  = NON
-DEPLOY PROD       = NO-GO ❌
+PROD DEPLOY       = NO-GO ❌
+TAG RC            = NO-GO tant que TIP release absent
 ```
 
 ---
 
 ## 1. Commits figés (OPTION B)
 
-### 1.1 ÉTAPE 1 — FAIT (packs isolés sur branche de travail)
+### 1.1 Contenu P0 figé (cherry-pick order)
 
 ```text
-OPTION RELEASE     = B / P0 ONLY ✅
-P0-A (conservé)    = 479cd60d560385b8609e9d93b5c50334ce1edd22
-P0-B               = 4cac0fbf455dd203bd44acac3fc7c47c2b573a46
-C-LEDGER-CLIENT    = 8861667935203048b8b02937a0f1133464b251e7
-C-LEDGER-SERVER    = 5e2b098ff521952f33e2fca3d3286934aec32615
-OBSERVABILITY      = e4adfb06bacd1e867839d98c61047b1d1ef4d84a
+P0 RELEASE CONTENT
+
+P0-A             479cd60d560385b8609e9d93b5c50334ce1edd22
+P0-B             4cac0fbf455dd203bd44acac3fc7c47c2b573a46
+LEDGER-CLIENT    8861667935203048b8b02937a0f1133464b251e7
+LEDGER-SERVER    5e2b098ff521952f33e2fca3d3286934aec32615
+OBSERVABILITY    e4adfb06bacd1e867839d98c61047b1d1ef4d84a
+
+DOC FREEZE       ba271034
 ```
 
 ```text
-TAG RC / release/gps-p0-2026-08-15   = PAS ENCORE
-  (après snapshot prod + cherry-pick depuis prod-current-SHA)
-Working tree hors P0                 = encore dirty (CI/coverage/staging — hors périmètre)
+OPTION RELEASE                   = B / P0 ONLY ✅
+PROCHAIN GO                      = PROD SNAPSHOT READ-ONLY uniquement
+release/gps-p0-2026-08-15        = INTERDIT sans prod-current-SHA
+TAG RC                           = INTERDIT sans TIP release testé
+Base interdite pour la branche   = main | feat/tracking-p0-p7-firewall
 ```
 
 Note SERVER : swagger ages observability co-localisé dans `driver.py` du commit SERVER (additif API).
@@ -74,22 +83,35 @@ Note SERVER : swagger ages observability co-localisé dans `driver.py` du commit
 
 Voir [gps-p0-prod-snapshot-2026-08-15.md](gps-p0-prod-snapshot-2026-08-15.md) — **INCOMPLET** (SSH absent).
 
-### 1.4 ÉTAPE 3 — Branche release (PAS ENCORE)
+### 1.4 ÉTAPE 3 — Branche release (PAS ENCORE — après snapshot)
 
 ```text
-prod-current-SHA  (depuis snapshot)
-    ↓
-git checkout -b release/gps-p0-2026-08-15 <prod-current-SHA>
-    ↓
-cherry-pick 479cd60d 4cac0fbf 88616679 5e2b098f e4adfb06
-  (+ dépendances minimales si conflits — capturer ; pas firewall/P5-B/CI)
-    ↓
-tests CI sur SHA tip
-    ↓
-tag RC gps-p0-rc-YYYYMMDD-<sha7>
+1. PROD SNAPSHOT READ-ONLY
+   → prod-current-SHA, images, alembic current, flags, compose actifs,
+     topologie ps (Up/Created), previous-release, baseline
+
+2. git checkout -b release/gps-p0-2026-08-15 <prod-current-SHA>
+   (JAMAIS depuis main ni feat/tracking-p0-p7-firewall)
+
+3. Cherry-pick ordre strict :
+   479cd60d… P0-A
+   4cac0fbf… P0-B
+   88616679… LEDGER-CLIENT
+   5e2b098f… LEDGER-SERVER
+   e4adfb06… OBSERVABILITY
+
+4. Conflits minimaux seulement — aucun refactor / hors-P0
+
+5. Tests sur le TIP exact
+
+6. WT clean
+
+7. TIP = release candidate G0
+
+8. Tag RC ensuite seulement
 ```
 
-Ce **SHA tip** de la branche release devient la référence **G0**, pas `feat/tracking-p0-p7-firewall`.
+Ce **TIP** de `release/gps-p0-2026-08-15` devient la référence **G0**, pas le working tree mélangé.
 
 ---
 
