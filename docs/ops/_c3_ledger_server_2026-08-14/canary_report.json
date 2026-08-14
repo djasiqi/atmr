@@ -1,0 +1,125 @@
+﻿{
+  "verdict": "PASS",
+  "driver_id": 1,
+  "company_id": 2,
+  "session_id": "canary_srv_e75827e10466",
+  "metrics": {
+    "orphan_claim_after_invalid_ids": 0,
+    "duplicate_final_without_persistence": 0,
+    "double_write": 0,
+    "HOL_after_invalid_item": 0,
+    "valid_loc_pg_progression": true,
+    "old_client_422": true,
+    "claim_release_after_invalid": true
+  },
+  "scenarios": [
+    {
+      "scenario": "S1_normal_valid_client",
+      "pass": true,
+      "http": 200,
+      "ack_status": "persisted",
+      "accept_reason": "",
+      "durability": "persisted_sync",
+      "ledger_persisted": true,
+      "claim_present": true,
+      "claim_key": "atmr:driver_location:event:1:5a18821ecef92b2fa5917307ce39902d",
+      "pg_rows": 1,
+      "pg": [
+        {
+          "id": 3,
+          "location_event_id": "s1_valid_c4a675ee8d6246a4",
+          "tracking_session_id": "canary_srv_e75827e10466",
+          "session_generation": 17,
+          "sequence_id": 1
+        }
+      ],
+      "event_id": "s1_valid_c4a675ee8d6246a4",
+      "generation": 17,
+      "sequence": 1
+    },
+    {
+      "scenario": "S2_old_client_generation_null",
+      "pass": true,
+      "http": 422,
+      "ack_status": "rejected",
+      "accept_reason": "invalid_ledger_ids",
+      "error_code": "invalid_ledger_ids",
+      "retryable": false,
+      "claim_present_after": false,
+      "claim_key": "atmr:driver_location:event:1:ba96fcad602f4024718626b8d2d302a0",
+      "pg_rows": 0,
+      "event_id": "s2_nullgen_c078bf4ccf9f421e",
+      "generation": null,
+      "sequence": 2,
+      "ack": {
+        "ack_status": "rejected",
+        "accept_reason": "invalid_ledger_ids",
+        "error": "invalid_ledger_ids",
+        "error_code": "invalid_ledger_ids",
+        "retryable": false,
+        "durability": null,
+        "ledger_persisted": false
+      }
+    },
+    {
+      "scenario": "S3_retry_same_old_payload",
+      "pass": true,
+      "http": 422,
+      "accept_reason": "invalid_ledger_ids",
+      "ack_status": "rejected",
+      "retryable": false,
+      "claim_present_after": false,
+      "cycle_poison": false,
+      "event_id": "s2_nullgen_c078bf4ccf9f421e"
+    },
+    {
+      "scenario": "S4_duplicate_persisted",
+      "pass": true,
+      "http": 200,
+      "accept_reason": "",
+      "ack_status": "persisted",
+      "durability": "persisted_sync",
+      "pg_before": 1,
+      "pg_after": 1,
+      "claim_present": true,
+      "event_id": "s1_valid_c4a675ee8d6246a4"
+    },
+    {
+      "scenario": "S5_claim_without_persistence_proof",
+      "pass": true,
+      "stale": {
+        "http": 200,
+        "accept_reason": "duplicate_event_id_unproven",
+        "ack_status": "ingested_non_persisted",
+        "durability": null,
+        "claim_after": false,
+        "event_id": "s5_orphan_f199db2e9aac4163",
+        "claim_key": "atmr:driver_location:event:1:2101a9af041c928fb665d66079604a1c"
+      },
+      "inflight": {
+        "http": 200,
+        "accept_reason": "claim_in_flight",
+        "ack_status": "ingested_non_persisted",
+        "durability": null,
+        "claim_after": true,
+        "event_id": "s5_inflight_0012b2dcf3c84afe",
+        "claim_key": "atmr:driver_location:event:1:a84e03f28b146f0d9c92c2b01d3f61ee"
+      }
+    },
+    {
+      "scenario": "S6_progress_after_invalid",
+      "pass": true,
+      "poison_http": 422,
+      "poison_claim_after": false,
+      "valid_http": 200,
+      "valid_ack_status": "persisted",
+      "valid_durability": "persisted_sync",
+      "valid_pg_rows": 1,
+      "valid_event_id": "s6_valid_c241ab5ebb9542ed",
+      "generation": 17,
+      "HOL": false
+    }
+  ],
+  "blocking_ok": true,
+  "ts": "2026-08-14T21:15:58.854350Z"
+}

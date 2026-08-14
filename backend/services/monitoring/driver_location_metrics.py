@@ -21,6 +21,12 @@ _KNOWN_ACCEPT_REASONS: frozenset[str] = frozenset(
         "location_update_not_attempted",
         "duplicate_event_id",
         "duplicate_proximity",
+        "duplicate_persisted",
+        "duplicate_event_id_unproven",
+        "claim_in_flight",
+        "invalid_ledger_ids",
+        "ledger_ids_missing",
+        "ledger_persist_failed",
     }
 )
 
@@ -431,7 +437,14 @@ def inc_dedup_skipped(
     t = _norm_transport(transport)
     r = (
         reason
-        if reason in ("duplicate_event_id", "duplicate_proximity")
+        if reason
+        in (
+            "duplicate_event_id",
+            "duplicate_proximity",
+            "duplicate_persisted",
+            "duplicate_event_id_unproven",
+            "claim_in_flight",
+        )
         else "_unknown"
     )
     _DEDUP_SKIPPED.labels(reason=r, location_mode=lm, transport=t).inc()

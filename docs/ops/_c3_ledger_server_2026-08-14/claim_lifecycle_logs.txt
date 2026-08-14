@@ -1,0 +1,11 @@
+﻿# Preuves lifecycle (corrélation ACK + Redis) — canary PASS
+# Logs module (niveau INFO forcé) :
+#   location_event_claim lifecycle=acquired ...
+#   location_event_claim lifecycle=released ... reason=invalid_ledger_ids
+#   location_event_claim duplicate_classified=duplicate_event_id_unproven ...
+#   location_event_claim duplicate_classified=claim_in_flight ...
+# Voir canary_report.json pour event_id / driver_id / generation / claim_key / PG id / ACK.
+INFO:services.geolocation.driver_location_dedup:location_event_claim lifecycle=acquired driver_id=1 event_id=canary_lifecycle_proof ttl=600
+INFO:services.geolocation.driver_location_dedup:location_event_claim lifecycle=released driver_id=1 event_id=canary_lifecycle_proof reason=invalid_ledger_ids deleted=1
+INFO:services.geolocation.driver_location_dedup:location_event_claim lifecycle=acquired driver_id=1 event_id=canary_inflight_proof ttl=600
+class claim_in_flight

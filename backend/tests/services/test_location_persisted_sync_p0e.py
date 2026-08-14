@@ -261,14 +261,18 @@ def test_projection_ok_without_ledger_must_not_claim_persisted_sync() -> None:
         and ledger.kind == "durable_ok"
     )
     assert durable_ok is False
+    # Option B : ids_missing → rejected non-retryable (pas ingested_non_persisted)
     response = {
-        "ack_status": "ingested_non_persisted",
+        "ack_status": "rejected",
+        "accept_reason": "invalid_ledger_ids",
         "durability": None,
         "db_persisted": True,
         "ledger_persisted": False,
+        "retryable": False,
     }
     assert response["durability"] != "persisted_sync"
     assert response["ledger_persisted"] is False
+    assert response["retryable"] is False
 
 
 def test_route_guard_strips_invented_persisted_sync() -> None:
@@ -291,18 +295,18 @@ def test_route_guard_strips_invented_persisted_sync() -> None:
 
 
 def test_http_matrix_mapping() -> None:
-    """Vérifie le mapping kind → HTTP / persisted_sync."""
+    """Vérifie le mapping kind → HTTP / persisted_sync (Option B)."""
 
     def map_kind(kind: str) -> tuple[int, bool]:
         if kind == "durable_ok":
             return 200, True
         if kind == "ids_missing":
-            return 200, False
+            return 422, False
         if kind == "conflict_409":
             return 409, False
         return 503, False
 
     assert map_kind("durable_ok") == (200, True)
-    assert map_kind("ids_missing") == (200, False)
+    assert map_kind("ids_missing") == (422, False)
     assert map_kind("conflict_409") == (409, False)
     assert map_kind("ledger_failed_503") == (503, False)
