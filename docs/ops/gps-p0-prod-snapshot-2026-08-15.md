@@ -84,7 +84,8 @@ Digests backend observés :
 - kafka-broker-1/2/3, zookeeper×3
 - prometheus, grafana, alertmanager, osrm, autoheal
 
-**Finding critique** : consumer/outbox ≠ backend GIT_SHA (casse l’invariant P0-E « même digest »). Fanout **Created** → Prometheus `up{job=atmr-tracking-processed-fanout}=0`.
+**Finding critique** : consumer/outbox ≠ backend GIT_SHA.  
+→ **Expliqué** (pas un hasard) : [gps-p0-deploy-skew-audit-2026-08-15.md](gps-p0-deploy-skew-audit-2026-08-15.md) — `deploy-production.sh` sans Kafka + recreate ingest P0 séparé + HOLD fanout.
 
 ---
 

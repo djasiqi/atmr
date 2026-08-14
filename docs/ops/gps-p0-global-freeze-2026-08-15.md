@@ -49,10 +49,11 @@ Tracking functional patch / ledger patch hors régression prouvée = **NO-GO**.
 OPTION RELEASE               = B / P0 ONLY ✅
 COMMIT FREEZE P0             = FAIT ✅
 SNAPSHOT PROD READ-ONLY      = FAIT ✅
-  prod-current-SHA           = 927640a0995a7025edfae3d31802998948a866d5
-  alembic                    = 9b6638784019
+DEPLOY SKEW AUDIT            = FAIT ✅ — gps-p0-deploy-skew-audit-2026-08-15.md
+  API 927640a0 ≠ ingest 390076ef = dual pipeline + HOLD (pas pin aléatoire)
+  fanout Created + ENABLED=false = HOLD volontaire
 TAG / branche release        = NO-GO jusqu’à GO explicite
-ALEMBIC PROD                 = NO-GO ❌
+ALEMBIC PROD                 = NO-GO ❌ (P0 isolé → exclure 25ce766952e2)
 PROD DEPLOY                  = NO-GO ❌
 REDIS/KAFKA PURGE            = NO-GO ❌
 ```

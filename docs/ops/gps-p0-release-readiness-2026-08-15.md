@@ -23,15 +23,14 @@ Freeze amont : [gps-p0-global-freeze-2026-08-15.md](gps-p0-global-freeze-2026-08
 | Gate | Objet | Statut | Commentaire |
 |------|--------|--------|-------------|
 | **G0** | SHA P0 individuels | **✅** | Freeze cherry-pick |
-| **G0** | SHA release unique (TIP RC) | **⏳** | Base connue = `927640a0…` ; branche **NO-GO** jusqu’à GO |
-| **G1** | inventaire migration | **✅** | `25ce766952e2` documentée |
-| **G1** | prod `alembic current` | **✅ capturé** | `9b6638784019` ; ≠ `25ce766952e2` |
-| **G1** | décision upgrade | **⏳** | Dépendance P0 à confirmer ; **ALEMBIC PROD = NO-GO** |
-| **G2** | config prod | **✅ capturé** | Flags + compose ; **skew images** consumer/outbox vs API |
+| **G0** | SHA release unique (TIP RC) | **⏳** | Base = `927640a0…` ; branche **NO-GO** |
+| **G1** | inventaire + prod current | **✅** | `9b6638784019` ; `25ce766952e2` absente |
+| **G1** | migration dans release P0 | **✅ orienté** | Cherry-pick P0 **sans** `25ce766952e2` (confirmer dry-run) — [audit skew](gps-p0-deploy-skew-audit-2026-08-15.md) |
+| **G2** | snapshot prod | **✅** | |
+| **G2** | image alignment | **✅ expliqué** | Dual pipeline + HOLD ; consumer reste `390076ef` — [audit](gps-p0-deploy-skew-audit-2026-08-15.md) |
 | **G3** | N/N-1 | **⏳** | Après branche release |
-| **G4** | rollback | **⏳** | `previous-release.json` **absent** ; tags images connus |
-| **G5** | checklist monitoring | **✅** | |
-| **G5** | baseline prod | **✅ partielle** | `up` + catalogue ; fanout=0 |
+| **G4** | rollback | **❌** | `previous-release.json` absent |
+| **G5** | baseline prod | **✅ partielle** | fanout up=0 attendu sous HOLD |
 
 ```text
 G0–G5 tous VERTS  = NON
