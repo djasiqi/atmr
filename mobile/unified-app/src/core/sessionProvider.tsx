@@ -50,6 +50,10 @@ import {
   setTrackingAuthAvailability,
 } from "./auth/sessionAuthDecision";
 import {
+  clearTrackingAuthSession,
+  publishTrackingAuthSessionAvailable,
+} from "./auth/trackingAuthPresence";
+import {
   newLifecycleOperationId,
   shouldAcceptBootstrapTrigger,
   type BootstrapTrigger,
@@ -591,6 +595,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
                 trackingGenerationId: runtime.identity.trackingGenerationId,
                 trackingIdentityId: runtime.identity.trackingIdentityId,
               });
+              // P0-B : presence persistée + cache SESSION_AVAILABLE (login / restore)
+              await publishTrackingAuthSessionAvailable({
+                driverId,
+                trackingIdentityId: runtime.identity.trackingIdentityId,
+                sessionGenerationId: runtime.identity.sessionGenerationId,
+              });
             }
           }
         })
@@ -832,6 +842,14 @@ export function SessionProvider({ children }: PropsWithChildren) {
               runtime.identity.trackingIdentityId ||
               resolveTrackingIdentityId(driverId),
           });
+          // P0-B : hydrater presence au bascule vers chauffeur
+          await publishTrackingAuthSessionAvailable({
+            driverId,
+            trackingIdentityId:
+              runtime.identity.trackingIdentityId ||
+              resolveTrackingIdentityId(driverId),
+            sessionGenerationId: runtime.identity.sessionGenerationId,
+          });
           const { driverTrackingQueue } = loadDriverTrackingQueue();
           await driverTrackingQueue.clearContextInactiveGate("context_entered_driver");
           await driverTrackingQueue.resumeAfterAuthRecovery({
@@ -974,6 +992,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
       onLogoutClaimed: () => {
         setAutoBootstrapAllowedSync(false);
         setMobileSessionStatus("logging_out");
+        // P0-B : effacer presence persistée + snapshot mémoire immédiatement
+        void clearTrackingAuthSession({ reason: "logout" });
         setTrackingAuthAvailability({ kind: "TRACKING_IDENTITY_UNAVAILABLE" });
         try {
           void loadTrackingContextLease().setTrackingContextLeaseInactive();

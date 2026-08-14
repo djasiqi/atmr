@@ -31,7 +31,7 @@ import {
   readTrackingContextLease,
 } from "./trackingContextLease";
 import { validateNativeOwnerForHeadless } from "./trackingRuntimeRegistry";
-import { getTrackingAuthAvailability } from "../../../core/auth/sessionAuthDecision";
+import { ensureTrackingAuthAvailabilityForHeadless } from "../../../core/auth/trackingAuthPresence";
 import { isWithinTrackingWindow } from "./trackingWindow";
 import {
   canAttemptNativeStartNow,
@@ -677,7 +677,7 @@ function defineTaskIfNeeded() {
         return;
       }
 
-      const auth = getTrackingAuthAvailability();
+      const auth = await ensureTrackingAuthAvailabilityForHeadless();
       const authUsable =
         auth.kind === "SESSION_AVAILABLE" ||
         auth.kind === "AUTH_TEMPORARILY_UNAVAILABLE";
@@ -1470,7 +1470,7 @@ export async function resumePendingNativeTrackingIfNeeded(): Promise<void> {
     await stopBackgroundLocationTask("missing_native_owner");
     return;
   }
-  const auth = getTrackingAuthAvailability();
+  const auth = await ensureTrackingAuthAvailabilityForHeadless();
   const authUsable =
     auth.kind === "SESSION_AVAILABLE" || auth.kind === "AUTH_TEMPORARILY_UNAVAILABLE";
   const ownerCheck = validateNativeOwnerForHeadless({
