@@ -20,6 +20,15 @@ import { AppState, AppStateStatus, Platform } from "react-native";
 import { resolveDeviceRuntimeMetadata } from "../../../core/device/deviceRuntimeMetadata";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { getTrackingRuntimeSnapshot } from "./trackingRuntime";
+import {
+  classifyTrackingObservability,
+  computeLocationFixAgeSeconds,
+  computeTaskInvokeAgeSeconds,
+  computeWatchCallbackAgeSeconds,
+  isGpsStaleAlertClass,
+  LOCATION_FIX_STALE_SECONDS,
+  type TrackingObservabilityClass,
+} from "./trackingObservabilityHealth";
 
 export type DevicePermissionStatus = "granted" | "denied" | "undetermined";
 
@@ -60,7 +69,31 @@ export type DeviceHealthPayload = {
   battery_optimized: boolean;
   battery_level: number | null;
   is_charging: boolean | null;
+  /**
+   * Âge GNSS (s) = now - Location.timestamp.
+   * Alias historique : source corrigée (plus lastWatchAt).
+   */
   last_fix_age_seconds: number | null;
+  /** Âge GNSS explicite (même valeur que last_fix_age_seconds). */
+  location_fix_age_seconds?: number | null;
+  /** Âge du dernier callback watch JS (≠ GNSS). */
+  watch_callback_age_seconds?: number | null;
+  /**
+   * Âge de la dernière invocation du task natif.
+   * @deprecated Lire `task_invoke_age_seconds` — conservé pour dashboards/alertes.
+   */
+  native_last_fix_age_seconds?: number | null;
+  /** Âge task invoke (s) — ≠ fraîcheur GNSS. */
+  task_invoke_age_seconds?: number | null;
+  /** Classification déterministe HEALTHY|PIPELINE|… */
+  observability_class?: TrackingObservabilityClass | null;
+  task_last_invoked_at?: number | null;
+  last_location_timestamp?: number | null;
+  last_enqueue_at?: string | null;
+  last_ingested_at?: string | null;
+  last_persisted_at?: string | null;
+  oldest_queue_item_age_seconds?: number | null;
+  persistence_lag_seconds?: number | null;
   fix_success_rate_last_5min: number | null;
   constraint_reason: string | null;
   app_state?: AppStateStatus | string | null;
@@ -84,8 +117,6 @@ export type DeviceHealthPayload = {
   release_channel?: string | null;
   /** SHA de release si embarqué dans extra. */
   release_sha?: string | null;
-  /** Âge (s) du dernier callback du task natif background-location — distinct du watch JS. */
-  native_last_fix_age_seconds?: number | null;
   /** Le task natif de localisation tourne réellement (hasStartedLocationUpdatesAsync). */
   native_task_running?: boolean | null;
   /** iOS : autorisation de précision inférée (full/reduced) — null hors iOS. */
@@ -111,7 +142,7 @@ export type StartDeviceHealthHeartbeatOptions = {
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 120_000;
 const MISSION_HEARTBEAT_INTERVAL_MS = 60_000;
-const FIX_STALE_THRESHOLD_SECONDS = 300;
+const FIX_STALE_THRESHOLD_SECONDS = LOCATION_FIX_STALE_SECONDS;
 const DEVICE_HEALTH_ENDPOINT = "/driver/me/device-health";
 const LEGACY_DEVICE_STATUS_ENDPOINT = "/driver/me/device-status";
 
@@ -189,10 +220,47 @@ async function readIosAccuracyAuthorization(): Promise<IosAccuracyAuthorization 
   }
 }
 
-function computeNativeLastFixAgeSeconds(): number | null {
-  const ts = getTrackingRuntimeSnapshot().lastTaskInvokedAt;
-  if (typeof ts !== "number" || !Number.isFinite(ts)) return null;
-  const ageMs = Date.now() - ts;
+async function readQueueObservabilityExtras(): Promise<{
+  oldestQueueItemAgeSeconds: number | null;
+  lastEnqueueGeneration: number | null;
+  lastEnqueueSequence: number | null;
+}> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("./driverTrackingQueue") as typeof import("./driverTrackingQueue");
+    if (typeof mod.driverTrackingQueue?.getSnapshot !== "function") {
+      return {
+        oldestQueueItemAgeSeconds: null,
+        lastEnqueueGeneration: null,
+        lastEnqueueSequence: null,
+      };
+    }
+    const snap = await mod.driverTrackingQueue.getSnapshot();
+    return {
+      oldestQueueItemAgeSeconds:
+        snap.oldestItemAgeMs != null
+          ? Math.round(snap.oldestItemAgeMs / 1000)
+          : null,
+      lastEnqueueGeneration:
+        snap.sessionGeneration != null ? Number(snap.sessionGeneration) : null,
+      lastEnqueueSequence:
+        snap.sequenceCounter != null ? Number(snap.sequenceCounter) : null,
+    };
+  } catch {
+    return {
+      oldestQueueItemAgeSeconds: null,
+      lastEnqueueGeneration: null,
+      lastEnqueueSequence: null,
+    };
+  }
+}
+
+function parseIsoAgeSeconds(iso: string | null | undefined, nowMs: number): number | null {
+  if (!iso) return null;
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return null;
+  const ageMs = nowMs - ts;
+  if (ageMs < -120_000) return null;
   if (ageMs < 0) return 0;
   return Math.round(ageMs / 1000);
 }
@@ -283,7 +351,12 @@ async function readBatteryCharging(): Promise<boolean | null> {
 type BridgeSnapshotLike = {
   missionId: number | null;
   lastWatchAt: string | null;
+  lastWatchAtMs?: number | null;
+  lastFixProducedAtMs?: number | null;
   queueDepth?: number | null;
+  lastEnqueuedAt?: string | null;
+  lastIngestedAt?: string | null;
+  lastPersistedAt?: string | null;
 };
 
 function readBridgeSnapshot(): BridgeSnapshotLike | null {
@@ -296,7 +369,12 @@ function readBridgeSnapshot(): BridgeSnapshotLike | null {
     return {
       missionId: snapshot.missionId ?? null,
       lastWatchAt: snapshot.lastWatchAt ?? null,
-      queueDepth: (snapshot as { queueDepth?: number | null }).queueDepth ?? null,
+      lastWatchAtMs: snapshot.lastWatchAtMs ?? null,
+      lastFixProducedAtMs: snapshot.lastFixProducedAtMs ?? null,
+      queueDepth: snapshot.queueDepth ?? null,
+      lastEnqueuedAt: snapshot.lastEnqueuedAt ?? null,
+      lastIngestedAt: snapshot.lastIngestedAt ?? null,
+      lastPersistedAt: snapshot.lastPersistedAt ?? null,
     };
   } catch {
     return null;
@@ -315,12 +393,14 @@ function readPresenceWindowActive(): boolean {
 }
 
 function computeLastFixAgeSeconds(snapshot: BridgeSnapshotLike | null): number | null {
+  // Legacy helper — watch callback age (≠ GNSS). Conservé pour tests internes.
+  if (snapshot?.lastWatchAtMs != null) {
+    return computeWatchCallbackAgeSeconds(snapshot.lastWatchAtMs);
+  }
   if (!snapshot?.lastWatchAt) return null;
   const ts = Date.parse(snapshot.lastWatchAt);
   if (!Number.isFinite(ts)) return null;
-  const ageMs = Date.now() - ts;
-  if (ageMs < 0) return 0;
-  return Math.round(ageMs / 1000);
+  return computeWatchCallbackAgeSeconds(ts);
 }
 
 function expectFgsRunning(snapshot: BridgeSnapshotLike | null): boolean {
@@ -337,16 +417,20 @@ function resolveConstraintReason(input: {
   batteryOptimized: boolean;
   fgsRunning: boolean;
   fgsExpected: boolean;
-  lastFixAgeSeconds: number | null;
+  /** GNSS only — Location.timestamp age. */
+  locationFixAgeSeconds: number | null;
+  observabilityClass: TrackingObservabilityClass;
 }): string | null {
   if (input.fgPermission === "denied") return "permission_fg_denied";
   if (input.bgPermission === "denied") return "permission_bg_denied";
   if (!input.gpsProviderEnabled) return "gps_provider_disabled";
   if (Platform.OS === "android" && input.batteryOptimized) return "battery_optimized";
   if (input.fgsExpected && !input.fgsRunning) return "fgs_not_running";
+  // Invariant : GPS stale uniquement si classification GNSS (Location.timestamp).
   if (
-    input.lastFixAgeSeconds !== null &&
-    input.lastFixAgeSeconds > FIX_STALE_THRESHOLD_SECONDS
+    isGpsStaleAlertClass(input.observabilityClass)
+    && input.locationFixAgeSeconds !== null
+    && input.locationFixAgeSeconds > FIX_STALE_THRESHOLD_SECONDS
   ) {
     return "fix_stale";
   }
@@ -381,9 +465,35 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
   ]);
 
   const snapshot = readBridgeSnapshot();
-  const lastFixAgeSeconds = computeLastFixAgeSeconds(snapshot);
-  const nativeLastFixAgeSeconds = computeNativeLastFixAgeSeconds();
+  const nowMs = Date.now();
+  const trackingRuntime = getTrackingRuntimeSnapshot();
+  const locationTimestampMs = snapshot?.lastFixProducedAtMs ?? null;
+  const locationFixAgeSeconds = computeLocationFixAgeSeconds(locationTimestampMs, nowMs);
+  const watchCallbackAgeSeconds = computeLastFixAgeSeconds(snapshot);
+  const taskInvokeAgeSeconds = computeTaskInvokeAgeSeconds(
+    trackingRuntime.lastTaskInvokedAt,
+    nowMs
+  );
+  const queueExtras = await readQueueObservabilityExtras();
+  const persistenceLagSeconds = parseIsoAgeSeconds(snapshot?.lastPersistedAt, nowMs);
+  const enqueueAgeSeconds = parseIsoAgeSeconds(snapshot?.lastEnqueuedAt, nowMs);
+  const enqueueWithoutPersist =
+    enqueueAgeSeconds != null
+    && enqueueAgeSeconds < 300
+    && (persistenceLagSeconds == null || persistenceLagSeconds > 120);
+
   const fgsExpected = expectFgsRunning(snapshot);
+  const observabilityClass = classifyTrackingObservability({
+    locationFixAgeSeconds: locationFixAgeSeconds,
+    taskInvokeAgeSeconds,
+    fgsRunning,
+    fgsExpected,
+    queueDepth: snapshot?.queueDepth ?? null,
+    oldestQueueItemAgeSeconds: queueExtras.oldestQueueItemAgeSeconds,
+    persistenceLagSeconds,
+    enqueueWithoutPersist,
+  });
+
   const runtimeMeta = resolveDeviceRuntimeMetadata();
   const {
     manufacturer,
@@ -400,11 +510,12 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
   const trackingState = resolveTrackingHealthState({
     fgsRunning,
     fgsExpected,
-    lastFixAgeSeconds,
-    nativeLastFixAgeSeconds,
+    lastFixAgeSeconds: locationFixAgeSeconds,
+    nativeLastFixAgeSeconds: taskInvokeAgeSeconds,
     gpsProviderEnabled,
     missionId: snapshot?.missionId ?? null,
     queueDepth: snapshot?.queueDepth ?? null,
+    observabilityClass,
   });
   const trackingActive =
     trackingState === "healthy" || trackingState === "starting";
@@ -416,7 +527,8 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
     batteryOptimized,
     fgsRunning,
     fgsExpected,
-    lastFixAgeSeconds,
+    locationFixAgeSeconds,
+    observabilityClass,
   });
 
   // Fix NULL pendant mission attendue = capture_failed (pas un tracking « sain »).
@@ -431,7 +543,6 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
         ? "when_in_use"
         : fgPermission;
 
-  const trackingRuntime = getTrackingRuntimeSnapshot();
   const nativeDiag = trackingRuntime.nativeStartDiagnostics;
   const nativeStartError =
     nativeDiag.native_start_error ?? trackingRuntime.lastNativeStartError ?? null;
@@ -452,7 +563,20 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
     battery_optimized: batteryOptimized,
     battery_level: batteryLevel,
     is_charging: isCharging,
-    last_fix_age_seconds: lastFixAgeSeconds,
+    last_fix_age_seconds: locationFixAgeSeconds,
+    location_fix_age_seconds: locationFixAgeSeconds,
+    watch_callback_age_seconds: watchCallbackAgeSeconds,
+    task_invoke_age_seconds: taskInvokeAgeSeconds,
+    // Compat lecture dashboards / alertes existantes
+    native_last_fix_age_seconds: taskInvokeAgeSeconds,
+    observability_class: observabilityClass,
+    task_last_invoked_at: trackingRuntime.lastTaskInvokedAt,
+    last_location_timestamp: locationTimestampMs,
+    last_enqueue_at: snapshot?.lastEnqueuedAt ?? null,
+    last_ingested_at: snapshot?.lastIngestedAt ?? null,
+    last_persisted_at: snapshot?.lastPersistedAt ?? null,
+    oldest_queue_item_age_seconds: queueExtras.oldestQueueItemAgeSeconds,
+    persistence_lag_seconds: persistenceLagSeconds,
     fix_success_rate_last_5min: null,
     constraint_reason: effectiveConstraint,
     app_state: AppState.currentState,
@@ -468,12 +592,13 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
     ota_update_id: otaUpdateId,
     release_channel: releaseChannel,
     release_sha: releaseSha,
-    native_last_fix_age_seconds: nativeLastFixAgeSeconds,
     native_task_running: fgsRunning,
     ios_accuracy_authorization: iosAccuracyAuthorization,
     ios_low_power_mode: iosLowPowerMode,
     ios_background_refresh_status: iosBackgroundRefreshStatus,
     queue_depth: snapshot?.queueDepth ?? null,
+    tracking_session_id: null,
+    sequence: queueExtras.lastEnqueueSequence,
   };
 }
 
@@ -485,6 +610,7 @@ function resolveTrackingHealthState(input: {
   gpsProviderEnabled: boolean;
   missionId: number | null;
   queueDepth: number | null;
+  observabilityClass: TrackingObservabilityClass;
 }): TrackingHealthState {
   if (!input.fgsExpected && input.missionId == null) {
     return "stopped";
@@ -504,16 +630,23 @@ function resolveTrackingHealthState(input: {
   ) {
     return "capture_failed";
   }
-  if (
-    input.lastFixAgeSeconds != null
-    && input.lastFixAgeSeconds > FIX_STALE_THRESHOLD_SECONDS
-  ) {
+  // GNSS stale uniquement (Location.timestamp) — pas task invoke.
+  if (input.observabilityClass === "GNSS") {
     return "capture_failed";
   }
-  if ((input.queueDepth ?? 0) > 50) {
+  if (
+    input.observabilityClass === "PIPELINE"
+    || (input.queueDepth ?? 0) > 50
+  ) {
     return "queue_blocked";
   }
-  if (input.fgsRunning || (input.lastFixAgeSeconds != null && input.lastFixAgeSeconds < 120)) {
+  if (
+    input.fgsRunning
+    || (input.lastFixAgeSeconds != null && input.lastFixAgeSeconds < 120)
+    || input.observabilityClass === "HEALTHY"
+    || input.observabilityClass === "RUNTIME_ONLY"
+    || input.observabilityClass === "PERSISTENCE"
+  ) {
     return "healthy";
   }
   return input.fgsExpected ? "starting" : "stopped";

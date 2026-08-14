@@ -264,6 +264,10 @@ export type DriverTrackingBridgeSnapshot = {
   flushPathUsed: "http_fallback" | "socket_batch" | null;
   networkProfile: TrackingNetworkProfile;
   lastWatchAt: string | null;
+  /** Epoch ms du dernier callback watch (≠ Location.timestamp). */
+  lastWatchAtMs: number | null;
+  /** Epoch ms = Location.timestamp du dernier fix produit. */
+  lastFixProducedAtMs: number | null;
   lastPosition: DriverTrackingPosition | null;
   lastAttemptAt: string | null;
   consecutiveFailures: number;
@@ -353,6 +357,9 @@ function buildTrackingBridgeSnapshot(): DriverTrackingBridgeSnapshot {
     flushPathUsed: state.flushPathUsed,
     networkProfile: state.networkProfile,
     lastWatchAt: state.lastWatchAtMs ? new Date(state.lastWatchAtMs).toISOString() : null,
+    lastWatchAtMs: state.lastWatchAtMs,
+    /** Location.timestamp du dernier vrai fix (autorité GNSS pour observabilité). */
+    lastFixProducedAtMs: state.lastFixProducedAtMs,
     lastPosition: readDriverLastKnownPosition(),
     lastAttemptAt: state.bridgeLastAttemptAt ?? managerSnapshot.lastAttemptAt,
     consecutiveFailures: managerSnapshot.consecutiveFailures,
@@ -831,6 +838,10 @@ async function flushPoint(appState: AppStateStatus) {
       trackingIdentityId: identitySnapshot?.trackingIdentityId,
     },
   });
+  if (!enqueuedItem) {
+    // Session ledger non-READY (register en cours / échec) — drop observé côté queue.
+    return;
+  }
   state.lastEnqueuedAt = new Date().toISOString();
   const attemptSeq = beginBridgeAttempt(enqueuedItem.id);
   const flushResult = await driverTrackingQueue.flush({

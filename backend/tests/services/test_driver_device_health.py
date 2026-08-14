@@ -116,9 +116,12 @@ def test_ingest_driver_device_health_parses_diagnostic_lot1_fields(db, sample_dr
                 "platform": "ios",
                 "tracking_active": True,
                 "last_fix_age_seconds": 6000,
+                "location_fix_age_seconds": 15,
                 "app_version": "1.42.3",
                 "os_version": "17.4",
-                "native_last_fix_age_seconds": 12,
+                "task_invoke_age_seconds": 12,
+                "native_last_fix_age_seconds": 999,
+                "observability_class": "RUNTIME_ONLY",
                 "native_task_running": True,
                 "ios_accuracy_authorization": "reduced",
                 "ios_low_power_mode": True,
@@ -128,11 +131,156 @@ def test_ingest_driver_device_health_parses_diagnostic_lot1_fields(db, sample_dr
 
     assert snapshot["app_version"] == "1.42.3"
     assert snapshot["os_version"] == "17.4"
+    # Prefer location_fix / task_invoke ; native_last_fix kept as compat alias
+    assert snapshot["location_fix_age_seconds"] == "15"
+    assert snapshot["last_fix_age_seconds"] == "15"
+    assert snapshot["task_invoke_age_seconds"] == "12"
     assert snapshot["native_last_fix_age_seconds"] == "12"
+    assert snapshot["observability_class"] == "RUNTIME_ONLY"
     assert snapshot["native_task_running"] == "1"
     assert snapshot["ios_accuracy_authorization"] == "reduced"
     assert snapshot["ios_low_power_mode"] == "1"
     assert snapshot["ios_background_refresh_status"] == "denied"
+
+
+def test_ingest_prefers_legacy_native_last_fix_when_task_invoke_absent(
+    db, sample_driver
+):
+    mock_redis = MagicMock()
+    mock_event = MagicMock()
+    with (
+        patch("services.driver_device_health.redis_client", mock_redis),
+        patch(
+            "services.geolocation.device_health.write_device_health", return_value=True
+        ),
+        patch(
+            "services.monitoring.driver_device_health_metrics.record_device_health_report"
+        ),
+        patch(
+            "services.driver_device_health.DriverDeviceHealthEvent",
+            return_value=mock_event,
+        ),
+        patch("services.driver_device_health.db.session"),
+    ):
+        snapshot = ingest_driver_device_health(
+            sample_driver.id,
+            {
+                "platform": "android",
+                "native_last_fix_age_seconds": 42,
+                "last_fix_age_seconds": 7,
+            },
+        )
+
+    assert snapshot["task_invoke_age_seconds"] == "42"
+    assert snapshot["native_last_fix_age_seconds"] == "42"
+    assert snapshot["location_fix_age_seconds"] == "7"
+    assert snapshot["last_fix_age_seconds"] == "7"
+
+
+def test_canary_observability_backend_compat_new_and_legacy(db, sample_driver):
+    """Canary OBSERVABILITY — nouveaux champs prioritaires ; legacy sans exception."""
+    mock_redis = MagicMock()
+    mock_event = MagicMock()
+
+    def _ingest(payload: dict):
+        return ingest_driver_device_health(sample_driver.id, payload)
+
+    with (
+        patch("services.driver_device_health.redis_client", mock_redis),
+        patch(
+            "services.geolocation.device_health.write_device_health", return_value=True
+        ),
+        patch(
+            "services.monitoring.driver_device_health_metrics.record_device_health_report"
+        ),
+        patch(
+            "services.driver_device_health.DriverDeviceHealthEvent",
+            return_value=mock_event,
+        ),
+        patch("services.driver_device_health.db.session"),
+    ):
+        new_snap = _ingest(
+            {
+                "platform": "android",
+                "location_fix_age_seconds": 11,
+                "last_fix_age_seconds": 999,
+                "task_invoke_age_seconds": 22,
+                "native_last_fix_age_seconds": 888,
+                "observability_class": "PIPELINE",
+                "oldest_queue_item_age_seconds": 200,
+                "persistence_lag_seconds": 300,
+            }
+        )
+        legacy_snap = _ingest(
+            {
+                "platform": "android",
+                "last_fix_age_seconds": 9,
+                "native_last_fix_age_seconds": 33,
+            }
+        )
+        empty_snap = _ingest({"platform": "android"})
+
+    assert new_snap["location_fix_age_seconds"] == "11"
+    assert new_snap["last_fix_age_seconds"] == "11"
+    assert new_snap["task_invoke_age_seconds"] == "22"
+    assert new_snap["native_last_fix_age_seconds"] == "22"
+    assert new_snap["observability_class"] == "PIPELINE"
+    assert new_snap["oldest_queue_item_age_seconds"] == "200"
+    assert new_snap["persistence_lag_seconds"] == "300"
+
+    assert legacy_snap["location_fix_age_seconds"] == "9"
+    assert legacy_snap["task_invoke_age_seconds"] == "33"
+    assert legacy_snap["native_last_fix_age_seconds"] == "33"
+    assert legacy_snap["observability_class"] == ""
+
+    assert empty_snap["location_fix_age_seconds"] == ""
+    assert empty_snap["task_invoke_age_seconds"] == ""
+    assert empty_snap["native_last_fix_age_seconds"] == ""
+
+
+def test_canary_observability_legacy_write_device_health_passthrough():
+    """Canary : write_device_health legacy accepte nouveaux champs sans erreur."""
+    from services.geolocation.device_health import (
+        parse_device_health,
+        write_device_health,
+    )
+
+    store: dict[str, dict[str, str]] = {}
+
+    class FakeRedis:
+        def hset(self, key, mapping=None, **_kwargs):
+            store[key] = dict(mapping or {})
+            return True
+
+        def expire(self, *_args, **_kwargs):
+            return True
+
+        def hgetall(self, key):
+            return store.get(key, {})
+
+    redis = FakeRedis()
+    ok = write_device_health(
+        redis,
+        7,
+        {
+            "fgs_running": True,
+            "battery_optimized": False,
+            "constraint_reason": None,
+            "fg_permission": "granted",
+            "bg_permission": "granted",
+            "gps_provider_enabled": True,
+            "location_fix_age_seconds": 14,
+            "task_invoke_age_seconds": 40,
+            "observability_class": "RUNTIME_ONLY",
+        },
+    )
+    assert ok is True
+    parsed = parse_device_health(store["driver:7:device_health"])
+    assert parsed is not None
+    assert parsed["location_fix_age_seconds"] == 14
+    assert parsed["task_invoke_age_seconds"] == 40
+    assert parsed["native_last_fix_age_seconds"] == 40
+    assert parsed["observability_class"] == "RUNTIME_ONLY"
 
 
 def test_read_driver_device_health_snapshot_empty():

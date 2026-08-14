@@ -1,0 +1,93 @@
+{
+  "canary": "OBSERVABILITY",
+  "date": "2026-08-15",
+  "mode": "harness_controlled",
+  "tracking_functional_change": false,
+  "ledger_touched": false,
+  "scenarios": [
+    {
+      "id": "O-C1",
+      "expected": "HEALTHY",
+      "got": "HEALTHY",
+      "location_fix_age_seconds": 8,
+      "task_invoke_age_seconds": 5,
+      "native_last_fix_age_seconds": 5,
+      "fix_stale": false,
+      "pass": true
+    },
+    {
+      "id": "O-C2",
+      "expected": "PIPELINE",
+      "got": "PIPELINE",
+      "location_fix_age_seconds": 12,
+      "task_invoke_age_seconds": 400,
+      "native_last_fix_age_seconds": 400,
+      "fix_stale": false,
+      "pass": true,
+      "notes": "Conceptuel P0-C : GNSS frais + queue bloquée"
+    },
+    {
+      "id": "O-C3",
+      "expected": "PERSISTENCE",
+      "got": "PERSISTENCE",
+      "location_fix_age_seconds": 10,
+      "task_invoke_age_seconds": 9,
+      "native_last_fix_age_seconds": 9,
+      "fix_stale": false,
+      "pass": true
+    },
+    {
+      "id": "O-C4",
+      "expected": "GNSS",
+      "got": "GNSS",
+      "location_fix_age_seconds": 390,
+      "task_invoke_age_seconds": 5,
+      "native_last_fix_age_seconds": 5,
+      "fix_stale": true,
+      "pass": true
+    },
+    {
+      "id": "O-C5",
+      "expected": "RUNTIME_ONLY",
+      "got": "RUNTIME_ONLY",
+      "location_fix_age_seconds": 7,
+      "task_invoke_age_seconds": 600,
+      "native_last_fix_age_seconds": 600,
+      "fix_stale": false,
+      "pass": true
+    },
+    {
+      "id": "O-C6",
+      "expected": "UNKNOWN",
+      "got": "UNKNOWN",
+      "location_fix_age_seconds": null,
+      "task_invoke_age_seconds": 400,
+      "native_last_fix_age_seconds": 400,
+      "fix_stale": false,
+      "pass": true
+    },
+    {
+      "id": "HIST-P0-C",
+      "expected": "PIPELINE",
+      "got": "PIPELINE",
+      "location_fix_age_seconds": 15,
+      "task_invoke_age_seconds": 450,
+      "native_last_fix_age_seconds": 450,
+      "fix_stale": false,
+      "pass": true,
+      "notes": "Situation historique P0-C : doit être PIPELINE (ou PERSISTENCE), jamais GNSS/fix_stale"
+    }
+  ],
+  "blocking_metrics": {
+    "false_gnss_with_fresh_fix": 0,
+    "fix_stale_outside_gnss": 0,
+    "pipeline_hist_classified_gnss": 0,
+    "location_timestamp_used": true,
+    "task_invoke_separated_from_fix_age": true,
+    "regression_p0a": 0,
+    "regression_p0b": 0,
+    "regression_ledger": 0,
+    "loc_put_persistence_behavior_unchanged": true
+  },
+  "verdict": "PASS"
+}

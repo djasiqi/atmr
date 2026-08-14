@@ -53,6 +53,62 @@ class DeviceHealthStatusSchema(Schema):
         required=False,
         allow_none=True,
         validate=validate.Range(min=0, error="last_fix_age_seconds doit être >= 0"),
+        metadata={
+            "description": (
+                "Âge GNSS (s) = now - Location.timestamp "
+                "(alias de location_fix_age_seconds)."
+            )
+        },
+    )
+    location_fix_age_seconds = fields.Int(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(
+            min=0, error="location_fix_age_seconds doit être >= 0"
+        ),
+    )
+    task_invoke_age_seconds = fields.Int(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(min=0, error="task_invoke_age_seconds doit être >= 0"),
+        metadata={"description": "Âge dernière invocation task natif (≠ GNSS)."},
+    )
+    native_last_fix_age_seconds = fields.Int(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(
+            min=0, error="native_last_fix_age_seconds doit être >= 0"
+        ),
+        metadata={
+            "description": (
+                "Compat : alias de task_invoke_age_seconds "
+                "(≠ fraîcheur GNSS)."
+            )
+        },
+    )
+    watch_callback_age_seconds = fields.Int(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(
+            min=0, error="watch_callback_age_seconds doit être >= 0"
+        ),
+    )
+    observability_class = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(max=32),
+    )
+    oldest_queue_item_age_seconds = fields.Int(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(
+            min=0, error="oldest_queue_item_age_seconds doit être >= 0"
+        ),
+    )
+    persistence_lag_seconds = fields.Int(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(min=0, error="persistence_lag_seconds doit être >= 0"),
     )
     fix_success_rate_last_5min = fields.Float(
         required=False,
