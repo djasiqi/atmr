@@ -535,6 +535,9 @@ async function refreshAuthToken(): Promise<string | null> {
   const {
     setTrackingAuthTemporarilyUnavailable,
   } = require("../auth/sessionAuthDecision") as typeof import("../auth/sessionAuthDecision");
+  const {
+    reassertTrackingAuthSessionAfterRefresh,
+  } = require("../auth/trackingAuthPresence") as typeof import("../auth/trackingAuthPresence");
 
   setTrackingAuthTemporarilyUnavailable("refreshing");
   try {
@@ -576,6 +579,8 @@ async function refreshAuthToken(): Promise<string | null> {
     return applyResult.value;
   } finally {
     setTrackingAuthTemporarilyUnavailable(null);
+    // P0-B : ne pas retomber en TRACKING_IDENTITY_UNAVAILABLE après un simple refresh
+    await reassertTrackingAuthSessionAfterRefresh().catch(() => undefined);
   }
 }
 

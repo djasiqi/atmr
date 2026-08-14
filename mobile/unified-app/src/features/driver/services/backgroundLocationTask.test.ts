@@ -88,8 +88,22 @@ jest.mock("./trackingContextLease", () => ({
   leaseAllowsTransport: (lease: { state?: string } | null) => lease?.state === "driver_active",
 }));
 
-jest.mock("../../../core/auth/sessionAuthDecision", () => ({
-  getTrackingAuthAvailability: () => ({
+jest.mock("../../../core/auth/sessionAuthDecision", () => {
+  const sessionAvailableAuth = {
+    kind: "SESSION_AVAILABLE",
+    sessionGenerationId: 1,
+    trackingIdentityId: "driver:42:company:1",
+    driverId: 42,
+  };
+  return {
+    getTrackingAuthAvailability: () => sessionAvailableAuth,
+    setTrackingAuthAvailability: jest.fn(),
+    setTrackingAuthTemporarilyUnavailable: jest.fn(),
+  };
+});
+
+jest.mock("../../../core/auth/trackingAuthPresence", () => ({
+  ensureTrackingAuthAvailabilityForHeadless: jest.fn().mockResolvedValue({
     kind: "SESSION_AVAILABLE",
     sessionGenerationId: 1,
     trackingIdentityId: "driver:42:company:1",
