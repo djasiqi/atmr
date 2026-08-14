@@ -46,9 +46,13 @@ Tracking functional patch / ledger patch hors régression prouvée = **NO-GO**.
 ## Phase suivante (hors diagnostic)
 
 ```text
-RELEASE CONTROL PREPARATION  = GO ✅
+OPTION RELEASE               = B / P0 ONLY ✅
+COMMIT FREEZE P0             = FAIT ✅ (SHAs dans gps-p0-release-readiness / snapshot doc)
+SNAPSHOT PROD READ-ONLY      = GO ✅ / INCOMPLET (SSH absent) — gps-p0-prod-snapshot-2026-08-15.md
+TAG RELEASE / branche RC     = après snapshot + cherry-pick
+ALEMBIC PROD                 = NO-GO ❌
 PROD DEPLOY                  = NO-GO ❌
-Dossier                      = gps-p0-release-readiness-2026-08-15.md
+REDIS/KAFKA PURGE            = NO-GO ❌
 ```
 
 ```text

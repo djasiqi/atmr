@@ -22,12 +22,12 @@ Freeze amont : [gps-p0-global-freeze-2026-08-15.md](gps-p0-global-freeze-2026-08
 
 | Gate | Objet | Statut | Commentaire |
 |------|--------|--------|-------------|
-| **G0** | tests / CI / canaries | **JAUNE** | Canaries A/B/C3/ledger/obs **PASS** ; code B/ledger/obs **non commité** → SHA release non figée |
-| **G1** | migrations | **JAUNE** | Migration `25ce766952e2` (`capture_id`) listée ; **current prod inconnu** (pas de snapshot live) ; **aucun `alembic upgrade` prod** |
-| **G2** | config prod | **ROUGE** | `.env.production` serveur **non lu** (pas de `.local.deploy.env` local) → inventaire à compléter sur serveur |
-| **G3** | compat N/N-1 | **JAUNE** | Matrice rédigée ; non vérifiée contre images/tags prod réels |
-| **G4** | rollback | **JAUNE** | Procédure documentée via `previous-release.json` ; **non testée** sur ce candidat |
-| **G5** | monitoring | **JAUNE** | Checklist prête ; **baseline avant** non capturée |
+| **G0** | tests / CI / canaries | **JAUNE** | Packs P0 **commités** (SHAs ci-dessous) ; **pas encore** branche `release/gps-p0-*` ni SHA unique cherry-pick ni CI sur ce SHA |
+| **G1** | migrations | **JAUNE** | `25ce766952e2` listée ; **current prod non capturé** (SSH absent) ; Alembic prod **NO-GO** |
+| **G2** | config prod | **ROUGE** | Snapshot live **bloqué** — pas de `.local.deploy.env` ; fragment local ≠ serveur |
+| **G3** | compat N/N-1 | **JAUNE** | Matrice rédigée ; insiste `generation=null` → `422 invalid_ledger_ids` ; non prouvée |
+| **G4** | rollback | **JAUNE** | Procédure connue ; non testée hors prod |
+| **G5** | monitoring | **JAUNE** | Checklist prête ; baseline live absente |
 
 ```text
 G0–G5 tous VERTS  = NON
@@ -36,80 +36,60 @@ DEPLOY PROD       = NO-GO ❌
 
 ---
 
-## 1. Commits figés
+## 1. Commits figés (OPTION B)
 
-### 1.1 État working tree (bloquant freeze)
-
-```text
-Branche locale     = feat/tracking-p0-p7-firewall
-HEAD commité       = 7197914905f3ffb516b21e5893d60d79f8e838fe
-origin/main        = 765b81837705d9f6657348d5a166514481a794b2
-Ahead origin/main  = ~29 commits (firewall + capture_id + P5-B + CI + …)
-Working tree       = DIRTY — P0-B / C-LEDGER / OBSERVABILITY majoritairement non commités
-```
-
-**Conséquence** : on ne peut pas encore publier un **release SHA unique** couvrant toute la branche P0 fermée.  
-Prochaine action freeze (hors deploy) :
+### 1.1 ÉTAPE 1 — FAIT (packs isolés sur branche de travail)
 
 ```text
-1. Commit packagé P0-B + C-LEDGER-CLIENT + C-LEDGER-SERVER + OBSERVABILITY (+ docs)
-2. Tag candidat ex. gps-p0-release-candidate-2026-08-15
-3. Recalculer la table SHA ci-dessous
-4. Rebuild images backend + mobile sur ce tag uniquement
+OPTION RELEASE     = B / P0 ONLY ✅
+P0-A (conservé)    = 479cd60d560385b8609e9d93b5c50334ce1edd22
+P0-B               = 4cac0fbf455dd203bd44acac3fc7c47c2b573a46
+C-LEDGER-CLIENT    = 8861667935203048b8b02937a0f1133464b251e7
+C-LEDGER-SERVER    = 5e2b098ff521952f33e2fca3d3286934aec32615
+OBSERVABILITY      = e4adfb06bacd1e867839d98c61047b1d1ef4d84a
 ```
 
-### 1.2 Ancres canary déjà figées (commits / builds)
+```text
+TAG RC / release/gps-p0-2026-08-15   = PAS ENCORE
+  (après snapshot prod + cherry-pick depuis prod-current-SHA)
+Working tree hors P0                 = encore dirty (CI/coverage/staging — hors périmètre)
+```
+
+Note SERVER : swagger ages observability co-localisé dans `driver.py` du commit SERVER (additif API).
+
+### 1.2 Ancres canary / builds
 
 | Branche | Ancre validée | SHA / build | Preuve |
 |---------|---------------|-------------|--------|
-| **P0-A** | lifecycle native | `479cd60d560385b8609e9d93b5c50334ce1edd22` | canary [gps-c3-p0a-canary-2026-08-14.md](gps-c3-p0a-canary-2026-08-14.md) |
-| **P0-A EAS** | APK staging-canary | build `d85e3254-9f24-43fc-9218-0d281858b960` · tag `gps-canary-p0a-2026-08-14` | [gps-android-canary-apk.md](gps-android-canary-apk.md) |
-| **P0-B** | presence hydrate | **WORKING TREE** (`trackingAuthPresence.ts` untracked + diffs session/client) | canary [gps-c3-p0b-canary-2026-08-14.md](gps-c3-p0b-canary-2026-08-14.md) — **pas de SHA git** |
-| **C3 GLOBAL** | A+B combiné | Metro/JS sur device au moment canary (pas d’image prod) | [gps-c3-ab-canary-2026-08-14.md](gps-c3-ab-canary-2026-08-14.md) |
-| **C-LEDGER-CLIENT** | queue generation null | **WORKING TREE** (`driverTrackingQueue.ts` modifié) | [gps-c3-ledger-client-canary-2026-08-14.md](gps-c3-ledger-client-canary-2026-08-14.md) |
-| **C-LEDGER-SERVER** | claim release / Option B | **WORKING TREE** (`driver.py`, `driver_location_dedup.py`, `sync_ledger_ack.py`) | [gps-c3-ledger-server-canary-2026-08-14.md](gps-c3-ledger-server-canary-2026-08-14.md) |
-| **OBSERVABILITY** | ages + class | **WORKING TREE** (`trackingObservabilityHealth.ts` untracked + heartbeat/bridge/backend health) | [gps-p0-c-observability-canary-2026-08-15.md](gps-p0-c-observability-canary-2026-08-15.md) |
-| **capture_id** (socle) | migration + wire | `e14cfbeab2d5ac4e4c1c755b726982a5cde8fb1e` | commit sur branche |
-| **Dernière image prod documentée** (P0-E, 2026-08-11) | align Kafka | `390076efc61ca71332c749a67aff1e6fc7c2d626` | [gps-p0e-kafka-align-execution-2026-08-11.md](gps-p0e-kafka-align-execution-2026-08-11.md) — **à re-vérifier live** |
+| **P0-A** | lifecycle native | `479cd60d560385b8609e9d93b5c50334ce1edd22` | [gps-c3-p0a-canary-2026-08-14.md](gps-c3-p0a-canary-2026-08-14.md) |
+| **P0-A EAS** | APK staging-canary | build `d85e3254-…` · tag `gps-canary-p0a-2026-08-14` | [gps-android-canary-apk.md](gps-android-canary-apk.md) |
+| **P0-B** | presence hydrate | `4cac0fbf…` | [gps-c3-p0b-canary-2026-08-14.md](gps-c3-p0b-canary-2026-08-14.md) |
+| **C3 GLOBAL** | A+B | canary device | [gps-c3-ab-canary-2026-08-14.md](gps-c3-ab-canary-2026-08-14.md) |
+| **C-LEDGER-CLIENT** | queue | `88616679…` | [gps-c3-ledger-client-canary-2026-08-14.md](gps-c3-ledger-client-canary-2026-08-14.md) |
+| **C-LEDGER-SERVER** | Option B | `5e2b098f…` | [gps-c3-ledger-server-canary-2026-08-14.md](gps-c3-ledger-server-canary-2026-08-14.md) |
+| **OBSERVABILITY** | ages + class | `e4adfb06…` | [gps-p0-c-observability-canary-2026-08-15.md](gps-p0-c-observability-canary-2026-08-15.md) |
+| **Prod documentée (P0-E)** | à re-vérifier live | `390076ef…` (doc 2026-08-11) | snapshot live **manquant** |
 
-### 1.3 Diff vs prod actuelle (hypothèse documentaire)
+### 1.3 ÉTAPE 2 — Snapshot PROD
 
-Base prod **documentée** = `390076ef…` (août 2026).  
-Candidat local = `HEAD 71979149` + **working tree dirty**.
+Voir [gps-p0-prod-snapshot-2026-08-15.md](gps-p0-prod-snapshot-2026-08-15.md) — **INCOMPLET** (SSH absent).
 
-```text
-delta documenté  ≈ 390076ef → 71979149  (+ dirty WT)
-contenu delta    = programme tracking P0–P7 firewall / capture_id / P5-B / CI
-                 + packs P0-B / ledger / observability non commités
-```
-
-**À faire avant G0 VERT** : snapshot live serveur :
-
-```bash
-# Sur le serveur (lecture seule) — NE PAS upgrade / NE PAS purge
-grep -E '^(GIT_SHA|SENTRY_RELEASE|DOCKER_TAG|BACKEND_IMAGE_REF)=' .env.production
-docker compose -f docker-compose.production.yml images
-cat /srv/atmr/releases/previous-release.json 2>/dev/null || true
-```
-
-### 1.4 Hors périmètre P0 GPS (embarqué si on ship la branche entière)
-
-Commits `origin/main..HEAD` incluent notamment :
-
-- CI coverage / ruff / GitGuardian test passwords
-- Dashboard Genève / dispatch heuristics
-- Staging observe harness
-- PG-first / mission firewall / recovery FSM (programme tracking élargi)
+### 1.4 ÉTAPE 3 — Branche release (PAS ENCORE)
 
 ```text
-CONFIRMATION « P0-only »              = NON (branche ≠ cherry-pick P0)
-OPTION A — ship branche complète      = accepter payload P0–P7 + CI (scope élargi)
-OPTION B — release minimale P0        = cherry-pick / PR dédiée A+B+ledger+obs
-                                         après commits WT
-RECOMMANDATION                        = OPTION B pour limiter le blast radius
+prod-current-SHA  (depuis snapshot)
+    ↓
+git checkout -b release/gps-p0-2026-08-15 <prod-current-SHA>
+    ↓
+cherry-pick 479cd60d 4cac0fbf 88616679 5e2b098f e4adfb06
+  (+ dépendances minimales si conflits — capturer ; pas firewall/P5-B/CI)
+    ↓
+tests CI sur SHA tip
+    ↓
+tag RC gps-p0-rc-YYYYMMDD-<sha7>
 ```
 
-Tant que l’option n’est pas tranchée : **G0 reste JAUNE**, deploy **NO-GO**.
+Ce **SHA tip** de la branche release devient la référence **G0**, pas `feat/tracking-p0-p7-firewall`.
 
 ---
 
@@ -375,18 +355,18 @@ tant que G0–G5 ne sont pas tous VERTS
 ## 8. Checklist préparation (prochaines actions — toujours NO-GO deploy)
 
 ```text
-[ ] Commit / tag freeze P0-B + ledger CLIENT/SERVER + observability
-[ ] Trancher OPTION A (branche entière) vs OPTION B (cherry-pick P0)
-[ ] Snapshot live prod : GIT_SHA, BACKEND_IMAGE_REF, flask db current, flags TRACKING_*
-[ ] Diff migrations prod current → tag
+[x] Commit / freeze packs P0-B + ledger CLIENT/SERVER + observability (SHAs listés)
+[ ] Snapshot live prod lecture seule (SSH) — checklist gps-p0-prod-snapshot-2026-08-15.md
+[ ] Branche release/gps-p0-2026-08-15 depuis prod-current-SHA + cherry-pick P0 only
+[ ] Diff migrations prod current → tip release (décider 25ce766952e2)
 [ ] Capturer baseline monitoring T-30
 [ ] Dry-run rollback (lecture previous-release.json + pull image N-1 sans up)
-[ ] GO deploy séparé (document daté) seulement si G0–G5 VERT
+[ ] GO deploy séparé seulement si G0–G5 VERT
 ```
 
 ---
 
 ## Implémentation
 
-✅ **Implémenté** : dossier release-readiness unique (SHAs/ancres, dirty WT, migrations `capture_id` vs canary local, config/flags, ordre deploy, rollback, monitoring, gates G0–G5) ; **PROD DEPLOY = NO-GO**.  
-**Reste à faire** : freeze commits → snapshot prod lecture seule → passer G0–G5 au vert → **attendre GO deploy explicite**.
+✅ **Implémenté** : OPTION B tranchée ; packs P0 commités (SHAs) ; dossier readiness + tentative snapshot (SSH bloqué) ; **PROD DEPLOY / ALEMBIC / PURGE = NO-GO**.  
+**Reste à faire** : snapshot prod live → branche `release/gps-p0-*` cherry-pick → G0–G5 VERT → GO deploy explicite.
