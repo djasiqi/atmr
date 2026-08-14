@@ -112,6 +112,14 @@ module.exports = ({ config }) => {
     assertAndroidMapsApiKeyForEasProdBuild(androidMapsApiKey);
   }
 
+  // Correlation canary / health (release_sha) — EAS injecte EAS_BUILD_GIT_COMMIT_HASH.
+  const releaseShaRaw = (
+    process.env.EXPO_PUBLIC_RELEASE_SHA ||
+    process.env.EAS_BUILD_GIT_COMMIT_HASH ||
+    ""
+  ).trim();
+  const releaseSha = releaseShaRaw ? releaseShaRaw.slice(0, 64) : null;
+
   return {
     ...base,
     name: displayName,
@@ -122,6 +130,7 @@ module.exports = ({ config }) => {
       productionApiUrl: "https://api.lirie.ch",
       ...(apiBaseUrl ? { apiBaseUrl } : {}),
       ...(driverSocketUrl ? { driverSocketUrl } : {}),
+      ...(releaseSha ? { releaseSha } : {}),
     },
     android: {
       ...base.android,
