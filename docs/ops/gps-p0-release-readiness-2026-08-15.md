@@ -22,20 +22,21 @@ Freeze amont : [gps-p0-global-freeze-2026-08-15.md](gps-p0-global-freeze-2026-08
 
 | Gate | Objet | Statut | Commentaire |
 |------|--------|--------|-------------|
-| **G0** | SHA P0 individuels | **✅** | Voir table freeze ci-dessous |
-| **G0** | SHA release unique (TIP RC) | **⏳** | Après `release/gps-p0-*` depuis **prod-current-SHA** |
-| **G1** | inventaire migration | **✅** | `25ce766952e2` documentée (nullable / réversible) |
-| **G1** | prod `alembic current` | **⏳** | Snapshot manquant ; **ALEMBIC PROD = NO-GO** |
-| **G2** | config prod | **❌** | Snapshot live manquant (SSH / `SERVER_HOST` absent) |
-| **G3** | N/N-1 | **⏳** | Après branche release + preuves vieux clients `422` |
-| **G4** | rollback | **⏳** | Après `prod-current-SHA` + images + `previous-release.json` |
-| **G5** | checklist monitoring | **✅** | Liste signaux prête |
-| **G5** | baseline prod | **⏳** | Snapshot / capture T-30 manquante |
+| **G0** | SHA P0 individuels | **✅** | Freeze cherry-pick |
+| **G0** | SHA release unique (TIP RC) | **⏳** | Base connue = `927640a0…` ; branche **NO-GO** jusqu’à GO |
+| **G1** | inventaire migration | **✅** | `25ce766952e2` documentée |
+| **G1** | prod `alembic current` | **✅ capturé** | `9b6638784019` ; ≠ `25ce766952e2` |
+| **G1** | décision upgrade | **⏳** | Dépendance P0 à confirmer ; **ALEMBIC PROD = NO-GO** |
+| **G2** | config prod | **✅ capturé** | Flags + compose ; **skew images** consumer/outbox vs API |
+| **G3** | N/N-1 | **⏳** | Après branche release |
+| **G4** | rollback | **⏳** | `previous-release.json` **absent** ; tags images connus |
+| **G5** | checklist monitoring | **✅** | |
+| **G5** | baseline prod | **✅ partielle** | `up` + catalogue ; fanout=0 |
 
 ```text
 G0–G5 tous VERTS  = NON
 PROD DEPLOY       = NO-GO ❌
-TAG RC            = NO-GO tant que TIP release absent
+TAG RC            = NO-GO
 ```
 
 ---
@@ -81,7 +82,14 @@ Note SERVER : swagger ages observability co-localisé dans `driver.py` du commit
 
 ### 1.3 ÉTAPE 2 — Snapshot PROD
 
-Voir [gps-p0-prod-snapshot-2026-08-15.md](gps-p0-prod-snapshot-2026-08-15.md) — **INCOMPLET** (SSH absent).
+**FAIT ✅** — [gps-p0-prod-snapshot-2026-08-15.md](gps-p0-prod-snapshot-2026-08-15.md)
+
+```text
+prod-current-SHA = 927640a0995a7025edfae3d31802998948a866d5
+ALEMBIC_CURRENT  = 9b6638784019
+25ce766952e2     = ABSENT
+image skew       = API 927640a0 ≠ consumer/outbox 390076ef ; fanout Created
+```
 
 ### 1.4 ÉTAPE 3 — Branche release (PAS ENCORE — après snapshot)
 

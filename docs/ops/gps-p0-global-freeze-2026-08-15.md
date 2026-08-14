@@ -48,10 +48,10 @@ Tracking functional patch / ledger patch hors régression prouvée = **NO-GO**.
 ```text
 OPTION RELEASE               = B / P0 ONLY ✅
 COMMIT FREEZE P0             = FAIT ✅
-  P0-A / P0-B / LEDGER-C/S / OBS / DOC FREEZE ba271034
-SNAPSHOT PROD READ-ONLY      = PROCHAIN GO ✅ / INCOMPLET (SSH)
-  → gps-p0-prod-snapshot-2026-08-15.md
-TAG / branche release        = INTERDIT sans prod-current-SHA
+SNAPSHOT PROD READ-ONLY      = FAIT ✅
+  prod-current-SHA           = 927640a0995a7025edfae3d31802998948a866d5
+  alembic                    = 9b6638784019
+TAG / branche release        = NO-GO jusqu’à GO explicite
 ALEMBIC PROD                 = NO-GO ❌
 PROD DEPLOY                  = NO-GO ❌
 REDIS/KAFKA PURGE            = NO-GO ❌

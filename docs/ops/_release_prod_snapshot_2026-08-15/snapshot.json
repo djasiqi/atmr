@@ -1,0 +1,45 @@
+{
+  "captured_at_utc": "2026-08-14T22:46:56Z",
+  "host_name": "atmr-prod-fsn1",
+  "path": "/srv/atmr",
+  "mutation": false,
+  "PROD_CURRENT_SHA": "927640a0995a7025edfae3d31802998948a866d5",
+  "DOCKER_TAG": "sha-927640a0995a",
+  "SENTRY_RELEASE": "927640a0995a7025edfae3d31802998948a866d5",
+  "BACKEND_IMAGE": "djasiqi/atmr-backend:sha-927640a0995a",
+  "WS_SERVICE_IMAGE": "djasiqi/atmr-ws-service:sha-927640a0995a",
+  "TRACKING_CONSUMER_IMAGE": "djasiqi/atmr-backend:sha-390076efc61c",
+  "OUTBOX_IMAGE": "djasiqi/atmr-backend:sha-390076efc61c",
+  "FANOUT_IMAGE": "djasiqi/atmr-backend:sha-16fd3e52418d",
+  "DLQ_CONSUMER_IMAGE": "djasiqi/atmr-backend:sha-16fd3e52418d",
+  "ALEMBIC_CURRENT": "9b6638784019",
+  "ALEMBIC_HEADS_ON_IMAGE": "9b6638784019",
+  "capture_id_migration_25ce766952e2_present": false,
+  "previous_release_json": null,
+  "flags": {
+    "KAFKA_ENABLED": true,
+    "TRACKING_INGEST_ASYNC_ENABLED": true,
+    "TRACKING_PROCESSED_FANOUT_ENABLED": true,
+    "TRACKING_INGEST_PERSIST_ENABLED": true,
+    "WS_KAFKA_CONSUMER_ENABLED": true,
+    "TRACKING_SOCKET_KAFKA_MIRROR_ENABLED": null,
+    "TRACKING_MISSION_FIREWALL_MODE": null,
+    "TRACKING_PG_FIRST_CANONICAL_ENABLED": null,
+    "KAFKA_COMPOSE_FILE": "docker-compose.kafka.yml",
+    "KAFKA_TOPIC_DRIVER_LOCATION_RAW": "driver.location.raw.v2",
+    "KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED": "driver.location.processed.v2",
+    "KAFKA_TOPIC_DRIVER_LOCATION_DLQ": "driver.location.dlq.v2"
+  },
+  "ACTIVE_COMPOSE_FILES": ["docker-compose.production.yml"],
+  "ACTIVE_OVERRIDES": "undetermined; docker-compose.kafka.yml alone invalid",
+  "image_skew": {
+    "api_celery_ws": "927640a0995a",
+    "consumer_outbox": "390076efc61c",
+    "fanout_dlq_created_only": "16fd3e52418d"
+  },
+  "containers": {
+    "up_aligned_927640a0": ["backend", "celery-worker", "celery-beat", "flower", "ws-service"],
+    "up_skew_390076ef": ["tracking-kafka-consumer", "tracking-outbox-publisher"],
+    "created_not_up_16fd3e52": ["tracking-processed-fanout×2", "kafka-dlq-consumer", "kafka-topics-init"]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "captured_note": "Prometheus up vector sample via wget inside prometheus container",
+  "captured_at_utc": "2026-08-14T22:48Z",
+  "highlights": {
+    "atmr-backend": 1,
+    "atmr-ws-service": 1,
+    "atmr-tracking-kafka-consumer": 1,
+    "atmr-tracking-processed-fanout": 0,
+    "redis_exporter": 0,
+    "postgres_exporter": 0,
+    "cadvisor": 0,
+    "node_exporter": 0
+  }
+}
