@@ -204,9 +204,15 @@ tracking.background.stop_failed
 
 `native_start_error` (health) préfixé avec `[nlo_start_…]` pour corrélation PG sans migration schéma.
 
+```text
+P0-A IMPLEMENTED   = YES
+BUILD CANARY A     = GO (EAS d85e3254 @479cd60d / tag gps-canary-p0a-2026-08-14)
+P0-B               = NO-GO
+C3                 = FAIL jusqu’au rejeu
+```
+
 **Reste à faire** :
 
-1. Build canary A seul (sans hydrater P0-B).
-2. Rejouer scénarios C3 qui ont cassé (shade / HOME↔app / lock / AppState / anti-zombie / 5 min).
-3. Vérifier absence de START/STOP concurrents, spam recovery, `ERR_FOREGROUND…` provoqué par notre orchestration.
-4. Seulement après validation A → P0-B.
+1. Installer APK canary A + Metro sur `479cd60d` (pré-check 8 points).
+2. Si pré-check propre → scénarios A (shade / HOME↔app / lock / AppState / anti-zombie / 5 min).
+3. Seulement après validation A → P0-B.
