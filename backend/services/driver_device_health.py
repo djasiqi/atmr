@@ -258,13 +258,20 @@ def ingest_driver_device_health(
 
     app_state = str(payload.get("app_state") or "").strip() or None
 
-    last_fix_age = payload.get("last_fix_age_seconds")
+    def _optional_int(key: str) -> int | None:
+        raw = payload.get(key)
+        try:
+            return int(raw) if raw is not None else None
+        except (TypeError, ValueError):
+            return None
 
-    try:
-        last_fix_age_seconds = int(last_fix_age) if last_fix_age is not None else None
-
-    except (TypeError, ValueError):
-        last_fix_age_seconds = None
+    # GNSS : préférer location_fix_age_seconds (autorité Location.timestamp)
+    location_fix_age_seconds = _optional_int("location_fix_age_seconds")
+    last_fix_age_seconds = (
+        location_fix_age_seconds
+        if location_fix_age_seconds is not None
+        else _optional_int("last_fix_age_seconds")
+    )
 
     constraint_reason = str(payload.get("constraint_reason") or "").strip() or None
 
@@ -310,13 +317,23 @@ def ingest_driver_device_health(
     release_channel = _optional_str("release_channel", 64)
     release_sha = _optional_str("release_sha", 64)
 
-    native_last_fix_age = payload.get("native_last_fix_age_seconds")
-    try:
-        native_last_fix_age_seconds = (
-            int(native_last_fix_age) if native_last_fix_age is not None else None
-        )
-    except (TypeError, ValueError):
-        native_last_fix_age_seconds = None
+    # Task invoke (≠ GNSS) : préférer task_invoke_age ; compat native_last_fix
+    task_invoke_age_seconds = _optional_int("task_invoke_age_seconds")
+    native_last_fix_age_seconds = (
+        task_invoke_age_seconds
+        if task_invoke_age_seconds is not None
+        else _optional_int("native_last_fix_age_seconds")
+    )
+    if task_invoke_age_seconds is None:
+        task_invoke_age_seconds = native_last_fix_age_seconds
+
+    observability_class = str(payload.get("observability_class") or "").strip() or None
+    if observability_class:
+        observability_class = observability_class[:32]
+
+    watch_callback_age_seconds = _optional_int("watch_callback_age_seconds")
+    oldest_queue_item_age_seconds = _optional_int("oldest_queue_item_age_seconds")
+    persistence_lag_seconds = _optional_int("persistence_lag_seconds")
 
     native_task_running = _optional_bool("native_task_running")
 
@@ -381,7 +398,16 @@ def ingest_driver_device_health(
         "notifications_enabled": _bool_to_redis(notifications_enabled),
         "tracking_active": _bool_to_redis(tracking_active),
         "app_state": app_state or "",
-        "last_fix_age_seconds": str(last_fix_age_seconds or ""),
+        "last_fix_age_seconds": str(
+            last_fix_age_seconds if last_fix_age_seconds is not None else ""
+        ),
+        "location_fix_age_seconds": str(
+            location_fix_age_seconds
+            if location_fix_age_seconds is not None
+            else (
+                last_fix_age_seconds if last_fix_age_seconds is not None else ""
+            )
+        ),
         "constraint_reason": constraint_reason or "",
         "fgs_running": _bool_to_redis(fgs_running),
         "trigger_reason": trigger_reason or "",
@@ -397,10 +423,28 @@ def ingest_driver_device_health(
         "ota_update_id": ota_update_id or "",
         "release_channel": release_channel or "",
         "release_sha": release_sha or "",
+        "task_invoke_age_seconds": str(
+            task_invoke_age_seconds if task_invoke_age_seconds is not None else ""
+        ),
+        # Compat lecture dashboards / alertes (alias task_invoke)
         "native_last_fix_age_seconds": str(
             native_last_fix_age_seconds
             if native_last_fix_age_seconds is not None
             else ""
+        ),
+        "observability_class": observability_class or "",
+        "watch_callback_age_seconds": str(
+            watch_callback_age_seconds
+            if watch_callback_age_seconds is not None
+            else ""
+        ),
+        "oldest_queue_item_age_seconds": str(
+            oldest_queue_item_age_seconds
+            if oldest_queue_item_age_seconds is not None
+            else ""
+        ),
+        "persistence_lag_seconds": str(
+            persistence_lag_seconds if persistence_lag_seconds is not None else ""
         ),
         "native_task_running": _bool_to_redis(native_task_running),
         "ios_accuracy_authorization": ios_accuracy_authorization or "",

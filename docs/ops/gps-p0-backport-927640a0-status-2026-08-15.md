@@ -8,15 +8,14 @@ BASE                         = 927640a0995a7025edfae3d31802998948a866d5
 
 P0 FONCTIONNEL               VALIDÉ ✅
 P0 COMMITS ORIGINAUX         NON BACKPORTABLE ❌
-BACKPORT P0 / 927640a0       IN PROGRESS
+BACKPORT P0 / 927640a0       5/5 PACKS VERTS (pré-composite)
 
-G0 COMPOSITION               ROUGE (reconstruction packs)
+G0 COMPOSITION               ROUGE (prochaine étape : dry-run TIP backport)
 G1 MIGRATION RELEASE         ROUGE (cible : 0 capture_id / 0 alembic 25ce766)
 G2 PROD SNAPSHOT             VERT ✅
 
 BRANCHE RELEASE              NO-GO
 TAG / BUILD / ALEMBIC / DEPLOY = NO-GO
-OBSERVABILITY                NO-GO (attendre GO explicite)
 ```
 
 ## Progression packs
@@ -27,33 +26,37 @@ OBSERVABILITY                NO-GO (attendre GO explicite)
 | BACKPORT P0-B | ✅ `ec0899f0` | trackingAuthPresence |
 | BACKPORT C-LEDGER-CLIENT | ✅ `a712ffaa` | readiness ABSENT→READY ; 0 captureId |
 | BACKPORT C-LEDGER-SERVER | ✅ `892486a9` | claim Redis + Option B ids_missing ; 0 ingress_envelope |
-| BACKPORT OBSERVABILITY | ⏳ NO-GO | attendre GO (5/5) |
+| BACKPORT OBSERVABILITY | ✅ `PENDING_SHA` | ages GNSS/task + classes ; fix_stale=GNSS only |
 
-## C-LEDGER-SERVER — preuves
+## OBSERVABILITY — preuves
 
 ```text
-T1–T7 (+ in_flight)     PASS  (test_ledger_server_claim_lifecycle_p0c)
-p02 claim/release       PASS
-p0e Option B (422)      PASS
-Jest A/B/CLIENT         PASS  (26 tests / 3 suites)
-anti-contam             PASS  capture_id=0 captureId=0 ingress_envelope=0
-migration 25ce766952e2  ABSENTE
-ruff fichiers touchés   PASS
+O1–O7 (+ O5b)           PASS  (trackingObservabilityHealth)
+canary O-C1…O-C6        PASS  (trackingObservabilityCanary)
+heartbeat tests         PASS  (deviceHealthHeartbeat)
+backend health tests    PASS  (test_driver_device_health 12)
+ruff OBS                PASS
+anti-contam             PASS
+régression A/B/CLIENT   PASS  (26)
+régression SERVER T1–T7 PASS  (8)
 ```
 
-Comportement (canary inchangé) :
+Invariants :
 
-- claim acquis + aucune persistence réussie → release (pas d’orphelin)
-- SET NX fail → VERIFY persistence → `duplicate_persisted` | `claim_in_flight` | `duplicate_event_id_unproven` (jamais assimilé auto à « déjà persisté »)
-- `generation=null` → 422 `invalid_ledger_ids`, `retryable=false`, release
+- Location fraîche + pipeline bloqué → PIPELINE / PERSISTENCE → fix_stale=false
+- task ancien + Location fraîche → RUNTIME_ONLY → fix_stale=false
+- Location réellement stale → GNSS → fix_stale=true
+
+Hors scope respecté : pas de bridge tip (`captureId`), pas de migration, pas d’ingress_envelope.
 
 ## Gate anti-contamination
 
 ```text
 capture_id / captureId / ingress_envelope = 0 dans le delta code
+migration 25ce766952e2 = absente
 ```
 
 ```text
-✅ **Implémenté** : packs A+B+CLIENT+SERVER testés sur 927640a0.
-**Reste à faire** : OBSERVABILITY (après GO) → dry-run composite TIP backport.
+✅ **Implémenté** : packs A+B+CLIENT+SERVER+OBS testés sur 927640a0 (5/5).
+**Reste à faire** : dry-run/composite exact depuis 927640a0 avec les 5 SHAs → valider G0/G1 avant branche release.
 ```

@@ -131,6 +131,19 @@ jest.mock("./driverTrackingBridge", () => ({
   getDriverTrackingPresenceWindowActive: () => mockGetDriverTrackingPresenceWindowActive(),
 }));
 
+jest.mock("./driverTrackingQueue", () => ({
+  driverTrackingQueue: {
+    getSnapshot: async () => ({
+      queueDepth: 0,
+      oldestQueuedAt: null,
+      newestQueuedAt: null,
+      oldestItemAgeMs: null,
+      sequenceCounter: 1,
+      sessionGeneration: 1,
+    }),
+  },
+}));
+
  
 const heartbeat = require("./deviceHealthHeartbeat") as typeof import("./deviceHealthHeartbeat");
 
@@ -148,6 +161,12 @@ function setHappyPathDefaults() {
   mockGetDriverTrackingBridgeSnapshot.mockReturnValue({
     missionId: 42,
     lastWatchAt: new Date(Date.now() - 5_000).toISOString(),
+    lastWatchAtMs: Date.now() - 5_000,
+    lastFixProducedAtMs: Date.now() - 5_000,
+    queueDepth: 0,
+    lastEnqueuedAt: new Date(Date.now() - 5_000).toISOString(),
+    lastPersistedAt: new Date(Date.now() - 5_000).toISOString(),
+    lastIngestedAt: new Date(Date.now() - 5_000).toISOString(),
   });
   mockApiPost.mockResolvedValue({ data: { ok: true } });
   mockIsLowPowerModeEnabledAsync.mockResolvedValue(false);
@@ -283,14 +302,57 @@ describe("deviceHealthHeartbeat", () => {
       expect(payload.constraint_reason).toBeNull();
     });
 
-    it("flags fix_stale when last watch older than 5 minutes", async () => {
+    it("flags fix_stale when Location.timestamp older than 5 minutes (not watch alone)", async () => {
+      const oldTs = Date.now() - 10 * 60 * 1000;
       mockGetDriverTrackingBridgeSnapshot.mockReturnValue({
         missionId: 99,
-        lastWatchAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+        lastWatchAt: new Date(Date.now() - 5_000).toISOString(),
+        lastWatchAtMs: Date.now() - 5_000,
+        lastFixProducedAtMs: oldTs,
+        queueDepth: 0,
+        lastEnqueuedAt: null,
+        lastPersistedAt: null,
+        lastIngestedAt: null,
       });
       const payload = await heartbeat.collectDeviceHealth();
+      expect(payload.location_fix_age_seconds).toBeGreaterThanOrEqual(600 - 1);
       expect(payload.last_fix_age_seconds).toBeGreaterThanOrEqual(600 - 1);
+      expect(payload.observability_class).toBe("GNSS");
       expect(payload.constraint_reason).toBe("fix_stale");
+    });
+
+    it("task stale + Location fresh → RUNTIME_ONLY, never fix_stale", async () => {
+      mockGetTrackingRuntimeSnapshot.mockReturnValue({
+        lastTaskInvokedAt: Date.now() - 10 * 60 * 1000,
+        lastNativeStartError: null,
+        lastNativeStartErrorAt: null,
+        pendingFgsStart: { active: false },
+        missionId: null,
+        mode: "off",
+        nativeStartDiagnostics: {
+          native_start_phase: null,
+          native_start_error: null,
+          native_task_defined: null,
+          native_started_before: null,
+          native_started_after: null,
+        },
+      });
+      mockGetDriverTrackingBridgeSnapshot.mockReturnValue({
+        missionId: 99,
+        lastWatchAt: new Date(Date.now() - 5_000).toISOString(),
+        lastWatchAtMs: Date.now() - 5_000,
+        lastFixProducedAtMs: Date.now() - 5_000,
+        queueDepth: 0,
+        lastEnqueuedAt: new Date(Date.now() - 5_000).toISOString(),
+        lastPersistedAt: new Date(Date.now() - 5_000).toISOString(),
+        lastIngestedAt: new Date(Date.now() - 5_000).toISOString(),
+      });
+      const payload = await heartbeat.collectDeviceHealth();
+      expect(payload.observability_class).toBe("RUNTIME_ONLY");
+      expect(payload.constraint_reason).not.toBe("fix_stale");
+      expect(payload.task_invoke_age_seconds).toBeGreaterThanOrEqual(590);
+      expect(payload.native_last_fix_age_seconds).toBe(payload.task_invoke_age_seconds);
+      expect(payload.location_fix_age_seconds).toBeLessThan(60);
     });
 
     it("returns null is_charging when battery state unknown", async () => {
@@ -299,14 +361,17 @@ describe("deviceHealthHeartbeat", () => {
       expect(payload.is_charging).toBeNull();
     });
 
-    it("[Lot 1] includes app/os version, native fix age, and null iOS signals on Android", async () => {
+    it("[Lot 1] includes app/os version, task invoke age (compat native_last_fix), and null iOS signals on Android", async () => {
       const payload = await heartbeat.collectDeviceHealth();
       expect(payload.app_version).toBe("1.42.3");
       expect(payload.os_version).toBe("17.4");
       expect(payload.native_task_running).toBe(true);
       // lastTaskInvokedAt = now - 8s -> ~8s
-      expect(payload.native_last_fix_age_seconds).toBeGreaterThanOrEqual(7);
-      expect(payload.native_last_fix_age_seconds).toBeLessThan(60);
+      expect(payload.task_invoke_age_seconds).toBeGreaterThanOrEqual(7);
+      expect(payload.task_invoke_age_seconds).toBeLessThan(60);
+      expect(payload.native_last_fix_age_seconds).toBe(payload.task_invoke_age_seconds);
+      expect(payload.location_fix_age_seconds).toBeLessThan(60);
+      expect(payload.observability_class).toBe("HEALTHY");
       // iOS-only signals are null on Android
       expect(payload.ios_low_power_mode).toBeNull();
       expect(payload.ios_background_refresh_status).toBeNull();

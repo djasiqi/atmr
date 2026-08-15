@@ -80,6 +80,34 @@ def write_device_health(
         "fix_success_rate_last_5min": _to_redis_value(
             payload.get("fix_success_rate_last_5min")
         ),
+        "last_fix_age_seconds": _to_redis_value(
+            payload.get("last_fix_age_seconds")
+        ),
+        "location_fix_age_seconds": _to_redis_value(
+            payload.get("location_fix_age_seconds")
+            if payload.get("location_fix_age_seconds") is not None
+            else payload.get("last_fix_age_seconds")
+        ),
+        "task_invoke_age_seconds": _to_redis_value(
+            payload.get("task_invoke_age_seconds")
+            if payload.get("task_invoke_age_seconds") is not None
+            else payload.get("native_last_fix_age_seconds")
+        ),
+        "native_last_fix_age_seconds": _to_redis_value(
+            payload.get("native_last_fix_age_seconds")
+            if payload.get("native_last_fix_age_seconds") is not None
+            else payload.get("task_invoke_age_seconds")
+        ),
+        "observability_class": _to_redis_value(payload.get("observability_class")),
+        "watch_callback_age_seconds": _to_redis_value(
+            payload.get("watch_callback_age_seconds")
+        ),
+        "oldest_queue_item_age_seconds": _to_redis_value(
+            payload.get("oldest_queue_item_age_seconds")
+        ),
+        "persistence_lag_seconds": _to_redis_value(
+            payload.get("persistence_lag_seconds")
+        ),
     }
 
     key = _redis_key(driver_id)
@@ -165,6 +193,22 @@ def parse_device_health(raw: dict[Any, Any] | None) -> dict[str, Any] | None:
         "fix_success_rate_last_5min": _parse_float(
             decoded.get("fix_success_rate_last_5min")
         ),
+        "last_fix_age_seconds": _parse_int(decoded.get("last_fix_age_seconds")),
+        "location_fix_age_seconds": _parse_int(
+            decoded.get("location_fix_age_seconds")
+        ),
+        "task_invoke_age_seconds": _parse_int(decoded.get("task_invoke_age_seconds")),
+        "native_last_fix_age_seconds": _parse_int(
+            decoded.get("native_last_fix_age_seconds")
+        ),
+        "observability_class": (decoded.get("observability_class") or "") or None,
+        "watch_callback_age_seconds": _parse_int(
+            decoded.get("watch_callback_age_seconds")
+        ),
+        "oldest_queue_item_age_seconds": _parse_int(
+            decoded.get("oldest_queue_item_age_seconds")
+        ),
+        "persistence_lag_seconds": _parse_int(decoded.get("persistence_lag_seconds")),
     }
 
 
