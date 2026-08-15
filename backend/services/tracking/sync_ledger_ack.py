@@ -52,9 +52,7 @@ def durable_proof(persist_result: dict[str, Any] | None) -> bool:
     reason = str(persist_result.get("reason") or "")
     if status == "persisted" and reason == "inserted":
         return True
-    if status == "duplicate" and reason == "same_event_already_persisted":
-        return True
-    return False
+    return status == "duplicate" and reason == "same_event_already_persisted"
 
 
 def _parse_optional_int(raw: Any) -> int | None:
@@ -104,6 +102,11 @@ def try_commit_sync_ledger_ack(
     - preuve non durable → rollback
     - PersistConflictError → rollback → 409
     - exception / commit KO → rollback → 503
+
+    Ownership claim Redis (P0-C-LEDGER-SERVER) :
+    - ce module ne release **pas** le claim ; le caller (route HTTP) doit
+      ``release_location_event_id`` sur tout chemin non ``durable_ok``
+      (notamment ``ids_missing``), sinon claim orphelin.
     """
     if (
         not tracking_session_id

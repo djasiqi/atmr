@@ -16,6 +16,7 @@ G2 PROD SNAPSHOT             VERT ✅
 
 BRANCHE RELEASE              NO-GO
 TAG / BUILD / ALEMBIC / DEPLOY = NO-GO
+OBSERVABILITY                NO-GO (attendre GO explicite)
 ```
 
 ## Progression packs
@@ -24,9 +25,27 @@ TAG / BUILD / ALEMBIC / DEPLOY = NO-GO
 |------|--------|-------|
 | BACKPORT P0-A | ✅ `1917c8b0` | lifecycle + BLT ; opId local |
 | BACKPORT P0-B | ✅ `ec0899f0` | trackingAuthPresence |
-| BACKPORT C-LEDGER-CLIENT | ✅ (voir SHA commit) | readiness ABSENT→READY ; 0 captureId |
-| BACKPORT C-LEDGER-SERVER | ⏳ | 0 ingress_envelope |
-| BACKPORT OBSERVABILITY | ⏳ | |
+| BACKPORT C-LEDGER-CLIENT | ✅ `a712ffaa` | readiness ABSENT→READY ; 0 captureId |
+| BACKPORT C-LEDGER-SERVER | ✅ `PENDING_SHA` | claim Redis + Option B ids_missing ; 0 ingress_envelope |
+| BACKPORT OBSERVABILITY | ⏳ NO-GO | attendre GO (5/5) |
+
+## C-LEDGER-SERVER — preuves
+
+```text
+T1–T7 (+ in_flight)     PASS  (test_ledger_server_claim_lifecycle_p0c)
+p02 claim/release       PASS
+p0e Option B (422)      PASS
+Jest A/B/CLIENT         PASS  (26 tests / 3 suites)
+anti-contam             PASS  capture_id=0 captureId=0 ingress_envelope=0
+migration 25ce766952e2  ABSENTE
+ruff fichiers touchés   PASS
+```
+
+Comportement (canary inchangé) :
+
+- claim acquis + aucune persistence réussie → release (pas d’orphelin)
+- SET NX fail → VERIFY persistence → `duplicate_persisted` | `claim_in_flight` | `duplicate_event_id_unproven` (jamais assimilé auto à « déjà persisté »)
+- `generation=null` → 422 `invalid_ledger_ids`, `retryable=false`, release
 
 ## Gate anti-contamination
 
@@ -35,6 +54,6 @@ capture_id / captureId / ingress_envelope = 0 dans le delta code
 ```
 
 ```text
-✅ **Implémenté** : packs A+B+CLIENT testés sur 927640a0.
-**Reste à faire** : SERVER → OBS → dry-run composite TIP backport.
+✅ **Implémenté** : packs A+B+CLIENT+SERVER testés sur 927640a0.
+**Reste à faire** : OBSERVABILITY (après GO) → dry-run composite TIP backport.
 ```

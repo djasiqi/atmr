@@ -8,15 +8,26 @@ from services.geolocation import driver_location_dedup as d
 class _FakeRedis:
     def __init__(self) -> None:
         self.store: dict[str, str] = {}
+        self.ttl_sec: dict[str, int] = {}
 
     def set(self, key, value, nx=False, ex=None):  # type: ignore[no-untyped-def]
         if nx and key in self.store:
             return False
         self.store[key] = value
+        if ex is not None:
+            self.ttl_sec[key] = int(ex)
         return True
 
     def delete(self, key):  # type: ignore[no-untyped-def]
-        return 1 if self.store.pop(key, None) is not None else 0
+        existed = key in self.store
+        self.store.pop(key, None)
+        self.ttl_sec.pop(key, None)
+        return 1 if existed else 0
+
+    def ttl(self, key):  # type: ignore[no-untyped-def]
+        if key not in self.store:
+            return -2
+        return int(self.ttl_sec.get(key, -1))
 
 
 def test_claim_release_allows_retry(monkeypatch) -> None:

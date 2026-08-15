@@ -1992,7 +1992,7 @@ class DriverLocation(Resource):
                                         or ""
                                     )
                                     if dedup_reason == "duplicate_event_id":
-                                        # persisted_sync uniquement si cache durable prouvé
+                                        # SET NX fail ≠ persisté : VERIFY preuve puis classer
                                         proven = None
                                         for _k in (idem_hdr, location_event_id):
                                             if not _k:
@@ -2007,12 +2007,21 @@ class DriverLocation(Resource):
                                             and str(proven.get("durability") or "")
                                             == "persisted_sync"
                                         ):
+                                            logger.info(
+                                                "location_event_claim "
+                                                "duplicate_classified=duplicate_persisted "
+                                                "driver_id=%s event_id=%s",
+                                                driver.id,
+                                                str(location_event_id or "")[:64],
+                                            )
                                             result = {
                                                 "ok": True,
                                                 "skipped": True,
-                                                "reason": "duplicate_event_id",
+                                                "reason": "duplicate_persisted",
                                                 "accept_status": "skipped",
-                                                "accept_reason": "duplicate_event_id",
+                                                "accept_reason": (
+                                                    "duplicate_persisted"
+                                                ),
                                                 "ack_status": "duplicate",
                                                 "durability": "persisted_sync",
                                                 "location_event_id": location_event_id,
@@ -2030,32 +2039,78 @@ class DriverLocation(Resource):
                                                 ),
                                                 "db_persisted": True,
                                                 "ledger_persisted": True,
+                                                "retryable": False,
                                             }
                                         else:
-                                            # Claim orphelin (ex. PG KO avant release) → libérer
                                             from services.geolocation.driver_location_dedup import (
+                                                classify_duplicate_event_without_persisted_proof,
                                                 release_location_event_id,
                                             )
 
-                                            release_location_event_id(
-                                                driver.id, location_event_id
+                                            dup_class = (
+                                                classify_duplicate_event_without_persisted_proof(
+                                                    driver.id, location_event_id
+                                                )
                                             )
-                                            result = {
-                                                "ok": True,
-                                                "skipped": True,
-                                                "reason": "duplicate_event_id",
-                                                "accept_status": "skipped",
-                                                "accept_reason": (
-                                                    "duplicate_event_id_unproven"
-                                                ),
-                                                "ack_status": "duplicate",
-                                                "durability": None,
-                                                "location_event_id": location_event_id,
-                                                "canonical_updated": False,
-                                                "db_persisted": False,
-                                                "ledger_persisted": False,
-                                                "retryable": True,
-                                            }
+                                            logger.info(
+                                                "location_event_claim "
+                                                "duplicate_classified=%s "
+                                                "driver_id=%s event_id=%s",
+                                                dup_class,
+                                                driver.id,
+                                                str(location_event_id or "")[:64],
+                                            )
+                                            if dup_class == "claim_in_flight":
+                                                result = {
+                                                    "ok": True,
+                                                    "skipped": True,
+                                                    "reason": "claim_in_flight",
+                                                    "accept_status": "skipped",
+                                                    "accept_reason": (
+                                                        "claim_in_flight"
+                                                    ),
+                                                    "ack_status": (
+                                                        "ingested_non_persisted"
+                                                    ),
+                                                    "durability": None,
+                                                    "location_event_id": (
+                                                        location_event_id
+                                                    ),
+                                                    "canonical_updated": False,
+                                                    "db_persisted": False,
+                                                    "ledger_persisted": False,
+                                                    "retryable": True,
+                                                }
+                                            else:
+                                                release_location_event_id(
+                                                    driver.id,
+                                                    location_event_id,
+                                                    reason=(
+                                                        "duplicate_event_id_unproven"
+                                                    ),
+                                                )
+                                                result = {
+                                                    "ok": True,
+                                                    "skipped": True,
+                                                    "reason": (
+                                                        "duplicate_event_id_unproven"
+                                                    ),
+                                                    "accept_status": "skipped",
+                                                    "accept_reason": (
+                                                        "duplicate_event_id_unproven"
+                                                    ),
+                                                    "ack_status": (
+                                                        "ingested_non_persisted"
+                                                    ),
+                                                    "durability": None,
+                                                    "location_event_id": (
+                                                        location_event_id
+                                                    ),
+                                                    "canonical_updated": False,
+                                                    "db_persisted": False,
+                                                    "ledger_persisted": False,
+                                                    "retryable": True,
+                                                }
                                     else:
                                         # duplicate_proximity : jamais persisted_sync
                                         result = {
@@ -2083,7 +2138,9 @@ class DriverLocation(Resource):
                                     )
 
                                     release_location_event_id(
-                                        driver.id, location_event_id
+                                        driver.id,
+                                        location_event_id,
+                                        reason="db_persist_failed",
                                     )
                                     lat = uc_result.snapped_lat
                                     lon = uc_result.snapped_lon
@@ -2135,9 +2192,28 @@ class DriverLocation(Resource):
                                     "[LocationService] HTTP location update failed: %s",
                                     str(e_loc),
                                 )
+                                # P0-C-LEDGER-SERVER : claim acquis avant l'échec → release
+                                if location_event_id:
+                                    try:
+                                        from services.geolocation.driver_location_dedup import (
+                                            release_location_event_id,
+                                        )
+
+                                        release_location_event_id(
+                                            driver.id,
+                                            location_event_id,
+                                            reason="location_update_failed",
+                                        )
+                                    except Exception:
+                                        logger.warning(
+                                            "release after location_update_failed KO",
+                                            exc_info=True,
+                                        )
                                 result = {
                                     "error": "Location service unavailable",
                                     "reason": "location_update_failed",
+                                    "retryable": True,
+                                    "location_event_id": location_event_id,
                                 }
                                 status_code = 503
 
@@ -2308,7 +2384,9 @@ class DriverLocation(Resource):
                                     )
                                     if company_id_for_ledger is None:
                                         release_location_event_id(
-                                            driver.id, location_event_id
+                                            driver.id,
+                                            location_event_id,
+                                            reason="ledger_company_id_missing",
                                         )
                                         result = {
                                             "error": "ledger_persist_failed",
@@ -2410,21 +2488,29 @@ class DriverLocation(Resource):
                                                         result,
                                                     )
                                         elif ledger_ack.kind == "ids_missing":
-                                            # Projection OK, IDs incomplets → 200 non durable
+                                            # P0-C-LEDGER-SERVER Option B :
+                                            # IDs structurels incomplets (ex. generation=null)
+                                            # → reject non-retryable + RELEASE claim
+                                            release_location_event_id(
+                                                driver.id,
+                                                location_event_id,
+                                                reason="invalid_ledger_ids",
+                                            )
                                             result = {
-                                                "ok": True,
+                                                "error": "invalid_ledger_ids",
+                                                "error_code": "invalid_ledger_ids",
+                                                "ok": False,
                                                 "source": source,
                                                 "message": (
-                                                    "Location accepted without "
-                                                    "durable persist"
+                                                    "Identifiants ledger incomplets "
+                                                    "(session_generation / sequence / "
+                                                    "tracking_session_id requis)."
                                                 ),
                                                 "location_mode": location_mode,
-                                                "accept_status": accept_status,
-                                                "accept_reason": ("ledger_ids_missing"),
+                                                "accept_status": "rejected_invalid",
+                                                "accept_reason": "invalid_ledger_ids",
                                                 "received_at": received_at,
-                                                "ack_status": (
-                                                    "ingested_non_persisted"
-                                                ),
+                                                "ack_status": "rejected",
                                                 "durability": None,
                                                 "location_event_id": (
                                                     location_event_id
@@ -2441,10 +2527,14 @@ class DriverLocation(Resource):
                                                 ),
                                                 "db_persisted": True,
                                                 "ledger_persisted": False,
+                                                "retryable": False,
                                             }
+                                            status_code = 422
                                         elif ledger_ack.kind == "conflict_409":
                                             release_location_event_id(
-                                                driver.id, location_event_id
+                                                driver.id,
+                                                location_event_id,
+                                                reason="ledger_conflict_409",
                                             )
                                             result = {
                                                 "error": ledger_ack.reason,
@@ -2481,7 +2571,9 @@ class DriverLocation(Resource):
                                         else:
                                             # 503 ledger / commit KO / unproven
                                             release_location_event_id(
-                                                driver.id, location_event_id
+                                                driver.id,
+                                                location_event_id,
+                                                reason="ledger_persist_failed",
                                             )
                                             result = {
                                                 "error": "ledger_persist_failed",
