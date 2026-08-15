@@ -97,7 +97,7 @@ describe("driverTrackingQueue http202AckSemantics + session", () => {
     await driverTrackingQueue.resetForTests();
   });
 
-  it("beginNewTrackingSession crée une session locale non nulle sans attendre le réseau", async () => {
+  it("beginNewTrackingSession attend register avant READY (plus de fire-and-forget)", async () => {
     let resolveRegister: ((v: unknown) => void) | null = null;
     mockRegisterTrackingSession.mockImplementation(
       () =>
@@ -105,17 +105,28 @@ describe("driverTrackingQueue http202AckSemantics + session", () => {
           resolveRegister = resolve;
         })
     );
-    await driverTrackingQueue.beginNewTrackingSession();
-    const snap = await driverTrackingQueue.getSnapshot();
-    expect(snap.trackingSessionId).toMatch(/^trk_sess_/);
-    expect(snap.sequenceCounter).toBe(0);
-    // débloquer pour ne pas laisser de promesse pendante
+    const beginPromise = driverTrackingQueue.beginNewTrackingSession();
+    for (let i = 0; i < 2000 && !resolveRegister; i += 1) {
+      await Promise.resolve();
+    }
+    expect(resolveRegister).not.toBeNull();
+    expect(["CREATING", "REGISTERING"]).toContain(
+      driverTrackingQueue.getSessionReadinessForTests()
+    );
+    const sessionId = (
+      driverTrackingQueue as unknown as { trackingSessionId: string }
+    ).trackingSessionId;
+    expect(sessionId).toMatch(/^trk_sess_/);
     resolveRegister?.({
-      tracking_session_id: snap.trackingSessionId,
+      tracking_session_id: sessionId,
       session_generation: 1,
       first_sequence_id: 1,
       status: "active",
     });
+    await beginPromise;
+    const snap = await driverTrackingQueue.getSnapshot();
+    expect(snap.sessionGeneration).toBe(1);
+    expect(snap.sessionReadiness).toBe("READY");
   });
 
   it("202 queued_async ne retire pas l'item (pas d'ACK final)", async () => {

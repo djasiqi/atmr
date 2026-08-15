@@ -810,6 +810,10 @@ async function flushPoint(appState: AppStateStatus) {
       trackingIdentityId: identitySnapshot?.trackingIdentityId,
     },
   });
+  if (!enqueuedItem) {
+    // Ledger non READY (CREATING/REGISTERING/REGISTER_FAILED) — drop observé, pas de flush.
+    return;
+  }
   state.lastEnqueuedAt = new Date().toISOString();
   const attemptSeq = beginBridgeAttempt(enqueuedItem.id);
   const flushResult = await driverTrackingQueue.flush({

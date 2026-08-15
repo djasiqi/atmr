@@ -10,7 +10,7 @@ P0 FONCTIONNEL               VALIDÉ ✅
 P0 COMMITS ORIGINAUX         NON BACKPORTABLE ❌
 BACKPORT P0 / 927640a0       IN PROGRESS
 
-G0 COMPOSITION               ROUGE (en cours de reconstruction)
+G0 COMPOSITION               ROUGE (reconstruction packs)
 G1 MIGRATION RELEASE         ROUGE (cible : 0 capture_id / 0 alembic 25ce766)
 G2 PROD SNAPSHOT             VERT ✅
 
@@ -22,20 +22,19 @@ TAG / BUILD / ALEMBIC / DEPLOY = NO-GO
 
 | Pack | Statut | Notes |
 |------|--------|-------|
-| BACKPORT P0-A | ✅ | `nativeTrackingLifecycle` + wiring BLT ; opId local (pas `captureId`) ; pas `ownerVersionMismatch` |
-| BACKPORT P0-B | ⏳ | |
-| BACKPORT C-LEDGER-CLIENT | ⏳ | 0 `capture_id`/`captureId` obligatoire |
-| BACKPORT C-LEDGER-SERVER | ⏳ | 0 `ingress_envelope` obligatoire |
+| BACKPORT P0-A | ✅ `1917c8b0` | lifecycle + BLT ; opId local |
+| BACKPORT P0-B | ✅ `ec0899f0` | trackingAuthPresence |
+| BACKPORT C-LEDGER-CLIENT | ✅ (voir SHA commit) | readiness ABSENT→READY ; 0 captureId |
+| BACKPORT C-LEDGER-SERVER | ⏳ | 0 ingress_envelope |
 | BACKPORT OBSERVABILITY | ⏳ | |
 
-## Gate anti-contamination (après chaque pack)
+## Gate anti-contamination
 
 ```text
 capture_id / captureId / ingress_envelope = 0 dans le delta code
-alembic/versions/25ce766952e2*            = absent
 ```
 
 ```text
-✅ **Implémenté** : worktree + branche travail ; statut figé ; pack A en cours de commit.
-**Reste à faire** : packs B → CLIENT → SERVER → OBS ; dry-run composite final ; seulement alors `release/gps-p0-*`.
+✅ **Implémenté** : packs A+B+CLIENT testés sur 927640a0.
+**Reste à faire** : SERVER → OBS → dry-run composite TIP backport.
 ```

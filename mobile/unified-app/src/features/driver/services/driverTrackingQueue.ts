@@ -45,12 +45,27 @@ export type TrackingDeliveryState =
 
 export type DriverTrackingMode = "mission_live" | "availability_presence" | "observability_only";
 
+/** Readiness ledger session (P0-C-LEDGER-CLIENT) — enqueue autorisé uniquement en READY. */
+export type TrackingSessionReadiness =
+  | "ABSENT"
+  | "CREATING"
+  | "REGISTERING"
+  | "READY"
+  | "REGISTER_FAILED";
+
 /** availability_presence = HTTP only (socket interdit côté backend). */
 function isSocketEligibleLocationMode(mode: DriverTrackingMode): boolean {
   return (
     isFeatureEnabled("tracking_socket_gps_ingest_enabled") &&
     mode !== "availability_presence"
   );
+}
+
+function isLedgerInvalidQueueItem(item: {
+  trackingSessionId?: string | null;
+  sessionGeneration?: number | null;
+}): boolean {
+  return !item.trackingSessionId || item.sessionGeneration == null;
 }
 
 export type DriverTrackingQueueItem = {
@@ -111,6 +126,7 @@ type DriverTrackingQueueSnapshot = {
   trackingSessionId?: string;
   sequenceCounter?: number;
   sessionGeneration?: number | null;
+  sessionReadiness?: TrackingSessionReadiness;
   suspendReason?: string | null;
 };
 
@@ -175,6 +191,7 @@ function buildQueueId(): string {
 
 class DriverTrackingQueue {
   private loaded = false;
+  private loadInFlight: Promise<void> | null = null;
   private isFlushing = false;
   private pendingFlushOptions: {
     ackStaleMs?: number;
@@ -188,6 +205,12 @@ class DriverTrackingQueue {
   private trackingSessionId = "";
   private sessionGeneration: number | null = null;
   private sessionCreatedAt = 0;
+  private sessionReadiness: TrackingSessionReadiness = "ABSENT";
+  private registerInFlight: Promise<boolean> | null = null;
+  private rotateInFlight: Promise<void> | null = null;
+  private lastRegisterAttemptAt = 0;
+  private static readonly REGISTER_RETRY_MIN_MS = 5_000;
+  private lastDeferredFixAt: number | null = null;
   private identityKey: string | null = null;
   private drainedInCurrentMinute = 0;
   private drainMinuteBucket = 0;
@@ -378,6 +401,17 @@ class DriverTrackingQueue {
 
   private async ensureLoaded() {
     if (this.loaded) return;
+    if (this.loadInFlight) {
+      await this.loadInFlight;
+      return;
+    }
+    this.loadInFlight = this.loadQueueState().finally(() => {
+      this.loadInFlight = null;
+    });
+    await this.loadInFlight;
+  }
+
+  private async loadQueueState() {
     await trackingQueueStore.init();
 
     // Source de vérité : SQLite (natif) ; AsyncStorage = legacy one-shot uniquement.
@@ -471,9 +505,22 @@ class DriverTrackingQueue {
         (max, item) => Math.max(max, item.sequenceId ?? 0),
         0
       );
+      if (this.sessionGeneration != null) {
+        this.setSessionReadiness("READY", "load_persisted");
+      } else {
+        // Ne pas bloquer le load sur le réseau : register en arrière-plan.
+        this.setSessionReadiness("REGISTERING", "load_missing_generation");
+        void this.registerSessionWithBackend();
+      }
     } else {
-      this.rotateTrackingSession();
+      // Pas de session TTL-valide : ABSENT jusqu'à beginNew / enqueue (rotate awaité).
+      this.trackingSessionId = "";
+      this.sessionCreatedAt = 0;
+      this.sessionGeneration = null;
+      this.sequenceCounter = 0;
+      this.setSessionReadiness("ABSENT", "load_expired_or_missing");
     }
+    await this.quarantineLedgerInvalidItems("ensure_loaded");
     await this.loadSuspendState();
     this.registerAuthRefreshListener();
     this.loaded = true;
@@ -730,25 +777,100 @@ class DriverTrackingQueue {
     this.sequenceCounter = 0;
   }
 
-  private rotateTrackingSession() {
-    this.createLocalTrackingSession();
-    void this.persistSession();
-    void this.registerSessionWithBackend();
+  private setSessionReadiness(
+    readiness: TrackingSessionReadiness,
+    reason: string
+  ): void {
+    this.sessionReadiness = readiness;
+    emitDriverTelemetry("tracking.session.readiness", {
+      source: "driver.tracking.queue",
+      readiness,
+      reason,
+      tracking_session_id: this.trackingSessionId || null,
+      session_generation: this.sessionGeneration,
+    });
   }
 
-  private async registerSessionWithBackend(): Promise<void> {
+  private isLedgerSessionReady(): boolean {
+    return (
+      this.sessionReadiness === "READY" &&
+      Boolean(this.trackingSessionId) &&
+      this.sessionGeneration != null
+    );
+  }
+
+  private sessionNeedsRotation(): boolean {
+    return (
+      !this.trackingSessionId ||
+      nowMs() - this.sessionCreatedAt >= TRACKING_SESSION_TTL_MS
+    );
+  }
+
+  /**
+   * Rotation / création locale + register awaité.
+   * Tant que non READY, aucun enqueue ledger n'est autorisé (drop observé).
+   */
+  private async rotateTrackingSessionAwaited(reason: string): Promise<void> {
+    if (this.rotateInFlight) {
+      await this.rotateInFlight;
+      return;
+    }
+    // CREATING synchrone avant tout await — observable immédiatement pour les tests / enqueue concurrents.
+    this.setSessionReadiness("CREATING", reason);
+    this.createLocalTrackingSession();
+    this.rotateInFlight = (async () => {
+      await this.persistSession();
+      this.setSessionReadiness("REGISTERING", reason);
+      await this.registerSessionWithBackend();
+    })().finally(() => {
+      this.rotateInFlight = null;
+    });
+    await this.rotateInFlight;
+  }
+
+  private async registerSessionWithBackend(): Promise<boolean> {
     const sessionIdAtStart = this.trackingSessionId;
-    if (!sessionIdAtStart) return;
+    if (!sessionIdAtStart) {
+      this.setSessionReadiness("ABSENT", "register_no_session");
+      return false;
+    }
+    if (this.registerInFlight) {
+      return this.registerInFlight;
+    }
+    this.registerInFlight = this.runRegisterSessionWithBackend(sessionIdAtStart).finally(
+      () => {
+        this.registerInFlight = null;
+      }
+    );
+    return this.registerInFlight;
+  }
+
+  private async runRegisterSessionWithBackend(
+    sessionIdAtStart: string
+  ): Promise<boolean> {
+    this.lastRegisterAttemptAt = nowMs();
+    if (this.sessionReadiness !== "READY") {
+      this.setSessionReadiness("REGISTERING", "register_start");
+    }
     try {
       const lease = await readTrackingContextLease();
       if (!leaseAllowsTransport(lease)) {
         await this.activateContextInactiveGate("register_session_lease");
+        if (this.trackingSessionId === sessionIdAtStart) {
+          this.setSessionReadiness("REGISTER_FAILED", "lease_not_active");
+        }
         emitDriverTelemetry("tracking.session.context_inactive", {
           source: "driver.tracking.queue",
           tracking_session_id: sessionIdAtStart,
           lease_state: lease?.state ?? "absent",
         });
-        return;
+        emitDriverTelemetry("tracking.session.register_failed", {
+          source: "driver.tracking.queue",
+          tracking_session_id: sessionIdAtStart,
+          error_code: "lease_not_active",
+          lease_state: lease?.state ?? "absent",
+        });
+        return false;
       }
       const res = await registerTrackingSession({
         tracking_session_id: sessionIdAtStart,
@@ -761,7 +883,7 @@ class DriverTrackingQueue {
           tracking_session_id: sessionIdAtStart,
           active_tracking_session_id: this.trackingSessionId,
         });
-        return;
+        return false;
       }
       this.sessionGeneration = res.session_generation;
       if (typeof res.first_sequence_id === "number" && res.first_sequence_id > 0) {
@@ -771,7 +893,10 @@ class DriverTrackingQueue {
         );
       }
       for (const item of this.items) {
-        if (item.trackingSessionId === sessionIdAtStart) {
+        if (
+          item.trackingSessionId === sessionIdAtStart &&
+          item.sessionGeneration == null
+        ) {
           item.sessionGeneration = res.session_generation;
         }
       }
@@ -781,30 +906,120 @@ class DriverTrackingQueue {
       );
       await this.persistSession();
       await this.persist();
+      this.setSessionReadiness("READY", "register_ok");
+      return true;
     } catch (error) {
       const meta = formatTrackingSendError(error);
+      if (this.trackingSessionId !== sessionIdAtStart) {
+        return false;
+      }
       if (isContextInactiveApiError(meta)) {
         await this.activateContextInactiveGate("register_session_context");
+        this.setSessionReadiness("REGISTER_FAILED", "context_inactive");
         emitDriverTelemetry("tracking.session.context_inactive", {
           source: "driver.tracking.queue",
           tracking_session_id: sessionIdAtStart,
           api_error_code: meta.api_error_code,
         });
-        return;
+        emitDriverTelemetry("tracking.session.register_failed", {
+          source: "driver.tracking.queue",
+          tracking_session_id: sessionIdAtStart,
+          error_code: meta.api_error_code ?? "context_inactive",
+          lease_state: "context_inactive",
+        });
+        return false;
       }
-      // Offline : capture locale continue ; génération injectée au retour réseau
+      // Offline / erreur réseau : pas d'activation ledger (generation reste null).
+      this.setSessionReadiness("REGISTER_FAILED", "register_deferred");
       emitDriverTelemetry("tracking.session.register_deferred", {
         source: "driver.tracking.queue",
         tracking_session_id: sessionIdAtStart,
       });
+      emitDriverTelemetry("tracking.session.register_failed", {
+        source: "driver.tracking.queue",
+        tracking_session_id: sessionIdAtStart,
+        error_code: meta.api_error_code ?? meta.http_status ?? "register_error",
+        lease_state: "unknown",
+      });
+      return false;
     }
   }
 
-  private ensureSessionFresh() {
-    if (!this.trackingSessionId || nowMs() - this.sessionCreatedAt >= TRACKING_SESSION_TTL_MS) {
-      this.rotateTrackingSession();
-      void this.persistSession();
+  /** Retry register sur la même session — jamais de createLocal à chaque fix. */
+  private kickRegisterRetryIfNeeded(): void {
+    if (!this.trackingSessionId || this.sessionGeneration != null) return;
+    if (this.registerInFlight || this.rotateInFlight) return;
+    if (
+      this.sessionReadiness !== "REGISTER_FAILED" &&
+      this.sessionReadiness !== "REGISTERING"
+    ) {
+      return;
     }
+    if (
+      nowMs() - this.lastRegisterAttemptAt <
+      DriverTrackingQueue.REGISTER_RETRY_MIN_MS
+    ) {
+      return;
+    }
+    void this.registerSessionWithBackend();
+  }
+
+  /**
+   * Quarantaine anti-HOL : items sans session_id / generation ne partent plus en HTTP
+   * et ne restent pas en tête FIFO active.
+   */
+  private async quarantineLedgerInvalidItems(source: string): Promise<number> {
+    const invalid = this.items.filter((item) => isLedgerInvalidQueueItem(item));
+    if (invalid.length === 0) return 0;
+    await this.finalizeTerminal(
+      invalid.map((item) => item.id),
+      "rejected",
+      {
+        deliveryState: "dropped",
+        ackedAt: nowMs(),
+        gaps: invalid.map((item) => ({
+          trackingSessionId: item.trackingSessionId || "unknown",
+          sequenceFrom: item.sequenceId,
+          sequenceTo: item.sequenceId,
+          reason: "ledger_invalid_null_generation",
+        })),
+      }
+    );
+    for (const item of invalid) {
+      emitDriverTelemetry("tracking.queue.ledger_invalid_quarantined", {
+        source: "driver.tracking.queue",
+        quarantine_source: source,
+        location_event_id: item.id,
+        tracking_session_id: item.trackingSessionId || null,
+        sequence_id: item.sequenceId,
+      });
+    }
+    await this.persist();
+    return invalid.length;
+  }
+
+  private dropEnqueueObserved(
+    reason: "not_ready" | "register_failed" | "generation_null",
+    entry: {
+      missionId: number | null;
+      appState: AppStateStatus;
+      locationMode: DriverTrackingMode;
+    }
+  ): null {
+    this.lastDeferredFixAt = nowMs();
+    this.kickRegisterRetryIfNeeded();
+    emitDriverTelemetry("tracking.queue.enqueue_blocked", {
+      source: "driver.tracking.queue",
+      reason,
+      readiness: this.sessionReadiness,
+      tracking_session_id: this.trackingSessionId || null,
+      session_generation: this.sessionGeneration,
+      mission_id: entry.missionId,
+      app_state: entry.appState,
+      location_mode: entry.locationMode,
+      last_deferred_fix_at: this.lastDeferredFixAt,
+    });
+    return null;
   }
 
   /**
@@ -1008,17 +1223,16 @@ class DriverTrackingQueue {
 
   /**
    * Ouvre une nouvelle session tracking pour les points futurs uniquement.
-   * N'altère pas les items déjà en file. Offline-first : jamais bloqué par le réseau.
+   * N'altère pas les items déjà en file. Activation ledger uniquement après register OK.
    */
   async beginNewTrackingSession(): Promise<void> {
     await this.ensureLoaded();
-    this.createLocalTrackingSession();
-    await this.persistSession();
-    void this.registerSessionWithBackend();
+    await this.rotateTrackingSessionAwaited("begin_new");
     emitDriverTelemetry("tracking.queue.new_session_begun", {
       source: "driver.tracking.queue",
       tracking_session_id: this.trackingSessionId,
       session_generation: this.sessionGeneration,
+      readiness: this.sessionReadiness,
     });
   }
 
@@ -1206,9 +1420,44 @@ class DriverTrackingQueue {
     appState: AppStateStatus;
     locationMode: DriverTrackingMode;
     payload: DriverLocationPayload;
-  }): Promise<DriverTrackingQueueItem> {
+  }): Promise<DriverTrackingQueueItem | null> {
     await this.ensureLoaded();
-    this.ensureSessionFresh();
+
+    // Mid-rotate / TTL / ABSENT : ne jamais enqueue avec generation=null,
+    // ni réutiliser silencieusement l'ancienne identité après démarrage de rotation.
+    if (
+      (this.rotateInFlight || this.loadInFlight) &&
+      (this.sessionReadiness === "CREATING" ||
+        this.sessionReadiness === "REGISTERING")
+    ) {
+      return this.dropEnqueueObserved("not_ready", entry);
+    }
+
+    if (this.sessionNeedsRotation() || this.sessionReadiness === "ABSENT") {
+      if (this.rotateInFlight || this.sessionReadiness === "REGISTERING") {
+        return this.dropEnqueueObserved("not_ready", entry);
+      }
+      await this.rotateTrackingSessionAwaited("ttl_or_missing");
+    } else if (
+      this.sessionReadiness === "CREATING" ||
+      this.sessionReadiness === "REGISTERING"
+    ) {
+      return this.dropEnqueueObserved("not_ready", entry);
+    } else if (this.sessionReadiness === "REGISTER_FAILED") {
+      return this.dropEnqueueObserved("register_failed", entry);
+    } else if (!this.isLedgerSessionReady()) {
+      this.kickRegisterRetryIfNeeded();
+      return this.dropEnqueueObserved(
+        this.sessionGeneration == null ? "generation_null" : "not_ready",
+        entry
+      );
+    }
+
+    // Invariant dur : aucun item ledger avec sessionGeneration == null.
+    if (!this.isLedgerSessionReady() || this.sessionGeneration == null) {
+      return this.dropEnqueueObserved("generation_null", entry);
+    }
+
     const locationMode = normalizeTrackingEnqueueMode(
       entry.locationMode,
       entry.missionId
@@ -1247,7 +1496,7 @@ class DriverTrackingQueue {
       await trackingQueueStore.upsert({
         locationEventId: item.id,
         trackingSessionId: item.trackingSessionId,
-        sessionGeneration: item.sessionGeneration ?? null,
+        sessionGeneration: item.sessionGeneration,
         sequenceId: item.sequenceId,
         payloadJson: JSON.stringify(item.payload),
         state: "non_ingested",
@@ -1299,7 +1548,7 @@ class DriverTrackingQueue {
     forceHttpFallback?: boolean;
   }): Promise<DriverTrackingFlushResult> {
     await this.ensureLoaded();
-    this.ensureSessionFresh();
+    await this.quarantineLedgerInvalidItems("flush");
     const ackStaleMs = options?.ackStaleMs ?? SOCKET_ACK_DEFAULT_STALE_MS;
     const networkProfile = options?.networkProfile ?? "normal";
     if (this.isFlushing) {
@@ -2062,6 +2311,7 @@ class DriverTrackingQueue {
       trackingSessionId: this.trackingSessionId,
       sequenceCounter: this.sequenceCounter,
       sessionGeneration: this.sessionGeneration,
+      sessionReadiness: this.sessionReadiness,
       suspendReason: this.queueSuspend?.reason ?? null,
     };
     if (this.items.length === 0) {
@@ -2155,7 +2405,7 @@ class DriverTrackingQueue {
   async reconcileAfterSessionConflict(): Promise<string> {
     await this.ensureLoaded();
     const previousSessionId = this.trackingSessionId;
-    this.rotateTrackingSession();
+    await this.rotateTrackingSessionAwaited("session_conflict");
     let released = 0;
     const releasedIds: string[] = [];
     for (const item of this.items) {
@@ -2185,6 +2435,7 @@ class DriverTrackingQueue {
       tracking_session_id: this.trackingSessionId,
       rebound_count: 0,
       released_socket_count: released,
+      readiness: this.sessionReadiness,
     });
     return this.trackingSessionId;
   }
@@ -2246,6 +2497,12 @@ class DriverTrackingQueue {
     this.queueSuspend = null;
     this.trackingSessionId = "";
     this.sessionGeneration = null;
+    this.sessionReadiness = "ABSENT";
+    this.registerInFlight = null;
+    this.rotateInFlight = null;
+    this.loadInFlight = null;
+    this.lastRegisterAttemptAt = 0;
+    this.lastDeferredFixAt = null;
     this.sequenceCounter = 0;
     this.sessionCreatedAt = 0;
     this.drainedInCurrentMinute = 0;
@@ -2277,6 +2534,22 @@ class DriverTrackingQueue {
     reason: QueueSuspendReason
   ): Promise<void> {
     await this.activateSuspension(suspendMs, reason);
+  }
+
+  /** Test-only : force l'expiration TTL de la session courante (mid-rotate). */
+  forceExpireSessionForTests(): void {
+    this.sessionCreatedAt = 0;
+  }
+
+  /** Test-only : readiness courante. */
+  getSessionReadinessForTests(): TrackingSessionReadiness {
+    return this.sessionReadiness;
+  }
+
+  /** Test-only : retry register sur la session courante (bypass backoff). */
+  async retryRegisterForTests(): Promise<boolean> {
+    this.lastRegisterAttemptAt = 0;
+    return this.registerSessionWithBackend();
   }
 }
 
