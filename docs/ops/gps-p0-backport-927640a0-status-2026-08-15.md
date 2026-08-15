@@ -26,7 +26,7 @@ OBSERVABILITY                NO-GO (attendre GO explicite)
 | BACKPORT P0-A | ✅ `1917c8b0` | lifecycle + BLT ; opId local |
 | BACKPORT P0-B | ✅ `ec0899f0` | trackingAuthPresence |
 | BACKPORT C-LEDGER-CLIENT | ✅ `a712ffaa` | readiness ABSENT→READY ; 0 captureId |
-| BACKPORT C-LEDGER-SERVER | ✅ `PENDING_SHA` | claim Redis + Option B ids_missing ; 0 ingress_envelope |
+| BACKPORT C-LEDGER-SERVER | ✅ `892486a9` | claim Redis + Option B ids_missing ; 0 ingress_envelope |
 | BACKPORT OBSERVABILITY | ⏳ NO-GO | attendre GO (5/5) |
 
 ## C-LEDGER-SERVER — preuves
