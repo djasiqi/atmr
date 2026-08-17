@@ -674,4 +674,175 @@ describe("resolveBackgroundGpsQuality (P0-F)", () => {
     expect(q.timeIntervalMs).toBe(90_000);
     expect(q.batteryDegradesGps).toBe(false);
   });
+
+  describe("D5 owner_version_mismatch (ensureNative)", () => {
+    function seedPriorOwner(owner: {
+      missionId: number;
+      missionContextVersion: number;
+      trackingGenerationId?: string;
+    }) {
+      const asyncStorage = require("@react-native-async-storage/async-storage") as {
+        getItem: jest.Mock;
+      };
+      asyncStorage.getItem.mockResolvedValue(
+        JSON.stringify({
+          missionId: owner.missionId,
+          missionStatus: "IN_PROGRESS",
+          taskMode: "mission",
+          updatedAt: new Date().toISOString(),
+          nativeOwner: {
+            trackingGenerationId: owner.trackingGenerationId ?? "trk-old",
+            sessionGenerationId: 1,
+            trackingIdentityId: "driver:42:company:1",
+            missionContextVersion: owner.missionContextVersion,
+            missionId: owner.missionId,
+            driverId: 42,
+          },
+        })
+      );
+    }
+
+    beforeEach(() => {
+      mockHasStarted.mockResolvedValue(true);
+      mockIsTaskRegistered.mockResolvedValue(true);
+      mockGetFg.mockResolvedValue({ status: "granted", granted: true });
+      mockGetBg.mockResolvedValue({ status: "granted", granted: true });
+      mockRequestFg.mockResolvedValue({ granted: true });
+      mockRequestBg.mockResolvedValue({ granted: true });
+      mockStop.mockClear();
+      mockStart.mockClear();
+    });
+
+    it("T9 : version bump même mission → 0 stopLocationUpdatesAsync", async () => {
+      seedPriorOwner({ missionId: 38243, missionContextVersion: 1 });
+      const requestOwnedStop = jest.fn(async () => "stopped" as const);
+      await bgTask.ensureNativeTrackingWhileForeground(
+        38243,
+        "IN_PROGRESS",
+        {
+          nativeOwner: {
+            trackingGenerationId: "trk-new",
+            sessionGenerationId: 1,
+            trackingIdentityId: "driver:42:company:1",
+            missionContextVersion: 2,
+            missionId: 38243,
+            driverId: 42,
+          },
+          requestOwnedStop,
+        },
+        "ensure_manager_state"
+      );
+      expect(mockStop).not.toHaveBeenCalled();
+      expect(requestOwnedStop).not.toHaveBeenCalled();
+      expect(mockEmit).toHaveBeenCalledWith(
+        "tracking.background.owner_mismatch.decision",
+        expect.objectContaining({ decision: "l1_reconcile" })
+      );
+    });
+
+    it("T10 : owned stop abandoned (START N+1) → pas de START recovery", async () => {
+      seedPriorOwner({ missionId: 100, missionContextVersion: 1 });
+      const requestOwnedStop = jest.fn(async () => "abandoned" as const);
+      await bgTask.ensureNativeTrackingWhileForeground(
+        200,
+        "IN_PROGRESS",
+        {
+          nativeOwner: {
+            trackingGenerationId: "trk-new",
+            sessionGenerationId: 1,
+            trackingIdentityId: "driver:42:company:1",
+            missionContextVersion: 1,
+            missionId: 200,
+            driverId: 42,
+          },
+          requestOwnedStop,
+        },
+        "ensure_manager_state"
+      );
+      expect(requestOwnedStop).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: "ensure_manager_state:owner_version_mismatch",
+          missionId: 200,
+        })
+      );
+      expect(mockStop).not.toHaveBeenCalled();
+      expect(mockStart).not.toHaveBeenCalled();
+      expect(mockEmit).toHaveBeenCalledWith(
+        "tracking.background.owner_mismatch.stop_abandoned",
+        expect.objectContaining({ stop_outcome: "abandoned" })
+      );
+    });
+
+    it("T11 : missionId changé + stop owned → 1 owned stop + 1 START", async () => {
+      seedPriorOwner({ missionId: 100, missionContextVersion: 1 });
+      // Entrée ensure : FGS vivant ; après owned stop : mort ; après START : vivant.
+      mockHasStarted.mockResolvedValue(true);
+      mockIsTaskRegistered.mockResolvedValue(true);
+      const requestOwnedStop = jest.fn(async () => {
+        mockHasStarted.mockResolvedValue(false);
+        return "stopped" as const;
+      });
+      mockStart.mockImplementation(async () => {
+        mockHasStarted.mockResolvedValue(true);
+      });
+      await bgTask.ensureNativeTrackingWhileForeground(
+        200,
+        "IN_PROGRESS",
+        {
+          nativeOwner: {
+            trackingGenerationId: "trk-new",
+            sessionGenerationId: 1,
+            trackingIdentityId: "driver:42:company:1",
+            missionContextVersion: 1,
+            missionId: 200,
+            driverId: 42,
+          },
+          requestOwnedStop,
+        },
+        "ensure_manager_state"
+      );
+      expect(requestOwnedStop).toHaveBeenCalledTimes(1);
+      expect(mockStop).not.toHaveBeenCalled(); // pas de bypass direct
+      expect(mockStart).toHaveBeenCalledTimes(1);
+      expect(mockEmit).toHaveBeenCalledWith(
+        "tracking.background.fgs_hard_restart",
+        expect.objectContaining({ via: "requestTrackingStop" })
+      );
+      expect(mockEmit).toHaveBeenCalledWith(
+        "tracking.background.owner_mismatch.decision",
+        expect.objectContaining({ decision: "owned_stop_then_start" })
+      );
+    });
+
+    it("recheck : owned_stop décidé mais FGS déjà mort → 0 requestOwnedStop", async () => {
+      seedPriorOwner({ missionId: 100, missionContextVersion: 1 });
+      mockHasStarted
+        .mockResolvedValueOnce(true) // lifecycle entrée (mismatch)
+        .mockResolvedValue(false); // re-check + suite
+      mockIsTaskRegistered.mockResolvedValue(true);
+      const requestOwnedStop = jest.fn(async () => "stopped" as const);
+      await bgTask.ensureNativeTrackingWhileForeground(
+        200,
+        "IN_PROGRESS",
+        {
+          nativeOwner: {
+            trackingGenerationId: "trk-new",
+            sessionGenerationId: 1,
+            trackingIdentityId: "driver:42:company:1",
+            missionContextVersion: 1,
+            missionId: 200,
+            driverId: 42,
+          },
+          requestOwnedStop,
+        },
+        "ensure_manager_state"
+      );
+      expect(requestOwnedStop).not.toHaveBeenCalled();
+      expect(mockStop).not.toHaveBeenCalled();
+      expect(mockEmit).toHaveBeenCalledWith(
+        "tracking.background.owner_mismatch.recheck_abort",
+        expect.objectContaining({ detail: "task_already_stopped" })
+      );
+    });
+  });
 });

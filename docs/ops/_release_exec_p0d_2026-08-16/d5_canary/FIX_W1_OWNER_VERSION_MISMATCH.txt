@@ -1,0 +1,47 @@
+# FIX W1 — owner_version_mismatch (ensureNative)
+
+```text
+STATUS       = DONE ✅
+DATE         = 2026-08-17
+SCOPE        = strictement owner_version_mismatch
+NON-SCOPE    = B2 / transient_loss / L1 UNKNOWN (inchangés, C1–C3 PASS)
+```
+
+## Comportement
+
+```text
+owner_version_mismatch détecté
+  → decideOwnerVersionMismatchAction
+      même mission + version bump → l1_reconcile (ABORT Unregister)
+      missionId changé + FGS → owned_stop_then_start
+  → re-check readNativeLocationUpdatesStarted
+      si déjà arrêté → recheck_abort (pas de STOP)
+  → requestOwnedStopForOwnerMismatch
+      → requestTrackingStop({ authority: recovery_l2, … })
+      → shouldAbortNativeStop juste avant natif
+  → START recovery si stop = stopped
+```
+
+## Interdit (arch T12)
+
+```text
+owner_version_mismatch → stopNativeBackgroundLocationUpdatesSafely(...)
+owner_version_mismatch → stopNative…Unlocked(...)  (hors bridge owner)
+```
+
+## Tests
+
+```text
+T9  version bump → 0 native STOP (l1_reconcile)
+T10 owned stop abandoned → 0 START recovery
+T11 mission change → 1 owned stop + 1 START (0 bypass mockStop)
+T12 arch : pas d'appel Safely direct ; policy + requestOwnedStop présents
+```
+
+## Suite
+
+```text
+C1–C3     = ne pas rejouer
+C4 RE-RUN = après build ≥131 + GO explicite
+DISTRIBUTION = NO-GO ⛔
+```

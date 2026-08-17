@@ -1,0 +1,80 @@
+# C4 summary — RE-RUN FIX W1 — 2026-08-17
+
+```text
+BINARY     = 1.0.11 / versionCode 131 (EAS fba42011)
+INJECT     = lirie://canary/d5-c4-unknown-l1?started_age_sec=120
+DEVICE     = SM-S911B @ 192.168.1.33:34343
+DRIVER     = 20135
+MISSION    = booking 38243
+WINDOW     = 11:51:05 -> 11:56:31 (+02)
+BACKEND    = OBSERVATION ONLY
+RUN_TAG    = C4_131
+```
+
+## Smoking gun (logcat) — PASS path
+
+```text
+11:52:42.932  am start VIEW d5-c4-unknown-l1
+11:52:43.043  [D5-C4] inject_unknown_start  mission_id=38243
+11:52:43.043  [D5-C4] unknown_no_anti_zombie
+11:52:43.285  tracking.watch.restarted  reason=canary_c4_l1 recovery_level=L1
+11:52:43.285  [D5-C4] l1_restart_done  ok=true destructive=false
+              … remount host_unmount → host_mount (~6 s) …
+              … AUCUN Unregistering task 'background-location-task' …
+              … AUCUN NATIVE_STOP_ENTRY …
+              … AUCUN owner_version_mismatch → stop …
+```
+
+Notes:
+- Aucun `tracking.anti_zombie.triggered` destructif (UNKNOWN → no anti-zombie)
+- Aucun `lifecycle.stop.requested` / `stop.executed`
+- Aucun `recovery_level=L2`
+- Remount deep-link observé (PERMISSION + host_unmount/mount) **sans** Unregister
+
+## Gate C4
+
+```text
+self-heal L1 observé (watch.restarted L1)     = OUI ✅
+UNKNOWN → anti_zombie / destructive restart   = 0 ✅
+self_heal_restart via stopBackground          = 0 ✅
+Unregister background-location-task           = 0 ✅  ← gate OK (était 2@129 / 1@130)
+NATIVE_STOP_ENTRY                             = 0 ✅  ← FIX W1
+owner_version_mismatch hard-stop              = 0 ✅
+Register↔Unregister storm                     = 0 ✅
+Finished                                      = 16 (continue, pas Unregister)
+PUT                                           = continue (PRE/POST)
+FGS fin run                                   = isFg=true startReq=true fgCount=1
+```
+
+## Verdict
+
+```text
+C4 = PASS ✅
+
+SELF-HEAL L1 DIRECT DESTRUCTIVE STOP = EXCLUDED ✅
+W1 owner_version_mismatch bypass     = FIXED ✅
+  (plus de NATIVE_STOP_ENTRY / Unregister sur ce chemin)
+
+C1 = PASS ✅
+C2 = PASS ✅
+C3 = PASS ✅
+C4 = PASS ✅
+
+CANARY INTERNE (C1–C4) = VALIDATED ✅
+DISTRIBUTION / Play / OTA prod       = NO-GO ⛔ (décision produit séparée)
+```
+
+## Artefacts
+
+- timeline_C4_131.txt / samples_C4_131.csv
+- logcat_C4_131_continuous.txt
+- C4_BUILD_131.txt
+- run_d5_c4.ps1 (AdbSerial 192.168.1.33:34343, MinVersionCode 131, RunTag C4_131)
+
+## Comparaison
+
+```text
+129 C4 FAIL  Unregister=2  (caller OPEN puis attribué W1)
+130 ATTR     Unregister=1  NATIVE_STOP_ENTRY owner_version_mismatch
+131 C4 PASS  Unregister=0  NATIVE_STOP_ENTRY=0
+```

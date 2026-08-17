@@ -1,0 +1,12 @@
+BUILD_ID=fba42011-32ce-4ef7-b26e-91d08c79e318
+URL=https://expo.dev/accounts/drinjasiqi/projects/operations-app/builds/fba42011-32ce-4ef7-b26e-91d08c79e318
+ARTIFACT=https://expo.dev/artifacts/eas/cYdNK8rkhKGPlzOmGFCsMIWYvcUN0-bolVMyszFSAU8.apk
+versionCode=131
+versionName=1.0.11
+profile=production-apk
+purpose=FIX_W1_owner_version_mismatch
+status=FINISHED
+canary=C4_PASS
+release_review=NO_GO
+gitCommitHash_eas=101992cce16176661cb1e6a4f08eb01fedb29d3e
+note=D5 code was in EAS upload working tree; not committed at that SHA

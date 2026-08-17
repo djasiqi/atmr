@@ -27,10 +27,13 @@ jest.mock("../../../core/featureFlags/registry", () => ({
 import {
   ANTI_ZOMBIE_FIX_AGE_SEC,
   COLD_START_THRESHOLD_SEC,
+  forceRestartTrackingWatch,
   resetAntiZombieForTests,
   resetColdStartForTests,
   shouldTriggerAntiZombie,
   shouldTriggerColdStart,
+  type SelfHealActions,
+  type SelfHealBridgeSlice,
 } from "./trackingSelfHeal";
 
 describe("shouldTriggerColdStart", () => {
@@ -116,7 +119,7 @@ describe("shouldTriggerColdStart", () => {
   });
 });
 
-describe("shouldTriggerAntiZombie — aucun fix jamais produit", () => {
+describe("shouldTriggerAntiZombie — aucun fix jamais produit (D5 UNKNOWN)", () => {
   const NOW = 1_000_000_000_000;
 
   beforeEach(() => {
@@ -129,7 +132,7 @@ describe("shouldTriggerAntiZombie — aucun fix jamais produit", () => {
     resetAntiZombieForTests();
   });
 
-  it("déclenche si le runtime tourne depuis > seuil sans aucun fix", () => {
+  it("D5 T4 : null/null + startedAge>60s → PAS d'anti-zombie (UNKNOWN, pas Unregister)", () => {
     expect(
       shouldTriggerAntiZombie({
         isTrackingRunning: true,
@@ -138,10 +141,10 @@ describe("shouldTriggerAntiZombie — aucun fix jamais produit", () => {
         trackingStartedAtMs: NOW - (ANTI_ZOMBIE_FIX_AGE_SEC + 10) * 1000,
         nowMs: NOW,
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("ne déclenche pas si le runtime vient de démarrer (grâce au seuil)", () => {
+  it("ne déclenche pas si le runtime vient de démarrer sans preuve de fraîcheur", () => {
     expect(
       shouldTriggerAntiZombie({
         isTrackingRunning: true,
@@ -198,5 +201,60 @@ describe("shouldTriggerAntiZombie — aucun fix jamais produit", () => {
         nowMs: NOW,
       })
     ).toBe(false);
+  });
+});
+
+describe("forceRestartTrackingWatch — D5 L1 non destructif", () => {
+  beforeEach(() => {
+    mockIsFeatureEnabled.mockReset();
+    mockIsFeatureEnabled.mockReturnValue(true);
+  });
+
+  function makeSlice(): SelfHealBridgeSlice {
+    return {
+      watchSubscription: null,
+      staleFallbackTimeouts: 2,
+      staleFallbackBlockedUntilMs: 0,
+      lastWatchAtMs: null,
+      lastWatchedPosition: null,
+      lastWatchRestartAtMs: 0,
+      watchRestartTimestampsMs: [],
+      missionId: 38224,
+    };
+  }
+
+  function makeActions(stopBackground: jest.Mock): SelfHealActions {
+    return {
+      stopWatch: jest.fn(),
+      stopBackground: stopBackground as unknown as SelfHealActions["stopBackground"],
+      ensureNativeForeground: jest.fn(async () => undefined),
+      ensureLocationWatch: jest.fn(async () => undefined),
+      triggerDeviceHealth: jest.fn(),
+    };
+  }
+
+  it("T4 : L1 par défaut n'appelle pas stopBackground (pas d'Unregister)", async () => {
+    const stopBackground = jest.fn(async () => undefined);
+    const ok = await forceRestartTrackingWatch(
+      "anti_zombie_fix_stale",
+      makeSlice(),
+      makeActions(stopBackground),
+      "active"
+    );
+    expect(ok).toBe(true);
+    expect(stopBackground).not.toHaveBeenCalled();
+  });
+
+  it("L2 optionnel appelle stopBackground uniquement si allowDestructiveRestart", async () => {
+    const stopBackground = jest.fn(async () => undefined);
+    const ok = await forceRestartTrackingWatch(
+      "native_proof_failed",
+      makeSlice(),
+      makeActions(stopBackground),
+      "active",
+      { allowDestructiveRestart: true }
+    );
+    expect(ok).toBe(true);
+    expect(stopBackground).toHaveBeenCalledWith("self_heal_restart");
   });
 });

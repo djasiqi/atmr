@@ -1,0 +1,87 @@
+# C4_130 — Attribution Unregister (instrumented)
+
+```text
+BINARY     = 1.0.11 / versionCode 130
+RUN        = C4_130 (attribution only — pas canary global)
+WINDOW     = 03:50:12 -> 03:55:33 (+02)
+INJECT     = d5-c4-unknown-l1?started_age_sec=120
+MISSION    = 38243
+```
+
+## Discriminant (W1)
+
+```text
+03:51:46.958  inject_unknown + unknown_no_anti_zombie
+03:51:47.006  PERMISSION_REQUEST_START caller=forceRestartTrackingWatch reason=canary_c4_l1
+03:51:47.006  host_unmount (DriverTrackingHost)  ← remount deep-link
+03:51:47.263  PERMISSION_REQUEST_RESULT success
+03:51:47.275  l1_restart_done L1
+~10 s
+03:51:56.876  transient_loss.pending
+03:51:56.975  host_mount
+03:51:57.149  ★ NATIVE_STOP_ENTRY
+                caller=stopNativeBackgroundLocationUpdatesUnlocked
+                reason=ensure_manager_state:owner_version_mismatch
+                registered_before=true
+03:51:57.149  ★ TaskService Unregistering background-location-task
+03:51:57.155  NATIVE_STOP_EXIT success registered_after=false
+03:51:57.583  NATIVE_START_ENTRY reason=mission_started:fgs_recover
+03:51:57.588  TaskService Registered
+03:51:57.611  NATIVE_START_EXIT success registered_after=true
+```
+
+## Verdict attribution
+
+```text
+APP OWNER STOP PATH           = OBSERVED ✅ (NATIVE_STOP_ENTRY présent)
+Expo-only Unregister sans app = EXCLUDED pour ce W1 ✅
+
+CALLER W1                     = CLOSED ★
+  stopNativeBackgroundLocationUpdatesUnlocked
+  reason = ensure_manager_state:owner_version_mismatch
+  (ensureNativeTrackingWhileForeground → hard restart owner mismatch
+   → stopNative…Safely SANS requestTrackingStop / lifecycle.stop.*)
+
+W2                            = non reproduit (Unregister count = 1)
+```
+
+## Implications
+
+```text
+L1 UNKNOWN / anti-zombie      = toujours non destructif (inchangé) ✅
+B2 requestTrackingStop        = était contourné par owner_version_mismatch ★
+Trou résiduel (à l'époque)    = ensureNative → stopNative…Unlocked direct
+```
+
+## FIX W1 (post-attribution) — ✅ Implémenté
+
+```text
+STATUS     = DONE ✅ (code + T9–T12)
+SCOPE      = owner_version_mismatch uniquement (B2 / transient / L1 UNKNOWN intacts)
+POLICY     = ownerVersionMismatchPolicy.ts
+  - même mission + version bump → l1_reconcile (0 Unregister)
+  - missionId changé + FGS vivant → requestTrackingStop (recovery_l2)
+    + shouldAbortNativeStop pré-natif + re-check taskStarted
+  - plus aucun stopNative…Safely/Unlocked direct depuis ce caller
+ENSURE     = backgroundLocationTask.ensureNativeTrackingWhileForeground
+TESTS      = T9–T11 ensureNative + policy ; T12 arch guard
+C4 RE-RUN  = PENDING (build ≥131, GO explicite) — pas C1–C3
+DISTRIBUTION = NO-GO ⛔
+```
+
+## Gates C4 (canary global)
+
+```text
+Unregister (129/130)          = 1 (FAIL gate zéro — pré-fix)
+Attribution                   = SUCCESS ★
+FIX W1                        = DONE ✅
+C4 RE-RUN                     = PENDING
+CANARY GLOBAL                 = NON VALIDÉ
+DISTRIBUTION                  = NO-GO
+```
+
+## Artefacts
+
+- logcat_C4_130_continuous.txt
+- timeline_C4_130.txt / samples_C4_130.csv
+- C4_UNREG_ATTRIBUTION.md (hypothèse antérieure) → supersédé ici pour W1

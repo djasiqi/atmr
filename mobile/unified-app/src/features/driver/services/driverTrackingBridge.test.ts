@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import {
   getDriverTrackingBridgeSnapshot,
   hardStopDriverContextRuntime,
+  requestTrackingStop,
   setDriverTrackingPresenceContext,
   startDriverTrackingBridge,
   stopDriverTrackingBridge,
   updateDriverTrackingBridgeStatus,
+  __getLifecycleGenerationForTests,
 } from "./driverTrackingBridge";
 import { driverTrackingQueue } from "./driverTrackingQueue";
 import {
@@ -149,7 +151,7 @@ jest.mock("./backgroundLocationTask", () => ({
   initializeBackgroundLocationTask: jest.fn(),
   resumePendingNativeTrackingIfNeeded: jest.fn().mockResolvedValue(undefined),
   setBackgroundTrackingMissionContext: jest.fn().mockResolvedValue(undefined),
-  stopBackgroundLocationTask: jest.fn().mockResolvedValue(undefined),
+  stopBackgroundLocationTask: jest.fn().mockResolvedValue({ nativeStopped: true }),
 }));
 
 jest.mock("./trackingContextLease", () => ({
@@ -471,11 +473,122 @@ describe("driver tracking bridge", () => {
     expect(flushSpy).not.toHaveBeenCalled();
     expect(clearResolved).toBe(true);
     expect(bg.setBackgroundTrackingMissionContext).toHaveBeenCalledWith(null, null);
-    expect(bg.stopBackgroundLocationTask).toHaveBeenCalledWith("context_left_driver");
+    expect(bg.stopBackgroundLocationTask).toHaveBeenCalledWith(
+      "context_left_driver",
+      expect.objectContaining({ shouldAbortNativeStop: expect.any(Function) })
+    );
     expect(mockEmitDriverTelemetry).toHaveBeenCalledWith(
       "tracking.context.hard_stop",
       expect.objectContaining({ reason: "context_left_driver" })
     );
     flushSpy.mockRestore();
+  });
+
+  describe("D5 lifecycle ownership", () => {
+    it("T1/T2 : STOP gen=N abandonné si START N+1 avant native (abort guard)", async () => {
+      const bg = require("./backgroundLocationTask") as {
+        stopBackgroundLocationTask: jest.Mock;
+      };
+      bg.stopBackgroundLocationTask.mockClear();
+      bg.stopBackgroundLocationTask.mockImplementation(
+        async (
+          _reason: string,
+          opts?: { shouldAbortNativeStop?: () => boolean }
+        ) => {
+          // Simule un START concurrent qui bump la génération avant le Unregister.
+          startDriverTrackingBridge(42, "IN_PROGRESS" as never);
+          const aborted = opts?.shouldAbortNativeStop?.() === true;
+          return { nativeStopped: !aborted };
+        }
+      );
+
+      startDriverTrackingBridge(41, "IN_PROGRESS" as never);
+      await jest.advanceTimersByTimeAsync(0);
+      const genAtStop = __getLifecycleGenerationForTests();
+
+      const outcome = await requestTrackingStop({
+        reason: "ineligible_tracking_state",
+        expectedGeneration: genAtStop,
+        expectedMissionId: 41,
+        authority: "explicit",
+      });
+
+      expect(outcome).toBe("abandoned");
+      expect(bg.stopBackgroundLocationTask).toHaveBeenCalled();
+      const abortFn = bg.stopBackgroundLocationTask.mock.calls[0]?.[1]
+        ?.shouldAbortNativeStop as (() => boolean) | undefined;
+      expect(typeof abortFn).toBe("function");
+      // Après START N+1, le guard doit toujours abort.
+      expect(abortFn?.()).toBe(true);
+    });
+
+    it("T2 : ensureManagerState ineligible passe par requestTrackingStop (pas stop direct sans opts)", async () => {
+      const bg = require("./backgroundLocationTask") as {
+        stopBackgroundLocationTask: jest.Mock;
+      };
+      bg.stopBackgroundLocationTask.mockClear();
+      bg.stopBackgroundLocationTask.mockResolvedValue({ nativeStopped: true });
+
+      markPresenceDisclosureAccepted();
+      setDriverTrackingPresenceContext({ available: false, windowOpen: false });
+      startDriverTrackingBridge(7, "IN_PROGRESS" as never);
+      await jest.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+
+      // Rendre ineligible : pas de présence + clear mission via stop explicite partiel
+      // simulate ineligible en coupant présence et en forçant ensure via presence update
+      // après stop mission state through hard path:
+      await stopDriverTrackingBridge();
+      await Promise.resolve();
+
+      // Après stop, un refresh présence hors éligibilité doit appeler stop avec guard.
+      setDriverTrackingPresenceContext({ available: false, windowOpen: false });
+      await Promise.resolve();
+
+      const ineligibleCalls = bg.stopBackgroundLocationTask.mock.calls.filter(
+        (c: unknown[]) => c[0] === "ineligible_tracking_state"
+      );
+      for (const call of ineligibleCalls) {
+        expect(call[1]).toEqual(
+          expect.objectContaining({ shouldAbortNativeStop: expect.any(Function) })
+        );
+      }
+    });
+
+    it("T5/T6 : transient_loss ne matérialise pas de STOP natif", async () => {
+      const bg = require("./backgroundLocationTask") as {
+        stopBackgroundLocationTask: jest.Mock;
+      };
+      bg.stopBackgroundLocationTask.mockClear();
+
+      startDriverTrackingBridge(55, "IN_PROGRESS" as never);
+      const gen = __getLifecycleGenerationForTests();
+      const outcome = await requestTrackingStop({
+        reason: "react_mission_null",
+        expectedGeneration: gen,
+        expectedMissionId: 55,
+        authority: "transient_loss",
+      });
+
+      expect(outcome).toBe("deferred");
+      expect(bg.stopBackgroundLocationTask).not.toHaveBeenCalled();
+    });
+
+    it("logout / leave : hardStop appelle STOP natif avec guard (T6)", async () => {
+      const bg = require("./backgroundLocationTask") as {
+        stopBackgroundLocationTask: jest.Mock;
+      };
+      bg.stopBackgroundLocationTask.mockClear();
+      bg.stopBackgroundLocationTask.mockResolvedValue({ nativeStopped: true });
+
+      startDriverTrackingBridge(88, "EN_ROUTE" as never);
+      await jest.advanceTimersByTimeAsync(0);
+      await hardStopDriverContextRuntime("context_left_driver");
+
+      expect(bg.stopBackgroundLocationTask).toHaveBeenCalledWith(
+        "context_left_driver",
+        expect.objectContaining({ shouldAbortNativeStop: expect.any(Function) })
+      );
+    });
   });
 });

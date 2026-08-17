@@ -44,6 +44,17 @@ import {
   type SelfHealBridgeSlice,
   ANTI_ZOMBIE_FIX_AGE_SEC,
 } from "../tracking/trackingSelfHeal";
+import type {
+  TrackingDesiredState,
+  TrackingStopOutcome,
+  TrackingStopRequest,
+} from "../tracking/trackingLifecycleOwner";
+export type {
+  TrackingDesiredState,
+  TrackingStopAuthority,
+  TrackingStopOutcome,
+  TrackingStopRequest,
+} from "../tracking/trackingLifecycleOwner";
 import {
   resolveTrackingFsmState,
   type TrackingFsmState,
@@ -101,6 +112,8 @@ let nativeTrackingAppStateSubscribed = false;
 let stopDriverTrackingInProgress: Promise<void> | null = null;
 /** Génération de cycle de vie : un ancien stop ne peut pas muter une génération plus récente. */
 let lifecycleGeneration = 0;
+/** Intention lifecycle owner (D5) — STOP natif seulement si STOPPED. */
+let desiredTrackingState: TrackingDesiredState = "STOPPED";
 /** Watchdog : pas de callback GPS pendant mission EN_ROUTE. */
 let noLocationCallbackTimer: ReturnType<typeof setTimeout> | null = null;
 const NO_LOCATION_CALLBACK_MS = Number(
@@ -425,7 +438,14 @@ function getSelfHealSlice(): SelfHealBridgeSlice {
 function getSelfHealActions() {
   return {
     stopWatch: () => stopLocationWatch(),
-    stopBackground: (reason: string) => stopBackgroundLocationTask(reason),
+    stopBackground: async (reason: string) => {
+      await requestTrackingStop({
+        reason,
+        expectedGeneration: lifecycleGeneration,
+        expectedMissionId: state.missionId,
+        authority: "recovery_l2",
+      });
+    },
     ensureNativeForeground: async () => {
       if (state.missionId != null && isFeatureEnabled("tracking_background_enabled")) {
         await ensureNativeTrackingWhileForeground(
@@ -1321,11 +1341,166 @@ async function ensurePresenceTrackingState(): Promise<void> {
 
 async function stopTrackingRuntime(): Promise<void> {
   await setBackgroundTrackingMissionContext(null, null);
-  await stopBackgroundLocationTask("tracking_bridge_stopped");
+  await requestTrackingStop({
+    reason: "tracking_bridge_stopped",
+    expectedGeneration: lifecycleGeneration,
+    expectedMissionId: state.missionId,
+    authority: "explicit",
+  });
   stopLocationWatch();
   trackingManager.stop();
   state.trackingStartedAtMs = null;
   notifyTrackingBridgeListeners();
+}
+
+/**
+ * D5 — seule entrée bridge pour un STOP natif intentionnel.
+ * Check génération + desiredState ; abort immédiat pré-Unregister.
+ */
+export async function requestTrackingStop(
+  req: TrackingStopRequest
+): Promise<TrackingStopOutcome> {
+  emitDriverTelemetry("tracking.lifecycle.stop.requested", {
+    source: "driver.tracking.bridge",
+    reason: req.reason,
+    authority: req.authority,
+    expected_generation: req.expectedGeneration,
+    actual_generation: lifecycleGeneration,
+    expected_mission_id: req.expectedMissionId ?? null,
+    mission_id: state.missionId,
+    desired_state: desiredTrackingState,
+  });
+
+  if (req.authority === "transient_loss") {
+    emitDriverTelemetry("tracking.lifecycle.stop.deferred", {
+      source: "driver.tracking.bridge",
+      reason: req.reason,
+      authority: req.authority,
+      expected_generation: req.expectedGeneration,
+      mission_id: state.missionId,
+    });
+    return "deferred";
+  }
+
+  if (req.authority === "recovery_l2") {
+    // L2 destructif : réservé aux preuves natives positives ; le self-heal
+    // par défaut est L1 (pas d'appel stopBackground). Si on arrive ici,
+    // on exige quand même le garde génération.
+  }
+
+  desiredTrackingState = "STOPPED";
+
+  if (req.expectedGeneration !== lifecycleGeneration) {
+    emitDriverTelemetry("tracking.lifecycle.stop.abandoned", {
+      source: "driver.tracking.bridge",
+      reason: req.reason,
+      abandon_reason: "generation_mismatch",
+      expected_generation: req.expectedGeneration,
+      actual_generation: lifecycleGeneration,
+      authority: req.authority,
+    });
+    return "abandoned";
+  }
+
+  if (
+    req.expectedMissionId != null &&
+    state.missionId != null &&
+    req.expectedMissionId !== state.missionId
+  ) {
+    emitDriverTelemetry("tracking.lifecycle.stop.abandoned", {
+      source: "driver.tracking.bridge",
+      reason: req.reason,
+      abandon_reason: "mission_mismatch",
+      expected_mission_id: req.expectedMissionId,
+      mission_id: state.missionId,
+      authority: req.authority,
+    });
+    return "abandoned";
+  }
+
+  const expectedGen = req.expectedGeneration;
+  const { nativeStopped } = await stopBackgroundLocationTask(req.reason, {
+    shouldAbortNativeStop: () => {
+      if (expectedGen !== lifecycleGeneration) return true;
+      if (desiredTrackingState !== "STOPPED") return true;
+      return false;
+    },
+  });
+
+  if (!nativeStopped) {
+    if (expectedGen !== lifecycleGeneration || desiredTrackingState !== "STOPPED") {
+      emitDriverTelemetry("tracking.lifecycle.stop.abandoned", {
+        source: "driver.tracking.bridge",
+        reason: req.reason,
+        abandon_reason: "pre_native_or_controller",
+        expected_generation: expectedGen,
+        actual_generation: lifecycleGeneration,
+        desired_state: desiredTrackingState,
+        authority: req.authority,
+      });
+      return "abandoned";
+    }
+    // Task déjà arrêtée / noop — traité comme stopped côté intention.
+  }
+
+  return "stopped";
+}
+
+/** Test-only : génération lifecycle courante. */
+export function __getLifecycleGenerationForTests(): number {
+  return lifecycleGeneration;
+}
+
+/** Génération lifecycle courante (callers ownership / recovery). */
+export function getTrackingLifecycleGeneration(): number {
+  return lifecycleGeneration;
+}
+
+/** Test-only : desired state. */
+export function __getDesiredTrackingStateForTests(): TrackingDesiredState {
+  return desiredTrackingState;
+}
+
+/** Canary D5-C4 — snapshot fraîcheur (QA panel uniquement). */
+export type CanaryFreshnessSnapshot = {
+  lastSentAt: string | null;
+  lastFixProducedAtMs: number | null;
+  trackingStartedAtMs: number | null;
+};
+
+export function __canaryD5SnapshotFreshness(): CanaryFreshnessSnapshot {
+  return {
+    lastSentAt: state.lastSentAt,
+    lastFixProducedAtMs: state.lastFixProducedAtMs,
+    trackingStartedAtMs: state.trackingStartedAtMs,
+  };
+}
+
+/** Force fraîcheur UNKNOWN + startedAge élevé (simule T4 Prod126). */
+export function __canaryD5ApplyUnknownFreshness(
+  fakeStartedAgeSec = 120
+): CanaryFreshnessSnapshot {
+  const prev = __canaryD5SnapshotFreshness();
+  state.lastSentAt = null;
+  state.lastFixProducedAtMs = null;
+  state.trackingStartedAtMs = Date.now() - Math.max(60, fakeStartedAgeSec) * 1000;
+  return prev;
+}
+
+export function __canaryD5RestoreFreshness(prev: CanaryFreshnessSnapshot): void {
+  state.lastSentAt = prev.lastSentAt;
+  state.lastFixProducedAtMs = prev.lastFixProducedAtMs;
+  state.trackingStartedAtMs = prev.trackingStartedAtMs;
+}
+
+/** Probe anti-zombie sur l'état courant (sans side-effect). */
+export function __canaryD5WouldTriggerAntiZombie(): boolean {
+  return shouldTriggerAntiZombie({
+    isTrackingRunning: trackingManager.getSnapshot().isRunning,
+    lastFixProducedAtMs: state.lastFixProducedAtMs,
+    lastSentAt: state.lastSentAt,
+    trackingStartedAtMs: state.trackingStartedAtMs,
+  });
 }
 
 /**
@@ -1373,7 +1548,12 @@ export async function hardStopDriverContextRuntime(reason = "context_left_driver
 
   // Await obligatoire : taskContext effacé avant resolve
   await setBackgroundTrackingMissionContext(null, null);
-  await stopBackgroundLocationTask(reason);
+  await requestTrackingStop({
+    reason,
+    expectedGeneration: lifecycleGeneration,
+    expectedMissionId: null,
+    authority: "explicit",
+  });
   stopLocationWatch();
   trackingManager.stop();
   state.trackingStartedAtMs = null;
@@ -1392,7 +1572,13 @@ function ensureManagerState(appStateOverride?: AppStateStatus) {
 
   if (!eligibility.trackingEligible) {
     void syncBridgeQueueDepthFromPersistence();
-    void stopBackgroundLocationTask("ineligible_tracking_state");
+    // D5 : plus de stopBackgroundLocationTask direct (bypass B2).
+    void requestTrackingStop({
+      reason: "ineligible_tracking_state",
+      expectedGeneration: lifecycleGeneration,
+      expectedMissionId: state.missionId,
+      authority: "explicit",
+    });
     trackingManager.stop();
     state.trackingStartedAtMs = null;
     stopLocationWatch();
@@ -1445,7 +1631,12 @@ function ensureManagerState(appStateOverride?: AppStateStatus) {
         "ensure_manager_presence_fg"
       );
     } else {
-      void stopBackgroundLocationTask("presence_fg_outside_window");
+      void requestTrackingStop({
+        reason: "presence_fg_outside_window",
+        expectedGeneration: lifecycleGeneration,
+        expectedMissionId: state.missionId,
+        authority: "explicit",
+      });
       void setBackgroundTrackingMissionContext(null, null);
     }
   }
@@ -1504,6 +1695,7 @@ export function startDriverTrackingBridge(
   // ne doit plus effacer missionId / arrêter le runtime.
   lifecycleGeneration += 1;
   const operationGeneration = lifecycleGeneration;
+  desiredTrackingState = "RUNNING";
   const driverId = resolveBridgeDriverId();
   const previousMissionId = state.missionId;
   const isMissionSwitch =

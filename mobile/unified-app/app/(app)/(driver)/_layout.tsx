@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { realtimeManager } from "../../../src/core/realtime/realtimeManager";
 import { Tabs } from "expo-router";
 import { View } from "react-native";
 import { DriverUnifiedGateGuard } from "../../../src/core/guards";
 import { DriverFloatingTabBar } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 import {
+  useActiveDriverContextId,
   useDriverMissionsQuery,
   useDriverRealtimeSync,
   useDriverTracking,
@@ -22,6 +24,13 @@ import {
   startBackgroundTrackingHealthMonitor,
   stopBackgroundTrackingHealthMonitor,
 } from "../../../src/features/driver/services/backgroundTrackingHealthMonitor";
+import { installCanaryD5TransientLossInject } from "../../../src/features/driver/tracking/canaryD5TransientLoss";
+import { installCanaryD5UnknownSelfHealInject } from "../../../src/features/driver/tracking/canaryD5UnknownSelfHeal";
+import { installCanaryD5NativeBoundaryProbes } from "../../../src/features/driver/tracking/canaryD5NativeBoundaryProbe";
+import {
+  __getLifecycleGenerationForTests,
+  getDriverTrackingBridgeSnapshot,
+} from "../../../src/features/driver/services/driverTrackingBridge";
 import {
   buildFloatingTabScreenOptions,
   FLOATING_TAB_IMPLEMENTATION,
@@ -60,12 +69,33 @@ function selectTrackingMission(missions: DriverMission[] | undefined): DriverMis
  *   - mission → toujours tracking
  */
 function DriverTrackingHost() {
+  const queryClient = useQueryClient();
+  const contextId = useActiveDriverContextId();
   const missionsQuery = useDriverMissionsQuery();
   const trackingMission = useMemo(
     () => selectTrackingMission(missionsQuery.data as DriverMission[] | undefined),
     [missionsQuery.data],
   );
   useDriverTracking(trackingMission);
+
+  // Canary D5-C3 / C4 : injects QA panel / production-apk uniquement.
+  useEffect(() => {
+    return installCanaryD5TransientLossInject({
+      queryClient,
+      getContextId: () => contextId,
+    });
+  }, [queryClient, contextId]);
+
+  useEffect(() => {
+    return installCanaryD5UnknownSelfHealInject();
+  }, []);
+
+  useEffect(() => {
+    return installCanaryD5NativeBoundaryProbes({
+      getMissionId: () => getDriverTrackingBridgeSnapshot().missionId,
+      getGeneration: () => __getLifecycleGenerationForTests(),
+    });
+  }, []);
 
   const window = useTrackingWindowState();
   const workWindowEnabled = isFeatureEnabled("driver_tracking_work_window_enabled");

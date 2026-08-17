@@ -32,8 +32,15 @@ import {
   readTrackingContextLease,
 } from "./trackingContextLease";
 import { validateNativeOwnerForHeadless } from "./trackingRuntimeRegistry";
-import { ensureTrackingAuthAvailabilityForHeadless } from "../../../core/auth/trackingAuthPresence";
+import { getTrackingAuthAvailability } from "../../../core/auth/sessionAuthDecision";
 import { isWithinTrackingWindow } from "./trackingWindow";
+import {
+  markNativeStartEntry,
+  markNativeStartExit,
+  markNativeStopEntry,
+  markNativeStopExit,
+} from "../tracking/canaryD5NativeBoundaryProbe";
+import { decideOwnerVersionMismatchAction } from "../tracking/ownerVersionMismatchPolicy";
 import {
   canAttemptNativeStartNow,
   ensureNativeLifecycleAppStateBridge,
@@ -438,12 +445,21 @@ async function isBackgroundLocationTaskRegistered(): Promise<boolean> {
   return TaskManager.isTaskRegisteredAsync(BACKGROUND_LOCATION_TASK_NAME).catch(() => false);
 }
 
+export type StopBackgroundLocationTaskOptions = {
+  /**
+   * D5 — check immédiat avant `Location.stopLocationUpdatesAsync`.
+   * Si true → abandon (pas d'Unregister), typiquement génération stale / desired≠STOPPED.
+   */
+  shouldAbortNativeStop?: () => boolean;
+};
+
 /**
  * STOP Expo Location — corps exécuté uniquement via requestNativeStop (P0-A).
  * Ne jamais appeler directement depuis un run() imbriqué d'un autre requestNative*.
  */
 async function stopNativeBackgroundLocationUpdatesUnlocked(
-  stopReason = "stop_native_background"
+  stopReason = "stop_native_background",
+  shouldAbortNativeStop?: () => boolean
 ): Promise<NativeStopRunResult> {
   if (
     typeof Location.hasStartedLocationUpdatesAsync !== "function" ||
@@ -489,6 +505,15 @@ async function stopNativeBackgroundLocationUpdatesUnlocked(
     return { ok: true, nativeStopped: false };
   }
 
+  // Canary D5 : frontière STOP avant télémétrie owner (attribution W1/W2).
+  await markNativeStopEntry({
+    caller: "stopNativeBackgroundLocationUpdatesUnlocked",
+    reason: stopReason,
+    missionId: priorContext?.missionId ?? null,
+    generation: priorContext?.nativeOwner?.trackingGenerationId ?? null,
+    appState: appStateAtRequest,
+  });
+
   emitDriverTelemetry("tracking.background.stop_requested", {
     source: "driver.services.backgroundLocationTask",
     task_name: BACKGROUND_LOCATION_TASK_NAME,
@@ -503,6 +528,30 @@ async function stopNativeBackgroundLocationUpdatesUnlocked(
     native_owner: priorContext?.nativeOwner ?? null,
     mission_id: priorContext?.missionId ?? null,
   });
+
+  // D5 : dernier check génération / desiredState IMMÉDIATEMENT avant Unregister.
+  if (shouldAbortNativeStop?.()) {
+    emitDriverTelemetry("tracking.lifecycle.stop.abandoned", {
+      source: "driver.services.backgroundLocationTask",
+      task_name: BACKGROUND_LOCATION_TASK_NAME,
+      stop_attempt_id: stopAttemptId,
+      stop_requested_at: stopRequestedAt,
+      stop_reason: stopReason,
+      abandon_reason: "pre_native_abort_guard",
+      app_state_at_request: appStateAtRequest,
+      native_owner: priorContext?.nativeOwner ?? null,
+      mission_id: priorContext?.missionId ?? null,
+    });
+    await markNativeStopExit({
+      caller: "stopNativeBackgroundLocationUpdatesUnlocked",
+      reason: stopReason,
+      missionId: priorContext?.missionId ?? null,
+      generation: priorContext?.nativeOwner?.trackingGenerationId ?? null,
+      success: false,
+      error: "pre_native_abort_guard",
+    });
+    return { ok: true, nativeStopped: false };
+  }
 
   try {
     await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME);
@@ -527,6 +576,13 @@ async function stopNativeBackgroundLocationUpdatesUnlocked(
       start_in_flight: inFlightAfter.start_in_flight,
       native_owner: priorContext?.nativeOwner ?? null,
       mission_id: priorContext?.missionId ?? null,
+    });
+    await markNativeStopExit({
+      caller: "stopNativeBackgroundLocationUpdatesUnlocked",
+      reason: stopReason,
+      missionId: priorContext?.missionId ?? null,
+      generation: priorContext?.nativeOwner?.trackingGenerationId ?? null,
+      success: true,
     });
     return { ok: true, nativeStopped: true };
   } catch (error) {
@@ -561,6 +617,14 @@ async function stopNativeBackgroundLocationUpdatesUnlocked(
         error_name: errFields.error_name,
         error_code: errFields.error_code,
       });
+      await markNativeStopExit({
+        caller: "stopNativeBackgroundLocationUpdatesUnlocked",
+        reason: stopReason,
+        missionId: priorContext?.missionId ?? null,
+        generation: priorContext?.nativeOwner?.trackingGenerationId ?? null,
+        success: false,
+        error: errFields.error_message,
+      });
       return {
         ok: false,
         nativeStopped: false,
@@ -569,16 +633,25 @@ async function stopNativeBackgroundLocationUpdatesUnlocked(
         errorMessage: errFields.error_message,
       };
     }
+    await markNativeStopExit({
+      caller: "stopNativeBackgroundLocationUpdatesUnlocked",
+      reason: stopReason,
+      missionId: priorContext?.missionId ?? null,
+      generation: priorContext?.nativeOwner?.trackingGenerationId ?? null,
+      success: true,
+      error: "benign_task_lifecycle_error",
+    });
     return { ok: true, nativeStopped: true };
   }
 }
 
 async function stopNativeBackgroundLocationUpdatesSafely(
-  stopReason = "stop_native_background"
+  stopReason = "stop_native_background",
+  shouldAbortNativeStop?: () => boolean
 ): Promise<void> {
   await requestNativeStop({
     reason: stopReason,
-    run: () => stopNativeBackgroundLocationUpdatesUnlocked(stopReason),
+    run: () => stopNativeBackgroundLocationUpdatesUnlocked(stopReason, shouldAbortNativeStop),
   });
 }
 
@@ -701,7 +774,7 @@ function defineTaskIfNeeded() {
         return;
       }
 
-      const auth = await ensureTrackingAuthAvailabilityForHeadless();
+      const auth = getTrackingAuthAvailability();
       const authUsable =
         auth.kind === "SESSION_AVAILABLE" ||
         auth.kind === "AUTH_TEMPORARILY_UNAVAILABLE";
@@ -971,6 +1044,14 @@ type StartBackgroundOptions = {
   scheduling?: MissionSchedulingSnapshot | null;
   /** Owner natif à persister avec le contexte (évite write sans owner pendant switch). */
   nativeOwner?: NativeTrackingOwnerPersist | null;
+  /**
+   * D5 — STOP owner-guarded pour mismatch mission (tests / DI).
+   * Défaut : bridge.requestTrackingStop (lazy, pas de STOP natif direct).
+   */
+  requestOwnedStop?: (req: {
+    reason: string;
+    missionId: number | null;
+  }) => Promise<"stopped" | "abandoned" | "deferred" | "unavailable">;
 };
 
 async function startBackgroundLocationTaskIfEligibleInternal(
@@ -1185,6 +1266,12 @@ async function startBackgroundLocationTaskIfEligibleInternal(
 
   try {
     recordNativeStartDiagnostics({ native_start_phase: "startLocationUpdatesAsync" });
+    await markNativeStartEntry({
+      caller: "startBackgroundLocationTaskIfEligibleInternal",
+      reason: startReason,
+      missionId,
+      appState: AppState.currentState,
+    });
     await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME, locationOptions);
 
     const [hasStartedAfter, isRegisteredAfter] = await Promise.all([
@@ -1251,6 +1338,13 @@ async function startBackgroundLocationTaskIfEligibleInternal(
         fg_permission: perms.fg,
         bg_permission: perms.bg,
       });
+      await markNativeStartExit({
+        caller: "startBackgroundLocationTaskIfEligibleInternal",
+        reason: startReason,
+        missionId,
+        success: false,
+        error: inactiveError,
+      });
       return {
         ok: false,
         nativeStarted: false,
@@ -1275,6 +1369,12 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       low_battery_mode: isLowBattery,
       battery_degrades_gps: gpsQuality.batteryDegradesGps,
       battery_level: batteryLevel,
+    });
+    await markNativeStartExit({
+      caller: "startBackgroundLocationTaskIfEligibleInternal",
+      reason: startReason,
+      missionId,
+      success: true,
     });
     return { ok: true, nativeStarted: true, invokedNativeStart: true };
   } catch (error: unknown) {
@@ -1308,6 +1408,13 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       app_state: AppState.currentState,
       fg_permission: perms.fg,
       bg_permission: perms.bg,
+    });
+    await markNativeStartExit({
+      caller: "startBackgroundLocationTaskIfEligibleInternal",
+      reason: startReason,
+      missionId,
+      success: false,
+      error: errFields.error_message,
     });
     return {
       ok: false,
@@ -1446,6 +1553,46 @@ function startNativeTrackingWatchdog(
 }
 
 /**
+ * D5 — STOP owner-guarded pour mismatch missionId.
+ * Jamais `stopNativeBackgroundLocationUpdatesSafely` direct ici.
+ */
+async function requestOwnedStopForOwnerMismatch(opts: {
+  reason: string;
+  missionId: number | null;
+  requestOwnedStop?: StartBackgroundOptions["requestOwnedStop"];
+}): Promise<"stopped" | "abandoned" | "deferred" | "unavailable"> {
+  if (opts.requestOwnedStop) {
+    return opts.requestOwnedStop({
+      reason: opts.reason,
+      missionId: opts.missionId,
+    });
+  }
+  try {
+    // Lazy : évite cycle bridge ↔ backgroundLocationTask.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const bridge = require("./driverTrackingBridge") as {
+      requestTrackingStop: (req: {
+        reason: string;
+        expectedGeneration: number;
+        expectedMissionId?: number | null;
+        authority: "recovery_l2";
+      }) => Promise<"stopped" | "abandoned" | "deferred">;
+      getTrackingLifecycleGeneration: () => number;
+      getDriverTrackingBridgeSnapshot: () => { missionId: number | null };
+    };
+    return await bridge.requestTrackingStop({
+      reason: opts.reason,
+      expectedGeneration: bridge.getTrackingLifecycleGeneration(),
+      expectedMissionId:
+        opts.missionId ?? bridge.getDriverTrackingBridgeSnapshot().missionId,
+      authority: "recovery_l2",
+    });
+  } catch {
+    return "unavailable";
+  }
+}
+
+/**
  * Démarre le tracking natif (FGS) tant que l'app est au premier plan, avec watchdog et defer BG.
  */
 export async function ensureNativeTrackingWhileForeground(
@@ -1492,7 +1639,7 @@ export async function ensureNativeTrackingWhileForeground(
   const desiredOwner =
     options.nativeOwner === undefined ? undefined : options.nativeOwner;
 
-  // Android : FGS déjà démarré avec owner mission/version obsolète → hard restart.
+  // Android : FGS déjà démarré avec owner mission/version obsolète.
   const ownerVersionMismatch =
     Platform.OS === "android" &&
     lifecycle.taskStarted &&
@@ -1513,9 +1660,28 @@ export async function ensureNativeTrackingWhileForeground(
   });
 
   if (ownerVersionMismatch) {
-    emitDriverTelemetry("tracking.background.fgs_hard_restart", {
+    const decision = decideOwnerVersionMismatchAction({
+      platform: Platform.OS,
+      taskStarted: lifecycle.taskStarted,
+      priorOwner: priorContext?.nativeOwner
+        ? {
+            missionId: priorContext.nativeOwner.missionId,
+            missionContextVersion: priorContext.nativeOwner.missionContextVersion,
+          }
+        : null,
+      desiredOwner: desiredOwner
+        ? {
+            missionId: desiredOwner.missionId,
+            missionContextVersion: desiredOwner.missionContextVersion,
+          }
+        : null,
+    });
+
+    emitDriverTelemetry("tracking.background.owner_mismatch.decision", {
       source: "driver.services.backgroundLocationTask",
       reason: `${reason}:owner_version_mismatch`,
+      decision: decision.action,
+      detail: decision.detail,
       mission_id: missionId,
       prior_mission_id: priorContext?.nativeOwner?.missionId ?? null,
       prior_mission_context_version:
@@ -1523,26 +1689,67 @@ export async function ensureNativeTrackingWhileForeground(
       desired_mission_id: desiredOwner?.missionId ?? null,
       desired_mission_context_version: desiredOwner?.missionContextVersion ?? null,
     });
-    // P0-A : STOP puis START sérialisés (jamais imbriqués dans un même run)
-    await stopNativeBackgroundLocationUpdatesSafely(`${reason}:owner_version_mismatch`);
-    clearPendingFgsStart();
-    stopNativeTrackingWatchdog();
-    if (AppState.currentState === "active") {
-      await requestEligibleNativeStart(
-        missionId,
-        missionStatus,
-        options,
-        `${reason}:owner_version_mismatch`
-      );
-    } else {
-      setPendingFgsStart({
-        active: true,
-        reason: "android_fgs_owner_version_mismatch",
-        missionId,
-        deferredAt: Date.now(),
-      });
+
+    if (decision.action === "l1_reconcile" || decision.action === "abort") {
+      // Contexte déjà réécrit — pas d'Unregister. Suite = chemin taskStarted existant.
+    } else if (decision.action === "owned_stop_then_start") {
+      // Re-check : mismatch encore positivement prouvé (FGS vivant) ?
+      const stillStarted = await readNativeLocationUpdatesStarted();
+      if (!stillStarted) {
+        emitDriverTelemetry("tracking.background.owner_mismatch.recheck_abort", {
+          source: "driver.services.backgroundLocationTask",
+          reason: `${reason}:owner_version_mismatch`,
+          detail: "task_already_stopped",
+          mission_id: missionId,
+        });
+        // Suite = chemin taskStarted / fgs_recover sans Unregister.
+      } else {
+        emitDriverTelemetry("tracking.background.fgs_hard_restart", {
+          source: "driver.services.backgroundLocationTask",
+          reason: `${reason}:owner_version_mismatch`,
+          mission_id: missionId,
+          prior_mission_id: priorContext?.nativeOwner?.missionId ?? null,
+          prior_mission_context_version:
+            priorContext?.nativeOwner?.missionContextVersion ?? null,
+          desired_mission_id: desiredOwner?.missionId ?? null,
+          desired_mission_context_version:
+            desiredOwner?.missionContextVersion ?? null,
+          via: "requestTrackingStop",
+        });
+        const stopOutcome = await requestOwnedStopForOwnerMismatch({
+          reason: `${reason}:owner_version_mismatch`,
+          missionId,
+          requestOwnedStop: options.requestOwnedStop,
+        });
+        if (stopOutcome !== "stopped") {
+          emitDriverTelemetry("tracking.background.owner_mismatch.stop_abandoned", {
+            source: "driver.services.backgroundLocationTask",
+            reason: `${reason}:owner_version_mismatch`,
+            stop_outcome: stopOutcome,
+            mission_id: missionId,
+          });
+          return;
+        }
+        clearPendingFgsStart();
+        stopNativeTrackingWatchdog();
+        if (AppState.currentState === "active") {
+          await requestEligibleNativeStart(
+            missionId,
+            missionStatus,
+            options,
+            `${reason}:owner_version_mismatch`
+          );
+        } else {
+          setPendingFgsStart({
+            active: true,
+            reason: "android_fgs_owner_version_mismatch",
+            missionId,
+            deferredAt: Date.now(),
+          });
+        }
+        return;
+      }
     }
-    return;
   }
 
   const contextUpgradedToMission =
@@ -1721,7 +1928,7 @@ export async function resumePendingNativeTrackingIfNeeded(): Promise<void> {
     await stopBackgroundLocationTask("missing_native_owner");
     return;
   }
-  const auth = await ensureTrackingAuthAvailabilityForHeadless();
+  const auth = getTrackingAuthAvailability();
   const authUsable =
     auth.kind === "SESSION_AVAILABLE" || auth.kind === "AUTH_TEMPORARILY_UNAVAILABLE";
   const ownerCheck = validateNativeOwnerForHeadless({
@@ -1834,17 +2041,40 @@ export async function stopPresenceWindowIfStillCurrent(opts: {
   });
 }
 
-export async function stopBackgroundLocationTask(reason: string) {
+/**
+ * Matérialise un STOP natif. Entrée réservée au lifecycle owner (bridge
+ * `requestTrackingStop`) et aux arrêts internes task (lease / présence).
+ * Callers externes : passer par `requestTrackingStop`.
+ */
+export async function stopBackgroundLocationTask(
+  reason: string,
+  opts?: StopBackgroundLocationTaskOptions
+): Promise<{ nativeStopped: boolean }> {
+  let nativeStopped = false;
   await withBackgroundTrackingLifecycleLock(async () => {
     stopNativeTrackingWatchdog();
     await setBackgroundTrackingMissionContext(null, null);
-    await stopNativeBackgroundLocationUpdatesSafely(reason);
+    const controllerResult = await requestNativeStop({
+      reason,
+      run: () =>
+        stopNativeBackgroundLocationUpdatesUnlocked(reason, opts?.shouldAbortNativeStop),
+    });
+    nativeStopped = Boolean(controllerResult.result?.nativeStopped);
     emitDriverTelemetry("tracking.background.task.stopped", {
       source: "driver.services.backgroundLocationTask",
       task_name: BACKGROUND_LOCATION_TASK_NAME,
       reason,
+      native_stopped: nativeStopped,
+      controller_outcome: controllerResult.outcome,
     });
+    if (nativeStopped) {
+      emitDriverTelemetry("tracking.lifecycle.stop.executed", {
+        source: "driver.services.backgroundLocationTask",
+        reason,
+      });
+    }
   });
+  return { nativeStopped };
 }
 
 export function initializeBackgroundLocationTask() {

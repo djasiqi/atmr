@@ -3,6 +3,10 @@ import * as Location from "expo-location";
 import { AppStateStatus } from "react-native";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
+import {
+  probeTaskRegState,
+  requestForegroundPermissionsWithCanaryProbe,
+} from "./canaryD5NativeBoundaryProbe";
 
 export const STALE_RESTART_THRESHOLD = 2;
 export const STALE_RESTART_COOLDOWN_MS = 300_000;
@@ -22,10 +26,19 @@ export type SelfHealBridgeSlice = {
 
 export type SelfHealActions = {
   stopWatch: () => void;
+  /** L2 uniquement — panne native positivement prouvée. L1 ne l'appelle pas. */
   stopBackground: (reason: string) => Promise<void>;
   ensureNativeForeground: () => Promise<void>;
   ensureLocationWatch: () => Promise<void>;
   triggerDeviceHealth: (reason: string) => void;
+};
+
+export type ForceRestartTrackingWatchOptions = {
+  /**
+   * D5 — L2 destructif (Unregister). Défaut false : recovery L1 non destructif.
+   * N'activer que si panne native positivement démontrée.
+   */
+  allowDestructiveRestart?: boolean;
 };
 
 export function createSelfHealSlice(): Pick<
@@ -64,7 +77,8 @@ export async function forceRestartTrackingWatch(
   reason: string,
   slice: SelfHealBridgeSlice,
   actions: SelfHealActions,
-  appState: AppStateStatus
+  appState: AppStateStatus,
+  opts?: ForceRestartTrackingWatchOptions
 ): Promise<boolean> {
   if (!isFeatureEnabled("tracking_self_heal_watch_restart_enabled")) {
     return false;
@@ -74,6 +88,7 @@ export async function forceRestartTrackingWatch(
   if (recent.length >= WATCH_RESTART_MAX_PER_HOUR) {
     Sentry.captureMessage("tracking.watch.restart.exhausted", { level: "warning" });
     emitDriverTelemetry("tracking.watch.restart.exhausted", {
+      source: "driver.tracking.self_heal",
       reason,
       mission_id: slice.missionId,
     });
@@ -81,8 +96,21 @@ export async function forceRestartTrackingWatch(
   }
 
   actions.stopWatch();
-  await actions.stopBackground("self_heal_restart").catch(() => undefined);
-  await Location.requestForegroundPermissionsAsync().catch(() => undefined);
+  // D5 : L1 par défaut — pas d'Unregister. L2 seulement si preuve native + flag.
+  if (opts?.allowDestructiveRestart) {
+    await actions.stopBackground("self_heal_restart").catch(() => undefined);
+  }
+  await probeTaskRegState("watch_restart", {
+    caller: "forceRestartTrackingWatch",
+    reason,
+    missionId: slice.missionId,
+    appState,
+  });
+  await requestForegroundPermissionsWithCanaryProbe({
+    caller: "forceRestartTrackingWatch",
+    reason,
+    missionId: slice.missionId,
+  });
 
   slice.staleFallbackTimeouts = 0;
   slice.staleFallbackBlockedUntilMs = 0;
@@ -96,9 +124,12 @@ export async function forceRestartTrackingWatch(
 
   actions.triggerDeviceHealth("stale_fallback_restart");
   emitDriverTelemetry("tracking.watch.restarted", {
+    source: "driver.tracking.self_heal",
     reason,
     mission_id: slice.missionId,
     app_state: appState,
+    destructive_restart: Boolean(opts?.allowDestructiveRestart),
+    recovery_level: opts?.allowDestructiveRestart ? "L2" : "L1",
   });
   return true;
 }
@@ -142,18 +173,17 @@ export function shouldTriggerAntiZombie(input: {
    * Le signal de santé prioritaire est l'ENVOI réel (`lastSentAt`) : un fix
    * natif/local « frais » (`lastFixProducedAtMs`, `native_last_fix_age`) ne
    * suffit pas si plus rien n'est envoyé au backend — c'est précisément le FGS
-   * zombie observé (service vivant, souscription morte, 0 envoi). Ordre de
-   * priorité : dernier envoi > dernier fix produit > ancienneté de démarrage
-   * (cas « démarré mais jamais rien produit »).
+   * zombie observé (service vivant, souscription morte, 0 envoi).
+   *
+   * D5 : `lastSentAt=null` ∧ `lastFix=null` = fraîcheur UNKNOWN, pas preuve
+   * que la task Location est morte. Le fallback `startedAge` ne déclenche
+   * plus l'anti-zombie destructif (Unregister). Un wake L1 éventuel peut
+   * être ajouté séparément ; ici on refuse le trigger « zombie » sans preuve.
    */
   const sentAgeSec = input.lastSentAt
     ? (nowMs - Date.parse(input.lastSentAt)) / 1000
     : null;
   const fixAge = getFixAgeSeconds(input.lastFixProducedAtMs, nowMs);
-  const startedAgeSec =
-    input.trackingStartedAtMs != null
-      ? (nowMs - input.trackingStartedAtMs) / 1000
-      : null;
 
   if (sentAgeSec !== null) {
     return sentAgeSec > ANTI_ZOMBIE_FIX_AGE_SEC;
@@ -161,9 +191,8 @@ export function shouldTriggerAntiZombie(input: {
   if (fixAge !== null) {
     return fixAge > ANTI_ZOMBIE_FIX_AGE_SEC;
   }
-  if (startedAgeSec !== null) {
-    return startedAgeSec > ANTI_ZOMBIE_FIX_AGE_SEC;
-  }
+  // UNKNOWN (startedAge ignoré pour Unregister / anti-zombie destructif)
+  void input.trackingStartedAtMs;
   return false;
 }
 

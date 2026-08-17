@@ -1,0 +1,32 @@
+# D5 — Build 131 FIX W1 owner_version_mismatch
+
+```text
+REASON           = FIX W1 : owner_version_mismatch → L1 / requestTrackingStop
+PROFILE          = production-apk
+BUILD_ID         = fba42011-32ce-4ef7-b26e-91d08c79e318
+URL              = https://expo.dev/accounts/drinjasiqi/projects/operations-app/builds/fba42011-32ce-4ef7-b26e-91d08c79e318
+versionName      = 1.0.11
+versionCode      = 131
+CHANNEL          = production (APK internal — pas store / pas OTA flotte)
+DISTRIBUTION     = NO-GO ⛔
+STATUS           = FINISHED / INSTALLED ✅
+C4 RE-RUN        = PASS ✅ → C4_summary_131.txt
+```
+
+## Contenu
+
+```text
+ownerVersionMismatchPolicy   = L1 reconcile (version bump) / owned stop (mission change)
+ensureNative                 = plus de stopNative…Safely direct sur mismatch
+re-check + shouldAbortNativeStop via requestTrackingStop(recovery_l2)
+T9–T12                       = PASS (pré-build)
+B2 / transient / L1 UNKNOWN  = INCHANGÉ
+```
+
+## Suite
+
+```text
+INSTALL device canary        = après FINISHED
+C4 RE-RUN only               = GO après install (pas C1–C3)
+DISTRIBUTION / Play / OTA    = NO-GO
+```

@@ -344,6 +344,15 @@ export function useDriverRealtimeSync() {
 /** Cadence du tick de re-arm cold-start (self-heal). */
 const COLD_START_REARM_INTERVAL_MS = 60_000;
 
+/**
+ * D5 — confirmation stable avant STOP sur perte React de mission.
+ * Pas un simple debounce arbitraire seul : annulé si la mission revient ;
+ * STOP seulement si le bridge conserve encore la même missionId.
+ */
+const TRANSIENT_MISSION_LOSS_CONFIRM_MS = Number(
+  process.env.EXPO_PUBLIC_TRACKING_TRANSIENT_LOSS_CONFIRM_MS ?? "2500"
+);
+
 export function useDriverTracking(mission: DriverMission | null | undefined) {
   const contextId = useActiveDriverContextId();
   const missionId = mission?.id ?? null;
@@ -356,6 +365,8 @@ export function useDriverTracking(mission: DriverMission | null | undefined) {
       scheduling: mission.scheduling,
     };
   }, [mission]);
+  const transientLossTokenRef = useRef(0);
+
   useEffect(() => {
     if (contextId) {
       void reconcileTrackingRuntime({
@@ -364,18 +375,57 @@ export function useDriverTracking(mission: DriverMission | null | undefined) {
         missionStatus: missionId ? normalized : null,
       });
     }
+
+    // Mission active React → START ; annule toute perte transitoire en cours.
+    if (missionId && isTrackingActiveStatus(normalized)) {
+      transientLossTokenRef.current += 1;
+      startDriverTracking(missionId, normalized, scheduling);
+      // Pas de cleanup destructif : un START plus récent bump la génération
+      // et stale-ifie tout STOP concurrent (D5). Leave/logout = hardStop explicite.
+      return undefined;
+    }
+
+    // Perte React de mission (cache/query) — TRANSIENT, pas STOP immédiat.
     if (!missionId) {
-      stopDriverTracking();
-      return;
+      const bridgeMissionId = getTrackingSnapshot().missionId;
+      if (bridgeMissionId == null) {
+        return undefined;
+      }
+      const token = ++transientLossTokenRef.current;
+      emitDriverTelemetry("tracking.lifecycle.transient_loss.pending" as never, {
+        source: "driver.hooks.useDriverTracking",
+        bridge_mission_id: bridgeMissionId,
+        confirm_ms: TRANSIENT_MISSION_LOSS_CONFIRM_MS,
+      });
+      if (process.env.EXPO_PUBLIC_TRACKING_QA_PANEL === "1") {
+        console.warn("[D5-C3] transient_loss.pending", {
+          bridge_mission_id: bridgeMissionId,
+          confirm_ms: TRANSIENT_MISSION_LOSS_CONFIRM_MS,
+        });
+      }
+      const timer = setTimeout(() => {
+        if (token !== transientLossTokenRef.current) return;
+        const snap = getTrackingSnapshot();
+        if (snap.missionId !== bridgeMissionId) return;
+        emitDriverTelemetry("tracking.lifecycle.transient_loss.confirmed" as never, {
+          source: "driver.hooks.useDriverTracking",
+          bridge_mission_id: bridgeMissionId,
+        });
+        if (process.env.EXPO_PUBLIC_TRACKING_QA_PANEL === "1") {
+          console.warn("[D5-C3] transient_loss.confirmed", {
+            bridge_mission_id: bridgeMissionId,
+          });
+        }
+        stopDriverTracking();
+      }, TRANSIENT_MISSION_LOSS_CONFIRM_MS);
+      return () => {
+        clearTimeout(timer);
+      };
     }
-    if (!isTrackingActiveStatus(normalized)) {
-      stopDriverTracking();
-      return;
-    }
-    startDriverTracking(missionId, normalized, scheduling);
-    return () => {
-      stopDriverTracking();
-    };
+
+    // Statut non-actif avec missionId présent → STOP explicite (mission terminale).
+    stopDriverTracking();
+    return undefined;
   }, [contextId, missionId, normalized, scheduling]);
 
   /**
