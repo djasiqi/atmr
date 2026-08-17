@@ -3,7 +3,7 @@
  * l'objet driver complet à la carte quand seuls lat/lng changent côté métier.
  */
 
-import { getDriverStatus } from './mapUtils';
+import { getDriverStatus, isDevicePipelineAlive, isDriverOffDuty } from './mapUtils';
 import { resolveDriverLocationPresence } from './fleetDriverLocationPresence';
 
 /** Couleur marqueur carte pour chauffeur en mode batterie restreinte (Tailwind orange-500). */
@@ -93,34 +93,19 @@ export function resolveDriverMapProjection(driver, { isFallback = false } = {}) 
   let visualTreatment = 'business';
   let visualStatus = businessStatus;
 
-  if (isFallback || positionSource === 'company_fallback' || gpsFreshness === 'company_fallback') {
+  if (isDriverOffDuty(driver)) {
+    visualTreatment = 'business';
+    visualStatus = 'off_duty';
+  } else if (isFallback || positionSource === 'company_fallback' || gpsFreshness === 'company_fallback') {
     visualTreatment = 'company_fallback';
     visualStatus = 'offline';
   } else if (
     gpsFreshness === 'offline'
     || gpsFreshness === 'offline_unknown'
   ) {
-    // C2 : hors ligne seulement si pipeline mort (preuve indépendante de recorded_at).
-    // Si device_health indique tracking actif + heartbeat frais → position périmée.
-    const dh = driver?.device_health;
-    const heartbeatFresh = (() => {
-      if (!dh || typeof dh !== 'object') return false;
-      const hb = dh.last_heartbeat_at;
-      if (hb) {
-        const ageMs = Date.now() - new Date(hb).getTime();
-        if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= 120_000) return true;
-      }
-      return dh.tracking_active === true;
-    })();
-    const pipelineAlive =
-      heartbeatFresh
-      && (dh?.tracking_active === true
-        || dh?.native_task_running === true
-        || dh?.fgs_running === true
-        || String(dh?.tracking_state || '').toLowerCase() === 'starting'
-        || String(dh?.tracking_state || '').toLowerCase() === 'active');
+    const pipelineAlive = isDevicePipelineAlive(driver);
 
-    if (pipelineAlive || String(dh?.tracking_state || '').toLowerCase() === 'starting') {
+    if (pipelineAlive) {
       visualTreatment = 'gps_stale';
       visualStatus = businessStatus === 'offline' ? 'available' : businessStatus;
     } else {
@@ -173,6 +158,7 @@ export function resolveDriverMapVisualStatus(driver, { isFallback = false } = {}
  */
 export function resolveDriverMapMarkerColor(visualStatus, statusColors = {}) {
   if (visualStatus === 'constrained') return CONSTRAINED_MARKER_COLOR;
+  if (visualStatus === 'off_duty' && statusColors.off_duty) return statusColors.off_duty;
   if (visualStatus === 'offline' && statusColors.offline) return statusColors.offline;
   if (visualStatus === 'available' && statusColors.available) return statusColors.available;
   return statusColors[visualStatus] ?? statusColors.available ?? CONSTRAINED_MARKER_COLOR;

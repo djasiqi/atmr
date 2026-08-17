@@ -71,6 +71,7 @@ import { driverQueryKeys } from "../features/driver/queryKeys";
 import { emitDriverTelemetry } from "./observability/driverTelemetry";
 import { appendSessionJournalEvent, clearSessionJournal, hydrateSessionJournal } from "./observability/sessionJournal";
 import { purgeDriverProfileCache } from "../features/driver/services/driverProfileCache";
+import { setDriverAvailabilityActive } from "../features/driver/services/driverAvailabilityBridge";
 import {
   companyDriverSwitchBlockedMessage,
   isCompanyDriverCrossContextSwitch,
@@ -999,6 +1000,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         // P0-B : effacer presence persistée + snapshot mémoire immédiatement
         void clearTrackingAuthSession({ reason: "logout" });
         setTrackingAuthAvailability({ kind: "TRACKING_IDENTITY_UNAVAILABLE" });
+        setDriverAvailabilityActive(null);
         try {
           void loadTrackingContextLease().setTrackingContextLeaseInactive();
         } catch {

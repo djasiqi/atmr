@@ -5,7 +5,7 @@ import {
 
 describe("resolveTrackingEligibility", () => {
   const base = {
-    driverAvailable: true,
+    driverAvailable: true as boolean | null,
     presenceWindowOpen: false,
     appForeground: true,
     presenceDisclosureAccepted: true,
@@ -26,6 +26,7 @@ describe("resolveTrackingEligibility", () => {
     });
     expect(r.mode).toBe("OFF");
     expect(r.trackingEligible).toBe(false);
+    expect(r.blocked).toBe(false);
   });
 
   it("3. available + disclosure + FG => PRESENCE_FG", () => {
@@ -45,7 +46,7 @@ describe("resolveTrackingEligibility", () => {
     expect(bg.mode).toBe("PRESENCE_BG");
   });
 
-  it("5. mission + hors fenêtre + BG => MISSION (fenêtre sans effet)", () => {
+  it("5. mission + hors fenêtre + BG + capability => MISSION", () => {
     const r = resolveTrackingEligibility({
       ...base,
       hasActiveMission: true,
@@ -72,6 +73,60 @@ describe("resolveTrackingEligibility", () => {
       permissionsReady: false,
     });
     expect(r.mode).toBe("BLOCKED");
+  });
+
+  it("8. mission + unavailable => OFF", () => {
+    const r = resolveTrackingEligibility({
+      ...base,
+      hasActiveMission: true,
+      driverAvailable: false,
+    });
+    expect(r.mode).toBe("OFF");
+    expect(r.trackingEligible).toBe(false);
+    expect(r.blocked).toBe(false);
+  });
+
+  it("9. mission + permissionsReady=false => BLOCKED", () => {
+    const r = resolveTrackingEligibility({
+      ...base,
+      hasActiveMission: true,
+      permissionsReady: false,
+    });
+    expect(r.mode).toBe("BLOCKED");
+    expect(r.trackingEligible).toBe(false);
+  });
+
+  it("10. mission + disclosure=false => BLOCKED", () => {
+    const r = resolveTrackingEligibility({
+      ...base,
+      hasActiveMission: true,
+      presenceDisclosureAccepted: false,
+      permissionsReady: true,
+    });
+    expect(r.mode).toBe("BLOCKED");
+    expect(r.trackingEligible).toBe(false);
+  });
+
+  it("11. présence + perms=true + disclosure=false => BLOCKED", () => {
+    const r = resolveTrackingEligibility({
+      ...base,
+      presenceDisclosureAccepted: false,
+      permissionsReady: true,
+    });
+    expect(r.mode).toBe("BLOCKED");
+    expect(r.trackingEligible).toBe(false);
+  });
+
+  it("12. UNKNOWN (pas hydraté) => pas PRESENCE/LIVE, pas BLOCKED, pas hors service", () => {
+    const r = resolveTrackingEligibility({
+      ...base,
+      driverAvailable: null,
+      hasActiveMission: true,
+    });
+    expect(r.mode).toBe("OFF");
+    expect(r.availabilityPending).toBe(true);
+    expect(r.trackingEligible).toBe(false);
+    expect(r.blocked).toBe(false);
   });
 });
 

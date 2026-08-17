@@ -39,6 +39,7 @@ export const STATUS_COLORS = {
   assigned: MAP_COLORS.warning,
   busy: MAP_COLORS.brand,
   offline: MAP_COLORS.muted,
+  off_duty: MAP_COLORS.muted,
   emergency: MAP_COLORS.danger,
 };
 
@@ -198,6 +199,47 @@ export const getDriverStatus = (driver) => {
   return 'available';
 };
 
+const DEVICE_HEARTBEAT_FRESH_MS = 120_000;
+
+/** Heartbeat device-health frais (preuve de vie runtime, indépendante de recorded_at / last_fix_age). */
+export function isDeviceHeartbeatFresh(driver, nowMs = Date.now()) {
+  const dh = driver?.device_health;
+  if (!dh || typeof dh !== 'object') return false;
+  const hb = dh.last_heartbeat_at;
+  if (!hb) return false;
+  const ageMs = nowMs - new Date(hb).getTime();
+  return Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= DEVICE_HEARTBEAT_FRESH_MS;
+}
+
+/** C2 : HORS SERVICE métier — jamais « GPS hors ligne ». */
+export function isDriverOffDuty(driver) {
+  if (!driver) return false;
+  if (driver.is_available === false) return true;
+  const status = String(driver.status || '').toLowerCase();
+  if (status === 'off_duty') return true;
+  return String(driver.service_window_status || '') === 'off_duty';
+}
+
+/**
+ * Pipeline/runtime vivant : heartbeat frais obligatoire.
+ * tracking_active / FGS / task ne sont crédibles que si le heartbeat est frais.
+ * last_fix_age n'est PAS une preuve indépendante.
+ */
+export function isDevicePipelineAlive(driver, nowMs = Date.now()) {
+  const dh = driver?.device_health;
+  if (!dh || typeof dh !== 'object') return false;
+  if (!isDeviceHeartbeatFresh(driver, nowMs)) return false;
+  if (dh.tracking_active === true) return true;
+  if (dh.native_task_running === true) return true;
+  if (dh.fgs_running === true) return true;
+  const state = String(dh.tracking_state || '').toLowerCase();
+  return state === 'starting' || state === 'active';
+}
+
+/** Signal device_health actif malgré position backend absente (PR2 dispatch). */
+export const isDeviceHealthSignalActive = (driver, nowMs = Date.now()) =>
+  isDevicePipelineAlive(driver, nowMs);
+
 export const formatLastSeen = (lastSeenSeconds) => {
   if (lastSeenSeconds == null || lastSeenSeconds < 0) return 'Dernier signal inconnu';
   if (lastSeenSeconds < 60) return `il y a ${lastSeenSeconds}s`;
@@ -243,15 +285,6 @@ export const getFreshnessStatus = (driver) => {
   return 'offline';
 };
 
-/** Signal device_health actif malgré position backend absente (PR2 dispatch). */
-export const isDeviceHealthSignalActive = (driver) => {
-  const dh = driver?.device_health;
-  if (!dh || typeof dh !== 'object') return false;
-  if (dh.tracking_active === true) return true;
-  const age = Number(dh.last_fix_age_seconds);
-  return Number.isFinite(age) && age >= 0 && age < 120;
-};
-
 export const getDriverFreshnessLabel = (driver) => {
   const status = getFreshnessStatus(driver);
   const recordedAt = driver?.recorded_at ?? driver?.timestamp ?? null;
@@ -264,17 +297,14 @@ export const getDriverFreshnessLabel = (driver) => {
     : null;
 
   // C2 situation 1 : hors service ≠ GPS hors ligne
-  if (
-    String(driver?.status || '') === 'off_duty'
-    || String(driver?.service_window_status || '') === 'off_duty'
-    || driver?.is_available === false
-  ) {
+  if (isDriverOffDuty(driver)) {
     return 'Hors service';
   }
 
   // C2 situation 2 : acquisition
   if (
     !recordedAt
+    && isDeviceHeartbeatFresh(driver)
     && (String(driver?.device_health?.tracking_state || '').toLowerCase() === 'starting'
       || driver?.device_health?.tracking_active === true)
   ) {
@@ -298,14 +328,7 @@ export const getDriverFreshnessLabel = (driver) => {
   }
   if (status === 'offline_unknown') return 'Offline';
   if (status === 'offline' || String(driver?.position_source || '').toLowerCase() === 'db_fallback') {
-    // C2 situation 5 : GPS hors ligne seulement avec preuve pipeline (sinon position ancienne)
-    const dh = driver?.device_health;
-    const pipelineAlive =
-      dh
-      && (dh.tracking_active === true
-        || String(dh.tracking_state || '').toLowerCase() === 'starting'
-        || String(dh.tracking_state || '').toLowerCase() === 'active');
-    if (pipelineAlive) {
+    if (isDevicePipelineAlive(driver)) {
       return lastPosLine
         ? `Dernière position : ${relative}`
         : `Position périmée · ${relative}`;

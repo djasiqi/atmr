@@ -41,6 +41,7 @@ export function useDriverAvailability(options?: Options) {
     const applyProfile = (profile: ReturnType<typeof normalizeDriverProfilePayload>) => {
       if (cancelled) return;
       const next = resolveDriverAvailabilityFromProfile(profile);
+      if (next == null) return;
       applyAvailability(next);
     };
 
@@ -53,11 +54,15 @@ export function useDriverAvailability(options?: Options) {
         const profile = normalizeDriverProfilePayload(await getDriverProfile());
         applyProfile(profile);
       } catch {
+        // Ne pas inventer AVAILABLE : conserver la valeur connue, sinon UNKNOWN.
         if (!cancelled) {
           setIsAvailable((current) => {
-            const next = current ?? true;
-            setDriverAvailabilityActive(next);
-            return next;
+            if (current != null) {
+              setDriverAvailabilityActive(current);
+              return current;
+            }
+            setDriverAvailabilityActive(null);
+            return null;
           });
         }
       }
@@ -110,7 +115,8 @@ export function useDriverAvailability(options?: Options) {
   }, [mutation.isPending]);
 
   return {
-    isAvailable: isAvailable ?? true,
+    /** null = UNKNOWN (pas encore hydraté) — ne pas interpréter comme hors service. */
+    isAvailable,
     availabilityLoading: isAvailable === null,
     availabilityPending: mutation.isPending,
     unavailableConfirmOpen,

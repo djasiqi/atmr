@@ -35,6 +35,7 @@ export function updateDriverTrackingStatus(status: DriverMissionStatus) {
   updateDriverTrackingBridgeStatus(status);
 }
 
+/** Démonte le contexte mission ; si toujours éligible, le bridge retombe en PRESENCE (pas un STOP natif). */
 export function stopDriverTracking() {
   void stopDriverTrackingBridge();
 }
@@ -64,8 +65,9 @@ export function disposeDriverTracking() {
 }
 
 /**
- * Pilote les signaux présence (disponibilité + fenêtre 07h–19h).
+ * Pilote le signal présence (Driver.is_available).
  * La décision start/stop passe par `resolveTrackingEligibility`.
+ * `available=null` = UNKNOWN : pas PRESENCE/LIVE, pas hors service.
  */
 export function setDriverPresenceContext(ctx: DriverPresenceContext) {
   setDriverTrackingPresenceContext(ctx);
