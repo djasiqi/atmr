@@ -104,8 +104,8 @@ describe('découplage métier / GPS', () => {
     expect(projection.gpsFreshness).toBe('last_known');
     expect(projection.positionSource).toBe('db_fallback');
     expect(projection.visualTreatment).toBe('gps_stale');
-    expect(projection.visualStatus).toBe('offline');
-    expect(resolveDriverMapVisualStatus(driver)).toBe('offline');
+    expect(projection.visualStatus).toBe('busy');
+    expect(resolveDriverMapVisualStatus(driver)).toBe('busy');
     expect(isNonLiveGpsPosition(driver)).toBe(true);
   });
 
@@ -121,7 +121,7 @@ describe('découplage métier / GPS', () => {
     expect(projection.visualStatus).toBe('offline');
   });
 
-  it('assigned + stale → signal ancien', () => {
+  it('assigned + stale → signal ancien (pas offline)', () => {
     const driver = {
       status: 'assigned',
       location_status: 'stale',
@@ -132,7 +132,7 @@ describe('découplage métier / GPS', () => {
     const projection = resolveDriverMapProjection(driver);
     expect(projection.businessStatus).toBe('assigned');
     expect(projection.visualTreatment).toBe('gps_stale');
-    expect(projection.visualStatus).toBe('offline');
+    expect(projection.visualStatus).toBe('assigned');
   });
 
   it('constrained + last_known → non-live dominant (pas orange actif)', () => {
@@ -144,7 +144,7 @@ describe('découplage métier / GPS', () => {
       longitude: 6.1,
       recorded_at: new Date(Date.now() - 600_000).toISOString(),
     };
-    expect(resolveDriverMapVisualStatus(driver)).toBe('offline');
+    expect(resolveDriverMapVisualStatus(driver)).toBe('assigned');
     expect(resolveDriverMapProjection(driver).visualTreatment).toBe('gps_stale_constrained');
   });
 

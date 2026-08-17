@@ -100,16 +100,41 @@ export function resolveDriverMapProjection(driver, { isFallback = false } = {}) 
     gpsFreshness === 'offline'
     || gpsFreshness === 'offline_unknown'
   ) {
-    visualTreatment = 'gps_offline';
-    visualStatus = 'offline';
+    // C2 : hors ligne seulement si pipeline mort (preuve indépendante de recorded_at).
+    // Si device_health indique tracking actif + heartbeat frais → position périmée.
+    const dh = driver?.device_health;
+    const heartbeatFresh = (() => {
+      if (!dh || typeof dh !== 'object') return false;
+      const hb = dh.last_heartbeat_at;
+      if (hb) {
+        const ageMs = Date.now() - new Date(hb).getTime();
+        if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= 120_000) return true;
+      }
+      return dh.tracking_active === true;
+    })();
+    const pipelineAlive =
+      heartbeatFresh
+      && (dh?.tracking_active === true
+        || dh?.native_task_running === true
+        || dh?.fgs_running === true
+        || String(dh?.tracking_state || '').toLowerCase() === 'starting'
+        || String(dh?.tracking_state || '').toLowerCase() === 'active');
+
+    if (pipelineAlive || String(dh?.tracking_state || '').toLowerCase() === 'starting') {
+      visualTreatment = 'gps_stale';
+      visualStatus = businessStatus === 'offline' ? 'available' : businessStatus;
+    } else {
+      visualTreatment = 'gps_offline';
+      visualStatus = 'offline';
+    }
   } else if (
     gpsFreshness === 'stale'
     || gpsFreshness === 'last_known'
     || positionSource === 'db_fallback'
   ) {
-    // Contrainte + last_known : traitement non-live dominant (pas d'orange « actif »).
+    // C2 situation 4 : stale/last_known ≠ offline
     visualTreatment = constrained ? 'gps_stale_constrained' : 'gps_stale';
-    visualStatus = 'offline';
+    visualStatus = businessStatus === 'offline' ? 'available' : businessStatus;
   } else if (constrained && FRESH_GPS.has(gpsFreshness)) {
     visualTreatment = 'constrained';
     visualStatus = 'constrained';

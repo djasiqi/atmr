@@ -1,7 +1,6 @@
-import { describe, expect, it } from "@jest/globals";
 import {
-  resolvePresenceGpsAccuracy,
   resolveTrackingEligibility,
+  resolvePresenceGpsAccuracy,
 } from "./trackingEligibility";
 
 describe("resolveTrackingEligibility", () => {
@@ -13,41 +12,36 @@ describe("resolveTrackingEligibility", () => {
     hasActiveMission: false,
   };
 
-  it("1. available + FG + hors fenêtre => OFF (P0-F TIME)", () => {
+  it("1. available + FG hors ancienne fenêtre 07–19 => PRESENCE_FG (fenêtre ignorée)", () => {
     const r = resolveTrackingEligibility(base);
-    expect(r.trackingEligible).toBe(false);
-    expect(r.mode).toBe("OFF");
-    expect(r.foregroundPresenceEligible).toBe(false);
-    expect(r.backgroundPresenceEligible).toBe(false);
+    expect(r.mode).toBe("PRESENCE_FG");
+    expect(r.trackingEligible).toBe(true);
+    expect(r.blocked).toBe(false);
   });
 
-  it("2. FG → BG hors fenêtre => ineligible", () => {
+  it("2. unavailable => OFF", () => {
     const r = resolveTrackingEligibility({
       ...base,
-      appForeground: false,
-      presenceWindowOpen: false,
+      driverAvailable: false,
     });
-    expect(r.trackingEligible).toBe(false);
     expect(r.mode).toBe("OFF");
+    expect(r.trackingEligible).toBe(false);
   });
 
-  it("3. available + fenêtre + FG => PRESENCE_FG", () => {
+  it("3. available + disclosure + FG => PRESENCE_FG", () => {
     const r = resolveTrackingEligibility({
       ...base,
       presenceWindowOpen: true,
-      appForeground: true,
     });
-    expect(r.trackingEligible).toBe(true);
     expect(r.mode).toBe("PRESENCE_FG");
   });
 
-  it("4. available + fenêtre + FG → BG => PRESENCE_BG", () => {
+  it("4. available + disclosure + FG → BG => PRESENCE_BG", () => {
     const bg = resolveTrackingEligibility({
       ...base,
-      presenceWindowOpen: true,
       appForeground: false,
+      presenceWindowOpen: true,
     });
-    expect(bg.trackingEligible).toBe(true);
     expect(bg.mode).toBe("PRESENCE_BG");
   });
 
@@ -58,28 +52,34 @@ describe("resolveTrackingEligibility", () => {
       appForeground: false,
       presenceWindowOpen: false,
     });
-    expect(r.trackingEligible).toBe(true);
     expect(r.mode).toBe("MISSION");
   });
 
-  it("disclosure refusée => pas de présence même disponible FG + fenêtre", () => {
+  it("6. disclosure refusée => BLOCKED (pas OFF) si disponible", () => {
     const r = resolveTrackingEligibility({
       ...base,
-      presenceWindowOpen: true,
       presenceDisclosureAccepted: false,
     });
+    expect(r.mode).toBe("BLOCKED");
+    expect(r.blocked).toBe(true);
     expect(r.trackingEligible).toBe(false);
+  });
+
+  it("7. permissionsReady=false explicite => BLOCKED", () => {
+    const r = resolveTrackingEligibility({
+      ...base,
+      presenceDisclosureAccepted: true,
+      permissionsReady: false,
+    });
+    expect(r.mode).toBe("BLOCKED");
   });
 });
 
 describe("resolvePresenceGpsAccuracy", () => {
-  it("mission => high", () => {
+  it("mission ou FG => high", () => {
     expect(
       resolvePresenceGpsAccuracy({ hasActiveMission: true, appForeground: false })
     ).toBe("high");
-  });
-
-  it("présence FG => high", () => {
     expect(
       resolvePresenceGpsAccuracy({ hasActiveMission: false, appForeground: true })
     ).toBe("high");

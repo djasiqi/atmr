@@ -121,6 +121,8 @@ export function DriverDashboardHeader({
       formatBridgeSyncLabel({
         gpsEnabled,
         isTracking: tracking.isTracking,
+        trackingBlocked: tracking.fsmState === "BLOCKED",
+        acquiring: tracking.isTracking && tracking.lastUpdate == null,
         lastUpdate: tracking.lastUpdate,
         lastAckAt: tracking.lastAckAt,
         lastAckIsQueued: tracking.lastAckIsQueued === true,
@@ -135,6 +137,7 @@ export function DriverDashboardHeader({
     [
       gpsEnabled,
       tracking.isTracking,
+      tracking.fsmState,
       tracking.lastUpdate,
       tracking.lastAckAt,
       tracking.lastAckIsQueued,

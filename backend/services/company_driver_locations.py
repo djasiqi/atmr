@@ -36,7 +36,6 @@ from services.geolocation.presence import (
 )
 from services.realtime.live_driver_status import resolve_driver_status_for_fanout
 from services.tracking.presence_window import (
-    is_within_presence_window,
     resolve_service_window_status,
 )
 
@@ -220,6 +219,7 @@ def build_company_driver_locations_items(
                 )
 
         is_active = _as_bool(getattr(driver, "is_active", True))
+        driver_is_available = _as_bool(getattr(driver, "is_available", True))
         active_booking = active_bookings_map.get(driver.id, {})
         has_active_booking = bool(active_booking.get("current_booking_id"))
         mission_status = active_booking.get("mission_status")
@@ -271,6 +271,7 @@ def build_company_driver_locations_items(
             mission_status=mission_status or "NONE",
             is_active=is_active,
             presence_status=presence_status,
+            is_available=driver_is_available,
         )
         offline_reason = (
             "no_signal"
@@ -287,11 +288,13 @@ def build_company_driver_locations_items(
         )
         if presence_status == "degraded_constrained":
             tracking_display_status = "degraded_constrained"
-        is_available = status == "available"
+        # SoT métier : colonne Driver.is_available (pas status fanout == "available")
+        is_available = driver_is_available
 
-        in_service_window = is_within_presence_window(now)
+        # A2 : hors service = !is_available (plus la fenêtre horaire 07–19)
+        in_service_window = driver_is_available
         service_window_status = resolve_service_window_status(
-            in_window=in_service_window,
+            in_window=driver_is_available,
             has_active_mission=has_active_booking,
         )
 

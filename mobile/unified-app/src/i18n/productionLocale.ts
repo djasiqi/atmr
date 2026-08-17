@@ -9,14 +9,16 @@ export const PRODUCTION_LOCALE = {
   fgsNotificationTitle: "Lirie est active",
   fgsNotificationBodyMission: "Mission en cours — localisation active",
   fgsNotificationBodyPresence: "Disponibilité active — localisation en cours",
+  /** Notification FGS stable (présence ↔ live sans mutation). */
+  fgsNotificationBodyStable: "Localisation ATMR active",
 
   /** Dialogues système iOS / plugin expo-location (alignés modales in-app). */
   iosLocationWhenInUse:
-    "La localisation permet le suivi temps réel des missions en cours et, lorsque vous êtes disponible pendant la plage opérationnelle (07h–19h), la visibilité sur la carte dispatch de votre entreprise.",
+    "La localisation permet le suivi temps réel des missions en cours et, lorsque vous êtes en service, la visibilité sur la carte dispatch de votre entreprise.",
   iosLocationAlways:
-    "La localisation en arrière-plan permet le suivi des missions lorsque l'écran est verrouillé et, lorsque vous êtes disponible pendant la plage opérationnelle (07h–19h), la visibilité flotte pour le dispatch.",
+    "La localisation en arrière-plan permet le suivi des missions lorsque l'écran est verrouillé et, lorsque vous êtes en service, la visibilité flotte pour le dispatch.",
   iosLocationAlwaysAndWhenInUse:
-    "La localisation en arrière-plan permet le suivi des missions lorsque l'écran est verrouillé et, lorsque vous êtes disponible pendant la plage opérationnelle (07h–19h), la visibilité flotte pour le dispatch.",
+    "La localisation en arrière-plan permet le suivi des missions lorsque l'écran est verrouillé et, lorsque vous êtes en service, la visibilité flotte pour le dispatch.",
   androidLocationAlwaysAndWhenInUse:
     "La localisation permet le suivi opérationnel des missions en cours, y compris lorsque l'écran est verrouillé.",
 

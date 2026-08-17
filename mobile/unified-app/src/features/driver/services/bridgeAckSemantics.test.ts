@@ -24,7 +24,7 @@ describe("bridgeAckSemantics", () => {
     expect(resolveBridgeAckFields("rejected", "t").lastAckError).toBe("ack_rejected");
   });
 
-  it("labels Confirmé only when seq+event match", () => {
+  it("labels Position confirmée only when seq+event match", () => {
     const label = formatBridgeSyncLabel({
       gpsEnabled: true,
       isTracking: true,
@@ -39,7 +39,7 @@ describe("bridgeAckSemantics", () => {
       lastAckEventId: "evt-b",
       formatSyncTime: () => "14:00",
     });
-    expect(label).toContain("Confirmé");
+    expect(label).toContain("Position confirmée");
   });
 
   it("does not confirm when event id mismatches (backlog ACK)", () => {
@@ -57,11 +57,11 @@ describe("bridgeAckSemantics", () => {
       lastAckEventId: "evt-old",
       formatSyncTime: () => "14:00",
     });
-    expect(label).toContain("Envoyé");
-    expect(label).not.toContain("Confirmé");
+    expect(label).toContain("Synchronisation");
+    expect(label).not.toContain("Position confirmée");
   });
 
-  it("shows Non confirmé on rejected for current attempt", () => {
+  it("shows Synchronisation on rejected for current attempt", () => {
     const label = formatBridgeSyncLabel({
       gpsEnabled: true,
       isTracking: true,
@@ -76,10 +76,11 @@ describe("bridgeAckSemantics", () => {
       lastAckEventId: "evt-1",
       formatSyncTime: () => "14:00",
     });
-    expect(label).toContain("Non confirmé");
+    expect(label).toContain("Synchronisation");
+    expect(label).not.toContain("Non confirmé");
   });
 
-  it("Q1 smoking gun: ingested_non_persisted → error fields → Non confirmé", () => {
+  it("Q1 smoking gun: ingested_non_persisted → Synchronisation…", () => {
     const fields = resolveBridgeAckFields(
       "ingested_non_persisted",
       "2026-08-17T14:00:00.000Z"
@@ -102,10 +103,10 @@ describe("bridgeAckSemantics", () => {
       lastAckEventId: "trk_1786978639041_1oxvf8se",
       formatSyncTime: () => "16:00",
     });
-    expect(label).toBe("GPS connecté • Non confirmé");
+    expect(label).toBe("GPS actif · Synchronisation…");
   });
 
-  it("Q1: queued would be Mis en file (mapping manquant aujourd’hui)", () => {
+  it("Q1: queued → Synchronisation…", () => {
     const fields = resolveBridgeAckFields("queued", "2026-08-17T14:00:00.000Z");
     expect(fields.lastAckError).toBeNull();
     const label = formatBridgeSyncLabel({
@@ -122,6 +123,25 @@ describe("bridgeAckSemantics", () => {
       lastAckEventId: "eid-1",
       formatSyncTime: () => "16:00",
     });
-    expect(label).toContain("Mis en file");
+    expect(label).toContain("Synchronisation");
+  });
+
+  it("BLOCKED → autorisation requise", () => {
+    const label = formatBridgeSyncLabel({
+      gpsEnabled: true,
+      isTracking: false,
+      trackingBlocked: true,
+      lastUpdate: undefined,
+      lastAckAt: undefined,
+      lastAckIsQueued: false,
+      lastAckStatus: null,
+      lastAckError: null,
+      currentAttemptSeq: 0,
+      lastAckAttemptSeq: null,
+      currentAttemptEventId: null,
+      lastAckEventId: null,
+      formatSyncTime: () => "",
+    });
+    expect(label).toContain("AUTORISATION REQUISE");
   });
 });

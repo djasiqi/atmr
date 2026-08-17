@@ -1,5 +1,7 @@
 # Pipeline GPS / tracking métier — référence ops
 
+**Produit SoT :** [`docs/contracts/gps-driver-product-contract.md`](../contracts/gps-driver-product-contract.md) — états OFF / BLOCKED / PRESENCE / LIVE, en-service via `Driver.is_available`, hors ligne carte (5 situations).
+
 ## Déploiement mobile (correctif tracking)
 
 Le correctif PR1/PR2 est **JS** mais requiert un **build store** pour :
@@ -559,12 +561,15 @@ Contrats :
 
 - **UTC technique** : [`time_contract.py`](../../backend/services/tracking/time_contract.py) — `parse_tracking_instant_strict` / `format_tracking_instant_utc_z` ; naïf/invalide = REJET (jamais `now`, jamais Genève silencieux). Wire Redis/API en `…Z`.
 - **Affichage Europe/Zurich** : [`businessTime.js`](../../frontend/src/utils/businessTime.js) + `formatAbsolutePositionTime` (sans `timeZoneName`) ; « aujourd’hui/hier » = calendrier Zurich.
-- **Fenêtre 07–19 figée** Europe/Zurich (mobile = backend) ; env `EXPO_PUBLIC_DRIVER_TRACKING_WINDOW_*` ≠ 7/19 → erreur log, pas de divergence silencieuse.
-- **Présence FG+BG** bornée par la fenêtre ; mission via `isTrackingActiveStatus` (mobile) / `BookingStatus` actifs (backend).
-- **Gardes** start/resume/wake/watchdog + callback ; arrêt `stopPresenceWindowIfStillCurrent` (génération / `missionContextVersion`).
-- **TIME-4** : `in_service_window` + `service_window_status` ∈ `{in_window, mission_override, off_duty}` — **séparé** du `status` métier ; « Hors service » seulement pour `off_duty`. Hors scope : N/T, live/recent/stale.
+- **Présence GPS** : commandée par `Driver.is_available` (en service), **pas** par l’heure. Voir contrat produit.
+- **Mission ASSIGNED** : fenêtre `[T−lead, T+grace]` (`assigned_in_tracking_window`) — **inchangée**, distincte de toute ancienne fenêtre présence 07–19.
+- **Obsolète produit (gate 07–19)** : la borne `PRESENCE_WINDOW` 07–19 Europe/Zurich **n’est plus** une règle produit pour start/stop présence. Conservée éventuellement en telemetry / annotation historique ; ne doit plus couper le GPS ni dériver `hors_service`.
+- Mission via `isTrackingActiveStatus` (mobile) / `BookingStatus` actifs (backend).
 
-**Canary frontière 19:00** : verrouiller ~18:55 sans mission → 19:05 → aucun nouveau point présence ; carte `service_window_status=off_duty`.
+### ✅ **Implémenté** : Conformité contrat GPS produit (v4)
+
+- SoT : [`docs/contracts/gps-driver-product-contract.md`](../contracts/gps-driver-product-contract.md)
+- Matrice canary : [`docs/ops/gps-product-contract-canary-matrix.md`](./gps-product-contract-canary-matrix.md)
 
 ### ✅ **Implémenté** : P0-F UI — Présence GPS flotte
 

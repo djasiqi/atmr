@@ -2,6 +2,8 @@
 
 Document de référence pour le flux GPS canonique, les invariants, SLA et compatibilité protocol.
 
+**Produit SoT :** le comportement métier (OFF / BLOCKED / PRESENCE / LIVE, en-service, hors ligne carte) est défini par [`docs/contracts/gps-driver-product-contract.md`](../contracts/gps-driver-product-contract.md). Ce document d’architecture décrit le **comment** technique ; le contrat produit prime en cas d’écart de sémantique.
+
 ## Flux canonique (Source of Truth)
 
 ```
@@ -39,7 +41,9 @@ Vérification : CI (`scripts/architecture/check_tracking_contract.py`) + runtime
 
 Implémentation : `mobile/unified-app/src/features/driver/tracking/TrackingStateMachine.ts`
 
-États principaux : `IDLE`, `PRESENCE`, `MISSION_PREPARE`, `MISSION_ACTIVE`, `MISSION_BACKGROUND`, `MISSION_RECOVERING`, `MISSION_STOPPING`, `DEGRADED`.
+États principaux : `IDLE` (OFF), `BLOCKED`, `PRESENCE`, `MISSION_PREPARE`, `MISSION_ACTIVE` / `MISSION_BACKGROUND` (LIVE), `MISSION_RECOVERING`, `MISSION_STOPPING`, `DEGRADED`.
+
+Alignement produit : `IDLE` = hors service / OFF ; `BLOCKED` = en service sans `permissionsReady` ; `PRESENCE` = en service sans mission ; états `MISSION_*` actifs = LIVE.
 
 Flag : `tracking_state_machine_enabled` (shadow puis obligatoire Sprint 4).
 

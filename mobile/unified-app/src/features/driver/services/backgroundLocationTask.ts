@@ -33,7 +33,6 @@ import {
 } from "./trackingContextLease";
 import { validateNativeOwnerForHeadless } from "./trackingRuntimeRegistry";
 import { getTrackingAuthAvailability } from "../../../core/auth/sessionAuthDecision";
-import { isWithinTrackingWindow } from "./trackingWindow";
 import {
   markNativeStartEntry,
   markNativeStartExit,
@@ -147,41 +146,39 @@ const KILL_SWITCH_KEY = "driver_background_tracking_enabled";
 const BACKGROUND_INTERVAL_MS = Number(
   process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_INTERVAL_MS ?? "20000"
 );
-const BACKGROUND_DISTANCE_METERS = Number(
+/** @deprecated Conservé pour rétrocompat env ; B3 utilise distance 0 durable. */
+const _BACKGROUND_DISTANCE_METERS = Number(
   process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_DISTANCE_METERS ?? "10"
 );
-/** Mission active : intervalle temporel seul (0 = pas de filtre distance, fix immobile). */
+void _BACKGROUND_DISTANCE_METERS;
+/** Mission / présence durable : intervalle temporel seul (0 = pas de filtre distance). */
 const BACKGROUND_MISSION_DISTANCE_METERS = Number(
   process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_MISSION_DISTANCE_METERS ?? "0"
 );
 const FOREGROUND_SERVICE_TITLE =
   process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_TITLE ?? PRODUCTION_LOCALE.fgsNotificationTitle;
-const FOREGROUND_SERVICE_BODY_MISSION =
+const _FOREGROUND_SERVICE_BODY_MISSION =
   process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_BODY ??
   PRODUCTION_LOCALE.fgsNotificationBodyMission;
-const FOREGROUND_SERVICE_BODY_PRESENCE =
+const _FOREGROUND_SERVICE_BODY_PRESENCE =
   process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_BODY_PRESENCE ??
   PRODUCTION_LOCALE.fgsNotificationBodyPresence;
+void _FOREGROUND_SERVICE_BODY_MISSION;
+void _FOREGROUND_SERVICE_BODY_PRESENCE;
 
-function resolveBackgroundDistanceMeters(taskMode: BackgroundTrackingTaskMode): number {
-  if (taskMode === "presence_window") {
-    return BACKGROUND_DISTANCE_METERS;
-  }
+function resolveBackgroundDistanceMeters(_taskMode: BackgroundTrackingTaskMode): number {
+  // B3/B4 : abonnement natif durable LIVE-compatible — distance seule interdite
+  // comme preuve de vie ; heartbeat temporel (timeInterval) pour présence et mission.
   return BACKGROUND_MISSION_DISTANCE_METERS;
 }
 
 function resolveForegroundServiceNotification(
-  taskMode: BackgroundTrackingTaskMode
+  _taskMode: BackgroundTrackingTaskMode
 ): { title: string; body: string } {
-  if (taskMode === "presence_window") {
-    return {
-      title: FOREGROUND_SERVICE_TITLE,
-      body: FOREGROUND_SERVICE_BODY_PRESENCE,
-    };
-  }
+  // B2/B3 : notification stable — évite de muter le FGS à chaque transition de mode.
   return {
     title: FOREGROUND_SERVICE_TITLE,
-    body: FOREGROUND_SERVICE_BODY_MISSION,
+    body: PRODUCTION_LOCALE.fgsNotificationBodyStable,
   };
 }
 const FOREGROUND_SERVICE_COLOR =
@@ -203,13 +200,14 @@ export function resolveBackgroundGpsQuality(input: {
   lowBatteryIntervalMs?: number;
 }): { accuracy: Location.Accuracy; timeIntervalMs: number; batteryDegradesGps: boolean } {
   const missionIntervalMs = input.missionIntervalMs ?? BACKGROUND_INTERVAL_MS;
-  const presenceMinIntervalMs = input.presenceMinIntervalMs ?? 90_000;
   const lowBatteryIntervalMs =
     input.lowBatteryIntervalMs ?? BACKGROUND_INTERVAL_LOW_BATTERY_MS;
   const isMissionLive = input.trackingMode === "mission_live";
   const isPresence = input.trackingMode === "availability_presence";
 
-  if (isMissionLive) {
+  // B3 : abonnement natif durable — options LIVE-compatibles (High + cadence mission).
+  // Filtrage présence (enqueue/transmit) côté JS ; coût batterie mesuré en canary D11.
+  if (isMissionLive || isPresence) {
     return {
       accuracy: Location.Accuracy.High,
       timeIntervalMs: missionIntervalMs,
@@ -217,9 +215,7 @@ export function resolveBackgroundGpsQuality(input: {
     };
   }
 
-  const intervalBase = isPresence
-    ? Math.max(missionIntervalMs, presenceMinIntervalMs)
-    : missionIntervalMs;
+  const intervalBase = missionIntervalMs;
   const batteryDegradesGps = input.isLowBattery;
   const timeIntervalMs = batteryDegradesGps
     ? Math.max(intervalBase, lowBatteryIntervalMs)
@@ -913,28 +909,8 @@ function defineTaskIfNeeded() {
         return;
       }
 
-      // TIME-3D : présence hors fenêtre Zurich → aucune capture + arrêt conditionnel (génération)
-      if (isPresenceContext && !isWithinTrackingWindow(new Date())) {
-        const expectedGenerationId =
-          context.nativeOwner?.trackingGenerationId ?? null;
-        const expectedMissionContextVersion =
-          context.nativeOwner?.missionContextVersion ?? null;
-        atmrJsDiag("J3_LOCATION_DECISION", {
-          accepted: false,
-          reason: "presence_window_closed",
-        });
-        emitDriverTelemetry("tracking.background.task.skipped", {
-          source: "driver.services.backgroundLocationTask",
-          reason: "presence_window_closed",
-          task_name: BACKGROUND_LOCATION_TASK_NAME,
-        });
-        await stopPresenceWindowIfStillCurrent({
-          expectedGenerationId,
-          expectedMissionContextVersion,
-          reason: "presence_window_closed",
-        });
-        return;
-      }
+      // A2 : présence commandée par en_service, plus par l'horloge 07–19.
+      // (Ancien TIME-3D presence_window_closed retiré.)
 
       // Sondage headless AVANT tout enfilage/flush : un handle SQLite non durable ou un schéma
       // pas prêt doit bloquer net (jamais de fallback HTTP silencieux depuis le background task).
@@ -1186,19 +1162,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
   if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) {
     return { ok: false, nativeStarted: false };
   }
-  // TIME-3C : refuser tout start/reprise présence hors fenêtre Europe/Zurich
-  if (isPresenceWindow && !isWithinTrackingWindow(new Date())) {
-    emitDriverTelemetry("tracking.background.task.skipped", {
-      source: "driver.services.backgroundLocationTask",
-      reason: "presence_window_closed",
-      runtime: describeBackgroundRuntime(),
-      mission_id: missionId,
-      task_mode: taskMode,
-      task_name: BACKGROUND_LOCATION_TASK_NAME,
-      start_reason: startReason,
-    });
-    return { ok: false, nativeStarted: false };
-  }
+  // A2 : plus de refus start présence hors fenêtre 07–19
   if (!canUseBackgroundLocation()) {
     emitDriverTelemetry("tracking.background.task.skipped", {
       source: "driver.services.backgroundLocationTask",
@@ -1581,17 +1545,7 @@ async function runWatchdogTick(): Promise<void> {
   if (!watchdogActive) return;
   if (bgStartInProgress) return;
 
-  // TIME-3C : ne pas relancer une présence hors fenêtre
-  if (watchdogPresenceWindow && !isWithinTrackingWindow(new Date())) {
-    stopNativeTrackingWatchdog();
-    clearPendingFgsStart();
-    emitDriverTelemetry("tracking.background.task.skipped", {
-      source: "driver.services.backgroundLocationTask",
-      reason: "presence_window_closed_watchdog",
-      mission_id: watchdogMissionId,
-    });
-    return;
-  }
+  // A2 : plus de skip watchdog présence hors fenêtre 07–19
 
   const lifecycle = await getNativeTaskLifecycleStatus();
   if (lifecycle.taskStarted) {
@@ -1733,17 +1687,7 @@ export async function ensureNativeTrackingWhileForeground(
   if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) {
     return;
   }
-  // TIME-3C : ne pas écrire/reprendre un contexte présence hors fenêtre
-  if (isPresenceWindow && !isWithinTrackingWindow(new Date())) {
-    emitDriverTelemetry("tracking.background.task.skipped", {
-      source: "driver.services.backgroundLocationTask",
-      reason: "presence_window_closed",
-      mission_id: missionId,
-      task_mode: "presence_window",
-      start_reason: reason,
-    });
-    return;
-  }
+  // A2 : plus de refus contexte présence hors fenêtre 07–19
 
   const lifecycle = await getNativeTaskLifecycleStatus();
   const taskMode: BackgroundTrackingTaskMode = isPresenceWindow ? "presence_window" : "mission";
@@ -1870,9 +1814,20 @@ export async function ensureNativeTrackingWhileForeground(
     taskMode === "mission" &&
     missionId != null;
 
-  if (lifecycle.taskStarted && !contextUpgradedToMission) {
+  // B2 : FGS déjà démarré → conserver l'abonnement (y compris upgrade présence→mission).
+  // Pas de stop/unregister ; le contexte a déjà été mis à jour ci-dessus.
+  if (lifecycle.taskStarted) {
     stopNativeTrackingWatchdog();
     clearPendingFgsStart();
+    if (contextUpgradedToMission) {
+      emitDriverTelemetry("tracking.background.mode_transition", {
+        source: "driver.services.backgroundLocationTask",
+        reason: `${reason}:context_upgrade_to_mission_no_restart`,
+        mission_id: missionId,
+        task_mode: taskMode,
+        prior_task_mode: priorContext?.taskMode ?? null,
+      });
+    }
     const stillRunning = await Location.hasStartedLocationUpdatesAsync(
       BACKGROUND_LOCATION_TASK_NAME
     ).catch(() => false);
@@ -1891,10 +1846,6 @@ export async function ensureNativeTrackingWhileForeground(
       );
     }
     return;
-  }
-
-  if (contextUpgradedToMission && AppState.currentState === "active") {
-    await stopNativeBackgroundLocationUpdatesSafely(`${reason}:context_upgrade_to_mission`);
   }
 
   if (AppState.currentState !== "active") {
@@ -1942,14 +1893,6 @@ export async function restartNativeTrackingFromWake(reason = "silent_push_wake")
     await resumePendingNativeTrackingIfNeeded();
     const ctx = await readTaskContext();
     if (ctx?.taskMode === "presence_window") {
-      if (!isWithinTrackingWindow(new Date())) {
-        await stopPresenceWindowIfStillCurrent({
-          expectedGenerationId: ctx.nativeOwner?.trackingGenerationId ?? null,
-          expectedMissionContextVersion: ctx.nativeOwner?.missionContextVersion ?? null,
-          reason: "presence_window_closed_wake",
-        });
-        return;
-      }
       await ensureNativeTrackingWhileForeground(null, null, { presenceWindow: true }, reason);
       return;
     }
@@ -2058,14 +2001,6 @@ export async function resumePendingNativeTrackingIfNeeded(): Promise<void> {
     return;
   }
   if (ctx?.taskMode === "presence_window") {
-    if (!isWithinTrackingWindow(new Date())) {
-      await stopPresenceWindowIfStillCurrent({
-        expectedGenerationId: ctx.nativeOwner?.trackingGenerationId ?? null,
-        expectedMissionContextVersion: ctx.nativeOwner?.missionContextVersion ?? null,
-        reason: "presence_window_closed_resume",
-      });
-      return;
-    }
     await ensureNativeTrackingWhileForeground(null, null, { presenceWindow: true }, "app_resume");
     return;
   }
