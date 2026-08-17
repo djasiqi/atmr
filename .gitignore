@@ -257,10 +257,78 @@ backend/.gunicorn/
 **/NUL
 **/nul
 
-# Artefacts CI deploy (env + manifeste) ù jamais committer
+# Artefacts CI deploy (env + manifeste) ? jamais committer
 deploy-staging/
 staging/output/
 .gitleaks-workdir/
 gitleaks-report.json
 deploy-release-bundle.tar.gz
 
+# ===== INTERDICTION commit : binaires / dumps ops lourds =====
+# (apr?s !/docs/ops/** ? ces motifs re-ignorent explicitement)
+*.apk
+*.aab
+*.apks
+*.b64
+*.db-wal
+*.db-shm
+backend/coverage_*.json
+docs/ops/**/*.zip
+docs/ops/**/*.apk
+docs/ops/**/*.aab
+docs/ops/**/*.apks
+docs/ops/**/*.b64
+docs/ops/**/*.db
+docs/ops/**/*.db-wal
+docs/ops/**/*.db-shm
+docs/ops/**/*logcat*continuous*
+docs/ops/**/logcat_raw_window.txt
+docs/ops/**/12b_logcat_fgs_broad.txt
+docs/ops/**/apk_extract_*/
+docs/ops/**/_apk*_check/
+docs/ops/**/*_apks_extract/
+docs/ops/**/apk_prod/
+docs/ops/**/apk_devclient/
+docs/ops/**/apk_prod*_audit/
+docs/ops/**/index.android.bundle
+docs/ops/**/bundletool.jar
+docs/ops/**/operations-app-temp.zip
+docs/ops/**/operations-app-*.apk
+docs/ops/**/operations-app-*.aab
+docs/ops/**/operations-app-*.apks
+docs/ops/_p0e_build_136_diag/
+
+
+# ===== INTERDICTION commit : binaires / dumps ops lourds =====
+# (apres !/docs/ops/** ‚Äî ces motifs re-ignorent explicitement)
+*.apk
+*.aab
+*.apks
+*.b64
+*.db-wal
+*.db-shm
+backend/coverage_*.json
+docs/ops/**/*.zip
+docs/ops/**/*.apk
+docs/ops/**/*.aab
+docs/ops/**/*.apks
+docs/ops/**/*.b64
+docs/ops/**/*.db
+docs/ops/**/*.db-wal
+docs/ops/**/*.db-shm
+docs/ops/**/*logcat*continuous*
+docs/ops/**/logcat_raw_window.txt
+docs/ops/**/12b_logcat_fgs_broad.txt
+docs/ops/**/apk_extract_*/
+docs/ops/**/_apk*_check/
+docs/ops/**/*_apks_extract/
+docs/ops/**/apk_prod/
+docs/ops/**/apk_devclient/
+docs/ops/**/apk_prod*_audit/
+docs/ops/**/index.android.bundle
+docs/ops/**/bundletool.jar
+docs/ops/**/operations-app-temp.zip
+docs/ops/**/operations-app-*.apk
+docs/ops/**/operations-app-*.aab
+docs/ops/**/operations-app-*.apks
+docs/ops/_p0e_build_136_diag/
