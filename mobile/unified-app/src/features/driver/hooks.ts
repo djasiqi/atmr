@@ -423,7 +423,8 @@ export function useDriverTracking(mission: DriverMission | null | undefined) {
       };
     }
 
-    // Statut non-actif avec missionId présent → STOP explicite (mission terminale).
+    // Statut non-actif avec missionId présent : démonte le contexte mission ;
+    // si le chauffeur reste en service, le bridge retombe en PRESENCE (pas un STOP natif).
     stopDriverTracking();
     return undefined;
   }, [contextId, missionId, normalized, scheduling]);

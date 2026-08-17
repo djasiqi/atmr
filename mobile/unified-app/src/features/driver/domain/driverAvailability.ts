@@ -1,9 +1,10 @@
 import type { DriverProfile } from "../api";
 
+/** true/false si le profil porte une valeur ; null si inconnue. */
 export function resolveDriverAvailabilityFromProfile(
   profile: DriverProfile | null | undefined
-): boolean {
-  if (!profile) return true;
+): boolean | null {
+  if (!profile) return null;
   const raw = profile.is_available;
   if (typeof raw === "boolean") return raw;
   if (raw === 1 || raw === "1") return true;
@@ -13,7 +14,7 @@ export function resolveDriverAvailabilityFromProfile(
     if (normalized === "true" || normalized === "yes") return true;
     if (normalized === "false" || normalized === "no") return false;
   }
-  return true;
+  return null;
 }
 
 export function normalizeDriverProfilePayload(data: unknown): DriverProfile {

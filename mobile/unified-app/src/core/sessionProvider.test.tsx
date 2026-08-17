@@ -32,6 +32,7 @@ const mockRestoreContextCache = jest.fn().mockReturnValue(false) as jest.MockedF
 >;
 const mockClearAllContextCache = jest.fn() as jest.MockedFunction<(queryClient: QueryClient) => void>;
 const mockPurgeDriverProfileCache = jest.fn() as jest.Mock<any>;
+const mockSetDriverAvailabilityActive = jest.fn() as jest.Mock<any>;
 const mockAttemptRestRecovery = jest.fn(async () => "no_action");
 const mockPerformExplicitLogout = jest.fn(async (params: {
   onLogoutClaimed?: (gen: number) => void;
@@ -144,6 +145,10 @@ jest.mock("../features/driver/services/driverProfileCache", () => ({
   purgeDriverProfileCache: () => mockPurgeDriverProfileCache(),
 }));
 
+jest.mock("../features/driver/services/driverAvailabilityBridge", () => ({
+  setDriverAvailabilityActive: (active: boolean | null) => mockSetDriverAvailabilityActive(active),
+}));
+
 function buildBootstrap(activeContextId: string | null = "driver:42") {
   return {
     bootstrap_version: "1.0.0",
@@ -224,6 +229,7 @@ describe("session provider gates", () => {
     mockRestoreContextCache.mockReturnValue(false);
     mockClearAllContextCache.mockReset();
     mockPurgeDriverProfileCache.mockReset();
+    mockSetDriverAvailabilityActive.mockReset();
     mockAttemptRestRecovery.mockReset();
     mockAttemptRestRecovery.mockResolvedValue("no_action");
     mockPerformExplicitLogout.mockClear();
@@ -462,6 +468,7 @@ describe("session provider gates", () => {
     expect(mockLogin).toHaveBeenCalledWith("driver@lirie.ch", "secret");
     expect(mockPerformExplicitLogout).toHaveBeenCalled();
     expect(mockPurgeDriverProfileCache).toHaveBeenCalled();
+    expect(mockSetDriverAvailabilityActive).toHaveBeenCalledWith(null);
     expect(mockDisconnect).toHaveBeenCalled();
     expect(mockClearAllContextCache).toHaveBeenCalled();
     expect(mockFetchBootstrap).toHaveBeenCalledWith(null);

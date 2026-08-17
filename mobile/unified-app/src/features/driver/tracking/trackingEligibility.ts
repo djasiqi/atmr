@@ -2,7 +2,7 @@
  * Résolveur unique d’éligibilité GPS chauffeur (contrat produit v4).
  *
  * Signaux séparés (ne pas fusionner) :
- * - driverAvailable (SoT Driver.is_available)
+ * - driverAvailable (SoT Driver.is_available ; null = UNKNOWN, pas encore hydraté)
  * - appForeground
  * - presenceDisclosureAccepted / permissionsReady
  * - hasActiveMission
@@ -11,7 +11,8 @@
  */
 
 export type TrackingEligibilityInput = {
-  driverAvailable: boolean;
+  /** true = en service ; false = hors service ; null/undefined = UNKNOWN (pas encore hydraté). */
+  driverAvailable: boolean | null;
   /** @deprecated Ignoré pour l’éligibilité produit (conservé pour call sites hérités). */
   presenceWindowOpen?: boolean;
   appForeground: boolean;
@@ -36,39 +37,63 @@ export type TrackingEligibilityResult = {
   foregroundPresenceEligible: boolean;
   backgroundPresenceEligible: boolean;
   trackingEligible: boolean;
-  /** En service mais contrat non garanti (permissions). */
+  /** En service mais contrat non garanti (permissions / disclosure). */
   blocked: boolean;
+  /** SoT pas encore hydratée : pas PRESENCE/LIVE, pas hors service. */
+  availabilityPending: boolean;
   mode: TrackingEligibilityMode;
 };
 
 export function resolveTrackingEligibility(
   input: TrackingEligibilityInput
 ): TrackingEligibilityResult {
-  const missionEligible = Boolean(input.hasActiveMission);
-  const available = Boolean(input.driverAvailable);
+  const availabilityPending = input.driverAvailable == null;
+  const available = input.driverAvailable === true;
   const foreground = Boolean(input.appForeground);
   const disclosure = Boolean(input.presenceDisclosureAccepted);
   const permissionsReady =
     input.permissionsReady !== undefined
       ? Boolean(input.permissionsReady)
       : disclosure;
+  const capabilityReady = permissionsReady && disclosure;
+  const hasMission = Boolean(input.hasActiveMission);
 
-  // En service sans capacité de garantir le contrat → BLOCKED (≠ OFF)
-  const blocked = available && !missionEligible && !permissionsReady;
+  const empty = {
+    missionEligible: false,
+    foregroundPresenceEligible: false,
+    backgroundPresenceEligible: false,
+    trackingEligible: false,
+    blocked: false,
+    availabilityPending,
+    mode: "OFF" as TrackingEligibilityMode,
+  };
 
-  const foregroundPresenceEligible =
-    available && foreground && permissionsReady;
-  const backgroundPresenceEligible =
-    available && !foreground && permissionsReady;
+  if (availabilityPending) {
+    return empty;
+  }
 
+  if (!available) {
+    return empty;
+  }
+
+  // En service sans capacité de garantir le contrat → BLOCKED (≠ OFF), mission comprise.
+  if (!capabilityReady) {
+    return {
+      ...empty,
+      blocked: true,
+      mode: "BLOCKED",
+    };
+  }
+
+  const missionEligible = hasMission;
+  const foregroundPresenceEligible = !hasMission && foreground;
+  const backgroundPresenceEligible = !hasMission && !foreground;
   const trackingEligible =
     missionEligible || foregroundPresenceEligible || backgroundPresenceEligible;
 
   let mode: TrackingEligibilityMode = "OFF";
   if (missionEligible) {
     mode = "MISSION";
-  } else if (blocked) {
-    mode = "BLOCKED";
   } else if (foregroundPresenceEligible) {
     mode = "PRESENCE_FG";
   } else if (backgroundPresenceEligible) {
@@ -80,7 +105,8 @@ export function resolveTrackingEligibility(
     foregroundPresenceEligible,
     backgroundPresenceEligible,
     trackingEligible,
-    blocked,
+    blocked: false,
+    availabilityPending: false,
     mode,
   };
 }

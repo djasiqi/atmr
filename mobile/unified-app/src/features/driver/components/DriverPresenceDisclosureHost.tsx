@@ -57,7 +57,7 @@ export function DriverPresenceDisclosureHost() {
 
   // A2 : en service commande la présence (plus la fenêtre horaire).
   const presenceTrackingWanted =
-    driverAvailable && bridgeSnapshot.missionId == null;
+    driverAvailable === true && bridgeSnapshot.missionId == null;
 
   const orchestrationAllowsPresence =
     !orchestration.blocksPresenceDisclosure && !orchestration.missionDisclosureVisible;

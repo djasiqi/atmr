@@ -613,7 +613,7 @@ function refreshFsmState(appState: AppStateStatus, fixStale: boolean) {
       eligibility.foregroundPresenceEligible ||
       eligibility.backgroundPresenceEligible,
     blocked: eligibility.blocked,
-    enService: getDriverAvailabilityActive(),
+    enService: getDriverAvailabilityActive() === true,
     appForeground: appState === "active",
     missionLive: resolveTrackingMode(appState) === "mission_live",
     fixStale,
@@ -631,8 +631,9 @@ function resolveBridgeEligibility(
 ): TrackingEligibilityResult {
   // SoT en-service : driverAvailabilityBridge (hydraté depuis Driver.is_available)
   const driverAvailable = getDriverAvailabilityActive();
-  if (state.driverAvailable !== driverAvailable) {
-    state.driverAvailable = driverAvailable;
+  const knownAvailable = driverAvailable === true;
+  if (state.driverAvailable !== knownAvailable) {
+    state.driverAvailable = knownAvailable;
   }
   return resolveTrackingEligibility({
     driverAvailable,
@@ -1900,30 +1901,32 @@ export async function stopDriverTrackingBridge(opts?: {
 }
 
 export type DriverPresenceContext = {
-  available: boolean;
+  available: boolean | null;
   windowOpen: boolean;
 };
 
 /**
  * Met à jour les signaux présence (disponibilité), puis
  * réconcilie via le resolver central. SoT = driverAvailabilityBridge.
+ * `available=null` = UNKNOWN : ne pas forcer hors service.
  */
 export function setDriverTrackingPresenceContext(ctx: DriverPresenceContext) {
-  const available = Boolean(ctx.available);
-  // A2 : windowOpen ignoré pour l'éligibilité ; toujours true côté produit
-  const windowOpen = true;
+  const available = ctx.available;
   setDriverAvailabilityActive(available);
+  const knownAvailable = available === true;
+  const windowOpen = true;
   if (
-    state.driverAvailable === available &&
+    state.driverAvailable === knownAvailable &&
     state.presenceWindowOpen === windowOpen
   ) {
     return;
   }
-  state.driverAvailable = available;
+  state.driverAvailable = knownAvailable;
   state.presenceWindowOpen = windowOpen;
   emitDriverTelemetry("tracking.presence_context.updated", {
     source: "driver.tracking.bridge",
-    driver_available: available,
+    driver_available: knownAvailable,
+    availability_pending: available == null,
     presence_window_open: windowOpen,
     mission_id: state.missionId,
   });
@@ -1948,7 +1951,7 @@ export function getDriverTrackingPresenceWindowActive(): boolean {
 
 export function getDriverTrackingPresenceContext(): DriverPresenceContext {
   return {
-    available: state.driverAvailable,
+    available: getDriverAvailabilityActive(),
     windowOpen: state.presenceWindowOpen,
   };
 }

@@ -24,7 +24,8 @@ const C = {
 const SWISS_TZ = "Europe/Zurich";
 
 type Props = {
-  isAvailable: boolean;
+  /** null = disponibilité pas encore hydratée (ni en service, ni hors service). */
+  isAvailable: boolean | null;
   onToggleAvailability?: () => void;
   availabilityPending?: boolean;
 };
@@ -182,14 +183,16 @@ export function DriverDashboardHeader({
           </AppText>
           <Pressable
             onPress={onToggleAvailability}
-            disabled={!onToggleAvailability || availabilityPending}
+            disabled={!onToggleAvailability || availabilityPending || isAvailable == null}
             accessibilityRole="button"
             accessibilityLabel={
               availabilityPending
                 ? "Mise à jour de la disponibilité"
-                : isAvailable
-                  ? "Disponible. Appuyer pour passer indisponible."
-                  : "Indisponible. Appuyer pour passer disponible."
+                : isAvailable == null
+                  ? "Disponibilité en cours de chargement"
+                  : isAvailable
+                    ? "Disponible. Appuyer pour passer indisponible."
+                    : "Indisponible. Appuyer pour passer disponible."
             }
             android_ripple={{ color: "rgba(0, 0, 0, 0.06)", borderless: true }}
             style={({ pressed }) => [
@@ -201,18 +204,20 @@ export function DriverDashboardHeader({
             <View
               style={[
                 styles.statusDot,
-                { backgroundColor: isAvailable ? C.available : C.textMuted },
+                { backgroundColor: isAvailable === true ? C.available : C.textMuted },
               ]}
             />
             <AppText
               variant="caption"
-              style={[styles.statusLabel, isAvailable && styles.statusLabelAvailable]}
+              style={[styles.statusLabel, isAvailable === true && styles.statusLabelAvailable]}
             >
               {availabilityPending
                 ? "Mise à jour…"
-                : isAvailable
-                  ? "Disponible"
-                  : "Indisponible"}
+                : isAvailable == null
+                  ? "Chargement…"
+                  : isAvailable
+                    ? "Disponible"
+                    : "Indisponible"}
             </AppText>
           </Pressable>
           <AppText variant="caption" style={styles.syncLine} numberOfLines={1}>

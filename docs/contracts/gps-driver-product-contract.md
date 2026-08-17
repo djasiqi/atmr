@@ -395,9 +395,11 @@ FORCE-STOP ANDROID
 OFF ↔ BLOCKED ↔ PRESENCE ↔ LIVE
 ```
 
-- `BLOCKED` : en service mais contrat non garanti (permissions) — ≠ hors service.
+- `BLOCKED` : en service mais contrat non garanti (`capabilityReady` = permissions FG+BG **et** disclosure) — ≠ hors service. Une mission **ne contourne pas** `BLOCKED`.
 - Fin de mission seule → `PRESENCE` si encore en service.
 - Force-stop : hors FSM JS.
+- Disponibilité mobile : `UNKNOWN` tant que `Driver.is_available` n’est pas hydraté (cache/DB) — pas PRESENCE/LIVE, pas hors service.
+- Preuve de vie carte : heartbeat device-health ≤ 120 s. `last_fix_age` n’est pas une preuve indépendante. `is_available=false` → HORS SERVICE, jamais « GPS hors ligne ».
 
 ---
 
@@ -406,10 +408,11 @@ OFF ↔ BLOCKED ↔ PRESENCE ↔ LIVE
 ✅ **Implémenté** sur `feat/gps-product-contract-v4` :
 
 - SoT `Driver.is_available` → fanout / live-locations / mobile
-- FSM `BLOCKED` + `permissionsReady` (FG+BG)
+- Mobile : état `UNKNOWN | AVAILABLE | UNAVAILABLE` (pas de défaut `true` avant hydratation)
+- FSM `BLOCKED` + `capabilityReady` (permissions FG+BG **et** disclosure) ; mission ne contourne pas `BLOCKED`
 - Retrait gate présence 07–19 (fenêtre mission T−30 intacte)
 - Transition présence↔LIVE sans stop FGS (B2) + options natives durables (B3)
-- Labels chauffeur + 5 situations carte
+- Labels chauffeur + 5 situations carte (`off_duty` prioritaire sur `gps_offline` ; heartbeat frais obligatoire)
 - Matrice canary : [`docs/ops/gps-product-contract-canary-matrix.md`](../ops/gps-product-contract-canary-matrix.md)
 
-**Gate release :** B2 seul = NO-GO prod ; B2+B3+canary batterie requis avant candidat canary.
+**Gate release :** A1 mobile + A3 + C2 doivent être verts avant canary. B2+B3+canary batterie requis avant candidat prod.
