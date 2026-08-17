@@ -1,0 +1,303 @@
+﻿08-16 15:57:08.820 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:08.895  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:08.896  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:08.896  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:08.898  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:08.898  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:08.899  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:08.902  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:08.904  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.22388634 / time=1786888628775 / elapsed=67856139193585
+08-16 15:57:09.073 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '278e9fa3-6beb-42c0-8360-9e83e10e9692'.
+08-16 15:57:13.871  3001  3376 I ActivityManager: Start proc 15378:com.google.android.gms/u150a231 for service {com.google.android.gms/com.google.android.gms.pay.gcmtask.PayGcmTaskService}
+08-16 15:57:16.778 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:19.188  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:19.188  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:19.188  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:19.188  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:19.190  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:19.190  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:19.190  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:19.191  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:19.194  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:19.194  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.1624635 / time=1786888639087 / elapsed=67866451407023
+08-16 15:57:27.090 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:29.299  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:29.302  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:29.303  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:29.307  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:29.307  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:29.307  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:29.308  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:29.317  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.12118747 / time=1786888649231 / elapsed=67876595004412
+08-16 15:57:29.668 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '09a97f5e-728d-4463-af26-6d492aa2cd4d'.
+08-16 15:57:30.022  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:30.022  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:30.022  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:30.022  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:30.022  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:30.023  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:30.023  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:30.023  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:30.023  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:30.024  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:30.025  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.978924 / time=1786888649988 / elapsed=67877352265970
+08-16 15:57:31.020  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:31.020  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:31.020  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:31.020  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:31.020  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:31.021  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:31.022  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:31.022  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:31.023  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:31.024  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:31.029  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.5719892 / time=1786888650987 / elapsed=67878351624980
+08-16 15:57:38.994 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:39.469  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:39.469  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:39.469  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:39.471  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:39.472  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:39.473  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:39.473  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:39.476  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.5828944 / time=1786888659375 / elapsed=67886739338689
+08-16 15:57:44.196  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:44.197  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:44.197  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:44.197  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:44.201  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:44.201  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:44.202  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:44.204  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:44.210  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.79585546 / time=1786888664186 / elapsed=67891550803325
+08-16 15:57:49.575  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:49.576  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:49.576  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:49.577  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:49.577  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:49.578  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:49.578  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:49.579  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:49.582  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.7980496 / time=1786888669464 / elapsed=67896827085043
+08-16 15:57:49.950  3001  3989 D LocationManagerService: network provider added registration from 1000/android[GnssService]/2BF14E5B -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+08-16 15:57:49.954  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+08-16 15:57:49.973  3001  3989 D LocationManagerService: network provider registration 1000/android[GnssService]/2BF14E5B finished after 1 updates
+08-16 15:57:49.973  3001  3989 D LocationManagerService: network provider removed registration from 1000/android[GnssService]/2BF14E5B
+08-16 15:57:49.973  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+08-16 15:57:50.265 13893 14034 I TaskService: Finished task 'background-location-task' with eventId 'da0d7769-7541-4921-a34b-a89f21ad1b3a'.
+08-16 15:57:57.467 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:59.653  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:59.653  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:59.653  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:59.653  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:59.654  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:57:59.655  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:59.655  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:59.656  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:57:59.656  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.41995308 / time=1786888679551 / elapsed=67906914743585
+08-16 15:58:07.555 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:09.783  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:09.784  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:09.784  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:09.785  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:09.785  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:09.785  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:09.785  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:09.786  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:09.786  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.28719318 / time=1786888689750 / elapsed=67917114417469
+08-16 15:58:10.229 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '9733ff8b-4e53-4e5e-837b-3a2ada769bdb'.
+08-16 15:58:16.015  3001  3989 D LocationManagerService: network provider added registration from 1000/android[GnssService]/D1549459 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+08-16 15:58:16.020  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+08-16 15:58:16.039  3001  3989 D LocationManagerService: network provider registration 1000/android[GnssService]/D1549459 finished after 1 updates
+08-16 15:58:16.039  3001  3989 D LocationManagerService: network provider removed registration from 1000/android[GnssService]/D1549459
+08-16 15:58:16.039  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+08-16 15:58:17.753 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:19.915  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:19.915  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:19.915  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:19.915  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:19.918  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:19.918  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:19.919  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:19.920  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:19.926  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.1893239 / time=1786888699838 / elapsed=67927201946219
+08-16 15:58:27.843 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:30.096  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:30.097  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:30.098  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:30.098  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:30.099  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:30.099  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:30.099  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:30.100  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:30.109  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.14469227 / time=1786888710037 / elapsed=67937401499969
+08-16 15:58:30.640 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '56804c84-6081-4a1b-81e5-320f9da8ccf3'.
+08-16 15:58:31.013  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:31.014  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:31.015  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:31.015  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:31.015  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:31.016  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:31.017  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:31.017  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:31.017  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:31.017  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:31.018  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.2059458 / time=1786888710988 / elapsed=67938351665581
+08-16 15:58:38.994 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:40.259  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:40.259  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:40.259  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:40.259  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:40.260  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:40.260  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:40.261  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:40.261  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:40.264  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.2232479 / time=1786888720124 / elapsed=67947488927364
+08-16 15:58:43.014  3001  3989 D LocationManagerService: network provider added registration from 1000/android[GnssService]/730AACE8 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+08-16 15:58:43.017  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+08-16 15:58:43.039  3001  3989 D LocationManagerService: network provider registration 1000/android[GnssService]/730AACE8 finished after 1 updates
+08-16 15:58:43.040  3001  3989 D LocationManagerService: network provider removed registration from 1000/android[GnssService]/730AACE8
+08-16 15:58:43.040  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+08-16 15:58:48.129 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:50.406  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:50.407  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:50.408  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:50.409  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:50.410  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:58:50.410  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:50.410  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:50.411  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:58:50.412  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.61658883 / time=1786888730324 / elapsed=67957688402573
+08-16 15:58:50.935 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '9e09fdeb-0149-454e-bd68-f4d7d3ae101a'.
+08-16 15:58:53.021  3001  3989 D LocationManagerService: network provider added registration from 1000/android[GnssService]/98A75878 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+08-16 15:58:53.023  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+08-16 15:58:53.052  3001  3989 D LocationManagerService: network provider registration 1000/android[GnssService]/98A75878 finished after 1 updates
+08-16 15:58:53.054  3001  3989 D LocationManagerService: network provider removed registration from 1000/android[GnssService]/98A75878
+08-16 15:58:53.054  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+08-16 15:58:58.327 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:00.442  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:00.442  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:00.442  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:00.442  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:00.443  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:00.443  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:00.444  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:00.444  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:00.447  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.26248893 / time=1786888740299 / elapsed=67967663676635
+08-16 15:59:08.303 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:10.580  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:10.581  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:10.581  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:10.581  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:10.582  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:10.582  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:10.582  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:10.583  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:10.587  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.14148903 / time=1786888750499 / elapsed=67977863075309
+08-16 15:59:11.016  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:11.016  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:11.017  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:11.017  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:11.017  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:11.018  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:11.018  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:11.019  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:11.019  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:11.020  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:11.020  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:11.022  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.1405327 / time=1786888750987 / elapsed=67978351950515
+08-16 15:59:11.132 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '183581a0-25b7-4c8f-b93c-e08c21e007f1'.
+08-16 15:59:18.993 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:20.646  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:20.646  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:20.646  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:20.646  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:20.648  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:20.649  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:20.649  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:20.650  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:20.656  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.1539197 / time=1786888760586 / elapsed=67987950358122
+08-16 15:59:28.590 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:30.687  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:30.687  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:30.690  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:30.694  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:30.694  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:30.694  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:30.695  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.57808197 / time=1786888770562 / elapsed=67997925528434
+08-16 15:59:31.232 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '36e61aab-a1c1-49ec-8496-66f93f640dff'.
+08-16 15:59:38.565 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:40.835  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:40.835  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:40.835  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:40.837  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:40.837  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:40.837  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:40.837  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:40.839  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:40.844  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.29079986 / time=1786888780760 / elapsed=68008124846559
+08-16 15:59:48.764 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:50.996  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:50.997  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:50.998  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:50.998  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:50.998  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 15:59:50.998  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:50.998  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:50.999  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 15:59:51.002  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.18457678 / time=1786888790960 / elapsed=68018324148643
+08-16 15:59:51.563 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '0c797b0e-ae68-453f-91d6-3ee4ef8a9973'.
+08-16 15:59:58.961 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 16:00:00.011  3001  3989 D LocationManagerService: network provider added registration from 1000/android[GnssService]/CFCD0545 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+08-16 16:00:00.012  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+08-16 16:00:00.045  3001  3989 D LocationManagerService: network provider registration 1000/android[GnssService]/CFCD0545 finished after 1 updates
+08-16 16:00:00.045  3001  3989 D LocationManagerService: network provider removed registration from 1000/android[GnssService]/CFCD0545
+08-16 16:00:00.045  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+08-16 16:00:01.123  3001  7127 E LocationManagerService: non-monotonic location received from network provider
+08-16 16:00:01.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:01.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:01.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:01.132  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:01.133  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:01.133  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:01.133  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:01.133  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:01.135  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.14212751 / time=1786888801047 / elapsed=68028411342393
+08-16 16:00:02.020  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:02.020  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:02.020  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:02.020  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:02.021  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:02.022  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:02.022  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:02.022  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:02.022  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:02.023  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:02.024  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.4176041 / time=1786888801987 / elapsed=68029351092996
+08-16 16:00:09.989 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 16:00:11.301  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:11.302  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:11.303  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:11.304  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:11.304  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:11.304  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:11.304  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:11.307  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:11.312  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.4344155 / time=1786888811246 / elapsed=68038610597995
+08-16 16:00:12.054 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '61cb89c9-ce0e-479e-88bf-9c95a4ba1199'.
+08-16 16:00:19.247 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 16:00:21.433  3001  7119 E LocationManagerService: non-monotonic location received from network provider
+08-16 16:00:21.441  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:21.441  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:21.441  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:21.444  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:21.444  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 16:00:21.444  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:21.444  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:21.447  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 16:00:21.451  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.57947505 / time=1786888821334 / elapsed=68048697754453
+08-16 16:00:24.016  3001  3989 D LocationManagerService: network provider added registration from 1000/android[GnssService]/F91CCD59 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+08-16 16:00:24.018  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+08-16 16:00:24.037  3001  3989 D LocationManagerService: network provider registration 1000/android[GnssService]/F91CCD59 finished after 1 updates
+08-16 16:00:24.038  3001  3989 D LocationManagerService: network provider removed registration from 1000/android[GnssService]/F91CCD59
+08-16 16:00:24.038  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]

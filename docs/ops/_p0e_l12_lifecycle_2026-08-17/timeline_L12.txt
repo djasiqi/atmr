@@ -1,0 +1,21 @@
+2026-08-17T17:12:46.9471703+02:00 [L12] PREFLIGHT versionName=1.0.12 versionCode=133 expect=133
+2026-08-17T17:13:07.2758959+02:00 [L12] SAMPLE phase=READY t=+0s isFg=true startReq=true fgCount=1 finished=0 unreg=0 PUT(60)=60 LOC90=-1 maxId=-1 maxSeq=-1 sess=NA
+2026-08-17T17:13:07.2818878+02:00 [L12] ABORT no active tracking session
+2026-08-17T17:13:52.6356508+02:00 [L12] PREFLIGHT versionName=1.0.12 versionCode=133 expect=133
+2026-08-17T17:14:11.9055552+02:00 [L12] SAMPLE phase=READY t=+0s isFg=true startReq=true fgCount=1 finished=1 unreg=0 PUT(60)=60 LOC90=7 maxId=6412 maxSeq=158 sess=trk_sess_1786979474208_5whqvvm6
+2026-08-17T17:14:11.9115586+02:00 [L12] ANCHOR sess=trk_sess_1786979474208_5whqvvm6 maxId=6412
+2026-08-17T17:14:11.9140748+02:00 [L12] L1_BEGIN HOME 150s (GPS MUST continue)
+2026-08-17T17:14:28.4646870+02:00 [L12] SAMPLE phase=L1_HOME t=+0s isFg=true startReq=true fgCount=1 finished=1 unreg=0 PUT(60)=51 LOC90=7 maxId=6413 maxSeq=158 sess=trk_sess_1786979474208_5whqvvm6
+2026-08-17T17:15:13.1292960+02:00 [L12] SAMPLE phase=L1_HOME t=+44s isFg=true startReq=true fgCount=1 finished=3 unreg=0 PUT(60)=18 LOC90=2 maxId=6413 maxSeq=158 sess=trk_sess_1786979474208_5whqvvm6
+2026-08-17T17:15:57.0713661+02:00 [L12] SAMPLE phase=L1_HOME t=+89s isFg=true startReq=true fgCount=1 finished=5 unreg=0 PUT(60)=9 LOC90=0 maxId=6413 maxSeq=158 sess=trk_sess_1786979474208_5whqvvm6
+2026-08-17T17:16:42.7420543+02:00 [L12] SAMPLE phase=L1_HOME t=+133s isFg=true startReq=true fgCount=1 finished=6 unreg=0 PUT(60)=9 LOC90=0 maxId=6413 maxSeq=158 sess=trk_sess_1786979474208_5whqvvm6
+2026-08-17T17:17:27.5855584+02:00 [L12] SAMPLE phase=L1_HOME t=+150s isFg=true startReq=true fgCount=1 finished=7 unreg=0 PUT(60)=9 LOC90=0 maxId=6413 maxSeq=158 sess=trk_sess_1786979474208_5whqvvm6
+2026-08-17T17:17:27.6389120+02:00 [L12] L1_VERDICT pass=True fgs=true put=9 deltaId=1 sessStable=True
+2026-08-17T17:17:27.6429265+02:00 [L12] L2_BEGIN FORCE-STOP wait=75s drain=15s
+2026-08-17T17:17:42.4039556+02:00 [L12] SAMPLE phase=L2_PRE t=+0s isFg=true startReq=true fgCount=1 finished=8 unreg=0 PUT(30)=6 LOC90=0 maxId=6413 maxSeq=158 sess=trk_sess_1786979474208_5whqvvm6
+2026-08-17T17:17:42.8540597+02:00 [L12] FORCE_STOP_ISSUED
+2026-08-17T17:18:12.2606510+02:00 [L12] SAMPLE phase=L2_DRAIN t=+15s isFg=absent startReq=absent fgCount=-1 finished=0 unreg=0 PUT(30)=0 LOC90=0 maxId=6413 maxSeq=158 sess=trk_sess_1786979474208_5whqvvm6
+2026-08-17T17:18:57.2016722+02:00 [L12] SAMPLE phase=L2_STOP t=+45s isFg=absent startReq=absent fgCount=-1 finished=0 unreg=0 PUT(30)=0 LOC90=0 maxId=6413 maxSeq=158 sess=trk_sess_1786979474208_5whqvvm6
+2026-08-17T17:19:41.2774073+02:00 [L12] SAMPLE phase=L2_STOP t=+90s isFg=absent startReq=absent fgCount=-1 finished=0 unreg=0 PUT(30)=0 LOC90=0 maxId=6413 maxSeq=158 sess=trk_sess_1786979474208_5whqvvm6
+2026-08-17T17:19:41.2824089+02:00 [L12] L2_VERDICT pass=True fgsGone=True isFg=absent startReq=absent put30=0 deltaIdAfterDrain=0 finished=0 (preStop maxId=6413 maxSeq=158 baseAfterDrain maxId=6413)
+2026-08-17T17:19:41.2854068+02:00 [L12] VERDICT L12_PASS

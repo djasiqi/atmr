@@ -1,0 +1,17 @@
+# SHA FINAL S — D5 release candidate
+
+```text
+SHA FINAL S      = a851cf1520bc2ed66f9e5f7b0acb6114cf1ff133
+TAG              = d5-rc-final (pushed origin)
+BRANCH           = feat/tracking-p0-p7-firewall (pushed @ S)
+
+B1 reproducible  = FIXED ✅ (source + remote)
+B2 AAB QA OFF    = BUILDING ▶ ab91958e-d00d-4d40-8304-128f0a7065f0 (versionCode 132)
+B3 tsc D5        = FIXED ✅
+PLAY SUBMISSION  = HOLD ⛔
+DISTRIBUTION     = NO-GO ⛔
+
+PATH A           = EAS autoIncrement, build from S (pas de commit R)
+```
+
+Canary APK 131 reste artifact de preuve interne (QA ON) — pas candidat Play.

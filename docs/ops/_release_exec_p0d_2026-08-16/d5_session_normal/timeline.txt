@@ -1,0 +1,47 @@
+2026-08-16T21:13:56.7452956+02:00 [SESS] START session-normal NO_FORCE_STOP poll=30s phases=300s BACKEND=FROZEN
+2026-08-16T21:13:57.0605964+02:00 [SESS] READY fg=1 binds=1
+2026-08-16T21:13:57.3333316+02:00 [SESS] FLP [2026-08-16 15:55:50]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations},
+2026-08-16T21:13:57.5315550+02:00 [SESS] PHASE_BEGIN FG1 action=FG
+2026-08-16T21:14:14.7544996+02:00 [SESS] SAMPLE phase=FG1 t=+0s fg=1 binds=1 isFg=true startReq=true finishedish=0 unavail=0 PUT=47 LOC=47 
+2026-08-16T21:15:01.1192742+02:00 [SESS] SAMPLE phase=FG1 t=+47s fg=1 binds=1 isFg=true startReq=true finishedish=1 unavail=2 PUT=29 LOC=29 
+2026-08-16T21:15:48.2480090+02:00 [SESS] SAMPLE phase=FG1 t=+93s fg=1 binds=1 isFg=true startReq=true finishedish=1 unavail=2 PUT=21 LOC=21 
+2026-08-16T21:16:34.4780990+02:00 [SESS] SAMPLE phase=FG1 t=+141s fg=1 binds=1 isFg=true startReq=true finishedish=0 unavail=0 PUT=24 LOC=24 
+2026-08-16T21:17:22.0312350+02:00 [SESS] SAMPLE phase=FG1 t=+187s fg=1 binds=1 isFg=true startReq=true finishedish=1 unavail=2 PUT=25 LOC=25 
+2026-08-16T21:18:10.3414877+02:00 [SESS] SAMPLE phase=FG1 t=+234s fg=1 binds=1 isFg=true startReq=true finishedish=0 unavail=2 PUT=22 LOC=22 
+2026-08-16T21:18:59.5914734+02:00 [SESS] SAMPLE phase=FG1 t=+283s fg=1 binds=1 isFg=true startReq=true finishedish=0 unavail=1 PUT=19 LOC=19 
+2026-08-16T21:19:48.2593225+02:00 [SESS] SAMPLE phase=FG1 t=+300s fg=42 binds=43 isFg=NA startReq=false finishedish=0 unavail=0 PUT=21 LOC=21 FGCOUNT_UP_1_to_42;BINDS_UP_1_to_43
+2026-08-16T21:19:48.4782225+02:00 [SESS] TRIGGER_CAPTURED FGCOUNT_UP_1_to_42;BINDS_UP_1_to_43 -> TRIGGER_211948_*
+2026-08-16T21:19:48.4792214+02:00 [SESS] PHASE_END FG1 final fg=42 binds=43
+2026-08-16T21:19:48.4812201+02:00 [SESS] PHASE_BEGIN HOME1 action=HOME
+2026-08-16T21:20:07.1975197+02:00 [SESS] SAMPLE phase=HOME1 t=+0s fg=58 binds=59 isFg=NA startReq=false finishedish=0 unavail=0 PUT=12 LOC=12 FGCOUNT_UP_42_to_58;BINDS_UP_43_to_59
+2026-08-16T21:20:07.3648826+02:00 [SESS] TRIGGER_CAPTURED FGCOUNT_UP_42_to_58;BINDS_UP_43_to_59 -> TRIGGER_212007_*
+2026-08-16T21:20:55.0948098+02:00 [SESS] SAMPLE phase=HOME1 t=+49s fg=69 binds=70 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 FGCOUNT_UP_58_to_69;BINDS_UP_59_to_70
+2026-08-16T21:20:55.2564983+02:00 [SESS] TRIGGER_CAPTURED FGCOUNT_UP_58_to_69;BINDS_UP_59_to_70 -> TRIGGER_212055_*
+2026-08-16T21:21:42.6471673+02:00 [SESS] SAMPLE phase=HOME1 t=+97s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=3 LOC=3 
+2026-08-16T21:22:29.5913479+02:00 [SESS] SAMPLE phase=HOME1 t=+144s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=3 LOC=3 
+2026-08-16T21:23:17.2475078+02:00 [SESS] SAMPLE phase=HOME1 t=+191s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:24:04.2080387+02:00 [SESS] SAMPLE phase=HOME1 t=+239s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:24:52.5372222+02:00 [SESS] SAMPLE phase=HOME1 t=+286s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:25:39.9634084+02:00 [SESS] SAMPLE phase=HOME1 t=+300s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:25:39.9664048+02:00 [SESS] PHASE_END HOME1 final fg=19 binds=19
+2026-08-16T21:25:39.9674037+02:00 [SESS] PHASE_BEGIN FG2 action=FG
+2026-08-16T21:25:58.1700306+02:00 [SESS] SAMPLE phase=FG2 t=+0s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:26:45.1670355+02:00 [SESS] SAMPLE phase=FG2 t=+48s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:27:32.9887350+02:00 [SESS] SAMPLE phase=FG2 t=+95s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:28:20.9836443+02:00 [SESS] SAMPLE phase=FG2 t=+143s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:29:09.3887388+02:00 [SESS] SAMPLE phase=FG2 t=+191s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:29:58.5257726+02:00 [SESS] SAMPLE phase=FG2 t=+239s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:30:46.1650525+02:00 [SESS] SAMPLE phase=FG2 t=+288s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:31:39.4671331+02:00 [SESS] SAMPLE phase=FG2 t=+300s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:31:39.4687677+02:00 [SESS] PHASE_END FG2 final fg=19 binds=19
+2026-08-16T21:31:39.4703782+02:00 [SESS] PHASE_BEGIN HOME2 action=HOME
+2026-08-16T21:31:58.9305947+02:00 [SESS] SAMPLE phase=HOME2 t=+0s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:32:45.8686280+02:00 [SESS] SAMPLE phase=HOME2 t=+49s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:33:33.9090144+02:00 [SESS] SAMPLE phase=HOME2 t=+96s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:34:21.7565612+02:00 [SESS] SAMPLE phase=HOME2 t=+144s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:35:12.5143146+02:00 [SESS] SAMPLE phase=HOME2 t=+192s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:35:59.3915290+02:00 [SESS] SAMPLE phase=HOME2 t=+243s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:36:46.9173416+02:00 [SESS] SAMPLE phase=HOME2 t=+290s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:37:33.5809936+02:00 [SESS] SAMPLE phase=HOME2 t=+300s fg=19 binds=19 isFg=NA startReq=false finishedish=0 unavail=0 PUT=0 LOC=0 
+2026-08-16T21:37:33.5830077+02:00 [SESS] PHASE_END HOME2 final fg=19 binds=19
+2026-08-16T21:37:33.5840049+02:00 [SESS] END_OK final fg=19 binds=19

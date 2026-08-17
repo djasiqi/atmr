@@ -78,4 +78,50 @@ describe("bridgeAckSemantics", () => {
     });
     expect(label).toContain("Non confirmé");
   });
+
+  it("Q1 smoking gun: ingested_non_persisted → error fields → Non confirmé", () => {
+    const fields = resolveBridgeAckFields(
+      "ingested_non_persisted",
+      "2026-08-17T14:00:00.000Z"
+    );
+    expect(fields.lastAckError).toBe("ack_ingested_non_persisted");
+    expect(fields.lastAckAt).toBeNull();
+    expect(fields.lastAckIsQueued).toBe(false);
+
+    const label = formatBridgeSyncLabel({
+      gpsEnabled: true,
+      isTracking: true,
+      lastUpdate: Date.parse("2026-08-17T14:00:00.000Z"),
+      lastAckAt: undefined,
+      lastAckIsQueued: fields.lastAckIsQueued,
+      lastAckStatus: fields.lastAckStatus,
+      lastAckError: fields.lastAckError,
+      currentAttemptSeq: 85,
+      lastAckAttemptSeq: 85,
+      currentAttemptEventId: "trk_1786978639041_1oxvf8se",
+      lastAckEventId: "trk_1786978639041_1oxvf8se",
+      formatSyncTime: () => "16:00",
+    });
+    expect(label).toBe("GPS connecté • Non confirmé");
+  });
+
+  it("Q1: queued would be Mis en file (mapping manquant aujourd’hui)", () => {
+    const fields = resolveBridgeAckFields("queued", "2026-08-17T14:00:00.000Z");
+    expect(fields.lastAckError).toBeNull();
+    const label = formatBridgeSyncLabel({
+      gpsEnabled: true,
+      isTracking: true,
+      lastUpdate: Date.parse("2026-08-17T14:00:00.000Z"),
+      lastAckAt: Date.parse(fields.lastAckAt!),
+      lastAckIsQueued: fields.lastAckIsQueued,
+      lastAckStatus: fields.lastAckStatus,
+      lastAckError: fields.lastAckError,
+      currentAttemptSeq: 1,
+      lastAckAttemptSeq: 1,
+      currentAttemptEventId: "eid-1",
+      lastAckEventId: "eid-1",
+      formatSyncTime: () => "16:00",
+    });
+    expect(label).toContain("Mis en file");
+  });
 });

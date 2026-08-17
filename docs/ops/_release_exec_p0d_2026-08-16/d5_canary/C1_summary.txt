@@ -1,0 +1,54 @@
+# C1 summary — 2026-08-17
+
+```text
+BINARY     = 1.0.11 / versionCode 127 (EAS e6e67963)
+DEVICE     = SM-S911B
+DRIVER     = 20135
+MISSION    = booking 38243 IN_PROGRESS
+WINDOW     = 00:58:52 -> 01:11:15 (+02)
+PHASES     = FG 180s -> HOME 480s
+BACKEND    = OBSERVATION ONLY
+```
+
+## Gate C1
+
+```text
+unexpected Unregister          = 0
+Register/Unregister storm       = 0
+Finished background-location    = 38 (cadence continue)
+Could not find a location task  = 0
+PUT (rolling 90s samples)       = 12-33 continue
+LOC PG C1 window                = 20 events
+FGS startForegroundCount        = 9 stable (no thrash)
+isForeground / startRequested   = true entire window
+self_heal L2 / Unregister       = 0
+```
+
+## Verdict
+
+```text
+C1 = PASS
+
+unexpected Unregister = 0
+storm = 0
+Finished continue
+PUT continue
+LOC continue
+FGS stable
+```
+
+## Artefacts
+
+- timeline_C1.txt
+- samples_C1.csv
+- logcat_continuous.txt (~12.9 MB)
+- analyze_verdict.txt (auto PASS)
+- run_d5_c1.ps1
+
+## Next
+
+```text
+C2-C4 = optional / not started
+DISTRIBUTION = NO-GO
+CANARY VALIDATED (full C1-C4) = C1 PASS only for now
+```

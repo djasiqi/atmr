@@ -424,6 +424,7 @@ function rowFromSqlite(r: Record<string, unknown>): TrackingQueueRow {
 // --- Primitives (executor fourni, jamais de verrou, jamais d'appel à l'API publique) ---
 
 async function upsertWithExecutor(executor: SqliteExecutor, row: TrackingQueueRow): Promise<void> {
+  // P0-E : ON CONFLICT ne réécrit jamais payload_json / session / seq (immutabilité event_id).
   await executor.runAsync(
     `INSERT INTO tracking_queue (
       location_event_id, tracking_session_id, session_generation, sequence_id,
@@ -431,20 +432,10 @@ async function upsertWithExecutor(executor: SqliteExecutor, row: TrackingQueueRo
       mission_id, location_mode, batch_id, position_id, app_state, last_error, acked_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(location_event_id) DO UPDATE SET
-      tracking_session_id=excluded.tracking_session_id,
-      session_generation=excluded.session_generation,
-      sequence_id=excluded.sequence_id,
-      payload_json=excluded.payload_json,
       state=excluded.state,
-      queued_at=excluded.queued_at,
       last_attempt_at=excluded.last_attempt_at,
       retry_count=excluded.retry_count,
       delivery_state=excluded.delivery_state,
-      mission_id=excluded.mission_id,
-      location_mode=excluded.location_mode,
-      batch_id=excluded.batch_id,
-      position_id=excluded.position_id,
-      app_state=excluded.app_state,
       last_error=excluded.last_error,
       acked_at=excluded.acked_at`,
     row.locationEventId,
@@ -468,6 +459,20 @@ async function upsertWithExecutor(executor: SqliteExecutor, row: TrackingQueueRo
 }
 
 function upsertMemory(row: TrackingQueueRow): void {
+  // P0-E : ne pas écraser un payload déjà stocké pour le même event_id.
+  const existing = memory.rows.get(row.locationEventId);
+  if (existing) {
+    memory.rows.set(row.locationEventId, {
+      ...existing,
+      state: row.state,
+      lastAttemptAt: row.lastAttemptAt,
+      retryCount: row.retryCount,
+      deliveryState: row.deliveryState,
+      lastError: row.lastError,
+      ackedAt: row.ackedAt,
+    });
+    return;
+  }
   memory.rows.set(row.locationEventId, { ...row });
 }
 

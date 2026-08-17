@@ -1,0 +1,41 @@
+﻿ssh : /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning: 
+Au caractère C:\Users\jasiq\atmr\docs\ops\_release_exec_p0d_2026-08-16\canary_p0d\run_canary_smoke_p0d.ps1:174 : 10
++   $out = ssh -o BatchMode=yes $sshTarget "docker exec atmr-backend-1  ...
++          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/usr/local/lib/...cationWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  from eventlet.patcher import is_monkey_patched  # type: ignore
+[2.9] OpenTelemetry non install├® - installer avec: pip install -r requirements-otel.txt
+­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+[2026-08-16 15:28:36,494] WARNING in app: [Security] Niveau de log forc├® ├á WARNING en production (APP_LOG_LEVEL 
+ignor├® pour s├®curit├®)
+LABEL LOCK
+NOW 2026-08-16T15:28:42.397458+00:00
+LOC_N 40
+LOC 2026-08-16 15:23:17.176571+00:00 rec= 2026-08-16 14:17:17.016000+00:00 seq= 71 eid= trk_1786889838323_9mbhiy9q sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:23:16.637505+00:00 rec= 2026-08-16 14:17:17.016000+00:00 seq= 70 eid= trk_1786889837161_ctczrbx8 sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:23:10.462809+00:00 rec= 2026-08-16 14:16:56.730000+00:00 seq= 69 eid= trk_1786889816843_w17x6cfa sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:23:10.440201+00:00 rec= 2026-08-16 14:16:36.445000+00:00 seq= 68 eid= trk_1786889796540_g7nynj2i sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:23:09.898290+00:00 rec= 2026-08-16 14:16:16.160000+00:00 seq= 67 eid= trk_1786889776213_d92t7dhh sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:22:50.468282+00:00 rec= 2026-08-16 14:15:55.875000+00:00 seq= 66 eid= trk_1786889755947_7h3j29dq sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:22:50.443526+00:00 rec= 2026-08-16 14:15:35.477000+00:00 seq= 65 eid= trk_1786889735626_fbwe9gq2 sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:22:49.849813+00:00 rec= 2026-08-16 14:15:15.231000+00:00 seq= 64 eid= trk_1786889715359_r1r7je7w sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:22:44.662715+00:00 rec= 2026-08-16 14:14:54.905000+00:00 seq= 63 eid= trk_1786889695041_s3qtej66 sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:22:44.634939+00:00 rec= 2026-08-16 14:14:34.618000+00:00 seq= 62 eid= trk_1786889674784_38wid4br sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:22:44.087682+00:00 rec= 2026-08-16 14:14:14.332000+00:00 seq= 61 eid= trk_1786889654452_rx3yri0d sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:22:40.443362+00:00 rec= 2026-08-16 14:13:54.046000+00:00 seq= 60 eid= trk_1786889634138_qasfdbv1 sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:22:40.424681+00:00 rec= 2026-08-16 14:13:33.629000+00:00 seq= 59 eid= trk_1786889613770_8m5ce1w3 sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:22:39.883215+00:00 rec= 2026-08-16 14:13:14.983000+00:00 seq= 58 eid= trk_1786889595036_59pugydi sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:22:30.548963+00:00 rec= 2026-08-16 14:12:55.522000+00:00 seq= 57 eid= trk_1786889575613_hr1u7zqh sid= trk_sess_1786888547392_4
+INGEST {'mx': 71, 'n': 47, 'last_rec': datetime.datetime(2026, 8, 16, 14, 17, 17, 16000, tzinfo=datetime.timezone.utc)}
+ACTIVE [(38224, 'IN_PROGRESS')]
+MULTI_ROW_SAME_EID []

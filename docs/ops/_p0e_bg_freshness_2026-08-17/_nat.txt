@@ -1,0 +1,4 @@
+﻿08-17 17:28:24.785 24118 24191 I TaskService: Finished task 'background-location-task' with eventId 'd6fbe469-d3ef-44c4-ba4c-06a865f33eb7'.
+08-17 17:28:45.182 24118 24191 I TaskService: Finished task 'background-location-task' with eventId '39811659-3047-4412-9f08-56cfddfed094'.
+08-17 17:29:05.599 24118 24191 I TaskService: Finished task 'background-location-task' with eventId 'bc8ec704-4cd7-449b-9b7a-816b6eaa6d77'.
+08-17 17:29:25.798 24118 24191 I TaskService: Finished task 'background-location-task' with eventId 'bbfaa5a5-1bb1-433d-98d0-e4f818ff7794'.

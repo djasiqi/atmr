@@ -1,0 +1,3 @@
+﻿08-17 01:40:15.418  4559  4604 I RegiGvnBase: checkRegiStatus: getState()=IDLE mIsUpdateRegistering=false
+08-17 01:40:17.779 15695 15898 I TaskService: Finished task 'background-location-task' with eventId 'fe583b8d-e241-40e2-84d8-79e7a74e0181'.
+08-17 01:40:24.428  3001  3950 D NetworkStatsObservers: Registering observer for RequestInfo from pid/uid:3001/1000(android) for DataUsageRequest [ requestId=13, networkTemplate=NetworkTemplate: matchRule=MOBILE, matchSubscriberIds=[228023...], matchWifiNetworkKeys=[], metered=YES, defaultNetwork=NO, thresholdInBytes=2500000 ] accessLevel:3

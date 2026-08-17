@@ -1,0 +1,196 @@
+﻿ssh : /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning: 
+Au caractère C:\Users\jasiq\AppData\Local\Temp\ps-script-1b887b6f-0629-4ab7-9900-b5bb6a551ad6.ps1:97 : 179
++ ... be_loc.py"; ssh -o BatchMode=yes -o ConnectTimeout=25 $ssh "docker cp ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/usr/local/lib/...cationWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  from eventlet.patcher import is_monkey_patched  # type: ignore
+[2.9] OpenTelemetry non install├® - installer avec: pip install -r requirements-otel.txt
+­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+[2026-08-17 11:30:50,029] WARNING in app: [Security] Niveau de log forc├® ├á WARNING en production (APP_LOG_LEVEL 
+ignor├® pour s├®curit├®)
+COLS_driver_location_events
+  id	bigint
+  driver_id	integer
+  company_id	integer
+  location_event_id	character varying
+  tracking_session_id	character varying
+  session_generation	bigint
+  sequence_id	bigint
+  recorded_at	timestamp with time zone
+  raw_latitude	double precision
+  raw_longitude	double precision
+  accuracy_m	double precision
+  speed_mps	double precision
+  heading	double precision
+  location_mode	character varying
+  mission_id	integer
+  source	character varying
+  event_payload_hash	character varying
+  payload_schema_version	character varying
+  created_at	timestamp with time zone
+LAST_ROWS 5
+---ROW---
+  id=5846
+  driver_id=20135
+  company_id=1
+  location_event_id=trk_1786965505020_ff3d7bps
+  tracking_session_id=trk_sess_1786965149557_7lkzgzna
+  session_generation=1675
+  sequence_id=28
+  recorded_at=2026-08-17 11:18:25.532340+00:00
+  raw_latitude=46.2115669
+  raw_longitude=6.1262394
+  accuracy_m=7.539000034332275
+  speed_mps=0.02797173336148262
+  heading=0.0
+  location_mode=mission_live
+  mission_id=38243
+  source=http
+  event_payload_hash=6f24472d9e7b4eb89ce72856068f6ab8b678f6013ae199a5ef3640099957d062
+  payload_schema_version=tracking-event-payload-v1
+  created_at=2026-08-17 11:18:26.550024+00:00
+---ROW---
+  id=5845
+  driver_id=20135
+  company_id=1
+  location_event_id=trk_1786965485295_ntwk35gs
+  tracking_session_id=trk_sess_1786965149557_7lkzgzna
+  session_generation=1675
+  sequence_id=27
+  recorded_at=2026-08-17 11:18:05.759873+00:00
+  raw_latitude=46.2115651
+  raw_longitude=6.126243
+  accuracy_m=27.923999786376953
+  speed_mps=0.037961043417453766
+  heading=0.0
+  location_mode=mission_live
+  mission_id=38243
+  source=http
+  event_payload_hash=56a46bd29fc83ed7b908423686fcefbf3c15b85eb4a8b5e6dfc7d30d9aec7115
+  payload_schema_version=tracking-event-payload-v1
+  created_at=2026-08-17 11:18:06.601878+00:00
+---ROW---
+  id=5844
+  driver_id=20135
+  company_id=1
+  location_event_id=trk_1786965456991_celxp0f1
+  tracking_session_id=trk_sess_1786965149557_7lkzgzna
+  session_generation=1675
+  sequence_id=26
+  recorded_at=2026-08-17 11:17:37.241055+00:00
+  raw_latitude=46.2115899
+  raw_longitude=6.1262416
+  accuracy_m=5.35699987411499
+  speed_mps=0.08575425297021866
+  heading=0.0
+  location_mode=mission_live
+  mission_id=38243
+  source=http
+  event_payload_hash=eac29f888dbabe46b61442634992ac3260e5993991f1021f3d25347e0cf791cb
+  payload_schema_version=tracking-event-payload-v1
+  created_at=2026-08-17 11:17:37.534316+00:00
+---ROW---
+  id=5843
+  driver_id=20135
+  company_id=1
+  location_event_id=trk_1786965436301_epi37jrb
+  tracking_session_id=trk_sess_1786965149557_7lkzgzna
+  session_generation=1675
+  sequence_id=25
+  recorded_at=2026-08-17 11:17:16.629301+00:00
+  raw_latitude=46.2115922
+  raw_longitude=6.1262407
+  accuracy_m=5.474999904632568
+  speed_mps=0.047310467809438705
+  heading=0.0
+  location_mode=mission_live
+  mission_id=38243
+  source=http
+  event_payload_hash=c99919c63053fc72fb34b934591ad14f19b9601baeb1f141072da0527a0a7b5d
+  payload_schema_version=tracking-event-payload-v1
+  created_at=2026-08-17 11:17:17.552073+00:00
+---ROW---
+  id=5842
+  driver_id=20135
+  company_id=1
+  location_event_id=trk_1786965436295_k5530zkn
+  tracking_session_id=trk_sess_1786965149557_7lkzgzna
+  session_generation=1675
+  sequence_id=24
+  recorded_at=2026-08-17 11:17:16.502342+00:00
+  raw_latitude=46.2115922
+  raw_longitude=6.1262407
+  accuracy_m=5.474999904632568
+  speed_mps=0.047310467809438705
+  heading=0.0
+  location_mode=mission_live
+  mission_id=38243
+  source=http
+  event_payload_hash=8594f929a06bbde075ae94f1c80de4303308829a6a06aec90ab7844aabc9feda
+  payload_schema_version=tracking-event-payload-v1
+  created_at=2026-08-17 11:17:17.015436+00:00
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.UndefinedColumn: column "last_lat" does not exist
+LINE 1: SELECT id, last_position_update, last_lat, last_lon, updated...
+                                         ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/tmp/_p0e_probe_loc.py", line 44, in <module>
+    drv = db.session.execute(
+          ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/scoping.py", line 764, in execute
+    return self._proxied.execute(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2373, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2280, in _execute_internal
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1421, in execute
+    return meth(
+           ^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "last_lat" does not exist
+LINE 1: SELECT id, last_position_update, last_lat, last_lon, updated...
+                                         ^
+
+[SQL: SELECT id, last_position_update, last_lat, last_lon, updated_at FROM driver WHERE id=%(d)s]
+[parameters: {'d': 20135}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+Sentry is attempting to send 2 pending events
+Waiting up to 2 seconds
+Press Ctrl-C to quit

@@ -1,0 +1,9 @@
+2026-08-15T23:29:07.6450000Z Evaluating deploy.if
+2026-08-15T23:29:07.6450000Z Evaluating: (success() && (((github.event.inputs.skip_deploy != 'true') && (needs.build-and-push.outputs.push_success == 'true'))))
+2026-08-15T23:29:07.6450000Z Expanded: (true && (('false' != 'true') && ('true' == 'true')))
+2026-08-15T23:29:07.6450000Z Result: true
+2026-08-15T23:29:07.6470000Z Job is waiting for a hosted runner to come online.
+2026-08-15T23:29:07.6470000Z Job is about to start running on the hosted runner: GitHub Actions 1000008143
+2026-08-15T23:29:07.6470000Z Requested labels: ubuntu-latest
+2026-08-15T23:29:07.6470000Z Job defined at: djasiqi/atmr/.github/workflows/deploy.yml@refs/heads/release/gps-p0-2026-08-15
+2026-08-15T23:29:07.6470000Z Waiting for a runner to pick up this job...

@@ -1,0 +1,152 @@
+﻿08-16 20:55:43.924  5727  5830 I ShadowRecoveryDetector_FLP: restored 6 daily summary
+08-16 20:55:43.930  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:43.930  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:43.930  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:55:43.930  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:43.931  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:43.931  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:55:43.931  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:55:43.931  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:43.932  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:43.932  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:55:43.932  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.0056175 / time=1786906543909 / elapsed=85771273595647
+08-16 20:55:48.863  3001  3872 E InputDispatcher: channel '[Gesture Monitor] secinputdev' ~ Channel is unrecoverably broken and will be disposed!
+08-16 20:55:51.163  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:51.163  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:51.164  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:51.165  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:51.165  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:55:51.165  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:55:51.166  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:51.166  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:55:51.179  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.0170134 / time=1786906551064 / elapsed=85778428866435
+08-16 20:55:51.357 24146 24454 I TaskService: Finished task 'background-location-task' with eventId '5b72a74e-63ee-4f34-be0f-49296c523910'.
+08-16 20:55:58.680  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 20:55:59.073 24146 24146 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:55:59.289 28357 28357 I Finsky  : [2] setup::RES: shouldRecoverRestoredPackages: versionCodeSystem 84893030
+08-16 20:55:59.289 28357 28357 I Finsky  : [2] Detected restoreservicev2://recovery not needed, will not run
+08-16 20:56:00.485  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:00.485  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:00.487  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:00.488  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:00.488  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:00.489  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:00.490  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:00.490  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:00.492  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.79379624 / time=1786906560367 / elapsed=85787730398050
+08-16 20:56:02.939  5727  5830 I ShadowRecoveryDetector_FLP: restored 6 daily summary
+08-16 20:56:02.948  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:02.948  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:02.948  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:02.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:02.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:02.951  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:02.951  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:02.953  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:02.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:02.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:02.956  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.9199159 / time=1786906562910 / elapsed=85790274503348
+08-16 20:56:08.933  5727  5830 I ShadowRecoveryDetector_FLP: restored 6 daily summary
+08-16 20:56:08.942  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:08.943  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:08.943  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:08.944  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:08.945  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:08.945  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:08.946  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:08.947  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:08.947  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:08.948  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=2.6153026 / time=1786906568910 / elapsed=85796274347720
+08-16 20:56:09.736  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:09.736  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:09.736  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:09.736  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:09.737  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:09.737  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:09.737  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:09.737  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:09.738  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:09.741  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=2.6174774 / time=1786906569668 / elapsed=85797032008727
+08-16 20:56:10.074 24146 24454 I TaskService: Finished task 'background-location-task' with eventId 'a237ae23-a9f3-4602-95e4-f6d33d649556'.
+08-16 20:56:15.058  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.058  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.058  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.059  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.059  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:15.060  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.061  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.061  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:15.063  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.7287719 / time=1786906575040 / elapsed=85802404287321
+08-16 20:56:15.243  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 20:56:15.384  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.384  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.388  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:15.388  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.388  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:15.389  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.389  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:15.389  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:15.389  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.389  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:15.389  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:15.392  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.7277093 / time=1786906575369 / elapsed=85802732125062
+08-16 20:56:17.926  5727  5830 I ShadowRecoveryDetector_FLP: restored 6 daily summary
+08-16 20:56:17.931  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:17.931  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:17.931  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:17.931  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:17.932  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:17.933  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:17.933  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:17.933  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:17.934  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:17.934  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:17.934  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=2.8442497 / time=1786906577910 / elapsed=85805274853551
+08-16 20:56:18.913  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:18.913  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:18.913  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:18.913  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:18.914  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:18.914  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:18.914  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:18.914  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:18.914  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:18.914  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:18.915  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=2.850023 / time=1786906578878 / elapsed=85806242461885
+08-16 20:56:21.502  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.502  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.503  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.506  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.506  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.506  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.506  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.508  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.510  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=2.104718 / time=1786906581485 / elapsed=85808849169177
+08-16 20:56:21.510  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.928  5727  5830 I ShadowRecoveryDetector_FLP: restored 6 daily summary
+08-16 20:56:21.937  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.937  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.937  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.937  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.937  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.937  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.937  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.937  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.938  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.938  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.938  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.939  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=2.6159039 / time=1786906581910 / elapsed=85809274937664
+08-16 20:56:21.995  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.995  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.995  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.995  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.995  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.996  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.996  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.997  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.997  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.997  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:56:21.997  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:56:21.997  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=2.6308851 / time=1786906581980 / elapsed=85809344145843
+08-16 20:56:27.015  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 20:56:27.412  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'

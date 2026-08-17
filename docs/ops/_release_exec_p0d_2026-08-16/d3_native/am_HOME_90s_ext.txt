@@ -1,0 +1,8 @@
+﻿08-16 14:38:14.991 22921 22921 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 14:38:25.240 22921 22921 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 14:38:34.444 22921 22921 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 14:38:44.536 22921 22921 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 14:38:47.631 24353 24353 I LPAPSH  : onDestroy(): Handler (com.samsung.euicc.push.SMDSService$SMDSHandler) {fd6b99d}                     [at com.samsung.euicc.push.SMDSService.onDestroy(SMDSService.java:124)]
+08-16 14:38:54.682 22921 22921 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 14:39:04.848 22921 22921 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 14:39:14.165 22921 22921 W LocationTaskConsumer: Location unavailable for foreground-service task delivery

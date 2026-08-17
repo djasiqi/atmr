@@ -1,0 +1,471 @@
+﻿--------- beginning of main
+08-14 16:42:00.839 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-14 16:42:00.839 31156 31943 I ReactNativeJS:   reason: 'throttled',
+08-14 16:42:00.839 31156 31943 I ReactNativeJS:   trigger_reason: null,
+08-14 16:42:00.839 31156 31943 I ReactNativeJS:   age_ms: 13871 }
+08-14 16:42:00.840 31156 31943 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-14 16:42:00.840 31156 31943 I ReactNativeJS:   stage: 'app_foreground' }
+08-14 16:42:00.840 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.push.fcm.get_token_start', { source: 'driver.firebaseMessaging', platform: 'android' }
+08-14 16:42:00.841 31156 31943 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-14 16:42:00.842 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.watch.started', { source: 'driver.tracking.bridge',
+08-14 16:42:00.842 31156 31943 I ReactNativeJS:   mission_id: null,
+08-14 16:42:00.842 31156 31943 I ReactNativeJS:   app_state: 'active',
+08-14 16:42:00.842 31156 31943 I ReactNativeJS:   distance_m: 10,
+08-14 16:42:00.842 31156 31943 I ReactNativeJS:   accuracy_tier: 'high' }
+08-14 16:42:00.843 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.watch.started', { source: 'driver.tracking.bridge',
+08-14 16:42:00.843 31156 31943 I ReactNativeJS:   mission_id: null,
+08-14 16:42:00.843 31156 31943 I ReactNativeJS:   app_state: 'background',
+08-14 16:42:00.843 31156 31943 I ReactNativeJS:   distance_m: 10,
+08-14 16:42:00.843 31156 31943 I ReactNativeJS:   accuracy_tier: 'balanced' }
+08-14 16:42:00.843 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.watch.started', { source: 'driver.tracking.bridge',
+08-14 16:42:00.843 31156 31943 I ReactNativeJS:   mission_id: null,
+08-14 16:42:00.843 31156 31943 I ReactNativeJS:   app_state: 'active',
+08-14 16:42:00.843 31156 31943 I ReactNativeJS:   distance_m: 10,
+08-14 16:42:00.843 31156 31943 I ReactNativeJS:   accuracy_tier: 'high' }
+08-14 16:42:00.844 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.watch.started', { source: 'driver.tracking.bridge',
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   mission_id: null,
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   app_state: 'background',
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   distance_m: 10,
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   accuracy_tier: 'balanced' }
+08-14 16:42:00.844 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.background.start_requested', { source: 'driver.services.backgroundLocationTask',
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   reason: 'ensure_manager_presence_fg',
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   start_attempt_id: 'nlo_start_cap_mst22py9_hts6lz3bko',
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   start_requested_at: 1786718520801,
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   start_reason: 'ensure_manager_presence_fg',
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   app_state_at_request: 'background',
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   isTaskRegisteredAsync_before: false,
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   hasStartedLocationUpdatesAsync_before: false,
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   stop_in_flight: 0,
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   start_in_flight: 1,
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   native_owner: null,
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   mission_id: null,
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   task_mode: 'presence_window',
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   task_defined: true,
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   task_started: false,
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   app_state: 'background',
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   fg_permission: 'granted',
+08-14 16:42:00.844 31156 31943 I ReactNativeJS:   bg_permission: 'granted' }
+08-14 16:42:00.852 31156 31943 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-14 16:42:00.852 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.push.fcm.token', { source: 'driver.firebaseMessaging', token_present: true }
+08-14 16:42:00.853 31156 31943 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-14 16:42:00.853 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:00.853 31156 31943 I ReactNativeJS:   tokenLength: 142 }
+08-14 16:42:00.854 31156 31943 I ReactNativeJS: '[driver-telemetry] driver_push.token_acquired', { source: 'driver.notifications.bridge',
+08-14 16:42:00.854 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:00.854 31156 31943 I ReactNativeJS:   provider: 'fcm',
+08-14 16:42:00.854 31156 31943 I ReactNativeJS:   token_length: 142 }
+08-14 16:42:00.855 31156 31943 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-14 16:42:00.855 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:00.855 31156 31943 I ReactNativeJS:   provider: 'fcm' }
+08-14 16:42:00.856 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.network.profile', { source: 'core.api.client',
+08-14 16:42:00.856 31156 31943 I ReactNativeJS:   network_profile_active: 'normal',
+08-14 16:42:00.856 31156 31943 I ReactNativeJS:   recommended_sync_interval_ms: 10000 }
+08-14 16:42:00.857 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.http.timeout', { source: 'core.api.client',
+08-14 16:42:00.857 31156 31943 I ReactNativeJS:   endpoint: '/driver/me/telemetry/push',
+08-14 16:42:00.857 31156 31943 I ReactNativeJS:   timeout_ms: 15000,
+08-14 16:42:00.857 31156 31943 I ReactNativeJS:   network_profile_active: 'normal' }
+08-14 16:42:00.919 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.background.start_success', { source: 'driver.services.backgroundLocationTask',
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   reason: 'ensure_manager_presence_fg',
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   start_attempt_id: 'nlo_start_cap_mst22py9_hts6lz3bko',
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   start_requested_at: 1786718520801,
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   start_reason: 'ensure_manager_presence_fg',
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   app_state_at_request: 'background',
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   isTaskRegisteredAsync_before: false,
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   hasStartedLocationUpdatesAsync_before: false,
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   stop_in_flight: 0,
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   start_in_flight: 1,
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   native_owner: null,
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   mission_id: null,
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   task_mode: 'presence_window',
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   outcome: 'started',
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   app_state_at_resolve: 'active',
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   isTaskRegisteredAsync_after: true,
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   hasStartedLocationUpdatesAsync_after: true,
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   task_defined: true,
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   task_started: true,
+08-14 16:42:00.919 31156 31943 I ReactNativeJS:   app_state: 'active' }
+08-14 16:42:00.920 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.background.task.started', { source: 'driver.services.backgroundLocationTask',
+08-14 16:42:00.920 31156 31943 I ReactNativeJS:   task_name: 'background-location-task',
+08-14 16:42:00.920 31156 31943 I ReactNativeJS:   start_attempt_id: 'nlo_start_cap_mst22py9_hts6lz3bko',
+08-14 16:42:00.920 31156 31943 I ReactNativeJS:   mission_id: null,
+08-14 16:42:00.920 31156 31943 I ReactNativeJS:   task_mode: 'presence_window',
+08-14 16:42:00.920 31156 31943 I ReactNativeJS:   interval_ms: 90000,
+08-14 16:42:00.920 31156 31943 I ReactNativeJS:   distance_m: 10,
+08-14 16:42:00.920 31156 31943 I ReactNativeJS:   low_battery_mode: false,
+08-14 16:42:00.920 31156 31943 I ReactNativeJS:   battery_degrades_gps: false,
+08-14 16:42:00.920 31156 31943 I ReactNativeJS:   battery_level: 0.5799999833106995 }
+08-14 16:42:00.921 31156 31943 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-14 16:42:00.921 31156 31943 I ReactNativeJS:   stage: 'app_foreground' }
+08-14 16:42:00.922 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.push.fcm.get_token_start', { source: 'driver.firebaseMessaging', platform: 'android' }
+08-14 16:42:00.922 31156 31943 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-14 16:42:00.924 31156 31943 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-14 16:42:00.924 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.push.fcm.token', { source: 'driver.firebaseMessaging', token_present: true }
+08-14 16:42:00.925 31156 31943 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-14 16:42:00.925 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:00.925 31156 31943 I ReactNativeJS:   tokenLength: 142 }
+08-14 16:42:00.925 31156 31943 I ReactNativeJS: '[driver-telemetry] driver_push.token_acquired', { source: 'driver.notifications.bridge',
+08-14 16:42:00.925 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:00.925 31156 31943 I ReactNativeJS:   provider: 'fcm',
+08-14 16:42:00.925 31156 31943 I ReactNativeJS:   token_length: 142 }
+08-14 16:42:00.926 31156 31943 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-14 16:42:00.926 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:00.926 31156 31943 I ReactNativeJS:   provider: 'fcm' }
+08-14 16:42:00.927 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.network.profile', { source: 'core.api.client',
+08-14 16:42:00.927 31156 31943 I ReactNativeJS:   network_profile_active: 'normal',
+08-14 16:42:00.927 31156 31943 I ReactNativeJS:   recommended_sync_interval_ms: 10000 }
+08-14 16:42:00.927 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.http.timeout', { source: 'core.api.client',
+08-14 16:42:00.927 31156 31943 I ReactNativeJS:   endpoint: '/driver/me/telemetry/push',
+08-14 16:42:00.927 31156 31943 I ReactNativeJS:   timeout_ms: 15000,
+08-14 16:42:00.927 31156 31943 I ReactNativeJS:   network_profile_active: 'normal' }
+08-14 16:42:00.930 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.background.stop_requested', { source: 'driver.services.backgroundLocationTask',
+08-14 16:42:00.930 31156 31943 I ReactNativeJS:   task_name: 'background-location-task',
+08-14 16:42:00.930 31156 31943 I ReactNativeJS:   stop_attempt_id: 'nlo_stop_cap_mst22q1k_kvk9b6qo53',
+08-14 16:42:00.930 31156 31943 I ReactNativeJS:   stop_requested_at: 1786718520920,
+08-14 16:42:00.930 31156 31943 I ReactNativeJS:   stop_reason: 'missing_native_owner',
+08-14 16:42:00.930 31156 31943 I ReactNativeJS:   app_state_at_request: 'active',
+08-14 16:42:00.930 31156 31943 I ReactNativeJS:   isTaskRegisteredAsync_before: true,
+08-14 16:42:00.930 31156 31943 I ReactNativeJS:   hasStartedLocationUpdatesAsync_before: true,
+08-14 16:42:00.930 31156 31943 I ReactNativeJS:   stop_in_flight: 1,
+08-14 16:42:00.930 31156 31943 I ReactNativeJS:   start_in_flight: 0,
+08-14 16:42:00.930 31156 31943 I ReactNativeJS:   native_owner: null,
+08-14 16:42:00.930 31156 31943 I ReactNativeJS:   mission_id: null }
+08-14 16:42:00.939 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.background.stop_success', { source: 'driver.services.backgroundLocationTask',
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   task_name: 'background-location-task',
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   stop_attempt_id: 'nlo_stop_cap_mst22q1k_kvk9b6qo53',
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   stop_requested_at: 1786718520920,
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   stop_reason: 'missing_native_owner',
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   app_state_at_request: 'active',
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   app_state_at_resolve: 'active',
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   isTaskRegisteredAsync_before: true,
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   hasStartedLocationUpdatesAsync_before: true,
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   isTaskRegisteredAsync_after: false,
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   hasStartedLocationUpdatesAsync_after: false,
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   stop_in_flight: 1,
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   start_in_flight: 0,
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   native_owner: null,
+08-14 16:42:00.939 31156 31943 I ReactNativeJS:   mission_id: null }
+08-14 16:42:00.940 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.background.task.stopped', { source: 'driver.services.backgroundLocationTask',
+08-14 16:42:00.940 31156 31943 I ReactNativeJS:   task_name: 'background-location-task',
+08-14 16:42:00.940 31156 31943 I ReactNativeJS:   reason: 'missing_native_owner' }
+08-14 16:42:00.975 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.background.start_deferred', { source: 'driver.services.backgroundLocationTask',
+08-14 16:42:00.975 31156 31943 I ReactNativeJS:   reason: 'ensure_manager_presence',
+08-14 16:42:00.975 31156 31943 I ReactNativeJS:   app_state: 'background',
+08-14 16:42:00.975 31156 31943 I ReactNativeJS:   mission_id: null,
+08-14 16:42:00.975 31156 31943 I ReactNativeJS:   task_defined: true,
+08-14 16:42:00.975 31156 31943 I ReactNativeJS:   task_started: false }
+08-14 16:42:01.046 31156 31943 I ReactNativeJS: '[FCM-GATE] register effect start', { source: 'driver.notifications.bridge',
+08-14 16:42:01.046 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:01.046 31156 31943 I ReactNativeJS:   enabled: true,
+08-14 16:42:01.046 31156 31943 I ReactNativeJS:   fcmEnabled: true }
+08-14 16:42:01.048 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.foreground.resume.resync.coalesced', { source: 'driver.sync_engine',
+08-14 16:42:01.048 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:01.048 31156 31943 I ReactNativeJS:   foreground_resume_resync_coalesced_total: 1 }
+08-14 16:42:01.051 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-14 16:42:01.051 31156 31943 I ReactNativeJS:   reason: 'throttled',
+08-14 16:42:01.051 31156 31943 I ReactNativeJS:   trigger_reason: null,
+08-14 16:42:01.051 31156 31943 I ReactNativeJS:   age_ms: 14084 }
+08-14 16:42:01.060 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.background.resume.rejected_missing_owner', { source: 'driver.services.backgroundLocationTask' }
+08-14 16:42:01.123 31156 31943 I ReactNativeJS: '[perf-kpi] perf.js_long_task', { source: 'perf.instrumentation',
+08-14 16:42:01.123 31156 31943 I ReactNativeJS:   role: 'driver',
+08-14 16:42:01.123 31156 31943 I ReactNativeJS:   screen: '/',
+08-14 16:42:01.123 31156 31943 I ReactNativeJS:   duration_ms: 167.47359400242567,
+08-14 16:42:01.123 31156 31943 I ReactNativeJS:   timestamp_client: '2026-08-14T14:42:01.123Z' }
+08-14 16:42:01.134 31156 31943 I ReactNativeJS: '[FCM-GATE] register effect start', { source: 'driver.notifications.bridge',
+08-14 16:42:01.134 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:01.134 31156 31943 I ReactNativeJS:   enabled: true,
+08-14 16:42:01.134 31156 31943 I ReactNativeJS:   fcmEnabled: true }
+08-14 16:42:01.135 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.foreground.resume.resync.coalesced', { source: 'driver.sync_engine',
+08-14 16:42:01.135 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:01.135 31156 31943 I ReactNativeJS:   foreground_resume_resync_coalesced_total: 1 }
+08-14 16:42:01.137 31156 31943 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-14 16:42:01.137 31156 31943 I ReactNativeJS:   stage: 'app_foreground' }
+08-14 16:42:01.137 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.push.fcm.get_token_start', { source: 'driver.firebaseMessaging', platform: 'android' }
+08-14 16:42:01.138 31156 31943 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-14 16:42:01.139 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-14 16:42:01.139 31156 31943 I ReactNativeJS:   reason: 'throttled',
+08-14 16:42:01.139 31156 31943 I ReactNativeJS:   trigger_reason: null,
+08-14 16:42:01.139 31156 31943 I ReactNativeJS:   age_ms: 14172 }
+08-14 16:42:01.147 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.background.resume.rejected_missing_owner', { source: 'driver.services.backgroundLocationTask' }
+08-14 16:42:01.233 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.watch.started', { source: 'driver.tracking.bridge',
+08-14 16:42:01.233 31156 31943 I ReactNativeJS:   mission_id: null,
+08-14 16:42:01.233 31156 31943 I ReactNativeJS:   app_state: 'background',
+08-14 16:42:01.233 31156 31943 I ReactNativeJS:   distance_m: 10,
+08-14 16:42:01.233 31156 31943 I ReactNativeJS:   accuracy_tier: 'balanced' }
+08-14 16:42:01.237 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.watch.started', { source: 'driver.tracking.bridge',
+08-14 16:42:01.237 31156 31943 I ReactNativeJS:   mission_id: null,
+08-14 16:42:01.237 31156 31943 I ReactNativeJS:   app_state: 'active',
+08-14 16:42:01.237 31156 31943 I ReactNativeJS:   distance_m: 10,
+08-14 16:42:01.237 31156 31943 I ReactNativeJS:   accuracy_tier: 'high' }
+08-14 16:42:01.240 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.watch.started', { source: 'driver.tracking.bridge',
+08-14 16:42:01.240 31156 31943 I ReactNativeJS:   mission_id: null,
+08-14 16:42:01.240 31156 31943 I ReactNativeJS:   app_state: 'active',
+08-14 16:42:01.240 31156 31943 I ReactNativeJS:   distance_m: 10,
+08-14 16:42:01.240 31156 31943 I ReactNativeJS:   accuracy_tier: 'high' }
+08-14 16:42:01.244 31156 31943 I ReactNativeJS: '[perf-kpi] perf.js_long_task', { source: 'perf.instrumentation',
+08-14 16:42:01.244 31156 31943 I ReactNativeJS:   role: 'driver',
+08-14 16:42:01.244 31156 31943 I ReactNativeJS:   screen: '/',
+08-14 16:42:01.244 31156 31943 I ReactNativeJS:   duration_ms: 118.44447900354862,
+08-14 16:42:01.244 31156 31943 I ReactNativeJS:   timestamp_client: '2026-08-14T14:42:01.241Z' }
+08-14 16:42:01.247 31156 31943 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-14 16:42:01.250 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.push.fcm.token', { source: 'driver.firebaseMessaging', token_present: true }
+08-14 16:42:01.254 31156 31943 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-14 16:42:01.254 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:01.254 31156 31943 I ReactNativeJS:   tokenLength: 142 }
+08-14 16:42:01.261 31156 31943 I ReactNativeJS: '[driver-telemetry] driver_push.token_acquired', { source: 'driver.notifications.bridge',
+08-14 16:42:01.261 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:01.261 31156 31943 I ReactNativeJS:   provider: 'fcm',
+08-14 16:42:01.261 31156 31943 I ReactNativeJS:   token_length: 142 }
+08-14 16:42:01.266 31156 31943 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-14 16:42:01.266 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:01.266 31156 31943 I ReactNativeJS:   provider: 'fcm' }
+08-14 16:42:01.268 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.network.profile', { source: 'core.api.client',
+08-14 16:42:01.268 31156 31943 I ReactNativeJS:   network_profile_active: 'normal',
+08-14 16:42:01.268 31156 31943 I ReactNativeJS:   recommended_sync_interval_ms: 10000 }
+08-14 16:42:01.270 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.http.timeout', { source: 'core.api.client',
+08-14 16:42:01.270 31156 31943 I ReactNativeJS:   endpoint: '/driver/me/telemetry/push',
+08-14 16:42:01.270 31156 31943 I ReactNativeJS:   timeout_ms: 15000,
+08-14 16:42:01.270 31156 31943 I ReactNativeJS:   network_profile_active: 'normal' }
+08-14 16:42:01.306 31156 31943 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-14 16:42:01.306 31156 31943 I ReactNativeJS:   stage: 'app_foreground' }
+08-14 16:42:01.323 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.push.fcm.get_token_start', { source: 'driver.firebaseMessaging', platform: 'android' }
+08-14 16:42:01.325 31156 31943 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-14 16:42:01.373 31156 31943 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-14 16:42:01.375 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.push.fcm.token', { source: 'driver.firebaseMessaging', token_present: true }
+08-14 16:42:01.376 31156 31943 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-14 16:42:01.376 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:01.376 31156 31943 I ReactNativeJS:   tokenLength: 142 }
+08-14 16:42:01.378 31156 31943 I ReactNativeJS: '[driver-telemetry] driver_push.token_acquired', { source: 'driver.notifications.bridge',
+08-14 16:42:01.378 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:01.378 31156 31943 I ReactNativeJS:   provider: 'fcm',
+08-14 16:42:01.378 31156 31943 I ReactNativeJS:   token_length: 142 }
+08-14 16:42:01.381 31156 31943 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-14 16:42:01.381 31156 31943 I ReactNativeJS:   stage: 'app_foreground',
+08-14 16:42:01.381 31156 31943 I ReactNativeJS:   provider: 'fcm' }
+08-14 16:42:01.384 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.network.profile', { source: 'core.api.client',
+08-14 16:42:01.384 31156 31943 I ReactNativeJS:   network_profile_active: 'normal',
+08-14 16:42:01.384 31156 31943 I ReactNativeJS:   recommended_sync_interval_ms: 10000 }
+08-14 16:42:01.385 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.http.timeout', { source: 'core.api.client',
+08-14 16:42:01.385 31156 31943 I ReactNativeJS:   endpoint: '/driver/me/telemetry/push',
+08-14 16:42:01.385 31156 31943 I ReactNativeJS:   timeout_ms: 15000,
+08-14 16:42:01.385 31156 31943 I ReactNativeJS:   network_profile_active: 'normal' }
+08-14 16:42:02.386 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.runtime.reconcile.failure', { source: 'driver.sync.orchestrator',
+08-14 16:42:02.386 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:02.386 31156 31943 I ReactNativeJS:   trigger: 'foreground',
+08-14 16:42:02.386 31156 31943 I ReactNativeJS:   reason: 'reconcile_failed' }
+08-14 16:42:02.395 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.network.profile', { source: 'core.api.client',
+08-14 16:42:02.395 31156 31943 I ReactNativeJS:   network_profile_active: 'normal',
+08-14 16:42:02.395 31156 31943 I ReactNativeJS:   recommended_sync_interval_ms: 10000 }
+08-14 16:42:02.397 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.http.timeout', { source: 'core.api.client',
+08-14 16:42:02.397 31156 31943 I ReactNativeJS:   endpoint: '/driver/me/bookings/since',
+08-14 16:42:02.397 31156 31943 I ReactNativeJS:   timeout_ms: 15000,
+08-14 16:42:02.397 31156 31943 I ReactNativeJS:   network_profile_active: 'normal' }
+08-14 16:42:02.545 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.session.register_deferred', { source: 'driver.tracking.queue',
+08-14 16:42:02.545 31156 31943 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786718507524_7uzyx0wx' }
+08-14 16:42:02.571 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.runtime.resume.failure', { source: 'driver.runtime.resume',
+08-14 16:42:02.571 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:02.571 31156 31943 I ReactNativeJS:   reason: 'resume_failed',
+08-14 16:42:02.571 31156 31943 I ReactNativeJS:   retry_count: 1,
+08-14 16:42:02.571 31156 31943 I ReactNativeJS:   will_retry: true,
+08-14 16:42:02.571 31156 31943 I ReactNativeJS:   resume_attempt_id: 'driver:20:1786718506956:1' }
+08-14 16:42:08.340 31156 31943 I ReactNativeJS: '[driver-telemetry] auth.refresh.endpoint_used', { source: 'core.api.client', endpoint: 'refresh-token' }
+08-14 16:42:08.509 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.watermark.poll_failed', { source: 'driver.tracking.queue',
+08-14 16:42:08.509 31156 31943 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786716368053_zyg5g2sn',
+08-14 16:42:08.509 31156 31943 I ReactNativeJS:   http_status: 403 }
+08-14 16:42:08.589 31156 31943 I ReactNativeJS: '[DriverSocket]', { socketUrl: 'http://127.0.0.1:15100',
+08-14 16:42:08.589 31156 31943 I ReactNativeJS:   urlEnvSource: 'EXPO_PUBLIC_DRIVER_SOCKET_URL',
+08-14 16:42:08.589 31156 31943 I ReactNativeJS:   transports: [ 'websocket', 'polling' ],
+08-14 16:42:08.589 31156 31943 I ReactNativeJS:   path: '/socket.io',
+08-14 16:42:08.589 31156 31943 I ReactNativeJS:   contextId: 'driver:20',
+08-14 16:42:08.589 31156 31943 I ReactNativeJS:   surface: 'driver',
+08-14 16:42:08.589 31156 31943 I ReactNativeJS:   hasToken: true }
+08-14 16:42:08.603 31156 31943 I ReactNativeJS: '[perf-kpi] perf.realtime.notify', { source: 'perf.instrumentation',
+08-14 16:42:08.603 31156 31943 I ReactNativeJS:   role: 'driver',
+08-14 16:42:08.603 31156 31943 I ReactNativeJS:   screen: '/',
+08-14 16:42:08.603 31156 31943 I ReactNativeJS:   duration_ms: 6,
+08-14 16:42:08.603 31156 31943 I ReactNativeJS:   listener_count: 4,
+08-14 16:42:08.603 31156 31943 I ReactNativeJS:   timestamp_client: '2026-08-14T14:42:08.600Z' }
+08-14 16:42:08.606 31156 31943 I ReactNativeJS: '[driver-telemetry] realtime.transport.state', { source: 'core.realtime.manager',
+08-14 16:42:08.606 31156 31943 I ReactNativeJS:   mode: 'socket',
+08-14 16:42:08.606 31156 31943 I ReactNativeJS:   actual_transport: 'polling',
+08-14 16:42:08.606 31156 31943 I ReactNativeJS:   connected: true,
+08-14 16:42:08.606 31156 31943 I ReactNativeJS:   transport_authority: 'polling' }
+08-14 16:42:08.616 31156 31943 I ReactNativeJS: '[perf-kpi] perf.realtime.notify', { source: 'perf.instrumentation',
+08-14 16:42:08.616 31156 31943 I ReactNativeJS:   role: 'driver',
+08-14 16:42:08.616 31156 31943 I ReactNativeJS:   screen: '/',
+08-14 16:42:08.616 31156 31943 I ReactNativeJS:   duration_ms: 5,
+08-14 16:42:08.616 31156 31943 I ReactNativeJS:   listener_count: 4,
+08-14 16:42:08.616 31156 31943 I ReactNativeJS:   timestamp_client: '2026-08-14T14:42:08.611Z' }
+08-14 16:42:08.619 31156 31943 I ReactNativeJS: '[DriverSocket]', { socketUrl: 'http://127.0.0.1:15100',
+08-14 16:42:08.619 31156 31943 I ReactNativeJS:   urlEnvSource: 'EXPO_PUBLIC_DRIVER_SOCKET_URL',
+08-14 16:42:08.619 31156 31943 I ReactNativeJS:   transports: [ 'websocket', 'polling' ],
+08-14 16:42:08.619 31156 31943 I ReactNativeJS:   path: '/socket.io',
+08-14 16:42:08.619 31156 31943 I ReactNativeJS:   contextId: 'driver:20',
+08-14 16:42:08.619 31156 31943 I ReactNativeJS:   surface: 'driver',
+08-14 16:42:08.619 31156 31943 I ReactNativeJS:   hasToken: true }
+08-14 16:42:08.628 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.network.profile', { source: 'core.api.client',
+08-14 16:42:08.628 31156 31943 I ReactNativeJS:   network_profile_active: 'normal',
+08-14 16:42:08.628 31156 31943 I ReactNativeJS:   recommended_sync_interval_ms: 10000 }
+08-14 16:42:08.630 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.http.timeout', { source: 'core.api.client',
+08-14 16:42:08.630 31156 31943 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-14 16:42:08.630 31156 31943 I ReactNativeJS:   timeout_ms: 15000,
+08-14 16:42:08.630 31156 31943 I ReactNativeJS:   network_profile_active: 'normal' }
+08-14 16:42:08.756 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.network.profile', { source: 'core.api.client',
+08-14 16:42:08.756 31156 31943 I ReactNativeJS:   network_profile_active: 'normal',
+08-14 16:42:08.756 31156 31943 I ReactNativeJS:   recommended_sync_interval_ms: 10000 }
+08-14 16:42:08.764 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.http.timeout', { source: 'core.api.client',
+08-14 16:42:08.764 31156 31943 I ReactNativeJS:   endpoint: '/driver/me/bookings/since',
+08-14 16:42:08.764 31156 31943 I ReactNativeJS:   timeout_ms: 15000,
+08-14 16:42:08.764 31156 31943 I ReactNativeJS:   network_profile_active: 'normal' }
+08-14 16:42:08.780 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-14 16:42:08.780 31156 31943 I ReactNativeJS:   previous_session_id: 'trk_sess_1786718507524_7uzyx0wx',
+08-14 16:42:08.780 31156 31943 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786718528623_dpx0mmi0',
+08-14 16:42:08.780 31156 31943 I ReactNativeJS:   rebound_count: 0,
+08-14 16:42:08.780 31156 31943 I ReactNativeJS:   released_socket_count: 0 }
+08-14 16:42:08.787 31156 31943 I ReactNativeJS: '[perf-kpi] perf.runtime.socket_reconnect_failed_total', { source: 'perf.runtime_stability',
+08-14 16:42:08.787 31156 31943 I ReactNativeJS:   total: 77,
+08-14 16:42:08.787 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:08.787 31156 31943 I ReactNativeJS:   timestamp_client: '2026-08-14T14:42:08.784Z' }
+08-14 16:42:08.789 31156 31943 I ReactNativeJS: '[driver-telemetry] realtime.transport.state', { source: 'core.realtime.manager',
+08-14 16:42:08.789 31156 31943 I ReactNativeJS:   mode: 'polling',
+08-14 16:42:08.789 31156 31943 I ReactNativeJS:   actual_transport: 'polling',
+08-14 16:42:08.789 31156 31943 I ReactNativeJS:   connected: false,
+08-14 16:42:08.789 31156 31943 I ReactNativeJS:   transport_authority: 'degraded' }
+08-14 16:42:08.805 31156 31943 I ReactNativeJS: '[perf-kpi] perf.realtime.notify', { source: 'perf.instrumentation',
+08-14 16:42:08.805 31156 31943 I ReactNativeJS:   role: 'driver',
+08-14 16:42:08.805 31156 31943 I ReactNativeJS:   screen: '/',
+08-14 16:42:08.805 31156 31943 I ReactNativeJS:   duration_ms: 3,
+08-14 16:42:08.805 31156 31943 I ReactNativeJS:   listener_count: 4,
+08-14 16:42:08.805 31156 31943 I ReactNativeJS:   timestamp_client: '2026-08-14T14:42:08.792Z' }
+08-14 16:42:08.811 31156 31943 I ReactNativeJS: '[driver-telemetry] realtime.socket.disconnect', { source: 'core.realtime.manager',
+08-14 16:42:08.811 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:08.811 31156 31943 I ReactNativeJS:   reason: 'websocket error' }
+08-14 16:42:08.816 31156 31943 I ReactNativeJS: '[driver-telemetry] realtime.transport.mismatch', { source: 'core.realtime.manager',
+08-14 16:42:08.816 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:08.816 31156 31943 I ReactNativeJS:   desired_transport: 'socket',
+08-14 16:42:08.816 31156 31943 I ReactNativeJS:   actual_transport: 'polling' }
+08-14 16:42:08.832 31156 31943 I ReactNativeJS: '[perf-kpi] perf.realtime.notify', { source: 'perf.instrumentation',
+08-14 16:42:08.832 31156 31943 I ReactNativeJS:   role: 'driver',
+08-14 16:42:08.832 31156 31943 I ReactNativeJS:   screen: '/',
+08-14 16:42:08.832 31156 31943 I ReactNativeJS:   duration_ms: 3,
+08-14 16:42:08.832 31156 31943 I ReactNativeJS:   listener_count: 4,
+08-14 16:42:08.832 31156 31943 I ReactNativeJS:   timestamp_client: '2026-08-14T14:42:08.820Z' }
+08-14 16:42:08.836 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush_coalesced', { source: 'driver.tracking.queue',
+08-14 16:42:08.836 31156 31943 I ReactNativeJS:   queue_depth: 2,
+08-14 16:42:08.836 31156 31943 I ReactNativeJS:   force_http_fallback: true }
+08-14 16:42:08.935 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.queue.suspend_wait', { source: 'driver.tracking.queue',
+08-14 16:42:08.935 31156 31943 I ReactNativeJS:   reason: 'context_inactive',
+08-14 16:42:08.935 31156 31943 I ReactNativeJS:   wait_ms: 0,
+08-14 16:42:08.935 31156 31943 I ReactNativeJS:   queue_depth: 2 }
+08-14 16:42:09.000 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.queue.suspend_wait', { source: 'driver.tracking.queue',
+08-14 16:42:09.000 31156 31943 I ReactNativeJS:   reason: 'context_inactive',
+08-14 16:42:09.000 31156 31943 I ReactNativeJS:   wait_ms: 0,
+08-14 16:42:09.000 31156 31943 I ReactNativeJS:   queue_depth: 2 }
+08-14 16:42:09.332 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-14 16:42:09.332 31156 31943 I ReactNativeJS:   kind: 'tracking_health',
+08-14 16:42:09.332 31156 31943 I ReactNativeJS:   constraint_reason: null,
+08-14 16:42:09.332 31156 31943 I ReactNativeJS:   fgs_running: true,
+08-14 16:42:09.332 31156 31943 I ReactNativeJS:   battery_optimized: false,
+08-14 16:42:09.332 31156 31943 I ReactNativeJS:   trigger_reason: null }
+08-14 16:42:09.433 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-14 16:42:09.433 31156 31943 I ReactNativeJS:   kind: 'tracking_health',
+08-14 16:42:09.433 31156 31943 I ReactNativeJS:   constraint_reason: null,
+08-14 16:42:09.433 31156 31943 I ReactNativeJS:   fgs_running: true,
+08-14 16:42:09.433 31156 31943 I ReactNativeJS:   battery_optimized: false,
+08-14 16:42:09.433 31156 31943 I ReactNativeJS:   trigger_reason: null }
+08-14 16:42:09.450 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-14 16:42:09.450 31156 31943 I ReactNativeJS:   kind: 'tracking_health',
+08-14 16:42:09.450 31156 31943 I ReactNativeJS:   constraint_reason: null,
+08-14 16:42:09.450 31156 31943 I ReactNativeJS:   fgs_running: true,
+08-14 16:42:09.450 31156 31943 I ReactNativeJS:   battery_optimized: false,
+08-14 16:42:09.450 31156 31943 I ReactNativeJS:   trigger_reason: null }
+08-14 16:42:09.483 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-14 16:42:09.483 31156 31943 I ReactNativeJS:   kind: 'tracking_health',
+08-14 16:42:09.483 31156 31943 I ReactNativeJS:   constraint_reason: null,
+08-14 16:42:09.483 31156 31943 I ReactNativeJS:   fgs_running: true,
+08-14 16:42:09.483 31156 31943 I ReactNativeJS:   battery_optimized: false,
+08-14 16:42:09.483 31156 31943 I ReactNativeJS:   trigger_reason: null }
+08-14 16:42:10.223 31156 31943 I ReactNativeJS: '[driver-telemetry] realtime.transport.state', { source: 'core.realtime.manager',
+08-14 16:42:10.223 31156 31943 I ReactNativeJS:   mode: 'polling',
+08-14 16:42:10.223 31156 31943 I ReactNativeJS:   actual_transport: 'polling',
+08-14 16:42:10.223 31156 31943 I ReactNativeJS:   connected: false,
+08-14 16:42:10.223 31156 31943 I ReactNativeJS:   transport_authority: 'reconcile' }
+08-14 16:42:10.228 31156 31943 I ReactNativeJS: '[perf-kpi] perf.realtime.notify', { source: 'perf.instrumentation',
+08-14 16:42:10.228 31156 31943 I ReactNativeJS:   role: 'driver',
+08-14 16:42:10.228 31156 31943 I ReactNativeJS:   screen: '/',
+08-14 16:42:10.228 31156 31943 I ReactNativeJS:   duration_ms: 3,
+08-14 16:42:10.228 31156 31943 I ReactNativeJS:   listener_count: 4,
+08-14 16:42:10.228 31156 31943 I ReactNativeJS:   timestamp_client: '2026-08-14T14:42:10.226Z' }
+08-14 16:42:10.230 31156 31943 I ReactNativeJS: '[driver-telemetry] realtime.transport.authority', { source: 'core.realtime.manager',
+08-14 16:42:10.230 31156 31943 I ReactNativeJS:   transport_authority: 'reconcile',
+08-14 16:42:10.230 31156 31943 I ReactNativeJS:   reason: 'since' }
+08-14 16:42:10.232 31156 31943 I ReactNativeJS: '[driver-telemetry] realtime.reconcile.since', { source: 'driver.sync.reconcile',
+08-14 16:42:10.232 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:10.232 31156 31943 I ReactNativeJS:   mission_reconcile_since_total: 1,
+08-14 16:42:10.232 31156 31943 I ReactNativeJS:   since_age_ms: 60073,
+08-14 16:42:10.232 31156 31943 I ReactNativeJS:   max_incremental_window_ms: 900000 }
+08-14 16:42:10.367 31156 31943 I ReactNativeJS: '[driver-telemetry] realtime.reconcile.since', { source: 'driver.sync.reconcile',
+08-14 16:42:10.367 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:10.367 31156 31943 I ReactNativeJS:   mission_reconcile_since_total: 1,
+08-14 16:42:10.367 31156 31943 I ReactNativeJS:   since_age_ms: 66434,
+08-14 16:42:10.367 31156 31943 I ReactNativeJS:   max_incremental_window_ms: 900000 }
+08-14 16:42:10.378 31156 31943 I ReactNativeJS: '[driver-telemetry] auth.refresh.endpoint_used', { source: 'core.api.client', endpoint: 'refresh-token' }
+08-14 16:42:10.397 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.runtime.reconcile', { source: 'driver.sync.orchestrator',
+08-14 16:42:10.397 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:10.397 31156 31943 I ReactNativeJS:   trigger: 'foreground' }
+08-14 16:42:10.412 31156 31943 I ReactNativeJS: '[driver-telemetry] tracking.queue.suspend_wait', { source: 'driver.tracking.queue',
+08-14 16:42:10.412 31156 31943 I ReactNativeJS:   reason: 'context_inactive',
+08-14 16:42:10.412 31156 31943 I ReactNativeJS:   wait_ms: 0,
+08-14 16:42:10.412 31156 31943 I ReactNativeJS:   queue_depth: 2 }
+08-14 16:42:10.428 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.runtime.resync', { source: 'driver.runtime.resume',
+08-14 16:42:10.428 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:10.428 31156 31943 I ReactNativeJS:   trigger: 'foreground',
+08-14 16:42:10.428 31156 31943 I ReactNativeJS:   resume_attempt_id: 'driver:20:1786718506956:1' }
+08-14 16:42:10.430 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.runtime.resume.success', { source: 'driver.runtime.resume',
+08-14 16:42:10.430 31156 31943 I ReactNativeJS:   context_id: 'driver:20',
+08-14 16:42:10.430 31156 31943 I ReactNativeJS:   retry_count: 1,
+08-14 16:42:10.430 31156 31943 I ReactNativeJS:   resume_attempt_id: 'driver:20:1786718506956:1' }
+08-14 16:42:10.433 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.network.profile', { source: 'core.api.client',
+08-14 16:42:10.433 31156 31943 I ReactNativeJS:   network_profile_active: 'normal',
+08-14 16:42:10.433 31156 31943 I ReactNativeJS:   recommended_sync_interval_ms: 10000 }
+08-14 16:42:10.434 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.http.timeout', { source: 'core.api.client',
+08-14 16:42:10.434 31156 31943 I ReactNativeJS:   endpoint: '/driver/me/bookings',
+08-14 16:42:10.434 31156 31943 I ReactNativeJS:   timeout_ms: 15000,
+08-14 16:42:10.434 31156 31943 I ReactNativeJS:   network_profile_active: 'normal' }
+08-14 16:42:10.437 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.network.profile', { source: 'core.api.client',
+08-14 16:42:10.437 31156 31943 I ReactNativeJS:   network_profile_active: 'normal',
+08-14 16:42:10.437 31156 31943 I ReactNativeJS:   recommended_sync_interval_ms: 10000 }
+08-14 16:42:10.439 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.http.timeout', { source: 'core.api.client',
+08-14 16:42:10.439 31156 31943 I ReactNativeJS:   endpoint: '/driver/me/bookings/since',
+08-14 16:42:10.439 31156 31943 I ReactNativeJS:   timeout_ms: 15000,
+08-14 16:42:10.439 31156 31943 I ReactNativeJS:   network_profile_active: 'normal' }
+08-14 16:42:10.440 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.network.profile', { source: 'core.api.client',
+08-14 16:42:10.440 31156 31943 I ReactNativeJS:   network_profile_active: 'normal',
+08-14 16:42:10.440 31156 31943 I ReactNativeJS:   recommended_sync_interval_ms: 10000 }
+08-14 16:42:10.442 31156 31943 I ReactNativeJS: '[driver-telemetry] driver.http.timeout', { source: 'core.api.client',
+08-14 16:42:10.442 31156 31943 I ReactNativeJS:   endpoint: '/driver/me/company-bookings/today',
+08-14 16:42:10.442 31156 31943 I ReactNativeJS:   timeout_ms: 15000,
+08-14 16:42:10.442 31156 31943 I ReactNativeJS:   network_profile_active: 'normal' }
+08-14 16:42:10.471 31156 31943 I ReactNativeJS: '[perf-kpi] perf.react_query.invalidate', { source: 'perf.instrumentation',
+08-14 16:42:10.471 31156 31943 I ReactNativeJS:   role: 'driver',
+08-14 16:42:10.471 31156 31943 I ReactNativeJS:   screen: '/',
+08-14 16:42:10.471 31156 31943 I ReactNativeJS:   duration_ms: 43,
+08-14 16:42:10.471 31156 31943 I ReactNativeJS:   trigger: 'query_client',
+08-14 16:42:10.471 31156 31943 I ReactNativeJS:   query_key: '["driver-sync-state","driver:20"]',
+08-14 16:42:10.471 31156 31943 I ReactNativeJS:   invalidate_sub_key: 'driver-sync-state.driver:20',
+08-14 16:42:10.471 31156 31943 I ReactNativeJS:   timestamp_client: '2026-08-14T14:42:10.468Z' }
+08-14 16:42:10.598 31156 31943 I ReactNativeJS: '[perf-kpi] perf.react_query.invalidate', { source: 'perf.instrumentation',
+08-14 16:42:10.598 31156 31943 I ReactNativeJS:   role: 'driver',
+08-14 16:42:10.598 31156 31943 I ReactNativeJS:   screen: '/',
+08-14 16:42:10.598 31156 31943 I ReactNativeJS:   duration_ms: 181,
+08-14 16:42:10.598 31156 31943 I ReactNativeJS:   trigger: 'query_client',
+08-14 16:42:10.598 31156 31943 I ReactNativeJS:   query_key: '["driver-missions","driver:20"]',
+08-14 16:42:10.598 31156 31943 I ReactNativeJS:   invalidate_sub_key: 'driver-missions.driver:20',
+08-14 16:42:10.598 31156 31943 I ReactNativeJS:   timestamp_client: '2026-08-14T14:42:10.595Z' }
+08-14 16:42:10.753 31156 31943 I ReactNativeJS: '[perf-kpi] perf.react_query.invalidate', { source: 'perf.instrumentation',
+08-14 16:42:10.753 31156 31943 I ReactNativeJS:   role: 'driver',
+08-14 16:42:10.753 31156 31943 I ReactNativeJS:   screen: '/',
+08-14 16:42:10.753 31156 31943 I ReactNativeJS:   duration_ms: 328,
+08-14 16:42:10.753 31156 31943 I ReactNativeJS:   trigger: 'query_client',
+08-14 16:42:10.753 31156 31943 I ReactNativeJS:   query_key: '["driver-company-bookings-today","driver:20"]',
+08-14 16:42:10.753 31156 31943 I ReactNativeJS:   invalidate_sub_key: 'driver-company-bookings-today.driver:20',
+08-14 16:42:10.753 31156 31943 I ReactNativeJS:   timestamp_client: '2026-08-14T14:42:10.750Z' }

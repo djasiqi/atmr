@@ -1,0 +1,288 @@
+﻿2026-08-15T23:20:16.9147588Z ##[group]Run aquasecurity/trivy-action@0.35.0
+2026-08-15T23:20:16.9147954Z with:
+2026-08-15T23:20:16.9148163Z   scan-type: fs
+2026-08-15T23:20:16.9148381Z   scan-ref: ./backend
+2026-08-15T23:20:16.9148991Z   format: cyclonedx
+2026-08-15T23:20:16.9149232Z   output: sbom-cyclonedx.json
+2026-08-15T23:20:16.9149488Z   exit-code: 0
+2026-08-15T23:20:16.9149791Z   ignore-unfixed: false
+2026-08-15T23:20:16.9150028Z   vuln-type: os,library
+2026-08-15T23:20:16.9150288Z   severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+2026-08-15T23:20:16.9150644Z   cache-dir: /home/runner/work/atmr/atmr/.cache/trivy
+2026-08-15T23:20:16.9151035Z   list-all-pkgs: false
+2026-08-15T23:20:16.9151263Z   version: v0.69.3
+2026-08-15T23:20:16.9151493Z   cache: true
+2026-08-15T23:20:16.9151773Z   skip-setup-trivy: false
+2026-08-15T23:20:16.9154621Z   token-setup-trivy: ***
+2026-08-15T23:20:16.9154950Z env:
+2026-08-15T23:20:16.9155248Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:16.9155681Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:16.9156023Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:16.9156413Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:16.9156647Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:16.9157012Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:16.9157401Z ##[endgroup]
+2026-08-15T23:20:16.9242048Z ##[start-action display=Install Trivy;id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy]
+2026-08-15T23:20:16.9360898Z ##[group]Run aquasecurity/setup-trivy@e6c2c5e321ed9123bda567646e2f96565e34abe1
+2026-08-15T23:20:16.9361465Z with:
+2026-08-15T23:20:16.9361672Z   version: v0.69.3
+2026-08-15T23:20:16.9361967Z   cache: true
+2026-08-15T23:20:16.9364704Z   token: ***
+2026-08-15T23:20:16.9365000Z   path: $HOME/.local/bin
+2026-08-15T23:20:16.9365537Z   github-server-url: https://github.com
+2026-08-15T23:20:16.9365907Z env:
+2026-08-15T23:20:16.9366205Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:16.9366620Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:16.9367020Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:16.9367854Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:16.9368412Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:16.9369355Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:16.9370160Z ##[endgroup]
+2026-08-15T23:20:16.9379827Z ##[start-action display=Binary dir;id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.binary-dir]
+2026-08-15T23:20:16.9401387Z ##[group]Run echo "dir=$HOME/.local/bin/trivy-bin" >> $GITHUB_OUTPUT
+2026-08-15T23:20:16.9402045Z [36;1mecho "dir=$HOME/.local/bin/trivy-bin" >> $GITHUB_OUTPUT[0m
+2026-08-15T23:20:16.9449381Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-15T23:20:16.9449824Z env:
+2026-08-15T23:20:16.9450122Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:16.9450709Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:16.9450958Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:16.9451409Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:16.9451646Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:16.9451995Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:16.9452467Z ##[endgroup]
+2026-08-15T23:20:16.9536138Z ##[end-action id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.binary-dir;outcome=success;conclusion=success;duration_ms=15]
+2026-08-15T23:20:16.9539624Z ##[start-action display=Check the version for caching;id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.__run]
+2026-08-15T23:20:16.9547611Z ##[end-action id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-08-15T23:20:16.9550946Z ##[start-action display=Restore Trivy binary from cache;id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.cache]
+2026-08-15T23:20:16.9604452Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T23:20:16.9606452Z ##[group]Run actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+2026-08-15T23:20:16.9606898Z with:
+2026-08-15T23:20:16.9607125Z   path: /home/runner/.local/bin/trivy-bin
+2026-08-15T23:20:16.9607512Z   key: trivy-binary-v0.69.3-Linux-X64
+2026-08-15T23:20:16.9607889Z   enableCrossOsArchive: false
+2026-08-15T23:20:16.9608246Z   fail-on-cache-miss: false
+2026-08-15T23:20:16.9608782Z   lookup-only: false
+2026-08-15T23:20:16.9609100Z   save-always: false
+2026-08-15T23:20:16.9609383Z env:
+2026-08-15T23:20:16.9609609Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:16.9610063Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:16.9610363Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:16.9610771Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:16.9611088Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:16.9611460Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:16.9611854Z ##[endgroup]
+2026-08-15T23:20:17.0675002Z (node:3281) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-15T23:20:17.0675914Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-15T23:20:17.3204588Z Cache hit for: trivy-binary-v0.69.3-Linux-X64
+2026-08-15T23:20:17.3315999Z (node:3281) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-08-15T23:20:18.6024421Z Received 0 of 44264935 (0.0%), 0.0 MBs/sec
+2026-08-15T23:20:19.2253554Z Received 44264935 of 44264935 (100.0%), 26.0 MBs/sec
+2026-08-15T23:20:19.2254341Z Cache Size: ~42 MB (44264935 B)
+2026-08-15T23:20:19.2284549Z [command]/usr/bin/tar -xf /home/runner/work/_temp/a88bc445-2527-437a-8d42-16e1f3657fcd/cache.tzst -P -C /home/runner/work/atmr/atmr --use-compress-program unzstd
+2026-08-15T23:20:19.4781437Z Cache restored successfully
+2026-08-15T23:20:19.4877642Z Cache restored from key: trivy-binary-v0.69.3-Linux-X64
+2026-08-15T23:20:19.4970000Z ##[end-action id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.cache;outcome=success;conclusion=success;duration_ms=2541]
+2026-08-15T23:20:19.4972823Z ##[start-action display=Checkout install script;id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.__actions_checkout]
+2026-08-15T23:20:19.4978816Z ##[end-action id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.__actions_checkout;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-08-15T23:20:19.4981322Z ##[start-action display=Install Trivy;id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.__run_2]
+2026-08-15T23:20:19.4985732Z ##[end-action id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.__run_2;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-08-15T23:20:19.4987838Z ##[start-action display=Add Trivy binary to $GITHUB_PATH;id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.__run_3]
+2026-08-15T23:20:19.5005045Z ##[group]Run echo /home/runner/.local/bin/trivy-bin >> $GITHUB_PATH
+2026-08-15T23:20:19.5005548Z [36;1mecho /home/runner/.local/bin/trivy-bin >> $GITHUB_PATH[0m
+2026-08-15T23:20:19.5042672Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-15T23:20:19.5043029Z env:
+2026-08-15T23:20:19.5043260Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:19.5043635Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:19.5043885Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:19.5044214Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:19.5044461Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:19.5044760Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:19.5045083Z ##[endgroup]
+2026-08-15T23:20:19.5107021Z ##[end-action id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy.__run_3;outcome=success;conclusion=success;duration_ms=11]
+2026-08-15T23:20:19.5119523Z ##[end-action id=__aquasecurity_trivy-action.__aquasecurity_setup-trivy;outcome=success;conclusion=success;duration_ms=2587]
+2026-08-15T23:20:19.5121627Z ##[start-action display=Get current date;id=__aquasecurity_trivy-action.date]
+2026-08-15T23:20:19.5136102Z ##[group]Run echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+2026-08-15T23:20:19.5136525Z [36;1mecho "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT[0m
+2026-08-15T23:20:19.5172645Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-15T23:20:19.5173028Z env:
+2026-08-15T23:20:19.5173395Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:19.5173785Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:19.5174045Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:19.5174401Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:19.5174744Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:19.5175040Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:19.5175371Z ##[endgroup]
+2026-08-15T23:20:19.5249326Z ##[end-action id=__aquasecurity_trivy-action.date;outcome=success;conclusion=success;duration_ms=12]
+2026-08-15T23:20:19.5261524Z ##[start-action display=Restore DB from cache;id=__aquasecurity_trivy-action.__actions_cache]
+2026-08-15T23:20:19.5300343Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T23:20:19.5301671Z ##[group]Run actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+2026-08-15T23:20:19.5302040Z with:
+2026-08-15T23:20:19.5302286Z   path: /home/runner/work/atmr/atmr/.cache/trivy
+2026-08-15T23:20:19.5302610Z   key: cache-trivy-2026-08-15
+2026-08-15T23:20:19.5302880Z   restore-keys: cache-trivy-
+2026-08-15T23:20:19.5303154Z   enableCrossOsArchive: false
+2026-08-15T23:20:19.5303604Z   fail-on-cache-miss: false
+2026-08-15T23:20:19.5303856Z   lookup-only: false
+2026-08-15T23:20:19.5304083Z   save-always: false
+2026-08-15T23:20:19.5304304Z env:
+2026-08-15T23:20:19.5304536Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:19.5304891Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:19.5305144Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:19.5305465Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:19.5305703Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:19.5306004Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:19.5306315Z ##[endgroup]
+2026-08-15T23:20:19.6351772Z (node:3301) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-15T23:20:19.6352734Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-15T23:20:19.8851031Z Cache hit for restore-key: cache-trivy-2026-08-11
+2026-08-15T23:20:19.8962001Z (node:3301) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-08-15T23:20:21.1814643Z Received 4194304 of 76819250 (5.5%), 4.0 MBs/sec
+2026-08-15T23:20:21.7617510Z Received 76819250 of 76819250 (100.0%), 46.4 MBs/sec
+2026-08-15T23:20:21.7620252Z Cache Size: ~73 MB (76819250 B)
+2026-08-15T23:20:21.7661663Z [command]/usr/bin/tar -xf /home/runner/work/_temp/9fe13c6c-968b-4362-a52a-278aef6507db/cache.tzst -P -C /home/runner/work/atmr/atmr --use-compress-program unzstd
+2026-08-15T23:20:23.3847750Z Cache restored successfully
+2026-08-15T23:20:23.3965362Z Cache restored from key: cache-trivy-2026-08-11
+2026-08-15T23:20:23.4075224Z ##[end-action id=__aquasecurity_trivy-action.__actions_cache;outcome=success;conclusion=success;duration_ms=3881]
+2026-08-15T23:20:23.4079793Z ##[start-action display=Set GitHub Path;id=__aquasecurity_trivy-action.__run]
+2026-08-15T23:20:23.4096470Z ##[group]Run echo "$GITHUB_ACTION_PATH" >> $GITHUB_PATH
+2026-08-15T23:20:23.4096914Z [36;1mecho "$GITHUB_ACTION_PATH" >> $GITHUB_PATH[0m
+2026-08-15T23:20:23.4134868Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-15T23:20:23.4135237Z env:
+2026-08-15T23:20:23.4135471Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:23.4136105Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:23.4136362Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:23.4136697Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:23.4136944Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:23.4137260Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:23.4137730Z   GITHUB_ACTION_PATH: /home/runner/work/_actions/aquasecurity/trivy-action/0.35.0
+2026-08-15T23:20:23.4138150Z ##[endgroup]
+2026-08-15T23:20:23.4205702Z ##[end-action id=__aquasecurity_trivy-action.__run;outcome=success;conclusion=success;duration_ms=12]
+2026-08-15T23:20:23.4207780Z ##[start-action display=Clear Trivy Envs file;id=__aquasecurity_trivy-action.__run_2]
+2026-08-15T23:20:23.4222467Z ##[group]Run rm -f trivy_envs.txt
+2026-08-15T23:20:23.4222786Z [36;1mrm -f trivy_envs.txt[0m
+2026-08-15T23:20:23.4223062Z [36;1mtouch trivy_envs.txt[0m
+2026-08-15T23:20:23.4258774Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-15T23:20:23.4259171Z env:
+2026-08-15T23:20:23.4259420Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:23.4259795Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:23.4260062Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:23.4260395Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:23.4260652Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:23.4260957Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:23.4261293Z ##[endgroup]
+2026-08-15T23:20:23.4342783Z ##[end-action id=__aquasecurity_trivy-action.__run_2;outcome=success;conclusion=success;duration_ms=13]
+2026-08-15T23:20:23.4347254Z ##[start-action display=Set Trivy environment variables;id=__aquasecurity_trivy-action.__run_3]
+2026-08-15T23:20:23.4362514Z ##[group]Run # Note: There is currently no way to distinguish between undefined variables and empty strings in GitHub Actions.
+2026-08-15T23:20:23.4363616Z [36;1m# Note: There is currently no way to distinguish between undefined variables and empty strings in GitHub Actions.[0m
+2026-08-15T23:20:23.4364317Z [36;1m# This limitation affects how we handle default values and empty inputs.[0m
+2026-08-15T23:20:23.4364903Z [36;1m# For more information, see: https://github.com/actions/runner/issues/924[0m
+2026-08-15T23:20:23.4365345Z [36;1m[0m
+2026-08-15T23:20:23.4365745Z [36;1m# The following logic implements the configuration priority described in the README:[0m
+2026-08-15T23:20:23.4366201Z [36;1m#[0m
+2026-08-15T23:20:23.4366419Z [36;1m# Inputs[0m
+2026-08-15T23:20:23.4366653Z [36;1m# Environment Variables[0m
+2026-08-15T23:20:23.4366933Z [36;1m# Config File[0m
+2026-08-15T23:20:23.4367175Z [36;1m# Defaults[0m
+2026-08-15T23:20:23.4367404Z [36;1m#[0m
+2026-08-15T23:20:23.4367836Z [36;1m# As noted above defaults are awkward to handle as GitHub Actions will inject those values as the input[0m
+2026-08-15T23:20:23.4368825Z [36;1m# if the caller doesn't provide them, thus if the input matches the default we don't set it as we[0m
+2026-08-15T23:20:23.4369536Z [36;1m# can't tell the difference.  Plus if we did set it when it was the default value then it could potentially[0m
+2026-08-15T23:20:23.4370342Z [36;1m# override an external environment variable, or something in the callers configuration file, which then wouldn't[0m
+2026-08-15T23:20:23.4370978Z [36;1m# match the configuration priority that is documented.[0m
+2026-08-15T23:20:23.4371349Z [36;1mset_env_var_if_provided() {[0m
+2026-08-15T23:20:23.4371645Z [36;1m  local var_name="$1"[0m
+2026-08-15T23:20:23.4371919Z [36;1m  local input_value="$2"[0m
+2026-08-15T23:20:23.4372202Z [36;1m  local default_value="$3"[0m
+2026-08-15T23:20:23.4372478Z [36;1m[0m
+2026-08-15T23:20:23.4372800Z [36;1m  if [ -n "$input_value" ] && [ "$input_value" != "$default_value" ]; then[0m
+2026-08-15T23:20:23.4373329Z [36;1m    # If action was provided with explicit input by the caller set that[0m
+2026-08-15T23:20:23.4373896Z [36;1m    # Use printf %q to safely escape special characters and prevent command injection[0m
+2026-08-15T23:20:23.4374458Z [36;1m    printf 'export %s=%q\n' "$var_name" "$input_value" >> trivy_envs.txt[0m
+2026-08-15T23:20:23.4375005Z [36;1m  fi[0m
+2026-08-15T23:20:23.4375221Z [36;1m}[0m
+2026-08-15T23:20:23.4375423Z [36;1m[0m
+2026-08-15T23:20:23.4375734Z [36;1m# Set environment variables, handling those with default values[0m
+2026-08-15T23:20:23.4376348Z [36;1m# cf. https://aquasecurity.github.io/trivy/latest/docs/configuration/#environment-variables[0m
+2026-08-15T23:20:23.4376932Z [36;1mset_env_var_if_provided "TRIVY_INPUT" "$INPUT_INPUT" ""[0m
+2026-08-15T23:20:23.4377387Z [36;1mset_env_var_if_provided "TRIVY_EXIT_CODE" "$INPUT_EXIT_CODE" ""[0m
+2026-08-15T23:20:23.4377915Z [36;1mset_env_var_if_provided "TRIVY_IGNORE_UNFIXED" "$INPUT_IGNORE_UNFIXED" "false"[0m
+2026-08-15T23:20:23.4378684Z [36;1mset_env_var_if_provided "TRIVY_PKG_TYPES" "$INPUT_VULN_TYPE" "os,library"[0m
+2026-08-15T23:20:23.4379317Z [36;1mset_env_var_if_provided "TRIVY_SEVERITY" "$INPUT_SEVERITY" "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"[0m
+2026-08-15T23:20:23.4379909Z [36;1mset_env_var_if_provided "TRIVY_FORMAT" "$INPUT_FORMAT" "table"[0m
+2026-08-15T23:20:23.4380382Z [36;1mset_env_var_if_provided "TRIVY_TEMPLATE" "$INPUT_TEMPLATE" ""[0m
+2026-08-15T23:20:23.4380828Z [36;1mset_env_var_if_provided "TRIVY_OUTPUT" "$INPUT_OUTPUT" ""[0m
+2026-08-15T23:20:23.4381286Z [36;1mset_env_var_if_provided "TRIVY_SKIP_DIRS" "$INPUT_SKIP_DIRS" ""[0m
+2026-08-15T23:20:23.4381764Z [36;1mset_env_var_if_provided "TRIVY_SKIP_FILES" "$INPUT_SKIP_FILES" ""[0m
+2026-08-15T23:20:23.4382235Z [36;1mset_env_var_if_provided "TRIVY_TIMEOUT" "$INPUT_TIMEOUT" ""[0m
+2026-08-15T23:20:23.4382721Z [36;1mset_env_var_if_provided "TRIVY_IGNORE_POLICY" "$INPUT_IGNORE_POLICY" ""[0m
+2026-08-15T23:20:23.4383221Z [36;1mset_env_var_if_provided "TRIVY_QUIET" "$INPUT_HIDE_PROGRESS" ""[0m
+2026-08-15T23:20:23.4383863Z [36;1mset_env_var_if_provided "TRIVY_LIST_ALL_PKGS" "$INPUT_LIST_ALL_PKGS" "false"[0m
+2026-08-15T23:20:23.4384370Z [36;1mset_env_var_if_provided "TRIVY_SCANNERS" "$INPUT_SCANNERS" ""[0m
+2026-08-15T23:20:23.4384840Z [36;1mset_env_var_if_provided "TRIVY_CONFIG" "$INPUT_TRIVY_CONFIG" ""[0m
+2026-08-15T23:20:23.4385288Z [36;1mset_env_var_if_provided "TRIVY_TF_VARS" "$INPUT_TF_VARS" ""[0m
+2026-08-15T23:20:23.4385761Z [36;1mset_env_var_if_provided "TRIVY_DOCKER_HOST" "$INPUT_DOCKER_HOST" ""[0m
+2026-08-15T23:20:23.4419853Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-15T23:20:23.4420229Z env:
+2026-08-15T23:20:23.4420463Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:23.4420819Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:23.4421071Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:23.4421388Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:23.4421628Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:23.4421932Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:23.4422252Z   INPUT_INPUT: 
+2026-08-15T23:20:23.4422476Z   INPUT_EXIT_CODE: 0
+2026-08-15T23:20:23.4422717Z   INPUT_IGNORE_UNFIXED: false
+2026-08-15T23:20:23.4422987Z   INPUT_VULN_TYPE: os,library
+2026-08-15T23:20:23.4423293Z   INPUT_SEVERITY: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+2026-08-15T23:20:23.4423631Z   INPUT_FORMAT: cyclonedx
+2026-08-15T23:20:23.4423881Z   INPUT_TEMPLATE: 
+2026-08-15T23:20:23.4424126Z   INPUT_OUTPUT: sbom-cyclonedx.json
+2026-08-15T23:20:23.4424403Z   INPUT_SKIP_DIRS: 
+2026-08-15T23:20:23.4424622Z   INPUT_SKIP_FILES: 
+2026-08-15T23:20:23.4424847Z   INPUT_TIMEOUT: 
+2026-08-15T23:20:23.4425072Z   INPUT_IGNORE_POLICY: 
+2026-08-15T23:20:23.4425309Z   INPUT_HIDE_PROGRESS: 
+2026-08-15T23:20:23.4425553Z   INPUT_LIST_ALL_PKGS: false
+2026-08-15T23:20:23.4425802Z   INPUT_SCANNERS: 
+2026-08-15T23:20:23.4426024Z   INPUT_TRIVY_CONFIG: 
+2026-08-15T23:20:23.4426255Z   INPUT_TF_VARS: 
+2026-08-15T23:20:23.4426474Z   INPUT_DOCKER_HOST: 
+2026-08-15T23:20:23.4426710Z ##[endgroup]
+2026-08-15T23:20:23.4492187Z ##[end-action id=__aquasecurity_trivy-action.__run_3;outcome=success;conclusion=success;duration_ms=14]
+2026-08-15T23:20:23.4495363Z ##[start-action display=Run Trivy;id=__aquasecurity_trivy-action.__run_4]
+2026-08-15T23:20:23.4510214Z ##[group]Run entrypoint.sh
+2026-08-15T23:20:23.4510520Z [36;1mentrypoint.sh[0m
+2026-08-15T23:20:23.4543908Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-15T23:20:23.4544287Z env:
+2026-08-15T23:20:23.4544523Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:23.4544881Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:23.4545143Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:23.4545470Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:23.4545717Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:23.4546024Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:23.4546364Z   INPUT_SCAN_TYPE: fs
+2026-08-15T23:20:23.4546595Z   INPUT_IMAGE_REF: 
+2026-08-15T23:20:23.4546834Z   INPUT_SCAN_REF: ./backend
+2026-08-15T23:20:23.4547090Z   INPUT_TRIVYIGNORES: 
+2026-08-15T23:20:23.4547320Z   INPUT_GITHUB_PAT: 
+2026-08-15T23:20:23.4547567Z   INPUT_LIMIT_SEVERITIES_FOR_SARIF: 
+2026-08-15T23:20:23.4547915Z   TRIVY_CACHE_DIR: /home/runner/work/atmr/atmr/.cache/trivy
+2026-08-15T23:20:23.4548262Z ##[endgroup]
+2026-08-15T23:20:23.4616212Z Running Trivy with options: trivy fs ./backend
+2026-08-15T23:20:23.5133528Z 2026-08-15T23:20:23Z	INFO	"--format cyclonedx" disables security scanning. Specify "--scanners vuln" explicitly if you want to include vulnerabilities in the "cyclonedx" report.
+2026-08-15T23:20:23.5424178Z 2026-08-15T23:20:23Z	WARN	[pip] Unable to find python `site-packages` directory. License detection is skipped.	err="site-packages directory not found"
+2026-08-15T23:20:23.5425962Z 2026-08-15T23:20:23Z	INFO	Number of language-specific files	num=0
+2026-08-15T23:20:23.5476305Z ##[end-action id=__aquasecurity_trivy-action.__run_4;outcome=success;conclusion=success;duration_ms=98]
+2026-08-15T23:20:23.5479225Z ##[start-action display=Remove Trivy Envs file;id=__aquasecurity_trivy-action.__run_5]
+2026-08-15T23:20:23.5496321Z ##[group]Run rm -f trivy_envs.txt
+2026-08-15T23:20:23.5496642Z [36;1mrm -f trivy_envs.txt[0m
+2026-08-15T23:20:23.5534978Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-15T23:20:23.5535375Z env:
+2026-08-15T23:20:23.5535619Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:23.5535991Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:23.5536244Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:23.5536572Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:23.5536820Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:23.5537125Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:23.5537450Z ##[endgroup]
+2026-08-15T23:20:23.5612042Z ##[end-action id=__aquasecurity_trivy-action.__run_5;outcome=success;conclusion=success;duration_ms=13]

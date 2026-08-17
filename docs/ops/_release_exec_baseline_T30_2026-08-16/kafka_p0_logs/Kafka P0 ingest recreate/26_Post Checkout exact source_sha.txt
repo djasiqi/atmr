@@ -1,0 +1,32 @@
+﻿2026-08-15T23:43:02.2111148Z Post job cleanup.
+2026-08-15T23:43:02.2821943Z [command]/usr/bin/git version
+2026-08-15T23:43:02.2861066Z git version 2.54.0
+2026-08-15T23:43:02.2893791Z Temporarily overriding HOME='/home/runner/work/_temp/f85bb01b-9245-4e76-bd4d-6d47fae5f9c3' before making global git config changes
+2026-08-15T23:43:02.2894585Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-15T23:43:02.2909112Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/atmr/atmr
+2026-08-15T23:43:02.2941083Z Removing SSH command configuration
+2026-08-15T23:43:02.2947934Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-15T23:43:02.2981824Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-15T23:43:02.3214739Z Removing HTTP extra header
+2026-08-15T23:43:02.3215811Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-15T23:43:02.3251115Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-15T23:43:02.3471676Z Removing includeIf entries pointing to credentials config files
+2026-08-15T23:43:02.3476621Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-15T23:43:02.3508243Z includeif.gitdir:/home/runner/work/atmr/atmr/.git.path
+2026-08-15T23:43:02.3513162Z includeif.gitdir:/home/runner/work/atmr/atmr/.git/worktrees/*.path
+2026-08-15T23:43:02.3513739Z includeif.gitdir:/github/workspace/.git.path
+2026-08-15T23:43:02.3514221Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-08-15T23:43:02.3516416Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/atmr/atmr/.git.path
+2026-08-15T23:43:02.3543291Z /home/runner/work/_temp/git-credentials-8fb9af73-258e-40d6-8ef1-a4f83af871ec.config
+2026-08-15T23:43:02.3554141Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/atmr/atmr/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-8fb9af73\-258e\-40d6\-8ef1\-a4f83af871ec\.config
+2026-08-15T23:43:02.3595935Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/atmr/atmr/.git/worktrees/*.path
+2026-08-15T23:43:02.3623344Z /home/runner/work/_temp/git-credentials-8fb9af73-258e-40d6-8ef1-a4f83af871ec.config
+2026-08-15T23:43:02.3646383Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/atmr/atmr/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-8fb9af73\-258e\-40d6\-8ef1\-a4f83af871ec\.config
+2026-08-15T23:43:02.3679313Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-08-15T23:43:02.3703438Z /github/runner_temp/git-credentials-8fb9af73-258e-40d6-8ef1-a4f83af871ec.config
+2026-08-15T23:43:02.3709805Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-8fb9af73\-258e\-40d6\-8ef1\-a4f83af871ec\.config
+2026-08-15T23:43:02.3740417Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-08-15T23:43:02.3762517Z /github/runner_temp/git-credentials-8fb9af73-258e-40d6-8ef1-a4f83af871ec.config
+2026-08-15T23:43:02.3770516Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-8fb9af73\-258e\-40d6\-8ef1\-a4f83af871ec\.config
+2026-08-15T23:43:02.3802988Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-15T23:43:02.3998680Z Removing credentials config '/home/runner/work/_temp/git-credentials-8fb9af73-258e-40d6-8ef1-a4f83af871ec.config'

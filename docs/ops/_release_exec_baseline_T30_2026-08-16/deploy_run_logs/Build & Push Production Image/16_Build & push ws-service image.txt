@@ -1,0 +1,722 @@
+﻿2026-08-15T23:27:36.8034052Z ##[group]Run docker/build-push-action@v7
+2026-08-15T23:27:36.8034695Z with:
+2026-08-15T23:27:36.8035083Z   context: ./services/ws-service
+2026-08-15T23:27:36.8035601Z   file: ./services/ws-service/Dockerfile
+2026-08-15T23:27:36.8036108Z   push: true
+2026-08-15T23:27:36.8036872Z   tags: ***/atmr-ws-service:sha-286737a2362e
+***/atmr-ws-service:gps-p0-rc-2026-08-15
+2026-08-15T23:27:36.8038754Z   labels: org.opencontainers.image.revision=286737a2362eb1e38013c72d04be23fcd608210e
+org.opencontainers.image.source=https://github.com/***/atmr
+
+2026-08-15T23:27:36.8040089Z   cache-from: type=gha
+2026-08-15T23:27:36.8040566Z   cache-to: type=gha,mode=max
+2026-08-15T23:27:36.8041041Z   no-cache: false
+2026-08-15T23:27:36.8041448Z   load: false
+2026-08-15T23:27:36.8041832Z   pull: false
+2026-08-15T23:27:36.8046449Z   github-token: ***
+2026-08-15T23:27:36.8046908Z env:
+2026-08-15T23:27:36.8047376Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:27:36.8047994Z   DOCKER_IMAGE: ***
+2026-08-15T23:27:36.8048452Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:27:36.8049361Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:27:36.8049825Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:27:36.8050373Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:27:36.8051160Z ##[endgroup]
+2026-08-15T23:27:37.0592659Z ##[group]GitHub Actions runtime token ACs
+2026-08-15T23:27:37.0600993Z refs/heads/release/gps-p0-2026-08-15: read/write
+2026-08-15T23:27:37.0601679Z refs/heads/main: read
+2026-08-15T23:27:37.0602470Z ##[endgroup]
+2026-08-15T23:27:37.0603187Z ##[group]Docker info
+2026-08-15T23:27:37.0654751Z [command]/usr/bin/docker version
+2026-08-15T23:27:37.0880719Z Client: Docker Engine - Community
+2026-08-15T23:27:37.0881734Z  Version:           28.0.4
+2026-08-15T23:27:37.0882909Z  API version:       1.48
+2026-08-15T23:27:37.0883364Z  Go version:        go1.23.7
+2026-08-15T23:27:37.0884258Z  Git commit:        b8034c0
+2026-08-15T23:27:37.0884725Z  Built:             Tue Mar 25 15:07:16 2025
+2026-08-15T23:27:37.0885252Z  OS/Arch:           linux/amd64
+2026-08-15T23:27:37.0885731Z  Context:           default
+2026-08-15T23:27:37.0886014Z 
+2026-08-15T23:27:37.0886206Z Server: Docker Engine - Community
+2026-08-15T23:27:37.0886661Z  Engine:
+2026-08-15T23:27:37.0886986Z   Version:          28.0.4
+2026-08-15T23:27:37.0887477Z   API version:      1.48 (minimum version 1.24)
+2026-08-15T23:27:37.0888015Z   Go version:       go1.23.7
+2026-08-15T23:27:37.0888655Z   Git commit:       6430e49
+2026-08-15T23:27:37.0889156Z   Built:            Tue Mar 25 15:07:16 2025
+2026-08-15T23:27:37.0889696Z   OS/Arch:          linux/amd64
+2026-08-15T23:27:37.0890148Z   Experimental:     false
+2026-08-15T23:27:37.0890560Z  containerd:
+2026-08-15T23:27:37.0890917Z   Version:          v2.3.3
+2026-08-15T23:27:37.0891453Z   GitCommit:        aad11006b869517fcd3009450b6f82da282e1a9b
+2026-08-15T23:27:37.0892034Z  runc:
+2026-08-15T23:27:37.0892382Z   Version:          1.4.3
+2026-08-15T23:27:37.0892805Z   GitCommit:        v1.4.3-0-gbb14dab
+2026-08-15T23:27:37.0893278Z  docker-init:
+2026-08-15T23:27:37.0893650Z   Version:          0.19.0
+2026-08-15T23:27:37.0894000Z   GitCommit:        de40ad0
+2026-08-15T23:27:37.0952282Z [command]/usr/bin/docker info
+2026-08-15T23:27:37.1444218Z Client: Docker Engine - Community
+2026-08-15T23:27:37.1445171Z  Version:    28.0.4
+2026-08-15T23:27:37.1446353Z  Context:    default
+2026-08-15T23:27:37.1458869Z  Debug Mode: false
+2026-08-15T23:27:37.1459463Z  Plugins:
+2026-08-15T23:27:37.1460034Z   buildx: Docker Buildx (Docker Inc.)
+2026-08-15T23:27:37.1460640Z     Version:  v0.36.1
+2026-08-15T23:27:37.1461272Z     Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+2026-08-15T23:27:37.1462038Z   compose: Docker Compose (Docker Inc.)
+2026-08-15T23:27:37.1462730Z     Version:  v2.38.2
+2026-08-15T23:27:37.1463375Z     Path:     /usr/libexec/docker/cli-plugins/docker-compose
+2026-08-15T23:27:37.1464021Z 
+2026-08-15T23:27:37.1464302Z Server:
+2026-08-15T23:27:37.1464774Z  Containers: 1
+2026-08-15T23:27:37.1465311Z   Running: 1
+2026-08-15T23:27:37.1465784Z   Paused: 0
+2026-08-15T23:27:37.1466710Z   Stopped: 0
+2026-08-15T23:27:37.1467232Z  Images: 1
+2026-08-15T23:27:37.1467710Z  Server Version: 28.0.4
+2026-08-15T23:27:37.1468257Z  Storage Driver: overlay2
+2026-08-15T23:27:37.1469016Z   Backing Filesystem: extfs
+2026-08-15T23:27:37.1469621Z   Supports d_type: true
+2026-08-15T23:27:37.1470176Z   Using metacopy: false
+2026-08-15T23:27:37.1470766Z   Native Overlay Diff: false
+2026-08-15T23:27:37.1471397Z   userxattr: false
+2026-08-15T23:27:37.1471978Z  Logging Driver: json-file
+2026-08-15T23:27:37.1472642Z  Cgroup Driver: systemd
+2026-08-15T23:27:37.1473231Z  Cgroup Version: 2
+2026-08-15T23:27:37.1473765Z  Plugins:
+2026-08-15T23:27:37.1474251Z   Volume: local
+2026-08-15T23:27:37.1474821Z   Network: bridge host ipvlan macvlan null overlay
+2026-08-15T23:27:37.1475728Z   Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog
+2026-08-15T23:27:37.1476868Z  Swarm: inactive
+2026-08-15T23:27:37.1477478Z  Runtimes: io.containerd.runc.v2 runc
+2026-08-15T23:27:37.1478020Z  Default Runtime: runc
+2026-08-15T23:27:37.1481852Z  Init Binary: docker-init
+2026-08-15T23:27:37.1482270Z  containerd version: aad11006b869517fcd3009450b6f82da282e1a9b
+2026-08-15T23:27:37.1482680Z  runc version: v1.4.3-0-gbb14dab
+2026-08-15T23:27:37.1483041Z  init version: de40ad0
+2026-08-15T23:27:37.1483367Z  Security Options:
+2026-08-15T23:27:37.1483611Z   apparmor
+2026-08-15T23:27:37.1483803Z   seccomp
+2026-08-15T23:27:37.1484015Z    Profile: builtin
+2026-08-15T23:27:37.1484357Z   cgroupns
+2026-08-15T23:27:37.1484606Z  Kernel Version: 6.17.0-1022-azure
+2026-08-15T23:27:37.1484900Z  Operating System: Ubuntu 24.04.4 LTS
+2026-08-15T23:27:37.1485195Z  OSType: linux
+2026-08-15T23:27:37.1485563Z  Architecture: x86_64
+2026-08-15T23:27:37.1485806Z  CPUs: 4
+2026-08-15T23:27:37.1486026Z  Total Memory: 15.61GiB
+2026-08-15T23:27:37.1486669Z  Name: runnervmzvulz
+2026-08-15T23:27:37.1486920Z  ID: 440382a3-ae17-440e-9655-4a40a976c94e
+2026-08-15T23:27:37.1487244Z  Docker Root Dir: /var/lib/docker
+2026-08-15T23:27:37.1487675Z  Debug Mode: false
+2026-08-15T23:27:37.1487968Z  Username: ***
+2026-08-15T23:27:37.1488223Z  Experimental: false
+2026-08-15T23:27:37.1488789Z  Insecure Registries:
+2026-08-15T23:27:37.1489062Z   ::1/128
+2026-08-15T23:27:37.1489260Z   127.0.0.0/8
+2026-08-15T23:27:37.1489478Z  Live Restore Enabled: false
+2026-08-15T23:27:37.1489642Z 
+2026-08-15T23:27:37.1489960Z ##[endgroup]
+2026-08-15T23:27:37.1490386Z ##[group]Proxy configuration
+2026-08-15T23:27:37.1490659Z No proxy configuration found
+2026-08-15T23:27:37.1491048Z ##[endgroup]
+2026-08-15T23:27:37.2184617Z ##[group]Buildx version
+2026-08-15T23:27:37.2219838Z [command]/usr/bin/docker buildx version
+2026-08-15T23:27:37.2837610Z github.com/docker/buildx v0.36.1 1d8dde89b8aba914e05e45366770736fea1fd690
+2026-08-15T23:27:37.2899720Z ##[endgroup]
+2026-08-15T23:27:37.2900429Z ##[group]Builder info
+2026-08-15T23:27:37.4029417Z {
+2026-08-15T23:27:37.4030526Z   "nodes": [
+2026-08-15T23:27:37.4030929Z     {
+2026-08-15T23:27:37.4031499Z       "name": "builder-3cd82bd2-cd56-4291-a4b6-ecead00cd9de0",
+2026-08-15T23:27:37.4032490Z       "endpoint": "unix:///var/run/docker.sock",
+2026-08-15T23:27:37.4033089Z       "status": "running",
+2026-08-15T23:27:37.4034093Z       "buildkitd-flags": "--allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host",
+2026-08-15T23:27:37.4035137Z       "buildkit": "v0.32.2",
+2026-08-15T23:27:37.4036535Z       "platforms": "linux/amd64,linux/amd64/v2,linux/amd64/v3,linux/arm64,linux/riscv64,linux/ppc64le,linux/s390x,linux/386,linux/mips64le,linux/mips64,linux/loong64,linux/arm/v7,linux/arm/v6",
+2026-08-15T23:27:37.4037989Z       "features": {
+2026-08-15T23:27:37.4038859Z         "Automatically load images to the Docker Engine image store": true,
+2026-08-15T23:27:37.4039618Z         "Cache export": true,
+2026-08-15T23:27:37.4040124Z         "Direct push": true,
+2026-08-15T23:27:37.4040607Z         "Docker exporter": true,
+2026-08-15T23:27:37.4041130Z         "Multi-platform build": true,
+2026-08-15T23:27:37.4044233Z         "OCI exporter": true
+2026-08-15T23:27:37.4044995Z       },
+2026-08-15T23:27:37.4045410Z       "labels": {
+2026-08-15T23:27:37.4045945Z         "org.mobyproject.buildkit.worker.executor": "oci",
+2026-08-15T23:27:37.4046759Z         "org.mobyproject.buildkit.worker.hostname": "e022f4152505",
+2026-08-15T23:27:37.4047571Z         "org.mobyproject.buildkit.worker.network": "host",
+2026-08-15T23:27:37.4048412Z         "org.mobyproject.buildkit.worker.oci.process-mode": "sandbox",
+2026-08-15T23:27:37.4050370Z         "org.mobyproject.buildkit.worker.selinux.enabled": "false",
+2026-08-15T23:27:37.4051601Z         "org.mobyproject.buildkit.worker.snapshotter": "overlayfs"
+2026-08-15T23:27:37.4052290Z       },
+2026-08-15T23:27:37.4052674Z       "gcPolicy": [
+2026-08-15T23:27:37.4053076Z         {
+2026-08-15T23:27:37.4053456Z           "all": false,
+2026-08-15T23:27:37.4053867Z           "filter": [
+2026-08-15T23:27:37.4054498Z             "type==source.local type==exec.cachemount type==source.git.checkout"
+2026-08-15T23:27:37.4055335Z           ],
+2026-08-15T23:27:37.4055737Z           "keepDuration": "48h0m0s",
+2026-08-15T23:27:37.4056243Z           "maxUsedSpace": "488.3MiB"
+2026-08-15T23:27:37.4056737Z         },
+2026-08-15T23:27:37.4057083Z         {
+2026-08-15T23:27:37.4057428Z           "all": false,
+2026-08-15T23:27:37.4057867Z           "keepDuration": "1440h0m0s",
+2026-08-15T23:27:37.4058388Z           "reservedSpace": "9.313GiB",
+2026-08-15T23:27:37.4061944Z           "maxUsedSpace": "93.13GiB",
+2026-08-15T23:27:37.4062524Z           "minFreeSpace": "27.01GiB"
+2026-08-15T23:27:37.4063020Z         },
+2026-08-15T23:27:37.4063396Z         {
+2026-08-15T23:27:37.4063770Z           "all": false,
+2026-08-15T23:27:37.4064237Z           "reservedSpace": "9.313GiB",
+2026-08-15T23:27:37.4064773Z           "maxUsedSpace": "93.13GiB",
+2026-08-15T23:27:37.4065627Z           "minFreeSpace": "27.01GiB"
+2026-08-15T23:27:37.4066126Z         },
+2026-08-15T23:27:37.4066487Z         {
+2026-08-15T23:27:37.4066840Z           "all": true,
+2026-08-15T23:27:37.4067300Z           "reservedSpace": "9.313GiB",
+2026-08-15T23:27:37.4068711Z           "maxUsedSpace": "93.13GiB",
+2026-08-15T23:27:37.4069273Z           "minFreeSpace": "27.01GiB"
+2026-08-15T23:27:37.4069764Z         }
+2026-08-15T23:27:37.4070120Z       ]
+2026-08-15T23:27:37.4070467Z     }
+2026-08-15T23:27:37.4070814Z   ],
+2026-08-15T23:27:37.4071288Z   "name": "builder-3cd82bd2-cd56-4291-a4b6-ecead00cd9de",
+2026-08-15T23:27:37.4071942Z   "driver": "docker-container",
+2026-08-15T23:27:37.4072473Z   "lastActivity": "2026-08-15T23:20:25.000Z"
+2026-08-15T23:27:37.4072969Z }
+2026-08-15T23:27:37.4073812Z ##[endgroup]
+2026-08-15T23:27:37.5614632Z [command]/usr/bin/docker buildx build --cache-from type=gha --cache-to type=gha,mode=max --file ./services/ws-service/Dockerfile --iidfile /home/runner/work/_temp/docker-actions-toolkit-nxzv7f/build-iidfile-2010ede2b5.txt --label org.opencontainers.image.revision=286737a2362eb1e38013c72d04be23fcd608210e --label org.opencontainers.image.source=https://github.com/***/atmr --attest type=provenance,mode=max,builder-id=https://github.com/***/atmr/actions/runs/31914382468/attempts/1 --tag ***/atmr-ws-service:sha-286737a2362e --tag ***/atmr-ws-service:gps-p0-rc-2026-08-15 --metadata-file /home/runner/work/_temp/docker-actions-toolkit-nxzv7f/build-metadata-34fe7c7127.json --push ./services/ws-service
+2026-08-15T23:27:37.8362781Z #0 building with "builder-3cd82bd2-cd56-4291-a4b6-ecead00cd9de" instance using docker-container driver
+2026-08-15T23:27:37.8363615Z 
+2026-08-15T23:27:37.8363861Z #1 [internal] load build definition from Dockerfile
+2026-08-15T23:27:37.8364469Z #1 transferring dockerfile: 930B done
+2026-08-15T23:27:37.8364937Z #1 DONE 0.0s
+2026-08-15T23:27:37.8365152Z 
+2026-08-15T23:27:37.8365423Z #2 [auth] library/python:pull token for registry-1.docker.io
+2026-08-15T23:27:37.8366075Z #2 DONE 0.0s
+2026-08-15T23:27:37.8366337Z 
+2026-08-15T23:27:37.8366655Z #3 [internal] load metadata for docker.io/library/python:3.12-slim
+2026-08-15T23:27:38.5008778Z #3 DONE 0.8s
+2026-08-15T23:27:38.6676650Z 
+2026-08-15T23:27:38.6677353Z #4 [internal] load .dockerignore
+2026-08-15T23:27:38.6677946Z #4 transferring context: 2B done
+2026-08-15T23:27:38.6678308Z #4 DONE 0.0s
+2026-08-15T23:27:38.6678723Z 
+2026-08-15T23:27:38.6678865Z #5 [internal] load build context
+2026-08-15T23:27:38.6679188Z #5 DONE 0.0s
+2026-08-15T23:27:38.6679335Z 
+2026-08-15T23:27:38.6679799Z #6 [ 1/19] FROM docker.io/library/python:3.12-slim@sha256:dd29372629eeba2dd003fd9e9d35a5b8236c44727875a0364254b5127af88e65
+2026-08-15T23:27:38.6680848Z #6 resolve docker.io/library/python:3.12-slim@sha256:dd29372629eeba2dd003fd9e9d35a5b8236c44727875a0364254b5127af88e65 done
+2026-08-15T23:27:38.6681543Z #6 DONE 0.0s
+2026-08-15T23:27:38.6681688Z 
+2026-08-15T23:27:38.6681879Z #7 importing cache manifest from gha:14100524395298264533
+2026-08-15T23:27:38.8753414Z #7 DONE 0.4s
+2026-08-15T23:27:39.0478455Z 
+2026-08-15T23:27:39.0479451Z #5 [internal] load build context
+2026-08-15T23:27:39.0480069Z #5 transferring context: 131.67kB done
+2026-08-15T23:27:39.0480662Z #5 DONE 0.0s
+2026-08-15T23:27:39.0480890Z 
+2026-08-15T23:27:39.0481621Z #6 [ 1/19] FROM docker.io/library/python:3.12-slim@sha256:dd29372629eeba2dd003fd9e9d35a5b8236c44727875a0364254b5127af88e65
+2026-08-15T23:27:39.0509040Z #6 sha256:b952fe9f6810de5dac5d24a3983aee5fce3884f7359a533ba325e48ecb745994 3.15MB / 12.12MB 0.2s
+2026-08-15T23:27:39.2043066Z #6 sha256:b952fe9f6810de5dac5d24a3983aee5fce3884f7359a533ba325e48ecb745994 12.12MB / 12.12MB 0.2s done
+2026-08-15T23:27:39.2044865Z #6 sha256:fa18dfb1257a9c1afc75e233c55b0195dd02b8d6d18dd7e24c10238b039e7742 1.29MB / 1.29MB 0.2s done
+2026-08-15T23:27:39.2046183Z #6 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 4.19MB / 29.78MB 0.3s
+2026-08-15T23:27:39.4211418Z #6 sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 29.78MB / 29.78MB 0.4s done
+2026-08-15T23:27:39.4213097Z #6 extracting sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d
+2026-08-15T23:27:39.9379722Z #6 extracting sha256:26c307b5e35a59ce911f5fde5b9458120ec8734e831ea2da5649a9ad14abfd3d 0.7s done
+2026-08-15T23:27:39.9380655Z #6 DONE 1.1s
+2026-08-15T23:27:40.1627601Z 
+2026-08-15T23:27:40.1628903Z #6 [ 1/19] FROM docker.io/library/python:3.12-slim@sha256:dd29372629eeba2dd003fd9e9d35a5b8236c44727875a0364254b5127af88e65
+2026-08-15T23:27:40.1630302Z #6 extracting sha256:fa18dfb1257a9c1afc75e233c55b0195dd02b8d6d18dd7e24c10238b039e7742 0.1s done
+2026-08-15T23:27:40.1631439Z #6 extracting sha256:b952fe9f6810de5dac5d24a3983aee5fce3884f7359a533ba325e48ecb745994
+2026-08-15T23:27:40.3665296Z #6 extracting sha256:b952fe9f6810de5dac5d24a3983aee5fce3884f7359a533ba325e48ecb745994 0.4s done
+2026-08-15T23:27:40.3665992Z #6 DONE 1.5s
+2026-08-15T23:27:40.4668322Z 
+2026-08-15T23:27:40.4670165Z #6 [ 1/19] FROM docker.io/library/python:3.12-slim@sha256:dd29372629eeba2dd003fd9e9d35a5b8236c44727875a0364254b5127af88e65
+2026-08-15T23:27:40.4671706Z #6 extracting sha256:6760bfe2ff00c4530bc73b2f88a1e9615a56c9a77028f41f8bb4b978d08b8439 done
+2026-08-15T23:27:40.4672697Z #6 DONE 1.5s
+2026-08-15T23:27:40.4672954Z 
+2026-08-15T23:27:40.4673187Z #8 [ 2/19] WORKDIR /app
+2026-08-15T23:27:40.4687081Z #8 DONE 0.1s
+2026-08-15T23:27:40.4687337Z 
+2026-08-15T23:27:40.4687650Z #9 [ 3/19] COPY requirements.txt /app/requirements.txt
+2026-08-15T23:27:40.6249543Z #9 DONE 0.0s
+2026-08-15T23:27:40.6249881Z 
+2026-08-15T23:27:40.6250262Z #10 [ 4/19] RUN pip install --no-cache-dir -r /app/requirements.txt
+2026-08-15T23:27:41.7578367Z #10 1.283 Collecting fastapi==0.137.1 (from -r /app/requirements.txt (line 1))
+2026-08-15T23:27:41.8749232Z #10 1.326   Downloading fastapi-0.137.1-py3-none-any.whl.metadata (26 kB)
+2026-08-15T23:27:41.8750501Z #10 1.363 Collecting starlette>=1.3.1 (from -r /app/requirements.txt (line 2))
+2026-08-15T23:27:41.8751509Z #10 1.371   Downloading starlette-1.6.0-py3-none-any.whl.metadata (6.4 kB)
+2026-08-15T23:27:41.8752614Z #10 1.401 Collecting uvicorn==0.35.0 (from uvicorn[standard]==0.35.0->-r /app/requirements.txt (line 3))
+2026-08-15T23:27:41.9769430Z #10 1.409   Downloading uvicorn-0.35.0-py3-none-any.whl.metadata (6.5 kB)
+2026-08-15T23:27:41.9771005Z #10 1.431 Collecting python-socketio==5.16.2 (from -r /app/requirements.txt (line 4))
+2026-08-15T23:27:41.9772151Z #10 1.440   Downloading python_socketio-5.16.2-py3-none-any.whl.metadata (3.3 kB)
+2026-08-15T23:27:41.9773065Z #10 1.469 Collecting redis==6.4.0 (from redis[hiredis]==6.4.0->-r /app/requirements.txt (line 5))
+2026-08-15T23:27:41.9773825Z #10 1.477   Downloading redis-6.4.0-py3-none-any.whl.metadata (10 kB)
+2026-08-15T23:27:41.9774518Z #10 1.495 Collecting PyJWT==2.13.0 (from -r /app/requirements.txt (line 6))
+2026-08-15T23:27:41.9775299Z #10 1.503   Downloading pyjwt-2.13.0-py3-none-any.whl.metadata (3.4 kB)
+2026-08-15T23:27:42.1732790Z #10 1.540 Collecting aiokafka==0.11.0 (from -r /app/requirements.txt (line 7))
+2026-08-15T23:27:42.1733962Z #10 1.548   Downloading aiokafka-0.11.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (17 kB)
+2026-08-15T23:27:42.1855648Z #10 1.711 Collecting cramjam (from -r /app/requirements.txt (line 8))
+2026-08-15T23:27:42.4122762Z #10 1.719   Downloading cramjam-2.11.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.6 kB)
+2026-08-15T23:27:42.4124476Z #10 1.738 Collecting httpx==0.28.1 (from -r /app/requirements.txt (line 9))
+2026-08-15T23:27:42.4125508Z #10 1.745   Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+2026-08-15T23:27:42.4126201Z #10 1.803 Collecting sentry-sdk>=2.0.0 (from -r /app/requirements.txt (line 10))
+2026-08-15T23:27:42.4126772Z #10 1.810   Downloading sentry_sdk-2.68.0-py3-none-any.whl.metadata (11 kB)
+2026-08-15T23:27:42.4127339Z #10 1.938 Collecting pydantic>=2.9.0 (from fastapi==0.137.1->-r /app/requirements.txt (line 1))
+2026-08-15T23:27:42.5128322Z #10 1.945   Downloading pydantic-2.13.4-py3-none-any.whl.metadata (109 kB)
+2026-08-15T23:27:42.5132308Z #10 1.973 Collecting typing-extensions>=4.8.0 (from fastapi==0.137.1->-r /app/requirements.txt (line 1))
+2026-08-15T23:27:42.5133767Z #10 1.980   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+2026-08-15T23:27:42.5134624Z #10 1.991 Collecting typing-inspection>=0.4.2 (from fastapi==0.137.1->-r /app/requirements.txt (line 1))
+2026-08-15T23:27:42.5135377Z #10 1.999   Downloading typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+2026-08-15T23:27:42.5136152Z #10 2.011 Collecting annotated-doc>=0.0.2 (from fastapi==0.137.1->-r /app/requirements.txt (line 1))
+2026-08-15T23:27:42.5136764Z #10 2.018   Downloading annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+2026-08-15T23:27:42.5137545Z #10 2.039 Collecting click>=7.0 (from uvicorn==0.35.0->uvicorn[standard]==0.35.0->-r /app/requirements.txt (line 3))
+2026-08-15T23:27:42.6175654Z #10 2.046   Downloading click-8.4.2-py3-none-any.whl.metadata (2.6 kB)
+2026-08-15T23:27:42.6176988Z #10 2.058 Collecting h11>=0.8 (from uvicorn==0.35.0->uvicorn[standard]==0.35.0->-r /app/requirements.txt (line 3))
+2026-08-15T23:27:42.6178119Z #10 2.065   Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+2026-08-15T23:27:42.6181053Z #10 2.080 Collecting bidict>=0.21.0 (from python-socketio==5.16.2->-r /app/requirements.txt (line 4))
+2026-08-15T23:27:42.6182170Z #10 2.087   Downloading bidict-0.23.1-py3-none-any.whl.metadata (8.7 kB)
+2026-08-15T23:27:42.6183310Z #10 2.113 Collecting python-engineio>=4.13.2 (from python-socketio==5.16.2->-r /app/requirements.txt (line 4))
+2026-08-15T23:27:42.6184494Z #10 2.121   Downloading python_engineio-4.13.5-py3-none-any.whl.metadata (1.9 kB)
+2026-08-15T23:27:42.6185518Z #10 2.135 Collecting async-timeout (from aiokafka==0.11.0->-r /app/requirements.txt (line 7))
+2026-08-15T23:27:42.6186503Z #10 2.143   Downloading async_timeout-5.0.1-py3-none-any.whl.metadata (5.1 kB)
+2026-08-15T23:27:42.7224365Z #10 2.161 Collecting packaging (from aiokafka==0.11.0->-r /app/requirements.txt (line 7))
+2026-08-15T23:27:42.7225525Z #10 2.169   Downloading packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+2026-08-15T23:27:42.7226792Z #10 2.193 Collecting anyio (from httpx==0.28.1->-r /app/requirements.txt (line 9))
+2026-08-15T23:27:42.7227358Z #10 2.201   Downloading anyio-4.14.2-py3-none-any.whl.metadata (4.6 kB)
+2026-08-15T23:27:42.7227897Z #10 2.222 Collecting certifi (from httpx==0.28.1->-r /app/requirements.txt (line 9))
+2026-08-15T23:27:42.7228439Z #10 2.229   Downloading certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+2026-08-15T23:27:42.7229719Z #10 2.248 Collecting httpcore==1.* (from httpx==0.28.1->-r /app/requirements.txt (line 9))
+2026-08-15T23:27:42.8514248Z #10 2.255   Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+2026-08-15T23:27:42.8515342Z #10 2.272 Collecting idna (from httpx==0.28.1->-r /app/requirements.txt (line 9))
+2026-08-15T23:27:42.8517685Z #10 2.279   Downloading idna-3.18-py3-none-any.whl.metadata (6.1 kB)
+2026-08-15T23:27:42.8519265Z #10 2.377 Collecting hiredis>=3.2.0 (from redis[hiredis]==6.4.0->-r /app/requirements.txt (line 5))
+2026-08-15T23:27:42.9558942Z #10 2.384   Downloading hiredis-3.4.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (7.5 kB)
+2026-08-15T23:27:42.9560838Z #10 2.415 Collecting httptools>=0.6.3 (from uvicorn[standard]==0.35.0->-r /app/requirements.txt (line 3))
+2026-08-15T23:27:42.9562583Z #10 2.422   Downloading httptools-0.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (3.5 kB)
+2026-08-15T23:27:42.9564128Z #10 2.440 Collecting python-dotenv>=0.13 (from uvicorn[standard]==0.35.0->-r /app/requirements.txt (line 3))
+2026-08-15T23:27:42.9565441Z #10 2.447   Downloading python_dotenv-1.2.2-py3-none-any.whl.metadata (27 kB)
+2026-08-15T23:27:42.9566780Z #10 2.481 Collecting pyyaml>=5.1 (from uvicorn[standard]==0.35.0->-r /app/requirements.txt (line 3))
+2026-08-15T23:27:43.0777706Z #10 2.489   Downloading pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+2026-08-15T23:27:43.0779816Z #10 2.525 Collecting uvloop>=0.15.1 (from uvicorn[standard]==0.35.0->-r /app/requirements.txt (line 3))
+2026-08-15T23:27:43.0781149Z #10 2.533   Downloading uvloop-0.22.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (4.9 kB)
+2026-08-15T23:27:43.0782494Z #10 2.603 Collecting watchfiles>=0.13 (from uvicorn[standard]==0.35.0->-r /app/requirements.txt (line 3))
+2026-08-15T23:27:43.1959650Z #10 2.611   Downloading watchfiles-1.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+2026-08-15T23:27:43.1961230Z #10 2.722 Collecting websockets>=10.4 (from uvicorn[standard]==0.35.0->-r /app/requirements.txt (line 3))
+2026-08-15T23:27:43.4306098Z #10 2.729   Downloading websockets-17.0.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.3 kB)
+2026-08-15T23:27:43.4307305Z #10 2.764 Collecting urllib3>=1.26.11 (from sentry-sdk>=2.0.0->-r /app/requirements.txt (line 10))
+2026-08-15T23:27:43.4308090Z #10 2.772   Downloading urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+2026-08-15T23:27:43.4309896Z #10 2.798 Collecting annotated-types>=0.6.0 (from pydantic>=2.9.0->fastapi==0.137.1->-r /app/requirements.txt (line 1))
+2026-08-15T23:27:43.4310921Z #10 2.805   Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+2026-08-15T23:27:43.8806827Z #10 3.406 Collecting pydantic-core==2.46.4 (from pydantic>=2.9.0->fastapi==0.137.1->-r /app/requirements.txt (line 1))
+2026-08-15T23:27:43.9894404Z #10 3.414   Downloading pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+2026-08-15T23:27:43.9895645Z #10 3.441 Collecting simple-websocket>=0.10.0 (from python-engineio>=4.13.2->python-socketio==5.16.2->-r /app/requirements.txt (line 4))
+2026-08-15T23:27:43.9896559Z #10 3.448   Downloading simple_websocket-1.1.0-py3-none-any.whl.metadata (1.5 kB)
+2026-08-15T23:27:43.9897540Z #10 3.481 Collecting wsproto (from simple-websocket>=0.10.0->python-engineio>=4.13.2->python-socketio==5.16.2->-r /app/requirements.txt (line 4))
+2026-08-15T23:27:43.9899579Z #10 3.489   Downloading wsproto-1.3.2-py3-none-any.whl.metadata (5.2 kB)
+2026-08-15T23:27:43.9900490Z #10 3.503 Downloading fastapi-0.137.1-py3-none-any.whl (121 kB)
+2026-08-15T23:27:43.9901271Z #10 3.515 Downloading uvicorn-0.35.0-py3-none-any.whl (66 kB)
+2026-08-15T23:27:44.0925946Z #10 3.524 Downloading python_socketio-5.16.2-py3-none-any.whl (82 kB)
+2026-08-15T23:27:44.0926915Z #10 3.531 Downloading redis-6.4.0-py3-none-any.whl (279 kB)
+2026-08-15T23:27:44.0927643Z #10 3.544 Downloading pyjwt-2.13.0-py3-none-any.whl (31 kB)
+2026-08-15T23:27:44.0928881Z #10 3.555 Downloading aiokafka-0.11.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.2 MB)
+2026-08-15T23:27:44.0930588Z #10 3.568    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 89.3 MB/s eta 0:00:00
+2026-08-15T23:27:44.0931447Z #10 3.576 Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+2026-08-15T23:27:44.0932182Z #10 3.584 Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+2026-08-15T23:27:44.0932929Z #10 3.591 Downloading starlette-1.6.0-py3-none-any.whl (75 kB)
+2026-08-15T23:27:44.0933932Z #10 3.599 Downloading cramjam-2.11.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.0 MB)
+2026-08-15T23:27:44.0935182Z #10 3.610    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 212.5 MB/s eta 0:00:00
+2026-08-15T23:27:44.0936025Z #10 3.618 Downloading sentry_sdk-2.68.0-py3-none-any.whl (518 kB)
+2026-08-15T23:27:44.1976299Z #10 3.627 Downloading annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+2026-08-15T23:27:44.1977643Z #10 3.634 Downloading anyio-4.14.2-py3-none-any.whl (125 kB)
+2026-08-15T23:27:44.1978637Z #10 3.643 Downloading bidict-0.23.1-py3-none-any.whl (32 kB)
+2026-08-15T23:27:44.1979591Z #10 3.650 Downloading click-8.4.2-py3-none-any.whl (119 kB)
+2026-08-15T23:27:44.1980333Z #10 3.659 Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+2026-08-15T23:27:44.1981900Z #10 3.666 Downloading hiredis-3.4.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (313 kB)
+2026-08-15T23:27:44.1983034Z #10 3.674 Downloading httptools-0.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (523 kB)
+2026-08-15T23:27:44.1983793Z #10 3.683 Downloading idna-3.18-py3-none-any.whl (65 kB)
+2026-08-15T23:27:44.1984278Z #10 3.691 Downloading pydantic-2.13.4-py3-none-any.whl (472 kB)
+2026-08-15T23:27:44.1984877Z #10 3.700 Downloading pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+2026-08-15T23:27:44.1985811Z #10 3.709    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 306.1 MB/s eta 0:00:00
+2026-08-15T23:27:44.1986290Z #10 3.716 Downloading python_dotenv-1.2.2-py3-none-any.whl (22 kB)
+2026-08-15T23:27:44.1986747Z #10 3.723 Downloading python_engineio-4.13.5-py3-none-any.whl (59 kB)
+2026-08-15T23:27:44.3026468Z #10 3.731 Downloading pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (807 kB)
+2026-08-15T23:27:44.3028173Z #10 3.734    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 807.9/807.9 kB 728.5 MB/s eta 0:00:00
+2026-08-15T23:27:44.3029538Z #10 3.741 Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+2026-08-15T23:27:44.3030379Z #10 3.749 Downloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+2026-08-15T23:27:44.3030929Z #10 3.756 Downloading urllib3-2.7.0-py3-none-any.whl (131 kB)
+2026-08-15T23:27:44.3031712Z #10 3.764 Downloading uvloop-0.22.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (4.4 MB)
+2026-08-15T23:27:44.3032655Z #10 3.789    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.4/4.4 MB 212.2 MB/s eta 0:00:00
+2026-08-15T23:27:44.3033377Z #10 3.797 Downloading watchfiles-1.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (456 kB)
+2026-08-15T23:27:44.3034333Z #10 3.806 Downloading websockets-17.0.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (220 kB)
+2026-08-15T23:27:44.3035311Z #10 3.814 Downloading async_timeout-5.0.1-py3-none-any.whl (6.2 kB)
+2026-08-15T23:27:44.3035844Z #10 3.821 Downloading certifi-2026.7.22-py3-none-any.whl (136 kB)
+2026-08-15T23:27:44.3036526Z #10 3.828 Downloading packaging-26.3-py3-none-any.whl (129 kB)
+2026-08-15T23:27:44.4242688Z #10 3.836 Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+2026-08-15T23:27:44.4243479Z #10 3.843 Downloading simple_websocket-1.1.0-py3-none-any.whl (13 kB)
+2026-08-15T23:27:44.4244039Z #10 3.850 Downloading wsproto-1.3.2-py3-none-any.whl (24 kB)
+2026-08-15T23:27:44.4246178Z #10 3.950 Installing collected packages: websockets, uvloop, urllib3, typing-extensions, redis, pyyaml, python-dotenv, PyJWT, packaging, idna, httptools, hiredis, h11, cramjam, click, certifi, bidict, async-timeout, annotated-types, annotated-doc, wsproto, uvicorn, typing-inspection, sentry-sdk, pydantic-core, httpcore, anyio, aiokafka, watchfiles, starlette, simple-websocket, pydantic, httpx, python-engineio, fastapi, python-socketio
+2026-08-15T23:27:46.6262648Z #10 6.151 Successfully installed PyJWT-2.13.0 aiokafka-0.11.0 annotated-doc-0.0.5 annotated-types-0.8.0 anyio-4.14.2 async-timeout-5.0.1 bidict-0.23.1 certifi-2026.7.22 click-8.4.2 cramjam-2.11.0 fastapi-0.137.1 h11-0.16.0 hiredis-3.4.1 httpcore-1.0.9 httptools-0.8.0 httpx-0.28.1 idna-3.18 packaging-26.3 pydantic-2.13.4 pydantic-core-2.46.4 python-dotenv-1.2.2 python-engineio-4.13.5 python-socketio-5.16.2 pyyaml-6.0.3 redis-6.4.0 sentry-sdk-2.68.0 simple-websocket-1.1.0 starlette-1.6.0 typing-extensions-4.16.0 typing-inspection-0.4.4 urllib3-2.7.0 uvicorn-0.35.0 uvloop-0.22.1 watchfiles-1.2.0 websockets-17.0.1 wsproto-1.3.2
+2026-08-15T23:27:46.8503370Z #10 6.152 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+2026-08-15T23:27:46.8505225Z #10 6.225 
+2026-08-15T23:27:46.8505566Z #10 6.225 [notice] A new release of pip is available: 25.0.1 -> 26.2.1
+2026-08-15T23:27:46.8506077Z #10 6.225 [notice] To update, run: pip install --upgrade pip
+2026-08-15T23:27:46.8913414Z #10 DONE 6.4s
+2026-08-15T23:27:46.9959571Z 
+2026-08-15T23:27:46.9960133Z #11 [ 5/19] COPY main.py /app/main.py
+2026-08-15T23:27:46.9960735Z #11 DONE 0.0s
+2026-08-15T23:27:46.9960904Z 
+2026-08-15T23:27:46.9961125Z #12 [ 6/19] COPY auth_claims.py /app/auth_claims.py
+2026-08-15T23:27:46.9961755Z #12 DONE 0.0s
+2026-08-15T23:27:46.9962044Z 
+2026-08-15T23:27:46.9962880Z #13 [ 7/19] COPY dedup.py /app/dedup.py
+2026-08-15T23:27:46.9964064Z #13 DONE 0.0s
+2026-08-15T23:27:46.9964536Z 
+2026-08-15T23:27:46.9965793Z #14 [ 8/19] COPY delivery_metrics.py /app/delivery_metrics.py
+2026-08-15T23:27:46.9966279Z #14 DONE 0.0s
+2026-08-15T23:27:46.9966553Z 
+2026-08-15T23:27:46.9966890Z #15 [ 9/19] COPY kafka_lag_metrics.py /app/kafka_lag_metrics.py
+2026-08-15T23:27:46.9967515Z #15 DONE 0.0s
+2026-08-15T23:27:46.9967758Z 
+2026-08-15T23:27:46.9968034Z #16 [10/19] COPY event_contract.py /app/event_contract.py
+2026-08-15T23:27:46.9968887Z #16 DONE 0.0s
+2026-08-15T23:27:46.9969117Z 
+2026-08-15T23:27:46.9969424Z #17 [11/19] COPY event_payload_hash.py /app/event_payload_hash.py
+2026-08-15T23:27:46.9969939Z #17 DONE 0.0s
+2026-08-15T23:27:46.9970073Z 
+2026-08-15T23:27:46.9970329Z #18 [12/19] COPY gps_ingest.py /app/gps_ingest.py
+2026-08-15T23:27:46.9970699Z #18 DONE 0.0s
+2026-08-15T23:27:46.9970903Z 
+2026-08-15T23:27:46.9971120Z #19 [13/19] COPY gps_spool.py /app/gps_spool.py
+2026-08-15T23:27:46.9971548Z #19 DONE 0.0s
+2026-08-15T23:27:46.9971671Z 
+2026-08-15T23:27:46.9971821Z #20 [14/19] COPY enriched_apply.py /app/enriched_apply.py
+2026-08-15T23:27:46.9972160Z #20 DONE 0.0s
+2026-08-15T23:27:47.1915765Z 
+2026-08-15T23:27:47.1929041Z #21 [15/19] COPY processed_apply.py /app/processed_apply.py
+2026-08-15T23:27:47.1929678Z #21 DONE 0.0s
+2026-08-15T23:27:47.1929819Z 
+2026-08-15T23:27:47.1929967Z #22 [16/19] COPY kill_switch.py /app/kill_switch.py
+2026-08-15T23:27:47.1930303Z #22 DONE 0.0s
+2026-08-15T23:27:47.1930708Z 
+2026-08-15T23:27:47.1930824Z #23 [17/19] COPY rooms.py /app/rooms.py
+2026-08-15T23:27:47.1931132Z #23 DONE 0.0s
+2026-08-15T23:27:47.1931257Z 
+2026-08-15T23:27:47.1931397Z #24 [18/19] COPY sentry_init.py /app/sentry_init.py
+2026-08-15T23:27:47.1931704Z #24 DONE 0.0s
+2026-08-15T23:27:47.1931821Z 
+2026-08-15T23:27:47.1931973Z #25 [19/19] COPY tracking_contract /app/tracking_contract
+2026-08-15T23:27:47.1932300Z #25 DONE 0.0s
+2026-08-15T23:27:47.1932419Z 
+2026-08-15T23:27:47.1932514Z #26 exporting to image
+2026-08-15T23:27:47.1932753Z #26 exporting layers
+2026-08-15T23:27:49.2224011Z #26 exporting layers 2.2s done
+2026-08-15T23:27:49.3732916Z #26 ...
+2026-08-15T23:27:49.3733193Z 
+2026-08-15T23:27:49.3733756Z #27 [auth] ***/atmr-ws-service:pull,push token for registry-1.docker.io
+2026-08-15T23:27:49.3735087Z #27 DONE 0.0s
+2026-08-15T23:27:49.3735256Z 
+2026-08-15T23:27:49.3735450Z #26 exporting to image
+2026-08-15T23:27:49.3736173Z #26 exporting manifest sha256:6fb7eaf663268ee0d9c40618dc3c403b7f1ec2cf50196f18f0607014d10d4222 done
+2026-08-15T23:27:49.3737124Z #26 exporting config sha256:6dcefffcec6418943d0dbcf8f310d50fe26202ba48f84f8ecb851d53bcfb3133 done
+2026-08-15T23:27:49.3738220Z #26 exporting attestation manifest sha256:fe5a6f0ad77c8fcc55c8736b24e96dbb2f4f5b5aded6dffc9b1125708e7b9f4a done
+2026-08-15T23:27:49.3739515Z #26 exporting manifest list sha256:4d5afbdb203e940672c431e678922e48c37b7e27390f3096abf1b1cbcb42d2d3 done
+2026-08-15T23:27:49.3740316Z #26 pushing layers
+2026-08-15T23:27:50.6279007Z #26 ...
+2026-08-15T23:27:50.6279568Z 
+2026-08-15T23:27:50.6280126Z #28 [auth] ***:pull ***/atmr-ws-service:pull,push token for registry-1.docker.io
+2026-08-15T23:27:50.6280637Z #28 DONE 0.0s
+2026-08-15T23:27:50.7781311Z 
+2026-08-15T23:27:50.7781957Z #29 exporting to GitHub Actions Cache
+2026-08-15T23:27:50.7782423Z #29 preparing build cache for export 0.0s done
+2026-08-15T23:27:50.7782763Z #29 sending cache export
+2026-08-15T23:27:50.7783230Z #29 writing layer sha256:006584ceed99e90b211326b4ca375bae13eb49aac286f94d6c74a46bf190e4ec 0.5s done
+2026-08-15T23:27:50.7783941Z #29 writing layer sha256:07955dc418988ce71d8ad50a82c6762b3b540f8d45c0a8de739b05b52fcd2db9 0.3s done
+2026-08-15T23:27:50.7784579Z #29 writing layer sha256:08dda27554468bfe6e5695228431075c5060ce8e008716b2da726070a56ae3aa
+2026-08-15T23:27:50.7941833Z #29 writing layer sha256:08dda27554468bfe6e5695228431075c5060ce8e008716b2da726070a56ae3aa 0.5s done
+2026-08-15T23:27:51.0254575Z #29 writing layer sha256:1ecf69fe57e28cc531d2cce7e4c768a1b88a590d8c3504550db41c79f905fe8a
+2026-08-15T23:27:51.4087438Z #29 writing layer sha256:1ecf69fe57e28cc531d2cce7e4c768a1b88a590d8c3504550db41c79f905fe8a 0.5s done
+2026-08-15T23:27:51.6411711Z #29 writing layer sha256:23661e526e4abe5ce50dd8800be7f3b7f54a47d997ac68b2ddae8ca644723a23
+2026-08-15T23:27:51.9800351Z #29 writing layer sha256:23661e526e4abe5ce50dd8800be7f3b7f54a47d997ac68b2ddae8ca644723a23 0.5s done
+2026-08-15T23:27:52.1421213Z #29 writing layer sha256:3459d58b5177c8d57dc4844b08ce815cda40b85552dbe38f4fb9bc2625a5bb58
+2026-08-15T23:27:52.6167269Z #29 writing layer sha256:3459d58b5177c8d57dc4844b08ce815cda40b85552dbe38f4fb9bc2625a5bb58 0.5s done
+2026-08-15T23:27:52.8482961Z #29 writing layer sha256:3c75ef1c3085e9b60e0df3557584ccd67364c6b82daaaa84bd7039855c6ef51e
+2026-08-15T23:27:55.1742272Z #29 ...
+2026-08-15T23:27:55.1742827Z 
+2026-08-15T23:27:55.1743256Z #26 exporting to image
+2026-08-15T23:27:55.1743723Z #26 pushing layers 5.9s done
+2026-08-15T23:27:55.1744928Z #26 pushing manifest for docker.io/***/atmr-ws-service:sha-286737a2362e@sha256:4d5afbdb203e940672c431e678922e48c37b7e27390f3096abf1b1cbcb42d2d3
+2026-08-15T23:27:58.0810042Z #26 pushing manifest for docker.io/***/atmr-ws-service:sha-286737a2362e@sha256:4d5afbdb203e940672c431e678922e48c37b7e27390f3096abf1b1cbcb42d2d3 2.7s done
+2026-08-15T23:27:58.3483519Z #26 pushing layers 0.5s done
+2026-08-15T23:27:58.3489257Z #26 pushing manifest for docker.io/***/atmr-ws-service:gps-p0-rc-2026-08-15@sha256:4d5afbdb203e940672c431e678922e48c37b7e27390f3096abf1b1cbcb42d2d3
+2026-08-15T23:28:00.0611163Z #26 pushing manifest for docker.io/***/atmr-ws-service:gps-p0-rc-2026-08-15@sha256:4d5afbdb203e940672c431e678922e48c37b7e27390f3096abf1b1cbcb42d2d3 1.7s done
+2026-08-15T23:28:00.0612093Z #26 DONE 13.0s
+2026-08-15T23:28:00.0612360Z 
+2026-08-15T23:28:00.0612529Z #29 exporting to GitHub Actions Cache
+2026-08-15T23:28:00.0613056Z #29 writing layer sha256:3c75ef1c3085e9b60e0df3557584ccd67364c6b82daaaa84bd7039855c6ef51e 3.0s done
+2026-08-15T23:28:00.0613952Z #29 writing layer sha256:591828e408243047816e713b246a1ad11de8a87c5edc3d10e592a14c4c5201e3 0.3s done
+2026-08-15T23:28:00.0614797Z #29 writing layer sha256:66b2255f231232b6ec65dc3920973288e4d34ec16f745e2e032c43cbf8707c04 0.3s done
+2026-08-15T23:28:00.0615569Z #29 writing layer sha256:6b21a226c21b4b5acac94a86b18bbd1e47e81efee2620f7425e794996fd69fde 0.3s done
+2026-08-15T23:28:00.0616976Z #29 writing layer sha256:8aa65b9369eccd3dd5ae064afda26c45917482ace3053071cf09d809c68c6100 0.5s done
+2026-08-15T23:28:00.0617930Z #29 writing layer sha256:9f7e79827f93acaeba3109a9fd76e105aec2f31293ac39c91f7b0083473501e5 0.3s done
+2026-08-15T23:28:00.0619043Z #29 writing layer sha256:b952fe9f6810de5dac5d24a3983aee5fce3884f7359a533ba325e48ecb745994 1.8s done
+2026-08-15T23:28:00.0619901Z #29 writing layer sha256:c19aac567ad37de98694d979980095a6c89153c440e9ddb6cdc384f729fe073e
+2026-08-15T23:28:00.3237892Z #29 writing layer sha256:c19aac567ad37de98694d979980095a6c89153c440e9ddb6cdc384f729fe073e 0.5s done
+2026-08-15T23:28:00.5551596Z #29 writing layer sha256:c976f452288d48e52754bd2070e4fad46709477bf61924f7e132028df8fdba54
+2026-08-15T23:28:00.9194475Z #29 writing layer sha256:c976f452288d48e52754bd2070e4fad46709477bf61924f7e132028df8fdba54 0.5s done
+2026-08-15T23:28:01.1511507Z #29 writing layer sha256:ca389137812e8218e44905d61721a36a0cecacc96ba0be69698a59603508abc6
+2026-08-15T23:28:01.4774192Z #29 writing layer sha256:ca389137812e8218e44905d61721a36a0cecacc96ba0be69698a59603508abc6 0.5s done
+2026-08-15T23:28:01.7115132Z #29 writing layer sha256:d6743fd1d35a6e79cc99eff2addbb554f1b57f97d6b6290d6b75b042afddcb8d
+2026-08-15T23:28:01.8487580Z #29 writing layer sha256:d6743fd1d35a6e79cc99eff2addbb554f1b57f97d6b6290d6b75b042afddcb8d 0.3s done
+2026-08-15T23:28:02.0812280Z #29 writing layer sha256:dce1a9ca9bc9e3e6f768c45248aacbb808851b50e7554c4c938f8b2fa7a02848
+2026-08-15T23:28:02.2096090Z #29 writing layer sha256:dce1a9ca9bc9e3e6f768c45248aacbb808851b50e7554c4c938f8b2fa7a02848 0.3s done
+2026-08-15T23:28:02.4445137Z #29 writing layer sha256:f9872aea0f75c4b62107db6e50c431a09771199adf6499bebf170296c4f0d382
+2026-08-15T23:28:02.5792183Z #29 writing layer sha256:f9872aea0f75c4b62107db6e50c431a09771199adf6499bebf170296c4f0d382 0.3s done
+2026-08-15T23:28:02.8070654Z #29 writing layer sha256:fa18dfb1257a9c1afc75e233c55b0195dd02b8d6d18dd7e24c10238b039e7742
+2026-08-15T23:28:03.5487598Z #29 writing layer sha256:fa18dfb1257a9c1afc75e233c55b0195dd02b8d6d18dd7e24c10238b039e7742 0.9s done
+2026-08-15T23:28:04.2710208Z #29 sending cache export 15.0s done
+2026-08-15T23:28:04.2711143Z #29 DONE 15.0s
+2026-08-15T23:28:04.3114110Z 
+2026-08-15T23:28:04.3114710Z #30 resolving provenance for metadata file
+2026-08-15T23:28:04.3115154Z #30 DONE 0.0s
+2026-08-15T23:28:04.3188810Z ##[group]ImageID
+2026-08-15T23:28:04.3189532Z sha256:4d5afbdb203e940672c431e678922e48c37b7e27390f3096abf1b1cbcb42d2d3
+2026-08-15T23:28:04.3190637Z ##[endgroup]
+2026-08-15T23:28:04.3191377Z ##[group]Digest
+2026-08-15T23:28:04.3192033Z sha256:4d5afbdb203e940672c431e678922e48c37b7e27390f3096abf1b1cbcb42d2d3
+2026-08-15T23:28:04.3193123Z ##[endgroup]
+2026-08-15T23:28:04.3194293Z ##[group]Metadata
+2026-08-15T23:28:04.3194849Z {
+2026-08-15T23:28:04.3195328Z   "buildx.build.provenance": {
+2026-08-15T23:28:04.3195842Z     "builder": {
+2026-08-15T23:28:04.3196650Z       "id": "https://github.com/***/atmr/actions/runs/31914382468/attempts/1"
+2026-08-15T23:28:04.3197474Z     },
+2026-08-15T23:28:04.3197997Z     "buildType": "https://mobyproject.org/buildkit@v1",
+2026-08-15T23:28:04.3198856Z     "materials": [
+2026-08-15T23:28:04.3199638Z       {
+2026-08-15T23:28:04.3200136Z         "uri": "pkg:docker/python@3.12-slim?platform=linux%2Famd64",
+2026-08-15T23:28:04.3200715Z         "digest": {
+2026-08-15T23:28:04.3201342Z           "sha256": "dd29372629eeba2dd003fd9e9d35a5b8236c44727875a0364254b5127af88e65"
+2026-08-15T23:28:04.3202125Z         }
+2026-08-15T23:28:04.3202497Z       }
+2026-08-15T23:28:04.3202862Z     ],
+2026-08-15T23:28:04.3203229Z     "invocation": {
+2026-08-15T23:28:04.3203691Z       "configSource": {
+2026-08-15T23:28:04.3204130Z         "entryPoint": "Dockerfile"
+2026-08-15T23:28:04.3204599Z       },
+2026-08-15T23:28:04.3204961Z       "parameters": {
+2026-08-15T23:28:04.3205379Z         "frontend": "dockerfile.v0",
+2026-08-15T23:28:04.3205855Z         "args": {
+2026-08-15T23:28:04.3206535Z           "label:org.opencontainers.image.revision": "286737a2362eb1e38013c72d04be23fcd608210e",
+2026-08-15T23:28:04.3208023Z           "label:org.opencontainers.image.source": "https://github.com/***/atmr"
+2026-08-15T23:28:04.3210061Z         },
+2026-08-15T23:28:04.3210412Z         "locals": [
+2026-08-15T23:28:04.3210751Z           {
+2026-08-15T23:28:04.3211085Z             "name": "context"
+2026-08-15T23:28:04.3211472Z           },
+2026-08-15T23:28:04.3211828Z           {
+2026-08-15T23:28:04.3212160Z             "name": "dockerfile"
+2026-08-15T23:28:04.3212600Z           }
+2026-08-15T23:28:04.3212916Z         ],
+2026-08-15T23:28:04.3213229Z         "root": {
+2026-08-15T23:28:04.3213633Z           "configSource": {
+2026-08-15T23:28:04.3214035Z             "path": "Dockerfile"
+2026-08-15T23:28:04.3214422Z           },
+2026-08-15T23:28:04.3214740Z           "request": {
+2026-08-15T23:28:04.3215066Z             "args": {
+2026-08-15T23:28:04.3215731Z               "label:org.opencontainers.image.revision": "286737a2362eb1e38013c72d04be23fcd608210e",
+2026-08-15T23:28:04.3216839Z               "label:org.opencontainers.image.source": "https://github.com/***/atmr",
+2026-08-15T23:28:04.3217665Z               "vcs:localdir:context": "services/ws-service",
+2026-08-15T23:28:04.3218409Z               "vcs:localdir:dockerfile": "services/ws-service",
+2026-08-15T23:28:04.3219372Z               "vcs:revision": "286737a2362eb1e38013c72d04be23fcd608210e",
+2026-08-15T23:28:04.3220179Z               "vcs:source": "https://github.com/***/atmr"
+2026-08-15T23:28:04.3220722Z             }
+2026-08-15T23:28:04.3221083Z           }
+2026-08-15T23:28:04.3221425Z         },
+2026-08-15T23:28:04.3221774Z         "compatibilityVersion": 30
+2026-08-15T23:28:04.3222240Z       },
+2026-08-15T23:28:04.3222590Z       "environment": {
+2026-08-15T23:28:04.3223034Z         "dockerfileVersion": "1.26.0",
+2026-08-15T23:28:04.3223592Z         "github_actor": "***",
+2026-08-15T23:28:04.3224061Z         "github_actor_id": "130777667",
+2026-08-15T23:28:04.3224590Z         "github_event_name": "workflow_dispatch",
+2026-08-15T23:28:04.3225088Z         "github_event_payload": {
+2026-08-15T23:28:04.3225485Z           "inputs": {
+2026-08-15T23:28:04.3225884Z             "additional_tag": "gps-p0-rc-2026-08-15",
+2026-08-15T23:28:04.3226456Z             "no_cache": "false",
+2026-08-15T23:28:04.3226884Z             "skip_deploy": "false"
+2026-08-15T23:28:04.3227276Z           },
+2026-08-15T23:28:04.3227685Z           "ref": "refs/heads/release/gps-p0-2026-08-15",
+2026-08-15T23:28:04.3228308Z           "repository": {
+2026-08-15T23:28:04.3229029Z             "allow_forking": true,
+2026-08-15T23:28:04.3229882Z             "archive_url": "https://api.github.com/repos/***/atmr/{archive_format}{/ref}",
+2026-08-15T23:28:04.3230645Z             "archived": false,
+2026-08-15T23:28:04.3231368Z             "assignees_url": "https://api.github.com/repos/***/atmr/assignees{/user}",
+2026-08-15T23:28:04.3232308Z             "blobs_url": "https://api.github.com/repos/***/atmr/git/blobs{/sha}",
+2026-08-15T23:28:04.3233257Z             "branches_url": "https://api.github.com/repos/***/atmr/branches{/branch}",
+2026-08-15T23:28:04.3234093Z             "clone_url": "https://github.com/***/atmr.git",
+2026-08-15T23:28:04.3235329Z             "collaborators_url": "https://api.github.com/repos/***/atmr/collaborators{/collaborator}",
+2026-08-15T23:28:04.3236440Z             "comments_url": "https://api.github.com/repos/***/atmr/comments{/number}",
+2026-08-15T23:28:04.3237386Z             "commits_url": "https://api.github.com/repos/***/atmr/commits{/sha}",
+2026-08-15T23:28:04.3238342Z             "compare_url": "https://api.github.com/repos/***/atmr/compare/{base}...{head}",
+2026-08-15T23:28:04.3239643Z             "contents_url": "https://api.github.com/repos/***/atmr/contents/{+path}",
+2026-08-15T23:28:04.3240654Z             "contributors_url": "https://api.github.com/repos/***/atmr/contributors",
+2026-08-15T23:28:04.3241562Z             "created_at": "2025-11-11T18:38:59Z",
+2026-08-15T23:28:04.3242132Z             "default_branch": "main",
+2026-08-15T23:28:04.3243134Z             "deployments_url": "https://api.github.com/repos/***/atmr/deployments",
+2026-08-15T23:28:04.3243954Z             "description": "Plateforme ATMR backend/frontend",
+2026-08-15T23:28:04.3244556Z             "disabled": false,
+2026-08-15T23:28:04.3245236Z             "downloads_url": "https://api.github.com/repos/***/atmr/downloads",
+2026-08-15T23:28:04.3246109Z             "events_url": "https://api.github.com/repos/***/atmr/events",
+2026-08-15T23:28:04.3246750Z             "fork": false,
+2026-08-15T23:28:04.3247173Z             "forks": 0,
+2026-08-15T23:28:04.3247582Z             "forks_count": 0,
+2026-08-15T23:28:04.3248216Z             "forks_url": "https://api.github.com/repos/***/atmr/forks",
+2026-08-15T23:28:04.3249154Z             "full_name": "***/atmr",
+2026-08-15T23:28:04.3249927Z             "git_commits_url": "https://api.github.com/repos/***/atmr/git/commits{/sha}",
+2026-08-15T23:28:04.3250914Z             "git_refs_url": "https://api.github.com/repos/***/atmr/git/refs{/sha}",
+2026-08-15T23:28:04.3251828Z             "git_tags_url": "https://api.github.com/repos/***/atmr/git/tags{/sha}",
+2026-08-15T23:28:04.3252633Z             "git_url": "git://github.com/***/atmr.git",
+2026-08-15T23:28:04.3253213Z             "has_discussions": false,
+2026-08-15T23:28:04.3253733Z             "has_downloads": false,
+2026-08-15T23:28:04.3254211Z             "has_issues": true,
+2026-08-15T23:28:04.3254660Z             "has_pages": false,
+2026-08-15T23:28:04.3255109Z             "has_projects": true,
+2026-08-15T23:28:04.3255594Z             "has_pull_requests": true,
+2026-08-15T23:28:04.3256089Z             "has_wiki": true,
+2026-08-15T23:28:04.3256613Z             "homepage": "https://atmr.vercel.app",
+2026-08-15T23:28:04.3257368Z             "hooks_url": "https://api.github.com/repos/***/atmr/hooks",
+2026-08-15T23:28:04.3258124Z             "html_url": "https://github.com/***/atmr",
+2026-08-15T23:28:04.3258969Z             "id": 1094466066,
+2026-08-15T23:28:04.3259448Z             "is_template": false,
+2026-08-15T23:28:04.3260291Z             "issue_comment_url": "https://api.github.com/repos/***/atmr/issues/comments{/number}",
+2026-08-15T23:28:04.3261436Z             "issue_events_url": "https://api.github.com/repos/***/atmr/issues/events{/number}",
+2026-08-15T23:28:04.3262454Z             "issues_url": "https://api.github.com/repos/***/atmr/issues{/number}",
+2026-08-15T23:28:04.3263393Z             "keys_url": "https://api.github.com/repos/***/atmr/keys{/key_id}",
+2026-08-15T23:28:04.3264282Z             "labels_url": "https://api.github.com/repos/***/atmr/labels{/name}",
+2026-08-15T23:28:04.3264954Z             "language": "Python",
+2026-08-15T23:28:04.3265671Z             "languages_url": "https://api.github.com/repos/***/atmr/languages",
+2026-08-15T23:28:04.3266373Z             "license": null,
+2026-08-15T23:28:04.3267017Z             "merges_url": "https://api.github.com/repos/***/atmr/merges",
+2026-08-15T23:28:04.3267955Z             "milestones_url": "https://api.github.com/repos/***/atmr/milestones{/number}",
+2026-08-15T23:28:04.3268943Z             "mirror_url": null,
+2026-08-15T23:28:04.3269402Z             "name": "atmr",
+2026-08-15T23:28:04.3269854Z             "node_id": "R_kgDOQTw6Eg",
+2026-08-15T23:28:04.3271116Z             "notifications_url": "https://api.github.com/repos/***/atmr/notifications{?since,all,participating}",
+2026-08-15T23:28:04.3272034Z             "open_issues": 38,
+2026-08-15T23:28:04.3272495Z             "open_issues_count": 38,
+2026-08-15T23:28:04.3273036Z             "owner": {
+2026-08-15T23:28:04.3273743Z               "avatar_url": "https://avatars.githubusercontent.com/u/130777667?v=4",
+2026-08-15T23:28:04.3274647Z               "events_url": "https://api.github.com/users/***/events{/privacy}",
+2026-08-15T23:28:04.3275529Z               "followers_url": "https://api.github.com/users/***/followers",
+2026-08-15T23:28:04.3276457Z               "following_url": "https://api.github.com/users/***/following{/other_user}",
+2026-08-15T23:28:04.3277595Z               "gists_url": "https://api.github.com/users/***/gists{/gist_id}",
+2026-08-15T23:28:04.3278255Z               "gravatar_id": "",
+2026-08-15T23:28:04.3279026Z               "html_url": "https://github.com/***",
+2026-08-15T23:28:04.3279689Z               "id": 130777667,
+2026-08-15T23:28:04.3280163Z               "login": "***",
+2026-08-15T23:28:04.3280578Z               "node_id": "U_kgDOB8uCQw",
+2026-08-15T23:28:04.3281057Z               "organizations_url": "https://api.github.com/users/***/orgs",
+2026-08-15T23:28:04.3281816Z               "received_events_url": "https://api.github.com/users/***/received_events",
+2026-08-15T23:28:04.3282349Z               "repos_url": "https://api.github.com/users/***/repos",
+2026-08-15T23:28:04.3282702Z               "site_admin": false,
+2026-08-15T23:28:04.3283120Z               "starred_url": "https://api.github.com/users/***/starred{/owner}{/repo}",
+2026-08-15T23:28:04.3283664Z               "subscriptions_url": "https://api.github.com/users/***/subscriptions",
+2026-08-15T23:28:04.3284069Z               "type": "User",
+2026-08-15T23:28:04.3284372Z               "url": "https://api.github.com/users/***",
+2026-08-15T23:28:04.3284711Z               "user_view_type": "public"
+2026-08-15T23:28:04.3284982Z             },
+2026-08-15T23:28:04.3285199Z             "private": false,
+2026-08-15T23:28:04.3285480Z             "pull_request_creation_policy": "all",
+2026-08-15T23:28:04.3285903Z             "pulls_url": "https://api.github.com/repos/***/atmr/pulls{/number}",
+2026-08-15T23:28:04.3286305Z             "pushed_at": "2026-08-15T23:18:00Z",
+2026-08-15T23:28:04.3286725Z             "releases_url": "https://api.github.com/repos/***/atmr/releases{/id}",
+2026-08-15T23:28:04.3287110Z             "size": 477629,
+2026-08-15T23:28:04.3287405Z             "ssh_url": "git@github.com:***/atmr.git",
+2026-08-15T23:28:04.3287719Z             "stargazers_count": 0,
+2026-08-15T23:28:04.3288110Z             "stargazers_url": "https://api.github.com/repos/***/atmr/stargazers",
+2026-08-15T23:28:04.3289020Z             "statuses_url": "https://api.github.com/repos/***/atmr/statuses/{sha}",
+2026-08-15T23:28:04.3289584Z             "subscribers_url": "https://api.github.com/repos/***/atmr/subscribers",
+2026-08-15T23:28:04.3290142Z             "subscription_url": "https://api.github.com/repos/***/atmr/subscription",
+2026-08-15T23:28:04.3290604Z             "svn_url": "https://github.com/***/atmr",
+2026-08-15T23:28:04.3291006Z             "tags_url": "https://api.github.com/repos/***/atmr/tags",
+2026-08-15T23:28:04.3291455Z             "teams_url": "https://api.github.com/repos/***/atmr/teams",
+2026-08-15T23:28:04.3291808Z             "topics": [],
+2026-08-15T23:28:04.3292166Z             "trees_url": "https://api.github.com/repos/***/atmr/git/trees{/sha}",
+2026-08-15T23:28:04.3292567Z             "updated_at": "2026-08-12T06:08:13Z",
+2026-08-15T23:28:04.3292918Z             "url": "https://api.github.com/repos/***/atmr",
+2026-08-15T23:28:04.3293258Z             "visibility": "public",
+2026-08-15T23:28:04.3293539Z             "watchers": 0,
+2026-08-15T23:28:04.3293783Z             "watchers_count": 0,
+2026-08-15T23:28:04.3294066Z             "web_commit_signoff_required": false
+2026-08-15T23:28:04.3294544Z           },
+2026-08-15T23:28:04.3294745Z           "sender": {
+2026-08-15T23:28:04.3295096Z             "avatar_url": "https://avatars.githubusercontent.com/u/130777667?v=4",
+2026-08-15T23:28:04.3295621Z             "events_url": "https://api.github.com/users/***/events{/privacy}",
+2026-08-15T23:28:04.3296572Z             "followers_url": "https://api.github.com/users/***/followers",
+2026-08-15T23:28:04.3297441Z             "following_url": "https://api.github.com/users/***/following{/other_user}",
+2026-08-15T23:28:04.3297986Z             "gists_url": "https://api.github.com/users/***/gists{/gist_id}",
+2026-08-15T23:28:04.3298778Z             "gravatar_id": "",
+2026-08-15T23:28:04.3299285Z             "html_url": "https://github.com/***",
+2026-08-15T23:28:04.3299795Z             "id": 130777667,
+2026-08-15T23:28:04.3300464Z             "login": "***",
+2026-08-15T23:28:04.3300894Z             "node_id": "U_kgDOB8uCQw",
+2026-08-15T23:28:04.3301548Z             "organizations_url": "https://api.github.com/users/***/orgs",
+2026-08-15T23:28:04.3302435Z             "received_events_url": "https://api.github.com/users/***/received_events",
+2026-08-15T23:28:04.3303269Z             "repos_url": "https://api.github.com/users/***/repos",
+2026-08-15T23:28:04.3303855Z             "site_admin": false,
+2026-08-15T23:28:04.3304517Z             "starred_url": "https://api.github.com/users/***/starred{/owner}{/repo}",
+2026-08-15T23:28:04.3305432Z             "subscriptions_url": "https://api.github.com/users/***/subscriptions",
+2026-08-15T23:28:04.3306114Z             "type": "User",
+2026-08-15T23:28:04.3306605Z             "url": "https://api.github.com/users/***",
+2026-08-15T23:28:04.3307144Z             "user_view_type": "public"
+2026-08-15T23:28:04.3307591Z           },
+2026-08-15T23:28:04.3307995Z           "workflow": ".github/workflows/deploy.yml"
+2026-08-15T23:28:04.3308830Z         },
+2026-08-15T23:28:04.3309231Z         "github_job": "build-and-push",
+2026-08-15T23:28:04.3309801Z         "github_ref": "refs/heads/release/gps-p0-2026-08-15",
+2026-08-15T23:28:04.3310437Z         "github_ref_name": "release/gps-p0-2026-08-15",
+2026-08-15T23:28:04.3310990Z         "github_ref_protected": "false",
+2026-08-15T23:28:04.3311485Z         "github_ref_type": "branch",
+2026-08-15T23:28:04.3311993Z         "github_repository": "***/atmr",
+2026-08-15T23:28:04.3312494Z         "github_repository_id": "1094466066",
+2026-08-15T23:28:04.3313044Z         "github_repository_owner": "***",
+2026-08-15T23:28:04.3313604Z         "github_repository_owner_id": "130777667",
+2026-08-15T23:28:04.3314175Z         "github_run_attempt": "1",
+2026-08-15T23:28:04.3314654Z         "github_run_id": "31914382468",
+2026-08-15T23:28:04.3315135Z         "github_run_number": "535",
+2026-08-15T23:28:04.3315602Z         "github_runner_arch": "X64",
+2026-08-15T23:28:04.3316114Z         "github_runner_environment": "github-hosted",
+2026-08-15T23:28:04.3316627Z         "github_runner_image_os": "ubuntu24",
+2026-08-15T23:28:04.3317166Z         "github_runner_image_version": "20260810.271.1",
+2026-08-15T23:28:04.3317723Z         "github_runner_name": "GitHub Actions 1000008142",
+2026-08-15T23:28:04.3318227Z         "github_runner_os": "Linux",
+2026-08-15T23:28:04.3319043Z         "github_runner_tracking_id": "github_089509ff-ab14-4cd6-913f-c5f8e01fd1a7",
+2026-08-15T23:28:04.3319722Z         "github_server_url": "https://github.com",
+2026-08-15T23:28:04.3320248Z         "github_triggering_actor": "***",
+2026-08-15T23:28:04.3320710Z         "github_workflow": "Build & Deploy",
+2026-08-15T23:28:04.3321536Z         "github_workflow_ref": "***/atmr/.github/workflows/deploy.yml@refs/heads/release/gps-p0-2026-08-15",
+2026-08-15T23:28:04.3322446Z         "github_workflow_sha": "286737a2362eb1e38013c72d04be23fcd608210e",
+2026-08-15T23:28:04.3323049Z         "platform": "linux/amd64"
+2026-08-15T23:28:04.3323462Z       }
+2026-08-15T23:28:04.3323763Z     }
+2026-08-15T23:28:04.3324065Z   },
+2026-08-15T23:28:04.3324982Z   "buildx.build.ref": "builder-3cd82bd2-cd56-4291-a4b6-ecead00cd9de/builder-3cd82bd2-cd56-4291-a4b6-ecead00cd9de0/1gz3qsobmlxil5099pq9yyrpd",
+2026-08-15T23:28:04.3326256Z   "containerimage.descriptor": {
+2026-08-15T23:28:04.3326809Z     "mediaType": "application/vnd.oci.image.index.v1+json",
+2026-08-15T23:28:04.3327607Z     "digest": "sha256:4d5afbdb203e940672c431e678922e48c37b7e27390f3096abf1b1cbcb42d2d3",
+2026-08-15T23:28:04.3328370Z     "size": 856
+2026-08-15T23:28:04.3329026Z   },
+2026-08-15T23:28:04.3329715Z   "containerimage.digest": "sha256:4d5afbdb203e940672c431e678922e48c37b7e27390f3096abf1b1cbcb42d2d3",
+2026-08-15T23:28:04.3330977Z   "image.name": "***/atmr-ws-service:sha-286737a2362e,***/atmr-ws-service:gps-p0-rc-2026-08-15"
+2026-08-15T23:28:04.3331741Z }
+2026-08-15T23:28:04.3332357Z ##[endgroup]
+2026-08-15T23:28:04.3332923Z ##[group]Reference
+2026-08-15T23:28:04.3333913Z builder-3cd82bd2-cd56-4291-a4b6-ecead00cd9de/builder-3cd82bd2-cd56-4291-a4b6-ecead00cd9de0/1gz3qsobmlxil5099pq9yyrpd
+2026-08-15T23:28:04.3335152Z ##[endgroup]
+2026-08-15T23:28:04.3335761Z ##[group]Check build summary support
+2026-08-15T23:28:04.3336475Z Build summary supported!
+2026-08-15T23:28:04.3337111Z ##[endgroup]

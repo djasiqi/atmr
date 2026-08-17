@@ -1,0 +1,7 @@
+﻿08-16 14:37:39.660 16027 16818 I SAMSUNGWALLET: [Hint_SimpleHintProcessMonitor] isHomePackageRunning topPkgName = ch.liri.operations, topClsName = ch.liri.operations.MainActivity, return false , se : false
+08-16 14:37:39.664  7813  7813 I HBD     : b [AiWriter] setContact : ch.liri.operations
+08-16 14:37:39.775  3001  3992 D MdnieScenarioControlService:  packageName : ch.liri.operations    className : ch.liri.operations.MainActivity
+08-16 14:37:39.800 25981 25981 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services ch.liri.operations'
+08-16 14:37:39.898 25981 25981 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity processes | grep -A20 'ch.liri.operations''
+08-16 14:37:40.020 25981 25981 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:pidof ch.liri.operations'
+08-16 14:37:40.140  3001  3353 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, callerUserId: 0

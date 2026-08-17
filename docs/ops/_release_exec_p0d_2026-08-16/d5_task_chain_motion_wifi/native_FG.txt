@@ -1,0 +1,335 @@
+﻿08-16 19:08:00.742  3001  4345 D ActivityTaskManager: startActivityAsUser: callingPid=15715, callingUid=2000, caller=com.android.server.am.ActivityManagerService.startActivityAsUserWithFeature:27 com.android.server.am.ActivityManagerShellCommand.runStartActivity:591 com.android.server.am.ActivityManagerShellCommand.onCommand:1059 com.android.modules.utils.BasicShellCommandHandler.exec:97 android.os.ShellCommand.exec:38 com.android.server.am.ActivityManagerService.onShellCommand:164 android.os.Binder.shellCommand:1219 
+08-16 19:08:00.747  3001  4345 W ActivityTaskManager: callingPackage for (uid=2000, pid=15715) has no WPC
+08-16 19:08:00.751  3001  4345 D WindowManager: Transition is created, t=TransitionRecord{ae7cf80 id=-1 type=OPEN flags=0x0 parallelCollectType=NONE recentsDisplayId=-1}, caller=com.android.server.wm.Transition.<init>:203 com.android.server.wm.TransitionController.createAndStartCollecting:106 com.android.server.wm.ActivityStarter.executeRequest:3691 com.android.server.wm.ActivityStarter.execute:1751 com.android.server.wm.ActivityTaskManagerService.startActivityAsUser:95 
+08-16 19:08:00.752  3001  4345 D BLASTSyncEngine: SyncGroup is created, id=3828, name=Transition-OPEN, caller=com.android.server.wm.BLASTSyncEngine.prepareSyncSet:60 com.android.server.wm.TransitionController.moveToCollecting:67 com.android.server.wm.TransitionController.createAndStartCollecting:109 com.android.server.wm.ActivityStarter.executeRequest:3691 com.android.server.wm.ActivityStarter.execute:1751 com.android.server.wm.ActivityTaskManagerService.startActivityAsUser:95 com.android.server.am.ActivityManagerService.startActivityAsUserWithFeature:27 
+08-16 19:08:00.752  3001  4345 V WindowManager: Start collecting in Transition: TransitionRecord{ae7cf80 id=3828 type=OPEN flags=0x0 parallelCollectType=NONE recentsDisplayId=-1}, caller=com.android.server.wm.TransitionController.createAndStartCollecting:109 com.android.server.wm.ActivityStarter.executeRequest:3691 com.android.server.wm.ActivityStarter.execute:1751 com.android.server.wm.ActivityTaskManagerService.startActivityAsUser:95 com.android.server.am.ActivityManagerService.startActivityAsUserWithFeature:27 
+08-16 19:08:00.752  3001  4345 V WindowManager: Collecting in transition 3828: ActivityRecord{49056185 u0 ch.liri.operations/.MainActivity, caller=com.android.server.wm.TransitionController.collect:7 com.android.server.wm.ActivityStarter.startActivityUnchecked:98 com.android.server.wm.ActivityStarter.executeRequest:3744 com.android.server.wm.ActivityStarter.execute:1751 com.android.server.wm.ActivityTaskManagerService.startActivityAsUser:95 
+08-16 19:08:00.757  3001  4345 D ActivityTaskManager: Temporarily retain top process state for launching app
+08-16 19:08:00.762  3001  4345 D ActivityTaskManager: scheduleTopResumedActivityChanged, onTop=true, r=ActivityRecord{60177111 u0 ch.liri.operations/.MainActivity t1332}, caller=com.android.server.wm.ActivityTaskSupervisor.scheduleTopResumedActivityStateIfNeeded:18 com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:94 com.android.server.wm.TaskFragment.setResumedActivity:29 com.android.server.wm.ActivityRecord.setState:100 com.android.server.wm.TaskFragment.resumeTopActivity:1996 com.android.server.wm.Task.resumeTopActivityInnerLocked:125 
+08-16 19:08:00.763  3001  4345 D ActivityTaskManager: scheduleTopResumedActivityChanged, onTop=false, r=ActivityRecord{60177111 u0 ch.liri.operations/.MainActivity t1332}, caller=com.android.server.wm.ActivityTaskSupervisor.scheduleTopResumedActivityStateLossIfNeeded:19 com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:44 com.android.server.wm.TaskFragment.setResumedActivity:29 com.android.server.wm.ActivityRecord.setState:91 com.android.server.wm.TaskFragment.startPausing$1:231 com.android.server.wm.Task$$ExternalSyntheticLambda36.accept:172 
+08-16 19:08:00.763  3001  4345 V WindowManager: }, caller=com.android.server.wm.ActivityStarter.handleStartResult:983 com.android.server.wm.ActivityStarter.startActivityUnchecked:124 com.android.server.wm.ActivityStarter.executeRequest:3744 com.android.server.wm.ActivityStarter.execute:1751 com.android.server.wm.ActivityTaskManagerService.startActivityAsUser:95 
+08-16 19:08:00.764  3001  4345 I ActivityTaskManager: START u0 {flg=0x10000000 xflg=0x5 cmp=ch.liri.operations/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (com.android.shell) (BAL_ALLOW_PERMISSION) result code=2
+08-16 19:08:00.769  3001  3354 V WindowManager: SyncGroup 3828: Finished!
+08-16 19:08:00.775  4933  4977 V WindowManagerShell: Transition animation finished (aborted=true), notifying core (#3828) android.os.BinderProxy@d31fa3@0
+08-16 19:08:00.777  3001  3350 V WindowManager: Finish Transition (#3828): created at 08-16 19:08:00.751 collect-started=0.413ms request-sent=11.856ms started=16.797ms ready=16.786ms sent=17.938ms finished=25.22ms
+08-16 19:08:00.777  3001  4345 D ChangeTransitionController: onTransitionFinished: TransitionRecord{ae7cf80 id=3828 type=OPEN flags=0x40 parallelCollectType=NONE recentsDisplayId=-1 c=[
+08-16 19:08:00.777  4933  4977 V WindowManagerShell: All active transition animations finished
+08-16 19:08:01.012 13893 14029 I ReactNativeJS: '[FCM-GATE] register effect start', { source: 'driver.notifications.bridge',
+08-16 19:08:01.012 13893 14029 I ReactNativeJS:   stage: 'app_foreground',
+08-16 19:08:01.012 13893 14029 I ReactNativeJS:   enabled: true,
+08-16 19:08:01.012 13893 14029 I ReactNativeJS:   fcmEnabled: true }
+08-16 19:08:01.209 13893 13893 D VRI[MainActivity]@55c538e: reportDrawFinished seqId=0
+08-16 19:08:01.947 13893 14029 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-16 19:08:01.947 13893 14029 I ReactNativeJS:   stage: 'app_foreground' }
+08-16 19:08:01.948 13893 14029 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-16 19:08:01.964 13893 14029 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-16 19:08:01.966 13893 14029 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-16 19:08:01.966 13893 14029 I ReactNativeJS:   stage: 'app_foreground',
+08-16 19:08:01.966 13893 14029 I ReactNativeJS:   tokenLength: 142 }
+08-16 19:08:01.969 13893 14029 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-16 19:08:01.969 13893 14029 I ReactNativeJS:   stage: 'app_foreground',
+08-16 19:08:01.969 13893 14029 I ReactNativeJS:   provider: 'fcm' }
+08-16 19:08:02.005 13893 14029 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+08-16 19:08:02.296 13893 14029 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+08-16 19:08:03.002  3001  3989 D LocationManagerService: network provider registration 1000/android[GnssService]/28702EF6 finished after 1 updates
+08-16 19:08:03.949  3001  6987 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:03.955  3001  6987 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:03.965  3001  4381 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:03.977  3001  5066 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786899925605
+08-16 19:08:04.027  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 19:08:04.057 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:08:04.058 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:08:04.058 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:08:04.069 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:08:04.892 15824 15824 I Finsky:background: [2] Finished reading experiment flags from file [0tGUNCGIkbk4o6-fQ335kUYSKwVj4lusnHT-A5Dsy08] numFlags=2528.
+08-16 19:08:04.943 15824 15824 I Finsky:background: [2] Finished reading experiment flags from file [YPXGgfrk9c24il_xq6x08EAm0a_nvpsBKAhrIz7JX0k] numFlags=2069.
+08-16 19:08:04.945 15824 15824 I Finsky:background: [2] Finished reading experiment flags from file [wvI_UOgYFoKt4VihpiVE9iik-HAP_EEPqJoc1wkSf10] numFlags=2069.
+08-16 19:08:04.953  3001  5066 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:05.102 15824 15845 I Finsky:background: [1759] Finished reading experiment flags from file [Se-xCc4LzNyh3UrKMIU2sUf-PUKz4oQEbpKZDMuaFno] numFlags=2057.
+08-16 19:08:05.355  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.355  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.355  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.356  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.357  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.357  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.357  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.358  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.358  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.358  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.358  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.359  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.359  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.360  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.8252827 / time=1786900085243 / elapsed=79312607951389
+08-16 19:08:05.950  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:08:05.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.969  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.969  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.969  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.970  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:05.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:05.987  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.87351453 / time=1786900085945 / elapsed=79313309458465
+08-16 19:08:08.294  4453  4453 I TrustedTime: TrustedTimeMaintenanceTaskService destroyed [CONTEXT service_id=326 ]
+08-16 19:08:13.295  3001  5104 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:13.303  3001  5063 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:13.310  3001  5063 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:13.318  3001  4381 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786899925605
+08-16 19:08:13.955 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:08:13.957 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:08:13.965 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:08:13.968 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:08:14.298  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:15.545  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:15.546  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:15.546  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:15.547  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:15.548  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:15.548  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:15.548  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:15.548  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:15.549  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:15.549  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:15.549  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:15.556  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.883312 / time=1786900095442 / elapsed=79322806654930
+08-16 19:08:20.972  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:08:20.993  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:20.993  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:20.993  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:20.994  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:20.994  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:20.995  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:20.995  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:20.995  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:20.996  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:20.996  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:20.996  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:20.996  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:20.997  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:20.997  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:21.007  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.9837615 / time=1786900100946 / elapsed=79328309458147
+08-16 19:08:23.465  3001  5066 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:23.468  3001  5066 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:23.471  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:23.480  3001  4381 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786899925605
+08-16 19:08:23.622 15941 15960 W AppInitScheduler|Run:   Finished InitMultiProcessTracker in 0ms
+08-16 19:08:23.653 15941 15959 W AppInitScheduler|Run:   Finished InitSharedLibraries in 36ms
+08-16 19:08:23.654 15941 15969 W AppInitScheduler|Run:   Finished InitOxygenCrashReporter in 1ms
+08-16 19:08:23.654 15941 15958 W AppInitScheduler|Run:   Finished ReliabilityInitConfigureErrorReportingOnProcess in 35ms
+08-16 19:08:23.656 15941 15961 W AppInitScheduler|Run:   Finished PreloadStartupLightSharedPreferenceUsages in 33ms
+08-16 19:08:23.663 15941 15968 W AppInitScheduler|Run:   Finished GeneratePerfStats in 10ms
+08-16 19:08:23.672 15941 15972 W AppInitScheduler|Run:   Finished LoadLibDexLoad in 18ms
+08-16 19:08:23.673 15941 15972 W AppInitScheduler|Run:   Finished InitDeadResourceDetection in 0ms
+08-16 19:08:23.674 15941 15973 W AppInitScheduler|Run:   Finished SetupFbGlog in 1ms
+08-16 19:08:23.674 15941 15958 W AppInitScheduler|Run:   Finished InitClassTracing in 0ms
+08-16 19:08:23.674 15941 15958 W AppInitScheduler|Run:   Finished InitMemoryTracer in 0ms
+08-16 19:08:23.677 15941 15959 W AppInitScheduler|Run:   Finished DisableRuntimeVerification in 3ms
+08-16 19:08:23.677 15941 15974 W AppInitScheduler|Run:   Finished InitCrashLoopMitigation in 3ms
+08-16 19:08:23.679 15941 15973 W AppInitScheduler|Run:   Finished Fadvise in 4ms
+08-16 19:08:23.679 15941 15968 W AppInitScheduler|Run:   Finished LoadDexes in 1ms
+08-16 19:08:23.679 15941 15973 W AppInitScheduler|Run:   Finished IsolatedLongtailAppInit in 0ms
+08-16 19:08:23.679 15941 15968 W AppInitScheduler|Run:   Finished AddMainDexStoreInfoToReliabilityLogging in 0ms
+08-16 19:08:23.680 15941 15969 W AppInitScheduler|Run:   Finished MprotectCode in 1ms
+08-16 19:08:23.680 15941 15972 W AppInitScheduler|Run:   Finished MaybeTraceColdStart in 3ms
+08-16 19:08:23.684 15941 15959 W AppInitScheduler|Run:   Finished InitLacrimaEarlyNative in 7ms
+08-16 19:08:23.687 15941 15959 W AppInitScheduler|Run:   Finished LoadVoltronModules in 3ms
+08-16 19:08:23.695 15941 15959 W AppInitScheduler|Run:   Finished RunOnApplicationInit in 8ms
+08-16 19:08:23.696 15941 15958 W AppInitScheduler|Run:   Finished InitUltralight in 9ms
+08-16 19:08:23.697 15941 15961 W AppInitScheduler|Run:   Finished CreateApplicationImpl in 10ms
+08-16 19:08:23.702 15941 15959 W AppInitScheduler|Run:   Finished ZeroABTestStaticBootstrap in 7ms
+08-16 19:08:23.702 15941 15968 W AppInitScheduler|Run:   Finished InitAppModuleFallbackLoader in 10ms
+08-16 19:08:23.702 15941 15959 W AppInitScheduler|Run:   Finished ZeroV2GateEarlyInit in 0ms
+08-16 19:08:23.702 15941 15959 W AppInitScheduler|Run:   Finished AddProcessNameToErrorReport in 0ms
+08-16 19:08:23.704 15941 15961 W AppInitScheduler|Run:   Finished PreloadStartupLightSharedPreferenceUsagesAppInit in 7ms
+08-16 19:08:23.704 15941 15961 W AppInitScheduler|Run:   Finished FixieLimitNativeStackSize in 0ms
+08-16 19:08:23.706 15941 15961 W AppInitScheduler|Run:   Finished InitAppChoreographer in 2ms
+08-16 19:08:23.707 15941 15973 W AppInitScheduler|Run:   Finished FbSharedPreferenceInitializer in 17ms
+08-16 19:08:23.708 15941 15961 W AppInitScheduler|Run:   Finished HandleAppComponentsForPreTosBuild in 2ms
+08-16 19:08:23.709 15941 15961 W AppInitScheduler|Run:   Finished InitAndroidX in 0ms
+08-16 19:08:23.711 15941 15961 W fb4a.AppInitScheduler|Run:   Finished InitLogging in 0ms
+08-16 19:08:23.712 15941 15959 W fb4a.AppInitScheduler|Run:   Finished FixieActivityManagerHook in 9ms
+08-16 19:08:23.712 15941 15973 W fb4a.AppInitScheduler|Run:   Finished INeedInitForEventBusRegister in 5ms
+08-16 19:08:23.713 15941 15960 W fb4a.AppInitScheduler|Run:   Finished LoadLibColdStart in 29ms
+08-16 19:08:23.714 15941 15961 W fb4a.AppInitScheduler|Run:   Finished InitMallocHooks in 2ms
+08-16 19:08:23.714 15941 15959 W fb4a.AppInitScheduler|Run:   Finished InitSystrace in 2ms
+08-16 19:08:23.716 15941 15959 W fb4a.AppInitScheduler|Run:   Finished NpuSrRendererInitializer in 2ms
+08-16 19:08:23.716 15941 15974 W fb4a.AppInitScheduler|Run:   Finished InitExecutors in 25ms
+08-16 19:08:23.716 15941 15959 W fb4a.AppInitScheduler|Run:   Finished ObjectCountJestE2EBridge in 0ms
+08-16 19:08:23.724 15941 15960 W fb4a.AppInitScheduler|Run:   Finished StaticGraphServiceFactoryInitializer in 11ms
+08-16 19:08:23.724 15941 15974 W fb4a.AppInitScheduler|Run:   Finished RunPerfMarkers in 8ms
+08-16 19:08:23.728 15941 15961 W fb4a.AppInitScheduler|Run:   Finished FbMCPPluginInitializer in 14ms
+08-16 19:08:23.728 15941 15961 W fb4a.AppInitScheduler|Run:   Finished RasFileInitializer in 0ms
+08-16 19:08:23.728 15941 15961 W fb4a.AppInitScheduler|Run:   Finished RegisterMainLooperTracer in 1ms
+08-16 19:08:23.728 15941 15961 W fb4a.AppInitScheduler|Run:   Finished ReleaseDeferredBroadcastReceiver in 0ms
+08-16 19:08:23.742 15941 15958 W fb4a.AppInitScheduler|Run:   Finished FbSharedPreferenceInitializerAsync in 46ms
+08-16 19:08:23.742 15941 15958 W fb4a.AppInitScheduler|Run:   Finished SetupDynaBuilds in 0ms
+08-16 19:08:23.742 15941 15973 W fb4a.AppInitScheduler|Run:   Finished LogController in 30ms
+08-16 19:08:23.743 15941 15958 W fb4a.AppInitScheduler|Run:   Finished WhitehatOverlayInitializer in 1ms
+08-16 19:08:23.744 15941 15969 W fb4a.AppInitScheduler|Run:   Finished MobileConfigSessionlessInit in 53ms
+08-16 19:08:23.744 15941 15972 W fb4a.AppInitScheduler|Run:   Finished InitAuthentication in 54ms
+08-16 19:08:23.744 15941 15969 W fb4a.AppInitScheduler|Run:   Finished E2EForceMobileConfigSessionlessFetch in 0ms
+08-16 19:08:23.745 15941 15969 W fb4a.AppInitScheduler|Run:   Finished EagerInitFBTigonLight in 0ms
+08-16 19:08:23.748 15941 15959 W fb4a.AppInitScheduler|Run:   Finished StringResourcesDelegate in 31ms
+08-16 19:08:23.748 15941 15968 W fb4a.AppInitScheduler|Run:   Finished EarliestPossibleColdStartClassPreloadStarter in 46ms
+08-16 19:08:23.749 15941 15959 W fb4a.AppInitScheduler|Run:   Finished ComposerSavedSessionStoreInitializer in 2ms
+08-16 19:08:23.749 15941 15968 W fb4a.AppInitScheduler|Run:   Finished ErrorReporterSecondaryInit in 1ms
+08-16 19:08:23.749 15941 15973 W fb4a.AppInitScheduler|Run:   Finished PrivacyUiiDetectionLogger in 5ms
+08-16 19:08:23.750 15941 15972 W fb4a.AppInitScheduler|Run:   Finished MobileConfigInit in 6ms
+08-16 19:08:23.750 15941 15958 W fb4a.AppInitScheduler|Run:   Finished MobileConfigAdminIdInit in 6ms
+08-16 19:08:23.751 15941 15959 W fb4a.AppInitScheduler|Run:   Finished MobileConfigSessionlessLaterInit in 2ms
+08-16 19:08:23.751 15941 15959 W fb4a.AppInitScheduler|Run:   Finished E2EForceMobileConfigAdminIdFetch in 0ms
+08-16 19:08:23.760 15941 15972 W fb4a.AppInitScheduler|Run:   Finished FdidInitSync in 9ms
+08-16 19:08:23.762 15941 15959 W fb4a.AppInitScheduler|Run:   Finished LithoConfiguration in 10ms
+08-16 19:08:23.762 15941 15959 W fb4a.AppInitScheduler|Run:   Finished StartupDestinationAppInit in 1ms
+08-16 19:08:23.762 15941 15959 W fb4a.AppInitScheduler|Run:   Finished EarlyFetchStartupDestinationAppInit in 0ms
+08-16 19:08:23.764 15941 15959 W fb4a.AppInitScheduler|Run:   Finished MaybeUnblockComponentsEarly in 1ms
+08-16 19:08:23.764 15941 15959 W fb4a.AppInitScheduler|Run:   Finished CheckUnstableContentProvider in 0ms
+08-16 19:08:23.769 15941 15960 W fb4a.AppInitScheduler|Run:   Finished InitLacrimaLaterInit in 45ms
+08-16 19:08:23.770 15941 15960 W fb4a.AppInitScheduler|Run:   Finished AnalyticsInit in 0ms
+08-16 19:08:23.771 15941 15960 W fb4a.AppInitScheduler|Run:   Finished ClientCacheEdgeManagerInitializer in 1ms
+08-16 19:08:23.771 15941 15960 W fb4a.AppInitScheduler|Run:   Finished ClientCacheEdgeManagerInitializerUserScoped in 0ms
+08-16 19:08:23.771 15941 15960 W fb4a.AppInitScheduler|Run:   Finished DgwEarlySyncInitializer in 0ms
+08-16 19:08:23.814 15941 15960 W fb4a.AppInitScheduler|Run:   Finished DownloadedFbResources in 42ms
+08-16 19:08:23.815 15941 15960 W fb4a.AppInitScheduler|Run:   Finished Fb4aReactEagerInitHotMCUnpacker in 1ms
+08-16 19:08:23.815 15941 15960 W fb4a.AppInitScheduler|Run:   Finished FbMsysPostBootstrapListenerRegistrarOnAppInit in 0ms
+08-16 19:08:23.816 15941 15960 W fb4a.AppInitScheduler|Run:   Finished NotifyAppStateManagerOnCreateComplete in 0ms
+08-16 19:08:23.817 15941 15960 W fb4a.AppInitScheduler|Run:   Finished FbSharedUIQREnvironment in 0ms
+08-16 19:08:23.817 15941 15960 W fb4a.AppInitScheduler|Run:   Finished FixieNoSync in 1ms
+08-16 19:08:23.821 15941 15960 W fb4a.AppInitScheduler|Run:   Finished INeedInitForSharedPrefsListenerRegister in 4ms
+08-16 19:08:23.829 15941 15960 W fb4a.AppInitScheduler|Run:   Finished InitFury in 8ms
+08-16 19:08:23.829 15941 15974 W fb4a.AppInitScheduler|Run:   Finished InitSurfaces in 105ms
+08-16 19:08:23.829 15941 15974 W fb4a.AppInitScheduler|Run:   Finished InitMemoryDumpHandler in 0ms
+08-16 19:08:23.832 15941 15958 W fb4a.AppInitScheduler|Run:   Finished AnalyticsLoggerInit in 81ms
+08-16 19:08:23.832 15941 15958 W fb4a.AppInitScheduler|Run:   Finished E2EForceMobileConfigFetch in 0ms
+08-16 19:08:23.834 15941 15958 W fb4a.AppInitScheduler|Run:   Finished InitPushLiteSdk in 2ms
+08-16 19:08:23.837 15941 15974 W fb4a.AppInitScheduler|Run:   Finished LanguageSwitcherCommonExInit in 8ms
+08-16 19:08:23.838 15941 15974 W fb4a.AppInitScheduler|Run:   Finished RunEarlyInitForActivity in 0ms
+08-16 19:08:23.849 15941 15974 W fb4a.AppInitScheduler|Run:   Finished AnalyticsLoggerPostInitReplay in 10ms
+08-16 19:08:23.849 15941 15974 W fb4a.AppInitScheduler|Run:   Finished BloksInitializer in 1ms
+08-16 19:08:23.849 15941 15974 W fb4a.AppInitScheduler|Run:   Finished FbMsysImmediateInitializer in 0ms
+08-16 19:08:23.849 15941 15974 W fb4a.AppInitScheduler|Run:   Finished LocationRequestDetector in 0ms
+08-16 19:08:23.850 15941 15974 W fb4a.AppInitScheduler|Run:   Finished MessageQueueDoctor in 1ms
+08-16 19:08:23.851 15941 15974 W fb4a.AppInitScheduler|Run:   Finished PendingStoryStoreInitializer in 0ms
+08-16 19:08:23.851 15941 15974 W fb4a.AppInitScheduler|Run:   Finished PreloadNativeLibrariesVif in 0ms
+08-16 19:08:23.851 15941 15974 W fb4a.AppInitScheduler|Run:   Finished TabBadgeFetchAppInit in 0ms
+08-16 19:08:23.852 15941 15974 W fb4a.AppInitScheduler|Run:   Finished WarmFacebookEmojiFont in 0ms
+08-16 19:08:23.854 15941 15974 W fb4a.AppInitScheduler|Run:   Finished FriendlyFeedPrefetch in 0ms
+08-16 19:08:23.854 15941 15974 W fb4a.AppInitScheduler|Run:   Finished FriendlyFeedPrefetchOnFirstForegroundWarmStart in 1ms
+08-16 19:08:23.854 15941 15974 W fb4a.AppInitScheduler|Run:   Finished InitPeriodicThreadBooster in 0ms
+08-16 19:08:23.854 15941 15960 W fb4a.AppInitScheduler|Run:   Finished InitHelium in 25ms
+08-16 19:08:23.855 15941 15960 W fb4a.AppInitScheduler|Run:   Finished MobileConfigAdminIdLaterInit in 0ms
+08-16 19:08:23.855 15941 15960 W fb4a.AppInitScheduler|Run:   Finished MobileConfigLaterInit in 1ms
+08-16 19:08:23.855 15941 15960 W fb4a.AppInitScheduler|Run:   Finished PreloadCreatorsHomeToHUnit in 0ms
+08-16 19:08:23.855 15941 15960 W fb4a.AppInitScheduler|Run:   Finished ScreenOnFeedPrefetch in 0ms
+08-16 19:08:23.862 15941 15974 W fb4a.AppInitScheduler|Run:   Finished LongtailVoltronAppInit in 8ms
+08-16 19:08:23.864 15941 15973 W fb4a.AppInitScheduler|Run:   Finished WarmVolumeCache in 95ms
+08-16 19:08:23.866 15941 15959 W fb4a.AppInitScheduler|Run:   Finished StartupQPLInit in 102ms
+08-16 19:08:23.866 15941 15959 W fb4a.AppInitScheduler|Run:   Finished PreloadFeedRequestHighPriority in 0ms
+08-16 19:08:23.867 15941 15959 W fb4a.AppInitScheduler|Run:   Finished InitFeedVpvSeenStore in 0ms
+08-16 19:08:23.867 15941 15959 W fb4a.AppInitScheduler|Run:   Finished PreloadVideoHomeDataController in 0ms
+08-16 19:08:23.888 15941 15974 W fb4a.AppInitScheduler|Run:   Finished INeedInitForBroadcastReceiverRegister in 22ms
+08-16 19:08:23.888 15941 15974 W fb4a.AppInitScheduler|Run:   Finished ReliabilityUserPerceptibleScopeToQPL in 0ms
+08-16 19:08:23.892 15941 15972 W fb4a.AppInitScheduler|Run:   Finished EagerInitImagePipeline in 56ms
+08-16 19:08:23.894 15941 15961 W fb4a.AppInitScheduler|Run:   Finished ReliabilityExperiments in 166ms
+08-16 19:08:23.896 15941 15961 W fb4a.AppInitScheduler|Run:   Finished EarlyInitStoriesTrayForActivity in 2ms
+08-16 19:08:23.907 15941 15958 W fb4a.AppInitScheduler|Run:   Finished PreloadWordmark in 73ms
+08-16 19:08:23.908 15941 15958 W fb4a.AppInitScheduler|Run:   Finished WaitForUIDependenciesInitializer in 1ms
+08-16 19:08:23.908 15941 15958 W fb4a.AppInitScheduler|Run:   Finished DismissSplashScreens in 0ms
+08-16 19:08:23.908 15941 15958 W fb4a.AppInitScheduler|Run:   Finished FixieScheduleIdleWork in 0ms
+08-16 19:08:23.909 15941 15958 W fb4a.AppInitScheduler|Run:   Finished MqttEarlySyncInitializerAfterAppCreate in 0ms
+08-16 19:08:23.909 15941 15958 W fb4a.AppInitScheduler|Run:   Finished ReplayBroadcastReceivedDuringAppInit in 0ms
+08-16 19:08:23.909 15941 15958 W fb4a.AppInitScheduler|Run:   Finished ScheduleLowPriWork in 1ms
+08-16 19:08:23.909 15941 15958 W fb4a.AppInitScheduler|Run:   Finished InitAppComponentFactoryStartupController in 0ms
+08-16 19:08:23.918 15941 15958 W fb4a.AppInitScheduler|Run:   Finished MetaCasper in 8ms
+08-16 19:08:23.929 15941 15959 W fb4a.AppInitScheduler|Run:   Finished ProfiloBridgeFactoryImpl in 63ms
+08-16 19:08:23.929 15941 15959 W fb4a.AppInitScheduler|Run:   Finished PartialScrollOnFirstForegroundWarmStart in 0ms
+08-16 19:08:23.930 15941 15959 W fb4a.AppInitScheduler|Run:   Finished PreloadFeedRequest in 0ms
+08-16 19:08:23.930 15941 15959 W fb4a.AppInitScheduler|Run:   Finished PrefetchFeedNetwork in 0ms
+08-16 19:08:23.947 15941 15961 W fb4a.AppInitScheduler|Run:   Finished KeepWarm in 50ms
+08-16 19:08:23.947 15941 15961 W fb4a.AppInitScheduler|Run:   Finished PreloadFeedConfig in 0ms
+08-16 19:08:23.947 15941 15961 W fb4a.AppInitScheduler|Run:   Finished PreloadFeedFetchMetadata in 0ms
+08-16 19:08:23.947 15941 15961 W fb4a.AppInitScheduler|Run:   Finished PreloadFeedRequestForAllStarts in 0ms
+08-16 19:08:23.973 15941 15961 W fb4a.AppInitScheduler|Run:   Finished PreloadFreshFeedRanker in 26ms
+08-16 19:08:23.973 15941 15961 W fb4a.AppInitScheduler|Run:   Finished PreloadFriendlyFeedFullCacheLoad in 0ms
+08-16 19:08:23.974 15941 15961 W fb4a.AppInitScheduler|Run:   Finished PreloadHeroManager in 0ms
+08-16 19:08:23.989 15941 15959 W fb4a.AppInitScheduler|Run:   Finished PreloadClashManager in 59ms
+08-16 19:08:23.993 15941 15959 W fb4a.AppInitScheduler|Run:   Finished PreloadInlineComposerProfileImageDeferred in 4ms
+08-16 19:08:24.003 15941 15959 W fb4a.AppInitScheduler|Run:   Finished PreloadLogDb in 10ms
+08-16 19:08:24.009 15941 15961 W fb4a.AppInitScheduler|Run:   Finished PreloadInlineComposerProfileImage in 36ms
+08-16 19:08:24.012 15941 15968 W fb4a.AppInitScheduler|Run:   Finished PreloadStoryAdsInStoriesTray in 0ms
+08-16 19:08:24.013 15941 15968 W fb4a.AppInitScheduler|Run:   Finished PreloadTabPreloadablesBackgroundPrefetch in 0ms
+08-16 19:08:24.013 15941 15968 W fb4a.AppInitScheduler|Run:   Finished PreloadVideoPrivateSharing in 0ms
+08-16 19:08:24.013 15941 15968 W fb4a.AppInitScheduler|Run:   Finished SetupBlockingBackgroundComponentReporting in 1ms
+08-16 19:08:24.013 15941 15969 W fb4a.AppInitScheduler|Run:   Finished EagerInitFBTigon in 268ms
+08-16 19:08:24.014 15941 15968 W fb4a.AppInitScheduler|Run:   Finished StartupQPLReplayer in 1ms
+08-16 19:08:24.038 15941 15958 W fb4a.AppInitScheduler|Run:   Finished PreloadStoriesTrayFetchController in 34ms
+08-16 19:08:24.039 15941 15973 W fb4a.AppInitScheduler|Run:   Finished PreloadIconsInit in 173ms
+08-16 19:08:24.040 15941 15958 W fb4a.AppInitScheduler|Run:   Finished ZeroLibraryInitializer in 2ms
+08-16 19:08:24.045 15941 15958 W fb4a.AppInitScheduler|Run:   Finished InitReliableMedia in 3ms
+08-16 19:08:24.045 15941 15958 W fb4a.AppInitScheduler|Run:   Finished StartupQPLTransitToMatureStage in 0ms
+08-16 19:08:24.045 15941 15961 W fb4a.AppInitScheduler|Run:   Finished PreloadStoriesTrayQuery in 36ms
+08-16 19:08:24.045 15941 15958 W fb4a.AppInitScheduler|Run:   Finished VideoMetaCasper in 0ms
+08-16 19:08:24.048 15941 15969 W fb4a.AppInitScheduler|Run:   Finished GraphServiceEagerInit in 35ms
+08-16 19:08:24.048 15941 15961 W fb4a.AppInitScheduler|Run:   Finished PreloadReelsCsrForReelsTabStarts in 0ms
+08-16 19:08:24.049 15941 15969 W fb4a.AppInitScheduler|Run:   Finished InitPushabilityCheck in 1ms
+08-16 19:08:24.052 15941 15973 W fb4a.AppInitScheduler|Run:   Finished InitTrafficNTS in 13ms
+08-16 19:08:24.056 15941 15959 W fb4a.AppInitScheduler|Run:   Finished PreloadReactions in 53ms
+08-16 19:08:24.063 15941 15974 W fb4a.AppInitScheduler|Run:   Finished PreloadFeedDataLoader in 175ms
+08-16 19:08:24.068 15941 15972 W fb4a.AppInitScheduler|Run:   Finished PreloadFeedFullCacheLoad in 176ms
+08-16 19:08:24.068 15941 15972 W fb4a.AppInitScheduler|Run:   Finished EagerInitFeedDataLoader in 0ms
+08-16 19:08:24.068 15941 15972 W fb4a.AppInitScheduler|Run:   Finished PreloadStoriesTray in 0ms
+08-16 19:08:24.434 15941 15960 W fb4a.AppInitScheduler|Run:   Finished SecondaryDexPreloaderBg in 579ms
+08-16 19:08:24.434 15941 15960 W fb4a.AppInitScheduler|Run: All work finished.
+08-16 19:08:24.467  3001  4381 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:25.660  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.660  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.660  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.660  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.661  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.662  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.662  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.663  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.663  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.663  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.663  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.663  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.663  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.664  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.664  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.673  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.9902874 / time=1786900105554 / elapsed=79332918995375
+08-16 19:08:25.955  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:08:25.967  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.967  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.969  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.969  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.969  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.969  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.969  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.970  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:08:25.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:08:25.972  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.9941423 / time=1786900105945 / elapsed=79333309458197
+08-16 19:08:30.284 15941 15986 W ExperimentConfigurator: onAppStartFinished completed: 0 configs executed
+08-16 19:08:33.598  3001  7120 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:33.603  3001  6987 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:33.616  3001  6987 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786899925605
+08-16 19:08:33.620  3001  5063 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786899925605
+08-16 19:08:33.948 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:08:33.951 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:08:33.952 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:08:33.957 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery

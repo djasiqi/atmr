@@ -1,0 +1,56 @@
+﻿ssh : /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning: 
+Au caractère C:\Users\jasiq\AppData\Local\Temp\ps-script-25793139-0427-4fe9-aa9d-7bfd6f4190aa.ps1:96 : 75
++ ... VER_HOST)"; ssh -o BatchMode=yes -o ConnectTimeout=45 $ssh "docker ex ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/usr/local/lib/...cationWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  from eventlet.patcher import is_monkey_patched  # type: ignore
+[2.9] OpenTelemetry non install├® - installer avec: pip install -r requirements-otel.txt
+­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+[2026-08-17 11:54:50,805] WARNING in app: [Security] Niveau de log forc├® ├á WARNING en production (APP_LOG_LEVEL 
+ignor├® pour s├®curit├®)
+T0_CAPTURE
+  now_utc=2026-08-17T11:54:56.996455+00:00
+  driver_id=20135
+REDIS_LAST_RAW
+  key=driver:20135:loc:last_raw
+  exists=False
+  ttl_s=-2
+REDIS_CANONICAL
+  key=driver:20135:loc:canonical
+  exists=False
+  ttl_s=-2
+REDIS_LEGACY
+  key=driver:20135:loc
+  exists=False
+  ttl_s=-2
+PG_LATEST_LOC
+  id=5873
+  sequence_id=55
+  recorded_at=2026-08-17 11:54:32.411749+00:00
+  created_at=2026-08-17 11:54:33.364440+00:00
+  location_mode=mission_live
+  mission_id=38243
+  location_event_id=trk_1786966059763_b5kpfwk3
+  tracking_session_id=trk_sess_1786965149557_7lkzgzna
+  age_created_s=23
+  fresh_lt_60s=True
+DRIVER
+  id=20135
+  last_position_update=2026-08-17 11:54:32.411749+00:00
+  latitude=46.2115731
+  longitude=6.1262573
+  is_active=True
+  age_lpu_s=24
+VERDICT
+  case=D
+  meaning=PUT path did not write Redis (or pre-T0 / wrong redis)

@@ -1,0 +1,7 @@
+BLOCKER_PRECHECK=2026-08-14T16:53:19.2304253+02:00
+- queue flush suspend_wait reason=context_inactive
+- trackingIdentityId=driver:20:company:unknown
+- LOC/PUT driver 20 = 0 malgré FGS/native/task_invoked/mission_live
+- pm clear effectué ? login requis
+- booking 26 reassignée à driver 19 pour C3 historique A+B
+NEXT=login atmr@atmr.ch (driver 19) puis GO runner

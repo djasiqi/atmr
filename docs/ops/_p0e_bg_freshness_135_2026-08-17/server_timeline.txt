@@ -1,0 +1,22 @@
+﻿­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+BG_FRESHNESS_RCA_START 2026-08-17T16:43:39.268760+00:00
+phase=HOME driver=20135 window=120s poll=15.0s
+PG_FIRST True
+SAMPLE n=1 t=+0s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4568 rest_src=db_fallback
+SAMPLE n=2 t=+15s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4583 rest_src=db_fallback
+SAMPLE n=3 t=+30s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4598 rest_src=db_fallback
+SAMPLE n=4 t=+45s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4613 rest_src=db_fallback
+SAMPLE n=5 t=+60s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4628 rest_src=db_fallback
+SAMPLE n=6 t=+75s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4643 rest_src=db_fallback
+SAMPLE n=7 t=+90s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4658 rest_src=db_fallback
+SAMPLE n=8 t=+105s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4673 rest_src=db_fallback
+SAMPLE n=9 t=+120s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4688 rest_src=db_fallback
+SUMMARY
+  dle_delta_id=0 dle_delta_seq=0
+  canon_delta_seq=-1
+  rest_statuses=['last_known', 'last_known', 'last_known', 'last_known', 'last_known', 'last_known', 'last_known', 'last_known', 'last_known']
+  first_dle={'id': 6442, 'sequence_id': 34, 'tracking_session_id': 'trk_sess_1786979474208_5whqvvm6', 'location_event_id': 'trk_1786980266550_htjp3662', 'recorded_at': datetime.datetime(2026, 8, 17, 15, 24, 24, 244000, tzinfo=datetime.timezone.utc), 'created_at': datetime.datetime(2026, 8, 17, 16, 39, 50, 790005, tzinfo=datetime.timezone.utc), 'mission_id': 38243}
+  last_dle={'id': 6442, 'sequence_id': 34, 'tracking_session_id': 'trk_sess_1786979474208_5whqvvm6', 'location_event_id': 'trk_1786980266550_htjp3662', 'recorded_at': datetime.datetime(2026, 8, 17, 15, 24, 24, 244000, tzinfo=datetime.timezone.utc), 'created_at': datetime.datetime(2026, 8, 17, 16, 39, 50, 790005, tzinfo=datetime.timezone.utc), 'mission_id': 38243}
+HYPOTHESIS A_or_D low_pg_and_canonical
+BG_FRESHNESS_RCA_END 2026-08-17T16:45:39.534919+00:00

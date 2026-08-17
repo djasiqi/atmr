@@ -1,0 +1,11 @@
+﻿2026-08-15T23:29:01.3138385Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T23:29:01.3140091Z Post job cleanup.
+2026-08-15T23:29:01.5532710Z ##[group]Post cache
+2026-08-15T23:29:01.5535586Z Caching docker.io--tonistiigi--binfmt-latest-linux-x64 to GitHub Actions cache
+2026-08-15T23:29:01.5558946Z (node:10267) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-15T23:29:01.5559926Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-15T23:29:01.5759825Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/atmr/atmr --files-from manifest.txt --use-compress-program zstdmt
+2026-08-15T23:29:02.1410409Z (node:10267) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-08-15T23:29:03.1328202Z Sent 19726336 of 32265102 (61.1%), 18.8 MBs/sec
+2026-08-15T23:29:03.5399144Z Sent 32265102 of 32265102 (100.0%), 21.9 MBs/sec
+2026-08-15T23:29:03.8095221Z ##[endgroup]

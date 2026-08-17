@@ -1,0 +1,60 @@
+﻿ssh : /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning: 
+Au caractère C:\Users\jasiq\AppData\Local\Temp\ps-script-29f58432-2f2c-4157-b23c-be15099b1002.ps1:97 : 193
++ ... hness2.py"; ssh -o BatchMode=yes -o ConnectTimeout=45 $ssh "docker cp ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/usr/local/lib/...cationWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  from eventlet.patcher import is_monkey_patched  # type: ignore
+­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+[2.9] OpenTelemetry non install├® - installer avec: pip install -r requirements-otel.txt
+[2026-08-17 11:32:45,698] WARNING in app: [Security] Niveau de log forc├® ├á WARNING en production (APP_LOG_LEVEL 
+ignor├® pour s├®curit├®)
+WITNESS
+  id=5846 driver_id=20135 mission_id=38243
+  tracking_session_id=trk_sess_1786965149557_7lkzgzna
+  sequence_id=28
+  location_event_id=trk_1786965505020_ff3d7bps
+  recorded_at=2026-08-17 11:18:25.532340+00:00
+  created_at(persisted_at)=2026-08-17 11:18:26.550024+00:00
+  location_mode=mission_live
+  lat=46.2115669 lon=6.1262394
+DRIVER
+  id=20135
+  last_position_update=2026-08-17 11:18:25.532340+00:00
+  latitude=46.2115669
+  longitude=6.1262394
+  is_active=True
+  age_lpu_s=866
+BOOKING {'id': 38243, 'status': 'IN_PROGRESS', 'driver_id': 20135}
+REDIS_CANONICAL_KEY driver:20135:loc:canonical
+  EMPTY
+REST_PROJECTION_COUNT 8 HIT 1
+REST_DRIVER_20135
+  id=20135
+  driver_id=20135
+  latitude=46.2115669
+  longitude=6.1262394
+  lat=46.2115669
+  lon=6.1262394
+  recorded_at=2026-08-17T11:18:25.532340+00:00
+  received_at=None
+  timestamp=2026-08-17T11:18:25.532340+00:00
+  last_seen_seconds=866
+  location_status=last_known
+  presence_status=degraded
+  position_source=db_fallback
+  tracking_display_status=last_known
+  location_mode=availability_presence
+  mission_id=38243
+  current_booking_id=38243
+  extra_keys= ['client_short', 'device_health', 'first_name', 'in_service_window', 'is_available', 'is_stale', 'last_name', 'mission_status', 'offline_reason', 'service_window_status', 'status']
+REDIS_TTL_s -2

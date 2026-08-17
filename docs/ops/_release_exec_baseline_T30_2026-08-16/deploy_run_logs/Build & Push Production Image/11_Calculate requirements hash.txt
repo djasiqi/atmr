@@ -1,0 +1,23 @@
+﻿2026-08-15T23:20:24.4696074Z ##[group]Run if [ -f backend/requirements.prod.txt ]; then
+2026-08-15T23:20:24.4696555Z [36;1mif [ -f backend/requirements.prod.txt ]; then[0m
+2026-08-15T23:20:24.4697260Z [36;1m  REQUIREMENTS_HASH=$(sha256sum backend/requirements.prod.txt backend/requirements.base.txt 2>/dev/null | sha256sum | cut -d' ' -f1)[0m
+2026-08-15T23:20:24.4697992Z [36;1m  echo "requirements_hash=${REQUIREMENTS_HASH}" >> $GITHUB_OUTPUT[0m
+2026-08-15T23:20:24.4698915Z [36;1m  echo "📋 Hash de requirements.prod.txt + requirements.base.txt: ${REQUIREMENTS_HASH:0:12}..."[0m
+2026-08-15T23:20:24.4699491Z [36;1melif [ -f backend/requirements.txt ]; then[0m
+2026-08-15T23:20:24.4699948Z [36;1m  REQUIREMENTS_HASH=$(sha256sum backend/requirements.txt | cut -d' ' -f1)[0m
+2026-08-15T23:20:24.4700467Z [36;1m  echo "requirements_hash=${REQUIREMENTS_HASH}" >> $GITHUB_OUTPUT[0m
+2026-08-15T23:20:24.4700988Z [36;1m  echo "📋 Hash de requirements.txt (fallback): ${REQUIREMENTS_HASH:0:12}..."[0m
+2026-08-15T23:20:24.4701406Z [36;1melse[0m
+2026-08-15T23:20:24.4701785Z [36;1m  echo "⚠️  requirements.prod.txt et requirements.txt non trouvés"[0m
+2026-08-15T23:20:24.4702553Z [36;1m  echo "requirements_hash=missing" >> $GITHUB_OUTPUT[0m
+2026-08-15T23:20:24.4702900Z [36;1mfi[0m
+2026-08-15T23:20:24.4740426Z shell: /usr/bin/bash -e {0}
+2026-08-15T23:20:24.4740707Z env:
+2026-08-15T23:20:24.4740941Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:24.4741324Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:24.4741578Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:24.4741895Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:24.4742145Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:24.4742448Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:24.4742774Z ##[endgroup]
+2026-08-15T23:20:24.4898055Z 📋 Hash de requirements.prod.txt + requirements.base.txt: 79ee13f410ba...

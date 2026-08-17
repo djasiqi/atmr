@@ -1,0 +1,10 @@
+﻿08-16 15:57:27.090 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:29.668 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '09a97f5e-728d-4463-af26-6d492aa2cd4d'.
+08-16 15:57:38.994 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:49.950  3001  3989 D LocationManagerService: network provider added registration from 1000/android[GnssService]/2BF14E5B -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+08-16 15:57:49.954  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+08-16 15:57:49.973  3001  3989 D LocationManagerService: network provider registration 1000/android[GnssService]/2BF14E5B finished after 1 updates
+08-16 15:57:49.973  3001  3989 D LocationManagerService: network provider removed registration from 1000/android[GnssService]/2BF14E5B
+08-16 15:57:49.973  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+08-16 15:57:50.265 13893 14034 I TaskService: Finished task 'background-location-task' with eventId 'da0d7769-7541-4921-a34b-a89f21ad1b3a'.
+08-16 15:57:57.467 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery

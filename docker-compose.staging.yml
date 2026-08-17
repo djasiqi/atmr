@@ -146,7 +146,7 @@ services:
       - path: .env.staging
         required: true
     environment:
-      APP_ENV: staging
+      APP_ENV: ${APP_ENV:-staging}
       FLASK_CONFIG: production
       FLASK_ENV: production
       FLASK_APP: app.py
@@ -169,7 +169,9 @@ services:
       TRACKING_INGEST_PERSIST_ENABLED: "true"
       TRACKING_SOCKET_KAFKA_MIRROR_ENABLED: "false"
       TRACKING_PROCESSED_FANOUT_ENABLED: "false"
+      SOCKET_GPS_INGEST_ENABLED: ${SOCKET_GPS_INGEST_ENABLED:-true}
       TRACKING_PG_FIRST_CANONICAL_ENABLED: ${TRACKING_PG_FIRST_CANONICAL_ENABLED:-false}
+      TRACKING_PERSIST_WITH_OUTBOX: ${TRACKING_PERSIST_WITH_OUTBOX:-false}
       TRACKING_MISSION_FIREWALL_MODE: ${TRACKING_MISSION_FIREWALL_MODE:-off}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TRACKING_CONSUMER_GROUP: ${KAFKA_TRACKING_CONSUMER_GROUP:-atmrstg-tracking-ingest}
@@ -177,13 +179,17 @@ services:
       HIBP_ENABLED: "false"
       INTERNAL_TRACKING_INGEST_ENABLED: "false"
       PDF_BASE_URL: ${PDF_BASE_URL:-http://127.0.0.1:15000}
+      # Canary téléphone : inclure l’origine LAN (ex. http://192.168.x.x:15000).
       SOCKETIO_CORS_ORIGINS: ${SOCKETIO_CORS_ORIGINS:-http://127.0.0.1:15000}
-      GIT_SHA: ${GIT_SHA:-26338ec0e0f124bac7b253b067970e08530aec3f}
-      API_GIT_SHA: ${API_GIT_SHA:-26338ec0e0f124bac7b253b067970e08530aec3f}
+      # Canary Android LAN : APP_ENV=demo (même image) désactive Talisman force_https.
+      # Remettre APP_ENV=staging après le canary. Ne jamais utiliser demo en prod.
+      GIT_SHA: ${GIT_SHA:-d5694d8e7cec190978098db6eb20f242226784a8}
+      API_GIT_SHA: ${API_GIT_SHA:-d5694d8e7cec190978098db6eb20f242226784a8}
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
       GUNICORN_WORKER_CLASS: gevent
     ports:
-      - "127.0.0.1:15000:5000"
+      # Défaut isolé loopback. Canary téléphone : STAGING_API_BIND=0.0.0.0
+      - "${STAGING_API_BIND:-127.0.0.1}:15000:5000"
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -229,6 +235,7 @@ services:
       TRACKING_INGEST_ASYNC_ENABLED: "true"
       TRACKING_INGEST_PERSIST_ENABLED: "true"
       TRACKING_PG_FIRST_CANONICAL_ENABLED: ${TRACKING_PG_FIRST_CANONICAL_ENABLED:-false}
+      TRACKING_PERSIST_WITH_OUTBOX: ${TRACKING_PERSIST_WITH_OUTBOX:-false}
       TRACKING_MISSION_FIREWALL_MODE: ${TRACKING_MISSION_FIREWALL_MODE:-off}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TRACKING_CONSUMER_GROUP: ${KAFKA_TRACKING_CONSUMER_GROUP:-atmrstg-tracking-ingest}
@@ -236,7 +243,7 @@ services:
       STANDALONE_PROMETHEUS_ENABLED: "true"
       STANDALONE_PROMETHEUS_PORT: "9115"
       HIBP_ENABLED: "false"
-      GIT_SHA: ${GIT_SHA:-26338ec0e0f124bac7b253b067970e08530aec3f}
+      GIT_SHA: ${GIT_SHA:-d5694d8e7cec190978098db6eb20f242226784a8}
     depends_on:
       backend:
         condition: service_healthy
@@ -327,6 +334,22 @@ services:
       - ./scripts/staging:/opt/staging:ro
       - staging_output:/output
     working_dir: /opt/staging
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - atmrstg
+
+  # Profil canary : expose le backend staging au LAN téléphone sans toucher api.lirie.ch.
+  # X-Forwarded-Proto=https → Talisman n'émet pas de redirect HTTPS (même image d5694d8).
+  canary-gateway:
+    profiles: ["canary"]
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:15100:15000"
+    volumes:
+      - ./scripts/staging/canary-nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       backend:
         condition: service_healthy

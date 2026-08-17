@@ -1,0 +1,45 @@
+﻿{
+  "id": "fba42011-32ce-4ef7-b26e-91d08c79e318",
+  "status": "FINISHED",
+  "platform": "ANDROID",
+  "artifacts": {
+    "buildUrl": "https://expo.dev/artifacts/eas/cYdNK8rkhKGPlzOmGFCsMIWYvcUN0-bolVMyszFSAU8.apk",
+    "applicationArchiveUrl": "https://expo.dev/artifacts/eas/cYdNK8rkhKGPlzOmGFCsMIWYvcUN0-bolVMyszFSAU8.apk"
+  },
+  "initiatingActor": {
+    "id": "f8512c47-8a63-4320-9be6-979f4740caff",
+    "displayName": "drinjasiqi"
+  },
+  "logFiles": [
+    "https://storage.googleapis.com/eas-workflows-production/logs/3be107c7-29d2-4987-91a0-8d7c31604891/fba42011-32ce-4ef7-b26e-91d08c79e318/2026-08-17T02%3A09%3A12Z-7c4ddf68-76ee-47e5-bbaf-832509f2315d.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260817%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260817T100130Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=714187a3b11cccf1fcd5ea1c8772cb39b2f91f6d20393bb4dc9cdebd8006845cd3f68dcf8756a91a8c37339cbabdf493db27062c0d0361714cced87191931090efddbd9db3a6dfe13caab50d92237769c5d64bfe0afc05f20ab58f61f9be1bd218707f954a2f816f70f63e5668f32854e645db5937b57d3e94a0ed81296862ccefceb096e379877d2e79010a2285e6c0b7498de1463e7ce2ad2b0ab5f62957911cffafc9a16788563fa016e99e3bc74d616a61fa27c01c9e017292071613c7d7ea9da7a4e747d60e40922fd9f198a7efcfb8218711106d221944bff4e71ae7bb8c6990107197f4292696e74fef1dba7b602a817eb6921bf0635f3e35c3f6a33b"
+  ],
+  "project": {
+    "id": "3be107c7-29d2-4987-91a0-8d7c31604891",
+    "name": "operations-app",
+    "slug": "operations-app",
+    "ownerAccount": {
+      "id": "b714e8e7-a921-4b60-adce-4bb87b393737",
+      "name": "drinjasiqi"
+    }
+  },
+  "channel": "production",
+  "distribution": "INTERNAL",
+  "buildProfile": "production-apk",
+  "sdkVersion": "54.0.0",
+  "appVersion": "1.0.11",
+  "appBuildVersion": "131",
+  "runtimeVersion": "1.0.11",
+  "gitCommitHash": "101992cce16176661cb1e6a4f08eb01fedb29d3e",
+  "gitCommitMessage": "docs(ops): audit prod image skew and Kafka P0 HOLD deploy paths\n\nExplains API 927640a0 vs ingest 390076ef dual pipelines; fanout Created with ENABLED=false; P0 release should exclude capture_id migration.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+  "priority": "NORMAL",
+  "createdAt": "2026-08-17T02:09:06.958Z",
+  "updatedAt": "2026-08-17T02:33:20.681Z",
+  "completedAt": "2026-08-17T02:33:20.443Z",
+  "expirationDate": "2026-08-31T02:09:07.026Z",
+  "isForIosSimulator": false,
+  "metrics": {
+    "buildWaitTime": 5095,
+    "buildQueueTime": 4485,
+    "buildDuration": 1443905
+  }
+}

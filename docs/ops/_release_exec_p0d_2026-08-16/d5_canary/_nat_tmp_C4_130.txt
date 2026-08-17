@@ -1,0 +1,6 @@
+﻿08-17 03:54:47.290 20593 20839 I TaskService: Finished task 'background-location-task' with eventId 'dfcbc570-b790-48e7-b308-bbeff64b6d5e'.
+08-17 03:54:48.454 20593 20824 W ReactNativeJS: '[D5-NATIVE] TASK_REG_STATE', { trigger: 'appstate',
+08-17 03:54:48.529 20593 20824 W ReactNativeJS: '[D5-NATIVE] TASK_REG_STATE', { trigger: 'appstate',
+08-17 03:55:03.587 20593 20824 W ReactNativeJS: '[D5-NATIVE] TASK_REG_STATE', { trigger: 'appstate',
+08-17 03:55:03.663 20593 20824 W ReactNativeJS: '[D5-NATIVE] TASK_REG_STATE', { trigger: 'appstate',
+08-17 03:55:05.440 20593 20839 I TaskService: Finished task 'background-location-task' with eventId '7f868523-cd2a-4243-9dc5-4d2a7cb5a4c2'.

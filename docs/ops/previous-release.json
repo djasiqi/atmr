@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "kind": "previous-release",
+  "created_at_utc": "2026-08-15T23:00:00Z",
+  "source_of_truth": [
+    "docs/ops/gps-p0-prod-snapshot-2026-08-15.md",
+    "docs/ops/_release_prod_snapshot_2026-08-15/snapshot.json",
+    "docs/ops/gps-p0-deploy-skew-audit-2026-08-15.md"
+  ],
+  "note": "Rollback cible = topologie PROD actuelle SKEWÉE, pas un pin uniforme sur 927640a0.",
+  "release_tip_before_deploy": "286737a2362eb1e38013c72d04be23fcd608210e",
+  "migration_head": "9b6638784019",
+  "alembic": {
+    "current": "9b6638784019",
+    "heads_on_prod_image": "9b6638784019",
+    "capture_id_migration_25ce766952e2": "absent",
+    "downgrade_required_on_rollback": false
+  },
+  "backend": {
+    "role": "api",
+    "git_sha": "927640a0995a7025edfae3d31802998948a866d5",
+    "docker_tag": "sha-927640a0995a",
+    "repository": "djasiqi/atmr-backend",
+    "reference": "djasiqi/atmr-backend:sha-927640a0995a",
+    "image_id_short": "9f4dc958e062"
+  },
+  "ws": {
+    "role": "ws-service",
+    "git_sha": "927640a0995a7025edfae3d31802998948a866d5",
+    "docker_tag": "sha-927640a0995a",
+    "repository": "djasiqi/atmr-ws-service",
+    "reference": "djasiqi/atmr-ws-service:sha-927640a0995a"
+  },
+  "celery": {
+    "role": "celery-worker/celery-beat/flower",
+    "git_sha": "927640a0995a7025edfae3d31802998948a866d5",
+    "docker_tag": "sha-927640a0995a",
+    "repository": "djasiqi/atmr-backend",
+    "reference": "djasiqi/atmr-backend:sha-927640a0995a",
+    "same_image_as": "backend"
+  },
+  "tracking": {
+    "consumer": {
+      "role": "tracking-kafka-consumer",
+      "git_sha": "390076efc61ca71332c749a67aff1e6fc7c2d626",
+      "docker_tag": "sha-390076efc61c",
+      "repository": "djasiqi/atmr-backend",
+      "reference": "djasiqi/atmr-backend:sha-390076efc61c",
+      "desired_state": "up",
+      "image_id_short": "780a166c04b9"
+    },
+    "outbox": {
+      "role": "tracking-outbox-publisher",
+      "git_sha": "390076efc61ca71332c749a67aff1e6fc7c2d626",
+      "docker_tag": "sha-390076efc61c",
+      "repository": "djasiqi/atmr-backend",
+      "reference": "djasiqi/atmr-backend:sha-390076efc61c",
+      "desired_state": "up",
+      "image_id_short": "780a166c04b9"
+    },
+    "fanout": {
+      "role": "tracking-processed-fanout",
+      "git_sha": "16fd3e52418dfe88039b82f35ccc5326ec4fa993",
+      "docker_tag": "sha-16fd3e52418d",
+      "repository": "djasiqi/atmr-backend",
+      "reference": "djasiqi/atmr-backend:sha-16fd3e52418d",
+      "desired_state": "created_not_up",
+      "image_id_short": "f0919cd25a03"
+    },
+    "dlq": {
+      "role": "kafka-dlq-consumer",
+      "git_sha": "16fd3e52418dfe88039b82f35ccc5326ec4fa993",
+      "docker_tag": "sha-16fd3e52418d",
+      "repository": "djasiqi/atmr-backend",
+      "reference": "djasiqi/atmr-backend:sha-16fd3e52418d",
+      "desired_state": "created_not_up",
+      "image_id_short": "f0919cd25a03"
+    },
+    "hold": {
+      "compose_override": "docker-compose.kafka.p0-hold.yml",
+      "TRACKING_PROCESSED_FANOUT_ENABLED": "false",
+      "env_production_may_say_true": true,
+      "runtime_authority": "p0-hold.yml forces false on fanout service; containers must remain Created/stopped",
+      "recreate_script": "scripts/ops-tracking-p0-recreate-ingest.sh",
+      "assert_fanout_not_running_after_recreate": true
+    }
+  },
+  "compose": {
+    "production": "docker-compose.production.yml",
+    "kafka_stack": [
+      "docker-compose.production.yml",
+      "docker-compose.kafka.yml",
+      "docker-compose.kafka.atmr-network.yml",
+      "docker-compose.kafka.p0-hold.yml"
+    ],
+    "deploy_api_must_not_include_kafka_profile": true
+  },
+  "rollback_must_not_require": [
+    "purge_redis",
+    "purge_kafka",
+    "flush_queue",
+    "alembic_downgrade",
+    "mobile_rollback"
+  ],
+  "g3": {
+    "backend_only_rollback_safe": true,
+    "mobile_p0_vs_old_backend": "DEGRADED-SAFE",
+    "ref": "docs/ops/gps-p0-g3-nn1-2026-08-15.md"
+  },
+  "rollback_procedure": {
+    "api_celery_ws": "deploy-production.sh --release-manifest previous-release.json (backend+ws refs)",
+    "consumer_outbox": "ops-tracking-p0-recreate-ingest.sh with SOURCE_SHA=390076ef… / tag sha-390076efc61c + p0-hold.yml",
+    "fanout_dlq": "leave Created/stopped; ENABLED=false via p0-hold; do not compose up fanout"
+  }
+}

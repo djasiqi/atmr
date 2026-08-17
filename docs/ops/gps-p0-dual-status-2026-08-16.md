@@ -152,15 +152,35 @@ C4 RE-RUN (131)             = PASS ✅
   Unregister=0 / NATIVE_STOP_ENTRY=0
   → d5_canary/C4_summary_131.txt
 CANARY VALIDATED (full)     = YES ✅ (interne C1–C4)
-RELEASE REVIEW 131          = FAIL ❌ → NO-GO DISTRIBUTION
-  B1 SHA freeze = OPEN ⛔
-  B2 QA panel APK = OPEN ⛔ (Play = AAB production QA OFF)
-  B3 tsc télémétrie D5 = FIXED ✅ (65 PASS / tsc D5=0)
-  → d5_canary/RELEASE_REVIEW_131.md
-  NEXT = commit SHA FINAL S (D5+B3) puis AAB production
+RELEASE REVIEW 131          = FAIL ❌ (historique) → B1/B2/B3 traités sur 132
+  B1 SHA FINAL S            = FIXED ✅ a851cf15… + tag d5-rc-final (pushed)
+  B2 AAB production QA OFF  = FIXED ✅ ab91958e… versionCode 132 (SHA=S)
+  B3 tsc télémétrie D5      = FIXED ✅
+  → d5_canary/B2_PRODUCTION_AAB_132.txt
+SMOKE RC132                 = PASS ✅ (FG 90s + HOME 180s ; Unreg=0 ; PUT OK ; FGS alive)
+  → d5_canary/RC132_SMOKE_summary.txt
+RELEASE REVIEW 132          = PASS ✅
+RC132 VALIDATED             = YES ✅
+RC132                       = FROZEN ✅ (ne plus modifier D5 / canary / SHA S)
+  → d5_canary/RELEASE_REVIEW_132.md
+  PLAY SUBMISSION / ROLLOUT = HOLD ⛔
 DISTRIBUTION                = NO-GO ⛔
-BACKEND PROD                = READ-ONLY
-GPS UI freshness            = HORS D5 (gelé séparément)
+
+═══════════════════════════════════════
+P0-E — GPS CONFIRMATION / MAP FRESHNESS
+═══════════════════════════════════════
+
+P0-E Q2                     = RCA CLOSED ✅
+  PHASE 1 A–E               = PASS ✅ (sha-d5694d8e7cec, PG_FIRST=false)
+  NOTE                      = OUTBOX=true restauré mid-lot (défaut compose false)
+  PG LOC + capture_id       = OK post-restore
+  canonical via P5-B        = OFF (LocationService sync peut encore écrire Redis)
+  PHASE 2 flag ON canary    = HOLD ⛔
+  → gps-p0e-phase1-ae-result-2026-08-17.md
+  INTERDIT                  = RC132 / frontend / flag ON sans GO
+
+BACKEND PROD                = READ-ONLY (obs + MDS)
+GPS UI freshness            = P0-E (ouvert)
 
 FERMÉ / NE PLUS ROUVRIR SANS PREUVE
 = OTA / AppConfigurationError / not-defined /

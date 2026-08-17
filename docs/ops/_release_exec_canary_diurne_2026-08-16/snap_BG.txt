@@ -1,0 +1,24 @@
+﻿­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=1)
+LABEL BG
+NOW 2026-08-16T10:02:28.561423+00:00
+BOOK27 27 IN_PROGRESS 19
+HEALTH_N 12
+NATIVE_ERR 0
+FGS_T 9 / 12
+NAT_T 9 / 12
+H 2026-08-16 11:59:27.192799+02:00 app= active fgs= True nat= True track= True fix= None nfix= 3 cr= None err= 
+H 2026-08-16 11:59:27.168364+02:00 app= active fgs= True nat= True track= True fix= None nfix= 3 cr= None err= 
+H 2026-08-16 11:58:09.865976+02:00 app= active fgs= True nat= True track= True fix= None nfix= 8 cr= None err= 
+H 2026-08-16 11:58:09.803007+02:00 app= active fgs= True nat= True track= True fix= None nfix= 8 cr= None err= 
+H 2026-08-16 11:58:00.664452+02:00 app= active fgs= False nat= False track= True fix= None nfix= None cr= fgs_not_running err= 
+H 2026-08-16 11:58:00.593849+02:00 app= active fgs= False nat= False track= True fix= None nfix= None cr= fgs_not_running err= 
+LOC_N 24
+LOC 2026-08-16 12:02:19.777161+02:00 mission= 27
+LOC 2026-08-16 12:02:03.484282+02:00 mission= 27
+LOC 2026-08-16 12:01:39.185220+02:00 mission= 27
+LOC 2026-08-16 12:01:18.854303+02:00 mission= 27
+LOC 2026-08-16 12:00:58.585803+02:00 mission= 27
+LOC 2026-08-16 12:00:42.272039+02:00 mission= 27
+LOC 2026-08-16 12:00:09.929654+02:00 mission= 27
+LOC 2026-08-16 11:59:49.756558+02:00 mission= 27

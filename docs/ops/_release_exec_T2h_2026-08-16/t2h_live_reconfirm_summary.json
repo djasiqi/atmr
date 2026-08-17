@@ -1,0 +1,31 @@
+{
+  "kind": "g5-t2h-live-reconfirm",
+  "captured_at_utc": "2026-08-16T09:55:34Z",
+  "local_geneva": "2026-08-16 ~11:55 CEST",
+  "release_tip": "286737a2362eb1e38013c72d04be23fcd608210e",
+  "docker_tag": "sha-286737a2362e",
+  "verdict": "VERT",
+  "includes": {
+    "retrospective_window_utc": ["2026-08-16T02:15:00Z", "2026-08-16T03:15:00Z"],
+    "daytime_last_2h": true,
+    "live_topology": true
+  },
+  "checks": {
+    "restart_count": 0,
+    "images_sha_286737a2362e": true,
+    "fanout_up": 0,
+    "fanout_enabled": false,
+    "http_5xx_retro_and_daytime": 0,
+    "claim_keys": 0,
+    "native_start_error": 0,
+    "dedup_storm": false
+  },
+  "pg": {
+    "t2h_window_loc": 0,
+    "last_2h_loc": 1,
+    "last_2h_health": 108,
+    "native_start_error": 0
+  },
+  "note": "T+2h rétrospectif + reconfirm diurne live. Volume LOC prod encore faible (1 event driver 3). Canary Lirie Dev staging = piste séparée pour preuve LOC FG/BG/lock.",
+  "evidence": "docs/ops/_release_exec_T2h_2026-08-16/t2h_live_2026-08-16_daytime.txt"
+}

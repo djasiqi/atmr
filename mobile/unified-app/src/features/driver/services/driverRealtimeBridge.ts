@@ -225,11 +225,25 @@ export function startDriverRealtimeBridge(
       lastReconnectResyncAtMs = now;
       scheduleDriverMissionSync(queryClient, contextId, "reconnect");
       if (isFeatureEnabled("tracking_resume_resync_enabled")) {
-        void driverTrackingQueue
-          .releaseSocketEmittedForHttpRetry()
-          .then(() => driverTrackingQueue.reconcileAfterSessionConflict())
-          .then(() => flushTrackingQueue())
-          .then(() => syncBridgeQueueDepthFromPersistence());
+        // Q3-A : reconnect ≠ session_conflict. Conserver la session locale,
+        // libérer les emits socket bloqués, flusher le backlog — jamais rotate.
+        void (async () => {
+          const before = await driverTrackingQueue.getSnapshot();
+          await driverTrackingQueue.releaseSocketEmittedForHttpRetry();
+          await flushTrackingQueue();
+          await syncBridgeQueueDepthFromPersistence();
+          const after = await driverTrackingQueue.getSnapshot();
+          emitDriverTelemetry("tracking.queue.reconnect_resync", {
+            source: "driver.realtime.bridge",
+            context_id: contextId,
+            tracking_session_id: after.trackingSessionId || null,
+            session_generation: after.sessionGeneration,
+            session_unchanged:
+              Boolean(before.trackingSessionId) &&
+              before.trackingSessionId === after.trackingSessionId,
+            rotated: false,
+          });
+        })();
       }
       queryClient.setQueryData(driverQueryKeys.syncState(contextId), {
         last_sync_at: new Date().toISOString(),

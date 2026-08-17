@@ -1,0 +1,419 @@
+﻿
+>       - ServiceRecord{6f86d74 u0 com.android.vending/com.google.android.finsky.services.LicensingService 
+c:ch.liri.operations}
+        - ServiceRecord{d8b93ab u0 com.android.vending/com.google.android.finsky.prewarmservice.PrewarmService 
+c:com.instagram.android}
+      scheduleServiceTimeoutPending=false
+      Published Providers:
+        - com.google.android.finsky.setup.p2p.CachedPackageContentProvider
+          -> ContentProviderRecord{70a427b u0 
+com.android.vending/com.google.android.finsky.setup.p2p.CachedPackageContentProvider}
+        - com.google.android.finsky.dumpsys.mainimpl.MainDumpsysContentProvider
+          -> ContentProviderRecord{31535d7 u0 
+com.android.vending/com.google.android.finsky.dumpsys.mainimpl.MainDumpsysContentProvider}
+        - com.google.android.finsky.fileprovider.FinskyFileProvider
+>       - ConnectionRecord{cdf592c u0 CR !FG !PRCP 
+ch.liri.operations/androidx.work.impl.background.systemjob.SystemJobService:@3d38df flags=0x8105}
+        - ConnectionRecord{cec7d1d u0 CR FGS com.sec.location.nsflp2/.nsmonitor.NSMonitorService:@c93a1f4 
+flags=0x4000001}
+        - ConnectionRecord{d12a52a u0 CR !FG !VIS 
+com.google.android.gms/com.google.android.location.internal.GoogleLocationManagerService:@9ca5e15 flags=0x40000005}
+        - ConnectionRecord{d3fb73c u0 CR !FG !VIS 
+com.google.android.gms/com.google.android.location.network.NetworkLocationService:@62b052f flags=0x40000005}
+        - ConnectionRecord{da021e7 u0 CR FGS com.google.android.gms/.auth.trustagent.GoogleTrustAgent:@db313a6 
+flags=0x4000001}
+        - ConnectionRecord{dbefd47 u0 CR DEAD com.google.android.permissioncontroller/com.android.permissioncontroller.
+permission.service.PermissionControllerServiceImpl:@4d9b21c flags=0x1}
+        - ConnectionRecord{e22d962 u0 CR DEAD com.google.android.permissioncontroller/com.android.permissioncontroller.
+permission.service.PermissionControllerServiceImpl:@4d9b21c flags=0x1}
+        - ConnectionRecord{e501514 u0 CR FGS com.google.android.gms/.chimera.PersistentBoundBrokerService:@8dd5367 
+flags=0x4000001}
+        - ConnectionRecord{e871fb2 u0 CR DEAD com.google.android.permissioncontroller/com.android.permissioncontroller.
+permission.service.PermissionControllerServiceImpl:@4d9b21c flags=0x1}
+>   *APP* UID 10901 ProcessRecord{a19ce1e 19683:ch.liri.operations/u0a901}
+      user #0 uid=10901 gids={3003, 50901, 20901, 9997}
+      mRequiredAbi=arm64-v8a instructionSet=arm64
+      class=com.pairip.application.Application
+>     dir=/data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==/base.apk 
+publicDir=/data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==/base.apk 
+data=/data/user/0/ch.liri.operations
+>     packageList={ch.liri.operations}
+      packageDependencies={com.google.android.webview}
+      compat={480dpi}
+      thread=com.android.server.am.ApplicationThreadDeferred@4e4cfc1
+      pid=19683
+      lastActivityTime=-8s353ms    startUpTime=-25m15s845ms    startElapsedTime=-26m32s119ms
+      startSeq=4605
+      mountMode=DEFAULT
+      lastRssTime=-7m42s596ms rssProcState=8 rssStatType=0 nextRssTime=+2m23s176ms
+>       - ServiceRecord{6c4a1c9 u0 
+ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService c:ch.liri.operations}
+>       - ServiceRecord{c4c8ff5 u0 ch.liri.operations/androidx.work.impl.background.systemjob.SystemJobService 
+c:android}
+>       - ServiceRecord{e389d7a u0 ch.liri.operations/expo.modules.location.services.LocationTaskService 
+c:ch.liri.operations}
+      mConnections:
+        - ConnectionRecord{28258f u0 CR WACT CAPS 
+com.google.android.gms/.chimera.PersistentDirectBootAwareApiService:@d1fbcee flags=0x1081}
+>       - ConnectionRecord{3c584c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@40407f 
+flags=0x1}
+>       - ConnectionRecord{a629f7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c0af1f6 
+flags=0x1}
+>       - ConnectionRecord{cffdd0 u0 CR IMP 
+ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService:@7d4b993 flags=0x41}
+>       - ConnectionRecord{10e308d u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@9873d24 flags=0x1}
+>       - ConnectionRecord{1783daf u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@6fea18e flags=0x1}
+>       - ConnectionRecord{1b27cb2 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@8fc3ebd flags=0x1}
+>       - ConnectionRecord{1b2f134 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@20f8c07 flags=0x1}
+>       - ConnectionRecord{1bb4e6e u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@dda91e9 flags=0x1}
+>       - ConnectionRecord{1bfbdb7 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@b837cb6 flags=0x1}
+>       - ConnectionRecord{1d38077 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@3d59276 flags=0x1}
+>       - ConnectionRecord{225e0e0 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@cb6fee3 flags=0x1}
+>       - ConnectionRecord{22d5605 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@5ee2d7c flags=0x1}
+>       - ConnectionRecord{242c48e u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@9db8c89 flags=0x1}
+>       - ConnectionRecord{2807185 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@7686fc 
+flags=0x1}
+        - ConnectionRecord{2a5f655 u0 CR 
+com.android.vending/com.google.android.finsky.services.LicensingService:@96ae486 flags=0x1}
+        - ConnectionRecord{2c183ec u0 CR WACT CAPS 
+com.google.android.gms/com.google.android.location.internal.GoogleLocationManagerService:@476569f flags=0x1081}
+>       - ConnectionRecord{2d1e730 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@a30ec73 flags=0x1}
+>       - ConnectionRecord{2e68248 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@10924eb flags=0x1}
+>       - ConnectionRecord{2fa0011 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@1724838 flags=0x1}
+>       - ConnectionRecord{31154f6 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@511fd91 flags=0x1}
+>       - ConnectionRecord{3582cfd u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@862a554 flags=0x1}
+>       - ConnectionRecord{379ed33 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@c2b0ca2 flags=0x1}
+>       - ConnectionRecord{37e1772 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@a1e8c7d flags=0x1}
+>       - ConnectionRecord{38f2de8 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@fc0bb0b flags=0x1}
+>       - ConnectionRecord{39eac6e u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@1d8a7e9 flags=0x1}
+>       - ConnectionRecord{418c410 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@5c7b0d3 flags=0x1}
+>       - ConnectionRecord{42e0d07 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@4a73746 flags=0x1}
+>       - ConnectionRecord{431058a u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@9e83f5 
+flags=0x1}
+>       - ConnectionRecord{43d95bc u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@e134daf flags=0x1}
+>       - ConnectionRecord{4e18ffe u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@b319fb9 flags=0x1}
+>       - ConnectionRecord{5148462 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@9e7d72d flags=0x1}
+>       - ConnectionRecord{5430a55 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@7d3c10c flags=0x1}
+>       - ConnectionRecord{54aa949 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@137350 
+flags=0x1}
+>       - ConnectionRecord{56ebd0e u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@bd21709 flags=0x1}
+>       - ConnectionRecord{58d2301 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@60160e8 flags=0x1}
+>       - ConnectionRecord{5a9f746 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@4197721 flags=0x1}
+>       - ConnectionRecord{5de8a9f u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@56b4c3e flags=0x1}
+>       - ConnectionRecord{5e9c64c u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@fa6a67f flags=0x1}
+>       - ConnectionRecord{614b3b1 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@c7f0658 flags=0x1}
+>       - ConnectionRecord{63d49b0 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@57a48f3 flags=0x1}
+>       - ConnectionRecord{68e618d u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@b159224 flags=0x1}
+>       - ConnectionRecord{69af021 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@7dfae88 flags=0x1}
+>       - ConnectionRecord{6aa529e u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@faf48d9 flags=0x1}
+>       - ConnectionRecord{6ac81fd u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@faf2e54 flags=0x1}
+>       - ConnectionRecord{6adad87 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@5d709c6 flags=0x1}
+>       - ConnectionRecord{6d29562 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@c7f8c2d flags=0x1}
+>       - ConnectionRecord{6d3de11 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@330de38 flags=0x1}
+>       - ConnectionRecord{70a7045 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8248bc 
+flags=0x1}
+>       - ConnectionRecord{710fd4b u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@3e26e1a flags=0x1}
+>       - ConnectionRecord{719faa8 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@637c2cb flags=0x1}
+>       - ConnectionRecord{73c637b u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@47fcf0a flags=0x1}
+>       - ConnectionRecord{7430554 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@180dca7 flags=0x1}
+>       - ConnectionRecord{747e2e5 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@69961dc flags=0x1}
+>       - ConnectionRecord{74c36d4 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@b11e427 flags=0x1}
+>       - ConnectionRecord{74e5655 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@10cbd0c flags=0x1}
+>       - ConnectionRecord{77c6e03 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@3b6ceb2 flags=0x1}
+>       - ConnectionRecord{7a7bed6 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@a7a62f1 flags=0x1}
+>       - ConnectionRecord{7f72b70 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@9cb99b3 flags=0x1}
+>       - ConnectionRecord{85065c1 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@810f6a8 flags=0x1}
+>       - ConnectionRecord{8c27eae u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@b3b5b29 flags=0x1}
+>       - ConnectionRecord{94511ec u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@7b75c9f flags=0x1}
+>       - ConnectionRecord{97b70fc u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@8fe8def flags=0x1}
+>       - ConnectionRecord{9b5c2c5 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@155553c flags=0x1}
+        - ConnectionRecord{9c85147 u0 CR 
+com.android.vending/com.google.android.finsky.services.LicensingService:@96ae486 flags=0x1}
+>       - ConnectionRecord{a1d299a u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@b736e45 flags=0x1}
+>       - ConnectionRecord{a51b366 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@7180fc1 flags=0x1}
+>       - ConnectionRecord{a9c7908 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@615beab flags=0x1}
+>       - ConnectionRecord{abd96d2 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@c78ed5d flags=0x1}
+>       - ConnectionRecord{ac01744 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@7c04057 flags=0x1}
+>       - ConnectionRecord{aea9f22 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@6aea4ed flags=0x1}
+>       - ConnectionRecord{b23b6a6 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@c2f1801 flags=0x1}
+>       - ConnectionRecord{b46ea90 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@ad46153 flags=0x1}
+>       - ConnectionRecord{b5aa2f7 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@151aef6 flags=0x1}
+>       - ConnectionRecord{b7a447c u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@62e7f6f flags=0x1}
+>       - ConnectionRecord{bb23fa7 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@be81066 flags=0x1}
+>       - ConnectionRecord{bc545e5 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f270dc 
+flags=0x1}
+>       - ConnectionRecord{bd0cfa5 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@8b3099c flags=0x1}
+>       - ConnectionRecord{c3f7a96 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@170b5b1 flags=0x1}
+>       - ConnectionRecord{c547bf3 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@42f9e62 flags=0x1}
+>       - ConnectionRecord{c8524f8 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@d26e45b flags=0x1}
+>       - ConnectionRecord{c964ddc u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@939524f flags=0x1}
+>       - ConnectionRecord{cc6991f u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@ec884be flags=0x1}
+>       - ConnectionRecord{cf4a944 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@a83da57 flags=0x1}
+>       - ConnectionRecord{d0aeb6a u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@37ad555 flags=0x1}
+>       - ConnectionRecord{d29f4d3 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@83deec2 flags=0x1}
+>       - ConnectionRecord{d431721 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@3041188 flags=0x1}
+>       - ConnectionRecord{d499387 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@37ac7c6 flags=0x1}
+>       - ConnectionRecord{d5c420c u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@52ab93f flags=0x1}
+>       - ConnectionRecord{d67e02f u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@5353e0e flags=0x1}
+>       - ConnectionRecord{db7061d u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@93eaef4 flags=0x1}
+>       - ConnectionRecord{dc8a867 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@3a7a426 flags=0x1}
+>       - ConnectionRecord{def94c4 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@33143d7 flags=0x1}
+>       - ConnectionRecord{e2f0e97 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@48c0516 flags=0x1}
+>       - ConnectionRecord{e2fe74e u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@a108249 flags=0x1}
+>       - ConnectionRecord{e7349bd u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@4393d14 flags=0x1}
+>       - ConnectionRecord{eb2059b u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@adc25aa flags=0x1}
+>       - ConnectionRecord{ec955bd u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@f2ff914 flags=0x1}
+>       - ConnectionRecord{ed24983 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@894e832 flags=0x1}
+>       - ConnectionRecord{f7943d2 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@7532e5d flags=0x1}
+>       - ConnectionRecord{f94dedc u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@fc3874f flags=0x1}
+>       - ConnectionRecord{fbcbc4a u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3fddb5 
+flags=0x1}
+>       - ConnectionRecord{fc59277 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@cdcac76 flags=0x1}
+>       - ConnectionRecord{fd8a032 u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@81ec03d flags=0x1}
+>       - ConnectionRecord{fecd00b u0 CR 
+ch.liri.operations/expo.modules.location.services.LocationTaskService:@9d2d3da flags=0x1}
+      scheduleServiceTimeoutPending=false
+      Published Providers:
+        - expo.modules.clipboard.ClipboardFileProvider
+>         -> ContentProviderRecord{48dee65 u0 ch.liri.operations/expo.modules.clipboard.ClipboardFileProvider}
+        - com.canhub.cropper.CropFileProvider
+>         -> ContentProviderRecord{2bde3bb u0 ch.liri.operations/com.canhub.cropper.CropFileProvider}
+        - androidx.startup.InitializationProvider
+>         -> ContentProviderRecord{7dd3bd3 u0 ch.liri.operations/androidx.startup.InitializationProvider}
+        - io.sentry.android.core.SentryPerformanceProvider
+>         -> ContentProviderRecord{39fb442 u0 ch.liri.operations/io.sentry.android.core.SentryPerformanceProvider}
+        - io.invertase.notifee.NotifeeInitProvider
+>         -> ContentProviderRecord{796c7bc u0 ch.liri.operations/io.invertase.notifee.NotifeeInitProvider}
+        - io.sentry.android.core.SentryInitProvider
+>         -> ContentProviderRecord{4791152 u0 ch.liri.operations/io.sentry.android.core.SentryInitProvider}
+        - com.reactnativecommunity.webview.RNCWebViewFileProvider
+>         -> ContentProviderRecord{d1ec688 u0 
+ch.liri.operations/com.reactnativecommunity.webview.RNCWebViewFileProvider}
+        - com.google.mlkit.common.internal.MlKitInitProvider
+>         -> ContentProviderRecord{f32eb7d u0 ch.liri.operations/com.google.mlkit.common.internal.MlKitInitProvider}
+        - io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider
+>         -> ContentProviderRecord{1c0e148 u0 
+ch.liri.operations/io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider}
+        - expo.modules.filesystem.FileSystemFileProvider
+>         -> ContentProviderRecord{7113c2a u0 ch.liri.operations/expo.modules.filesystem.FileSystemFileProvider}
+        - com.google.firebase.provider.FirebaseInitProvider
+>         -> ContentProviderRecord{4a440f4 u0 ch.liri.operations/com.google.firebase.provider.FirebaseInitProvider}
+        - expo.modules.imagepicker.fileprovider.ImagePickerFileProvider
+>         -> ContentProviderRecord{cdcc20b u0 
+ch.liri.operations/expo.modules.imagepicker.fileprovider.ImagePickerFileProvider}
+      Connected Providers:
+>       - 9f1b707/com.android.providers.settings/.SettingsProvider->19683:ch.liri.operations/u0a901 s1/1 u0/0 
++26m31s909ms
+      mIsReceivingBroadcast=false
+      mBroadcastReceiverSchedGroup=-2147483648
+      mReceivers:
+>       - ReceiverList{3351077 19683 ch.liri.operations/10901/u0 remote:e836276}
+>       - ReceiverList{3ff90f9 19683 ch.liri.operations/10901/u0 remote:c516bc0}
+>       - ReceiverList{d698425 19683 ch.liri.operations/10901/u0 remote:823c01c}
+>       - ReceiverList{dbcc095 19683 ch.liri.operations/10901/u0 remote:e65684c}
+      lastCompactTime=0 lastCompactProfile=null
+      hasPendingCompaction=false    isFreezeExempt=false isPendingFreeze=false isFrozen=false
+      earliestFreezableTimeMs=-10m42s100ms
+      Activities:
+>       - ActivityRecord{81776958 u0 ch.liri.operations/.MainActivity t1304}
+      Recent Tasks:
+>       - Task{bd6e2bb #1304 type=standard A=10901:ch.liri.operations}
+       Configuration={0.8 228mcc2mnc [fr_CH,sq_AL,en_GB] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded 
+port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) 
+mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined 
+mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off 
+mOverlappingWithCutout=false} s.2429 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=32 themeSeq=0}
+       OverrideConfiguration={0.8 228mcc2mnc [fr_CH,sq_AL,en_GB] ldltr sw360dp w360dp h780dp 480dpi nrml long 
+compactNeeded port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 
+2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=standard 
+mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off 
+mOverlappingWithCutout=false} s.2 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=32 themeSeq=0}
+       mLastReportedConfiguration={0.8 228mcc2mnc [fr_CH,sq_AL,en_GB] ldltr sw360dp w360dp h780dp 480dpi nrml long 
+compactNeeded port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 
+2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined 
+mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off 
+mOverlappingWithCutout=false} s.2572 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=32 themeSeq=0}
+    *PERS* UID 10487 ProcessRecord{4713172 5108:.qms/u0a487}
+      user #0 uid=10487 gids={50487, 20487, 9997}
+      mRequiredAbi=arm64-v8a instructionSet=null
+      dir=/vendor/app/TxPwrAdmin/TxPwrAdmin.apk publicDir=/vendor/app/TxPwrAdmin/TxPwrAdmin.apk 
+data=/data/user_de/0/vendor.qti.data.txpwradmin
+      packageList={vendor.qti.data.txpwradmin}
+>     Proc # 0: fg     b/A/TRNB -------TI  t: 0 19683:ch.liri.operations/u0a901 (service)
+>         ch.liri.operations/androidx.work.impl.background.systemjob.SystemJobService<=Proc{3001:system/1000}
+          oom: max=1001 curRaw=0 setRaw=0 cur=0 set=0
+          state: cur=TRNB set=TRNB lastRss=295MB lastCachedRss=90MB
+          cached=false empty=false hasAboveClient=false
+      Proc #23: vis    F/S/FGS  ---NFUATI  t: 0 23585:com.tailscale.ipn/u0a896 (service)
+          com.tailscale.ipn/.IPNService<=Proc{3001:system/1000}
+          oom: max=1001 curRaw=100 setRaw=100 cur=100 set=100
+          state: cur=FGS  set=FGS  lastRss=96MB lastCachedRss=0,00
+          cached=false empty=false hasAboveClient=false
+>         
+com.android.vending/com.google.android.finsky.services.LicensingService<=Proc{19683:ch.liri.operations/u0a901}
+          oom: max=1001 curRaw=100 setRaw=100 cur=100 set=100
+          state: cur=TRNB set=TRNB lastRss=128MB lastCachedRss=84MB
+          cached=false empty=false hasAboveClient=false
+      Proc #95: prcp   M/S/FGS  ---NFU-TI  t: 0 19457:com.mgoogle.android.gms:persistent/u0a641 (fg-service)
+          oom: max=1001 curRaw=200 setRaw=200 cur=200 set=200
+          state: cur=FGS  set=FGS  lastRss=63MB lastCachedRss=0,00
+          cached=false empty=false hasAboveClient=false
+      Proc #100: prcp   b/ /TRNB -------TI  t: 0 5710:com.android.proxyhandler/u0a92 (service)
+>       proc=ProcessRecord{a19ce1e 19683:ch.liri.operations/u0a901}
+      UID u0ai0: UidRecord{732ab30 u0ai0 CACC bg:+3m23s364ms idle change:procstateprocadj procs:0 seq(832363,832005)} 
+caps=---------
+        curProcState=17 curCapability=---------
+        proc=ProcessRecord{e6d9ba 13826:com.instagram.android:sandboxed_process0:com.facebook.browser.helium.content.Sa
+ndboxedProcessService0:0/u0a451i-9000}
+      UID u0ai1: UidRecord{7dbb3a9 u0ai1 CACC bg:+4h8m44s782ms idle change: procs:0 seq(832362,371019)} caps=---------
+        curProcState=17 curCapability=---------
+        proc=ProcessRecord{9cc9b74 
+14005:com.instagram.android:zygote_warmer:com.facebook.browser.helium.preload.AppZygoteWarmerService/u0a451i-8999}
+      UID u0ai106: UidRecord{6ff2d2e u0ai106 CACC bg:+4h1m57s773ms idle change:procadj procs:0 seq(832361,729794)} 
+caps=---------
+        curProcState=17 curCapability=---------
+>     #112: fg     TRNB -------TI 19683:ch.liri.operations/u0a901 act:activities|recents
+      #111: vis    BFGS LCMNFUATI 4453:com.google.android.gms.persistent/u0a231 act:client
+      #110: vis    TRNB -------TI 20444:com.android.vending/u0a233 act:activities|recents|client
+      #109: picked  CAC  --------- 389:com.instagram.android/u0a451 act:activities|recents
+      #108: cch    CACC --------- 
+14005:com.instagram.android:zygote_warmer:com.facebook.browser.helium.preload.AppZygoteWarmerService/u0a451i-8999 
+act:client
+      #107: vis    BFGS ---NFU-TI 5289:com.sec.android.app.launcher/u0a138 act:activities|recents
+      #106: cch    CACC -------TI 15125:com.google.android.googlequicksearchbox:googleapp/u0a234 act:client
+      #105: vis    BFGS LCMNFUATI 4107:com.google.android.gms/u0a231 act:client
+      #104: cch+10 CACC --------- 13826:com.instagram.android:sandboxed_process0:com.facebook.browser.helium.content.Sa
+ndboxedProcessService0:0/u0a451i-9000 act:client
+>     Proc # 0: fg     b/A/TRNB -------TI  t: 0 19683:ch.liri.operations/u0a901 (service)
+>         ch.liri.operations/androidx.work.impl.background.systemjob.SystemJobService<=Proc{3001:system/1000}
+      Proc #23: vis    F/S/FGS  ---NFUATI  t: 0 23585:com.tailscale.ipn/u0a896 (service)
+          com.tailscale.ipn/.IPNService<=Proc{3001:system/1000}
+      Proc #94: vis    F/ /BFGS ---NFU-TI  t: 0 5415:com.samsung.android.knox.containercore/5250 (service)
+          com.samsung.android.knox.containercore/.service.ContainerCoreService<=Proc{3001:system/1000}
+      Proc #92: vis    T/ /BFGS ---NFU-TI  t: 0 11762:com.samsung.SMT/1000 (service)
+          com.samsung.SMT/.SamsungTTSService<=Proc{3001:system/1000}
+      Proc #90: vis    F/ /BFGS LCMNFUATI  t: 0 9442:com.samsung.android.smartsuggestions/u150a111 (service)
+          com.samsung.android.smartsuggestions/.extservice.services.ContentCaptureService<=Proc{3001:system/1000}
+>         
+com.android.vending/com.google.android.finsky.services.LicensingService<=Proc{19683:ch.liri.operations/u0a901}
+      Proc #95: prcp   M/S/FGS  ---NFU-TI  t: 0 19457:com.mgoogle.android.gms:persistent/u0a641 (fg-service)
+      Proc #100: prcp   b/ /TRNB -------TI  t: 0 5710:com.android.proxyhandler/u0a92 (service)
+          com.android.proxyhandler/.ProxyService<=Proc{3001:system/1000}
+      Proc #80: prcp   F/ /TRNB --------I  t: 0 14270:com.samsung.android.oneconnect:Core/u0a287 (force-imp)
+          {null}<=ImportanceToken { c9bfb4b setProcessImportant() 14270 android.os.BinderProxy@bfd0928 }
+      Proc #53: prcp   F/ /TRNB --------I  t: 0 17434:com.samsung.android.mdx.kit/5025 (force-imp)
+          {null}<=ImportanceToken { 774641 setProcessImportant() 17434 android.os.BinderProxy@176e7e6 }
+      Proc #41: prcp   F/ /TRNB --------I  t: 0 16573:com.samsung.android.spayfw/5279 (service)
+>     PID #19683: ProcessRecord{a19ce1e 19683:ch.liri.operations/u0a901}
+      PID #19960: ProcessRecord{746e47d 19960:com.samsung.android.wifi.ai/1000}
+      PID #20140: ProcessRecord{45fcee3 20140:com.sec.android.daemonapp/u0a196}
+      PID #20444: ProcessRecord{cf72bdc 20444:com.android.vending/u0a233}
+      PID #20460: ProcessRecord{a11be69 20460:nl.degiro.trader/u0a757}
+      PID #20699: ProcessRecord{48b7cd8 
+20699:com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0/u0a757i20}
+      PID #20865: ProcessRecord{148cd3b 20865:com.samsung.android.app.contacts/u0a106}
+      PID #21846: ProcessRecord{a89405d 21846:com.sec.android.daemonapp:weather_content_provider/u0a196}
+      PID #22005: ProcessRecord{8cd6bbf 22005:com.google.android.apps.maps/u0a249}
+>   MLList AUF Process name : [0_&_ch.liri.operations, 0_&_com.whatsapp, 0_&_com.instagram.android, 
+0_&_com.google.android.apps.maps, 0_&_com.android.settings]
+  
+    mUidObservers:
+      1000 null com.android.server.pm.ShortcutService$4: GONE STATE (cut=-1)
+      1041 audioserver android.app.IUidObserver$Stub$Proxy: IDLE ACT GONE STATE (cut=-1)
+      1000 android android.app.ActivityManager$MyUidObserver: GONE STATE (cut=4)
+        Last 1001: 0
+        Last 1002: 0
+        Last 1027: 0
+
+

@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "kind": "g5-monitoring-pack",
+  "created_at_utc": "2026-08-15T23:15:00Z",
+  "release_tip": "286737a2362eb1e38013c72d04be23fcd608210e",
+  "previous_release_manifest": "docs/ops/previous-release.json",
+  "rollback_decision_owner": {
+    "role": "oncall-tracking / release conductor",
+    "authority": "Seul le release conductor (ou oncall tracking désigné) déclenche le rollback G4.",
+    "escalation": "Si doute sur seuil IMMEDIATE → rollback images ; ne pas purger Redis/Kafka."
+  },
+  "baseline": {
+    "pre_release_partial": {
+      "source": "docs/ops/_release_prod_snapshot_2026-08-15/",
+      "captured_at_utc": "2026-08-14T22:46:56Z",
+      "highlights": {
+        "atmr-backend_up": 1,
+        "atmr-ws-service_up": 1,
+        "atmr-tracking-kafka-consumer_up": 1,
+        "atmr-tracking-processed-fanout_up": 0,
+        "fanout_up_zero_expected_under_hold": true
+      }
+    },
+    "live_capture_required_at": "T-30min of GO RELEASE EXECUTION",
+    "window_min_minutes": 30,
+    "historical_known_events": [
+      {
+        "id": "P0-A-2026-08-14",
+        "signal": "ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED",
+        "note": "race native start/stop ; pattern P0-A confirmé"
+      },
+      {
+        "id": "LEDGER-gen-null",
+        "signal": "generation=null → HOL / ingested_non_persisted on old server",
+        "note": "sur release serveur : 422 invalid_ledger_ids attendu (pas rollback)"
+      },
+      {
+        "id": "HOLD-fanout",
+        "signal": "fanout up=0",
+        "note": "intentionnel sous p0-hold ; ENABLED=false runtime"
+      }
+    ]
+  },
+  "queries": {
+    "prometheus": {
+      "services_up": "up{job=~\"atmr-backend|atmr-ws-service|atmr-tracking-kafka-consumer|atmr-tracking-processed-fanout\"}",
+      "loc_received_rate_5m": "sum(rate(driver_location_received_total[5m]))",
+      "loc_ingested_rate_5m": "sum(rate(driver_location_ingested_total[5m]))",
+      "loc_processed_rate_5m": "sum(rate(driver_location_processed_total[5m]))",
+      "dedup_invalid_ledger_5m": "sum(rate(driver_location_dedup_skipped_total{reason=\"invalid_ledger_ids\"}[5m])) or vector(0)",
+      "dedup_unproven_5m": "sum(rate(driver_location_dedup_skipped_total{reason=\"duplicate_event_id_unproven\"}[5m])) or vector(0)",
+      "dedup_claim_in_flight_5m": "sum(rate(driver_location_dedup_skipped_total{reason=\"claim_in_flight\"}[5m])) or vector(0)",
+      "dedup_duplicate_persisted_5m": "sum(rate(driver_location_dedup_skipped_total{reason=\"duplicate_persisted\"}[5m])) or vector(0)",
+      "device_health_received_5m": "sum(rate(driver_device_health_received_total[5m])) or vector(0)",
+      "http_5xx_tracking_hint": "sum(rate(flask_http_request_total{status=~\"5..\",path=~\".*location.*|.*device-health.*\"}[5m])) or vector(0)"
+    },
+    "loki_or_telemetry": {
+      "err_foreground": "ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED",
+      "native_start_error": "native_start_error OR native_start_phase",
+      "auth_not_usable": "auth_not_usable",
+      "enqueue_blocked": "tracking.queue.enqueue_blocked",
+      "observability_class": "observability_class"
+    },
+    "redis_ops": {
+      "device_health_key": "driver:{id}:health / driver:{id}:device_health",
+      "claim_key_ns": "atmr:driver_location:event:{driver_id}:{hash}",
+      "orphan_claim_check": "TTL present + no persisted_sync proof after failure path"
+    },
+    "anti_skew": {
+      "inspect_git_sha": "docker inspect <container> --format '{{index .Config.Env}}' | tr ' ' '\\n' | grep -E 'GIT_SHA|SENTRY_RELEASE'",
+      "expected_post_release_same_sha": "286737a2362eb1e38013c72d04be23fcd608210e",
+      "expected_rollback_api": "927640a0995a7025edfae3d31802998948a866d5",
+      "expected_rollback_consumer": "390076efc61ca71332c749a67aff1e6fc7c2d626",
+      "expected_rollback_fanout": "16fd3e52418dfe88039b82f35ccc5326ec4fa993",
+      "fanout_hold_assert": "TRACKING_PROCESSED_FANOUT_ENABLED=false AND status!=running"
+    }
+  },
+  "checkpoints": {
+    "T+5m": {
+      "goal": "santé immédiate",
+      "must": [
+        "api/celery/ws/consumer/outbox Up healthy",
+        "fanout not running (HOLD)",
+        "no crash-loop",
+        "no tracking 5xx storm",
+        "GIT_SHA anti-skew match expected deploy SHA"
+      ]
+    },
+    "T+30m": {
+      "goal": "tracking réel",
+      "must": [
+        "LOC ingested/persisted rates not collapsed vs baseline",
+        "queue depth/oldest age stable",
+        "ledger reasons: no orphan growth; unproven not looping",
+        "canary or real mission: FG/BG/lock with persisted LOC"
+      ]
+    },
+    "T+2h": {
+      "goal": "stabilité",
+      "must": [
+        "no progressive HOL",
+        "no rising fix_age / persistence lag trend",
+        "no GNSS class with fresh location_fix_age",
+        "fanout still HOLD"
+      ]
+    }
+  },
+  "thresholds": {
+    "immediate_rollback": [
+      "crash-loop API/worker",
+      "5xx tracking significatifs vs baseline",
+      "orphan claim > 0 croissance",
+      "duplicate final sans preuve persistence > 0 soutenu",
+      "HOL ledger reproduit (queue blocked + ingested_non_persisted poison)",
+      "nouveaux clients corrigés avec generation=null en volume",
+      "ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED pattern P0 réapparaît",
+      "auth_not_usable avec session chauffeur valide",
+      "perte franche LOC persisted vs baseline",
+      "queue oldest age augmente continuellement"
+    ],
+    "investigate_first": [
+      "claim_in_flight ponctuel",
+      "enqueue_blocked pendant REGISTERING",
+      "RUNTIME_ONLY isolé",
+      "PIPELINE/PERSISTENCE transitoire",
+      "ancien client generation invalide → 422 invalid_ledger_ids (attendu)"
+    ]
+  }
+}

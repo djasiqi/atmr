@@ -1,0 +1,21 @@
+2026-08-17T03:50:12.1223390+02:00 [C4_130] PREFLIGHT versionName=1.0.11 versionCode=130 minRequired=130
+2026-08-17T03:50:12.5519107+02:00 [C4_130] LOGCAT_PID=49936
+2026-08-17T03:50:12.5554350+02:00 [C4_130] BACKEND=OBSERVATION_ONLY DRIVER=20135 StartedAgeSec=120
+2026-08-17T03:50:16.8809952+02:00 [C4_130] READY_CHECK isFg=true startReq=true fgCount=1
+2026-08-17T03:50:16.9089003+02:00 [C4_130] PHASE_BEGIN PRE sec=60
+2026-08-17T03:50:33.8286792+02:00 [C4_130] SAMPLE phase=PRE t=+0s fg=1 binds=1 isFg=true startReq=true finished=1 unreg=0 c4marks=0 l1=0 native=2 PUT=72 LOC=-1
+2026-08-17T03:51:10.1067227+02:00 [C4_130] SAMPLE phase=PRE t=+37s fg=1 binds=1 isFg=true startReq=true finished=1 unreg=0 c4marks=0 l1=0 native=4 PUT=60 LOC=-1
+2026-08-17T03:51:46.8028230+02:00 [C4_130] SAMPLE phase=PRE t=+60s fg=1 binds=1 isFg=true startReq=true finished=2 unreg=0 c4marks=0 l1=0 native=6 PUT=50 LOC=-1
+2026-08-17T03:51:46.8050283+02:00 [C4_130] PHASE_END PRE
+2026-08-17T03:51:46.8071874+02:00 [C4_130] INJECT_DEEPLINK started_age_sec=120
+2026-08-17T03:52:11.4478069+02:00 [C4_130] SAMPLE phase=INJECT t=+0s fg=1 binds=1 isFg=true startReq=true finished=1 unreg=0 c4marks=4 l1=1 native=11 PUT=60 LOC=-1
+2026-08-17T03:52:11.4500084+02:00 [C4_130] PHASE_BEGIN POST sec=180
+2026-08-17T03:52:27.9391183+02:00 [C4_130] SAMPLE phase=POST t=+0s fg=2 binds=2 isFg=true startReq=true finished=1 unreg=1 c4marks=1 l1=1 native=17 PUT=66 LOC=-1
+2026-08-17T03:53:05.1855234+02:00 [C4_130] SAMPLE phase=POST t=+36s fg=2 binds=2 isFg=true startReq=true finished=1 unreg=0 c4marks=0 l1=0 native=8 PUT=60 LOC=-1
+2026-08-17T03:53:41.1474655+02:00 [C4_130] SAMPLE phase=POST t=+74s fg=2 binds=2 isFg=true startReq=true finished=1 unreg=0 c4marks=0 l1=0 native=6 PUT=63 LOC=-1
+2026-08-17T03:54:17.4488353+02:00 [C4_130] SAMPLE phase=POST t=+110s fg=2 binds=2 isFg=true startReq=true finished=2 unreg=0 c4marks=0 l1=0 native=6 PUT=56 LOC=-1
+2026-08-17T03:54:56.4482812+02:00 [C4_130] SAMPLE phase=POST t=+146s fg=2 binds=2 isFg=true startReq=true finished=2 unreg=0 c4marks=0 l1=0 native=6 PUT=60 LOC=-1
+2026-08-17T03:55:33.2689676+02:00 [C4_130] SAMPLE phase=POST t=+180s fg=2 binds=2 isFg=true startReq=true finished=2 unreg=0 c4marks=0 l1=0 native=4 PUT=60 LOC=-1
+2026-08-17T03:55:33.2705154+02:00 [C4_130] PHASE_END POST
+2026-08-17T03:55:33.3447869+02:00 [C4_130] LOGCAT_STOPPED
+2026-08-17T03:55:33.3467837+02:00 [C4_130] END_C4_OK

@@ -1,0 +1,23 @@
+﻿
+>     requested permissions:
+        com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE
+        com.sonyericsson.home.permission.BROADCAST_BADGE
+>       android.permission.ACCESS_BACKGROUND_LOCATION
+>     install permissions:
+        com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE: granted=true
+        com.google.android.c2dm.permission.RECEIVE: granted=true
+>       runtime permissions:
+          android.permission.POST_NOTIFICATIONS: granted=true, flags=[ 
+USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+          android.permission.ACCESS_FINE_LOCATION: granted=true, flags=[ 
+USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED|524288]
+>         android.permission.ACCESS_BACKGROUND_LOCATION: granted=true, flags=[ 
+USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED|RESTRICTION_INSTALLER_EXEMPT]
+        enabledComponents:
+          androidx.work.impl.background.systemalarm.RescheduleReceiver
+>       runtime permissions:
+>         android.permission.ACCESS_BACKGROUND_LOCATION: granted=false, flags=[ RESTRICTION_UPGRADE_EXEMPT]
+  
+  Queries:
+
+

@@ -1,0 +1,736 @@
+﻿08-16 19:11:32.876  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-enabled gps true'
+08-16 19:11:32.988  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.211611,6.126213 --accuracy 5'
+08-16 19:11:35.811  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:35.812  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:35.812  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:35.813  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:35.813  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:35.813  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:35.815  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:35.815  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:35.815  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.32886124 / time=1786900295724 / elapsed=79523088245625
+08-16 19:11:35.892 13893 14029 W ReactNativeJS: MapViewDirections Error: Error on GMAPS route request: This IP, site or mobile application is not authorized to use this API key. Request received from IP address 194.230.196.30, with empty referer
+08-16 19:11:36.078  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.211761,6.127263 --accuracy 5'
+08-16 19:11:39.234  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.211911,6.128313 --accuracy 5'
+08-16 19:11:42.409  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.212061,6.129363 --accuracy 5'
+08-16 19:11:43.735 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:11:43.736 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:11:43.736 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:11:43.750 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:11:45.580  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.212211,6.130413 --accuracy 5'
+08-16 19:11:45.805  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:45.805  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:45.806  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:45.807  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:45.807  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:45.807  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:45.808  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:45.808  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:45.808  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:45.808  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:45.808  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:45.808  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:45.808  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too old
+08-16 19:11:45.808  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:45.808  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:45.809  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.23818514 / time=1786900303905 / elapsed=79531269891562
+08-16 19:11:48.666  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.212361,6.131463 --accuracy 5'
+08-16 19:11:51.854  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.212511,6.132513 --accuracy 5'
+08-16 19:11:51.910 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:11:51.911 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:11:51.927 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:11:51.927 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:11:55.018  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.212661,6.133563 --accuracy 5'
+08-16 19:11:55.114  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:55.117  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:55.118  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:55.118  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:55.118  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:55.118  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:55.119  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:55.119  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:55.119  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:55.119  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:11:55.119  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:11:55.120  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.8798659 / time=1786900313733 / elapsed=79541097000000
+08-16 19:11:58.174  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.212811,6.134613 --accuracy 5'
+08-16 19:11:59.996 11345 11345 I  | KNOXZT_FW | PhishingDetectionFactor: isReadyToStart : {CD=true, RD=true, PD=false, testMode=0, consumerAction=com.samsung.android.knox.zt.sdk.consumer.ACTION_MTD_START, reputationCheckTimeout=3000, consumerReceiver=com.samsung.android.knox.zt.sdk.consumer.MockPartnerMtdReceiver, consumerPackage=com.samsung.android.knox.zt.sdk.consumer}
+08-16 19:11:59.996 11345 11345 I  | KNOXZT_FW | PhishingDetectionFactor: isReadyToStart : {CD=true, RD=true, PD=false, testMode=0, consumerAction=com.samsung.android.knox.zt.sdk.consumer.ACTION_MTD_START, reputationCheckTimeout=3000, consumerReceiver=com.samsung.android.knox.zt.sdk.consumer.MockPartnerMtdReceiver, consumerPackage=com.samsung.android.knox.zt.sdk.consumer}
+08-16 19:12:01.280  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.212961,6.135663 --accuracy 5'
+08-16 19:12:01.735 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:01.738 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:01.738 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:01.739 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:04.406  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.213111,6.136713 --accuracy 5'
+08-16 19:12:04.456  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:04.456  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:04.456  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:04.459  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:04.461  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:04.461  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:04.461  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:04.462  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:04.462  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:04.462  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:04.462  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:04.462  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:04.463  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:04.463  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:04.464  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.26415753 / time=1786900323114 / elapsed=79550478000000
+08-16 19:12:07.537  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.213261,6.137763 --accuracy 5'
+08-16 19:12:10.824  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.213411,6.138813 --accuracy 5'
+08-16 19:12:11.707 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:11.707 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:11.710 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:11.710 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:13.662  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.670  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.673  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.675  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.675  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.675  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.675  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.675  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.676  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.677  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.677  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.682  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.0142765 / time=1786900332406 / elapsed=79559770000000
+08-16 19:12:13.953  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=1.08 / time=1786900334000 / elapsed=79561296633366
+08-16 19:12:13.964  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.213561,6.139863 --accuracy 5'
+08-16 19:12:13.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:13.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:13.978  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.93763375 / time=1786900333932 / elapsed=79561296633366
+08-16 19:12:17.104  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.213711,6.140913 --accuracy 5'
+08-16 19:12:20.248  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.213861,6.141963 --accuracy 5'
+08-16 19:12:21.940 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:21.940 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:21.940 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:21.941 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:23.527  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.214011,6.143013 --accuracy 5'
+08-16 19:12:25.344  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.344  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.344  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.353  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.354  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.354  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.355  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.355  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.355  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.355  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.355  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.355  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.355  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.361  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.15451974 / time=1786900344046 / elapsed=79571410000000
+08-16 19:12:25.961  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=0.0 / time=1786900346000 / elapsed=79573297110653
+08-16 19:12:25.984  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.984  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.985  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.985  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too old
+08-16 19:12:25.986  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.986  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.986  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.986  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.986  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.986  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.986  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.987  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.987  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.987  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.988  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:25.989  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.19297823 / time=1786900345933 / elapsed=79573297110653
+08-16 19:12:25.990  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:25.990  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:26.671  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.214161,6.144063 --accuracy 5'
+08-16 19:12:29.909  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.214311,6.145113 --accuracy 5'
+08-16 19:12:30.956  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=0.0 / time=1786900351000 / elapsed=79578296608203
+08-16 19:12:30.964  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:30.965  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:30.970  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:30.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:30.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:30.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:30.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:30.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:30.976  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:30.977  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:30.977  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:30.978  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.319678 / time=1786900350933 / elapsed=79578296608203
+08-16 19:12:33.069  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.214461,6.146163 --accuracy 5'
+08-16 19:12:34.694  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:34.694  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:34.695  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:34.697  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:34.697  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:34.697  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:34.697  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:34.698  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:34.698  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:34.698  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:34.698  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:34.699  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:34.699  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:34.699  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:34.699  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:34.699  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:34.701  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.6284225 / time=1786900354601 / elapsed=79581965251903
+08-16 19:12:36.240  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.214611,6.147213 --accuracy 5'
+08-16 19:12:38.957  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=0.0 / time=1786900359000 / elapsed=79586297367887
+08-16 19:12:38.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:38.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:38.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:38.975  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:38.977  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:38.978  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:38.978  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:38.979  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:38.979  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:38.979  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:38.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:38.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:38.981  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:38.981  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:38.982  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.6557226 / time=1786900358934 / elapsed=79586297367887
+08-16 19:12:39.417  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.214761,6.148263 --accuracy 5'
+08-16 19:12:42.603  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.214911,6.149313 --accuracy 5'
+08-16 19:12:44.039  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:44.039  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:44.039  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:44.042  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:44.042  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:44.042  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:44.042  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:44.042  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:44.043  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:44.043  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:44.043  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:44.043  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:44.043  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:44.045  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:44.045  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:44.049  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.648285 / time=1786900363902 / elapsed=79591266766799
+08-16 19:12:45.769  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.215061,6.150363 --accuracy 5'
+08-16 19:12:49.175  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.215211,6.151413 --accuracy 5'
+08-16 19:12:51.905 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:51.912 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:51.913 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:51.915 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:12:52.330  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.215361,6.152463 --accuracy 5'
+08-16 19:12:54.189  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:54.190  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:54.192  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:54.192  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:54.192  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:54.193  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:54.193  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:54.193  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:54.193  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:12:54.193  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:12:54.196  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.6706527 / time=1786900373876 / elapsed=79601240595288
+08-16 19:12:56.122  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.215511,6.153513 --accuracy 5'
+08-16 19:12:59.235  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.215661,6.154563 --accuracy 5'
+08-16 19:13:00.965  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=0.0 / time=1786900381000 / elapsed=79608297500014
+08-16 19:13:00.989  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:00.989  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:00.989  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:00.991  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:00.991  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:00.991  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:00.991  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:00.992  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:00.992  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:00.992  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:00.993  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:00.993  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:00.993  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:00.994  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:00.994  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:00.994  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too old
+08-16 19:13:00.996  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.6684919 / time=1786900380933 / elapsed=79608297500014
+08-16 19:13:02.358  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.215811,6.155613 --accuracy 5'
+08-16 19:13:03.393  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.393  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.393  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.395  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.395  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.395  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.395  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.395  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.396  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.396  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.396  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.396  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.396  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.397  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.398  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.398  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.6534548 / time=1786900382052 / elapsed=79609415000000
+08-16 19:13:03.399  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.965  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=0.0 / time=1786900384000 / elapsed=79611296266940
+08-16 19:13:03.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.974  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:03.975  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:03.977  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.42967588 / time=1786900383932 / elapsed=79611296266940
+08-16 19:13:05.486  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.215961,6.156663 --accuracy 5'
+08-16 19:13:08.649  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.216111,6.157713 --accuracy 5'
+08-16 19:13:11.814  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.216261,6.158763 --accuracy 5'
+08-16 19:13:11.944 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:11.944 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:11.944 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:11.960 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:13.581  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:13.586  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:13.589  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:13.590  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:13.590  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:13.591  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:13.591  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:13.592  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:13.592  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:13.593  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:13.594  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.4297948 / time=1786900393469 / elapsed=79620833332007
+08-16 19:13:14.996  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.216411,6.159813 --accuracy 5'
+08-16 19:13:18.182  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.216561,6.160863 --accuracy 5'
+08-16 19:13:18.962  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=0.0 / time=1786900399000 / elapsed=79626297009070
+08-16 19:13:19.001  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:19.001  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:19.002  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:19.003  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too old
+08-16 19:13:19.004  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:19.004  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:19.004  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:19.004  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:19.004  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:19.005  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:19.005  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:19.005  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:19.005  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:19.005  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:19.007  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:19.007  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:19.009  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.5883567 / time=1786900398933 / elapsed=79626297009070
+08-16 19:13:21.356  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.216711,6.161913 --accuracy 5'
+08-16 19:13:22.784  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.784  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.784  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.787  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.787  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.787  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.787  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.787  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.788  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.788  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.788  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.788  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.788  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.790  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.790  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.790  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.791  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.59780097 / time=1786900402742 / elapsed=79630106689090
+08-16 19:13:22.955  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=0.0 / time=1786900403000 / elapsed=79630296850735
+08-16 19:13:22.967  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.967  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.969  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.970  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.971  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.972  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:22.973  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:22.974  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.5483095 / time=1786900402932 / elapsed=79630296850735
+08-16 19:13:24.534  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.216861,6.162963 --accuracy 5'
+08-16 19:13:27.731  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.217011,6.164013 --accuracy 5'
+08-16 19:13:30.890  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.217161,6.165063 --accuracy 5'
+08-16 19:13:30.934 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:30.935 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:30.935 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:30.943 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:32.951  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:32.952  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:32.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:32.956  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:32.956  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:32.956  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:32.956  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:32.957  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:32.958  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:32.958  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:32.959  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.5537615 / time=1786900412828 / elapsed=79640192478078
+08-16 19:13:34.066  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.217311,6.166113 --accuracy 5'
+08-16 19:13:37.189  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.217461,6.167163 --accuracy 5'
+08-16 19:13:40.331  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.217611,6.168213 --accuracy 5'
+08-16 19:13:40.833 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:40.837 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:40.837 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:40.861 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:42.164  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:42.164  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:42.164  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:42.165  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:42.165  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:42.165  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:42.165  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:42.165  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:42.166  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:42.166  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:42.166  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:42.166  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:42.166  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:42.167  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:42.167  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:42.172  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.53900915 / time=1786900420901 / elapsed=79648265000000
+08-16 19:13:43.498  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.217761,6.169263 --accuracy 5'
+08-16 19:13:46.781  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.217911,6.170313 --accuracy 5'
+08-16 19:13:48.905 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:48.906 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:48.908 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:48.910 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:49.961  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.218061,6.171363 --accuracy 5'
+08-16 19:13:51.387  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:51.387  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:51.388  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:51.389  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:51.390  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:51.390  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:51.390  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:51.390  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:51.391  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:51.391  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:51.391  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:51.391  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:51.392  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:13:51.392  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:13:51.392  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.53068024 / time=1786900430116 / elapsed=79657480000000
+08-16 19:13:53.140  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.218211,6.172413 --accuracy 5'
+08-16 19:13:56.310  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.218361,6.173463 --accuracy 5'
+08-16 19:13:58.124 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:58.125 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:58.125 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:58.125 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:13:59.441  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.218511,6.174513 --accuracy 5'
+08-16 19:14:01.559  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.563  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.566  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.567  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.567  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.567  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.567  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.567  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.567  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.568  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.568  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.570  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.7581072 / time=1786900439369 / elapsed=79666733000000
+08-16 19:14:01.962  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=0.756 / time=1786900442000 / elapsed=79669295724262
+08-16 19:14:01.967  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.967  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.967  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:01.968  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:01.969  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.5942108 / time=1786900441931 / elapsed=79669295724262
+08-16 19:14:02.537  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.218661,6.175563 --accuracy 5'
+08-16 19:14:05.644  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.218811,6.176613 --accuracy 5'
+08-16 19:14:09.549  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.218961,6.177663 --accuracy 5'
+08-16 19:14:09.934 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:09.935 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:09.937 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:09.938 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:13.338  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.219111,6.178713 --accuracy 5'
+08-16 19:14:16.513  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.219261,6.179763 --accuracy 5'
+08-16 19:14:18.348  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.348  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:18.349  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:18.350  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:18.351  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:18.351  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.352  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.353  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.353  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.353  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:18.353  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.354  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:18.355  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.360  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786900457038 / elapsed=79684402000000
+08-16 19:14:18.958  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=0.0 / time=1786900459000 / elapsed=79686295867327
+08-16 19:14:18.976  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.976  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too old
+08-16 19:14:18.978  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:18.979  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:18.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:18.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.981  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.981  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:18.981  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:18.982  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:18.983  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.7728243 / time=1786900458932 / elapsed=79686295867327
+08-16 19:14:19.696  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.219411,6.180813 --accuracy 5'
+08-16 19:14:22.873  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.219561,6.181863 --accuracy 5'
+08-16 19:14:26.048  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.219711,6.182913 --accuracy 5'
+08-16 19:14:26.935 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:26.936 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:26.938 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:26.939 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:27.677  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:27.678  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:27.679  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:27.680  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:27.680  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:27.680  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:27.680  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:27.680  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:27.680  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:27.681  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:27.681  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:27.681  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:27.681  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:27.681  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:27.682  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:27.687  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.69043946 / time=1786900467539 / elapsed=79694903589929
+08-16 19:14:29.166  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.219861,6.183963 --accuracy 5'
+08-16 19:14:32.305  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.220011,6.185013 --accuracy 5'
+08-16 19:14:35.427  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.220161,6.186063 --accuracy 5'
+08-16 19:14:35.542 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:35.548 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:35.548 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:35.548 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:37.868  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:37.868  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:37.868  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:37.883  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:37.884  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:37.884  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:37.884  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:37.884  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:37.884  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:37.884  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:37.884  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:37.884  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:37.885  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:37.885  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:37.898  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.82069796 / time=1786900475647 / elapsed=79703011000000
+08-16 19:14:38.535  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.220311,6.187113 --accuracy 5'
+08-16 19:14:38.970  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=0.0 / time=1786900479000 / elapsed=79706297483467
+08-16 19:14:38.978  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:38.979  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:38.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:38.982  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:38.982  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:38.983  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:38.984  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:38.984  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:38.984  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:38.987  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:38.987  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:38.988  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:38.988  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.45699874 / time=1786900478933 / elapsed=79706297483467
+08-16 19:14:41.745  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.220461,6.188163 --accuracy 5'
+08-16 19:14:45.021  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.220611,6.189213 --accuracy 5'
+08-16 19:14:46.936 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:46.939 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:46.940 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:46.940 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:47.151  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:47.151  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:47.151  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:47.152  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:47.152  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:47.152  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:47.152  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:47.152  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:47.152  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:47.153  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:47.153  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:47.153  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:47.153  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:47.153  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:47.153  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:47.161  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.39382607 / time=1786900487092 / elapsed=79714456737012
+08-16 19:14:48.314  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.220761,6.190263 --accuracy 5'
+08-16 19:14:51.487  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.220911,6.191313 --accuracy 5'
+08-16 19:14:54.662  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.221061,6.192363 --accuracy 5'
+08-16 19:14:55.096 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:55.105 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:55.105 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:55.107 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:14:57.368  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:57.368  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:57.369  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:57.371  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:57.372  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:57.373  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:57.373  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:57.374  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:57.374  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:57.374  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:57.374  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:57.374  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:57.375  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:14:57.375  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:14:57.376  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.6622596 / time=1786900494984 / elapsed=79722348000000
+08-16 19:14:57.856  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.221211,6.193413 --accuracy 5'
+08-16 19:15:00.965  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.221361,6.194463 --accuracy 5'
+08-16 19:15:02.993 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:02.993 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:02.994 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:02.994 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:04.108  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.221511,6.195513 --accuracy 5'
+08-16 19:15:06.737  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:06.738  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:06.739  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:06.739  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:06.739  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:06.739  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:06.739  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:06.739  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:06.740  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:06.740  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:06.740  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:06.742  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.1420549 / time=1786900505300 / elapsed=79732664000000
+08-16 19:15:07.615  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.221661,6.196563 --accuracy 5'
+08-16 19:15:10.865  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.221811,6.197613 --accuracy 5'
+08-16 19:15:13.303 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:13.304 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:13.305 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:13.308 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:14.038  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.221961,6.198663 --accuracy 5'
+08-16 19:15:16.079  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:16.080  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:16.081  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:16.084  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:16.084  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:16.085  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:16.085  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:16.086  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:16.086  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:16.086  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:16.086  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:16.086  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:16.087  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:16.087  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:16.094  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.9621567 / time=1786900514719 / elapsed=79742082000000
+08-16 19:15:17.432  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.222111,6.199713 --accuracy 5'
+08-16 19:15:20.560  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.222261,6.200763 --accuracy 5'
+08-16 19:15:22.722 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:22.722 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:22.722 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:22.725 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:23.662  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.222411,6.201813 --accuracy 5'
+08-16 19:15:25.293  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:25.294  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:25.296  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:25.296  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:25.296  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:25.297  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:25.297  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:25.297  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:25.297  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:25.298  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:25.298  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:25.303  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.8392275 / time=1786900524051 / elapsed=79751414000000
+08-16 19:15:26.854  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.222561,6.202863 --accuracy 5'
+08-16 19:15:30.040  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.222711,6.203913 --accuracy 5'
+08-16 19:15:32.056 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:32.057 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:32.057 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:32.057 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:33.333  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.222861,6.204963 --accuracy 5'
+08-16 19:15:34.749  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:34.749  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:34.749  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:34.750  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:34.751  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:34.751  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:34.751  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:34.751  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:34.751  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:34.751  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:34.751  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:34.751  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:34.752  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:34.752  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:34.756  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.23555979 / time=1786900533282 / elapsed=79760646000000
+08-16 19:15:36.602  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.223011,6.206013 --accuracy 5'
+08-16 19:15:39.782  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.223161,6.207063 --accuracy 5'
+08-16 19:15:41.287 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:41.293 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:41.294 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:41.294 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:15:42.892  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.223311,6.208113 --accuracy 5'
+08-16 19:15:44.067  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:44.068  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:44.069  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:44.069  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:44.070  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:44.070  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:44.070  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:44.070  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:44.070  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:44.071  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:44.071  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:44.073  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.5190715 / time=1786900542713 / elapsed=79770077000000
+08-16 19:15:44.970  5727  5830 I GnssEngineManager_FLP: onGpsLocationChanged, provider=gps / isMock=false / speed=0.0 / time=1786900545000 / elapsed=79772296399378
+08-16 19:15:44.997  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:44.997  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:44.998  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:44.999  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:45.000  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:45.000  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:45.000  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too old
+08-16 19:15:45.000  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:45.000  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:45.000  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:45.001  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:45.001  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:45.001  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:45.001  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:45.001  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:45.002  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:15:45.002  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.4895886 / time=1786900544932 / elapsed=79772296399378
+08-16 19:15:45.003  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:15:46.053  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:cmd location providers set-test-provider-location gps --location 46.223461,6.209163 --accuracy 5'

@@ -1,0 +1,42 @@
+﻿08-17 21:13:52.686 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=true
+08-17 21:13:52.686 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:13:56.984 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=true deferred.size=0 hostPaused=true
+08-17 21:14:02.723 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=true
+08-17 21:14:02.724 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:14:07.241 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=true deferred.size=0 hostPaused=true
+08-17 21:14:12.958 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=true
+08-17 21:14:12.958 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:14:17.638 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=true deferred.size=0 hostPaused=true
+08-17 21:14:17.643 27984 27984 I ATMR_LTC_P: P2b onLocationResult size=1 time=1786994055055 ertNanos=45184834000000 lat=46.2115837 lon=6.1262592 sLastTimestamp=1786994027669
+08-17 21:14:17.643 27984 27984 I ATMR_LTC_P: P4 defer/report deferred.size=1 hostPaused=true shouldReport=true deferredDistance=1.7687208652496338 sLastTimestamp=1786994027669
+08-17 21:14:17.643 27984 27984 I ATMR_LTC_P: P5 filter incoming.time=1786994055055 sLastTimestamp=1786994027669 accepted=true lat=46.2115837 lon=6.1262592
+08-17 21:14:17.643 27984 27984 I ATMR_LTC_P: P5 summary accepted=1 rejectedTs=0 bundles=1
+08-17 21:14:17.643 27984 27984 I ATMR_LTC_P: P6 directFGS execute bundles.size=1
+08-17 21:14:17.643 27984 27984 I ATMR_LTC_P: P8 executeTask JS=true bundles.size=1
+08-17 21:14:18.325 27984 28107 I TaskService: Finished task 'background-location-task' with eventId '2b24ec96-4842-4d87-95f0-e1bba8a33a32'.
+08-17 21:14:24.868 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=true
+08-17 21:14:24.868 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:14:27.745 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=true deferred.size=0 hostPaused=true
+08-17 21:14:33.721 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=true
+08-17 21:14:33.725 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:14:37.868 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=true deferred.size=0 hostPaused=true
+08-17 21:14:37.873 27984 27984 I ATMR_LTC_P: P2b onLocationResult size=1 time=1786994075548 ertNanos=45205328000000 lat=46.2115698 lon=6.126269 sLastTimestamp=1786994055055
+08-17 21:14:37.874 27984 27984 I ATMR_LTC_P: P4 defer/report deferred.size=1 hostPaused=true shouldReport=true deferredDistance=1.7202075719833374 sLastTimestamp=1786994055055
+08-17 21:14:37.874 27984 27984 I ATMR_LTC_P: P5 filter incoming.time=1786994075548 sLastTimestamp=1786994055055 accepted=true lat=46.2115698 lon=6.126269
+08-17 21:14:37.874 27984 27984 I ATMR_LTC_P: P5 summary accepted=1 rejectedTs=0 bundles=1
+08-17 21:14:37.874 27984 27984 I ATMR_LTC_P: P6 directFGS execute bundles.size=1
+08-17 21:14:37.874 27984 27984 I ATMR_LTC_P: P8 executeTask JS=true bundles.size=1
+08-17 21:14:38.450 27984 28107 I TaskService: Finished task 'background-location-task' with eventId 'f385b317-3b37-48e6-8539-a6c0232b46a1'.
+08-17 21:14:45.682 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=true
+08-17 21:14:45.682 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:14:48.092 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=true deferred.size=0 hostPaused=true
+08-17 21:14:55.692 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=true
+08-17 21:14:55.693 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:14:58.060 27984 27984 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=true deferred.size=0 hostPaused=true
+08-17 21:14:58.080 27984 27984 I ATMR_LTC_P: P2b onLocationResult size=1 time=1786994095903 ertNanos=45225682000000 lat=46.2115911 lon=6.126241 sLastTimestamp=1786994075548
+08-17 21:14:58.080 27984 27984 I ATMR_LTC_P: P4 defer/report deferred.size=1 hostPaused=true shouldReport=true deferredDistance=3.205333709716797 sLastTimestamp=1786994075548
+08-17 21:14:58.080 27984 27984 I ATMR_LTC_P: P5 filter incoming.time=1786994095903 sLastTimestamp=1786994075548 accepted=true lat=46.2115911 lon=6.126241
+08-17 21:14:58.080 27984 27984 I ATMR_LTC_P: P5 summary accepted=1 rejectedTs=0 bundles=1
+08-17 21:14:58.080 27984 27984 I ATMR_LTC_P: P6 directFGS execute bundles.size=1
+08-17 21:14:58.080 27984 27984 I ATMR_LTC_P: P8 executeTask JS=true bundles.size=1
+08-17 21:14:58.649 27984 28107 I TaskService: Finished task 'background-location-task' with eventId 'a9e2499b-7383-40a5-a7d3-309262313a6c'.

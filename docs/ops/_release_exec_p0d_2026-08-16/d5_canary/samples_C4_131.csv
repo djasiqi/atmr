@@ -1,0 +1,11 @@
+﻿ts,phase,elapsed_s,fgCount,binds,isFg,startReq,finished_delta,unregister_delta,put_n,loc_n,note
+2026-08-17T11:51:28.1441330+02:00,PRE,0,1,1,true,true,0,0,21,-1,c4=0;l1=0;native=1
+2026-08-17T11:52:05.1570301+02:00,PRE,38,1,1,true,true,1,0,63,-1,c4=0;l1=0;native=4
+2026-08-17T11:52:42.8747174+02:00,PRE,60,1,1,true,true,2,0,62,-1,c4=0;l1=0;native=2
+2026-08-17T11:53:07.5980855+02:00,INJECT,0,1,1,true,true,0,0,60,-1,c4=0;l1=0;native=0
+2026-08-17T11:53:24.7458231+02:00,POST,0,1,1,true,true,1,0,60,-1,c4=0;l1=0;native=4
+2026-08-17T11:54:03.5062640+02:00,POST,37,1,1,true,true,1,0,54,-1,c4=0;l1=0;native=0
+2026-08-17T11:54:40.1801395+02:00,POST,76,1,1,true,true,2,0,24,-1,c4=0;l1=0;native=0
+2026-08-17T11:55:17.8969189+02:00,POST,113,1,1,true,true,3,0,6,-1,c4=0;l1=0;native=0
+2026-08-17T11:55:54.7091119+02:00,POST,150,1,1,true,true,3,0,6,-1,c4=0;l1=0;native=0
+2026-08-17T11:56:31.5462535+02:00,POST,180,1,1,true,true,3,0,9,-1,c4=0;l1=0;native=0

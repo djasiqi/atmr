@@ -1,0 +1,153 @@
+2026-08-16T13:45:16.7897640+02:00 PHASE_FG_START
+2026-08-16T13:45:16.8122549+02:00 SNAP_A_FG
+2026-08-16T13:45:17.8496408+02:00   
+2026-08-16T13:45:17.8546395+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_FG_location_task.txt:17:    
+2026-08-16T13:45:17.8593430+02:00   getFgsAllowWiu_legacy=DENIED
+2026-08-16T13:45:17.8643402+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_FG_location_task.txt:18:    
+2026-08-16T13:45:17.8673355+02:00   getFgsAllowWiu_new=DENIED
+2026-08-16T13:45:17.8721063+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_FG_location_task.txt:19:    
+2026-08-16T13:45:17.8761185+02:00   getFgsAllowWiu_forStart=DENIED
+2026-08-16T13:45:17.8796444+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_FG_location_task.txt:20:    
+2026-08-16T13:45:17.8826468+02:00   getFgsAllowWiu_forCapabilities=DENIED
+2026-08-16T13:45:17.8856466+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_FG_location_task.txt:27:    
+2026-08-16T13:45:17.8896442+02:00   getFgsAllowStart_legacy=DENIED
+2026-08-16T13:45:17.8916501+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_FG_location_task.txt:28:    
+2026-08-16T13:45:17.8956537+02:00   getFgsAllowStart_new=DENIED
+2026-08-16T13:45:17.8976517+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_FG_location_task.txt:29:    
+2026-08-16T13:45:17.9006510+02:00   getFgsAllowStart=DENIED
+2026-08-16T13:45:17.9036656+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_FG_location_task.txt:30:    
+2026-08-16T13:45:17.9061712+02:00   startForegroundCount=99
+2026-08-16T13:45:17.9081710+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_FG_location_task.txt:33:    
+2026-08-16T13:45:17.9111711+02:00   lastActivity=-18m7s827ms restartTime=-20m49s104ms createdFromFg=true
+2026-08-16T13:45:17.9141703+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_FG_location_task.txt:34:    startRequested=false 
+2026-08-16T13:45:17.9251834+02:00 PHASE_HOME_60s
+2026-08-16T13:45:33.0530226+02:00 SNAP_A_HOME_15s
+2026-08-16T13:45:33.7436532+02:00   
+2026-08-16T13:45:33.7466544+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_15s_location_task.txt:17:    
+2026-08-16T13:45:33.7496555+02:00   getFgsAllowWiu_legacy=DENIED
+2026-08-16T13:45:33.7536625+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_15s_location_task.txt:18:    
+2026-08-16T13:45:33.7561867+02:00   getFgsAllowWiu_new=DENIED
+2026-08-16T13:45:33.7582095+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_15s_location_task.txt:19:    
+2026-08-16T13:45:33.7611924+02:00   getFgsAllowWiu_forStart=DENIED
+2026-08-16T13:45:33.7641871+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_15s_location_task.txt:20:    
+2026-08-16T13:45:33.7661848+02:00   getFgsAllowWiu_forCapabilities=DENIED
+2026-08-16T13:45:33.7681920+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_15s_location_task.txt:27:    
+2026-08-16T13:45:33.7707012+02:00   getFgsAllowStart_legacy=DENIED
+2026-08-16T13:45:33.7732275+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_15s_location_task.txt:28:    
+2026-08-16T13:45:33.7752289+02:00   getFgsAllowStart_new=DENIED
+2026-08-16T13:45:33.7777604+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_15s_location_task.txt:29:    
+2026-08-16T13:45:33.7814490+02:00   getFgsAllowStart=DENIED
+2026-08-16T13:45:33.7834528+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_15s_location_task.txt:30:    
+2026-08-16T13:45:33.7854503+02:00   startForegroundCount=99
+2026-08-16T13:45:33.7884484+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_15s_location_task.txt:33:    
+2026-08-16T13:45:33.7904535+02:00   lastActivity=-18m24s83ms restartTime=-21m5s360ms createdFromFg=true
+2026-08-16T13:45:33.7924550+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_15s_location_task.txt:34:    
+2026-08-16T13:46:18.7981566+02:00 SNAP_A_HOME_60s
+2026-08-16T13:46:19.4967694+02:00   
+2026-08-16T13:46:19.5002095+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_60s_location_task.txt:17:    
+2026-08-16T13:46:19.5018085+02:00   getFgsAllowWiu_legacy=DENIED
+2026-08-16T13:46:19.5050013+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_60s_location_task.txt:18:    
+2026-08-16T13:46:19.5077581+02:00   getFgsAllowWiu_new=DENIED
+2026-08-16T13:46:19.5093622+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_60s_location_task.txt:19:    
+2026-08-16T13:46:19.5109163+02:00   getFgsAllowWiu_forStart=DENIED
+2026-08-16T13:46:19.5129173+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_60s_location_task.txt:20:    
+2026-08-16T13:46:19.5149178+02:00   getFgsAllowWiu_forCapabilities=DENIED
+2026-08-16T13:46:19.5169163+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_60s_location_task.txt:27:    
+2026-08-16T13:46:19.5201081+02:00   getFgsAllowStart_legacy=DENIED
+2026-08-16T13:46:19.5234535+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_60s_location_task.txt:28:    
+2026-08-16T13:46:19.5267724+02:00   getFgsAllowStart_new=DENIED
+2026-08-16T13:46:19.5284162+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_60s_location_task.txt:29:    
+2026-08-16T13:46:19.5323151+02:00   getFgsAllowStart=DENIED
+2026-08-16T13:46:19.5343088+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_60s_location_task.txt:30:    
+2026-08-16T13:46:19.5363114+02:00   startForegroundCount=99
+2026-08-16T13:46:19.5393119+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_60s_location_task.txt:33:    
+2026-08-16T13:46:19.5413077+02:00   lastActivity=-19m9s801ms restartTime=-21m51s78ms createdFromFg=true
+2026-08-16T13:46:19.5433089+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_HOME_60s_location_task.txt:34:    
+2026-08-16T13:46:19.5468456+02:00 PHASE_BACK
+2026-08-16T13:46:29.6918589+02:00 SNAP_A_BACK
+2026-08-16T13:46:30.5595662+02:00   
+2026-08-16T13:46:30.5618268+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:17:    
+2026-08-16T13:46:30.5658408+02:00   getFgsAllowWiu_legacy=DENIED
+2026-08-16T13:46:30.5688418+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:18:    
+2026-08-16T13:46:30.5708393+02:00   getFgsAllowWiu_new=DENIED
+2026-08-16T13:46:30.5749023+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:19:    
+2026-08-16T13:46:30.5777502+02:00   getFgsAllowWiu_forStart=DENIED
+2026-08-16T13:46:30.5830528+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:20:    
+2026-08-16T13:46:30.5861639+02:00   getFgsAllowWiu_forCapabilities=DENIED
+2026-08-16T13:46:30.5892626+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:27:    
+2026-08-16T13:46:30.5927611+02:00   getFgsAllowStart_legacy=DENIED
+2026-08-16T13:46:30.5958380+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:28:    
+2026-08-16T13:46:30.5979284+02:00   getFgsAllowStart_new=DENIED
+2026-08-16T13:46:30.6010595+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:29:    
+2026-08-16T13:46:30.6041575+02:00   getFgsAllowStart=DENIED
+2026-08-16T13:46:30.6078101+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:30:    
+2026-08-16T13:46:30.6116681+02:00   startForegroundCount=99
+2026-08-16T13:46:30.6150093+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:33:    
+2026-08-16T13:46:30.6189043+02:00   lastActivity=-19m20s681ms restartTime=-22m1s958ms createdFromFg=true
+2026-08-16T13:46:30.6224690+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:34:    
+2026-08-16T13:46:30.6267230+02:00 PHASE_LOCK_60s
+2026-08-16T13:46:45.8092317+02:00 SNAP_A_LOCK_15s
+2026-08-16T13:46:46.8107609+02:00   
+2026-08-16T13:46:46.8137621+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_15s_location_task.txt:17:    
+2026-08-16T13:46:46.8177888+02:00   getFgsAllowWiu_legacy=DENIED
+2026-08-16T13:46:46.8197993+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_15s_location_task.txt:18:    
+2026-08-16T13:46:46.8235364+02:00   getFgsAllowWiu_new=DENIED
+2026-08-16T13:46:46.8263290+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_15s_location_task.txt:19:    
+2026-08-16T13:46:46.8290255+02:00   getFgsAllowWiu_forStart=DENIED
+2026-08-16T13:46:46.8323044+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_15s_location_task.txt:20:    
+2026-08-16T13:46:46.8350229+02:00   getFgsAllowWiu_forCapabilities=DENIED
+2026-08-16T13:46:46.8380482+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_15s_location_task.txt:27:    
+2026-08-16T13:46:46.8413960+02:00   getFgsAllowStart_legacy=DENIED
+2026-08-16T13:46:46.8444142+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_15s_location_task.txt:28:    
+2026-08-16T13:46:46.8464106+02:00   getFgsAllowStart_new=DENIED
+2026-08-16T13:46:46.8514095+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_15s_location_task.txt:29:    
+2026-08-16T13:46:46.8534085+02:00   getFgsAllowStart=DENIED
+2026-08-16T13:46:46.8564085+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_15s_location_task.txt:30:    
+2026-08-16T13:46:46.8594109+02:00   startForegroundCount=99
+2026-08-16T13:46:46.8619375+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_15s_location_task.txt:33:    
+2026-08-16T13:46:46.8639341+02:00   lastActivity=-19m36s811ms restartTime=-22m18s88ms createdFromFg=true
+2026-08-16T13:46:46.8679331+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_15s_location_task.txt:34:    
+2026-08-16T13:47:31.8808794+02:00 SNAP_A_LOCK_60s
+2026-08-16T13:47:32.9012568+02:00   
+2026-08-16T13:47:32.9050533+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_60s_location_task.txt:17:    
+2026-08-16T13:47:32.9105801+02:00   getFgsAllowWiu_legacy=DENIED
+2026-08-16T13:47:32.9139480+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_60s_location_task.txt:18:    
+2026-08-16T13:47:32.9187547+02:00   getFgsAllowWiu_new=DENIED
+2026-08-16T13:47:32.9229215+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_60s_location_task.txt:19:    
+2026-08-16T13:47:32.9269483+02:00   getFgsAllowWiu_forStart=DENIED
+2026-08-16T13:47:32.9293644+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_60s_location_task.txt:20:    
+2026-08-16T13:47:32.9326680+02:00   getFgsAllowWiu_forCapabilities=DENIED
+2026-08-16T13:47:32.9359852+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_60s_location_task.txt:27:    
+2026-08-16T13:47:32.9398572+02:00   getFgsAllowStart_legacy=DENIED
+2026-08-16T13:47:32.9448373+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_60s_location_task.txt:28:    
+2026-08-16T13:47:32.9475810+02:00   getFgsAllowStart_new=DENIED
+2026-08-16T13:47:32.9529086+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_60s_location_task.txt:29:    
+2026-08-16T13:47:32.9562025+02:00   getFgsAllowStart=DENIED
+2026-08-16T13:47:32.9602868+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_60s_location_task.txt:30:    
+2026-08-16T13:47:32.9639962+02:00   startForegroundCount=99
+2026-08-16T13:47:32.9681171+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_60s_location_task.txt:33:    
+2026-08-16T13:47:32.9719813+02:00   lastActivity=-20m22s891ms restartTime=-23m4s168ms createdFromFg=true
+2026-08-16T13:47:32.9765347+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_LOCK_60s_location_task.txt:34:    
+2026-08-16T13:47:32.9798939+02:00 PHASE_UNLOCK
+2026-08-16T13:47:52.8753290+02:00 SNAP_A_UNLOCK
+2026-08-16T13:47:53.6836068+02:00   
+2026-08-16T13:47:53.6876038+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_UNLOCK_location_task.txt:17:    
+2026-08-16T13:47:53.6901137+02:00   getFgsAllowWiu_legacy=DENIED
+2026-08-16T13:47:53.6931247+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_UNLOCK_location_task.txt:18:    
+2026-08-16T13:47:53.6957853+02:00   getFgsAllowWiu_new=DENIED
+2026-08-16T13:47:53.6988093+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_UNLOCK_location_task.txt:19:    
+2026-08-16T13:47:53.7013365+02:00   getFgsAllowWiu_forStart=DENIED
+2026-08-16T13:47:53.7043301+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_UNLOCK_location_task.txt:20:    
+2026-08-16T13:47:53.7063353+02:00   getFgsAllowWiu_forCapabilities=DENIED
+2026-08-16T13:47:53.7093324+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_UNLOCK_location_task.txt:27:    
+2026-08-16T13:47:53.7123279+02:00   getFgsAllowStart_legacy=DENIED
+2026-08-16T13:47:53.7143335+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_UNLOCK_location_task.txt:28:    
+2026-08-16T13:47:53.7168524+02:00   getFgsAllowStart_new=DENIED
+2026-08-16T13:47:53.7198784+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_UNLOCK_location_task.txt:29:    
+2026-08-16T13:47:53.7236191+02:00   getFgsAllowStart=DENIED
+2026-08-16T13:47:53.7273407+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_UNLOCK_location_task.txt:30:    
+2026-08-16T13:47:53.7301640+02:00   startForegroundCount=99
+2026-08-16T13:47:53.7323937+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_UNLOCK_location_task.txt:33:    
+2026-08-16T13:47:53.7354779+02:00   lastActivity=-20m43s872ms restartTime=-23m25s149ms createdFromFg=true
+2026-08-16T13:47:53.7379829+02:00   docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_UNLOCK_location_task.txt:34:    
+2026-08-16T13:47:56.5402132+02:00 PHASE_A_DONE

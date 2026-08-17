@@ -1,0 +1,32 @@
+﻿2026-08-15T23:34:20.4494954Z Post job cleanup.
+2026-08-15T23:34:20.5387264Z [command]/usr/bin/git version
+2026-08-15T23:34:20.5465896Z git version 2.54.0
+2026-08-15T23:34:20.5525573Z Temporarily overriding HOME='/home/runner/work/_temp/e77f7ab6-f68e-48d5-905d-1a9f0742485e' before making global git config changes
+2026-08-15T23:34:20.5527276Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-15T23:34:20.5538522Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/***/***
+2026-08-15T23:34:20.5588606Z Removing SSH command configuration
+2026-08-15T23:34:20.5596113Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-15T23:34:20.5650843Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-15T23:34:20.5978379Z Removing HTTP extra header
+2026-08-15T23:34:20.5987212Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-15T23:34:20.6062386Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-15T23:34:20.6453833Z Removing includeIf entries pointing to credentials config files
+2026-08-15T23:34:20.6463483Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-15T23:34:20.6540390Z includeif.gitdir:/home/runner/work/***/***/.git.path
+2026-08-15T23:34:20.6572640Z includeif.gitdir:/home/runner/work/***/***/.git/worktrees/*.path
+2026-08-15T23:34:20.6573850Z includeif.gitdir:/github/workspace/.git.path
+2026-08-15T23:34:20.6575425Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-08-15T23:34:20.6577929Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/***/***/.git.path
+2026-08-15T23:34:20.6607261Z /home/runner/work/_temp/git-credentials-cc79a42d-ff8d-4f2c-88a7-2da23c94d750.config
+2026-08-15T23:34:20.6643496Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/***/***/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-cc79a42d\-ff8d\-4f2c\-88a7\-2da23c94d750\.config
+2026-08-15T23:34:20.6746296Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/***/***/.git/worktrees/*.path
+2026-08-15T23:34:20.6775491Z /home/runner/work/_temp/git-credentials-cc79a42d-ff8d-4f2c-88a7-2da23c94d750.config
+2026-08-15T23:34:20.6835921Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/***/***/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-cc79a42d\-ff8d\-4f2c\-88a7\-2da23c94d750\.config
+2026-08-15T23:34:20.6926814Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-08-15T23:34:20.6927745Z /github/runner_temp/git-credentials-cc79a42d-ff8d-4f2c-88a7-2da23c94d750.config
+2026-08-15T23:34:20.6978606Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-cc79a42d\-ff8d\-4f2c\-88a7\-2da23c94d750\.config
+2026-08-15T23:34:20.7046150Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-08-15T23:34:20.7047532Z /github/runner_temp/git-credentials-cc79a42d-ff8d-4f2c-88a7-2da23c94d750.config
+2026-08-15T23:34:20.7049566Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-cc79a42d\-ff8d\-4f2c\-88a7\-2da23c94d750\.config
+2026-08-15T23:34:20.7051214Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-15T23:34:20.7306146Z Removing credentials config '/home/runner/work/_temp/git-credentials-cc79a42d-ff8d-4f2c-88a7-2da23c94d750.config'

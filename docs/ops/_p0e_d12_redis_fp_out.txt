@@ -1,0 +1,73 @@
+﻿ssh : /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning: 
+Au caractère C:\Users\jasiq\AppData\Local\Temp\ps-script-2785648a-5c15-4e77-819c-07955531b777.ps1:96 : 403
++ ... dis_fp.py"; ssh -o BatchMode=yes -o ConnectTimeout=40 $ssh "docker cp ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/usr/local/lib/...cationWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  from eventlet.patcher import is_monkey_patched  # type: ignore
+[2.9] OpenTelemetry non install├® - installer avec: pip install -r requirements-otel.txt
+­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+[2026-08-17 11:58:11,185] WARNING in app: [Security] Niveau de log forc├® ├á WARNING en production (APP_LOG_LEVEL 
+ignor├® pour s├®curit├®)
+ENV_INGEST
+  TRACKING_INGEST_ASYNC_ENABLED='true'
+  TRACKING_PG_FIRST_CANONICAL_ENABLED=None
+  TRACKING_PROCESSED_FANOUT_ENABLED='true'
+  KAFKA_ENABLED='true'
+  DRIVER_LOC_TTL_SEC=None
+  REDIS_URL_fp={'set': True, 'scheme': 'redis', 'host': 'redis', 'port': 6379, 'db': '0', 'has_password': True, 'has_user': False}
+  REDIS_HOST='redis'
+  REDIS_PORT='6379'
+  REDIS_DB='0'
+  CELERY_BROKER_URL_fp={'set': True, 'scheme': 'redis', 'host': 'redis', 'port': 6379, 'db': '0', 'has_password': True, 'has_user': False}
+REDIS_CLIENT_FP
+  type=Redis
+  host=redis
+  port=6379
+  db=0
+  ping=True
+  redis_version=7.4.10
+  redis_mode=standalone
+  client_info={'id': 47952, 'addr': '172.20.0.6:52842', 'laddr': '172.20.0.2:6379', 'fd': '100', 'name': '', 'age': 8, 'idle': 0, 'flags': 'N', 'db': 0, 'sub': 0, 'psub': 0, 'ssub': '0', 'multi': -1, 'watch': '0', 'qbuf': 26, 'qbuf-free': 20448, 'argv-mem': 10, 'multi-mem': '0', 'rbs': '1024', 'rbp': '631', 'obl': 0, 'oll': 0, 'omem': 0, 'tot-mem': 22426, 'events': 'r', 'cmd': 'client|info', 'user': 'default', 'redir': '-1', 'resp': '2', 'lib-name': 'redis-py', 'lib-ver': '7.4.1'}
+  canary_set_ok=True
+LOC_5882
+  id=5882
+  driver_id=20135
+  company_id=1
+  location_event_id=trk_1786966250150_edzzbtxp
+  tracking_session_id=trk_sess_1786965149557_7lkzgzna
+  session_generation=1675
+  sequence_id=64
+  recorded_at=2026-08-17 11:55:20.858678+00:00
+  created_at=2026-08-17 11:55:21.371431+00:00
+  location_mode=mission_live
+  mission_id=38243
+  source=http
+  payload_schema_version=tracking-event-payload-v1
+SCAN_20135
+  rounds=50 count=2
+  key=driver:20135:active_tracking_session
+  key=driver:20135:health
+EXPECTED_KEYS
+  driver:20135:loc:last_raw exists=False ttl=-2
+  driver:20135:loc:canonical exists=False ttl=-2
+  driver:20135:loc exists=False ttl=-2
+  driver:20135:active_tracking_session exists=True ttl=1783
+RECENT_SOURCES
+  id=5897 source=http seq=79 created=2026-08-17 11:56:23.239952+00:00
+  id=5896 source=http seq=78 created=2026-08-17 11:56:22.696657+00:00
+  id=5895 source=http seq=77 created=2026-08-17 11:56:22.151358+00:00
+  id=5894 source=http seq=76 created=2026-08-17 11:56:12.580533+00:00
+  id=5893 source=http seq=75 created=2026-08-17 11:56:12.045704+00:00
+  id=5892 source=http seq=74 created=2026-08-17 11:56:11.499905+00:00
+  id=5891 source=http seq=73 created=2026-08-17 11:56:07.308442+00:00
+  id=5890 source=http seq=72 created=2026-08-17 11:56:07.283794+00:00

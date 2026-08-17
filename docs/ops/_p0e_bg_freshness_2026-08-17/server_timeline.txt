@@ -1,0 +1,22 @@
+﻿­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+BG_FRESHNESS_RCA_START 2026-08-17T15:27:44.191632+00:00
+phase=HOME driver=20135 window=120s poll=15.0s
+PG_FIRST True
+SAMPLE n=1 t=+0s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1188 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=live rest_age=13 rest_src=None
+SAMPLE n=2 t=+15s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1173 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=recent rest_age=28 rest_src=None
+SAMPLE n=3 t=+30s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1158 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=recent rest_age=43 rest_src=None
+SAMPLE n=4 t=+45s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1143 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=recent rest_age=58 rest_src=None
+SAMPLE n=5 t=+60s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1128 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=recent rest_age=73 rest_src=None
+SAMPLE n=6 t=+75s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1113 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=recent rest_age=88 rest_src=None
+SAMPLE n=7 t=+90s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1098 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=stale rest_age=103 rest_src=None
+SAMPLE n=8 t=+105s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1083 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=stale rest_age=118 rest_src=None
+SAMPLE n=9 t=+120s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1068 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=stale rest_age=133 rest_src=None
+SUMMARY
+  dle_delta_id=0 dle_delta_seq=0
+  canon_delta_seq=0
+  rest_statuses=['live', 'recent', 'recent', 'recent', 'recent', 'recent', 'stale', 'stale', 'stale']
+  first_dle={'id': 6441, 'sequence_id': 46, 'tracking_session_id': 'trk_sess_1786979474208_5whqvvm6', 'location_event_id': 'trk_1786980441803_k6c7ottu', 'recorded_at': datetime.datetime(2026, 8, 17, 15, 27, 31, 105881, tzinfo=datetime.timezone.utc), 'created_at': datetime.datetime(2026, 8, 17, 15, 27, 32, 12096, tzinfo=datetime.timezone.utc), 'mission_id': 38243}
+  last_dle={'id': 6441, 'sequence_id': 46, 'tracking_session_id': 'trk_sess_1786979474208_5whqvvm6', 'location_event_id': 'trk_1786980441803_k6c7ottu', 'recorded_at': datetime.datetime(2026, 8, 17, 15, 27, 31, 105881, tzinfo=datetime.timezone.utc), 'created_at': datetime.datetime(2026, 8, 17, 15, 27, 32, 12096, tzinfo=datetime.timezone.utc), 'mission_id': 38243}
+HYPOTHESIS A_or_D low_pg_and_canonical
+BG_FRESHNESS_RCA_END 2026-08-17T15:29:44.491882+00:00

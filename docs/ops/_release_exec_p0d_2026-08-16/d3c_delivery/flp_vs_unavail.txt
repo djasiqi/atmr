@@ -1,0 +1,53 @@
+﻿08-16 15:57:08.820 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:08.904  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.22388634 / time=1786888628775 / elapsed=67856139193585
+08-16 15:57:16.778 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:19.194  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.1624635 / time=1786888639087 / elapsed=67866451407023
+08-16 15:57:27.090 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:29.317  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.12118747 / time=1786888649231 / elapsed=67876595004412
+08-16 15:57:30.025  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.978924 / time=1786888649988 / elapsed=67877352265970
+08-16 15:57:31.029  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.5719892 / time=1786888650987 / elapsed=67878351624980
+08-16 15:57:38.994 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:39.476  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.5828944 / time=1786888659375 / elapsed=67886739338689
+08-16 15:57:44.210  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.79585546 / time=1786888664186 / elapsed=67891550803325
+08-16 15:57:49.582  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.7980496 / time=1786888669464 / elapsed=67896827085043
+08-16 15:57:57.467 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:59.656  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.41995308 / time=1786888679551 / elapsed=67906914743585
+08-16 15:58:07.555 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:09.786  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.28719318 / time=1786888689750 / elapsed=67917114417469
+08-16 15:58:17.753 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:19.926  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.1893239 / time=1786888699838 / elapsed=67927201946219
+08-16 15:58:27.843 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:30.109  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.14469227 / time=1786888710037 / elapsed=67937401499969
+08-16 15:58:31.018  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.2059458 / time=1786888710988 / elapsed=67938351665581
+08-16 15:58:38.994 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:40.264  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.2232479 / time=1786888720124 / elapsed=67947488927364
+08-16 15:58:48.129 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:50.412  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.61658883 / time=1786888730324 / elapsed=67957688402573
+08-16 15:58:58.327 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:00.447  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.26248893 / time=1786888740299 / elapsed=67967663676635
+08-16 15:59:08.303 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:10.587  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.14148903 / time=1786888750499 / elapsed=67977863075309
+08-16 15:59:11.022  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.1405327 / time=1786888750987 / elapsed=67978351950515
+08-16 15:59:18.993 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:20.656  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.1539197 / time=1786888760586 / elapsed=67987950358122
+08-16 15:59:28.590 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:30.695  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.57808197 / time=1786888770562 / elapsed=67997925528434
+08-16 15:59:38.565 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:40.844  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.29079986 / time=1786888780760 / elapsed=68008124846559
+08-16 15:59:48.764 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:51.002  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.18457678 / time=1786888790960 / elapsed=68018324148643
+08-16 15:59:58.961 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 16:00:01.135  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.14212751 / time=1786888801047 / elapsed=68028411342393
+08-16 16:00:02.024  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.4176041 / time=1786888801987 / elapsed=68029351092996
+08-16 16:00:09.989 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 16:00:11.312  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.4344155 / time=1786888811246 / elapsed=68038610597995
+08-16 16:00:19.247 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 16:00:21.451  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.57947505 / time=1786888821334 / elapsed=68048697754453
+08-16 16:00:29.336 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 16:00:31.589  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.20646968 / time=1786888831532 / elapsed=68058896978620
+08-16 16:00:39.535 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 16:00:41.738  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.15256098 / time=1786888841620 / elapsed=68068984178620
+08-16 16:00:49.623 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 16:00:51.916  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.10525343 / time=1786888851819 / elapsed=68079183412995
+08-16 16:00:52.014  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.8364581 / time=1786888851987 / elapsed=68079351981465
+08-16 16:00:59.994 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery

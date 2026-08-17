@@ -1,0 +1,32 @@
+﻿2026-08-15T23:29:09.6633857Z Current runner version: '2.336.0'
+2026-08-15T23:29:09.6674734Z ##[group]Runner Image Provisioner
+2026-08-15T23:29:09.6676723Z Hosted Compute Agent
+2026-08-15T23:29:09.6678377Z Version: 20260729.566
+2026-08-15T23:29:09.6680196Z Commit: cf7153fe6e25b664e8693c24944bf2b00355d109
+2026-08-15T23:29:09.6682098Z Build Date: 2026-07-29T19:17:02Z
+2026-08-15T23:29:09.6683864Z Worker ID: {f6268814-05f1-4933-8244-a9d9e4baafa7}
+2026-08-15T23:29:09.6686096Z Azure Region: eastus
+2026-08-15T23:29:09.6687692Z ##[endgroup]
+2026-08-15T23:29:09.6691157Z ##[group]Operating System
+2026-08-15T23:29:09.6692875Z Ubuntu
+2026-08-15T23:29:09.6694727Z 24.04.4
+2026-08-15T23:29:09.6696278Z LTS
+2026-08-15T23:29:09.6697815Z ##[endgroup]
+2026-08-15T23:29:09.6699451Z ##[group]Runner Image
+2026-08-15T23:29:09.6701213Z Image: ubuntu-24.04
+2026-08-15T23:29:09.6702736Z Version: 20260810.271.1
+2026-08-15T23:29:09.6705592Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260810.271/images/ubuntu/Ubuntu2404-Readme.md
+2026-08-15T23:29:09.6709326Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260810.271
+2026-08-15T23:29:09.6711791Z ##[endgroup]
+2026-08-15T23:29:09.6714973Z ##[group]GITHUB_TOKEN Permissions
+2026-08-15T23:29:09.6719472Z Contents: read
+2026-08-15T23:29:09.6721214Z Metadata: read
+2026-08-15T23:29:09.6722672Z ##[endgroup]
+2026-08-15T23:29:09.6726618Z Secret source: Actions
+2026-08-15T23:29:09.6729825Z Prepare workflow directory
+2026-08-15T23:29:09.7531528Z Prepare all required actions
+2026-08-15T23:29:09.7605145Z Getting action download info
+2026-08-15T23:29:09.9364782Z Download action repository 'actions/checkout@v7' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-08-15T23:29:10.0949483Z Download action repository 'appleboy/scp-action@v0.1.7' (SHA:917f8b81dfc1ccd331fef9e2d61bdc6c8be94634)
+2026-08-15T23:29:10.1856916Z Download action repository 'appleboy/ssh-action@v1.2.2' (SHA:2ead5e36573f08b82fbfce1504f1a4b05a647c6f)
+2026-08-15T23:29:10.4760917Z Complete job name: Deploy Production Environment

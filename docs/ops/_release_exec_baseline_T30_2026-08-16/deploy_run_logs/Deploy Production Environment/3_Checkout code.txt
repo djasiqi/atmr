@@ -1,0 +1,184 @@
+﻿2026-08-15T23:29:14.0751309Z ##[group]Run actions/checkout@v7
+2026-08-15T23:29:14.0752143Z with:
+2026-08-15T23:29:14.0752721Z   repository: djasiqi/***
+2026-08-15T23:29:14.0755647Z   token: ***
+2026-08-15T23:29:14.0756072Z   ssh-strict: true
+2026-08-15T23:29:14.0756478Z   ssh-user: git
+2026-08-15T23:29:14.0756886Z   persist-credentials: true
+2026-08-15T23:29:14.0757324Z   clean: true
+2026-08-15T23:29:14.0757724Z   sparse-checkout-cone-mode: true
+2026-08-15T23:29:14.0758185Z   fetch-depth: 1
+2026-08-15T23:29:14.0758576Z   fetch-tags: false
+2026-08-15T23:29:14.0758994Z   show-progress: true
+2026-08-15T23:29:14.0759395Z   lfs: false
+2026-08-15T23:29:14.0759783Z   submodules: false
+2026-08-15T23:29:14.0760234Z   set-safe-directory: true
+2026-08-15T23:29:14.0760699Z   allow-unsafe-pr-checkout: false
+2026-08-15T23:29:14.0761423Z env:
+2026-08-15T23:29:14.0761862Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:29:14.0762392Z   DOCKER_IMAGE: ***
+2026-08-15T23:29:14.0762817Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:29:14.0763325Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:29:14.0763898Z   SSH_HOST: ***
+2026-08-15T23:29:14.0764581Z   SSH_USER: ***
+2026-08-15T23:29:14.0764997Z   SSH_PORT: ***
+2026-08-15T23:29:14.0767014Z   SSH_KEY: ***
+2026-08-15T23:29:14.0767553Z   APP_ENCRYPTION_KEY_B64: ***
+2026-08-15T23:29:14.0768135Z   SECRET_KEY: ***
+2026-08-15T23:29:14.0768793Z   JWT_SECRET_KEY: ***
+2026-08-15T23:29:14.0769285Z   POSTGRES_PASSWORD: ***
+2026-08-15T23:29:14.0769729Z   POSTGRES_USER: ***
+2026-08-15T23:29:14.0770153Z   POSTGRES_DB: ***
+2026-08-15T23:29:14.0770597Z   REDIS_PASSWORD: ***
+2026-08-15T23:29:14.0771033Z   MAIL_PASSWORD: ***
+2026-08-15T23:29:14.0771762Z   SENTRY_DSN: ***
+2026-08-15T23:29:14.0772196Z   PDF_BASE_URL: ***
+2026-08-15T23:29:14.0772704Z   GOOGLE_MAPS_API_KEY: ***
+2026-08-15T23:29:14.0773328Z   MASTER_ENCRYPTION_KEY: ***
+2026-08-15T23:29:14.0773781Z   GRAFANA_ADMIN_USER: ***
+2026-08-15T23:29:14.0774453Z   GRAFANA_ADMIN_PASSWORD: ***
+2026-08-15T23:29:14.0775348Z   GRAFANA_ROOT_URL: ***
+2026-08-15T23:29:14.0775822Z   SMTP_HOST: ***
+2026-08-15T23:29:14.0776232Z   SMTP_PORT: ***
+2026-08-15T23:29:14.0776663Z   SMTP_USERNAME: ***
+2026-08-15T23:29:14.0777098Z   SMTP_PASSWORD: ***
+2026-08-15T23:29:14.0777529Z   ALERTMANAGER_FROM_EMAIL: ***
+2026-08-15T23:29:14.0778046Z   ALERT_EMAIL_TO: ***
+2026-08-15T23:29:14.0778981Z   SOCKETIO_CORS_ORIGINS: ***
+2026-08-15T23:29:14.0779705Z   BREVO_API_KEY: ***
+2026-08-15T23:29:14.0780136Z   SMS_NOTIFICATIONS_ENABLED: 
+2026-08-15T23:29:14.0780570Z   TWILIO_ACCOUNT_SID: 
+2026-08-15T23:29:14.0780977Z   TWILIO_AUTH_TOKEN: 
+2026-08-15T23:29:14.0781384Z   TWILIO_PHONE_NUMBER: 
+2026-08-15T23:29:14.0781829Z   POSTGRES_HOST: ***
+2026-08-15T23:29:14.0782260Z   FLASK_ENV: ***
+2026-08-15T23:29:14.0782678Z   FLASK_CONFIG: ***
+2026-08-15T23:29:14.0783098Z   ENVIRONMENT: ***
+2026-08-15T23:29:14.0871594Z   FIREBASE_SERVICE_ACCOUNT_B64: ***
+2026-08-15T23:29:14.0872982Z   INTERNAL_SERVICE_TOKEN: ***
+2026-08-15T23:29:14.0873778Z   INTERNAL_SERVICE_TOKEN_NEXT: 
+2026-08-15T23:29:14.0874821Z ##[endgroup]
+2026-08-15T23:29:14.2041877Z Syncing repository: djasiqi/***
+2026-08-15T23:29:14.2044596Z ##[group]Getting Git version info
+2026-08-15T23:29:14.2045609Z Working directory is '/home/runner/work/***/***'
+2026-08-15T23:29:14.2046966Z [command]/usr/bin/git version
+2026-08-15T23:29:14.2052747Z git version 2.54.0
+2026-08-15T23:29:14.2078307Z ##[endgroup]
+2026-08-15T23:29:14.2091985Z Temporarily overriding HOME='/home/runner/work/_temp/d7279fbb-3116-4b1d-acc9-a636f96c9690' before making global git config changes
+2026-08-15T23:29:14.2094514Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-15T23:29:14.2100959Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/***/***
+2026-08-15T23:29:14.2155400Z Deleting the contents of '/home/runner/work/***/***'
+2026-08-15T23:29:14.2169999Z ##[group]Determining repository object format
+2026-08-15T23:29:14.2171349Z ##[endgroup]
+2026-08-15T23:29:14.2172548Z ##[group]Initializing the repository
+2026-08-15T23:29:14.2185678Z [command]/usr/bin/git init /home/runner/work/***/***
+2026-08-15T23:29:14.2311744Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-08-15T23:29:14.2313478Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-08-15T23:29:14.2315415Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-08-15T23:29:14.2316872Z hint: call:
+2026-08-15T23:29:14.2317865Z hint:
+2026-08-15T23:29:14.2318795Z hint: 	git config --global init.defaultBranch <name>
+2026-08-15T23:29:14.2319666Z hint:
+2026-08-15T23:29:14.2320482Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-08-15T23:29:14.2321733Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-08-15T23:29:14.2322771Z hint:
+2026-08-15T23:29:14.2323458Z hint: 	git branch -m <name>
+2026-08-15T23:29:14.2324155Z hint:
+2026-08-15T23:29:14.2325273Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-08-15T23:29:14.2326800Z Initialized empty Git repository in /home/runner/work/***/***/.git/
+2026-08-15T23:29:14.2333116Z [command]/usr/bin/git remote add origin https://github.com/djasiqi/***
+2026-08-15T23:29:14.2387890Z ##[endgroup]
+2026-08-15T23:29:14.2389307Z ##[group]Disabling automatic garbage collection
+2026-08-15T23:29:14.2392406Z [command]/usr/bin/git config --local gc.auto 0
+2026-08-15T23:29:14.2437358Z ##[endgroup]
+2026-08-15T23:29:14.2438581Z ##[group]Setting up auth
+2026-08-15T23:29:14.2439391Z Removing SSH command configuration
+2026-08-15T23:29:14.2442765Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-15T23:29:14.2491234Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-15T23:29:14.2976170Z Removing HTTP extra header
+2026-08-15T23:29:14.2982561Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-15T23:29:14.3023119Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-15T23:29:14.3269208Z Removing includeIf entries pointing to credentials config files
+2026-08-15T23:29:14.3276364Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-15T23:29:14.3317860Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-15T23:29:14.3592654Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-cc79a42d-ff8d-4f2c-88a7-2da23c94d750.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-08-15T23:29:14.3671208Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/***/***/.git.path /home/runner/work/_temp/git-credentials-cc79a42d-ff8d-4f2c-88a7-2da23c94d750.config
+2026-08-15T23:29:14.3711569Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/***/***/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-cc79a42d-ff8d-4f2c-88a7-2da23c94d750.config
+2026-08-15T23:29:14.3773925Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-cc79a42d-ff8d-4f2c-88a7-2da23c94d750.config
+2026-08-15T23:29:14.3815186Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-cc79a42d-ff8d-4f2c-88a7-2da23c94d750.config
+2026-08-15T23:29:14.3849768Z ##[endgroup]
+2026-08-15T23:29:14.3850647Z ##[group]Fetching the repository
+2026-08-15T23:29:14.3857634Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +286737a2362eb1e38013c72d04be23fcd608210e:refs/remotes/origin/release/gps-p0-2026-08-15
+2026-08-15T23:29:19.4137206Z From https://github.com/djasiqi/***
+2026-08-15T23:29:19.4138279Z  * [new ref]         286737a2362eb1e38013c72d04be23fcd608210e -> origin/release/gps-p0-2026-08-15
+2026-08-15T23:29:19.4185083Z [command]/usr/bin/git branch --list --remote origin/release/gps-p0-2026-08-15
+2026-08-15T23:29:19.4217391Z   origin/release/gps-p0-2026-08-15
+2026-08-15T23:29:19.4230723Z [command]/usr/bin/git rev-parse refs/remotes/origin/release/gps-p0-2026-08-15
+2026-08-15T23:29:19.4258787Z 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:29:19.4263961Z ##[endgroup]
+2026-08-15T23:29:19.4265237Z ##[group]Determining the checkout info
+2026-08-15T23:29:19.4266412Z ##[endgroup]
+2026-08-15T23:29:19.4272231Z [command]/usr/bin/git sparse-checkout disable
+2026-08-15T23:29:19.4325234Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-08-15T23:29:19.4365932Z ##[group]Checking out the ref
+2026-08-15T23:29:19.4367223Z [command]/usr/bin/git checkout --progress --force -B release/gps-p0-2026-08-15 refs/remotes/origin/release/gps-p0-2026-08-15
+2026-08-15T23:29:20.5464485Z Updating files:  47% (2468/5249)
+2026-08-15T23:29:20.5497979Z Updating files:  48% (2520/5249)
+2026-08-15T23:29:20.5549097Z Updating files:  49% (2573/5249)
+2026-08-15T23:29:20.5851328Z Updating files:  50% (2625/5249)
+2026-08-15T23:29:20.5889551Z Updating files:  51% (2677/5249)
+2026-08-15T23:29:20.5922402Z Updating files:  52% (2730/5249)
+2026-08-15T23:29:20.5959650Z Updating files:  53% (2782/5249)
+2026-08-15T23:29:20.5986560Z Updating files:  54% (2835/5249)
+2026-08-15T23:29:20.6027519Z Updating files:  55% (2887/5249)
+2026-08-15T23:29:20.6071982Z Updating files:  56% (2940/5249)
+2026-08-15T23:29:20.6114180Z Updating files:  57% (2992/5249)
+2026-08-15T23:29:20.6166420Z Updating files:  58% (3045/5249)
+2026-08-15T23:29:20.6213912Z Updating files:  59% (3097/5249)
+2026-08-15T23:29:20.6261885Z Updating files:  60% (3150/5249)
+2026-08-15T23:29:20.6300921Z Updating files:  61% (3202/5249)
+2026-08-15T23:29:20.6341568Z Updating files:  62% (3255/5249)
+2026-08-15T23:29:20.6378953Z Updating files:  63% (3307/5249)
+2026-08-15T23:29:20.6405297Z Updating files:  64% (3360/5249)
+2026-08-15T23:29:20.6430475Z Updating files:  65% (3412/5249)
+2026-08-15T23:29:20.6458530Z Updating files:  66% (3465/5249)
+2026-08-15T23:29:20.6487475Z Updating files:  67% (3517/5249)
+2026-08-15T23:29:20.6601414Z Updating files:  68% (3570/5249)
+2026-08-15T23:29:20.6797230Z Updating files:  69% (36***/5249)
+2026-08-15T23:29:20.6833416Z Updating files:  70% (3675/5249)
+2026-08-15T23:29:20.6872510Z Updating files:  71% (3727/5249)
+2026-08-15T23:29:20.7081267Z Updating files:  72% (3780/5249)
+2026-08-15T23:29:20.7258736Z Updating files:  73% (3832/5249)
+2026-08-15T23:29:20.8878863Z Updating files:  74% (3885/5249)
+2026-08-15T23:29:20.9100565Z Updating files:  75% (3937/5249)
+2026-08-15T23:29:20.9132243Z Updating files:  76% (3990/5249)
+2026-08-15T23:29:20.9160567Z Updating files:  77% (4042/5249)
+2026-08-15T23:29:20.9184394Z Updating files:  78% (4095/5249)
+2026-08-15T23:29:20.9214950Z Updating files:  79% (4147/5249)
+2026-08-15T23:29:20.9240428Z Updating files:  80% (4200/5249)
+2026-08-15T23:29:20.9267942Z Updating files:  81% (4252/5249)
+2026-08-15T23:29:20.9299397Z Updating files:  82% (4305/5249)
+2026-08-15T23:29:20.9329007Z Updating files:  83% (4357/5249)
+2026-08-15T23:29:20.9359367Z Updating files:  84% (4410/5249)
+2026-08-15T23:29:20.9390834Z Updating files:  85% (4462/5249)
+2026-08-15T23:29:20.9424583Z Updating files:  86% (4515/5249)
+2026-08-15T23:29:20.9456322Z Updating files:  87% (4567/5249)
+2026-08-15T23:29:20.9487285Z Updating files:  88% (4620/5249)
+2026-08-15T23:29:20.9513471Z Updating files:  89% (4672/5249)
+2026-08-15T23:29:20.9542497Z Updating files:  90% (4725/5249)
+2026-08-15T23:29:20.9578369Z Updating files:  91% (4777/5249)
+2026-08-15T23:29:20.9604882Z Updating files:  92% (4830/5249)
+2026-08-15T23:29:21.0655884Z Updating files:  93% (4882/5249)
+2026-08-15T23:29:21.0687859Z Updating files:  94% (4935/5249)
+2026-08-15T23:29:21.0716479Z Updating files:  95% (4987/5249)
+2026-08-15T23:29:21.0744181Z Updating files:  96% (5040/5249)
+2026-08-15T23:29:21.0775330Z Updating files:  97% (5092/5249)
+2026-08-15T23:29:21.0822620Z Updating files:  98% (5145/5249)
+2026-08-15T23:29:21.0880616Z Updating files:  99% (5197/5249)
+2026-08-15T23:29:21.0881663Z Updating files: 100% (5249/5249)
+2026-08-15T23:29:21.0882320Z Updating files: 100% (5249/5249), done.
+2026-08-15T23:29:21.0947644Z Switched to a new branch 'release/gps-p0-2026-08-15'
+2026-08-15T23:29:21.0968870Z branch 'release/gps-p0-2026-08-15' set up to track 'origin/release/gps-p0-2026-08-15'.
+2026-08-15T23:29:21.1474858Z ##[endgroup]
+2026-08-15T23:29:21.1525787Z [command]/usr/bin/git log -1 --format=%H
+2026-08-15T23:29:21.1556985Z 286737a2362eb1e38013c72d04be23fcd608210e

@@ -1,0 +1,43 @@
+﻿2026-08-15T23:18:37.4785305Z ##[group]Run npm ci
+2026-08-15T23:18:37.4785663Z [36;1mnpm ci[0m
+2026-08-15T23:18:37.4828596Z shell: /usr/bin/bash -e {0}
+2026-08-15T23:18:37.4828876Z env:
+2026-08-15T23:18:37.4829119Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:18:37.4829617Z ##[endgroup]
+2026-08-15T23:18:43.1595993Z npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-08-15T23:18:43.3503300Z npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+2026-08-15T23:18:43.3974043Z npm warn deprecated whatwg-encoding@2.0.0: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+2026-08-15T23:18:43.4054478Z npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+2026-08-15T23:18:43.4313200Z npm warn deprecated abab@2.0.6: Use your platform's native atob() and btoa() methods instead
+2026-08-15T23:18:43.5937799Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.5941641Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.5953930Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.5973670Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.5980695Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.6021977Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.6025872Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.7055840Z npm warn deprecated domexception@4.0.0: Use your platform's native DOMException instead
+2026-08-15T23:18:58.4757920Z 
+2026-08-15T23:18:58.4758845Z > lirie-unified-app@0.1.0 postinstall
+2026-08-15T23:18:58.4759565Z > patch-package
+2026-08-15T23:18:58.4759730Z 
+2026-08-15T23:18:58.6325540Z patch-package 8.0.1
+2026-08-15T23:18:58.6329607Z Applying patches...
+2026-08-15T23:18:58.6557041Z expo-location@19.0.8 ✔
+2026-08-15T23:18:58.6567911Z expo-task-manager@14.0.9 ✔
+2026-08-15T23:18:58.6580674Z image-size@1.2.1 ✔
+2026-08-15T23:18:58.6784164Z 
+2026-08-15T23:18:58.6784720Z added 1225 packages, and audited 1226 packages in 21s
+2026-08-15T23:18:58.6785204Z 
+2026-08-15T23:18:58.6785466Z 201 packages are looking for funding
+2026-08-15T23:18:58.6785991Z   run `npm fund` for details
+2026-08-15T23:18:58.7496248Z 
+2026-08-15T23:18:58.7496994Z 11 high severity vulnerabilities
+2026-08-15T23:18:58.7498056Z 
+2026-08-15T23:18:58.7498522Z To address issues that do not require attention, run:
+2026-08-15T23:18:58.7499541Z   npm audit fix
+2026-08-15T23:18:58.7499842Z 
+2026-08-15T23:18:58.7500409Z To address all issues (including breaking changes), run:
+2026-08-15T23:18:58.7501262Z   npm audit fix --force
+2026-08-15T23:18:58.7501600Z 
+2026-08-15T23:18:58.7501866Z Run `npm audit` for details.

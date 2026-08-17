@@ -1766,10 +1766,26 @@ class DriverLocation(Resource):
                     p = dict(p)
                     p["location_mode"] = "mission_live"
                     logger.debug("📍 location_mode manquant, défaut=mission_live")
-                if "recorded_at" not in p or not p.get("recorded_at"):
+                from services.tracking.location_idempotency import (
+                    resolve_client_recorded_at,
+                )
+
+                _resolved_recorded = resolve_client_recorded_at(
+                    p if isinstance(p, dict) else None
+                )
+                if not _resolved_recorded:
                     p = dict(p)
-                    p["recorded_at"] = p.get("ts") or datetime.now(UTC).isoformat()
-                    logger.debug("📍 recorded_at manquant, défaut=ts ou now")
+                    p["recorded_at"] = datetime.now(UTC).isoformat()
+                    logger.warning(
+                        "📍 recorded_at/timestamp/ts absents — fallback now "
+                        "(idempotence dégradée)"
+                    )
+                elif "recorded_at" not in p or not p.get("recorded_at"):
+                    p = dict(p)
+                    p["recorded_at"] = _resolved_recorded
+                    logger.debug(
+                        "📍 recorded_at dérivé de timestamp/ts client (P0-D)"
+                    )
                 # Validation et conversion
                 try:
                     lat_val = p.get("lat") or p.get("latitude")
@@ -1833,8 +1849,9 @@ class DriverLocation(Resource):
                                 p.get("accuracy_m", p.get("accuracy", 0.0)) or 0.0
                             )
                             recorded_at = (
-                                p.get("recorded_at")
-                                or p.get("ts")
+                                resolve_client_recorded_at(
+                                    p if isinstance(p, dict) else None
+                                )
                                 or datetime.now(UTC).isoformat()
                             )
                             sent_at = p.get("sent_at") or datetime.now(UTC).isoformat()

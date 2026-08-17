@@ -3,46 +3,92 @@
 # Note: E402 est une règle Flake8, pas Ruff
 # Les directives # noqa: E402 sont nécessaires pour Flake8 dans le CI
 
+from __future__ import annotations
+
 import os
 import sys
+from collections.abc import Sequence
 
-# ✅ FIX: Permettre de désactiver eventlet pour les migrations
-# eventlet.monkey_patch() interfère avec les transactions Alembic/psycopg
-# Utiliser DISABLE_EVENTLET=1 pour les commandes de migration
-_disable_eventlet = os.getenv("DISABLE_EVENTLET", "0") == "1"
-
-# ✅ RECOMMANDATION A: Auto-détection des commandes de migration
-# Si la commande contient 'db' ou 'alembic', désactiver eventlet automatiquement
-_is_migration_command = any(
-    arg
-    in ("db", "alembic", "migrate", "upgrade", "downgrade", "stamp", "heads", "current")
-    for arg in sys.argv
+MIGRATION_CLI_ARGS = (
+    "db",
+    "alembic",
+    "migrate",
+    "upgrade",
+    "downgrade",
+    "stamp",
+    "heads",
+    "current",
 )
 
-if _is_migration_command and not _disable_eventlet:
-    # ✅ RECOMMANDATION B: Warning si migrations sans DISABLE_EVENTLET
-    print(
-        "⚠️  [manage.py] Commande de migration détectée sans DISABLE_EVENTLET=1",
-        flush=True,
-    )
-    print(
-        "    → Désactivation automatique d'eventlet pour éviter les problèmes de transaction.",
-        flush=True,
-    )
-    print(
-        "    → Pour supprimer ce warning, utilisez: DISABLE_EVENTLET=1 flask db ...",
-        flush=True,
-    )
-    _disable_eventlet = True
 
-if not _disable_eventlet:
+def is_migration_command(argv: Sequence[str]) -> bool:
+    """True si la ligne de commande vise une migration Alembic/Flask-Migrate."""
+    return any(arg in MIGRATION_CLI_ARGS for arg in argv)
+
+
+def env_disables_eventlet(value: str | None = None) -> bool:
+    """True si DISABLE_EVENTLET=1 (valeur explicite ou environnement)."""
+    raw = os.getenv("DISABLE_EVENTLET", "0") if value is None else value
+    return raw == "1"
+
+
+def apply_eventlet_monkey_patch() -> None:
+    """Applique ``eventlet.monkey_patch()``."""
     import eventlet
 
     eventlet.monkey_patch()
-elif os.getenv("DISABLE_EVENTLET", "0") == "1":
-    # Explicitement désactivé par l'utilisateur
-    print("✅ [manage.py] eventlet désactivé (DISABLE_EVENTLET=1)", flush=True)
-# else: auto-désactivé pour migration (message déjà affiché)
+
+
+def running_under_pytest() -> bool:
+    """Évite le monkey_patch eventlet pendant la collecte pytest."""
+    return "pytest" in sys.modules
+
+
+def bootstrap_eventlet(
+    argv: Sequence[str] | None = None,
+    *,
+    disable_env: str | None = None,
+    apply_patch: bool | None = None,
+) -> bool:
+    """Décide si eventlet doit être désactivé. Retourne True si désactivé."""
+    argv = sys.argv if argv is None else argv
+    explicit = env_disables_eventlet(disable_env)
+    disable = explicit
+    should_patch = (not running_under_pytest()) if apply_patch is None else apply_patch
+
+    if is_migration_command(argv) and not explicit:
+        print(
+            "⚠️  [manage.py] Commande de migration détectée sans DISABLE_EVENTLET=1",
+            flush=True,
+        )
+        print(
+            "    → Désactivation automatique d'eventlet pour éviter les problèmes de transaction.",
+            flush=True,
+        )
+        print(
+            "    → Pour supprimer ce warning, utilisez: DISABLE_EVENTLET=1 flask db ...",
+            flush=True,
+        )
+        disable = True
+
+    if not disable:
+        if should_patch:
+            apply_eventlet_monkey_patch()
+    elif explicit:
+        print("✅ [manage.py] eventlet désactivé (DISABLE_EVENTLET=1)", flush=True)
+
+    return disable
+
+
+def resolve_config_name(flask_env: str | None = None) -> str:
+    """Nom de config Flask (FLASK_ENV ou development)."""
+    env = os.getenv("FLASK_ENV") if flask_env is None else flask_env
+    return env or "development"
+
+
+# ✅ FIX: Permettre de désactiver eventlet pour les migrations
+# eventlet.monkey_patch() interfère avec les transactions Alembic/psycopg
+_disable_eventlet = bootstrap_eventlet()
 
 import click  # noqa: E402
 from flask_migrate import init as _init  # noqa: E402
@@ -58,9 +104,22 @@ from services.demo.seed_service import (  # noqa: E402
     reset_and_seed_demo_dataset,
 )
 
-# Crée une instance de l'application pour le contexte
-config_name = os.getenv("FLASK_ENV") or "development"
-app = create_app(config_name)
+_app = None
+
+
+def get_app():
+    """Instance Flask (création paresseuse pour les tests et ``manage.app``)."""
+    global _app
+    if _app is None:
+        _app = create_app(resolve_config_name())
+    return _app
+
+
+def __getattr__(name: str):
+    """Compat : ``import manage ; manage.app``."""
+    if name == "app":
+        return get_app()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # --- Création de l'interface en ligne de commande avec Click ---
@@ -81,7 +140,7 @@ def dbcli():
 @dbcli.command()
 def init():
     """Initialise le dossier des migrations."""
-    with app.app_context():
+    with get_app().app_context():
         _init()
     click.echo("Dossier des migrations initialisé.")
 
@@ -92,7 +151,7 @@ def init():
 )
 def migrate(message):
     """Génère une nouvelle migration."""
-    with app.app_context():
+    with get_app().app_context():
         _migrate(message=message)
     click.echo("Script de migration généré.")
 
@@ -100,7 +159,7 @@ def migrate(message):
 @dbcli.command()
 def upgrade():
     """Applique les migrations à la base de données."""
-    with app.app_context():
+    with get_app().app_context():
         _upgrade()
     click.echo("Migrations appliquées à la base de données.")
 
@@ -109,7 +168,7 @@ def upgrade():
 @click.argument("revision", default="head")
 def stamp(revision):
     """'Tamponne' la base de données avec une révision, sans exécuter la migration."""
-    with app.app_context():
+    with get_app().app_context():
         _stamp(revision=revision)
     click.echo(f"Base de données tamponnée avec la révision : {revision}.")
 
@@ -130,7 +189,7 @@ def seedcli():
 )
 def seed_demo(reset: bool, profile_name: str):
     """Seed dataset démo déterministe (tiny|sales)."""
-    with app.app_context():
+    with get_app().app_context():
         summary = reset_and_seed_demo_dataset(
             profile_name=profile_name,
             reset=reset,

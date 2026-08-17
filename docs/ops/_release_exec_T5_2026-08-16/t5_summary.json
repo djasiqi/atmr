@@ -1,0 +1,37 @@
+{
+  "kind": "g5-t5-post-release",
+  "captured_at_utc": "2026-08-15T23:47:45Z",
+  "release_tip": "286737a2362eb1e38013c72d04be23fcd608210e",
+  "docker_tag": "sha-286737a2362e",
+  "backend_digest": "sha256:02053f7361d2000a61a0e13a0151b95a9c65481326c20453075037bc9129cbe1",
+  "verdict": "VERT",
+  "topology": {
+    "api_celery_ws": "sha-286737a2362e Up healthy",
+    "consumer_outbox": "sha-286737a2362e Up healthy",
+    "fanout_dlq": "sha-286737a2362e Created",
+    "fanout_hold_enabled": false,
+    "fanout_up": 0
+  },
+  "prometheus_up": {
+    "atmr-backend": 1,
+    "atmr-ws-service": 1,
+    "atmr-tracking-kafka-consumer": 1,
+    "atmr-tracking-processed-fanout": 0
+  },
+  "rates_5m": {
+    "driver_location_received": null,
+    "driver_location_ingested": null,
+    "driver_location_processed": null,
+    "dedup_invalid_ledger": 0,
+    "dedup_unproven": 0,
+    "dedup_claim_in_flight": 0,
+    "device_health_received": 0
+  },
+  "restart_counts": {
+    "backend": 0,
+    "ws": 0,
+    "consumer": 0,
+    "outbox": 0
+  },
+  "note": "Night window: LOC series absent/0 like T-30 baseline. No immediate rollback threshold."
+}

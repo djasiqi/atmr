@@ -1,0 +1,16 @@
+# D5 C4 — build 129 (inject UNKNOWN + L1)
+
+```text
+REASON           = C4 requires QA-gated deep-link inject (absent on 128)
+PROFILE          = production-apk
+BUILD_ID         = 456f60f0-ccab-45d8-91c4-8d91d05968e2
+URL              = https://expo.dev/accounts/drinjasiqi/projects/operations-app/builds/456f60f0-ccab-45d8-91c4-8d91d05968e2
+versionCode      = 129
+INJECT           = lirie://canary/d5-c4-unknown-l1?started_age_sec=120
+STATUS           = FINISHED
+ARTIFACT         = https://expo.dev/artifacts/eas/P8ZwTNIJ3HKkgNosEGl9PuBBtUf4EYsbrHdfc7ooavY.apk
+LOCAL_APK        = d5_canary/d5-canary-129.apk
+DISTRIBUTION     = NO-GO
+BACKEND          = observation only
+GPS UI freshness = NOT D5 (deferred)
+```

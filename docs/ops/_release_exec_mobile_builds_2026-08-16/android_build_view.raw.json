@@ -1,0 +1,49 @@
+﻿{
+  "id": "a2970b22-6b5c-4390-a81b-74588e06b50b",
+  "status": "FINISHED",
+  "platform": "ANDROID",
+  "artifacts": {
+    "buildUrl": "https://expo.dev/artifacts/eas/6l4-yT5NJmkZCJQWqNEEPiYDUq3ry6Z9XRWoIdrGZ9s.aab",
+    "applicationArchiveUrl": "https://expo.dev/artifacts/eas/6l4-yT5NJmkZCJQWqNEEPiYDUq3ry6Z9XRWoIdrGZ9s.aab"
+  },
+  "fingerprint": {
+    "id": "01a0099b-9534-7f74-9b8b-ce98bb72f91f",
+    "hash": "a42982277edb3d6e66198e934512ea911afcf252"
+  },
+  "initiatingActor": {
+    "id": "f8512c47-8a63-4320-9be6-979f4740caff",
+    "displayName": "drinjasiqi"
+  },
+  "logFiles": [
+    "https://storage.googleapis.com/eas-workflows-production/logs/3be107c7-29d2-4987-91a0-8d7c31604891/a2970b22-6b5c-4390-a81b-74588e06b50b/2026-08-16T08%3A06%3A29Z-b7259900-33a0-4a8a-9845-3681edbd62fd.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260816%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260816T101548Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=66def3965b0501821ab283a492e74e2ed07d4b6a4acb804e7dd4a9e95f734defb02ad94d00368a8cf50574c75e9c0afda14ff82e3b608b3bb8547201793fd48f2d1751bc78710d68120ca8b756ddf1f7a3054833428218a03b75eb60520341f0d669cf8c09d4da1c9dbce4a1e6722a05c5fd5a3d721e312dec3d97d02555d57c4334e7bbd8296318ae278e1755b7183614b3916ddad443a7bdf4171ca2954973736ae81b2079604a0764cc95e90c2ee01d069a4bc025c34fb8eedab5a1803dcb837ce9d800a1be914103ec6d21a7fe8ce1c0a03cff47680a143e99a4cb8de330ebcb69880af49cea5661a3708fbc2a49eef2e1c877924d991d7a930f8728b393"
+  ],
+  "project": {
+    "id": "3be107c7-29d2-4987-91a0-8d7c31604891",
+    "name": "operations-app",
+    "slug": "operations-app",
+    "ownerAccount": {
+      "id": "b714e8e7-a921-4b60-adce-4bb87b393737",
+      "name": "drinjasiqi"
+    }
+  },
+  "channel": "production",
+  "distribution": "STORE",
+  "buildProfile": "production",
+  "sdkVersion": "54.0.0",
+  "appVersion": "1.0.11",
+  "appBuildVersion": "126",
+  "runtimeVersion": "1.0.11",
+  "gitCommitHash": "286737a2362eb1e38013c72d04be23fcd608210e",
+  "gitCommitMessage": "feat(tracking): backport OBSERVABILITY ages and health classes on 927640a0\n\nlocation_fix_age / task_invoke_age + classification ; fix_stale GNSS-only. Sans captureId/ingress/migration.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+  "priority": "NORMAL",
+  "createdAt": "2026-08-16T08:06:26.296Z",
+  "updatedAt": "2026-08-16T08:29:29.908Z",
+  "completedAt": "2026-08-16T08:29:29.699Z",
+  "expirationDate": "2026-09-15T08:06:26.349Z",
+  "isForIosSimulator": false,
+  "metrics": {
+    "buildWaitTime": 2801,
+    "buildQueueTime": 4538,
+    "buildDuration": 1376064
+  }
+}

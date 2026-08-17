@@ -1,0 +1,795 @@
+﻿08-16 20:05:09.488 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:05:09.488 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903501461_wgooyadr',
+08-16 20:05:09.962 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-16 20:05:09.962 11635 11788 I ReactNativeJS:   kind: 'tracking_health',
+08-16 20:05:09.993 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-16 20:05:09.993 11635 11788 I ReactNativeJS:   kind: 'tracking_health',
+08-16 20:05:10.328 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:10.328 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903501461_wgooyadr',
+08-16 20:05:10.338 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:10.338 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903510328_cwgrab1i',
+08-16 20:05:10.338 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:10.338 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903510328_cwgrab1i',
+08-16 20:05:10.339 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:05:10.424 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush_coalesced', { source: 'driver.tracking.queue',
+08-16 20:05:10.484 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush_coalesced', { source: 'driver.tracking.queue',
+08-16 20:05:10.548 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:10.548 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903510328_cwgrab1i',
+08-16 20:05:10.555 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:05:10.555 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903510328_cwgrab1i',
+08-16 20:05:10.556 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush_coalesced', { source: 'driver.tracking.queue',
+08-16 20:05:10.637 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:05:10.639 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:10.639 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 1210,
+08-16 20:05:10.639 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:10.640 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.bridge.health', { source: 'driver.tracking.bridge',
+08-16 20:05:10.640 11635 11788 I ReactNativeJS:   tracking_flush_batch_size: 1,
+08-16 20:05:10.645 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:10.645 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:05:10.646 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:16.927 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:05:19.342  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:19.344  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:19.345  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:19.345  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:19.345  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:19.345  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:19.345  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:19.345  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:19.346  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:19.350  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.012668348 / time=1786903517998 / elapsed=82745362000000
+08-16 20:05:24.567 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:05:24.618 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:05:24.621 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:05:24.838 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:24.838 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903510328_cwgrab1i',
+08-16 20:05:24.848 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:24.848 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903524838_y8wadn46',
+08-16 20:05:24.849 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:24.849 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903524838_y8wadn46',
+08-16 20:05:24.850 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:05:24.914 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:24.914 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:05:24.915 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:24.934 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:24.934 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:05:24.934 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:24.954 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:24.954 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903524838_y8wadn46',
+08-16 20:05:24.956 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:05:24.956 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903524838_y8wadn46',
+08-16 20:05:24.957 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:24.957 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:05:24.958 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:26.306  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:26.310  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:26.313  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:26.313  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:26.313  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:26.313  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:26.313  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:26.314  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:26.314  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.5108345 / time=1786903524704 / elapsed=82752068000000
+08-16 20:05:26.328 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:05:26.328 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903524838_y8wadn46',
+08-16 20:05:26.472 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:05:26.474 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:26.474 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 154,
+08-16 20:05:26.474 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:26.476 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.bridge.health', { source: 'driver.tracking.bridge',
+08-16 20:05:26.476 11635 11788 I ReactNativeJS:   tracking_flush_batch_size: 1,
+08-16 20:05:32.709 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:05:35.633  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.636  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:35.637  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:35.637  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.637  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.637  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.637  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.637  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.639  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.40638992 / time=1786903534271 / elapsed=82761635000000
+08-16 20:05:35.642 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task_invoked', { source: 'driver.services.backgroundLocationTask',
+08-16 20:05:35.642 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:05:35.642 11635 11788 I ReactNativeJS:   task_mode: 'mission' }
+08-16 20:05:35.660 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:05:35.660 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903524838_y8wadn46',
+08-16 20:05:35.810 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:05:35.811 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:35.811 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 168,
+08-16 20:05:35.812 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:35.813 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task.flush', { source: 'driver.services.backgroundLocationTask',
+08-16 20:05:35.813 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:05:35.813 11635 11788 I ReactNativeJS:   task_mode: 'mission',
+08-16 20:05:35.813 11635 11801 I TaskService: Finished task 'background-location-task' with eventId '486ff5c2-8933-4082-a516-4f6a23a96539'.
+08-16 20:05:35.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:35.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:35.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:35.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:35.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:35.952  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.31494588 / time=1786903535920 / elapsed=82763284892438
+08-16 20:05:39.725 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:05:39.774 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.send.skipped', { source: 'driver.tracking.bridge',
+08-16 20:05:39.791 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:05:40.026 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:40.026 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903524838_y8wadn46',
+08-16 20:05:40.036 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:40.036 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903540026_pek4pm4h',
+08-16 20:05:40.036 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:40.036 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903540026_pek4pm4h',
+08-16 20:05:40.037 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:05:40.113 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:40.113 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:05:40.113 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:40.124 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:40.124 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:05:40.127 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:40.177 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:40.177 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903540026_pek4pm4h',
+08-16 20:05:40.178 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:05:40.178 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903540026_pek4pm4h',
+08-16 20:05:40.180 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:40.180 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:05:40.180 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:43.924 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:05:49.951  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:49.952  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:49.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:49.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:49.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:49.957  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:49.957  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:49.957  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.09479247 / time=1786903549921 / elapsed=82777285664308
+08-16 20:05:54.885 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:05:54.925 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:05:54.939 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:05:55.154 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:05:55.186 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:55.186 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903540026_pek4pm4h',
+08-16 20:05:55.196 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:55.196 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903555186_vw5bm1t9',
+08-16 20:05:55.196 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:55.196 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903555186_vw5bm1t9',
+08-16 20:05:55.197 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:05:55.231 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:55.231 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:05:55.232 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:55.261 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:55.261 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:05:55.262 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:55.324 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:05:55.324 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903555186_vw5bm1t9',
+08-16 20:05:55.326 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:05:55.326 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903555186_vw5bm1t9',
+08-16 20:05:55.327 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:05:55.327 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:05:55.328 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:05:55.600 11635 11788 I ReactNativeJS:   tracking_active: true,
+08-16 20:05:55.600 11635 11788 I ReactNativeJS:   tracking_queue_depth: 0,
+08-16 20:05:59.311  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:59.313  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:59.313  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:05:59.314  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:59.315  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:05:59.319  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.79666364 / time=1786903558022 / elapsed=82785386000000
+08-16 20:05:59.327 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:05:59.327 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903555186_vw5bm1t9',
+08-16 20:05:59.375 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task_invoked', { source: 'driver.services.backgroundLocationTask',
+08-16 20:05:59.375 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:05:59.375 11635 11788 I ReactNativeJS:   task_mode: 'mission' }
+08-16 20:05:59.387 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:05:59.387 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903555186_vw5bm1t9',
+08-16 20:05:59.388 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush_coalesced', { source: 'driver.tracking.queue',
+08-16 20:05:59.388 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush_coalesced', { source: 'driver.tracking.queue',
+08-16 20:05:59.389 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task.flush', { source: 'driver.services.backgroundLocationTask',
+08-16 20:05:59.389 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:05:59.389 11635 11788 I ReactNativeJS:   task_mode: 'mission',
+08-16 20:05:59.389 11635 11801 I TaskService: Finished task 'background-location-task' with eventId '6360848e-e7ac-4ab9-b27c-3bd2832a2e3d'.
+08-16 20:06:03.459 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:06:03.594 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:06:03.595 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:03.595 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 4278,
+08-16 20:06:03.596 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:03.598 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.bridge.health', { source: 'driver.tracking.bridge',
+08-16 20:06:03.598 11635 11788 I ReactNativeJS:   tracking_flush_batch_size: 2,
+08-16 20:06:03.602 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:03.602 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:03.603 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:06.026 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:06:06.221 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:06:08.643  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:08.644  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:08.646  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:08.646  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:08.646  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:08.647  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:08.647  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:08.647  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:08.648  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.0327567 / time=1786903567313 / elapsed=82794677000000
+08-16 20:06:10.163 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:06:10.163 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903555186_vw5bm1t9',
+08-16 20:06:10.171 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-16 20:06:10.171 11635 11788 I ReactNativeJS:   kind: 'tracking_health',
+08-16 20:06:10.353 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-16 20:06:10.353 11635 11788 I ReactNativeJS:   kind: 'tracking_health',
+08-16 20:06:10.469 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:10.469 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903555186_vw5bm1t9',
+08-16 20:06:10.485 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:10.485 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903570469_6zvptv2k',
+08-16 20:06:10.486 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:10.486 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903570469_6zvptv2k',
+08-16 20:06:10.487 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:06:10.504 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush_coalesced', { source: 'driver.tracking.queue',
+08-16 20:06:10.509 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:06:10.510 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:10.510 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 410,
+08-16 20:06:10.510 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:10.511 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.bridge.health', { source: 'driver.tracking.bridge',
+08-16 20:06:10.511 11635 11788 I ReactNativeJS:   tracking_flush_batch_size: 1,
+08-16 20:06:10.550 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:10.550 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:10.550 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:10.571 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:10.571 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903570469_6zvptv2k',
+08-16 20:06:10.572 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:06:10.572 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903570469_6zvptv2k',
+08-16 20:06:10.574 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:10.574 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:10.574 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:10.627 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:10.627 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:10.628 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:15.318 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:06:15.567 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:15.567 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:15.568 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:18.008  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:18.011  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:18.011  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:18.011  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:18.011  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:18.011  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:18.011  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:18.011  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:18.014  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.7982802 / time=1786903576522 / elapsed=82803886000000
+08-16 20:06:18.024 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task_invoked', { source: 'driver.services.backgroundLocationTask',
+08-16 20:06:18.024 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:06:18.024 11635 11788 I ReactNativeJS:   task_mode: 'mission' }
+08-16 20:06:18.031 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:06:18.031 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903570469_6zvptv2k',
+08-16 20:06:18.192 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:06:18.199 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:18.199 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 168,
+08-16 20:06:18.201 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:18.202 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task.flush', { source: 'driver.services.backgroundLocationTask',
+08-16 20:06:18.202 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:06:18.202 11635 11788 I ReactNativeJS:   task_mode: 'mission',
+08-16 20:06:18.203 11635 11801 I TaskService: Finished task 'background-location-task' with eventId '041ae3a4-2864-40f7-9261-03d4d0805210'.
+08-16 20:06:24.526 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:06:25.198 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:06:25.248 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:06:25.518 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:25.518 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903570469_6zvptv2k',
+08-16 20:06:25.530 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:25.530 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903585518_x68nqajh',
+08-16 20:06:25.530 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:25.530 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903585518_x68nqajh',
+08-16 20:06:25.531 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:06:25.555 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:25.555 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:25.556 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:25.588 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:25.588 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:25.589 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:25.592 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:25.592 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:25.592 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:25.657 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:25.657 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903585518_x68nqajh',
+08-16 20:06:25.658 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:06:25.658 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903585518_x68nqajh',
+08-16 20:06:25.660 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:25.660 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:25.661 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:26.797  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:26.798  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:26.799  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:26.799  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:26.799  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:26.800  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:26.800  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:26.800  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:26.806  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.6375129 / time=1786903585317 / elapsed=82812681000000
+08-16 20:06:26.812 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:06:26.812 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903585518_x68nqajh',
+08-16 20:06:26.923 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:06:26.924 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:26.924 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 117,
+08-16 20:06:26.925 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:26.926 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.bridge.health', { source: 'driver.tracking.bridge',
+08-16 20:06:26.926 11635 11788 I ReactNativeJS:   tracking_flush_batch_size: 1,
+08-16 20:06:28.946  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:28.947  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:28.947  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:28.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:28.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:28.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:28.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:28.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:28.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:28.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:28.952  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.5909375 / time=1786903588922 / elapsed=82816286017366
+08-16 20:06:35.571 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:35.571 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:35.572 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:36.927 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:06:38.285  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:38.289  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:38.289  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:38.289  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:38.289  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:38.289  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:38.291  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:38.291  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:38.292  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.61124384 / time=1786903597000 / elapsed=82824364000000
+08-16 20:06:38.299 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task_invoked', { source: 'driver.services.backgroundLocationTask',
+08-16 20:06:38.299 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:06:38.299 11635 11788 I ReactNativeJS:   task_mode: 'mission' }
+08-16 20:06:38.317 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:06:38.317 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903585518_x68nqajh',
+08-16 20:06:38.450 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:06:38.451 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:38.451 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 151,
+08-16 20:06:38.452 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:38.454 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task.flush', { source: 'driver.services.backgroundLocationTask',
+08-16 20:06:38.454 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:06:38.454 11635 11788 I ReactNativeJS:   task_mode: 'mission',
+08-16 20:06:38.454 11635 11801 I TaskService: Finished task 'background-location-task' with eventId '9e60e829-f51d-4ef9-9309-309f2be7441b'.
+08-16 20:06:40.320 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:06:40.321 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.send.skipped', { source: 'driver.tracking.bridge',
+08-16 20:06:40.376 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:06:40.605 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:40.605 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903585518_x68nqajh',
+08-16 20:06:40.625 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:40.625 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903600605_5k0z0vsd',
+08-16 20:06:40.625 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:40.625 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903600605_5k0z0vsd',
+08-16 20:06:40.627 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:06:40.662 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:40.662 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:40.662 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:40.713 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:40.713 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:40.714 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:40.742 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:40.742 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903600605_5k0z0vsd',
+08-16 20:06:40.747 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:06:40.747 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903600605_5k0z0vsd',
+08-16 20:06:40.748 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:40.748 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:40.749 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:45.002 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:06:45.582 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:45.582 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:45.583 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:47.629  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:47.630  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:47.634  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:47.634  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:47.634  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:47.634  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:47.635  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:47.635  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:47.636  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.4087174 / time=1786903606279 / elapsed=82833643000000
+08-16 20:06:49.947  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:49.947  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:49.948  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:49.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:49.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:49.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:49.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:49.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:49.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:49.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:49.951  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=1.0218318 / time=1786903609922 / elapsed=82837286413868
+08-16 20:06:55.445 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:06:55.499 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:06:55.503 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:06:55.593 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:55.593 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:55.594 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:55.606 11635 11788 I ReactNativeJS:   tracking_active: true,
+08-16 20:06:55.606 11635 11788 I ReactNativeJS:   tracking_queue_depth: 0,
+08-16 20:06:55.724 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:55.724 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903600605_5k0z0vsd',
+08-16 20:06:55.736 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:55.736 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903615724_0ql3t59h',
+08-16 20:06:55.736 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:55.736 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903615724_0ql3t59h',
+08-16 20:06:55.737 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:06:55.863 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:06:55.863 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903615724_0ql3t59h',
+08-16 20:06:55.870 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:55.870 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:55.871 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:55.872 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:06:55.872 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903615724_0ql3t59h',
+08-16 20:06:55.878 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:55.878 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:55.878 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:55.884 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:55.884 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:55.884 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:59.332  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:59.334  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:59.334  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:06:59.334  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:59.334  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:59.334  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:59.335  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:59.335  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:06:59.336  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.5197162 / time=1786903618016 / elapsed=82845380000000
+08-16 20:06:59.341 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task_invoked', { source: 'driver.services.backgroundLocationTask',
+08-16 20:06:59.341 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:06:59.341 11635 11788 I ReactNativeJS:   task_mode: 'mission' }
+08-16 20:06:59.359 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:06:59.359 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903615724_0ql3t59h',
+08-16 20:06:59.365 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:06:59.365 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903615724_0ql3t59h',
+08-16 20:06:59.365 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush_coalesced', { source: 'driver.tracking.queue',
+08-16 20:06:59.366 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.bridge.health', { source: 'driver.tracking.bridge',
+08-16 20:06:59.366 11635 11788 I ReactNativeJS:   tracking_flush_batch_size: 0,
+08-16 20:06:59.513 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:06:59.757 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:06:59.760 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:59.760 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 417,
+08-16 20:06:59.761 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:06:59.763 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task.flush', { source: 'driver.services.backgroundLocationTask',
+08-16 20:06:59.763 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:06:59.763 11635 11788 I ReactNativeJS:   task_mode: 'mission',
+08-16 20:06:59.764 11635 11801 I TaskService: Finished task 'background-location-task' with eventId '4e5e22f4-fee4-4ea1-8884-862f245dbc1e'.
+08-16 20:06:59.767 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:06:59.767 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:06:59.768 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:03.948  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:03.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:03.952  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:03.953  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:03.953  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:03.953  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:03.954  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:03.954  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:03.956  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.33093938 / time=1786903623920 / elapsed=82851284835217
+08-16 20:07:05.648 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:05.648 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:05.649 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:06.256 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:07:10.577 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.send.skipped', { source: 'driver.tracking.bridge',
+08-16 20:07:10.644 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-16 20:07:10.644 11635 11788 I ReactNativeJS:   kind: 'tracking_health',
+08-16 20:07:10.785 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-16 20:07:10.785 11635 11788 I ReactNativeJS:   kind: 'tracking_health',
+08-16 20:07:10.863 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:10.863 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903615724_0ql3t59h',
+08-16 20:07:10.878 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:10.878 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903630863_wg22lig0',
+08-16 20:07:10.878 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:10.878 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903630863_wg22lig0',
+08-16 20:07:10.880 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:07:10.935 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:10.935 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:10.935 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:10.975 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:10.975 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903630863_wg22lig0',
+08-16 20:07:10.976 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:07:10.976 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903630863_wg22lig0',
+08-16 20:07:10.978 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:10.978 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:10.979 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:11.066 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:11.066 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:11.067 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:11.927 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:07:15.670 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:15.670 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:15.671 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:18.278  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.281  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:18.281  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:18.281  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.281  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.281  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.281  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.281  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.282  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.44395375 / time=1786903637008 / elapsed=82864372000000
+08-16 20:07:18.288 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task_invoked', { source: 'driver.services.backgroundLocationTask',
+08-16 20:07:18.288 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:07:18.288 11635 11788 I ReactNativeJS:   task_mode: 'mission' }
+08-16 20:07:18.308 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:07:18.308 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903630863_wg22lig0',
+08-16 20:07:18.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:18.956  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:18.956  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:18.956  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.956  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.957  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.957  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.957  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:18.958  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.2805248 / time=1786903638920 / elapsed=82866284875785
+08-16 20:07:22.359 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:07:22.361 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:22.361 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 4071,
+08-16 20:07:22.362 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:22.363 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task.flush', { source: 'driver.services.backgroundLocationTask',
+08-16 20:07:22.363 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:07:22.363 11635 11788 I ReactNativeJS:   task_mode: 'mission',
+08-16 20:07:22.364 11635 11801 I TaskService: Finished task 'background-location-task' with eventId '4bf4b788-8e23-4dbb-b45d-84f53b46c983'.
+08-16 20:07:24.948  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:24.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:24.951  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:24.951  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:24.951  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:24.951  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:24.951  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:24.952  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:24.952  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:24.959  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.20983817 / time=1786903644922 / elapsed=82872286045574
+08-16 20:07:25.709 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:07:25.713 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:25.713 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:25.713 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:25.767 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:07:25.770 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:07:25.770 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903630863_wg22lig0',
+08-16 20:07:26.010 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:07:26.010 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:26.010 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 252,
+08-16 20:07:26.011 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:26.012 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.bridge.health', { source: 'driver.tracking.bridge',
+08-16 20:07:26.012 11635 11788 I ReactNativeJS:   tracking_flush_batch_size: 1,
+08-16 20:07:26.051 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:26.051 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903630863_wg22lig0',
+08-16 20:07:26.059 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:26.059 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903646051_vesh8gdw',
+08-16 20:07:26.060 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:26.060 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903646051_vesh8gdw',
+08-16 20:07:26.061 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:07:26.096 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:26.096 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:26.096 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:26.124 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:26.124 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:26.125 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:26.149 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:26.149 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903646051_vesh8gdw',
+08-16 20:07:26.151 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:07:26.151 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903646051_vesh8gdw',
+08-16 20:07:26.152 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:26.152 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:26.153 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:32.925 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:07:35.736 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:35.736 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:35.737 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:36.523  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.523  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:36.525  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:36.525  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.525  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.525  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.528  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.528  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.529  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.35963187 / time=1786903655003 / elapsed=82882367000000
+08-16 20:07:36.953  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.954  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:36.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:36.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:36.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.955  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:36.956  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.26061216 / time=1786903656921 / elapsed=82884285856715
+08-16 20:07:36.964 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task_invoked', { source: 'driver.services.backgroundLocationTask',
+08-16 20:07:36.964 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:07:36.964 11635 11788 I ReactNativeJS:   task_mode: 'mission' }
+08-16 20:07:36.980 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:07:36.980 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903646051_vesh8gdw',
+08-16 20:07:37.120 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:07:37.121 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:37.121 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 156,
+08-16 20:07:37.122 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:37.123 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task.flush', { source: 'driver.services.backgroundLocationTask',
+08-16 20:07:37.123 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:07:37.123 11635 11788 I ReactNativeJS:   task_mode: 'mission',
+08-16 20:07:37.124 11635 11801 I TaskService: Finished task 'background-location-task' with eventId '598cf9a2-179b-4950-a703-b707ef7f5deb'.
+08-16 20:07:37.943  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:37.944  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:37.944  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:37.946  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:37.948  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:37.948  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:37.949  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:37.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:37.950  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:37.952  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.37737262 / time=1786903657922 / elapsed=82885285259267
+08-16 20:07:40.821 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:07:40.823 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.send.skipped', { source: 'driver.tracking.bridge',
+08-16 20:07:40.879 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:07:41.087 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:41.087 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903646051_vesh8gdw',
+08-16 20:07:41.094 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:41.094 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903661087_bavysf9e',
+08-16 20:07:41.094 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:41.094 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903661087_bavysf9e',
+08-16 20:07:41.095 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:07:41.134 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:41.134 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:41.135 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:41.154 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:41.154 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:41.155 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:41.244 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:41.244 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903661087_bavysf9e',
+08-16 20:07:41.246 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:07:41.246 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903661087_bavysf9e',
+08-16 20:07:41.251 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:41.251 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:41.252 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:45.768 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:45.768 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:45.769 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:45.927 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:07:48.303  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:48.304  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:48.307  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:48.307  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:48.307  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:48.308  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:48.308  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:48.309  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:48.309  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:48.309  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.66335946 / time=1786903666938 / elapsed=82894302000000
+08-16 20:07:54.944 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:07:55.187 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:07:55.640 11635 11788 I ReactNativeJS:   tracking_active: true,
+08-16 20:07:55.640 11635 11788 I ReactNativeJS:   tracking_queue_depth: 0,
+08-16 20:07:55.785 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:55.785 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:55.786 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:55.948 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:07:55.997 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:07:56.050 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:56.050 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903661087_bavysf9e',
+08-16 20:07:56.061 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:56.061 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903676050_8d22ttw9',
+08-16 20:07:56.061 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:56.061 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903676050_8d22ttw9',
+08-16 20:07:56.062 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:07:56.230 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:56.230 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:56.231 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:56.249 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:07:56.249 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903676050_8d22ttw9',
+08-16 20:07:56.251 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:07:56.251 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903676050_8d22ttw9',
+08-16 20:07:56.252 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush_coalesced', { source: 'driver.tracking.queue',
+08-16 20:07:56.253 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:56.253 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:56.254 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:56.266 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:56.266 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:56.267 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:57.546  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.550  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:57.550  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.550  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.550  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.550  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.550  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.551  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.27533197 / time=1786903676020 / elapsed=82903384000000
+08-16 20:07:57.562 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task_invoked', { source: 'driver.services.backgroundLocationTask',
+08-16 20:07:57.562 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:07:57.562 11635 11788 I ReactNativeJS:   task_mode: 'mission' }
+08-16 20:07:57.563 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:07:57.563 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903676050_8d22ttw9',
+08-16 20:07:57.581 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:07:57.581 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903676050_8d22ttw9',
+08-16 20:07:57.581 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush_coalesced', { source: 'driver.tracking.queue',
+08-16 20:07:57.582 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush_coalesced', { source: 'driver.tracking.queue',
+08-16 20:07:57.582 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task.flush', { source: 'driver.services.backgroundLocationTask',
+08-16 20:07:57.582 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:07:57.582 11635 11788 I ReactNativeJS:   task_mode: 'mission',
+08-16 20:07:57.583 11635 11801 I TaskService: Finished task 'background-location-task' with eventId 'f12891f8-6076-4813-ac36-b159c3197039'.
+08-16 20:07:57.707 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:07:57.828 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:07:57.830 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:57.830 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 274,
+08-16 20:07:57.831 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:57.834 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.bridge.health', { source: 'driver.tracking.bridge',
+08-16 20:07:57.834 11635 11788 I ReactNativeJS:   tracking_flush_batch_size: 2,
+08-16 20:07:57.838 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:07:57.838 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:07:57.839 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:07:57.965  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.965  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:57.965  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:57.966  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too old
+08-16 20:07:57.966  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:57.966  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:07:57.966  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.966  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.967  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.967  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.967  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:07:57.967  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.186246 / time=1786903677920 / elapsed=82905284981551
+08-16 20:08:05.801 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:08:05.801 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:08:05.802 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:08:05.924 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:08:06.302 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.send_skipped', { source: 'driver.device_health',
+08-16 20:08:06.761  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:06.762  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:08:06.764  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:08:06.764  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:08:06.764  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:06.765  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:06.765  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:06.765  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:06.765  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:06.768  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.08457481 / time=1786903686711 / elapsed=82914075137035
+08-16 20:08:11.056 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.send.skipped', { source: 'driver.tracking.bridge',
+08-16 20:08:11.129 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-16 20:08:11.129 11635 11788 I ReactNativeJS:   kind: 'tracking_health',
+08-16 20:08:11.256 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.device_health.sent', { source: 'driver.device_health',
+08-16 20:08:11.256 11635 11788 I ReactNativeJS:   kind: 'tracking_health',
+08-16 20:08:11.338 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:08:11.338 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903676050_8d22ttw9',
+08-16 20:08:11.348 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:08:11.348 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903691338_b3tbr1am',
+08-16 20:08:11.349 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:08:11.349 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903691338_b3tbr1am',
+08-16 20:08:11.351 11635 11788 I ReactNativeJS:   endpoint: '/driver/me/tracking/sessions',
+08-16 20:08:11.375 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:08:11.375 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:08:11.375 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:08:11.408 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:08:11.408 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:08:11.408 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:08:11.442 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.readiness', { source: 'driver.tracking.queue',
+08-16 20:08:11.442 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903691338_b3tbr1am',
+08-16 20:08:11.444 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.session.reconciled', { source: 'driver.tracking.queue',
+08-16 20:08:11.444 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903691338_b3tbr1am',
+08-16 20:08:11.445 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:08:11.445 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:08:11.446 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:08:14.715 11635 11635 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 20:08:15.831 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:08:15.831 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: null,
+08-16 20:08:15.832 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:08:16.094  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:16.097  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 20:08:16.098  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:16.098  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:16.099  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:16.099  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:16.099  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 20:08:16.104  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.19036394 / time=1786903694760 / elapsed=82922124000000
+08-16 20:08:16.105 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task_invoked', { source: 'driver.services.backgroundLocationTask',
+08-16 20:08:16.105 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:08:16.105 11635 11788 I ReactNativeJS:   task_mode: 'mission' }
+08-16 20:08:16.123 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.enqueued', { source: 'driver.tracking.queue',
+08-16 20:08:16.123 11635 11788 I ReactNativeJS:   tracking_session_id: 'trk_sess_1786903691338_b3tbr1am',
+08-16 20:08:16.283 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.ingest.ack', { source: 'driver.tracking.queue',
+08-16 20:08:16.285 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.queue.flush', { source: 'driver.tracking.queue',
+08-16 20:08:16.285 11635 11788 I ReactNativeJS:   tracking_queue_oldest_age_ms: 178,
+08-16 20:08:16.286 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.flush.transport', { source: 'driver.tracking.queue',
+08-16 20:08:16.287 11635 11788 I ReactNativeJS: '[driver-telemetry] tracking.background.task.flush', { source: 'driver.services.backgroundLocationTask',
+08-16 20:08:16.287 11635 11788 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 20:08:16.287 11635 11788 I ReactNativeJS:   task_mode: 'mission',
+08-16 20:08:16.288 11635 11801 I TaskService: Finished task 'background-location-task' with eventId 'edccbb0b-8e64-43b6-8c00-9a21ba062e1d'.

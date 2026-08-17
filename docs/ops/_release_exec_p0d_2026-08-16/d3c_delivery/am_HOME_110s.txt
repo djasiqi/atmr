@@ -1,0 +1,18 @@
+﻿08-16 15:58:17.753 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:27.843 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:30.640 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '56804c84-6081-4a1b-81e5-320f9da8ccf3'.
+08-16 15:58:38.994 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:43.014  3001  3989 D LocationManagerService: network provider added registration from 1000/android[GnssService]/730AACE8 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+08-16 15:58:43.017  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+08-16 15:58:43.039  3001  3989 D LocationManagerService: network provider registration 1000/android[GnssService]/730AACE8 finished after 1 updates
+08-16 15:58:43.040  3001  3989 D LocationManagerService: network provider removed registration from 1000/android[GnssService]/730AACE8
+08-16 15:58:43.040  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+08-16 15:58:48.129 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:58:50.935 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '9e09fdeb-0149-454e-bd68-f4d7d3ae101a'.
+08-16 15:58:53.021  3001  3989 D LocationManagerService: network provider added registration from 1000/android[GnssService]/98A75878 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+08-16 15:58:53.023  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+08-16 15:58:53.052  3001  3989 D LocationManagerService: network provider registration 1000/android[GnssService]/98A75878 finished after 1 updates
+08-16 15:58:53.054  3001  3989 D LocationManagerService: network provider removed registration from 1000/android[GnssService]/98A75878
+08-16 15:58:53.054  3001  3989 D LocationManagerService: network provider request changed to ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+08-16 15:58:58.327 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:59:08.303 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery

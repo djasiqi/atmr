@@ -1,0 +1,27 @@
+﻿# C1 preflight — 2026-08-17
+
+```text
+device = SM-S911B (100.81.106.54:43223)
+package = ch.liri.operations
+versionName = 1.0.11
+versionCode = 127
+lastUpdateTime = 2026-08-17 00:53:41
+
+PATCH BINARY ON DEVICE = YES
+BUNDLE MARKERS         = CONFIRMED (requestTrackingStop, abort_guard, transient_loss)
+
+VERDICT PREFLIGHT step1 = PASS
+C1                      = READY AFTER LOGIN
+next =
+  2. start logcat continue
+  3. backend observation only (no change)
+  4. login chauffeur 20135
+  5. mission IN_PROGRESS
+  6. C1 FG -> HOME -> background prolonge
+
+NOTE = uninstall Play126 requis (INSTALL_FAILED_UPDATE_INCOMPATIBLE)
+     -> re-auth chauffeur necessaire
+
+DISTRIBUTION = NO-GO
+BACKEND = no change
+```

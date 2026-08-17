@@ -1,0 +1,226 @@
+﻿2026-08-15T23:42:46.0825852Z ##[group]Run appleboy/ssh-action@v1.2.2
+2026-08-15T23:42:46.0826155Z with:
+2026-08-15T23:42:46.0826368Z   host: ***
+2026-08-15T23:42:46.0826574Z   username: ***
+2026-08-15T23:42:46.0827941Z   key: ***
+2026-08-15T23:42:46.0828291Z   port: ***
+2026-08-15T23:42:46.0828613Z   envs: DOCKER_IMAGE,DOCKER_TAG,SOURCE_SHA,IMAGE_DIGEST,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
+2026-08-15T23:42:46.0830578Z   script: set -euo pipefail
+cd /srv/atmr
+export ATMR_DEPLOY_ROOT=/srv/atmr
+eval "$(./scripts/kafka-env-effective.sh)"
+echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+export DOCKER_IMAGE DOCKER_TAG SOURCE_SHA IMAGE_DIGEST
+export GIT_SHA="${SOURCE_SHA}"
+export SENTRY_RELEASE="${SOURCE_SHA}"
+export COMPOSE_PROJECT_NAME=atmr
+export COMPOSE_FILES="-f docker-compose.production.yml -f docker-compose.kafka.yml -f docker-compose.kafka.atmr-network.yml -f docker-compose.kafka.p0-hold.yml"
+export ENV_FILE="--env-file ${ATMR_ENV_FILE}"
+export EXPECTED_INGEST_REPLICAS=1
+export EXECUTE_P0_RECREATE=YES
+./scripts/ops-tracking-p0-recreate-ingest.sh
+
+2026-08-15T23:42:46.0832451Z   protocol: tcp
+2026-08-15T23:42:46.0832657Z   timeout: 30s
+2026-08-15T23:42:46.0832864Z   command_timeout: 10m
+2026-08-15T23:42:46.0833091Z   proxy_port: ***
+2026-08-15T23:42:46.0833310Z   proxy_protocol: tcp
+2026-08-15T23:42:46.0833526Z   proxy_timeout: 30s
+2026-08-15T23:42:46.0833743Z   capture_stdout: false
+2026-08-15T23:42:46.0833954Z env:
+2026-08-15T23:42:46.0834165Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:42:46.0834433Z   SSH_HOST: ***
+2026-08-15T23:42:46.0834631Z   SSH_USER: ***
+2026-08-15T23:42:46.0834833Z   SSH_PORT: ***
+2026-08-15T23:42:46.0836330Z   SSH_KEY: ***
+2026-08-15T23:42:46.0836546Z   DOCKER_IMAGE: ***
+2026-08-15T23:42:46.0836767Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:42:46.0837039Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:42:46.0837278Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:42:46.0837666Z   IMAGE_DIGEST: sha256:02053f7361d2000a61a0e13a0151b95a9c65481326c20453075037bc9129cbe1
+2026-08-15T23:42:46.0838051Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:42:46.0838277Z ##[endgroup]
+2026-08-15T23:42:46.0841992Z ##[start-action display=Set GitHub Path;id=__appleboy_ssh-action_4.__run]
+2026-08-15T23:42:46.0854071Z ##[group]Run echo "$GITHUB_ACTION_PATH" >> $GITHUB_PATH
+2026-08-15T23:42:46.0854437Z [36;1mecho "$GITHUB_ACTION_PATH" >> $GITHUB_PATH[0m
+2026-08-15T23:42:46.0887607Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-15T23:42:46.0887926Z env:
+2026-08-15T23:42:46.0888141Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:42:46.0888422Z   SSH_HOST: ***
+2026-08-15T23:42:46.0888635Z   SSH_USER: ***
+2026-08-15T23:42:46.0888846Z   SSH_PORT: ***
+2026-08-15T23:42:46.0890209Z   SSH_KEY: ***
+2026-08-15T23:42:46.0890430Z   DOCKER_IMAGE: ***
+2026-08-15T23:42:46.0890655Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:42:46.0890938Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:42:46.0891188Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:42:46.0891586Z   IMAGE_DIGEST: sha256:02053f7361d2000a61a0e13a0151b95a9c65481326c20453075037bc9129cbe1
+2026-08-15T23:42:46.0891977Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:42:46.0892306Z   GITHUB_ACTION_PATH: /home/runner/work/_actions/appleboy/ssh-action/v1.2.2
+2026-08-15T23:42:46.0892649Z ##[endgroup]
+2026-08-15T23:42:46.0949109Z ##[end-action id=__appleboy_ssh-action_4.__run;outcome=success;conclusion=success;duration_ms=10]
+2026-08-15T23:42:46.0953431Z ##[start-action display=Run entrypoint.sh;id=__appleboy_ssh-action_4.entrypoint]
+2026-08-15T23:42:46.0966245Z ##[group]Run entrypoint.sh
+2026-08-15T23:42:46.0966518Z [36;1mentrypoint.sh[0m
+2026-08-15T23:42:46.0996843Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-15T23:42:46.0997165Z env:
+2026-08-15T23:42:46.0997393Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:42:46.0997690Z   SSH_HOST: ***
+2026-08-15T23:42:46.0997901Z   SSH_USER: ***
+2026-08-15T23:42:46.0998102Z   SSH_PORT: ***
+2026-08-15T23:42:46.0999496Z   SSH_KEY: ***
+2026-08-15T23:42:46.0999924Z   DOCKER_IMAGE: ***
+2026-08-15T23:42:46.1000153Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:42:46.1000441Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:42:46.1000689Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:42:46.1001223Z   IMAGE_DIGEST: sha256:02053f7361d2000a61a0e13a0151b95a9c65481326c20453075037bc9129cbe1
+2026-08-15T23:42:46.1001605Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:42:46.1001934Z   GITHUB_ACTION_PATH: /home/runner/work/_actions/appleboy/ssh-action/v1.2.2
+2026-08-15T23:42:46.1002279Z   INPUT_HOST: ***
+2026-08-15T23:42:46.1002491Z   INPUT_PORT: ***
+2026-08-15T23:42:46.1002696Z   INPUT_PROTOCOL: tcp
+2026-08-15T23:42:46.1002921Z   INPUT_USERNAME: ***
+2026-08-15T23:42:46.1003134Z   INPUT_PASSWORD: 
+2026-08-15T23:42:46.1003347Z   INPUT_PASSPHRASE: 
+2026-08-15T23:42:46.1004763Z   INPUT_KEY: ***
+2026-08-15T23:42:46.1004968Z   INPUT_KEY_PATH: 
+2026-08-15T23:42:46.1005181Z   INPUT_FINGERPRINT: 
+2026-08-15T23:42:46.1005390Z   INPUT_PROXY_HOST: 
+2026-08-15T23:42:46.1005846Z   INPUT_PROXY_PORT: ***
+2026-08-15T23:42:46.1006071Z   INPUT_PROXY_USERNAME: 
+2026-08-15T23:42:46.1006299Z   INPUT_PROXY_PASSWORD: 
+2026-08-15T23:42:46.1006522Z   INPUT_PROXY_PASSPHRASE: 
+2026-08-15T23:42:46.1006758Z   INPUT_PROXY_KEY: 
+2026-08-15T23:42:46.1006970Z   INPUT_PROXY_KEY_PATH: 
+2026-08-15T23:42:46.1007189Z   INPUT_PROXY_FINGERPRINT: 
+2026-08-15T23:42:46.1007420Z   INPUT_TIMEOUT: 30s
+2026-08-15T23:42:46.1007636Z   INPUT_PROXY_TIMEOUT: 30s
+2026-08-15T23:42:46.1007867Z   INPUT_COMMAND_TIMEOUT: 10m
+2026-08-15T23:42:46.1009748Z   INPUT_SCRIPT: set -euo pipefail
+cd /srv/atmr
+export ATMR_DEPLOY_ROOT=/srv/atmr
+eval "$(./scripts/kafka-env-effective.sh)"
+echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+export DOCKER_IMAGE DOCKER_TAG SOURCE_SHA IMAGE_DIGEST
+export GIT_SHA="${SOURCE_SHA}"
+export SENTRY_RELEASE="${SOURCE_SHA}"
+export COMPOSE_PROJECT_NAME=atmr
+export COMPOSE_FILES="-f docker-compose.production.yml -f docker-compose.kafka.yml -f docker-compose.kafka.atmr-network.yml -f docker-compose.kafka.p0-hold.yml"
+export ENV_FILE="--env-file ${ATMR_ENV_FILE}"
+export EXPECTED_INGEST_REPLICAS=1
+export EXECUTE_P0_RECREATE=YES
+./scripts/ops-tracking-p0-recreate-ingest.sh
+
+2026-08-15T23:42:46.1011607Z   INPUT_SCRIPT_FILE: 
+2026-08-15T23:42:46.1011974Z   INPUT_ENVS: DOCKER_IMAGE,DOCKER_TAG,SOURCE_SHA,IMAGE_DIGEST,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
+2026-08-15T23:42:46.1012369Z   INPUT_ENVS_FORMAT: 
+2026-08-15T23:42:46.1012578Z   INPUT_DEBUG: 
+2026-08-15T23:42:46.1012780Z   INPUT_ALL_ENVS: 
+2026-08-15T23:42:46.1012987Z   INPUT_REQUEST_PTY: 
+2026-08-15T23:42:46.1013201Z   INPUT_USE_INSECURE_CIPHER: 
+2026-08-15T23:42:46.1013431Z   INPUT_CIPHER: 
+2026-08-15T23:42:46.1013644Z   INPUT_PROXY_USE_INSECURE_CIPHER: 
+2026-08-15T23:42:46.1013887Z   INPUT_PROXY_CIPHER: 
+2026-08-15T23:42:46.1014102Z   INPUT_SYNC: 
+2026-08-15T23:42:46.1014306Z   INPUT_CAPTURE_STDOUT: false
+2026-08-15T23:42:46.1014527Z ##[endgroup]
+2026-08-15T23:42:46.1106303Z Will download drone-ssh-1.8.1-linux-amd64 from https://github.com/appleboy/drone-ssh/releases/download/v1.8.1
+2026-08-15T23:42:46.4282301Z ======= CLI Version =======
+2026-08-15T23:42:46.4306041Z Drone SSH version 1.8.1
+2026-08-15T23:42:46.4310057Z ===========================
+2026-08-15T23:42:48.9273275Z WARNING! Your credentials are stored unencrypted in '/home/***/.docker/config.json'.
+2026-08-15T23:42:48.9273751Z Login Succeeded
+2026-08-15T23:42:48.9274039Z Configure a credential helper to remove this warning. See
+2026-08-15T23:42:48.9274414Z https://docs.docker.com/go/credential-store/
+2026-08-15T23:42:48.9431907Z == Préflight config fusionné (mktemp) ==
+2026-08-15T23:42:49.1471296Z time="2026-08-15T23:42:49Z" level=warning msg="The \"SMTP_USER\" variable is not set. Defaulting to a blank string."
+2026-08-15T23:42:49.3826488Z == Vérif DSN / flags / topics (config) ==
+2026-08-15T23:42:49.3826993Z --- tracking-kafka-consumer ---
+2026-08-15T23:42:49.3877809Z       DATABASE_URL: ""
+2026-08-15T23:42:49.3880662Z       POSTGRES_DB: atmr
+2026-08-15T23:42:49.3881543Z       POSTGRES_HOST: pgbouncer
+2026-08-15T23:42:49.3881821Z       POSTGRES_PORT: "6432"
+2026-08-15T23:42:49.3882071Z       POSTGRES_USER: atmr
+2026-08-15T23:42:49.3882311Z       PRIMARY_DATABASE_URL: ""
+2026-08-15T23:42:49.3882699Z       REPLICA_DATABASE_URL: ""
+2026-08-15T23:42:49.3882940Z       REPLICA_DATABASE_URLS: ""
+2026-08-15T23:42:49.3883197Z       SQLALCHEMY_DATABASE_URI: ""
+2026-08-15T23:42:49.3883477Z --- tracking-processed-fanout ---
+2026-08-15T23:42:49.3996722Z       DATABASE_URL: ""
+2026-08-15T23:42:49.3997138Z       POSTGRES_DB: atmr
+2026-08-15T23:42:49.3997543Z       POSTGRES_HOST: pgbouncer
+2026-08-15T23:42:49.3997809Z       POSTGRES_PORT: "6432"
+2026-08-15T23:42:49.3998052Z       POSTGRES_USER: atmr
+2026-08-15T23:42:49.3998300Z       PRIMARY_DATABASE_URL: ""
+2026-08-15T23:42:49.3999855Z       REPLICA_DATABASE_URL: ""
+2026-08-15T23:42:49.4000193Z       REPLICA_DATABASE_URLS: ""
+2026-08-15T23:42:49.4000449Z       SQLALCHEMY_DATABASE_URI: ""
+2026-08-15T23:42:49.4002279Z --- kafka-dlq-consumer ---
+2026-08-15T23:42:49.4140588Z       DATABASE_URL: ""
+2026-08-15T23:42:49.4141030Z       POSTGRES_DB: atmr
+2026-08-15T23:42:49.4141299Z       POSTGRES_HOST: pgbouncer
+2026-08-15T23:42:49.4141569Z       POSTGRES_PORT: "6432"
+2026-08-15T23:42:49.4141853Z       POSTGRES_USER: atmr
+2026-08-15T23:42:49.4142099Z       PRIMARY_DATABASE_URL: ""
+2026-08-15T23:42:49.4142336Z       REPLICA_DATABASE_URL: ""
+2026-08-15T23:42:49.4142568Z       REPLICA_DATABASE_URLS: ""
+2026-08-15T23:42:49.4142814Z       SQLALCHEMY_DATABASE_URI: ""
+2026-08-15T23:42:49.4291171Z OK tracking-kafka-consumer.TRACKING_PERSIST_WITH_OUTBOX=true
+2026-08-15T23:42:49.4386740Z OK tracking-kafka-consumer.TRACKING_INGEST_PERSIST_ENABLED=true
+2026-08-15T23:42:49.4503052Z OK tracking-kafka-consumer.TRACKING_INGEST_ALLOW_REPUBLISH_ONLY=false
+2026-08-15T23:42:49.5257036Z OK tracking-kafka-consumer.TRACKING_INGEST_SEEK_TO_END_ON_START=false
+2026-08-15T23:42:49.5257613Z OK tracking-kafka-consumer.TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE=false
+2026-08-15T23:42:49.5258076Z OK tracking-processed-fanout.TRACKING_PROCESSED_FANOUT_ENABLED=false
+2026-08-15T23:42:49.5258542Z OK tracking-kafka-consumer.KAFKA_TOPIC_DRIVER_LOCATION_RAW=driver.location.raw.v2
+2026-08-15T23:42:49.5259092Z OK tracking-kafka-consumer.KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED=driver.location.processed.v2
+2026-08-15T23:42:49.5259600Z OK tracking-kafka-consumer.KAFKA_TOPIC_DRIVER_LOCATION_DLQ=driver.location.dlq.v2
+2026-08-15T23:42:49.5331851Z OK tracking-processed-fanout.KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED=driver.location.processed.v2
+2026-08-15T23:42:49.5404570Z OK kafka-dlq-consumer.KAFKA_TOPIC_DRIVER_LOCATION_DLQ=driver.location.dlq.v2
+2026-08-15T23:42:49.6719237Z OK aucun consumer GPS étranger au projet atmr
+2026-08-15T23:42:49.7163612Z INFO replicas ingest projet atmr avant stop : 1
+2026-08-15T23:42:49.7164012Z == Pull image exacte par digest ==
+2026-08-15T23:42:50.0628172Z docker.io/***@sha256:02053f7361d2000a61a0e13a0151b95a9c65481326c20453075037bc9129cbe1: Pulling from ***
+2026-08-15T23:42:50.0807453Z Digest: sha256:02053f7361d2000a61a0e13a0151b95a9c65481326c20453075037bc9129cbe1
+2026-08-15T23:42:50.0808212Z Status: Image is up to date for ***@sha256:02053f7361d2000a61a0e13a0151b95a9c65481326c20453075037bc9129cbe1
+2026-08-15T23:42:50.0834570Z docker.io/***@sha256:02053f7361d2000a61a0e13a0151b95a9c65481326c20453075037bc9129cbe1
+2026-08-15T23:42:50.1650123Z OK RepoDigest ***@sha256:02053f7361d2000a61a0e13a0151b95a9c65481326c20453075037bc9129cbe1
+2026-08-15T23:42:50.1650764Z OK expected_image_id=sha256:a234675d6257bcdb259474461f669649b8b1a434abfb4bd260ce1f07e9c8936c
+2026-08-15T23:42:50.1651538Z == Tag local ***:sha-286737a2362e (après validation digest) ==
+2026-08-15T23:42:50.2114358Z == Stop fanout + DLQ (projet atmr uniquement) ==
+2026-08-15T23:42:50.4468398Z time="2026-08-15T23:42:50Z" level=warning msg="The \"SMTP_USER\" variable is not set. Defaulting to a blank string."
+2026-08-15T23:42:50.6499435Z  Container atmr-tracking-processed-fanout-2  Stopping
+2026-08-15T23:42:50.6499879Z  Container atmr-kafka-dlq-consumer  Stopping
+2026-08-15T23:42:50.6500613Z  Container atmr-tracking-processed-fanout-1  Stopping
+2026-08-15T23:42:50.6508259Z  Container atmr-tracking-processed-fanout-2  Stopped
+2026-08-15T23:42:50.6512930Z  Container atmr-tracking-processed-fanout-1  Stopped
+2026-08-15T23:42:50.6513904Z  Container atmr-kafka-dlq-consumer  Stopped
+2026-08-15T23:42:50.6608176Z == Stop ingest ==
+2026-08-15T23:42:50.8669502Z time="2026-08-15T23:42:50Z" level=warning msg="The \"SMTP_USER\" variable is not set. Defaulting to a blank string."
+2026-08-15T23:42:51.0772801Z  Container atmr-tracking-kafka-consumer-1  Stopping
+2026-08-15T23:42:52.9827642Z  Container atmr-tracking-kafka-consumer-1  Stopped
+2026-08-15T23:42:52.9920957Z OK Sentry release consumer GIT_SHA=286737a2362eb1e38013c72d04be23fcd608210e SENTRY_RELEASE=286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:42:52.9921548Z == Recreate ingest (--pull never, scale=1) ==
+2026-08-15T23:42:53.2009126Z time="2026-08-15T23:42:53Z" level=warning msg="The \"SMTP_USER\" variable is not set. Defaulting to a blank string."
+2026-08-15T23:42:53.4045656Z time="2026-08-15T23:42:53Z" level=warning msg="Found orphan containers ([atmr-alertmanager atmr-prometheus atmr-grafana]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+2026-08-15T23:42:53.4046717Z  Container atmr-tracking-kafka-consumer-1  Recreate
+2026-08-15T23:42:53.5019877Z  Container atmr-tracking-kafka-consumer-1  Recreated
+2026-08-15T23:42:53.5167222Z  Container atmr-tracking-kafka-consumer-1  Starting
+2026-08-15T23:42:53.8144314Z  Container atmr-tracking-kafka-consumer-1  Started
+2026-08-15T23:43:00.1908328Z OK 1 replica(s) ingest running/healthy
+2026-08-15T23:43:00.2247807Z == Assertions runtime sur chaque replica ==
+2026-08-15T23:43:00.3886066Z OK config_files ensemble exact (cid=ebb394f4420b)
+2026-08-15T23:43:01.6744051Z {'driver': 'postgresql', 'host': 'pgbouncer', 'port': 6432, 'database': 'atmr', 'user_present': True, 'password_present': True}
+2026-08-15T23:43:01.8487269Z SELECT 1 OK
+2026-08-15T23:43:01.8487579Z flags/topics OK
+2026-08-15T23:43:01.8487817Z PID1 ingest_consumer OK
+2026-08-15T23:43:02.0015245Z OK runtime asserts cid=ebb394f4420b
+2026-08-15T23:43:02.0015849Z == Fanout + DLQ projet atmr doivent rester stopped ==
+2026-08-15T23:43:02.0439458Z OK tracking-processed-fanout stopped
+2026-08-15T23:43:02.0880717Z OK kafka-dlq-consumer stopped
+2026-08-15T23:43:02.1993265Z OK aucun consumer GPS étranger au projet atmr
+2026-08-15T23:43:02.1993871Z DONE — lancer ensuite la gate E2E ×3 (nouvelles positions, pas de reset offsets).
+2026-08-15T23:43:02.1994361Z Recréer kafka-dlq-consumer seulement après gate ingest OK.
+2026-08-15T23:43:02.2020540Z ===============================================
+2026-08-15T23:43:02.2021089Z ✅ Successfully executed commands to all hosts.
+2026-08-15T23:43:02.2021490Z ===============================================
+2026-08-15T23:43:02.2037156Z ##[end-action id=__appleboy_ssh-action_4.entrypoint;outcome=success;conclusion=success;duration_ms=16108]

@@ -1,0 +1,71 @@
+﻿ACTIVITY MANAGER SERVICES (dumpsys activity services)
+  User 0 active services:
+  * ServiceRecord{e71b23d u0 ch.liri.operations/expo.modules.location.services.LocationTaskService c:ch.liri.operations}
+    intent={cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService}
+    packageName=ch.liri.operations
+    processName=ch.liri.operations
+    targetSdkVersion=36
+    baseDir=/data/app/~~8V_eYsKOwwnOeXq_5lKMfw==/ch.liri.operations-gauuIJ4mDn8nfjzxpbcmfg==/base.apk
+    dataDir=/data/user/0/ch.liri.operations
+    app=ProcessRecord{bcbad49 23759:ch.liri.operations/u0a902}
+    useNewWiuLogic_forCapabilities()=true
+    useNewWiuLogic_forStart()=true
+    useNewBfslLogic()=true
+    mAllowWiu_noBinding=PROC_STATE_TOP
+    mAllowWiu_inBindService=PROC_STATE_TOP
+    mAllowWiu_byBindings=DENIED
+    getFgsAllowWiu_legacy=PROC_STATE_TOP
+    getFgsAllowWiu_new=PROC_STATE_TOP
+    getFgsAllowWiu_forStart=PROC_STATE_TOP
+    getFgsAllowWiu_forCapabilities=PROC_STATE_TOP
+    allowUiJobScheduling=true
+    recentCallingPackage=ch.liri.operations
+    recentCallingUid=10902
+    mAllowStart_noBinding=PROC_STATE_TOP
+    mAllowStart_inBindService=PROC_STATE_TOP
+    mAllowStart_byBindings=DENIED
+    getFgsAllowStart_legacy=PROC_STATE_TOP
+    getFgsAllowStart_new=PROC_STATE_TOP
+    getFgsAllowStart=PROC_STATE_TOP
+    startForegroundCount=3
+    infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10902; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:2; bindFromPackage:null: isBindService:true]
+    isForeground=true foregroundId=481756 types=0x00000008 foregroundNoti=Notification(channel=ch.liri.operations:background-location-task shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=NO_CLEAR|FOREGROUND_SERVICE color=0xff0a7f59 category=service vis=PRIVATE semFlags=0x0 semPriority=0 semMissedCount=0 semScenarioType=0)
+    createTime=-5m26s260ms startingBgTimeout=--
+    lastActivity=-3m15s526ms restartTime=-5m26s259ms createdFromFg=true
+    startRequested=true delayedStop=false stopIfKilled=true callStart=true lastStartId=3
+ startCommandResult=3
+    Delivered Starts:
+    #0 id=1 dur=-5m26s259ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #1 id=2 dur=-5m2s55ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #2 id=3 dur=-3m15s529ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    Bindings:
+    * IntentBindRecord{e40bd48 CREATE}:
+      intent={xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService}
+      binder=android.os.BinderProxy@8ecb7e1
+      requested=true received=true hasBound=true doRebind=false
+      * Client AppBindRecord{5d70906 ProcessRecord{bcbad49 23759:ch.liri.operations/u0a902}}
+        Per-process Connections:
+          ConnectionRecord{414f900 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a50e383 flags=0x1}
+          ConnectionRecord{bd533fb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8af918a flags=0x1}
+          ConnectionRecord{f50a011 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@47f6838 flags=0x1}
+    All Connections:
+      ConnectionRecord{f50a011 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@47f6838 flags=0x1}
+      ConnectionRecord{bd533fb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8af918a flags=0x1}
+      ConnectionRecord{414f900 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a50e383 flags=0x1}
+
+  Connection bindings to services:
+  * ConnectionRecord{f50a011 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@47f6838 flags=0x1}
+    binding=AppBindRecord{5d70906 ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@47f6838 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{bd533fb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8af918a flags=0x1}
+    binding=AppBindRecord{5d70906 ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@8af918a flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{414f900 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a50e383 flags=0x1}
+    binding=AppBindRecord{5d70906 ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@a50e383 flags=0x1
+    ongoingCalls=false

@@ -1,0 +1,9 @@
+﻿08-17 21:14:55.693 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:14:58.649 27984 28107 I TaskService: Finished task 'background-location-task' with eventId 'a9e2499b-7383-40a5-a7d3-309262313a6c'.
+08-17 21:15:06.168 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:15:15.120 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:15:19.047 27984 28107 I TaskService: Finished task 'background-location-task' with eventId 'b92eb351-1756-4e05-81fc-9f6b7f4d1d6c'.
+08-17 21:15:31.875 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:15:39.132 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 21:15:42.997 27984 28107 I TaskService: Finished task 'background-location-task' with eventId 'ff44ef4a-dd87-47d6-9535-c81cd842e4f1'.
+08-17 21:15:48.812 27984 27984 W LocationTaskConsumer: Location unavailable for foreground-service task delivery

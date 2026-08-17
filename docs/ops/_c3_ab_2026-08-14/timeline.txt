@@ -1,0 +1,36 @@
+2026-08-14T16:57:19.0336087+02:00 PRECHECK_START
+2026-08-14T16:57:47.1526335+02:00 SIG_P0_precheck auth_not_usable=0 invoked=1 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=11 stops=5 ensure=7 session=5 d19_hits=114 d20_hits=0 pid=12646
+2026-08-14T16:58:02.6331189+02:00 T3_SHADE_START
+2026-08-14T16:58:33.5999571+02:00 SIG_T3_shade auth_not_usable=0 invoked=2 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=11 stops=5 ensure=6 session=6 d19_hits=137 d20_hits=0 pid=12646
+2026-08-14T16:58:45.7240997+02:00 T2_HOME_START
+2026-08-14T16:59:48.3049414+02:00 SIG_T2_home auth_not_usable=0 invoked=0 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=0 stops=0 ensure=0 session=1 d19_hits=10 d20_hits=0 pid=17959
+2026-08-14T17:00:00.2014654+02:00 T_HOME_APP_START
+2026-08-14T17:00:48.6811360+02:00 SIG_T_home_app auth_not_usable=0 invoked=0 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=0 stops=0 ensure=0 session=0 d19_hits=0 d20_hits=0 pid=19468
+2026-08-14T17:00:59.4353820+02:00 T8_RECENTS_OSC_START
+2026-08-14T17:02:25.5725411+02:00 SIG_T8_T9_osc auth_not_usable=0 invoked=0 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=0 stops=0 ensure=0 session=0 d19_hits=0 d20_hits=0 pid=21719
+2026-08-14T17:02:38.5056072+02:00 T6_LOCK_30s_START
+2026-08-14T17:03:22.9723067+02:00 SIG_T6_lock_30s auth_not_usable=0 invoked=0 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=0 stops=0 ensure=0 session=0 d19_hits=0 d20_hits=0 pid=21719
+2026-08-14T17:03:34.9782754+02:00 T6_LOCK_60s_START
+2026-08-14T17:04:49.3300346+02:00 SIG_T6_lock_60s auth_not_usable=0 invoked=1 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=0 stops=0 ensure=1 session=2 d19_hits=29 d20_hits=0 pid=21719
+2026-08-14T17:05:03.0691040+02:00 T7_SHADE_LOCK_START
+2026-08-14T17:05:41.4531559+02:00 SIG_T7_shade_lock auth_not_usable=0 invoked=0 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=0 stops=0 ensure=0 session=0 d19_hits=6 d20_hits=0 pid=21719
+2026-08-14T17:05:53.4037872+02:00 T5_BG_15s_START
+2026-08-14T17:06:11.2228997+02:00 SIG_T5_bg_15s auth_not_usable=0 invoked=0 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=0 stops=0 ensure=0 session=0 d19_hits=0 d20_hits=0 pid=
+2026-08-14T17:06:22.6781091+02:00 T5_BG_30s_START
+2026-08-14T17:06:55.4281367+02:00 SIG_T5_bg_30s auth_not_usable=0 invoked=0 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=0 stops=0 ensure=0 session=0 d19_hits=0 d20_hits=0 pid=
+2026-08-14T17:07:10.1766611+02:00 T5_BG_60s_START
+2026-08-14T17:08:12.8031025+02:00 SIG_T5_bg_60s auth_not_usable=0 invoked=0 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=0 stops=0 ensure=0 session=0 d19_hits=0 d20_hits=0 pid=
+2026-08-14T17:08:27.3349420+02:00 T10_ANTI_ZOMBIE_START
+2026-08-14T17:11:52.9136196+02:00 SIG_T10_zombie auth_not_usable=0 invoked=1 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=11 stops=5 ensure=4 session=1 d19_hits=93 d20_hits=0 pid=27347
+2026-08-14T17:12:04.6913326+02:00 T11_NET_OFF_ON_START
+2026-08-14T17:13:21.1415523+02:00 SIG_T11_net auth_not_usable=0 invoked=1 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=11 stops=5 ensure=5 session=2 d19_hits=179 d20_hits=0 pid=27347
+2026-08-14T17:13:32.6356741+02:00 T_FORCE_STOP_COLD_START
+2026-08-14T17:14:51.4308669+02:00 SIG_T_cold_restart auth_not_usable=0 invoked=1 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=11 stops=5 ensure=7 session=5 d19_hits=87 d20_hits=0 pid=29679
+2026-08-14T17:15:02.8074113+02:00 T12_STABILIZE_5MIN_START
+2026-08-14T17:20:06.6875271+02:00 SIG_T12_stabilize auth_not_usable=0 invoked=11 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=0 stops=0 ensure=11 session=10 d19_hits=540 d20_hits=0 pid=29679
+2026-08-14T17:22:49.6660271+02:00 DONE_FULL_C3_AB
+2026-08-14T18:12:31.5930622+02:00 RESUME_PRECHECK_START device=100.81.106.54:40175
+2026-08-14T18:13:00.2912347+02:00 SIG_resume_precheck auth_not_usable=1 invoked=0 skipped=1 concurrent_both=0 err_fg=0 start_fail=0 starts=11 stops=5 ensure=4 session=3 d19_hits=41 d20_hits=0 pid=28854
+2026-08-14T18:13:16.6029423+02:00 RESUME_T12_STABILIZE_5MIN_START
+2026-08-14T18:18:20.3450682+02:00 SIG_resume_T12_stabilize auth_not_usable=0 invoked=0 skipped=0 concurrent_both=0 err_fg=0 start_fail=0 starts=0 stops=0 ensure=0 session=0 d19_hits=398 d20_hits=0 pid=28854
+2026-08-14T18:18:32.9202896+02:00 RESUME_T12_DONE

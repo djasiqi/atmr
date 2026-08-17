@@ -1,0 +1,331 @@
+﻿--------- beginning of main
+08-16 11:57:51.360  1759  1759 I Zygote  : Process 1759 created for ch.liri.operations
+08-16 11:57:51.361  1759  1759 I liri.operations: Late-enabling -Xcheck:jni
+08-16 11:57:51.375  1759  1759 I liri.operations: Using generational CollectorTypeCMC GC.
+08-16 11:57:51.384  1759  1759 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+08-16 11:57:51.387  1759  1759 D ActivityThread: setConscryptValidator
+08-16 11:57:51.388  1759  1759 D ActivityThread: setConscryptValidator - put
+08-16 11:57:51.426  1759  1759 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/org.apache.http.legacy.jar
+08-16 11:57:51.461  1759  1759 D nativeloader: Configuring clns-9 for other apk /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/lib/arm64:/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/ch.liri.operations
+08-16 11:57:51.470  1759  1759 V GraphicsEnvironment: Currently set values for:
+08-16 11:57:51.470  1759  1759 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+08-16 11:57:51.470  1759  1759 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+08-16 11:57:51.470  1759  1759 V GraphicsEnvironment: ch.liri.operations is not listed in per-application setting
+08-16 11:57:51.470  1759  1759 V GraphicsEnvironment: ANGLE allowlist from config: com.dreamgames.royalmatch com.dts.freefiremax com.dxx.firenow com.gramgames.mergedragons com.ludo.king com.mojang.minecraftpe com.my.defense com.nintendo.zaka com.os.airforce com.playrix.fishdomdd.gplay io.teslatech.callbreak jp.konami.prospia net.peakgames.toonblast
+08-16 11:57:51.470  1759  1759 V GraphicsEnvironment: No special selections for ANGLE, returning default driver choice
+08-16 11:57:51.470  1759  1759 V GraphicsEnvironment: App is not on the allowlist for updatable production driver.
+08-16 11:57:51.517  1759  1759 I FirebaseApp: Device unlocked: initializing all Firebase APIs for app [DEFAULT]
+08-16 11:57:51.519  1759  1759 I FirebaseInitProvider: FirebaseApp initialization successful
+08-16 11:57:51.520  1759  1759 D ReactNativeFirebaseApp: received application context.
+08-16 11:57:51.523  1759  1759 D Sentry  : io.sentry.auto-init read: false
+08-16 11:57:51.526  1759  1759 D WM-WrkMgrInitializer: Initializing WorkManager with default configuration.
+08-16 11:57:51.529  1759  1759 D WM-PackageManagerHelper: Skipping component enablement for androidx.work.impl.background.systemjob.SystemJobService
+08-16 11:57:51.529  1759  1759 D WM-Schedulers: Created SystemJobScheduler and enabled SystemJobService
+08-16 11:57:51.530  1759  1759 D DesktopExperienceFlags: Toggle override initialized to: false
+08-16 11:57:51.534  1759  1759 D NOTIFEE : (context): received application context
+08-16 11:57:51.538  1759  1759 W SoLoader: Initializing SoLoader: 0
+08-16 11:57:51.538  1759  1759 W SoLoader: Recording new base apk path: /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk
+08-16 11:57:51.538  1759  1759 W SoLoader: Previously recorded 0 base apk paths.
+08-16 11:57:51.539  1759  1759 I SoLoader: Preparing SO source: DirectorySoSource[root = /vendor/lib64 flags = 2]
+08-16 11:57:51.539  1759  1759 I SoLoader: Preparing SO source: DirectorySoSource[root = /system/lib64 flags = 2]
+08-16 11:57:51.539  1759  1759 I SoLoader: Preparing SO source: DirectApkSoSource[root = [/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!/lib/arm64-v8a]]
+08-16 11:57:51.540  1759  1876 E ashmem  : Pinning is deprecated since Android Q. Please use trim or other methods.
+08-16 11:57:51.603  1759  1759 I SoLoader: Preparing SO source: ApplicationSoSource[DirectorySoSource[root = /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/lib/arm64 flags = 0]]
+08-16 11:57:51.603  1759  1759 I SoLoader: init finish: 4 SO sources prepared
+08-16 11:57:51.603  1759  1759 W SoLoader: SoLoader initialized: 8
+08-16 11:57:51.689  1759  1759 D nativeloader: Load /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!/lib/arm64-v8a/libc++_shared.so using class loader ns clns-9 (caller=/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!classes7.dex): ok
+08-16 11:57:51.732  1759  1759 D nativeloader: Load /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!/lib/arm64-v8a/libjsi.so using class loader ns clns-9 (caller=/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!classes7.dex): ok
+08-16 11:57:51.777  1759  1759 D nativeloader: Load /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!/lib/arm64-v8a/libfbjni.so using class loader ns clns-9 (caller=/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!classes7.dex): ok
+08-16 11:57:51.792  1759  1759 D nativeloader: Load /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!/lib/arm64-v8a/libreactnative.so using class loader ns clns-9 (caller=/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!classes7.dex): ok
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Entering merged library JNI_OnLoad.
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing 12 pre-merged libs (including stub)
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing to register libfabricjni_so.  onload_func: 0x6eaac88ce0
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing to register libreact_devsupportjni_so.  onload_func: 0x6eaae82fc8
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing to register libreact_featureflagsjni_so.  onload_func: 0x6eaae91518
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing to register libreact_newarchdefaults_so.  onload_func: 0x6eaaef96a8
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing to register libreactnativeblob_so.  onload_func: 0x6eab0e9cb4
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing to register libreactnativejni_so.  onload_func: 0x6eab1376bc
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing to register libreactnativejni_common_so.  onload_func: 0x6eab148044
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing to register librninstance_so.  onload_func: 0x6eab18f764
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing to register libturbomodulejsijni_so.  onload_func: 0x6eab2a7f68
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing to register libuimanagerjni_so.  onload_func: 0x6eab2c0fb8
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: Preparing to register libyoga_so.  onload_func: 0x6eab2d0a3c
+08-16 11:57:51.792  1759  1759 D jni_lib_merge: About to register 11 actual methods.
+08-16 11:57:51.877  1759  1759 D nativeloader: Load /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!/lib/arm64-v8a/libreact_codegen_rnscreens.so using class loader ns clns-9 (caller=/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!classes7.dex): ok
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Entering merged library JNI_OnLoad.
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing 12 pre-merged libs (including stub)
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing to register libfabricjni_so.  onload_func: 0x6eaac88ce0
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing to register libreact_devsupportjni_so.  onload_func: 0x6eaae82fc8
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing to register libreact_featureflagsjni_so.  onload_func: 0x6eaae91518
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing to register libreact_newarchdefaults_so.  onload_func: 0x6eaaef96a8
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing to register libreactnativeblob_so.  onload_func: 0x6eab0e9cb4
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing to register libreactnativejni_so.  onload_func: 0x6eab1376bc
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing to register libreactnativejni_common_so.  onload_func: 0x6eab148044
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing to register librninstance_so.  onload_func: 0x6eab18f764
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing to register libturbomodulejsijni_so.  onload_func: 0x6eab2a7f68
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing to register libuimanagerjni_so.  onload_func: 0x6eab2c0fb8
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: Preparing to register libyoga_so.  onload_func: 0x6eab2d0a3c
+08-16 11:57:51.877  1759  1759 D jni_lib_merge: About to register 11 actual methods.
+08-16 11:57:51.918  1759  1759 D nativeloader: Load /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!/lib/arm64-v8a/libreact_codegen_safeareacontext.so using class loader ns clns-9 (caller=/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!classes7.dex): ok
+08-16 11:57:51.924  1759  1759 D nativeloader: Load /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!/lib/arm64-v8a/libappmodules.so using class loader ns clns-9 (caller=/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!classes7.dex): ok
+08-16 11:57:51.944  1759  1759 D SensorManager: registerListener :: 11, lsm6dso LSM6DSO Accelerometer Non-wakeup, 66667, 0, 
+08-16 11:57:51.996  1759  1759 I Choreographer: Skipped 55 frames!  The application may be doing too much work on its main thread.
+--------- beginning of system
+08-16 11:57:52.000  1759  1759 D ActivityThread: ch.liri.operations will use render engine as VK
+08-16 11:57:52.000  1759  1759 D HWUI    : HWUI - treat SMPTE_170M as sRGB
+08-16 11:57:52.002  1759  1918 I DisplayManager: Choreographer implicitly registered for the refresh rate.
+08-16 11:57:52.003  1759  1918 D HWUI    : CacheManager constructor. deviceInfo=(1080, 1920)
+08-16 11:57:52.004  1759  1918 I AdrenoGLES-0: QUALCOMM build                   : 3df4c357f0, I515341007c
+08-16 11:57:52.004  1759  1918 I AdrenoGLES-0: Build Date                       : 01/27/26
+08-16 11:57:52.004  1759  1918 I AdrenoGLES-0: OpenGL ES Shader Compiler Version: E031.41.03.64
+08-16 11:57:52.004  1759  1918 I AdrenoGLES-0: Local Branch                     : 
+08-16 11:57:52.004  1759  1918 I AdrenoGLES-0: Remote Branch                    : refs/tags/AU_LINUX_ANDROID_LA.VENDOR.13.2.0.11.00.00.856.062
+08-16 11:57:52.004  1759  1918 I AdrenoGLES-0: Remote Branch                    : NONE
+08-16 11:57:52.004  1759  1918 I AdrenoGLES-0: Reconstruct Branch               : NOTHING
+08-16 11:57:52.004  1759  1918 I AdrenoGLES-0: Build Config                     : S P 14.1.4 AArch64
+08-16 11:57:52.004  1759  1918 I AdrenoGLES-0: Driver Path                      : /vendor/lib64/egl/libGLESv2_adreno.so
+08-16 11:57:52.004  1759  1918 I AdrenoGLES-0: Driver Version                   : 0676.77.1
+08-16 11:57:52.008  1759  1918 I AdrenoGLES-0: PFP: 0x01740181, ME: 0x00000000
+08-16 11:57:52.008  1759  1759 D AppCompatDelegate: Checking for metadata for AppLocalesMetadataHolderService : Service not found
+08-16 11:57:52.011  1759  1918 W Adreno-AppProfiles: Could not find QSPM HAL service. Skipping adreno profile processing.
+08-16 11:57:52.012  1759  1918 I AdrenoUtils: <ReadGpuID:407>: Reading chip ID through GSL
+08-16 11:57:52.019  1759  1759 D CompatChangeReporter: Compat change id reported: 377864165; UID 10898; state: ENABLED
+08-16 11:57:52.019  1759  1759 D DesktopModeFlags: Toggle override initialized to: OVERRIDE_UNSET
+08-16 11:57:52.021  1759  1759 I DecorView: setWindowBackground: isPopOver=false color=fffafafa d=android.graphics.drawable.ColorDrawable@4d82246
+08-16 11:57:52.023  1759  1759 I liri.operations: hiddenapi: Accessing hidden method Landroid/view/ViewGroup;->makeOptionalFitsSystemWindows()V (runtime_flags=0, domain=platform, api=unsupported) from Landroidx/appcompat/widget/ViewUtils; (domain=app, TargetSdkVersion=36) using reflection: allowed
+08-16 11:57:52.027  1759  1759 I liri.operations: hiddenapi: Accessing hidden field Ljava/lang/reflect/Field;->accessFlags:I (runtime_flags=0, domain=core-platform, api=unsupported) from Lexpo/modules/ReactActivityDelegateWrapper; (domain=app, TargetSdkVersion=36) using reflection: allowed
+08-16 11:57:52.028  1759  1759 I ExpoDevMenu: Set new dev-menu delegate: class expo.modules.devmenu.DevMenuDefaultDelegate
+08-16 11:57:52.028  1759  1759 D PhoneWindow: forceLight changed to false [] from com.android.internal.policy.PhoneWindow.updateForceLightNavigationBar:663 com.android.internal.policy.PhoneWindow.setNavigationBarColor:4435 com.facebook.react.views.view.WindowUtilKt.enableEdgeToEdge:116 java.lang.reflect.Method.invoke:-2 expo.modules.kotlin.edgeToEdge.EdgeToEdgePackage$createReactActivityLifecycleListeners$1.onCreate:113 
+08-16 11:57:52.030  1759  1759 W WindowOnBackDispatcher: OnBackInvokedCallback is not enabled for the application.
+08-16 11:57:52.030  1759  1759 W WindowOnBackDispatcher: Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+08-16 11:57:52.040  1759  1759 D ViewRootImpl: desktopMode is false
+08-16 11:57:52.041  1759  1759 I ViewRootImpl: dVRR is disabled
+08-16 11:57:52.041  1759  1759 D HardwareRenderer: onDisplayChanged. displayId=0 current wxh=1080x2340 mLargest wxh=0x0
+08-16 11:57:52.041  1759  1759 D HardwareRenderer: Set largestWidth and largestHeight as logical resolution. (1080x2340)
+08-16 11:57:52.041  1759  1918 D HWUI    : setMaxSurfaceArea requested wxh=(1080,2340) requestedSurfaceArea(2527200) mMaxSurfaceArea(2073600)
+08-16 11:57:52.042  1759  1918 D NativeCustomFrequencyManager: [NativeCFMS] BpCustomFrequencyManager::BpCustomFrequencyManager()
+08-16 11:57:52.045  1759  1759 D InputTransport: Input channel constructed: 'ec0dccd', fd=130
+08-16 11:57:52.046  1759  1759 I InsetsController: onStateChanged: host=ch.liri.operations/ch.liri.operations.MainActivity, from=android.view.ViewRootImpl.onInsetsStateChanged:3038, state=InsetsState: {mDisplayFrame=Rect(0, 0 - 1080, 2340), mDisplayCutout=DisplayCutout{insets=Rect(0, 98 - 0, 0) waterfall=Insets{left=0, top=0, right=0, bottom=0} boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(510, 0 - 570, 98), Rect(0, 0 - 0, 0), Rect(0, 0 - 0, 0)]} cutoutPathParserInfo={CutoutPathParserInfo{displayWidth=1080 displayHeight=2340 physicalDisplayWidth=1080 physicalDisplayHeight=2340 density={3.0} cutoutSpec={M 0,0 H -10 V 32.66666666666667 H 10 V 0 H 0 Z @dp} rotation={0} scale={1.0} physicalPixelDisplaySizeRatio={1.0}}} sideOverrides={}}, mRoundedCorners=RoundedCorners{[RoundedCorner{position=TopLeft, radius=108, center=Point(108, 108)}, RoundedCorner{position=TopRight, radius=108, center=Point(972, 108)}, RoundedCorner{position=BottomRight, radius=108, center=Point(972, 2232)}, RoundedCorner{position=BottomLeft, radius=108, center=Point(108, 2232)}]}  mRoundedCornerFrame=Rect(0, 0 - 1080, 2340), mPrivacyIndicatorBounds=PrivacyIndicatorBounds {static bounds=Rect(948, 0 - 1080, 98) rotation=0}, mDisplayShape=DisplayShape{ spec=-311912193 displayWidth=1080 displayHeight=2340 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}, mSources= { InsetsSource: {87620001 mType=navigationBars mFrame=[0,2295][1080,2340] mAttachedInsets=null mVisible=true mFlags=SUPPRESS_SCRIM mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {87620004 mType=systemGestures mFrame=[0,0][90,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=LEFT mBoundingRects=null}, InsetsSource: {87620005 mType=mandatorySystemGestures mFrame=[0,2244][1080,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {87620006 mType=tappableElement mFrame=[0,0][0,0] mAttachedInsets=null mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {87620024 mType=systemGestures mFrame=[990,0][1080,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=RIGHT mBoundingRects=null}, InsetsSource: {3 mType=ime mFrame=[0,0][0,0] mAttachedInsets=null mVisible=false mFlags=INVALID mSideHint=NONE mBoundingRects=null}, InsetsSource: {27 mType=displayCutout mFrame=[0,0][1080,98] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {10830000 mType=statusBars mFrame=[0,0][1080,98] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {10830005 mType=mandatorySystemGestures mFrame=[0,0][1080,134] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {10830006 mType=tappableElement mFrame=[0,0][1080,98] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null} }
+08-16 11:57:52.048  1759  1759 I VRI[MainActivity]@b0f572c: synced displayState. AttachInfo displayState=2
+08-16 11:57:52.048  1759  1759 I VRI[MainActivity]@b0f572c: setView = com.android.internal.policy.DecorView@f595ad7 IsHRR=false mFlingFrameRateChange=0 TM=true
+08-16 11:57:52.048  1759  1759 I IDS_TAG : Starting IDS observe window
+08-16 11:57:52.048  1759  1759 I IDS_TAG : Getting Shared Preference for ch.liri.operations.MainApplication@5285a13 uid = 10898
+08-16 11:57:52.050  1759  1759 I IDS_TAG : App ch.liri.operations.MainApplication@5285a13 being boosted by IDS
+08-16 11:57:52.050  1759  1759 I IDS_TAG : Closing IDS observe window
+08-16 11:57:52.050  1759  1759 I IDS_TAG : Getting Shared Preference for ch.liri.operations.MainApplication@5285a13 uid = 10898
+08-16 11:57:52.051  1759  1759 D VRI[MainActivity]@b0f572c: WindowInsets changed: 1080x2340 statusBars:[0,98,0,0] navigationBars:[0,0,0,45] mandatorySystemGestures:[0,134,0,96] 
+08-16 11:57:52.052  1759  1759 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.view.ViewRootImpl$$ExternalSyntheticLambda16@a35aead
+08-16 11:57:52.058  1759  1759 E BufferQueueProducer: Unable to open libpenguin.so: dlopen failed: library "libpenguin.so" not found.
+08-16 11:57:52.058  1759  1759 E liri.operations: Unable to open libpenguin.so: dlopen failed: library "libpenguin.so" not found.
+08-16 11:57:52.058  1759  1759 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 11:57:52.058  1759  1759 I BufferQueueProducer: [](id:6df00000000,api:0,p:-1838064480,c:1759) setDequeueTimeout:2077252342
+08-16 11:57:52.058  1759  1759 I BLASTBufferQueue_Java: new BLASTBufferQueue, mName= VRI[MainActivity]@b0f572c mNativeObject= 0xb400006fd4d0fc00 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3603 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 android.view.Choreographer.doCallbacks:1423 android.view.Choreographer.doFrame:1348 android.view.Choreographer$FrameDisplayEventReceiver.run:1930 
+08-16 11:57:52.058  1759  1759 I BLASTBufferQueue_Java: update, w= 1080 h= 2340 mName = VRI[MainActivity]@b0f572c mNativeObject= 0xb400006fd4d0fc00 sc.mNativeObject= 0xb400007094c845c0 format= -1 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3608 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 
+08-16 11:57:52.059  1759  1759 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 11:57:52.059  1759  1759 I VRI[MainActivity]@b0f572c: Relayout returned: old=(0,0,1080,2340) new=(0,0,1080,2340) relayoutAsync=false req=(1080,2340)0 dur=5 res=0x3 s={true 0xb400006fd4e41300} ch=true seqId=0
+08-16 11:57:52.059  1759  1759 I VRI[MainActivity]@b0f572c: performConfigurationChange setNightDimText nightDimLevel=32
+08-16 11:57:52.060  1759  1759 D VRI[MainActivity]@b0f572c: mThreadedRenderer.initialize() mSurface={isValid=true 0xb400006fd4e41300} hwInitialized=true
+08-16 11:57:52.061  1759  1759 D VRI[MainActivity]@b0f572c: reportNextDraw android.view.ViewRootImpl.performTraversals:5507 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 
+08-16 11:57:52.061  1759  1759 D VRI[MainActivity]@b0f572c: Setup new sync=wmsSync-VRI[MainActivity]@b0f572c#0
+08-16 11:57:52.061  1759  1759 I VRI[MainActivity]@b0f572c: Creating new active sync group VRI[MainActivity]@b0f572c#1
+08-16 11:57:52.062  1759  1759 D VRI[MainActivity]@b0f572c: registerCallbacksForSync syncBuffer=false
+08-16 11:57:52.062  1759  1954 D VRI[MainActivity]@b0f572c: Received frameDrawingCallback syncResult=0 frameNum=1.
+08-16 11:57:52.062  1759  1954 I VRI[MainActivity]@b0f572c: mWNT: t=0xb400006fd4d4d400 mBlastBufferQueue=0xb400006fd4d0fc00 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$12.onFrameDraw:15561 android.view.ThreadedRenderer$1.onFrameDraw:751 <bottom of call stack> 
+08-16 11:57:52.062  1759  1954 I VRI[MainActivity]@b0f572c: Setting up sync and frameCommitCallback
+08-16 11:57:52.064  1759  1918 I BLASTBufferQueue: [VRI[MainActivity]@b0f572c#0](f:0,a:0,s:0) onFrameAvailable the first frame is available
+08-16 11:57:52.064  1759  1918 I SurfaceComposerClient: apply transaction with the first frame. layerId: 2852, bufferData(ID: 7554847473664, frameNumber: 1)
+08-16 11:57:52.064  1759  1918 I VRI[MainActivity]@b0f572c: Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true
+08-16 11:57:52.065  1759  1918 D HWUI    : CFMS:: SetUp Pid : 1759    Tid : 1918
+08-16 11:57:52.065  1759  1759 D VRI[MainActivity]@b0f572c: reportDrawFinished seqId=0
+08-16 11:57:52.066  1759  1918 D HWUI    : HWUI - treat SMPTE_170M as sRGB
+08-16 11:57:52.099  1759  1759 I VRI[MainActivity]@b0f572c: registerCallbackForPendingTransactions
+08-16 11:57:52.100  1759  1759 D VRI[MainActivity]@b0f572c: mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb400006fd4e41300}
+08-16 11:57:52.100  1759  1953 I VRI[MainActivity]@b0f572c: mWNT: t=0xb400006fd4d4d800 mBlastBufferQueue=0xb400006fd4d0fc00 fn= 2 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$10.onFrameDraw:6615 android.view.ViewRootImpl$4.onFrameDraw:2485 android.view.ThreadedRenderer$1.onFrameDraw:751 
+08-16 11:57:52.100  1759  1759 D InputMethodManagerUtils: startInputInner - Id : 0
+08-16 11:57:52.101  1759  1759 I InputMethodManager: startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+08-16 11:57:52.102  1759  1759 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, type=statusBars, host=ch.liri.operations/ch.liri.operations.MainActivity
+08-16 11:57:52.102  1759  1759 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=ch.liri.operations/ch.liri.operations.MainActivity
+08-16 11:57:52.103  1759  1759 D InsetsController: hide(ime())
+08-16 11:57:52.103  1759  1759 I ImeTracker: ch.liri.operations:4c6434a4: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+08-16 11:57:52.105  1759  1835 D InputTransport: Input channel constructed: 'ClientS', fd=147
+08-16 11:57:52.303  1759  1771 I liri.operations: Compiler allocated 5313KB to compile void android.view.ViewRootImpl.performTraversals()
+08-16 11:57:52.548  1759  1994 I HWUI    : Using FreeType backend (prop=Auto)
+08-16 11:57:54.642  1759  1759 D SensorManager: registerListener :: 11, lsm6dso LSM6DSO Accelerometer Non-wakeup, 66667, 0, 
+08-16 11:57:54.645  1759  1759 I ExpoDevMenu: Set new dev-menu delegate: class expo.modules.devmenu.DevMenuDefaultDelegate
+08-16 11:57:54.645  1759  1875 D SensorManager: unregisterListener
+08-16 11:57:54.665  1759  1759 D ActivityThread: ch.liri.operations will use render engine as VK
+08-16 11:57:54.671  1759  1759 I DecorView: setWindowBackground: isPopOver=false color=fffafafa d=android.graphics.drawable.ColorDrawable@a70e08
+08-16 11:57:54.680  1759  1759 W unknown:BridgelessReact: ReactHost{0}.startSurface(surfaceId = 0): Schedule
+08-16 11:57:54.680  1759  1759 W unknown:BridgelessReact: ReactHost{0}.attachSurface(surfaceId = 0)
+08-16 11:57:54.681  1759  2042 W unknown:BridgelessReact: ReactHost{0}.getOrCreateReactInstanceTask()
+08-16 11:57:54.681  1759  2042 W unknown:BridgelessReact: ReactHost{0}.getOrCreateReactInstanceTask(): Start
+08-16 11:57:54.681  1759  2042 W unknown:BridgelessReact: ReactHost{0}.getJSBundleLoader()
+08-16 11:57:54.681  1759  2042 W unknown:BridgelessReact: ReactHost{0}.isMetroRunning()
+08-16 11:57:54.682  1759  1759 D PhoneWindow: forceLight changed to false [] from com.android.internal.policy.PhoneWindow.updateForceLightNavigationBar:663 com.android.internal.policy.PhoneWindow.setNavigationBarColor:4435 com.facebook.react.views.view.WindowUtilKt.enableEdgeToEdge:116 java.lang.reflect.Method.invoke:-2 expo.modules.kotlin.edgeToEdge.EdgeToEdgePackage$createReactActivityLifecycleListeners$1.onCreate:113 
+08-16 11:57:54.683  1759  1759 W WindowOnBackDispatcher: OnBackInvokedCallback is not enabled for the application.
+08-16 11:57:54.683  1759  1759 W WindowOnBackDispatcher: Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+08-16 11:57:54.684  1759  1759 W unknown:BridgelessReact: ReactHost{0}.onHostResume(activity)
+08-16 11:57:54.685  1759  1759 D ViewRootImpl: desktopMode is false
+08-16 11:57:54.685  1759  1759 I ViewRootImpl: dVRR is disabled
+08-16 11:57:54.685  1759  1918 D NativeCustomFrequencyManager: [NativeCFMS] BpCustomFrequencyManager::BpCustomFrequencyManager()
+08-16 11:57:54.688  1759  1759 D InputTransport: Input channel constructed: 'dc3a66b', fd=165
+08-16 11:57:54.689  1759  1759 I InsetsController: onStateChanged: host=ch.liri.operations/ch.liri.operations.MainActivity, from=android.view.ViewRootImpl.onInsetsStateChanged:3038, state=InsetsState: {mDisplayFrame=Rect(0, 0 - 1080, 2340), mDisplayCutout=DisplayCutout{insets=Rect(0, 98 - 0, 0) waterfall=Insets{left=0, top=0, right=0, bottom=0} boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(510, 0 - 570, 98), Rect(0, 0 - 0, 0), Rect(0, 0 - 0, 0)]} cutoutPathParserInfo={CutoutPathParserInfo{displayWidth=1080 displayHeight=2340 physicalDisplayWidth=1080 physicalDisplayHeight=2340 density={3.0} cutoutSpec={M 0,0 H -10 V 32.66666666666667 H 10 V 0 H 0 Z @dp} rotation={0} scale={1.0} physicalPixelDisplaySizeRatio={1.0}}} sideOverrides={}}, mRoundedCorners=RoundedCorners{[RoundedCorner{position=TopLeft, radius=108, center=Point(108, 108)}, RoundedCorner{position=TopRight, radius=108, center=Point(972, 108)}, RoundedCorner{position=BottomRight, radius=108, center=Point(972, 2232)}, RoundedCorner{position=BottomLeft, radius=108, center=Point(108, 2232)}]}  mRoundedCornerFrame=Rect(0, 0 - 1080, 2340), mPrivacyIndicatorBounds=PrivacyIndicatorBounds {static bounds=Rect(948, 0 - 1080, 98) rotation=0}, mDisplayShape=DisplayShape{ spec=-311912193 displayWidth=1080 displayHeight=2340 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}, mSources= { InsetsSource: {87620001 mType=navigationBars mFrame=[0,2295][1080,2340] mAttachedInsets=null mVisible=true mFlags=SUPPRESS_SCRIM mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {87620004 mType=systemGestures mFrame=[0,0][90,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=LEFT mBoundingRects=null}, InsetsSource: {87620005 mType=mandatorySystemGestures mFrame=[0,2244][1080,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {87620006 mType=tappableElement mFrame=[0,0][0,0] mAttachedInsets=null mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {87620024 mType=systemGestures mFrame=[990,0][1080,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=RIGHT mBoundingRects=null}, InsetsSource: {3 mType=ime mFrame=[0,0][0,0] mAttachedInsets=null mVisible=false mFlags=INVALID mSideHint=NONE mBoundingRects=null}, InsetsSource: {27 mType=displayCutout mFrame=[0,0][1080,98] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {10830000 mType=statusBars mFrame=[0,0][1080,98] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {10830005 mType=mandatorySystemGestures mFrame=[0,0][1080,134] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {10830006 mType=tappableElement mFrame=[0,0][1080,98] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null} }
+08-16 11:57:54.689  1759  1759 I VRI[MainActivity]@47cc750: synced displayState. AttachInfo displayState=2
+08-16 11:57:54.689  1759  1759 I VRI[MainActivity]@47cc750: setView = com.android.internal.policy.DecorView@f44c167 IsHRR=false mFlingFrameRateChange=0 TM=true
+08-16 11:57:54.690  1759  1918 D HWUI    : HWUI - treat SMPTE_170M as sRGB
+08-16 11:57:54.690  1759  2043 W unknown:BridgelessReact: ReactHost{0}.isMetroRunning(): Async result = true
+08-16 11:57:54.690  1759  2042 W unknown:BridgelessReact: ReactHost{0}.loadJSBundleFromMetro()
+08-16 11:57:54.710  1759  1759 I liri.operations: hiddenapi: Accessing hidden method Landroid/os/SystemProperties;->addChangeCallback(Ljava/lang/Runnable;)V (runtime_flags=0, domain=platform, api=unsupported) from Landroidx/compose/ui/platform/AndroidComposeView$Companion; (domain=app, TargetSdkVersion=36) using reflection: allowed
+08-16 11:57:54.712  1759  1759 E VibratorInfo: Invalid frequency profile received from HAL. resonantFrequencyHz=NaN, frequenciesHz=null, outputAccelerationsGs=null
+08-16 11:57:54.720  1759  1759 D VRI[MainActivity]@47cc750: WindowInsets changed: 1080x2340 statusBars:[0,98,0,0] navigationBars:[0,0,0,45] mandatorySystemGestures:[0,134,0,96] 
+08-16 11:57:54.721  1759  1759 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.view.ViewRootImpl$$ExternalSyntheticLambda16@92d10a3
+08-16 11:57:54.732  1759  1759 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 11:57:54.732  1759  1759 I BufferQueueProducer: [](id:6df00000001,api:0,p:-722425152,c:1759) setDequeueTimeout:2077252342
+08-16 11:57:54.732  1759  1759 I BLASTBufferQueue_Java: new BLASTBufferQueue, mName= VRI[MainActivity]@47cc750 mNativeObject= 0xb400006fd4f78000 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3603 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 android.view.Choreographer.doCallbacks:1423 android.view.Choreographer.doFrame:1348 android.view.Choreographer$FrameDisplayEventReceiver.run:1930 
+08-16 11:57:54.732  1759  1759 I BLASTBufferQueue_Java: update, w= 1080 h= 2340 mName = VRI[MainActivity]@47cc750 mNativeObject= 0xb400006fd4f78000 sc.mNativeObject= 0xb400006fd4e7a080 format= -1 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3608 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 
+08-16 11:57:54.732  1759  1759 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 11:57:54.733  1759  1759 I VRI[MainActivity]@47cc750: Relayout returned: old=(0,0,1080,2340) new=(0,0,1080,2340) relayoutAsync=false req=(1080,2340)0 dur=6 res=0x3 s={true 0xb400006fd4e42c00} ch=true seqId=0
+08-16 11:57:54.733  1759  1759 I VRI[MainActivity]@47cc750: performConfigurationChange setNightDimText nightDimLevel=32
+08-16 11:57:54.734  1759  1759 D VRI[MainActivity]@47cc750: mThreadedRenderer.initialize() mSurface={isValid=true 0xb400006fd4e42c00} hwInitialized=true
+08-16 11:57:54.740  1759  1759 D VRI[MainActivity]@47cc750: reportNextDraw android.view.ViewRootImpl.performTraversals:5507 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 
+08-16 11:57:54.740  1759  1759 D VRI[MainActivity]@47cc750: Setup new sync=wmsSync-VRI[MainActivity]@47cc750#2
+08-16 11:57:54.740  1759  1759 I VRI[MainActivity]@47cc750: Creating new active sync group VRI[MainActivity]@47cc750#3
+08-16 11:57:54.740  1759  1759 D VRI[MainActivity]@47cc750: registerCallbacksForSync syncBuffer=false
+08-16 11:57:54.741  1759  1759 I View    : setRequestedFrameRate frameRate=0.0, this=androidx.compose.ui.platform.AndroidComposeView{cd04f61 VFED..... ........ 0,0-1080,2340 aid=1073741824}, caller=android.view.ViewGroup.setRequestedFrameRate:10045 androidx.compose.ui.platform.Api35Impl.setRequestedFrameRate:3314 androidx.compose.ui.platform.AndroidComposeView.dispatchDraw:1949 android.view.View.draw:26758 android.view.View.updateDisplayListIfDirty:25577 
+08-16 11:57:54.742  1759  1759 I View    : setRequestedFrameRate frameRate=-4.0, this=android.view.View{afdb2c6 V.ED..... ......I. 0,0-0,0}, caller=androidx.compose.ui.platform.Api35Impl.setRequestedFrameRate:3314 androidx.compose.ui.platform.AndroidComposeView.dispatchDraw:1950 android.view.View.draw:26758 android.view.View.updateDisplayListIfDirty:25577 android.view.View.draw:26477 
+08-16 11:57:54.742  1759  1954 D VRI[MainActivity]@47cc750: Received frameDrawingCallback syncResult=0 frameNum=1.
+08-16 11:57:54.742  1759  1954 I VRI[MainActivity]@47cc750: mWNT: t=0xb400006fd4d1b000 mBlastBufferQueue=0xb400006fd4f78000 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$12.onFrameDraw:15561 android.view.ThreadedRenderer$1.onFrameDraw:751 <bottom of call stack> 
+08-16 11:57:54.742  1759  1954 I VRI[MainActivity]@47cc750: Setting up sync and frameCommitCallback
+08-16 11:57:54.743  1759  1918 I BLASTBufferQueue: [VRI[MainActivity]@47cc750#1](f:0,a:0,s:0) onFrameAvailable the first frame is available
+08-16 11:57:54.743  1759  1918 I SurfaceComposerClient: apply transaction with the first frame. layerId: 2865, bufferData(ID: 7554847473671, frameNumber: 1)
+08-16 11:57:54.743  1759  1918 I VRI[MainActivity]@47cc750: Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true
+08-16 11:57:54.744  1759  1918 D HWUI    : CFMS:: SetUp Pid : 1759    Tid : 1918
+08-16 11:57:54.744  1759  1759 D VRI[MainActivity]@47cc750: reportDrawFinished seqId=0
+08-16 11:57:54.744  1759  1759 I ImeFocusController: onPreWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+08-16 11:57:54.744  1759  1759 I ImeFocusController: onPostWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+08-16 11:57:54.753  1759  1759 I WindowManager: WindowManagerGlobal#addView, ty=1000, view=android.widget.PopupWindow$PopupDecorView{b9612d9 V.E...... R.....I. 0,0-0,0}, caller=android.view.WindowManagerImpl.addView:167 android.widget.PopupWindow.invokePopup:1686 android.widget.PopupWindow.showAtLocation:1412 
+08-16 11:57:54.754  1759  1759 D ViewRootImpl: desktopMode is false
+08-16 11:57:54.754  1759  1759 I ViewRootImpl: dVRR is disabled
+08-16 11:57:54.754  1759  1918 D NativeCustomFrequencyManager: [NativeCFMS] BpCustomFrequencyManager::BpCustomFrequencyManager()
+08-16 11:57:54.757  1759  1759 D InputTransport: Input channel constructed: '6b1dd55', fd=179
+08-16 11:57:54.758  1759  1759 I InsetsController: onStateChanged: host=PopupWindow:ecb4920, from=android.view.ViewRootImpl.onInsetsStateChanged:3038, state=InsetsState: {mDisplayFrame=Rect(0, 0 - 1080, 2340), mDisplayCutout=DisplayCutout{insets=Rect(0, 98 - 0, 0) waterfall=Insets{left=0, top=0, right=0, bottom=0} boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(510, 0 - 570, 98), Rect(0, 0 - 0, 0), Rect(0, 0 - 0, 0)]} cutoutPathParserInfo={CutoutPathParserInfo{displayWidth=1080 displayHeight=2340 physicalDisplayWidth=1080 physicalDisplayHeight=2340 density={3.0} cutoutSpec={M 0,0 H -10 V 32.66666666666667 H 10 V 0 H 0 Z @dp} rotation={0} scale={1.0} physicalPixelDisplaySizeRatio={1.0}}} sideOverrides={}}, mRoundedCorners=RoundedCorners{[RoundedCorner{position=TopLeft, radius=108, center=Point(108, 108)}, RoundedCorner{position=TopRight, radius=108, center=Point(972, 108)}, RoundedCorner{position=BottomRight, radius=108, center=Point(972, 2232)}, RoundedCorner{position=BottomLeft, radius=108, center=Point(108, 2232)}]}  mRoundedCornerFrame=Rect(0, 0 - 1080, 2340), mPrivacyIndicatorBounds=PrivacyIndicatorBounds {static bounds=Rect(948, 0 - 1080, 98) rotation=0}, mDisplayShape=DisplayShape{ spec=-311912193 displayWidth=1080 displayHeight=2340 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}, mSources= { InsetsSource: {87620001 mType=navigationBars mFrame=[0,2295][1080,2340] mAttachedInsets=null mVisible=true mFlags=SUPPRESS_SCRIM mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {87620004 mType=systemGestures mFrame=[0,0][90,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=LEFT mBoundingRects=null}, InsetsSource: {87620005 mType=mandatorySystemGestures mFrame=[0,2244][1080,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {87620006 mType=tappableElement mFrame=[0,0][0,0] mAttachedInsets=null mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {87620024 mType=systemGestures mFrame=[990,0][1080,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=RIGHT mBoundingRects=null}, InsetsSource: {3 mType=ime mFrame=[0,0][0,0] mAttachedInsets=null mVisible=false mFlags=INVALID mSideHint=NONE mBoundingRects=null}, InsetsSource: {27 mType=displayCutout mFrame=[0,0][1080,98] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {10830000 mType=statusBars mFrame=[0,0][1080,98] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {10830005 mType=mandatorySystemGestures mFrame=[0,0][1080,134] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {10830006 mType=tappableElement mFrame=[0,0][1080,98] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null} }
+08-16 11:57:54.758  1759  1759 I VRI[PopupWindow:ecb4920]@57a549e: synced displayState. AttachInfo displayState=2
+08-16 11:57:54.758  1759  1759 I VRI[PopupWindow:ecb4920]@57a549e: setView = android.widget.PopupWindow$PopupDecorView@b9612d9 IsHRR=false mFlingFrameRateChange=0 TM=true
+08-16 11:57:54.758  1759  1759 I VRI[MainActivity]@b0f572c: handleAppVisibility mAppVisible = true visible = false
+08-16 11:57:54.758  1759  1759 D VRI[MainActivity]@b0f572c: visibilityChanged oldVisibility=true newVisibility=false
+08-16 11:57:54.763  1759  1759 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.view.ViewRootImpl$$ExternalSyntheticLambda16@5d23b77
+08-16 11:57:54.767  1759  1759 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 11:57:54.767  1759  1759 I BufferQueueProducer: [](id:6df00000002,api:0,p:-722423232,c:1759) setDequeueTimeout:2077252342
+08-16 11:57:54.768  1759  1759 I BLASTBufferQueue_Java: new BLASTBufferQueue, mName= VRI[PopupWindow:ecb4920]@57a549e mNativeObject= 0xb400006fd4f7bc00 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3603 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 android.view.Choreographer.doCallbacks:1423 android.view.Choreographer.doFrame:1348 android.view.Choreographer$FrameDisplayEventReceiver.run:1930 
+08-16 11:57:54.768  1759  1759 I BLASTBufferQueue_Java: update, w= 1080 h= 69 mName = VRI[PopupWindow:ecb4920]@57a549e mNativeObject= 0xb400006fd4f7bc00 sc.mNativeObject= 0xb400006fd4e7b4c0 format= -3 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3608 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 
+08-16 11:57:54.768  1759  1759 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 11:57:54.768  1759  1759 I VRI[PopupWindow:ecb4920]@57a549e: Relayout returned: old=(0,98,1080,2295) new=(0,98,1080,167) relayoutAsync=false req=(1080,69)0 dur=3 res=0x3 s={true 0xb400006e859dff00} ch=true seqId=0
+08-16 11:57:54.768  1759  1759 I VRI[PopupWindow:ecb4920]@57a549e: performConfigurationChange setNightDimText nightDimLevel=32
+08-16 11:57:54.769  1759  1759 D VRI[PopupWindow:ecb4920]@57a549e: mThreadedRenderer.initialize() mSurface={isValid=true 0xb400006e859dff00} hwInitialized=true
+08-16 11:57:54.769  1759  1759 D VRI[PopupWindow:ecb4920]@57a549e: reportNextDraw android.view.ViewRootImpl.performTraversals:5507 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 
+08-16 11:57:54.769  1759  1759 D VRI[PopupWindow:ecb4920]@57a549e: Setup new sync=wmsSync-VRI[PopupWindow:ecb4920]@57a549e#4
+08-16 11:57:54.769  1759  1759 I VRI[PopupWindow:ecb4920]@57a549e: Creating new active sync group VRI[PopupWindow:ecb4920]@57a549e#5
+08-16 11:57:54.770  1759  1759 D VRI[PopupWindow:ecb4920]@57a549e: registerCallbacksForSync syncBuffer=false
+08-16 11:57:54.770  1759  1953 D VRI[PopupWindow:ecb4920]@57a549e: Received frameDrawingCallback syncResult=0 frameNum=1.
+08-16 11:57:54.770  1759  1953 I VRI[PopupWindow:ecb4920]@57a549e: mWNT: t=0xb400006fd4f55c00 mBlastBufferQueue=0xb400006fd4f7bc00 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$12.onFrameDraw:15561 android.view.ThreadedRenderer$1.onFrameDraw:751 <bottom of call stack> 
+08-16 11:57:54.771  1759  1953 I VRI[PopupWindow:ecb4920]@57a549e: Setting up sync and frameCommitCallback
+08-16 11:57:54.773  1759  1918 I BLASTBufferQueue: [VRI[PopupWindow:ecb4920]@57a549e#2](f:0,a:0,s:0) onFrameAvailable the first frame is available
+08-16 11:57:54.773  1759  1918 I SurfaceComposerClient: apply transaction with the first frame. layerId: 2870, bufferData(ID: 7554847473674, frameNumber: 1)
+08-16 11:57:54.773  1759  1918 I VRI[PopupWindow:ecb4920]@57a549e: Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true
+08-16 11:57:54.774  1759  1918 D HWUI    : CFMS:: SetUp Pid : 1759    Tid : 1918
+08-16 11:57:54.774  1759  1759 D VRI[PopupWindow:ecb4920]@57a549e: reportDrawFinished seqId=0
+08-16 11:57:54.777  1759  1759 I VRI[MainActivity]@b0f572c: Relayout returned: old=(0,0,1080,2340) new=(0,0,1080,2340) relayoutAsync=false req=(1080,2340)8 dur=2 res=0x2 s={false 0x0} ch=true seqId=0
+08-16 11:57:54.777  1759  1759 D VRI[MainActivity]@b0f572c: Not drawing due to not visible. Reason=!mAppVisible && !mForceDecorViewVisibility
+08-16 11:57:54.778  1759  1759 I VRI[MainActivity]@b0f572c: stopped(true) old = false
+08-16 11:57:54.778  1759  1759 D VRI[MainActivity]@b0f572c: WindowStopped on ch.liri.operations/ch.liri.operations.MainActivity set to true
+08-16 11:57:54.780  1759  1759 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): null
+08-16 11:57:54.780  1759  1759 D ViewRootImpl: Skipping stats log for color mode
+08-16 11:57:54.780  1759  1759 I VRI[MainActivity]@b0f572c: dispatchDetachedFromWindow
+08-16 11:57:54.783  1759  1759 D InputTransport: Input channel destroyed: 'ec0dccd', fd=130
+08-16 11:57:54.784  1759  1759 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, type=statusBars, host=ch.liri.operations/ch.liri.operations.MainActivity
+08-16 11:57:54.784  1759  1759 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=ch.liri.operations/ch.liri.operations.MainActivity
+08-16 11:57:54.784  1759  1918 D HWUI    : HWUI - treat SMPTE_170M as sRGB
+08-16 11:57:54.786  1759  1759 I VRI[PopupWindow:ecb4920]@57a549e: handleResized, frames=ClientWindowFrames{frame=[0,98][1080,167] display=[0,98][1080,2295] parentFrame=[0,0][0,0] attachedFrame=[0,0][1080,2340]} displayId=0 dragResizing=false compatScale=1.0 frameChanged=false attachedFrameChanged=false configChanged=false displayChanged=false compatScaleChanged=false dragResizingChanged=false
+08-16 11:57:54.786  1759  1759 I VRI[PopupWindow:ecb4920]@57a549e: handleResized mSyncSeqId = 0
+08-16 11:57:54.786  1759  1759 D VRI[PopupWindow:ecb4920]@57a549e: reportNextDraw android.view.ViewRootImpl.handleResized:2995 android.view.ViewRootImpl.-$$Nest$mhandleResized:0 android.view.ViewRootImpl$W.resized:14200 android.app.servertransaction.WindowStateResizeItem.execute:81 android.app.servertransaction.WindowStateTransactionItem.execute:62 
+08-16 11:57:54.786  1759  1759 D VRI[PopupWindow:ecb4920]@57a549e: Setup new sync=wmsSync-VRI[PopupWindow:ecb4920]@57a549e#6
+08-16 11:57:54.786  1759  1759 I VRI[PopupWindow:ecb4920]@57a549e: Creating new active sync group VRI[PopupWindow:ecb4920]@57a549e#7
+08-16 11:57:54.786  1759  1759 D VRI[PopupWindow:ecb4920]@57a549e: registerCallbacksForSync syncBuffer=false
+08-16 11:57:54.786  1759  1954 D VRI[PopupWindow:ecb4920]@57a549e: Received frameDrawingCallback syncResult=0 frameNum=2.
+08-16 11:57:54.786  1759  1954 I VRI[PopupWindow:ecb4920]@57a549e: Setting up sync and frameCommitCallback
+08-16 11:57:54.786  1759  1918 I VRI[PopupWindow:ecb4920]@57a549e: Received frameCommittedCallback lastAttemptedDrawFrameNum=2 didProduceBuffer=false
+08-16 11:57:54.786  1759  1918 I BLASTBufferQueue_Java: gatherPendingTransactions, mName= VRI[PopupWindow:ecb4920]@57a549e mNativeObject= 0xb400006fd4f7bc00 frameNumber= 2 caller= android.view.ViewRootImpl$12.lambda$onFrameDraw$3:15645 android.view.ViewRootImpl$12.$r8$lambda$CTo3ExVBk8akdVTGlqHPAoYLRVI:0 android.view.ViewRootImpl$12$$ExternalSyntheticLambda1.onFrameCommit:0 android.view.ThreadedRenderer$1.lambda$onFrameDraw$0:763 android.view.ThreadedRenderer$1$$ExternalSyntheticLambda0.onFrameCommit:0 <bottom of call stack> 
+08-16 11:57:54.787  1759  1759 D VRI[PopupWindow:ecb4920]@57a549e: reportDrawFinished seqId=0
+08-16 11:57:54.787  1759  1759 I VRI[MainActivity]@47cc750: registerCallbackForPendingTransactions
+08-16 11:57:54.787  1759  1953 I VRI[MainActivity]@47cc750: mWNT: t=0xb400006fd4fc8600 mBlastBufferQueue=0xb400006fd4f78000 fn= 2 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$10.onFrameDraw:6615 android.view.ViewRootImpl$4.onFrameDraw:2485 android.view.ThreadedRenderer$1.onFrameDraw:751 
+08-16 11:57:54.787  1759  1759 D VRI[MainActivity]@47cc750: mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb400006fd4e42c00}
+08-16 11:57:54.788  1759  1759 W unknown:BridgelessReact: ReactHost{0}.raiseSoftException(onWindowFocusChange(hasFocus = "true")): Tried to access onWindowFocusChange while context is not ready
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: Unhandled SoftException
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: com.facebook.react.bridge.ReactNoCrashSoftException: raiseSoftException(onWindowFocusChange(hasFocus = "true")): Tried to access onWindowFocusChange while context is not ready
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at com.facebook.react.runtime.ReactHostImpl.raiseSoftException(ReactHostImpl.kt:787)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at com.facebook.react.runtime.ReactHostImpl.raiseSoftException$default(ReactHostImpl.kt:779)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at com.facebook.react.runtime.ReactHostImpl.onWindowFocusChange(ReactHostImpl.kt:589)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at com.facebook.react.ReactDelegate.onWindowFocusChanged(ReactDelegate.kt:217)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at com.facebook.react.ReactActivityDelegate.onWindowFocusChanged(ReactActivityDelegate.java:236)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at expo.modules.ReactActivityDelegateWrapper$onWindowFocusChanged$1.invokeSuspend(ReactActivityDelegateWrapper.kt:353)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at expo.modules.ReactActivityDelegateWrapper$onWindowFocusChanged$1.invoke(ReactActivityDelegateWrapper.kt:8)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at expo.modules.ReactActivityDelegateWrapper$onWindowFocusChanged$1.invoke(ReactActivityDelegateWrapper.kt:4)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at expo.modules.ReactActivityDelegateWrapper$launchLifecycleScopeWithLock$1.invokeSuspend(ReactActivityDelegateWrapper.kt:485)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at kotlinx.coroutines.internal.DispatchedContinuationKt.resumeCancellableWith(DispatchedContinuation.kt:359)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at kotlinx.coroutines.intrinsics.CancellableKt.startCoroutineCancellable(Cancellable.kt:26)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at kotlinx.coroutines.CoroutineStart.invoke(CoroutineStart.kt:358)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at kotlinx.coroutines.AbstractCoroutine.start(AbstractCoroutine.kt:124)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at kotlinx.coroutines.BuildersKt__Builders_commonKt.launch(Builders.common.kt:52)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at kotlinx.coroutines.BuildersKt.launch(dex-id-404bb6b360041adcda3473115a16c1b39655eb12:1)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at kotlinx.coroutines.BuildersKt__Builders_commonKt.launch$default(Builders.common.kt:43)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at kotlinx.coroutines.BuildersKt.launch$default(dex-id-404bb6b360041adcda3473115a16c1b39655eb12:1)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at expo.modules.ReactActivityDelegateWrapper.launchLifecycleScopeWithLock(ReactActivityDelegateWrapper.kt:483)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at expo.modules.ReactActivityDelegateWrapper.launchLifecycleScopeWithLock$default(ReactActivityDelegateWrapper.kt:479)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at expo.modules.ReactActivityDelegateWrapper.onWindowFocusChanged(ReactActivityDelegateWrapper.kt:351)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at com.facebook.react.ReactActivity.onWindowFocusChanged(ReactActivity.java:158)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at androidx.appcompat.view.WindowCallbackWrapper.onWindowFocusChanged(WindowCallbackWrapper.java:124)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at com.android.internal.policy.DecorView.onWindowFocusChanged(DecorView.java:2827)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.view.View.dispatchWindowFocusChanged(View.java:17901)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.view.ViewGroup.dispatchWindowFocusChanged(ViewGroup.java:1631)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.view.ViewRootImpl.dispatchFocusEvent(ViewRootImpl.java:6037)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.view.ViewRootImpl.handleWindowFocusChanged(ViewRootImpl.java:5920)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.view.ViewRootImpl.-$$Nest$mhandleWindowFocusChanged(ViewRootImpl.java:0)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.view.ViewRootImpl$ViewRootHandler.handleMessageImpl(ViewRootImpl.java:8475)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.view.ViewRootImpl$ViewRootHandler.handleMessage(ViewRootImpl.java:8383)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.os.Handler.dispatchMessage(Handler.java:132)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.os.Looper.dispatchMessage(Looper.java:358)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.os.Looper.loopOnce(Looper.java:288)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.os.Looper.loop(Looper.java:392)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at android.app.ActivityThread.main(ActivityThread.java:10346)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at java.lang.reflect.Method.invoke(Native Method)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:638)
+08-16 11:57:54.788  1759  1759 E unknown:ReactHost: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:972)
+08-16 11:57:54.789  1759  1759 D InputMethodManagerUtils: startInputInner - Id : 0
+08-16 11:57:54.789  1759  1759 I InputMethodManager: startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+08-16 11:57:54.791  1759  1835 D InputTransport: Input channel constructed: 'ClientS', fd=136
+08-16 11:57:54.791  1759  1759 D InsetsController: hide(ime())
+08-16 11:57:54.791  1759  1759 I ImeTracker: ch.liri.operations:bf1d8732: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+08-16 11:57:55.134  1759  1777 D InputTransport: Input channel destroyed: 'ClientS', fd=136
+08-16 11:57:55.136  1759  1804 W System  : A resource failed to call close. 
+08-16 11:57:55.643  1759  2045 W unknown:BridgelessReact: ReactHost{0}.loadJSBundleFromMetro(): Creating BundleLoader
+08-16 11:57:55.643  1759  1759 I WindowManager: WindowManagerGlobal#removeView, ty=1000, view=android.widget.PopupWindow$PopupDecorView{b9612d9 V.E...... R....... 0,0-1080,69}, caller=android.view.WindowManagerGlobal.removeView:654 android.view.WindowManagerImpl.removeViewImmediate:254 android.widget.PopupWindow.dismissImmediate:2380 
+08-16 11:57:55.643  1759  1759 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): null
+08-16 11:57:55.643  1759  2042 W unknown:BridgelessReact: ReactHost{0}.getOrCreateReactContext(): Creating BridgelessReactContext
+08-16 11:57:55.643  1759  2042 W unknown:BridgelessReact: ReactHost{0}.getOrCreateReactInstanceTask(): Creating ReactInstance
+08-16 11:57:55.644  1759  1759 I VRI[PopupWindow:ecb4920]@57a549e: dispatchDetachedFromWindow
+08-16 11:57:55.650  1759  1759 D InputTransport: Input channel destroyed: '6b1dd55', fd=179
+08-16 11:57:55.662  1759  2042 D nativeloader: Load /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!/lib/arm64-v8a/libhermes.so using class loader ns clns-9 (caller=/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!classes7.dex): ok
+08-16 11:57:55.664  1759  2042 D nativeloader: Load /data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!/lib/arm64-v8a/libhermestooling.so using class loader ns clns-9 (caller=/data/app/~~hmU_KK06weI51d2-SgP1aQ==/ch.liri.operations-W-v6LpKxpHRh8NIGKvPqDg==/base.apk!classes7.dex): ok
+08-16 11:57:55.664  1759  2042 D jni_lib_merge: Entering merged library JNI_OnLoad.
+08-16 11:57:55.664  1759  2042 D jni_lib_merge: Preparing 4 pre-merged libs (including stub)
+08-16 11:57:55.664  1759  2042 D jni_lib_merge: Preparing to register libhermes_executor_so.  onload_func: 0x6fd326c7e0
+08-16 11:57:55.664  1759  2042 D jni_lib_merge: Preparing to register libhermesinstancejni_so.  onload_func: 0x6fd32a226c
+08-16 11:57:55.664  1759  2042 D jni_lib_merge: Preparing to register libjsijniprofiler_so.  onload_func: 0x6fd32a42bc
+08-16 11:57:55.664  1759  2042 D jni_lib_merge: About to register 3 actual methods.
+08-16 11:57:55.688  1759  2042 I TaskService: Registered task with name 'driver-location-background-task' for app with scoping identifier 'ch.liri.operations'.
+08-16 11:57:55.688  1759  2042 D BackgroundTaskConsumer: didRegister: driver-location-background-task
+08-16 11:57:55.695  1759  2042 D BackgroundTaskScheduler: Cancelling worker with identifier EXPO_BACKGROUND_WORKER
+08-16 11:57:55.706  1759  2042 D BackgroundTaskScheduler: Enqueuing worker with identifier EXPO_BACKGROUND_WORKER and '15' minutes delay.
+08-16 11:57:55.717  1759  2042 I TaskService: Registered task with name 'background-location-task' for app with scoping identifier 'ch.liri.operations'.
+08-16 11:57:55.717  1759  2042 W LocationTaskConsumer: Foreground location task cannot be started while the app is in the background!

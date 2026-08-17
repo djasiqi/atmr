@@ -1,0 +1,52 @@
+﻿ssh : /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning: 
+Au caractère C:\Users\jasiq\atmr\docs\ops\_release_exec_mobile_builds_2026-08-16\run_smoke_play_internal.ps1:144 : 10
++   $out = ssh -o BatchMode=yes $sshTarget "docker exec atmr-backend-1  ...
++          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/usr/local/lib/...cationWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  from eventlet.patcher import is_monkey_patched  # type: ignore
+[2.9] OpenTelemetry non install├® - installer avec: pip install -r requirements-otel.txt
+­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+[2026-08-16 11:31:30,586] WARNING in app: [Security] Niveau de log forc├® ├á WARNING en production (APP_LOG_LEVEL 
+ignor├® pour s├®curit├®)
+LABEL BACK
+NOW 2026-08-16T11:31:37.047348+00:00
+ACTIVE [(38224, 'IN_PROGRESS')]
+HEALTH_N 25
+NATIVE_ERR 0
+FGS_NOT_RUNNING_N 14
+H 2026-08-16 11:31:01.174019+00:00 app= background trk= True fgs= False ntask= False fix_age= None task_invoke_age= 342 cstr= fgs_not_running trig= health_monitor:fgs_not_running phase= None err= 
+H 2026-08-16 11:31:01.103324+00:00 app= active trk= True fgs= False ntask= False fix_age= None task_invoke_age= 342 cstr= fgs_not_running trig= None phase= None err= 
+H 2026-08-16 11:28:46.704120+00:00 app= active trk= True fgs= False ntask= False fix_age= None task_invoke_age= 207 cstr= fgs_not_running trig= None phase= None err= 
+H 2026-08-16 11:28:46.642930+00:00 app= active trk= True fgs= False ntask= False fix_age= None task_invoke_age= 207 cstr= fgs_not_running trig= None phase= None err= 
+H 2026-08-16 11:28:46.634906+00:00 app= active trk= True fgs= False ntask= False fix_age= None task_invoke_age= 207 cstr= fgs_not_running trig= health_monitor:fgs_not_running phase= None err= 
+H 2026-08-16 11:26:36.952278+00:00 app= active trk= True fgs= False ntask= False fix_age= None task_invoke_age= 78 cstr= fgs_not_running trig= anti_zombie_fix_stale phase= None err= 
+H 2026-08-16 11:25:30.958491+00:00 app= background trk= True fgs= False ntask= False fix_age= None task_invoke_age= 12 cstr= fgs_not_running trig= health_monitor:fgs_not_running phase= None err= 
+H 2026-08-16 11:25:30.899131+00:00 app= active trk= True fgs= False ntask= False fix_age= None task_invoke_age= 12 cstr= fgs_not_running trig= None phase= None err= 
+H 2026-08-16 11:24:39.082602+00:00 app= background trk= True fgs= True ntask= True fix_age= None task_invoke_age= 15 cstr= None trig= health_monitor_ok phase= None err= 
+H 2026-08-16 11:24:39.033440+00:00 app= active trk= True fgs= True ntask= True fix_age= None task_invoke_age= 15 cstr= None trig= None phase= None err= 
+H 2026-08-16 11:23:29.459013+00:00 app= active trk= True fgs= True ntask= True fix_age= None task_invoke_age= 4 cstr= None trig= health_monitor_ok phase= None err= 
+H 2026-08-16 11:23:29.404401+00:00 app= active trk= True fgs= True ntask= True fix_age= None task_invoke_age= 4 cstr= None trig= None phase= None err= 
+LOC_N 12
+LOC 2026-08-16 11:25:31.452171+00:00 mission= 38224
+LOC 2026-08-16 11:25:23.654207+00:00 mission= 38224
+LOC 2026-08-16 11:25:23.115534+00:00 mission= 38224
+LOC 2026-08-16 11:25:22.575777+00:00 mission= 38224
+LOC 2026-08-16 11:24:25.137899+00:00 mission= 38224
+LOC 2026-08-16 11:24:05.728213+00:00 mission= 38224
+LOC 2026-08-16 11:23:56.018565+00:00 mission= 38224
+LOC 2026-08-16 11:23:46.692208+00:00 mission= 38224
+LOC 2026-08-16 11:23:45.609046+00:00 mission= 38224
+LOC 2026-08-16 11:23:37.887032+00:00 mission= 38224
+LOC 2026-08-16 11:23:26.490765+00:00 mission= 38224
+LOC 2026-08-16 11:23:25.943432+00:00 mission= 38224
+LOC_LAST_3M 0

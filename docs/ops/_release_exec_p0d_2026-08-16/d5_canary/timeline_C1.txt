@@ -1,0 +1,27 @@
+2026-08-17T00:58:51.9996663+02:00 [C1] PREFLIGHT versionName=1.0.11 versionCode=127
+2026-08-17T00:58:52.4470077+02:00 [C1] LOGCAT_PID=49196 file=c:\Users\jasiq\atmr\docs\ops\_release_exec_p0d_2026-08-16\d5_canary\logcat_continuous.txt
+2026-08-17T00:58:52.4510832+02:00 [C1] BACKEND=OBSERVATION_ONLY DRIVER=20135 FgSec=180 HomeSec=480
+2026-08-17T00:58:55.7587486+02:00 [C1] READY_CHECK isFg=true startReq=true fgCount=9
+2026-08-17T00:58:55.7609109+02:00 [C1] PHASE_BEGIN FG
+2026-08-17T00:59:12.3055657+02:00 [C1] SAMPLE phase=FG t=+0s fg=9 binds=9 isFg=true startReq=true finished=0 unreg=0 PUT=33 LOC=-1
+2026-08-17T00:59:58.9034679+02:00 [C1] SAMPLE phase=FG t=+47s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 PUT=26 LOC=-1
+2026-08-17T01:00:45.6978624+02:00 [C1] SAMPLE phase=FG t=+93s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 PUT=22 LOC=-1
+2026-08-17T01:01:32.0395638+02:00 [C1] SAMPLE phase=FG t=+140s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 PUT=19 LOC=-1
+2026-08-17T01:02:18.9481774+02:00 [C1] SAMPLE phase=FG t=+180s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 PUT=20 LOC=-1
+2026-08-17T01:02:18.9499145+02:00 [C1] PHASE_END FG
+2026-08-17T01:02:18.9509258+02:00 [C1] PHASE_BEGIN HOME
+2026-08-17T01:02:35.2835977+02:00 [C1] SAMPLE phase=HOME t=+0s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 PUT=18 LOC=-1
+2026-08-17T01:03:22.8288480+02:00 [C1] SAMPLE phase=HOME t=+46s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 PUT=14 LOC=-1
+2026-08-17T01:04:10.2914817+02:00 [C1] SAMPLE phase=HOME t=+94s fg=9 binds=9 isFg=true startReq=true finished=4 unreg=0 PUT=15 LOC=-1
+2026-08-17T01:04:57.0557869+02:00 [C1] SAMPLE phase=HOME t=+141s fg=9 binds=9 isFg=true startReq=true finished=3 unreg=0 PUT=15 LOC=-1
+2026-08-17T01:05:43.4297146+02:00 [C1] SAMPLE phase=HOME t=+188s fg=9 binds=9 isFg=true startReq=true finished=4 unreg=0 PUT=15 LOC=-1
+2026-08-17T01:06:29.9969067+02:00 [C1] SAMPLE phase=HOME t=+234s fg=9 binds=9 isFg=true startReq=true finished=3 unreg=0 PUT=12 LOC=-1
+2026-08-17T01:07:16.1028013+02:00 [C1] SAMPLE phase=HOME t=+281s fg=9 binds=9 isFg=true startReq=true finished=4 unreg=0 PUT=15 LOC=-1
+2026-08-17T01:08:02.8134529+02:00 [C1] SAMPLE phase=HOME t=+327s fg=9 binds=9 isFg=true startReq=true finished=3 unreg=0 PUT=15 LOC=-1
+2026-08-17T01:08:48.5430889+02:00 [C1] SAMPLE phase=HOME t=+374s fg=9 binds=9 isFg=true startReq=true finished=4 unreg=0 PUT=15 LOC=-1
+2026-08-17T01:09:35.0527128+02:00 [C1] SAMPLE phase=HOME t=+419s fg=9 binds=9 isFg=true startReq=true finished=3 unreg=0 PUT=15 LOC=-1
+2026-08-17T01:10:28.6244528+02:00 [C1] SAMPLE phase=HOME t=+466s fg=9 binds=9 isFg=true startReq=true finished=3 unreg=0 PUT=15 LOC=-1
+2026-08-17T01:11:15.2994401+02:00 [C1] SAMPLE phase=HOME t=+480s fg=9 binds=9 isFg=true startReq=true finished=4 unreg=0 PUT=12 LOC=-1
+2026-08-17T01:11:15.3025861+02:00 [C1] PHASE_END HOME
+2026-08-17T01:11:15.3371550+02:00 [C1] LOGCAT_STOPPED
+2026-08-17T01:11:15.3419638+02:00 [C1] END_C1_OK

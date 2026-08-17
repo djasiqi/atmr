@@ -1,0 +1,487 @@
+﻿        5023/com.samsung.android.networkdiagnostic/4FDF9C6D {bg} Request[PASSIVE, minUpdateInterval=+5m0s0ms, minUpdateDistance=20.0, WorkSource{5023 com.samsung.android.networkdiagnostic}]
+        15010231/com.google.android.gms[fused_location_provider]/431353E2 {bg} Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+        15010231/com.google.android.gms[fused_location_provider]/2EBCA410 {bg} Request[@+24855d3h14m7s806ms BALANCED, minUpdateInterval=0, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+        1000/android[SensorNotificationService]/A32BFD51 Request[PASSIVE, minUpdateInterval=+30m0s0ms, minUpdateDistance=100000.0, WorkSource{1000 android}]
+        10231/com.google.android.gms[fused_location_provider]/A3D6E2EA Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+        1000/android[SLocationService]/6E26FB12 Request[PASSIVE, minUpdateInterval=+1s0ms, WorkSource{1000 android}]
+        10084/com.samsung.android.mcfds/33353725 {bg} Request[PASSIVE, minUpdateInterval=+40s0ms, WorkSource{10084 com.samsung.android.mcfds}]
+        10231/com.google.android.gms[fused_location_provider]/B25A803A Request[@+24855d3h14m7s806ms BALANCED, minUpdateInterval=0, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+        15010231/com.google.android.gms[network_location_provider]/7BCAD644 {bg} Request[PASSIVE, minUpdateInterval=0, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+      service: ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+        15010223/com.google.android.as/3BF12CBF (COARSE) Request[@+6h0m0s0ms LOW_POWER, minUpdateDistance=100000.0, WorkSource{15010223 com.google.android.as}]
+        1000/android[GnssService]/4CBDD3AB Request[PASSIVE, minUpdateInterval=0, hiddenFromAppOps, WorkSource{1000 android}]
+      service: ProviderRequest[OFF]
+      service: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+        10231/com.google.android.gms[fused_location_provider]/E4473D29 Request[@+8s0ms HIGH_ACCURACY, minUpdateInterval=0, hiddenFromAppOps, WorkSource{10905 ch.liri.operations}]
+      [2026-08-16 12:27:44]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:27:46]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:28:16]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:28:16]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:28:40]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:28:44]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:32:28]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 12:35:32]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:35:39]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 12:36:54]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:41:17]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 12:41:23]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:41:31]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:42:58]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:42:58]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 12:43:41]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:44:56]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:44:56]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 12:46:21]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:46:27]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 12:46:27]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 12:48:23]: ProviderRequest[@+500ms, HIGH_ACCURACY, WorkSource{1000 com.samsung.android.fmm}] WorkSource{1000 com.samsung.android.fmm}, 
+      [2026-08-16 12:48:43]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:06:46]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 13:06:47]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 13:06:52]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 13:07:23]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 13:07:23]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:16:33]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 13:16:34]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10900 ch.liri.operations}] WorkSource{10900 ch.liri.operations}, 
+      [2026-08-16 13:16:34]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:23:23]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:23:23]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:23:25]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:23:53]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:23:55]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:26:07]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:26:07]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:26:09]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:26:19]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:26:19]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:26:20]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:26:51]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:26:51]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:28:56]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:29:30]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:29:31]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:32:27]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:33:20]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:33:20]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:34:49]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:34:55]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:34:55]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:34:56]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:35:26]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:35:26]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:37:39]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:37:40]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:37:40]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:45:25]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:45:56]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:45:56]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:46:07]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:46:16]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:46:16]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:46:19]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:46:30]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:46:30]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:47:34]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:48:05]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10901 ch.liri.operations}] WorkSource{10901 ch.liri.operations}, 
+      [2026-08-16 13:48:05]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:55:35]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:55:35]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 13:55:35]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:56:24]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:56:26]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:56:48]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:56:53]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:57:20]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:57:22]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:57:44]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:57:47]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:58:18]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:58:23]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:58:49]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 13:58:51]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 14:01:05]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 14:01:10]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 14:02:12]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10902 ch.liri.operations}] WorkSource{10902 ch.liri.operations}, 
+      [2026-08-16 14:02:12]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 14:18:43]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:18:45]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:19:12]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:19:14]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:22:35]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:22:35]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 14:34:19]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:34:19]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:34:28]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:34:28]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 14:34:37]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:34:37]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:34:44]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:34:44]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 14:34:58]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:34:58]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:35:06]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:35:06]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 14:35:06]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:35:06]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:35:36]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:35:36]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 14:36:04]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:36:04]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:36:04]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:36:04]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 14:36:05]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:36:05]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:36:35]: ProviderRequest[@+20s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:36:35]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 14:37:30]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:37:32]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10903 ch.liri.operations}] WorkSource{10903 ch.liri.operations}, 
+      [2026-08-16 14:41:51]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 14:55:50]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10231 com.google.android.gms}] WorkSource{10231 com.google.android.gms}, 
+      [2026-08-16 14:56:57]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 15:11:10]: ProviderRequest[@+500ms, HIGH_ACCURACY, WorkSource{1000 com.samsung.android.fmm}] WorkSource{1000 com.samsung.android.fmm}, 
+      [2026-08-16 15:11:30]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 15:13:49]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 15:13:55]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 15:22:17]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 15:22:22]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 15:22:29]: ProviderRequest[@+500ms, HIGH_ACCURACY, WorkSource{1000 com.samsung.android.fmm}] WorkSource{1000 com.samsung.android.fmm}, 
+      [2026-08-16 15:22:49]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 15:50:16]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 15:50:21]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 15:54:28]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 15:54:33]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 15:55:47]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 15:55:50]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 15:56:18]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 15:56:20]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 15:56:42]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 15:56:42]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 16:03:00]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10231 com.google.android.gms}] WorkSource{10231 com.google.android.gms}, 
+      [2026-08-16 16:03:00]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 16:05:29]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10599 com.toyota.oneapp.eu}] WorkSource{10599 com.toyota.oneapp.eu}, 
+      [2026-08-16 16:05:36]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 16:20:37]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 16:20:42]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 17:03:15]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10599 com.toyota.oneapp.eu}] WorkSource{10599 com.toyota.oneapp.eu}, 
+      [2026-08-16 17:03:25]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 17:03:30]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10599 com.toyota.oneapp.eu}] WorkSource{10599 com.toyota.oneapp.eu}, 
+      [2026-08-16 17:03:35]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 17:08:13]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10599 com.toyota.oneapp.eu}] WorkSource{10599 com.toyota.oneapp.eu}, 
+      [2026-08-16 17:08:34]: ProviderRequest[@+997ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps, 10599 com.toyota.oneapp.eu}] WorkSource{10249 com.google.android.apps.maps, 10599 com.toyota.oneapp.eu}, 
+      [2026-08-16 17:08:34]: ProviderRequest[@+997ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 17:09:31]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 17:09:31]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 17:11:46]: ProviderRequest[@+997ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 17:11:46]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 17:11:46]: ProviderRequest[@+997ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 17:11:47]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android, 10249 com.google.android.apps.maps}] WorkSource{1000 android, 10249 com.google.android.apps.maps}, 
+      [2026-08-16 17:11:49]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 17:11:50]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 17:33:00]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10231 com.google.android.gms}] WorkSource{10231 com.google.android.gms}, 
+      [2026-08-16 17:33:00]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 17:40:35]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 17:40:39]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 17:41:11]: ProviderRequest[@+500ms, HIGH_ACCURACY, WorkSource{1000 com.samsung.android.fmm}] WorkSource{1000 com.samsung.android.fmm}, 
+      [2026-08-16 17:41:28]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android, 1000 com.samsung.android.fmm}] WorkSource{1000 android, 1000 com.samsung.android.fmm}, 
+      [2026-08-16 17:41:31]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 17:41:31]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 17:41:36]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 17:41:40]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 17:42:21]: ProviderRequest[@+500ms, HIGH_ACCURACY, WorkSource{1000 com.samsung.android.fmm}] WorkSource{1000 com.samsung.android.fmm}, 
+      [2026-08-16 17:42:41]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 17:49:17]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10231 com.google.android.gms}] WorkSource{10231 com.google.android.gms}, 
+      [2026-08-16 17:51:17]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:04:33]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10231 com.google.android.gms}] WorkSource{10231 com.google.android.gms}, 
+      [2026-08-16 18:04:33]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:11:50]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 18:11:55]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:25:35]: ProviderRequest[@+500ms, HIGH_ACCURACY, WorkSource{1000 com.samsung.android.fmm}] WorkSource{1000 com.samsung.android.fmm}, 
+      [2026-08-16 18:25:55]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:33:06]: ProviderRequest[@+500ms, HIGH_ACCURACY, WorkSource{1000 com.samsung.android.fmm}] WorkSource{1000 com.samsung.android.fmm}, 
+      [2026-08-16 18:33:28]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:37:46]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10231 com.google.android.gms}] WorkSource{10231 com.google.android.gms}, 
+      [2026-08-16 18:39:41]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:39:44]: ProviderRequest[@+500ms, HIGH_ACCURACY, WorkSource{1000 com.samsung.android.fmm}] WorkSource{1000 com.samsung.android.fmm}, 
+      [2026-08-16 18:40:04]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:46:27]: ProviderRequest[@+500ms, HIGH_ACCURACY, WorkSource{1000 com.samsung.android.fmm}] WorkSource{1000 com.samsung.android.fmm}, 
+      [2026-08-16 18:46:47]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:54:28]: ProviderRequest[@+500ms, HIGH_ACCURACY, WorkSource{1000 com.samsung.android.fmm}] WorkSource{1000 com.samsung.android.fmm}, 
+      [2026-08-16 18:54:48]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:55:48]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10599 com.toyota.oneapp.eu}] WorkSource{10599 com.toyota.oneapp.eu}, 
+      [2026-08-16 18:55:50]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:55:56]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10599 com.toyota.oneapp.eu}] WorkSource{10599 com.toyota.oneapp.eu}, 
+      [2026-08-16 18:56:00]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:58:43]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 18:58:43]: ProviderRequest[@+997ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 18:58:43]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 18:58:43]: ProviderRequest[@+997ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 18:58:53]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 18:58:53]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:59:39]: ProviderRequest[@+997ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 18:59:39]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 18:59:39]: ProviderRequest[@+997ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 18:59:57]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10249 com.google.android.apps.maps}] WorkSource{10249 com.google.android.apps.maps}, 
+      [2026-08-16 18:59:57]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 18:59:59]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10599 com.toyota.oneapp.eu}] WorkSource{10599 com.toyota.oneapp.eu}, 
+      [2026-08-16 19:00:13]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:00:18]: ProviderRequest[@+1s0ms, HIGH_ACCURACY, WorkSource{10599 com.toyota.oneapp.eu}] WorkSource{10599 com.toyota.oneapp.eu}, 
+      [2026-08-16 19:00:23]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:05:19]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 19:05:24]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:11:16]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:11:25]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:16:54]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:16:57]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:16:57]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:16:59]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:16:59]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:02]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:02]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:04]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:04]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:07]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:07]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:10]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:10]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:12]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:12]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:15]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:15]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:17]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:17]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:20]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:20]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:22]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:22]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:25]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:25]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:27]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:27]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:29]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:29]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:32]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:32]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:34]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:34]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:37]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:37]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:39]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:39]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:42]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:42]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:44]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:44]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:46]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:47]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:49]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:49]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:51]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:51]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:54]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:54]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:56]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:56]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:17:59]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:17:59]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:01]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:02]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:04]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:04]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:06]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:06]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:09]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:09]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:11]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:12]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:14]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:14]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:16]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:16]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:19]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:19]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:21]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:21]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:24]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:24]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:26]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:26]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:28]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:28]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:31]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:31]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:18:34]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:18:36]: ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}] WorkSource{1000 android}, 
+      [2026-08-16 19:18:36]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}, 
+      [2026-08-16 19:19:29]: ProviderRequest[OFF] WorkSource{}, 
+      [2026-08-16 19:19:37]: ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}] WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:04.828: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:04.838: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:04.839: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:07.731: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:07.845: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:07.856: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:07.865: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:10.399: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:10.482: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:10.499: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:10.570: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:12.893: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:12.989: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:12.997: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:12.999: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:15.341: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:15.430: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:15.440: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:15.441: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:17.706: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:17.814: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:17.817: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:17.836: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:20.198: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:20.291: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:20.296: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:20.310: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:22.727: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:22.822: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:22.828: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:22.829: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:25.093: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:25.202: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:25.211: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:25.215: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:27.546: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:27.647: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:27.652: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:27.658: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:29.927: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:30.016: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:30.021: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:30.024: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:32.361: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:32.432: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:32.437: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:32.448: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:34.873: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:34.960: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:34.971: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:34.977: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:37.242: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:37.371: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:37.375: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:37.379: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:39.640: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:39.735: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:39.741: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:39.745: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:42.117: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:42.190: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:42.200: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:42.208: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:44.543: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:44.624: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:44.631: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:44.644: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:47.060: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:47.145: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:47.153: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:47.155: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:49.509: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:49.662: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:49.667: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:49.686: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:51.973: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:52.118: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:52.124: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:52.134: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:54.418: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:54.518: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:54.532: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:54.543: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:56.789: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:56.873: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:56.883: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:56.883: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:17:59.453: gps provider request = ProviderRequest[OFF]
+    08-16 19:17:59.589: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:17:59.602: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:17:59.607: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:02.051: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:02.179: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:02.187: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:02.196: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:04.475: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:04.577: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:04.580: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:04.592: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:06.868: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:06.966: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:06.978: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:06.978: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:09.391: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:09.535: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:09.543: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:09.545: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:12.093: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:12.195: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:12.206: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:12.208: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:14.513: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:14.619: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:14.671: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:16.917: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:16.990: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:17.002: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:17.003: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:19.271: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:19.354: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:19.364: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:19.366: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:21.679: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:21.771: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:21.782: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:21.783: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:24.234: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:24.320: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:24.326: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:24.326: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:26.623: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:26.704: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:26.711: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:26.716: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:28.943: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:29.032: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:29.042: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:29.043: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:31.344: gps provider request = ProviderRequest[OFF]
+    08-16 19:18:31.426: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:31.436: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:18:31.440: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:18:36.631: network provider +registration 1000/android[SLocationService]/3A8C617F -> Request[@0 BALANCED, WorkSource{1000 android}]
+    08-16 19:18:36.633: network provider request = ProviderRequest[@0, WorkSource{1000 android}]
+    08-16 19:18:36.640: fused provider +registration 1000/android[SLocationService]/CA8194AA -> Request[@0 BALANCED, WorkSource{1000 android}]
+    08-16 19:18:36.641: fused provider request = ProviderRequest[@0, WorkSource{1000 android}]
+    08-16 19:18:36.656: network provider request = ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+    08-16 19:18:36.657: fused provider request = ProviderRequest[OFF]
+    08-16 19:18:36.675: gps provider +registration 10231/com.google.android.gms[fused_location_provider]/B9C9B17F -> Request[@0 HIGH_ACCURACY, hiddenFromAppOps, WorkSource{1000 android}]
+    08-16 19:18:36.676: gps provider request = ProviderRequest[@0, HIGH_ACCURACY, WorkSource{1000 android}]
+    08-16 19:18:36.698: gps provider +registration 10231/com.google.android.gms[fused_location_provider]/E4473D29 -> Request[@+8s0ms HIGH_ACCURACY, minUpdateInterval=0, hiddenFromAppOps, WorkSource{10905 ch.liri.operations}]
+    08-16 19:18:36.700: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:19:29.919: gps provider request = ProviderRequest[OFF]
+    08-16 19:19:30.028: gps provider request = ProviderRequest[@+8s0ms, HIGH_ACCURACY, WorkSource{10905 ch.liri.operations}]
+    08-16 19:19:30.042: passive provider +registration 10231/com.google.android.gms[fused_location_provider]/A3D6E2EA -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{10231 com.google.android.gms}]
+    08-16 19:19:30.046: passive provider +registration 15010231/com.google.android.gms[fused_location_provider]/431353E2 -> Request[@0 BALANCED, hiddenFromAppOps, WorkSource{15010231 com.google.android.gms}]
+    08-16 19:19:57.891: network provider +registration 1000/android[GnssService]/685300C1 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+    08-16 19:19:57.894: network provider request = ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+    08-16 19:19:57.908: network provider request = ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+    08-16 19:21:17.878: network provider +registration 1000/android[GnssService]/B120FA99 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+    08-16 19:21:17.880: network provider request = ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+    08-16 19:21:17.906: network provider request = ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+    08-16 19:23:08.081: network provider +registration 1000/android[GnssService]/56ADCE35 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+    08-16 19:23:08.082: network provider request = ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+    08-16 19:23:08.109: network provider request = ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+    08-16 19:27:27.879: network provider +registration 1000/android[GnssService]/CCAC6C25 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+    08-16 19:27:27.880: network provider request = ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+    08-16 19:27:27.910: network provider request = ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]
+    08-16 19:27:50.874: network provider +registration 1000/android[GnssService]/963F19E6 -> Request[@+1s0ms LOW_POWER, duration=+10s0ms, maxUpdates=1, WorkSource{1000 android}]
+    08-16 19:27:50.875: network provider request = ProviderRequest[@+1s0ms, LOW_POWER, WorkSource{1000 android}]
+    08-16 19:27:50.894: network provider request = ProviderRequest[@+6h0m0s0ms, LOW_POWER, WorkSource{15010223 com.google.android.as}]

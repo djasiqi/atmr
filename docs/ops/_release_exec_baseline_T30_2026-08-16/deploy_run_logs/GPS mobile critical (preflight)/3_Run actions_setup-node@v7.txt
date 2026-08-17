@@ -1,0 +1,31 @@
+﻿2026-08-15T23:18:28.4456950Z ##[group]Run actions/setup-node@v7
+2026-08-15T23:18:28.4457594Z with:
+2026-08-15T23:18:28.4457919Z   node-version: 20
+2026-08-15T23:18:28.4458293Z   cache: npm
+2026-08-15T23:18:28.4458919Z   cache-dependency-path: mobile/unified-app/package-lock.json
+2026-08-15T23:18:28.4460025Z   check-latest: false
+2026-08-15T23:18:28.4468307Z   token: ***
+2026-08-15T23:18:28.4468707Z   package-manager-cache: true
+2026-08-15T23:18:28.4469202Z env:
+2026-08-15T23:18:28.4469709Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:18:28.4470319Z ##[endgroup]
+2026-08-15T23:18:28.5814217Z Attempting to download 20...
+2026-08-15T23:18:29.3077074Z Acquiring 20.20.2 - x64 from https://github.com/actions/node-versions/releases/download/20.20.2-23521894959/node-20.20.2-linux-x64.tar.gz
+2026-08-15T23:18:29.7274206Z Extracting ...
+2026-08-15T23:18:29.7402737Z [command]/usr/bin/tar xz --strip 1 --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/ab6fb281-1d54-4283-ada1-0668d55d4eb8 -f /home/runner/work/_temp/1568884a-0f9f-424a-bde5-1395f5c6e207
+2026-08-15T23:18:30.7600603Z Adding to the cache ...
+2026-08-15T23:18:33.4194128Z ##[group]Environment details
+2026-08-15T23:18:33.6490157Z node: v20.20.2
+2026-08-15T23:18:33.6490715Z npm: 10.8.2
+2026-08-15T23:18:33.6491194Z yarn: 1.22.22
+2026-08-15T23:18:33.6491856Z ##[endgroup]
+2026-08-15T23:18:33.6512061Z [command]/opt/hostedtoolcache/node/20.20.2/x64/bin/npm config get cache
+2026-08-15T23:18:33.7561995Z /home/runner/.npm
+2026-08-15T23:18:34.0173854Z Cache hit for: node-cache-Linux-x64-npm-913a90590490c8d755fd3b68a518d97b134ef0b0fb8e4430880c30d13046e739
+2026-08-15T23:18:35.3060404Z Received 0 of 184774715 (0.0%), 0.0 MBs/sec
+2026-08-15T23:18:36.3057142Z Received 113246208 of 184774715 (61.3%), 54.0 MBs/sec
+2026-08-15T23:18:36.8490579Z Received 184774715 of 184774715 (100.0%), 69.4 MBs/sec
+2026-08-15T23:18:36.8507679Z Cache Size: ~176 MB (184774715 B)
+2026-08-15T23:18:36.8568745Z [command]/usr/bin/tar -xf /home/runner/work/_temp/d23e4b5e-738b-473a-b291-4db1c1035604/cache.tzst -P -C /home/runner/work/atmr/atmr --use-compress-program unzstd
+2026-08-15T23:18:37.3844331Z Cache restored successfully
+2026-08-15T23:18:37.3931518Z Cache restored from key: node-cache-Linux-x64-npm-913a90590490c8d755fd3b68a518d97b134ef0b0fb8e4430880c30d13046e739

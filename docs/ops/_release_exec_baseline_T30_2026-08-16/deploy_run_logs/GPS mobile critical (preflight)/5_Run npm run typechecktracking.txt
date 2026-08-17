@@ -1,0 +1,11 @@
+﻿2026-08-15T23:18:58.8318450Z ##[group]Run npm run typecheck:tracking
+2026-08-15T23:18:58.8318828Z [36;1mnpm run typecheck:tracking[0m
+2026-08-15T23:18:58.8358307Z shell: /usr/bin/bash -e {0}
+2026-08-15T23:18:58.8358569Z env:
+2026-08-15T23:18:58.8358789Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:18:58.8359074Z ##[endgroup]
+2026-08-15T23:18:58.9516623Z 
+2026-08-15T23:18:58.9517202Z > lirie-unified-app@0.1.0 typecheck:tracking
+2026-08-15T23:18:58.9517829Z > node ./scripts/typecheckTracking.cjs
+2026-08-15T23:18:58.9518104Z 
+2026-08-15T23:19:14.3256122Z Typecheck surface tracking OK (299 erreur(s) hors surface tolérée(s) temporairement).

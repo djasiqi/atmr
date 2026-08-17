@@ -1,0 +1,37 @@
+2026-08-14T21:54:59.3487190+02:00 PRECHECK_START
+2026-08-14T21:55:10.8756177+02:00 SIG_P0_precheck pid=28854 readiness=0 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=0 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T21:55:46.0510884+02:00 RELOAD_BUNDLE_START
+2026-08-14T21:56:37.1660838+02:00 SIG_C1_after_reload pid=10998 readiness=5 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=3 register_deferred=0 auth_not_usable=0 nlo_stop=2 enqueued=2 err_fg=0 quarantined=0
+2026-08-14T21:57:00.6251930+02:00 C1_START
+2026-08-14T21:58:03.6266750+02:00 SIG_C1_steady pid=10998 readiness=18 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=3 register_deferred=0 auth_not_usable=0 nlo_stop=2 enqueued=9 err_fg=0 quarantined=0
+2026-08-14T21:58:30.3517400+02:00 C2_START
+2026-08-14T21:58:43.7543065+02:00 SIG_C2_registering_window pid=17204 readiness=0 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=0 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T21:59:31.0575238+02:00 SIG_C2_after_ready pid=17204 readiness=0 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=0 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T21:59:56.4912371+02:00 C3_START
+2026-08-14T22:00:54.0576721+02:00 SIG_C3_offline_failed pid= readiness=0 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=0 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T22:02:10.6248656+02:00 SIG_C3_after_recover pid= readiness=0 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=0 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T22:02:22.1459231+02:00 C6_START
+2026-08-14T22:15:33.0492735+02:00 SIG_C6_offline pid= readiness=0 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=0 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T22:16:27.0854708+02:00 PRECHECK_START USB=RFCW20QC53W
+2026-08-14T22:16:37.6021995+02:00 SIG_P0_precheck pid=19574 readiness=0 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=0 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T22:16:44.6664868+02:00 SIG_C6_online_resume pid= readiness=0 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=0 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T22:16:52.6124042+02:00 RELOAD_BUNDLE_START
+2026-08-14T22:16:58.3544679+02:00 C4_START
+2026-08-14T22:17:43.3040127+02:00 SIG_C1_after_reload pid= readiness=0 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=0 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T22:17:56.6319614+02:00 C1_START
+2026-08-14T22:18:59.4657825+02:00 SIG_C1_steady pid=30715 readiness=0 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=0 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T22:19:20.6308509+02:00 C2_START
+2026-08-14T22:19:33.4783379+02:00 SIG_C2_registering_window pid=31719 readiness=0 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=0 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T22:20:10.6924737+02:00 SIG_C2_after_ready pid=31719 readiness=17 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=5 register_deferred=0 auth_not_usable=0 nlo_stop=2 enqueued=5 err_fg=0 quarantined=0
+2026-08-14T22:20:24.2080311+02:00 C3_START
+2026-08-14T22:21:09.2326626+02:00 SIG_C3_offline_failed pid=32712 readiness=21 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=5 register_deferred=0 auth_not_usable=0 nlo_stop=2 enqueued=6 err_fg=0 quarantined=0
+2026-08-14T22:22:23.6821120+02:00 SIG_C3_after_recover pid=32712 readiness=50 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=1 nlo_start=7 register_deferred=0 auth_not_usable=0 nlo_stop=2 enqueued=11 err_fg=0 quarantined=0
+2026-08-14T22:22:36.4821252+02:00 C6_START
+2026-08-14T22:23:29.6533651+02:00 SIG_C6_offline pid=32712 readiness=25 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=5 register_deferred=0 auth_not_usable=0 nlo_stop=2 enqueued=6 err_fg=0 quarantined=0
+2026-08-14T22:24:39.4681914+02:00 SIG_C6_online_resume pid=32712 readiness=49 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=9 register_deferred=0 auth_not_usable=1 nlo_stop=2 enqueued=13 err_fg=0 quarantined=0
+2026-08-14T22:24:52.6003173+02:00 C4_START
+2026-08-14T22:25:33.4477348+02:00 SIG_C4_mid_rotate pid=9042 readiness=5 session_gen_null_enqueue=0 register_failed=0 register_ok_ready=0 enqueue_blocked=0 nlo_start=0 register_deferred=0 auth_not_usable=0 nlo_stop=2 enqueued=0 err_fg=0 quarantined=0
+2026-08-14T22:26:16.3291321+02:00 SIG_C4_after_ready pid=9042 readiness=25 session_gen_null_enqueue=0 register_failed=3 register_ok_ready=0 enqueue_blocked=2 nlo_start=5 register_deferred=2 auth_not_usable=0 nlo_stop=2 enqueued=4 err_fg=0 quarantined=0
+2026-08-14T22:26:30.5614838+02:00 FINAL_GATE
+2026-08-14T22:27:03.3314925+02:00 SIG_FINAL pid=9042 readiness=41 session_gen_null_enqueue=0 register_failed=3 register_ok_ready=0 enqueue_blocked=2 nlo_start=10 register_deferred=2 auth_not_usable=0 nlo_stop=2 enqueued=8 err_fg=0 quarantined=0
+2026-08-14T22:27:16.8503336+02:00 DONE_LEDGER_CLIENT_CANARY

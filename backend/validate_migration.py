@@ -1,47 +1,85 @@
 #!/usr/bin/env python3
 """Script de validation de la migration dispatch_routes -> dispatch."""
 
+from __future__ import annotations
+
 import base64
 import os
 import sys
+from collections.abc import Callable
+from typing import Any
 
-# Générer une clé d'encryption valide pour les tests
-os.environ.setdefault(
-    "APP_ENCRYPTION_KEY_B64", base64.b64encode(os.urandom(32)).decode()
-)
 
-print("🔍 Validation de la migration dispatch_routes -> dispatch...")
-print()
+def ensure_encryption_key(environ: dict[str, str] | None = None) -> str:
+    """Génère une clé d'encryption valide pour les tests si absente."""
+    env = os.environ if environ is None else environ
+    return env.setdefault(
+        "APP_ENCRYPTION_KEY_B64",
+        base64.b64encode(os.urandom(32)).decode(),
+    )
 
-# Test 1: Import du namespace
-try:
+
+def import_dispatch_ns() -> Any:
+    """Importe ``dispatch_ns`` depuis ``routes.dispatch``."""
     from routes.dispatch import dispatch_ns
 
-    print("✅ Import dispatch_ns réussi")
-except Exception as e:
-    print(f"❌ Erreur import dispatch_ns: {e}")
-    sys.exit(1)
+    return dispatch_ns
 
-# Test 2: Import de routes_api
-try:
+
+def import_init_namespaces() -> Any:
+    """Importe ``init_namespaces`` depuis ``routes_api``."""
     from routes_api import init_namespaces
 
-    # Vérifier que la fonction existe
-    assert callable(init_namespaces), "init_namespaces doit être callable"
-    print("✅ Import routes_api réussi")
-except Exception as e:
-    print(f"❌ Erreur import routes_api: {e}")
-    sys.exit(1)
+    return init_namespaces
 
-# Test 3: Vérifier que dispatch_ns est bien enregistré
-try:
-    # Vérifier que le namespace existe et a des routes
-    print(f"✅ Namespace dispatch_ns créé: {dispatch_ns.name}")
-    print(f"   Description: {dispatch_ns.description}")
-except Exception as e:
-    print(f"❌ Erreur vérification namespace: {e}")
-    sys.exit(1)
 
-print()
-print("✅ Migration validée : tous les imports fonctionnent correctement !")
-print("   Le nouveau module routes.dispatch est opérationnel.")
+def describe_namespace(dispatch_ns: Any) -> tuple[str, str]:
+    """Retourne (name, description) du namespace."""
+    return dispatch_ns.name, dispatch_ns.description
+
+
+def run_validation(
+    *,
+    load_dispatch_ns: Callable[[], Any] = import_dispatch_ns,
+    load_init_namespaces: Callable[[], Any] = import_init_namespaces,
+) -> int:
+    """Valide les imports de migration. Retourne 0 si OK, 1 sinon."""
+    print("🔍 Validation de la migration dispatch_routes -> dispatch...")
+    print()
+
+    try:
+        dispatch_ns = load_dispatch_ns()
+        print("✅ Import dispatch_ns réussi")
+    except Exception as e:
+        print(f"❌ Erreur import dispatch_ns: {e}")
+        return 1
+
+    try:
+        init_namespaces = load_init_namespaces()
+        assert callable(init_namespaces), "init_namespaces doit être callable"
+        print("✅ Import routes_api réussi")
+    except Exception as e:
+        print(f"❌ Erreur import routes_api: {e}")
+        return 1
+
+    try:
+        name, description = describe_namespace(dispatch_ns)
+        print(f"✅ Namespace dispatch_ns créé: {name}")
+        print(f"   Description: {description}")
+    except Exception as e:
+        print(f"❌ Erreur vérification namespace: {e}")
+        return 1
+
+    print()
+    print("✅ Migration validée : tous les imports fonctionnent correctement !")
+    print("   Le nouveau module routes.dispatch est opérationnel.")
+    return 0
+
+
+def main() -> int:
+    ensure_encryption_key()
+    return run_validation()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

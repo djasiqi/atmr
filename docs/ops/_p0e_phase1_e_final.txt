@@ -1,0 +1,63 @@
+﻿healthy
+healthy
+healthy
+healthy
+ssh : /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning: 
+Au caractère C:\Users\jasiq\AppData\Local\Temp\ps-script-6a369418-37c9-48b0-961e-2778b8f62811.ps1:96 : 75
++ ... VER_HOST)"; ssh -o BatchMode=yes -o ConnectTimeout=40 $ssh "docker in ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/usr/local/lib/...cationWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  from eventlet.patcher import is_monkey_patched  # type: ignore
+[2.9] OpenTelemetry non install├® - installer avec: pip install -r requirements-otel.txt
+­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+[2026-08-17 12:22:29,765] WARNING in app: [Security] Niveau de log forc├® ├á WARNING en production (APP_LOG_LEVEL 
+ignor├® pour s├®curit├®)
+PG_FIRST false
+ASYNC true
+OUTBOX None
+--- canonical ttl=1122 ---
+  recorded_at=2026-08-17T12:21:16.544Z
+  received_at=2026-08-17T12:21:16.573Z
+  mission_id=38243
+  location_mode=mission_live
+  source=osrm_match
+  lat=46.211518
+  lon=6.12641
+--- last_raw ttl=1122 ---
+  accept_status=accepted_canonical
+  accept_reason=
+  recorded_at=2026-08-17T12:21:16.544Z
+  received_at=2026-08-17T12:21:16.573Z
+  location_event_id=trk_1786966643870_binuncsl
+  capture_id=cap_msx5suxq_s7hjfd5jtk
+  mission_id=38243
+  location_mode=mission_live
+  source=osrm_match
+  lat=46.2115805
+  lon=6.1262556
+--- legacy ttl=1122 ---
+  recorded_at=2026-08-17T12:21:16.544Z
+  received_at=2026-08-17T12:21:16.573Z
+  mission_id=38243
+  location_mode=mission_live
+  source=osrm_match
+  lat=46.211518
+  lon=6.12641
+PG_LAST5
+  {'id': 5903, 'sequence_id': 85, 'created_at': datetime.datetime(2026, 8, 17, 12, 21, 38, 693635, tzinfo=datetime.timezone.utc), 'capture_id': 'cap_msx5u5wl_hqx99yyttz', 'location_event_id': 'trk_1786966704741_7rlk6g2n'}
+  {'id': 5902, 'sequence_id': 84, 'created_at': datetime.datetime(2026, 8, 17, 12, 21, 38, 657573, tzinfo=datetime.timezone.utc), 'capture_id': 'cap_msx5tq9t_ah24ckrx2j', 'location_event_id': 'trk_1786966684481_ec7xbkm7'}
+  {'id': 5901, 'sequence_id': 83, 'created_at': datetime.datetime(2026, 8, 17, 12, 21, 38, 70243, tzinfo=datetime.timezone.utc), 'capture_id': 'cap_msx5tamw_56ztknh0cf', 'location_event_id': 'trk_1786966664216_7vadxqeq'}
+  {'id': 5900, 'sequence_id': 82, 'created_at': datetime.datetime(2026, 8, 17, 12, 21, 16, 587641, tzinfo=datetime.timezone.utc), 'capture_id': 'cap_msx5suxq_s7hjfd5jtk', 'location_event_id': 'trk_1786966643870_binuncsl'}
+  {'id': 5899, 'sequence_id': 81, 'created_at': datetime.datetime(2026, 8, 17, 12, 21, 16, 319420, tzinfo=datetime.timezone.utc), 'capture_id': 'cap_msx5sfbg_yrvplsa812', 'location_event_id': 'trk_1786966623628_lsg4kk7o'}
+DRIVER {'last_position_update': datetime.datetime(2026, 8, 17, 12, 21, 35, 962950, tzinfo=datetime.timezone.utc), 'latitude': 46.2115967, 'longitude': 6.126256}
+NOW 2026-08-17T12:22:34.192839+00:00

@@ -1,0 +1,15 @@
+﻿  * ServiceRecord{2fbe4f8 u0 ch.liri.operations/expo.modules.location.services.LocationTaskService c:ch.liri.operations}
+    intent={cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService}
+    getFgsAllowStart=PROC_STATE_TOP
+    startForegroundCount=1
+    infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10903; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:0; bindFromPackage:null: isBindService:true]
+    isForeground=true foregroundId=481756 types=0x00000008 foregroundNoti=Notification(channel=ch.liri.operations:background-location-task shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=NO_CLEAR|FOREGROUND_SERVICE color=0xff0a7f59 category=service vis=PRIVATE semFlags=0x0 semPriority=0 semMissedCount=0 semScenarioType=0)
+    lastActivity=-31s859ms restartTime=-31s863ms createdFromFg=true
+    startRequested=true delayedStop=false stopIfKilled=true callStart=true lastStartId=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    Bindings:
+      intent={xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService}
+          ConnectionRecord{9da3036 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4d43dd1 flags=0x1}
+      ConnectionRecord{9da3036 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4d43dd1 flags=0x1}
+  * ConnectionRecord{9da3036 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4d43dd1 flags=0x1}
+    binding=AppBindRecord{a7e8a63 ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}

@@ -1,0 +1,54 @@
+# B2 — AAB production QA OFF depuis SHA FINAL S
+
+```text
+PATH               = A (EAS autoIncrement, source S inchangée)
+SHA FINAL S        = a851cf1520bc2ed66f9e5f7b0acb6114cf1ff133
+TAG                = d5-rc-final (poussé)
+BRANCH             = feat/tracking-p0-p7-firewall (poussé → a851cf15)
+
+BUILD_ID           = ab91958e-d00d-4d40-8304-128f0a7065f0
+URL                = https://expo.dev/accounts/drinjasiqi/projects/operations-app/builds/ab91958e-d00d-4d40-8304-128f0a7065f0
+ARTIFACT           = https://expo.dev/artifacts/eas/_YpZ7mZ4KywK4ySN2eLa1wgAodK9HIzfsFUNf8xTZAA.aab
+PROFILE            = production
+FORMAT             = AAB ✅
+DISTRIBUTION EAS   = STORE
+CHANNEL            = production
+versionName        = 1.0.11
+versionCode        = 132 ✅ (autoIncrement)
+gitCommitHash EAS  = a851cf1520bc2ed66f9e5f7b0acb6114cf1ff133 ✅ = S
+EXPO_PUBLIC_TRACKING_QA_PANEL = ABSENT (uniquement production-apk) ✅
+STATUS             = FINISHED ✅
+completedAt        = 2026-08-17T10:57:47.603Z
+```
+
+## Gates pré-smoke
+
+```text
+versionCode = 132              ✅
+AAB production                 ✅
+QA_PANEL=0                     ✅
+SHA embarqué = S               ✅
+65 tests / tsc D5=0            ✅ (re-check post-FINISHED)
+smoke RC FG→HOME               PENDING ▶
+PLAY SUBMISSION                = HOLD ⛔
+DISTRIBUTION                   = NO-GO ⛔
+```
+
+## Smoke RC (après install device)
+
+```text
+mission IN_PROGRESS
+→ FG → HOME quelques minutes
+unexpected Unregister = 0
+storm = 0
+Finished = continue
+PUT / LOC = continue
+FGS = alive
+crash/ANR = 0
+```
+
+## Non-candidat
+
+```text
+APK 131 production-apk (QA ON) = preuve canary interne seulement
+```

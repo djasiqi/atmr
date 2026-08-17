@@ -1,0 +1,1 @@
+﻿PID=13893 TIME=2026-08-16T15:58:56.7821625+02:00 hasReg=True activeCount=293 fg=True sr=True allow=PROC_STATE_TOP unavail=4

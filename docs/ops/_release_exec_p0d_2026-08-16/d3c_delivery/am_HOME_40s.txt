@@ -1,0 +1,3 @@
+﻿08-16 15:57:27.090 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:29.668 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '09a97f5e-728d-4463-af26-6d492aa2cd4d'.
+08-16 15:57:38.994 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery

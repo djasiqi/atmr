@@ -1,0 +1,65 @@
+# C3 summary — 2026-08-17
+
+```text
+BINARY     = 1.0.11 / versionCode 128 (EAS 29c1441c)
+INJECT     = lirie://canary/d5-c3-transient?hole_ms=1000
+DEVICE     = SM-S911B
+DRIVER     = 20135
+MISSION    = booking 38243 IN_PROGRESS (end)
+WINDOW     = 02:20:32 -> 02:25:45 (+02)
+BACKEND    = OBSERVATION ONLY
+```
+
+## Smoking gun (logcat)
+
+```text
+02:22:06.832  [D5-C3] inject_hole_start  hole_ms=1000
+02:22:07.863  [D5-C3] inject_hole_restore  context=driver:20135
+02:22:41.045  [D5-C3] transient_loss.pending  bridge_mission_id=38243 confirm_ms=2500
+(no transient_loss.confirmed)
+(no Unregistering 'background-location-task')
+(no stop.executed)
+```
+
+Note: le trou injecte 1s a ete restaure avant un pending synchrone visible;
+un `transient_loss.pending` est quand meme apparu ensuite sans `confirmed`
+ni STOP natif — protection non destructive validee.
+
+## Gate C3
+
+```text
+unexpected Unregister (background-location-task) = 0
+Register/Unregister storm                         = 0
+transient null -> STOP immediat                   = 0
+transient null -> clear destructif                = 0
+mission revient -> tracking continue              = OUI
+Finished                                          = 15 (continue)
+PUT                                               = 57-72 /60s continue
+LOC PG C3 window                                  = 85
+FGS                                               = stable (fgCount 1->2 sans storm)
+```
+
+## Verdict
+
+```text
+C3 = PASS
+
+GPS UI freshness ("Non confirme" / map) = HORS SCOPE D5 (gele separement)
+```
+
+## Artefacts
+
+- timeline_C3.txt / samples_C3.csv
+- logcat_C3_continuous.txt
+- d5-canary-128.apk
+- run_d5_c3.ps1 / canaryD5TransientLoss.ts
+
+## Next
+
+```text
+C1 = PASS
+C2 = PASS
+C3 = PASS
+C4 = NEXT
+DISTRIBUTION = NO-GO
+```

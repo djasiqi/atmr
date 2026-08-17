@@ -1,0 +1,23 @@
+﻿2026-08-15T23:28:44.9126418Z Post job cleanup.
+2026-08-15T23:28:44.9130702Z ##[start-action display=Restore DB from cache;id=__5abac765-f322-4b3a-9e76-039e4a0e0b83.__actions_cache]
+2026-08-15T23:28:44.9164212Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T23:28:44.9165476Z Post job cleanup.
+2026-08-15T23:28:45.0307521Z (node:9767) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-15T23:28:45.0308850Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-15T23:28:45.0482630Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/atmr/atmr --files-from manifest.txt --use-compress-program zstdmt
+2026-08-15T23:28:46.9605420Z (node:9767) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-08-15T23:28:47.9525644Z Sent 19726336 of 79611097 (24.8%), 18.8 MBs/sec
+2026-08-15T23:28:48.9532821Z Sent 76480512 of 79611097 (96.1%), 36.4 MBs/sec
+2026-08-15T23:28:49.1490590Z Sent 79611097 of 79611097 (100.0%), 34.6 MBs/sec
+2026-08-15T23:28:49.2817731Z Cache saved with key: cache-trivy-2026-08-15
+2026-08-15T23:28:49.2901606Z ##[end-action id=__5abac765-f322-4b3a-9e76-039e4a0e0b83.__actions_cache;outcome=success;conclusion=success;duration_ms=4376]
+2026-08-15T23:28:49.2905075Z ##[start-action display=Install Trivy;id=__5abac765-f322-4b3a-9e76-039e4a0e0b83.__aquasecurity_setup-trivy]
+2026-08-15T23:28:49.3004045Z Post job cleanup.
+2026-08-15T23:28:49.3007891Z ##[start-action display=Restore Trivy binary from cache;id=__5abac765-f322-4b3a-9e76-039e4a0e0b83.__aquasecurity_setup-trivy.cache]
+2026-08-15T23:28:49.3070536Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T23:28:49.3073087Z Post job cleanup.
+2026-08-15T23:28:49.4184950Z Cache hit occurred on the primary key trivy-binary-v0.69.3-Linux-X64, not saving cache.
+2026-08-15T23:28:49.4186767Z (node:9787) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-15T23:28:49.4187946Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-15T23:28:49.4242726Z ##[end-action id=__5abac765-f322-4b3a-9e76-039e4a0e0b83.__aquasecurity_setup-trivy.cache;outcome=success;conclusion=success;duration_ms=123]
+2026-08-15T23:28:49.4247046Z ##[end-action id=__5abac765-f322-4b3a-9e76-039e4a0e0b83.__aquasecurity_setup-trivy;outcome=success;conclusion=success;duration_ms=134]

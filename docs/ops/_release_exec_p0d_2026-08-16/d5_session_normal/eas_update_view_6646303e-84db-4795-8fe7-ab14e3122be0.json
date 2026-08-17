@@ -1,0 +1,26 @@
+﻿[
+  {
+    "id": "019ff25e-0a1f-7e5c-842e-d2b0a88df6fb",
+    "createdAt": "2026-08-11T19:47:57.087Z",
+    "group": "6646303e-84db-4795-8fe7-ab14e3122be0",
+    "branch": "production",
+    "message": "feat(fleet): pr├®sence GPS P0-F UI + fen├¬tres tracking 07-19 + tests bridge",
+    "runtimeVersion": "1.0.11",
+    "platform": "ios",
+    "manifestPermalink": "https://u.expo.dev/update/019ff25e-0a1f-7e5c-842e-d2b0a88df6fb",
+    "isRollBackToEmbedded": false,
+    "gitCommitHash": "16fd3e52418dfe88039b82f35ccc5326ec4fa993"
+  },
+  {
+    "id": "019ff25e-0a1f-73ab-ab15-e3bddc296169",
+    "createdAt": "2026-08-11T19:47:57.087Z",
+    "group": "6646303e-84db-4795-8fe7-ab14e3122be0",
+    "branch": "production",
+    "message": "feat(fleet): pr├®sence GPS P0-F UI + fen├¬tres tracking 07-19 + tests bridge",
+    "runtimeVersion": "1.0.11",
+    "platform": "android",
+    "manifestPermalink": "https://u.expo.dev/update/019ff25e-0a1f-73ab-ab15-e3bddc296169",
+    "isRollBackToEmbedded": false,
+    "gitCommitHash": "16fd3e52418dfe88039b82f35ccc5326ec4fa993"
+  }
+]

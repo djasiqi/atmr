@@ -1,0 +1,39 @@
+{
+  "kind": "g5-t2h-retrospective",
+  "captured_at_utc": "2026-08-16T08:02:00Z",
+  "window": {
+    "local_geneva": "2026-08-16 ~04:45 CEST",
+    "utc_mid": "2026-08-16T02:45:00Z",
+    "utc_range": ["2026-08-16T02:15:00Z", "2026-08-16T03:15:00Z"],
+    "method": "prometheus_instant+query_range + docker inspect StartedAt/RestartCount + PG/Redis read-only"
+  },
+  "release_tip": "286737a2362eb1e38013c72d04be23fcd608210e",
+  "docker_tag": "sha-286737a2362e",
+  "verdict": "VERT",
+  "checks": {
+    "restart_count": 0,
+    "images_sha_286737a2362e": true,
+    "containers_up_since_deploy_uninterrupted": true,
+    "fanout_up": 0,
+    "fanout_status": "created",
+    "fanout_enabled": false,
+    "prometheus_up_stable_in_window": true,
+    "http_5xx_rate_max": 0,
+    "dedup_invalid_ledger": 0,
+    "dedup_unproven": 0,
+    "dedup_claim_in_flight": 0,
+    "tracking_kafka_persist_rate": 0,
+    "driver_device_stale_fix_rate": 0,
+    "pg_loc_in_window": 0,
+    "pg_health_in_window": 0,
+    "pg_native_start_error_in_window": 0,
+    "redis_location_claim_keys": 0,
+    "note_claim_pattern_hit": "socketio:claims:* only (not location orphan claims)"
+  },
+  "caveat": "Night/early-morning traffic ~0 (coherent with T-30/T+5/T+30). T+2h proves stability/HOLD/anti-skew/no error storm — not diurnal LOC volume.",
+  "evidence": [
+    "docs/ops/_release_exec_T2h_2026-08-16/t2h_prom.txt",
+    "docs/ops/_release_exec_T2h_2026-08-16/t2h_pg.txt",
+    "docs/ops/_release_exec_T2h_2026-08-16/t2h_extra.txt"
+  ]
+}

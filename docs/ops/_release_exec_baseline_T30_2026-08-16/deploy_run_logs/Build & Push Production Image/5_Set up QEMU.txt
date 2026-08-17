@@ -1,0 +1,247 @@
+﻿2026-08-15T23:19:43.8879863Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T23:19:43.8881525Z ##[group]Run docker/setup-qemu-action@v3
+2026-08-15T23:19:43.8881824Z with:
+2026-08-15T23:19:43.8882050Z   image: docker.io/tonistiigi/binfmt:latest
+2026-08-15T23:19:43.8882334Z   platforms: all
+2026-08-15T23:19:43.8882542Z   cache-image: true
+2026-08-15T23:19:43.8882749Z env:
+2026-08-15T23:19:43.8882956Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:19:43.8883298Z   DOCKER_IMAGE: ***
+2026-08-15T23:19:43.8883541Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:19:43.8883841Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:19:43.8884067Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:19:43.8884361Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:19:43.8884720Z ##[endgroup]
+2026-08-15T23:19:44.1379671Z ##[group]Docker info
+2026-08-15T23:19:44.1405372Z (node:2276) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-15T23:19:44.1407607Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-15T23:19:44.1479819Z [command]/usr/bin/docker version
+2026-08-15T23:19:45.6288346Z Client: Docker Engine - Community
+2026-08-15T23:19:45.6289188Z  Version:           28.0.4
+2026-08-15T23:19:45.6289682Z  API version:       1.48
+2026-08-15T23:19:45.6290094Z  Go version:        go1.23.7
+2026-08-15T23:19:45.6290512Z  Git commit:        b8034c0
+2026-08-15T23:19:45.6290950Z  Built:             Tue Mar 25 15:07:16 2025
+2026-08-15T23:19:45.6291515Z  OS/Arch:           linux/amd64
+2026-08-15T23:19:45.6291957Z  Context:           default
+2026-08-15T23:19:45.6292271Z 
+2026-08-15T23:19:45.6292455Z Server: Docker Engine - Community
+2026-08-15T23:19:45.6292884Z  Engine:
+2026-08-15T23:19:45.6293089Z   Version:          28.0.4
+2026-08-15T23:19:45.6293393Z   API version:      1.48 (minimum version 1.24)
+2026-08-15T23:19:45.6293690Z   Go version:       go1.23.7
+2026-08-15T23:19:45.6294084Z   Git commit:       6430e49
+2026-08-15T23:19:45.6294340Z   Built:            Tue Mar 25 15:07:16 2025
+2026-08-15T23:19:45.6294638Z   OS/Arch:          linux/amd64
+2026-08-15T23:19:45.6294911Z   Experimental:     false
+2026-08-15T23:19:45.6295282Z  containerd:
+2026-08-15T23:19:45.6295499Z   Version:          v2.3.3
+2026-08-15T23:19:45.6295793Z   GitCommit:        aad11006b869517fcd3009450b6f82da282e1a9b
+2026-08-15T23:19:45.6296138Z  runc:
+2026-08-15T23:19:45.6296472Z   Version:          1.4.3
+2026-08-15T23:19:45.6296713Z   GitCommit:        v1.4.3-0-gbb14dab
+2026-08-15T23:19:45.6296983Z  docker-init:
+2026-08-15T23:19:45.6297185Z   Version:          0.19.0
+2026-08-15T23:19:45.6297526Z   GitCommit:        de40ad0
+2026-08-15T23:19:45.6331391Z [command]/usr/bin/docker info
+2026-08-15T23:19:47.7530547Z Client: Docker Engine - Community
+2026-08-15T23:19:47.7531293Z  Version:    28.0.4
+2026-08-15T23:19:47.7544396Z  Context:    default
+2026-08-15T23:19:47.7544807Z  Debug Mode: false
+2026-08-15T23:19:47.7545276Z  Plugins:
+2026-08-15T23:19:47.7545696Z   buildx: Docker Buildx (Docker Inc.)
+2026-08-15T23:19:47.7546107Z     Version:  v0.36.1
+2026-08-15T23:19:47.7546524Z     Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+2026-08-15T23:19:47.7546993Z   compose: Docker Compose (Docker Inc.)
+2026-08-15T23:19:47.7547393Z     Version:  v2.38.2
+2026-08-15T23:19:47.7547782Z     Path:     /usr/libexec/docker/cli-plugins/docker-compose
+2026-08-15T23:19:47.7548132Z 
+2026-08-15T23:19:47.7548320Z Server:
+2026-08-15T23:19:47.7548975Z  Containers: 0
+2026-08-15T23:19:47.7549362Z   Running: 0
+2026-08-15T23:19:47.7549676Z   Paused: 0
+2026-08-15T23:19:47.7549982Z   Stopped: 0
+2026-08-15T23:19:47.7550288Z  Images: 6
+2026-08-15T23:19:47.7550590Z  Server Version: 28.0.4
+2026-08-15T23:19:47.7550938Z  Storage Driver: overlay2
+2026-08-15T23:19:47.7551323Z   Backing Filesystem: extfs
+2026-08-15T23:19:47.7552079Z   Supports d_type: true
+2026-08-15T23:19:47.7552457Z   Using metacopy: false
+2026-08-15T23:19:47.7552798Z   Native Overlay Diff: false
+2026-08-15T23:19:47.7553281Z   userxattr: false
+2026-08-15T23:19:47.7553617Z  Logging Driver: json-file
+2026-08-15T23:19:47.7553982Z  Cgroup Driver: systemd
+2026-08-15T23:19:47.7554312Z  Cgroup Version: 2
+2026-08-15T23:19:47.7554626Z  Plugins:
+2026-08-15T23:19:47.7554936Z   Volume: local
+2026-08-15T23:19:47.7555315Z   Network: bridge host ipvlan macvlan null overlay
+2026-08-15T23:19:47.7555845Z   Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog
+2026-08-15T23:19:47.7556566Z  Swarm: inactive
+2026-08-15T23:19:47.7557190Z  Runtimes: runc io.containerd.runc.v2
+2026-08-15T23:19:47.7557628Z  Default Runtime: runc
+2026-08-15T23:19:47.7557983Z  Init Binary: docker-init
+2026-08-15T23:19:47.7558411Z  containerd version: aad11006b869517fcd3009450b6f82da282e1a9b
+2026-08-15T23:19:47.7559497Z  runc version: v1.4.3-0-gbb14dab
+2026-08-15T23:19:47.7559903Z  init version: de40ad0
+2026-08-15T23:19:47.7560247Z  Security Options:
+2026-08-15T23:19:47.7560576Z   apparmor
+2026-08-15T23:19:47.7560869Z   seccomp
+2026-08-15T23:19:47.7561166Z    Profile: builtin
+2026-08-15T23:19:47.7561520Z   cgroupns
+2026-08-15T23:19:47.7562062Z  Kernel Version: 6.17.0-1022-azure
+2026-08-15T23:19:47.7562445Z  Operating System: Ubuntu 24.04.4 LTS
+2026-08-15T23:19:47.7562819Z  OSType: linux
+2026-08-15T23:19:47.7563138Z  Architecture: x86_64
+2026-08-15T23:19:47.7563479Z  CPUs: 4
+2026-08-15T23:19:47.7563778Z  Total Memory: 15.61GiB
+2026-08-15T23:19:47.7564132Z  Name: runnervmzvulz
+2026-08-15T23:19:47.7564475Z  ID: 440382a3-ae17-440e-9655-4a40a976c94e
+2026-08-15T23:19:47.7564877Z  Docker Root Dir: /var/lib/docker
+2026-08-15T23:19:47.7565236Z  Debug Mode: false
+2026-08-15T23:19:47.7565558Z  Username: githubactions
+2026-08-15T23:19:47.7565896Z  Experimental: false
+2026-08-15T23:19:47.7566235Z  Insecure Registries:
+2026-08-15T23:19:47.7570507Z   ::1/128
+2026-08-15T23:19:47.7571095Z   127.0.0.0/8
+2026-08-15T23:19:47.7571583Z  Live Restore Enabled: false
+2026-08-15T23:19:47.7571870Z 
+2026-08-15T23:19:47.7572555Z ##[endgroup]
+2026-08-15T23:19:47.7573017Z ##[group]Pulling binfmt Docker image
+2026-08-15T23:19:48.0088947Z Cache hit for: docker.io--tonistiigi--binfmt-latest-linux-x64
+2026-08-15T23:19:48.0194737Z (node:2276) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-08-15T23:19:49.3055208Z Received 0 of 32265058 (0.0%), 0.0 MBs/sec
+2026-08-15T23:19:49.5930432Z Received 32265058 of 32265058 (100.0%), 23.9 MBs/sec
+2026-08-15T23:19:49.5932622Z Cache Size: ~31 MB (32265058 B)
+2026-08-15T23:19:49.5962031Z [command]/usr/bin/tar -xf /home/runner/work/_temp/98f8b441-760b-4525-a5d6-4049e079048c/cache.tzst -P -C /home/runner/work/atmr/atmr --use-compress-program unzstd
+2026-08-15T23:19:49.7396248Z Cache restored successfully
+2026-08-15T23:19:49.7414200Z Restored docker.io--tonistiigi--binfmt-latest-linux-x64 from GitHub Actions cache
+2026-08-15T23:19:49.7875491Z Cached to hosted tool cache /opt/hostedtoolcache/docker.io--tonistiigi--binfmt/latest/linux-x64
+2026-08-15T23:19:49.7877208Z Copying /opt/hostedtoolcache/docker.io--tonistiigi--binfmt/latest/linux-x64/image.tar to /home/runner/.docker/.cache/images/docker.io--tonistiigi--binfmt/latest/linux-x64/image.tar
+2026-08-15T23:19:49.8413362Z Image found from cache in /home/runner/.docker/.cache/images/docker.io--tonistiigi--binfmt/latest/linux-x64/image.tar
+2026-08-15T23:19:49.8433382Z [command]/usr/bin/docker load -i /home/runner/.docker/.cache/images/docker.io--tonistiigi--binfmt/latest/linux-x64/image.tar
+2026-08-15T23:19:51.4395259Z Loaded image: tonistiigi/binfmt:latest
+2026-08-15T23:19:51.4513524Z [command]/usr/bin/docker pull docker.io/tonistiigi/binfmt:latest
+2026-08-15T23:19:52.3988084Z latest: Pulling from tonistiigi/binfmt
+2026-08-15T23:19:52.6721612Z Digest: sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+2026-08-15T23:19:52.6727245Z Status: Image is up to date for tonistiigi/binfmt:latest
+2026-08-15T23:19:52.6734391Z docker.io/tonistiigi/binfmt:latest
+2026-08-15T23:19:52.6767522Z [command]/usr/bin/docker save -o /home/runner/work/_temp/docker-actions-toolkit-j5dYYA/749e64100d3fa0c09bdbc8a02e4fb9cb3ee64266f7f661c98371040689abacb3.tar docker.io/tonistiigi/binfmt:latest
+2026-08-15T23:19:53.0526822Z Copying /home/runner/work/_temp/docker-actions-toolkit-j5dYYA/749e64100d3fa0c09bdbc8a02e4fb9cb3ee64266f7f661c98371040689abacb3.tar to /home/runner/.docker/.cache/images/docker.io--tonistiigi--binfmt/latest/linux-x64/image.tar
+2026-08-15T23:19:53.1220854Z Image cached to /home/runner/.docker/.cache/images/docker.io--tonistiigi--binfmt/latest/linux-x64/image.tar
+2026-08-15T23:19:53.1222455Z ##[endgroup]
+2026-08-15T23:19:53.1223434Z ##[group]Image info
+2026-08-15T23:19:53.1243873Z [command]/usr/bin/docker image inspect docker.io/tonistiigi/binfmt:latest
+2026-08-15T23:19:53.2330138Z [
+2026-08-15T23:19:53.2330923Z     {
+2026-08-15T23:19:53.2331979Z         "Id": "sha256:15935d0512bf0a8e5afa1df990d971cf97a619ede08fa60f2d5966a62de6d6b7",
+2026-08-15T23:19:53.2332690Z         "RepoTags": [
+2026-08-15T23:19:53.2333086Z             "tonistiigi/binfmt:latest"
+2026-08-15T23:19:53.2333914Z         ],
+2026-08-15T23:19:53.2334234Z         "RepoDigests": [
+2026-08-15T23:19:53.2334906Z             "tonistiigi/binfmt@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0"
+2026-08-15T23:19:53.2335695Z         ],
+2026-08-15T23:19:53.2336022Z         "Parent": "",
+2026-08-15T23:19:53.2336441Z         "Comment": "buildkit.dockerfile.v0",
+2026-08-15T23:19:53.2336804Z         "Created": "2026-06-05T19:12:02.167333037Z",
+2026-08-15T23:19:53.2337138Z         "DockerVersion": "",
+2026-08-15T23:19:53.2337407Z         "Author": "",
+2026-08-15T23:19:53.2337650Z         "Config": {
+2026-08-15T23:19:53.2337924Z             "Hostname": "",
+2026-08-15T23:19:53.2338222Z             "Domainname": "",
+2026-08-15T23:19:53.2338776Z             "User": "",
+2026-08-15T23:19:53.2339044Z             "AttachStdin": false,
+2026-08-15T23:19:53.2339338Z             "AttachStdout": false,
+2026-08-15T23:19:53.2339638Z             "AttachStderr": false,
+2026-08-15T23:19:53.2339923Z             "Tty": false,
+2026-08-15T23:19:53.2340176Z             "OpenStdin": false,
+2026-08-15T23:19:53.2340452Z             "StdinOnce": false,
+2026-08-15T23:19:53.2340860Z             "Env": [
+2026-08-15T23:19:53.2341377Z                 "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+2026-08-15T23:19:53.2341862Z                 "QEMU_PRESERVE_ARGV0=1"
+2026-08-15T23:19:53.2342136Z             ],
+2026-08-15T23:19:53.2342465Z             "Cmd": null,
+2026-08-15T23:19:53.2342704Z             "Image": "",
+2026-08-15T23:19:53.2342920Z             "Volumes": {
+2026-08-15T23:19:53.2343146Z                 "/tmp": {}
+2026-08-15T23:19:53.2343365Z             },
+2026-08-15T23:19:53.2343578Z             "WorkingDir": "/",
+2026-08-15T23:19:53.2343823Z             "Entrypoint": [
+2026-08-15T23:19:53.2344058Z                 "/usr/bin/binfmt"
+2026-08-15T23:19:53.2344295Z             ],
+2026-08-15T23:19:53.2344497Z             "OnBuild": null,
+2026-08-15T23:19:53.2344737Z             "Labels": null
+2026-08-15T23:19:53.2345074Z         },
+2026-08-15T23:19:53.2345430Z         "Architecture": "amd64",
+2026-08-15T23:19:53.2345840Z         "Os": "linux",
+2026-08-15T23:19:53.2346201Z         "Size": 85304497,
+2026-08-15T23:19:53.2346583Z         "GraphDriver": {
+2026-08-15T23:19:53.2346951Z             "Data": {
+2026-08-15T23:19:53.2347769Z                 "LowerDir": "/var/lib/docker/overlay2/c360bdad071565e9106210ce5a5677398ed3e52c7fa9ea0e0fde333f0618cabc/diff",
+2026-08-15T23:19:53.2349347Z                 "MergedDir": "/var/lib/docker/overlay2/23fd1f1f2131d857b7f3f00bd583cdef5773df804f369ef6e47faebe76798af8/merged",
+2026-08-15T23:19:53.2350752Z                 "UpperDir": "/var/lib/docker/overlay2/23fd1f1f2131d857b7f3f00bd583cdef5773df804f369ef6e47faebe76798af8/diff",
+2026-08-15T23:19:53.2352389Z                 "WorkDir": "/var/lib/docker/overlay2/23fd1f1f2131d857b7f3f00bd583cdef5773df804f369ef6e47faebe76798af8/work"
+2026-08-15T23:19:53.2352942Z             },
+2026-08-15T23:19:53.2353155Z             "Name": "overlay2"
+2026-08-15T23:19:53.2353596Z         },
+2026-08-15T23:19:53.2353795Z         "RootFS": {
+2026-08-15T23:19:53.2354008Z             "Type": "layers",
+2026-08-15T23:19:53.2354246Z             "Layers": [
+2026-08-15T23:19:53.2354600Z                 "sha256:c747b796d990a647df062f87e24f1ef5e4a90a312cd9c4ae8b7d09667d57befb",
+2026-08-15T23:19:53.2355142Z                 "sha256:6d831b0f477d9df7afe18e5a65c97e8084fef8fe10c2930b65f728ab68d0bb5b"
+2026-08-15T23:19:53.2355542Z             ]
+2026-08-15T23:19:53.2355730Z         },
+2026-08-15T23:19:53.2355921Z         "Metadata": {
+2026-08-15T23:19:53.2356161Z             "LastTagTime": "0001-01-01T00:00:00Z"
+2026-08-15T23:19:53.2356575Z         }
+2026-08-15T23:19:53.2356771Z     }
+2026-08-15T23:19:53.2356951Z ]
+2026-08-15T23:19:53.2357934Z ##[endgroup]
+2026-08-15T23:19:53.2358310Z ##[group]Binfmt version
+2026-08-15T23:19:53.2364110Z [command]/usr/bin/docker run --rm --privileged docker.io/tonistiigi/binfmt:latest --version
+2026-08-15T23:19:53.6463800Z binfmt/e29e7d7 qemu/v10.2.3 go/1.26.4
+2026-08-15T23:19:53.7171850Z ##[endgroup]
+2026-08-15T23:19:53.7172602Z ##[group]Installing QEMU static binaries
+2026-08-15T23:19:53.7187024Z [command]/usr/bin/docker run --rm --privileged docker.io/tonistiigi/binfmt:latest --install all
+2026-08-15T23:19:53.8438965Z installing: s390x OK
+2026-08-15T23:19:53.8440010Z installing: mips64le OK
+2026-08-15T23:19:53.8440408Z installing: mips64 OK
+2026-08-15T23:19:53.8440661Z installing: arm64 OK
+2026-08-15T23:19:53.8440891Z installing: arm OK
+2026-08-15T23:19:53.8441264Z installing: ppc64le OK
+2026-08-15T23:19:53.8441544Z installing: riscv64 OK
+2026-08-15T23:19:53.8441781Z installing: loong64 OK
+2026-08-15T23:19:53.8657544Z {
+2026-08-15T23:19:53.8658125Z   "supported": [
+2026-08-15T23:19:53.8659132Z     "linux/amd64",
+2026-08-15T23:19:53.8659556Z     "linux/amd64/v2",
+2026-08-15T23:19:53.8659974Z     "linux/amd64/v3",
+2026-08-15T23:19:53.8660368Z     "linux/arm64",
+2026-08-15T23:19:53.8660712Z     "linux/riscv64",
+2026-08-15T23:19:53.8661114Z     "linux/ppc64le",
+2026-08-15T23:19:53.8661478Z     "linux/s390x",
+2026-08-15T23:19:53.8661818Z     "linux/386",
+2026-08-15T23:19:53.8662158Z     "linux/mips64le",
+2026-08-15T23:19:53.8662539Z     "linux/mips64",
+2026-08-15T23:19:53.8662876Z     "linux/loong64",
+2026-08-15T23:19:53.8663234Z     "linux/arm/v7",
+2026-08-15T23:19:53.8663588Z     "linux/arm/v6"
+2026-08-15T23:19:53.8663937Z   ],
+2026-08-15T23:19:53.8664262Z   "emulators": [
+2026-08-15T23:19:53.8664611Z     "llvm-16-runtime.binfmt",
+2026-08-15T23:19:53.8665047Z     "llvm-17-runtime.binfmt",
+2026-08-15T23:19:53.8665431Z     "llvm-18-runtime.binfmt",
+2026-08-15T23:19:53.8665834Z     "python3.12",
+2026-08-15T23:19:53.8666150Z     "qemu-aarch64",
+2026-08-15T23:19:53.8666507Z     "qemu-arm",
+2026-08-15T23:19:53.8666861Z     "qemu-loongarch64",
+2026-08-15T23:19:53.8667262Z     "qemu-mips64",
+2026-08-15T23:19:53.8667614Z     "qemu-mips64el",
+2026-08-15T23:19:53.8667860Z     "qemu-ppc64le",
+2026-08-15T23:19:53.8668086Z     "qemu-riscv64",
+2026-08-15T23:19:53.8668291Z     "qemu-s390x"
+2026-08-15T23:19:53.8670797Z   ]
+2026-08-15T23:19:53.8671012Z }
+2026-08-15T23:19:53.9325386Z ##[endgroup]
+2026-08-15T23:19:53.9325899Z ##[group]Extracting available platforms
+2026-08-15T23:19:54.1454195Z linux/amd64,linux/amd64/v2,linux/amd64/v3,linux/arm64,linux/riscv64,linux/ppc64le,linux/s390x,linux/386,linux/mips64le,linux/mips64,linux/loong64,linux/arm/v7,linux/arm/v6
+2026-08-15T23:19:54.1455630Z ##[endgroup]

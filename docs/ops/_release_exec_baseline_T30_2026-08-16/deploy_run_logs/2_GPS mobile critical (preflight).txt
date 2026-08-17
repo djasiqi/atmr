@@ -1,0 +1,449 @@
+﻿2026-08-15T23:18:20.7790325Z Current runner version: '2.336.0'
+2026-08-15T23:18:20.7817596Z ##[group]Runner Image Provisioner
+2026-08-15T23:18:20.7818545Z Hosted Compute Agent
+2026-08-15T23:18:20.7819159Z Version: 20260729.566
+2026-08-15T23:18:20.7820014Z Commit: cf7153fe6e25b664e8693c24944bf2b00355d109
+2026-08-15T23:18:20.7820860Z Build Date: 2026-07-29T19:17:02Z
+2026-08-15T23:18:20.7821546Z Worker ID: {28ed7f21-21a9-4398-93b5-fe1c2425b149}
+2026-08-15T23:18:20.7822249Z Azure Region: westus
+2026-08-15T23:18:20.7822889Z ##[endgroup]
+2026-08-15T23:18:20.7824402Z ##[group]Operating System
+2026-08-15T23:18:20.7825206Z Ubuntu
+2026-08-15T23:18:20.7825793Z 24.04.4
+2026-08-15T23:18:20.7826354Z LTS
+2026-08-15T23:18:20.7826963Z ##[endgroup]
+2026-08-15T23:18:20.7827520Z ##[group]Runner Image
+2026-08-15T23:18:20.7828114Z Image: ubuntu-24.04
+2026-08-15T23:18:20.7828813Z Version: 20260810.271.1
+2026-08-15T23:18:20.7830301Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260810.271/images/ubuntu/Ubuntu2404-Readme.md
+2026-08-15T23:18:20.7831906Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260810.271
+2026-08-15T23:18:20.7832887Z ##[endgroup]
+2026-08-15T23:18:20.7834166Z ##[group]GITHUB_TOKEN Permissions
+2026-08-15T23:18:20.7836038Z Contents: read
+2026-08-15T23:18:20.7836778Z Metadata: read
+2026-08-15T23:18:20.7837375Z ##[endgroup]
+2026-08-15T23:18:20.7840023Z Secret source: Actions
+2026-08-15T23:18:20.7841187Z Prepare workflow directory
+2026-08-15T23:18:20.8262514Z Prepare all required actions
+2026-08-15T23:18:20.8312083Z Getting action download info
+2026-08-15T23:18:21.1829946Z Download action repository 'actions/checkout@v7' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-08-15T23:18:21.3223037Z Download action repository 'actions/setup-node@v7' (SHA:820762786026740c76f36085b0efc47a31fe5020)
+2026-08-15T23:18:21.5075859Z Complete job name: GPS mobile critical (preflight)
+2026-08-15T23:18:21.5856999Z ##[group]Run actions/checkout@v7
+2026-08-15T23:18:21.5857889Z with:
+2026-08-15T23:18:21.5858377Z   repository: djasiqi/atmr
+2026-08-15T23:18:21.5862595Z   token: ***
+2026-08-15T23:18:21.5863055Z   ssh-strict: true
+2026-08-15T23:18:21.5863511Z   ssh-user: git
+2026-08-15T23:18:21.5863960Z   persist-credentials: true
+2026-08-15T23:18:21.5864462Z   clean: true
+2026-08-15T23:18:21.5864921Z   sparse-checkout-cone-mode: true
+2026-08-15T23:18:21.5865452Z   fetch-depth: 1
+2026-08-15T23:18:21.5865890Z   fetch-tags: false
+2026-08-15T23:18:21.5866335Z   show-progress: true
+2026-08-15T23:18:21.5866798Z   lfs: false
+2026-08-15T23:18:21.5867210Z   submodules: false
+2026-08-15T23:18:21.5867666Z   set-safe-directory: true
+2026-08-15T23:18:21.5868173Z   allow-unsafe-pr-checkout: false
+2026-08-15T23:18:21.5868980Z env:
+2026-08-15T23:18:21.5869702Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:18:21.5870277Z ##[endgroup]
+2026-08-15T23:18:21.6939870Z Syncing repository: djasiqi/atmr
+2026-08-15T23:18:21.6942019Z ##[group]Getting Git version info
+2026-08-15T23:18:21.6942766Z Working directory is '/home/runner/work/atmr/atmr'
+2026-08-15T23:18:21.6943898Z [command]/usr/bin/git version
+2026-08-15T23:18:21.7071585Z git version 2.54.0
+2026-08-15T23:18:21.7100493Z ##[endgroup]
+2026-08-15T23:18:21.7118385Z Temporarily overriding HOME='/home/runner/work/_temp/0129f1f9-9af0-41e1-a1ac-90242c503abf' before making global git config changes
+2026-08-15T23:18:21.7121120Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-15T23:18:21.7125287Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/atmr/atmr
+2026-08-15T23:18:21.7180658Z Deleting the contents of '/home/runner/work/atmr/atmr'
+2026-08-15T23:18:21.7184412Z ##[group]Determining repository object format
+2026-08-15T23:18:21.7186346Z ##[endgroup]
+2026-08-15T23:18:21.7187481Z ##[group]Initializing the repository
+2026-08-15T23:18:21.7190942Z [command]/usr/bin/git init /home/runner/work/atmr/atmr
+2026-08-15T23:18:21.7339493Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-08-15T23:18:21.7341765Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-08-15T23:18:21.7343254Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-08-15T23:18:21.7344486Z hint: call:
+2026-08-15T23:18:21.7345095Z hint:
+2026-08-15T23:18:21.7345874Z hint: 	git config --global init.defaultBranch <name>
+2026-08-15T23:18:21.7346835Z hint:
+2026-08-15T23:18:21.7347724Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-08-15T23:18:21.7349196Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-08-15T23:18:21.7350580Z hint:
+2026-08-15T23:18:21.7351211Z hint: 	git branch -m <name>
+2026-08-15T23:18:21.7351972Z hint:
+2026-08-15T23:18:21.7352944Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-08-15T23:18:21.7354489Z Initialized empty Git repository in /home/runner/work/atmr/atmr/.git/
+2026-08-15T23:18:21.7359791Z [command]/usr/bin/git remote add origin https://github.com/djasiqi/atmr
+2026-08-15T23:18:21.7417404Z ##[endgroup]
+2026-08-15T23:18:21.7418281Z ##[group]Disabling automatic garbage collection
+2026-08-15T23:18:21.7422841Z [command]/usr/bin/git config --local gc.auto 0
+2026-08-15T23:18:21.7479904Z ##[endgroup]
+2026-08-15T23:18:21.7481858Z ##[group]Setting up auth
+2026-08-15T23:18:21.7483821Z Removing SSH command configuration
+2026-08-15T23:18:21.7484947Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-15T23:18:21.7537091Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-15T23:18:21.7968979Z Removing HTTP extra header
+2026-08-15T23:18:21.7975625Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-15T23:18:21.8011954Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-15T23:18:21.8233690Z Removing includeIf entries pointing to credentials config files
+2026-08-15T23:18:21.8240542Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-15T23:18:21.8278853Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-15T23:18:21.8542522Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-08-15T23:18:21.8594520Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/atmr/atmr/.git.path /home/runner/work/_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:18:21.8634433Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/atmr/atmr/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:18:21.8682910Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:18:21.8723619Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:18:21.8756688Z ##[endgroup]
+2026-08-15T23:18:21.8757454Z ##[group]Fetching the repository
+2026-08-15T23:18:21.8767512Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +286737a2362eb1e38013c72d04be23fcd608210e:refs/remotes/origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:27.0498247Z From https://github.com/djasiqi/atmr
+2026-08-15T23:18:27.0501105Z  * [new ref]         286737a2362eb1e38013c72d04be23fcd608210e -> origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:27.0534471Z [command]/usr/bin/git branch --list --remote origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:27.0572467Z   origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:27.0584285Z [command]/usr/bin/git rev-parse refs/remotes/origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:27.0615568Z 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:18:27.0620757Z ##[endgroup]
+2026-08-15T23:18:27.0622015Z ##[group]Determining the checkout info
+2026-08-15T23:18:27.0622959Z ##[endgroup]
+2026-08-15T23:18:27.0627646Z [command]/usr/bin/git sparse-checkout disable
+2026-08-15T23:18:27.0682244Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-08-15T23:18:27.0716921Z ##[group]Checking out the ref
+2026-08-15T23:18:27.0722464Z [command]/usr/bin/git checkout --progress --force -B release/gps-p0-2026-08-15 refs/remotes/origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:28.1394838Z Updating files:  74% (3914/5249)
+2026-08-15T23:18:28.1624147Z Updating files:  75% (3937/5249)
+2026-08-15T23:18:28.1657095Z Updating files:  76% (3990/5249)
+2026-08-15T23:18:28.1685105Z Updating files:  77% (4042/5249)
+2026-08-15T23:18:28.1710253Z Updating files:  78% (4095/5249)
+2026-08-15T23:18:28.1739749Z Updating files:  79% (4147/5249)
+2026-08-15T23:18:28.1765429Z Updating files:  80% (4200/5249)
+2026-08-15T23:18:28.1792569Z Updating files:  81% (4252/5249)
+2026-08-15T23:18:28.1824750Z Updating files:  82% (4305/5249)
+2026-08-15T23:18:28.1854894Z Updating files:  83% (4357/5249)
+2026-08-15T23:18:28.1885591Z Updating files:  84% (4410/5249)
+2026-08-15T23:18:28.1917359Z Updating files:  85% (4462/5249)
+2026-08-15T23:18:28.1950267Z Updating files:  86% (4515/5249)
+2026-08-15T23:18:28.1981920Z Updating files:  87% (4567/5249)
+2026-08-15T23:18:28.2012879Z Updating files:  88% (4620/5249)
+2026-08-15T23:18:28.2039093Z Updating files:  89% (4672/5249)
+2026-08-15T23:18:28.2070352Z Updating files:  90% (4725/5249)
+2026-08-15T23:18:28.2106695Z Updating files:  91% (4777/5249)
+2026-08-15T23:18:28.2133399Z Updating files:  92% (4830/5249)
+2026-08-15T23:18:28.3190881Z Updating files:  93% (4882/5249)
+2026-08-15T23:18:28.3227321Z Updating files:  94% (4935/5249)
+2026-08-15T23:18:28.3262662Z Updating files:  95% (4987/5249)
+2026-08-15T23:18:28.3290156Z Updating files:  96% (5040/5249)
+2026-08-15T23:18:28.3321051Z Updating files:  97% (5092/5249)
+2026-08-15T23:18:28.3368033Z Updating files:  98% (5145/5249)
+2026-08-15T23:18:28.3426705Z Updating files:  99% (5197/5249)
+2026-08-15T23:18:28.3429011Z Updating files: 100% (5249/5249)
+2026-08-15T23:18:28.3431398Z Updating files: 100% (5249/5249), done.
+2026-08-15T23:18:28.3540076Z Switched to a new branch 'release/gps-p0-2026-08-15'
+2026-08-15T23:18:28.3543958Z branch 'release/gps-p0-2026-08-15' set up to track 'origin/release/gps-p0-2026-08-15'.
+2026-08-15T23:18:28.4066141Z ##[endgroup]
+2026-08-15T23:18:28.4119962Z [command]/usr/bin/git log -1 --format=%H
+2026-08-15T23:18:28.4148169Z 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:18:28.4456973Z ##[group]Run actions/setup-node@v7
+2026-08-15T23:18:28.4457599Z with:
+2026-08-15T23:18:28.4457923Z   node-version: 20
+2026-08-15T23:18:28.4458303Z   cache: npm
+2026-08-15T23:18:28.4458930Z   cache-dependency-path: mobile/unified-app/package-lock.json
+2026-08-15T23:18:28.4460031Z   check-latest: false
+2026-08-15T23:18:28.4468312Z   token: ***
+2026-08-15T23:18:28.4468711Z   package-manager-cache: true
+2026-08-15T23:18:28.4469206Z env:
+2026-08-15T23:18:28.4469715Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:18:28.4470323Z ##[endgroup]
+2026-08-15T23:18:28.5814255Z Attempting to download 20...
+2026-08-15T23:18:29.3077114Z Acquiring 20.20.2 - x64 from https://github.com/actions/node-versions/releases/download/20.20.2-23521894959/node-20.20.2-linux-x64.tar.gz
+2026-08-15T23:18:29.7274267Z Extracting ...
+2026-08-15T23:18:29.7402975Z [command]/usr/bin/tar xz --strip 1 --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/ab6fb281-1d54-4283-ada1-0668d55d4eb8 -f /home/runner/work/_temp/1568884a-0f9f-424a-bde5-1395f5c6e207
+2026-08-15T23:18:30.7600661Z Adding to the cache ...
+2026-08-15T23:18:33.4194190Z ##[group]Environment details
+2026-08-15T23:18:33.6490231Z node: v20.20.2
+2026-08-15T23:18:33.6490726Z npm: 10.8.2
+2026-08-15T23:18:33.6491223Z yarn: 1.22.22
+2026-08-15T23:18:33.6491864Z ##[endgroup]
+2026-08-15T23:18:33.6512102Z [command]/opt/hostedtoolcache/node/20.20.2/x64/bin/npm config get cache
+2026-08-15T23:18:33.7562038Z /home/runner/.npm
+2026-08-15T23:18:34.0175261Z Cache hit for: node-cache-Linux-x64-npm-913a90590490c8d755fd3b68a518d97b134ef0b0fb8e4430880c30d13046e739
+2026-08-15T23:18:35.3060462Z Received 0 of 184774715 (0.0%), 0.0 MBs/sec
+2026-08-15T23:18:36.3057327Z Received 113246208 of 184774715 (61.3%), 54.0 MBs/sec
+2026-08-15T23:18:36.8490626Z Received 184774715 of 184774715 (100.0%), 69.4 MBs/sec
+2026-08-15T23:18:36.8507694Z Cache Size: ~176 MB (184774715 B)
+2026-08-15T23:18:36.8568805Z [command]/usr/bin/tar -xf /home/runner/work/_temp/d23e4b5e-738b-473a-b291-4db1c1035604/cache.tzst -P -C /home/runner/work/atmr/atmr --use-compress-program unzstd
+2026-08-15T23:18:37.3844378Z Cache restored successfully
+2026-08-15T23:18:37.3931539Z Cache restored from key: node-cache-Linux-x64-npm-913a90590490c8d755fd3b68a518d97b134ef0b0fb8e4430880c30d13046e739
+2026-08-15T23:18:37.4785324Z ##[group]Run npm ci
+2026-08-15T23:18:37.4785667Z [36;1mnpm ci[0m
+2026-08-15T23:18:37.4828607Z shell: /usr/bin/bash -e {0}
+2026-08-15T23:18:37.4828879Z env:
+2026-08-15T23:18:37.4829122Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:18:37.4829621Z ##[endgroup]
+2026-08-15T23:18:43.1596035Z npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-08-15T23:18:43.3503346Z npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+2026-08-15T23:18:43.3974082Z npm warn deprecated whatwg-encoding@2.0.0: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+2026-08-15T23:18:43.4054518Z npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+2026-08-15T23:18:43.4313313Z npm warn deprecated abab@2.0.6: Use your platform's native atob() and btoa() methods instead
+2026-08-15T23:18:43.5937852Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.5941656Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.5953947Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.5973701Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.5980709Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.6021992Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.6025891Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-08-15T23:18:43.7055888Z npm warn deprecated domexception@4.0.0: Use your platform's native DOMException instead
+2026-08-15T23:18:58.4757972Z 
+2026-08-15T23:18:58.4758858Z > lirie-unified-app@0.1.0 postinstall
+2026-08-15T23:18:58.4759570Z > patch-package
+2026-08-15T23:18:58.4759733Z 
+2026-08-15T23:18:58.6325582Z patch-package 8.0.1
+2026-08-15T23:18:58.6329616Z Applying patches...
+2026-08-15T23:18:58.6557061Z expo-location@19.0.8 ✔
+2026-08-15T23:18:58.6567925Z expo-task-manager@14.0.9 ✔
+2026-08-15T23:18:58.6580685Z image-size@1.2.1 ✔
+2026-08-15T23:18:58.6784209Z 
+2026-08-15T23:18:58.6784726Z added 1225 packages, and audited 1226 packages in 21s
+2026-08-15T23:18:58.6785208Z 
+2026-08-15T23:18:58.6785470Z 201 packages are looking for funding
+2026-08-15T23:18:58.6785996Z   run `npm fund` for details
+2026-08-15T23:18:58.7496273Z 
+2026-08-15T23:18:58.7497621Z 11 high severity vulnerabilities
+2026-08-15T23:18:58.7498063Z 
+2026-08-15T23:18:58.7498527Z To address issues that do not require attention, run:
+2026-08-15T23:18:58.7499551Z   npm audit fix
+2026-08-15T23:18:58.7499846Z 
+2026-08-15T23:18:58.7500414Z To address all issues (including breaking changes), run:
+2026-08-15T23:18:58.7501268Z   npm audit fix --force
+2026-08-15T23:18:58.7501605Z 
+2026-08-15T23:18:58.7501871Z Run `npm audit` for details.
+2026-08-15T23:18:58.8318465Z ##[group]Run npm run typecheck:tracking
+2026-08-15T23:18:58.8318831Z [36;1mnpm run typecheck:tracking[0m
+2026-08-15T23:18:58.8358315Z shell: /usr/bin/bash -e {0}
+2026-08-15T23:18:58.8358571Z env:
+2026-08-15T23:18:58.8358792Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:18:58.8359077Z ##[endgroup]
+2026-08-15T23:18:58.9516653Z 
+2026-08-15T23:18:58.9517207Z > lirie-unified-app@0.1.0 typecheck:tracking
+2026-08-15T23:18:58.9517833Z > node ./scripts/typecheckTracking.cjs
+2026-08-15T23:18:58.9518107Z 
+2026-08-15T23:19:14.3256172Z Typecheck surface tracking OK (299 erreur(s) hors surface tolérée(s) temporairement).
+2026-08-15T23:19:14.3357873Z ##[group]Run npm run test:gps-critical
+2026-08-15T23:19:14.3358221Z [36;1mnpm run test:gps-critical[0m
+2026-08-15T23:19:14.3396914Z shell: /usr/bin/bash -e {0}
+2026-08-15T23:19:14.3397170Z env:
+2026-08-15T23:19:14.3397386Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:19:14.3397669Z ##[endgroup]
+2026-08-15T23:19:14.4584507Z 
+2026-08-15T23:19:14.4585108Z > lirie-unified-app@0.1.0 test:gps-critical
+2026-08-15T23:19:14.4588166Z > jest --watchAll=false --runInBand --forceExit --testPathPattern="(driverTrackingQueue(\.|\.p0|\.http|\.p03)|driverTrackingBridge|driverTrackingFixAge|driverRealtimeBridge|localDriverLocationFreshness|fleetMapStale|useCompanyDriverLiveTracking|trackingRuntimeRegistry|trackingQueueStore)"
+2026-08-15T23:19:14.4590152Z 
+2026-08-15T23:19:19.2662963Z PASS src/features/driver/services/driverTrackingBridge.test.ts
+2026-08-15T23:19:19.4897076Z PASS src/features/driver/services/trackingQueueStore.test.ts
+2026-08-15T23:19:19.5648835Z   ● Console
+2026-08-15T23:19:19.5649715Z 
+2026-08-15T23:19:19.5650344Z     console.error
+2026-08-15T23:19:19.5651246Z       [trackingQueueStore] CRITICAL sqlite_npe_detected {
+2026-08-15T23:19:19.5652811Z         error: "Error: Call to function 'NativeDatabase.prepareAsync' has been rejected -> Caused by: java.lang.NullPointerException"
+2026-08-15T23:19:19.5654163Z       }
+2026-08-15T23:19:19.5654579Z 
+2026-08-15T23:19:19.5656800Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5658699Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5661084Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5662774Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5663739Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5670096Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5670947Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5671450Z 
+2026-08-15T23:19:19.5672111Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5673473Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:354:5)
+2026-08-15T23:19:19.5674601Z           at Generator.throw (<anonymous>)
+2026-08-15T23:19:19.5675712Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5677018Z       at _throw (node_modules/@babel/runtime/helpers/asyncToGenerator.js:20:9)
+2026-08-15T23:19:19.5677795Z 
+2026-08-15T23:19:19.5678171Z     console.error
+2026-08-15T23:19:19.5678955Z       [trackingQueueStore] CRITICAL sqlite_npe_detected {
+2026-08-15T23:19:19.5680972Z         error: "Error: Call to function 'NativeDatabase.prepareAsync' has been rejected -> Caused by: java.lang.NullPointerException"
+2026-08-15T23:19:19.5682213Z       }
+2026-08-15T23:19:19.5682610Z 
+2026-08-15T23:19:19.5684486Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5686153Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5688420Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5690839Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5692323Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5693269Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5694058Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5694637Z 
+2026-08-15T23:19:19.5695689Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5697127Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:354:5)
+2026-08-15T23:19:19.5698368Z           at Generator.throw (<anonymous>)
+2026-08-15T23:19:19.5699913Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5701316Z       at _throw (node_modules/@babel/runtime/helpers/asyncToGenerator.js:20:9)
+2026-08-15T23:19:19.5702089Z 
+2026-08-15T23:19:19.5702456Z     console.error
+2026-08-15T23:19:19.5703312Z       [trackingQueueStore] CRITICAL sqlite_npe_recovery_exhausted {
+2026-08-15T23:19:19.5704898Z         error: "Error: Call to function 'NativeDatabase.prepareAsync' has been rejected -> Caused by: java.lang.NullPointerException"
+2026-08-15T23:19:19.5706293Z       }
+2026-08-15T23:19:19.5706742Z 
+2026-08-15T23:19:19.5708690Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5711241Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5713032Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5714518Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5715472Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5716555Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5717242Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5717560Z 
+2026-08-15T23:19:19.5718351Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5719816Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:377:9)
+2026-08-15T23:19:19.5720801Z           at Generator.throw (<anonymous>)
+2026-08-15T23:19:19.5721787Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5722976Z       at _throw (node_modules/@babel/runtime/helpers/asyncToGenerator.js:20:9)
+2026-08-15T23:19:19.5723568Z 
+2026-08-15T23:19:19.5723770Z     console.error
+2026-08-15T23:19:19.5724678Z       [trackingQueueStore] CRITICAL sqlite_open_failed { error: 'Error: boom', platform: 'native' }
+2026-08-15T23:19:19.5725432Z 
+2026-08-15T23:19:19.5727203Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5728999Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5731299Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5732829Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5733604Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5734328Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5734969Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5735271Z 
+2026-08-15T23:19:19.5735743Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5736908Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:331:3)
+2026-08-15T23:19:19.5737883Z           at Generator.throw (<anonymous>)
+2026-08-15T23:19:19.5738835Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5740464Z       at _throw (node_modules/@babel/runtime/helpers/asyncToGenerator.js:20:9)
+2026-08-15T23:19:19.5741058Z 
+2026-08-15T23:19:19.5741254Z     console.error
+2026-08-15T23:19:19.5742151Z       [trackingQueueStore] CRITICAL upsert_rejected_durable_unavailable { locationEventId: 'x1' }
+2026-08-15T23:19:19.5743198Z 
+2026-08-15T23:19:19.5744986Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5746775Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5748416Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5750184Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5750918Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5751629Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5752251Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5752558Z 
+2026-08-15T23:19:19.5753031Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5754210Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:755:9)
+2026-08-15T23:19:19.5755512Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5756673Z       at _next (node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+2026-08-15T23:19:19.5757259Z 
+2026-08-15T23:19:19.5757460Z     console.error
+2026-08-15T23:19:19.5758058Z       [trackingQueueStore] CRITICAL sqlite_npe_detected {
+2026-08-15T23:19:19.5759692Z         error: "Error: Call to function 'NativeDatabase.prepareAsync' has been rejected -> Caused by: java.lang.NullPointerException"
+2026-08-15T23:19:19.5760832Z       }
+2026-08-15T23:19:19.5761067Z 
+2026-08-15T23:19:19.5763098Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5764814Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5766465Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5767985Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5768730Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5769700Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5770345Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5770650Z 
+2026-08-15T23:19:19.5771113Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5772255Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:354:5)
+2026-08-15T23:19:19.5773210Z           at Generator.throw (<anonymous>)
+2026-08-15T23:19:19.5774166Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5775351Z       at _throw (node_modules/@babel/runtime/helpers/asyncToGenerator.js:20:9)
+2026-08-15T23:19:19.5775934Z 
+2026-08-15T23:19:19.7426955Z PASS src/features/driver/services/driverTrackingQueue.ledgerClient.test.ts
+2026-08-15T23:19:19.8921910Z PASS src/features/driver/services/driverTrackingQueue.test.ts
+2026-08-15T23:19:20.1535116Z PASS src/features/driver/services/driverTrackingQueue.p03DrainGuard.test.ts
+2026-08-15T23:19:20.2950551Z PASS src/features/driver/services/driverTrackingQueue.p0DurableAck.test.ts
+2026-08-15T23:19:20.4118064Z PASS src/features/driver/services/driverTrackingQueue.http202AckSemantics.test.ts
+2026-08-15T23:19:20.7172164Z PASS src/features/company/realtime/useCompanyDriverLiveTracking.test.ts
+2026-08-15T23:19:25.9017735Z PASS src/features/driver/services/driverRealtimeBridge.test.ts (5.174 s)
+2026-08-15T23:19:25.9072804Z   ● Console
+2026-08-15T23:19:25.9073077Z 
+2026-08-15T23:19:25.9073258Z     console.info
+2026-08-15T23:19:25.9073774Z       [driver-telemetry] tracking.batch.ack {
+2026-08-15T23:19:25.9074855Z         source: 'driver.realtime.bridge',
+2026-08-15T23:19:25.9075477Z         context_id: 'driver:1',
+2026-08-15T23:19:25.9075974Z         socket_acked_count: 2,
+2026-08-15T23:19:25.9076471Z         ack_last_sequence_id: 15,
+2026-08-15T23:19:25.9076930Z         durable_purge: false
+2026-08-15T23:19:25.9077364Z       }
+2026-08-15T23:19:25.9077547Z 
+2026-08-15T23:19:25.9077906Z       at info (src/core/observability/driverTelemetry.ts:240:11)
+2026-08-15T23:19:25.9078363Z 
+2026-08-15T23:19:25.9078529Z     console.info
+2026-08-15T23:19:25.9079075Z       [driver-telemetry] tracking.batch.ingest_disabled {
+2026-08-15T23:19:25.9080032Z         source: 'driver.realtime.bridge',
+2026-08-15T23:19:25.9080681Z         context_id: 'driver:1',
+2026-08-15T23:19:25.9081202Z         retry_event_ids_count: 2
+2026-08-15T23:19:25.9081659Z       }
+2026-08-15T23:19:25.9081853Z 
+2026-08-15T23:19:25.9082205Z       at info (src/core/observability/driverTelemetry.ts:240:11)
+2026-08-15T23:19:25.9082671Z 
+2026-08-15T23:19:25.9082826Z     console.info
+2026-08-15T23:19:25.9083350Z       [driver-telemetry] tracking.batch.rate_limited {
+2026-08-15T23:19:25.9083977Z         source: 'driver.realtime.bridge',
+2026-08-15T23:19:25.9084505Z         context_id: 'driver:1',
+2026-08-15T23:19:25.9084944Z         retry_after_ms: 4000
+2026-08-15T23:19:25.9085331Z       }
+2026-08-15T23:19:25.9085503Z 
+2026-08-15T23:19:25.9085855Z       at info (src/core/observability/driverTelemetry.ts:240:11)
+2026-08-15T23:19:25.9086302Z 
+2026-08-15T23:19:25.9086443Z     console.info
+2026-08-15T23:19:25.9086961Z       [driver-telemetry] tracking.batch.session_conflict {
+2026-08-15T23:19:25.9087606Z         source: 'driver.realtime.bridge',
+2026-08-15T23:19:25.9088139Z         context_id: 'driver:1',
+2026-08-15T23:19:25.9088891Z         stale_acked_count: 1,
+2026-08-15T23:19:25.9089630Z         ack_last_sequence_id: 42
+2026-08-15T23:19:25.9090065Z       }
+2026-08-15T23:19:25.9090251Z 
+2026-08-15T23:19:25.9090620Z       at info (src/core/observability/driverTelemetry.ts:240:11)
+2026-08-15T23:19:25.9091093Z 
+2026-08-15T23:19:26.0015637Z PASS src/features/driver/services/trackingRuntimeRegistry.test.ts
+2026-08-15T23:19:26.0769572Z PASS src/features/company/utils/localDriverLocationFreshness.test.ts
+2026-08-15T23:19:26.1959447Z PASS src/features/company/components/maps/fleetMapStale.test.ts
+2026-08-15T23:19:26.2668241Z PASS src/features/driver/services/driverTrackingFixAge.test.ts
+2026-08-15T23:19:26.2683266Z 
+2026-08-15T23:19:26.2692764Z Test Suites: 13 passed, 13 total
+2026-08-15T23:19:26.2693329Z Tests:       103 passed, 103 total
+2026-08-15T23:19:26.2693636Z Snapshots:   0 total
+2026-08-15T23:19:26.2693888Z Time:        10.902 s
+2026-08-15T23:19:26.2695180Z Ran all test suites matching /(driverTrackingQueue(\.|\.p0|\.http|\.p03)|driverTrackingBridge|driverTrackingFixAge|driverRealtimeBridge|localDriverLocationFreshness|fleetMapStale|useCompanyDriverLiveTracking|trackingRuntimeRegistry|trackingQueueStore)/i.
+2026-08-15T23:19:26.2705178Z Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+2026-08-15T23:19:26.3251587Z Post job cleanup.
+2026-08-15T23:19:26.4362483Z Cache hit occurred on the primary key node-cache-Linux-x64-npm-913a90590490c8d755fd3b68a518d97b134ef0b0fb8e4430880c30d13046e739, not saving cache.
+2026-08-15T23:19:26.4528595Z Post job cleanup.
+2026-08-15T23:19:26.5371793Z [command]/usr/bin/git version
+2026-08-15T23:19:26.5414993Z git version 2.54.0
+2026-08-15T23:19:26.5453609Z Temporarily overriding HOME='/home/runner/work/_temp/23b22313-d62f-45e5-adc4-fb544068f05a' before making global git config changes
+2026-08-15T23:19:26.5455168Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-15T23:19:26.5469072Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/atmr/atmr
+2026-08-15T23:19:26.5504601Z Removing SSH command configuration
+2026-08-15T23:19:26.5512316Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-15T23:19:26.5552643Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-15T23:19:26.5836684Z Removing HTTP extra header
+2026-08-15T23:19:26.5837481Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-15T23:19:26.5884458Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-15T23:19:26.6149918Z Removing includeIf entries pointing to credentials config files
+2026-08-15T23:19:26.6156761Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-15T23:19:26.6264711Z includeif.gitdir:/home/runner/work/atmr/atmr/.git.path
+2026-08-15T23:19:26.6265751Z includeif.gitdir:/home/runner/work/atmr/atmr/.git/worktrees/*.path
+2026-08-15T23:19:26.6266645Z includeif.gitdir:/github/workspace/.git.path
+2026-08-15T23:19:26.6267495Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-08-15T23:19:26.6271982Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/atmr/atmr/.git.path
+2026-08-15T23:19:26.6330986Z /home/runner/work/_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:19:26.6337114Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/atmr/atmr/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-e86a32a1\-0220\-4f2f\-9bc4\-e3209287f77a\.config
+2026-08-15T23:19:26.6401443Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/atmr/atmr/.git/worktrees/*.path
+2026-08-15T23:19:26.6432295Z /home/runner/work/_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:19:26.6443680Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/atmr/atmr/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-e86a32a1\-0220\-4f2f\-9bc4\-e3209287f77a\.config
+2026-08-15T23:19:26.6494242Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-08-15T23:19:26.6525942Z /github/runner_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:19:26.6535389Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-e86a32a1\-0220\-4f2f\-9bc4\-e3209287f77a\.config
+2026-08-15T23:19:26.6577151Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-08-15T23:19:26.6607914Z /github/runner_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:19:26.6620479Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-e86a32a1\-0220\-4f2f\-9bc4\-e3209287f77a\.config
+2026-08-15T23:19:26.6660798Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-15T23:19:26.6916207Z Removing credentials config '/home/runner/work/_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config'
+2026-08-15T23:19:26.7082071Z Cleaning up orphan processes

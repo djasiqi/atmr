@@ -1,0 +1,2485 @@
+﻿POWER MANAGER (dumpsys power)
+
+Power Manager State:
+  Settings power_manager_constants:
+    no_cached_wake_locks=true
+  mDirty=0x0
+  mWakefulness=Dozing
+  mWakefulnessChanging=false
+  mIsPowered=false
+  mPlugType=0
+  mBatteryLevel=89
+  mDreamsBatteryLevelDrain=0
+  mDockState=0
+  mStayOn=false
+  mProximityPositive=false
+  mBootCompleted=true
+  mSystemReady=true
+  mEnhancedDischargeTimeElapsed=0
+  mLastEnhancedDischargeTimeUpdatedElapsed=0
+  mEnhancedDischargePredictionIsPersonalized=false
+  mUseAutoSuspend=true
+  mHalAutoSuspendModeEnabled=true
+  mHalInteractiveModeEnabled=false
+  mWakeLockSummary=0x41
+  mNotifyLongScheduled=+59s596ms
+  mNotifyLongDispatched=-489ms
+  mNotifyLongNextCheck=(none)
+  mRequestWaitForNegativeProximity=false
+  mInterceptedPowerKeyForProximity=false
+  mInterceptedKeyForProximity=false
+  mSandmanScheduled=false
+  mBatteryLevelLow=false
+  mLightDeviceIdleMode=true
+  mDeviceIdleMode=false
+  mDeviceIdleWhitelist=[1000, 1001, 2000, 5006, 5012, 5017, 5022, 5025, 5026, 5250, 5278, 10040, 10042, 10050, 10055, 10057, 10062, 10067, 10071, 10072, 10077, 10078, 10081, 10083, 10084, 10085, 10086, 10088, 10089, 10091, 10095, 10096, 10099, 10100, 10104, 10105, 10106, 10107, 10109, 10110, 10111, 10112, 10114, 10115, 10119, 10126, 10129, 10137, 10140, 10142, 10144, 10164, 10165, 10172, 10173, 10178, 10181, 10196, 10200, 10205, 10206, 10231, 10238, 10257, 10267, 10283, 10292, 10293, 10299, 10300, 10301, 10307, 10308, 10312, 10322, 10357, 10360, 10419, 10426, 10464, 10483, 10490, 10500, 10879, 10888, 10901]
+  mDeviceIdleTempWhitelist=[]
+  mLowPowerStandbyActive=false
+  mLastWakeTime=45892829 (431660 ms ago)
+  mLastSleepTime=46151876 (172613 ms ago)
+  mLastSleepReason=power_button
+  mLastGlobalWakeTimeRealtime=59481981 (in 13157492 ms)
+  mLastGlobalSleepTimeRealtime=59741330 (in 13416841 ms)
+  mLastInteractivePowerHintTime=46152503 (171986 ms ago)
+  mLastScreenBrightnessBoostTime=0 (46324489 ms ago)
+  mScreenBrightnessBoostInProgress=false
+  mDefaultDisplayReadyByProximity=true
+  mHoldingWakeLockSuspendBlocker=true
+  mHoldingDisplaySuspendBlocker=false
+
+Settings and Configuration:
+  mDecoupleHalAutoSuspendModeFromDisplayConfig=true
+  mDecoupleHalInteractiveModeFromDisplayConfig=true
+  mWakeUpWhenPluggedOrUnpluggedConfig=true
+  mWakeUpWhenPluggedOrUnpluggedInTheaterModeConfig=false
+  mTheaterModeEnabled=false
+  mKeepDreamingWhenUnplugging=false
+  mSuspendWhenScreenOffDueToProximityConfig=true
+  mDreamsSupportedConfig=true
+  mDreamsEnabledByDefaultConfig=false
+  mDreamsActivatedOnSleepByDefaultConfig=false
+  mDreamsActivatedOnDockByDefaultConfig=true
+  mDreamsActivatedWhilePosturedByDefaultConfig=false
+  mDreamsActivatedOnlyWhileWirelessChargingConfig=false
+  mDreamsEnabledOnBatteryConfig=false
+  mDreamsBatteryLevelMinimumWhenPoweredConfig=-1
+  mDreamsBatteryLevelMinimumWhenNotPoweredConfig=15
+  mDreamsBatteryLevelDrainCutoffConfig=5
+  mDreamsEnabledSetting=false
+  mDreamsActivateOnSleepSetting=true
+  mDreamsActivateOnDockSetting=false
+  mDreamsActivateWhilePosturedSetting=false
+  mDreamsOnlyOnWirelessChargingSetting=false
+  mDozeAfterScreenOff=true
+  mBrightWhenDozingConfig=false
+  mAttentiveWarningDurationConfig=30000
+  mStayOnWhilePluggedInSetting=15
+  mUserActivityTimeoutOverrideFromWindowManager=6000
+  mUserActivityTimeoutForDexOverrideFromWindowManager=-1
+  mUserInactiveOverrideFromWindowManager=false
+  mDozeScreenStateOverrideFromDreamManager=1
+  mDrawWakeLockOverrideFromSidekick=false
+  mDozeScreenBrightnessOverrideFromDreamManager=-1.0
+  mUseNormalBrightnessForDoze=false
+  mScreenBrightnessMinimum=0.0
+  mScreenBrightnessMaximum=1.0
+  mScreenBrightnessDefault=0.5019608
+  mDoubleTapWakeEnabled=false
+  mForegroundProfile=0
+  mUserId=0
+  mLastWakeUpReason: 1
+  mOutdoorModeSetting: false
+  mAutoBrightnessLowerLimit=-1
+  mAutoBrightnessUpperLimit=-1
+  mLastAutoBrightnessLimitTime=0
+  mAutoBrightnessLimitLastCaller=
+  SEC_FEATURE_USE_GED_DOZE: true
+  SEC_FEATURE_SEAMLESS_AOD: false
+  SEC_FEATURE_WA_WAITING_AOD_WHEN_WAKINGUP_FROM_DOZE: true
+  SEC_FEATURE_WAKEUP_WHEN_PLUG_CHANGED: true
+  SEC_FEATURE_AOD_LOOK_CHARGING_UI: false
+  mAodMode: true
+  mShouldWaitForTransitionToAodUi: false
+  SEC_FEATURE_DEX_DUAL_VIEW: true
+  SEC_FEATURE_FOLD_COVER_DISPLAY: false
+  SEC_FEATURE_FLIP_COVER_DISPLAY: false
+  SEC_FEATURE_FLIP_LARGE_COVER_DISPLAY: false
+  SEC_FEATURE_DUAL_DISPLAY: false
+  SEC_FEATURE_ENSURE_TRANSITION_TO_DOZING: false
+
+Attentive timeout: -1 ms
+Sleep timeout: -1 ms
+Screen off timeout: 6000 ms
+Screen dim duration: 0 ms
+Screen dim duration override: 0 ms
+SQD Screen dim duration override: -1 ms
+Screen off timeout for DeX: 600000 ms
+
+Smart Stay:
+  mSmartStayEnabledSetting: false
+Smart Stay:
+  USE_SMART_STAY: true
+  mSmartStayEnabled: false
+  SmartStayDelay: 2750
+  mFaceDetectRequested: false
+  PREVENT_BAD_CURRENT_CONSUMPTION: true
+
+Wakelock Blacklist App id: size=0
+
+UID states (changing=false changed=false):
+  UID 1000:   ACTIVE  count=2 state=0
+  UID 1001:   ACTIVE  count=0 state=0
+  UID 1002:   ACTIVE  count=0 state=0
+  UID 1027:   ACTIVE  count=0 state=0
+  UID 1068:   ACTIVE  count=0 state=0
+  UID 1073:   ACTIVE  count=0 state=0
+  UID 5013:   ACTIVE  count=0 state=5
+  UID 5025: INACTIVE  count=0 state=8
+  UID 5250:   ACTIVE  count=0 state=5
+  UID 5278: INACTIVE  count=0 state=19
+  UID 5279: INACTIVE  count=0 state=8
+  UID 5554:   ACTIVE  count=0 state=6
+  UID u0a23: INACTIVE  count=0 state=19
+  UID u0a40:   ACTIVE  count=0 state=5
+  UID u0a47: INACTIVE  count=0 state=19
+  UID u0a48: INACTIVE  count=0 state=19
+  UID u0a57: INACTIVE  count=0 state=19
+  UID u0a66: INACTIVE  count=0 state=19
+  UID u0a67: INACTIVE  count=0 state=10
+  UID u0a68: INACTIVE  count=0 state=19
+  UID u0a83:   ACTIVE  count=0 state=6
+  UID u0a84:   ACTIVE  count=0 state=6
+  UID u0a92: INACTIVE  count=0 state=8
+  UID u0a95: INACTIVE  count=0 state=10
+  UID u0a102: INACTIVE  count=0 state=19
+  UID u0a104:   ACTIVE  count=0 state=5
+  UID u0a106: INACTIVE  count=0 state=10
+  UID u0a107: INACTIVE  count=0 state=17
+  UID u0a110:   ACTIVE  count=0 state=6
+  UID u0a111:   ACTIVE  count=0 state=5
+  UID u0a114: INACTIVE  count=0 state=17
+  UID u0a116: INACTIVE  count=0 state=16
+  UID u0a117: INACTIVE  count=0 state=16
+  UID u0a128: INACTIVE  count=0 state=19
+  UID u0a133: INACTIVE  count=0 state=19
+  UID u0a137: INACTIVE  count=0 state=10
+  UID u0a138:   ACTIVE  count=0 state=5
+  UID u0a140:   ACTIVE  count=0 state=5
+  UID u0a167: INACTIVE  count=0 state=19
+  UID u0a179:   ACTIVE  count=0 state=7
+  UID u0a196:   ACTIVE  count=0 state=6
+  UID u0a209:   ACTIVE  count=0 state=6
+  UID u0a221: INACTIVE  count=0 state=19
+  UID u0a223:   ACTIVE  count=0 state=5
+  UID u0a230: INACTIVE  count=0 state=19
+  UID u0a231:   ACTIVE  count=0 state=5
+  UID u0a232:   ACTIVE  count=0 state=5
+  UID u0a233: INACTIVE  count=0 state=8
+  UID u0a234:   ACTIVE  count=0 state=5
+  UID u0a243: INACTIVE  count=0 state=16
+  UID u0a248: INACTIVE  count=0 state=16
+  UID u0a249: INACTIVE  count=0 state=19
+  UID u0a250: INACTIVE  count=0 state=19
+  UID u0a257:   ACTIVE  count=0 state=0
+  UID u0a261:   ACTIVE  count=0 state=0
+  UID u0a266: INACTIVE  count=0 state=19
+  UID u0a267: INACTIVE  count=0 state=19
+  UID u0a268:   ACTIVE  count=0 state=5
+  UID u0a269:   ACTIVE  count=0 state=0
+  UID u0a274:   ACTIVE  count=0 state=5
+  UID u0a287: INACTIVE  count=0 state=8
+  UID u0a294: INACTIVE  count=0 state=8
+  UID u0a302: INACTIVE  count=0 state=19
+  UID u0a304: INACTIVE  count=0 state=16
+  UID u0a308: INACTIVE  count=0 state=17
+  UID u0a360: INACTIVE  count=0 state=17
+  UID u0a363:   ACTIVE  count=0 state=0
+  UID u0a374: INACTIVE  count=0 state=16
+  UID u0a417:   ACTIVE  count=0 state=6
+  UID u0a451: INACTIVE  count=0 state=11
+  UID u0a487:   ACTIVE  count=0 state=0
+  UID u0a508: INACTIVE  count=0 state=19
+  UID u0a510: INACTIVE  count=0 state=19
+  UID u0a599: INACTIVE  count=0 state=19
+  UID u0a641:   ACTIVE  count=0 state=4
+  UID u0a657: INACTIVE  count=0 state=19
+  UID u0a710: INACTIVE  count=0 state=19
+  UID u0a757: INACTIVE  count=0 state=16
+  UID u0a765: INACTIVE  count=0 state=18
+  UID u0a896:   ACTIVE  count=0 state=4
+  UID u0a901: INACTIVE  count=0 state=8
+  UID u0ai0: INACTIVE  count=0 state=11
+  UID u0ai1: INACTIVE  count=0 state=17
+  UID u0ai106: INACTIVE  count=0 state=17
+  UID u0ai9000: INACTIVE  count=0 state=17
+  UID u0i20: INACTIVE  count=0 state=17
+  UID u0i21: INACTIVE  count=0 state=17
+  UID u150a47: INACTIVE  count=0 state=19
+  UID u150a48: INACTIVE  count=0 state=19
+  UID u150a57: INACTIVE  count=0 state=19
+  UID u150a111:   ACTIVE  count=0 state=5
+  UID u150a223:   ACTIVE  count=0 state=5
+  UID u150a230: INACTIVE  count=0 state=19
+  UID u150a231: INACTIVE  count=0 state=10
+  UID u150a266:   ACTIVE  count=0 state=6
+  UID u150a268:   ACTIVE  count=0 state=5
+  UID u150a269:   ACTIVE  count=0 state=0
+
+Looper state:
+  Looper (PowerManagerService, tid 61) {45dbb88}
+    (MessageQueue is using Concurrent implementation)
+    State: android.os.MessageQueue$TimedParkStateNode@6356c32
+    PriorityQueue Messages: 
+    AsyncPriorityQueue Messages: 
+    Message 1: { when=+59s593ms what=4 target=android.os.Handler async=true heapIndex=-1 }
+    Message 2: { when=+13m55s902ms callback=com.android.server.power.PowerManagerService$6 target=android.os.Handler async=true heapIndex=-1 }
+    (Total messages: 3, polling=true, quitting=false)
+Clear Cover:
+  mIsCoverClosed: false
+  mlastUpdateCoverStateReason: isCoverClosedBySysfs called on closed = false
+  mlastUpdateCoverStateTime: = -1 (46324493 ms ago)
+  mFeatureCoverSysfs: true
+  mCoverType: -1 at 38182255 (8142237 ms ago)
+  mlastUpdateCoverTypeReason: setCoverType = -1
+  mScreenBrightnessForClearCoverConfig=0.4156863
+  mBrightnessLimitByCoverConfig: -1
+Master Brightness Limit:
+  mMasterBrightnessLowerLimit: -1
+  mMasterBrightnessUpperLimit: 612
+  mMasterBrightnessLimitLastCaller:  (uid: 1000 pid: 7047)
+  mMasterBrightnessLimitPeriod: 200
+  mMasterBrightnessLimitRunning: false
+  mLastRequestedLimitationOfBrightness: 612
+  mTargetBrightnessForLimit : 612
+HDR Brightness Limit
+  mHdrBrightnessUpperLimit: -1
+  mLastRequestedLimitationOfHdrBrightness: 485
+  mTargetBrightnessForHdrLimit: 0
+  mHdrBrightnessLimitRunning: false
+  mHdrBrightnessLimitPeriod: 0
+HDR Brightness Limit Locks: size=0
+
+SEC_USE_FACTORY_BINARY: false
+
+Wake Locks: size=2
+  PARTIAL_WAKE_LOCK                 '*job*r/ch.liri.operations/androidx.work.impl.background.systemjob.SystemJobService' ACQ=-10m21s107ms LONG (uid=1000 isFrozen=false pid=3001 ws=WorkSource{ chains=WorkChain{(10901), (1000, JobScheduler)}} displayId=0 lock=2f3e77a)
+  DOZE_WAKE_LOCK                    'dream:doze' ACQ=-2m51s863ms (uid=1000 isFrozen=false pid=3001 displayId=0 lock=85287b7)
+
+Suspend Blockers: size=5
+  PowerManagerService.Booting: ref count=0 []
+  PowerManagerService.WakeLocks: ref count=1 [unknown: (08-16 13:34:24.933)]
+  PowerManagerService.Display: ref count=0 []
+  PowerManagerService.Broadcasts: ref count=0 []
+  PowerManagerService.WirelessChargerDetector: ref count=0 []
+
+Display Power: com.android.server.power.PowerManagerService$3@c627d83
+
+ScreenTimeoutConstants: 
+  mAttentiveTimeoutConfig=-1
+  mAttentiveTimeoutSetting=-1
+  mMinimumScreenOffTimeoutConfig=3000
+  mMaximumScreenDimDurationConfig=20000
+  mMaximumScreenDimRatioConfig=0.333
+  mMaximumScreenOffTimeoutFromDeviceAdmin=9223372036854775807 (enforced=false)
+  mScreenOffTimeoutSetting=30000
+  mSleepTimeoutSetting=-1
+
+mFreezingScreenBrightness: false
+
+PowerHistorian:
+  WakeLock Release History:
+  [1]   08-15 22:17:27.638 +2m29s51ms        SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [2]   08-15 23:03:45.293 +1m10s1ms         SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=b4e5970)
+  [3]   08-15 23:04:15.476 +1m40s247ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [4]   08-16 00:12:18.184 +1m18s120ms       SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=89b172e)
+  [5]   08-16 00:16:16.252 +1m8s289ms        SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=88aeb7d)
+  [6]   08-16 00:16:16.326 +5m24s74ms        SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [7]   08-16 01:09:08.033 +1m10s1ms         SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=60a90b6)
+  [8]   08-16 01:10:09.717 +1m10s6ms         SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=e59f998)
+  [9]   08-16 01:10:26.879 +3m41s701ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [10]  08-16 01:12:54.533 +1m1s937ms        SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=53c3fa6)
+  [11]  08-16 01:13:39.765 +1m3s520ms        SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=7694c8c)
+  [12]  08-16 01:13:47.422 +1m50s242ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [13]  08-16 01:20:59.212 +1m10s1ms         SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=de3e25e)
+  [14]  08-16 01:25:29.610 +1m38s304ms       SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=b1c2908)
+  [15]  08-16 01:26:48.449 +1m19s60ms        SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=4c7f81a)
+  [16]  08-16 01:27:06.902 +7m17s628ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [17]  08-16 01:30:48.467 +1m10s1ms         SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=f51e86f)
+  [18]  08-16 01:31:00.217 +1m21s592ms       SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=3331699)
+  [19]  08-16 01:34:50.944 +2m25s395ms       SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=6dc9fca)
+  [20]  08-16 01:34:50.958 +5m12s409ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [21]  08-16 01:36:55.739 +1m58s536ms       SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=846dd9c)
+  [22]  08-16 01:37:06.038 +2m9s978ms        SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [23]  08-16 01:41:07.433 +2m17s175ms       SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=1fd7346)
+  [24]  08-16 01:42:09.767 +1m2s568ms        SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=4ae8224)
+  [25]  08-16 01:43:20.040 +1m10s488ms       SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=f0c181e)
+  [26]  08-16 01:44:54.648 +1m10s2ms         SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=90a0baa)
+  [27]  08-16 01:44:58.047 +1m11s834ms       SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=429cc8)
+  [28]  08-16 01:46:48.313 +1m18s238ms       SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=28050 displayId=0 lock=a09ed9b)
+  [29]  08-16 01:46:48.345 +9m41s148ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [30]  08-16 09:38:46.813 +1m19s996ms       SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=389 displayId=0 lock=9830076)
+  [31]  08-16 09:38:46.831 +1m51s874ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [32]  08-16 09:47:38.352 +1m10s703ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [33]  08-16 09:50:19.316 +1m10s0ms         SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=389 displayId=0 lock=9af150a)
+  [34]  08-16 09:52:22.544 +1m8s577ms        SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=389 displayId=0 lock=a8fb406)
+  [35]  08-16 09:53:00.098 +5m19s368ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [36]  08-16 09:53:31.119 +1m8s792ms        SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=389 displayId=0 lock=5bc492d)
+  [37]  08-16 09:54:44.942 +1m10s3ms         SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=389 displayId=0 lock=5151c2)
+  [38]  08-16 09:56:27.145 +3m26s981ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [39]  08-16 09:56:27.162 +1m30s131ms       SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=389 displayId=0 lock=d2282ef)
+  [40]  08-16 11:54:05.646 +7m2s163ms        SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10898 ch.liri.operations} displayId=0 lock=b2ed51c)
+  [41]  08-16 12:00:18.530 +2m20s698ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10898 ch.liri.operations} displayId=0 lock=b2ed51c)
+  [42]  08-16 12:08:43.858 +4m49s157ms       SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10898 ch.liri.operations} displayId=0 lock=b2ed51c)
+  [43]  08-16 13:39:32.263 +1m47s36ms        SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+  [44]  08-16 13:41:00.740 +1m10s9ms         SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=389 displayId=0 lock=de740af)
+  [45]  08-16 13:41:16.622 +1m10s0ms         SCREEN_BRIGHT_WAKE_LOCK           'GrootPlayer:WakeLock' DISABLED (uid=10451 isFrozen=false pid=389 displayId=0 lock=1383382)
+  [46]  08-16 13:41:53.923 +2m3s111ms        SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3001 ws=WorkSource{10451 com.instagram.android} displayId=0 lock=b2ed51c)
+
+  DisplayGroup History:
+
+  WakeUp History:
+   No   Timestamp          UID   ID ST  Reason                         Foreground Package             Caller (Op Package)
+  [1]   08-16 01:27:25.748 1000  0  OFF timeout                        com.instagram.android          
+  [2]   08-16 01:27:26.135 1000  0  ON  power_button                   com.instagram.android          android
+  [3]   08-16 01:46:48.229 1000  0  OFF power_button                   com.instagram.android          
+  [4]   08-16 09:35:52.891 1000  0  ON  power_button                   com.instagram.android          android
+  [5]   08-16 09:35:54.541 1000  0  OFF power_button                   com.instagram.android          
+  [6]   08-16 09:35:54.953 1000  0  ON  power_button                   com.instagram.android          android
+  [7]   08-16 09:35:58.446 1000  0  ON  plugged_in                     com.instagram.android          android
+  [8]   08-16 09:36:00.705 1000  0  OFF power_button                   com.instagram.android          
+  [9]   08-16 09:36:19.779 1000  0  ON  power_button                   com.instagram.android          android
+  [10]  08-16 09:38:46.738 1000  0  OFF power_button                   com.instagram.android          
+  [11]  08-16 09:39:22.310 1000  0  ON  power_button                   com.instagram.android          android
+  [12]  08-16 09:39:28.303 1000  0  OFF timeout                        com.instagram.android          
+  [13]  08-16 09:40:31.915 1000  0  ON  power_button                   com.instagram.android          android
+  [14]  08-16 09:41:03.349 1000  0  OFF power_button                   com.whatsapp                   
+  [15]  08-16 09:41:03.792 1000  0  ON  power_button                   com.whatsapp                   android
+  [16]  08-16 09:41:09.790 1000  0  OFF timeout                        com.whatsapp                   
+  [17]  08-16 09:41:48.822 1000  0  ON  power_button                   com.whatsapp                   android
+  [18]  08-16 09:43:57.673 1000  0  OFF timeout                        nl.degiro.trader               
+  [19]  08-16 09:44:08.792 1000  0  ON  power_button                   nl.degiro.trader               android
+  [20]  08-16 09:56:28.053 1000  0  OFF power_button                   com.sec.android.app.launcher   
+  [21]  08-16 09:56:55.350 1000  0  ON  power_button                   com.sec.android.app.launcher   android
+  [22]  08-16 09:57:28.934 1000  0  OFF timeout                        com.sec.android.app.launcher   
+  [23]  08-16 10:02:01.581 1000  0  ON  power_button                   com.sec.android.app.launcher   android
+  [24]  08-16 10:03:50.538 1000  0  OFF power_button                   com.whatsapp                   
+  [25]  08-16 10:05:17.738 1000  0  ON  power_button                   com.whatsapp                   android
+  [26]  08-16 10:05:21.476 1000  0  OFF power_button                   com.whatsapp                   
+  [27]  08-16 10:06:12.341 1000  0  ON  power_button                   com.whatsapp                   android
+  [28]  08-16 10:06:14.555 1000  0  OFF power_button                   com.whatsapp                   
+  [29]  08-16 10:08:25.600 1000  0  ON  power_button                   com.whatsapp                   android
+  [30]  08-16 10:08:29.068 1000  0  OFF power_button                   com.whatsapp                   
+  [31]  08-16 10:13:01.272 1000  0  ON  power_button                   com.whatsapp                   android
+  [32]  08-16 10:13:08.176 1000  0  OFF timeout                        com.whatsapp                   
+  [33]  08-16 10:22:13.743 1000  0  ON  power_button                   com.whatsapp                   android
+  [34]  08-16 10:22:53.200 1000  0  OFF power_button                   com.samsung.android.spay       
+  [35]  08-16 10:28:31.384 1000  0  ON  power_button                   com.samsung.android.spay       android
+  [36]  08-16 10:29:28.048 1000  0  OFF power_button                   com.whatsapp                   
+  [37]  08-16 10:29:50.495 1000  0  ON  power_button                   com.whatsapp                   android
+  [38]  08-16 10:29:57.468 1000  0  OFF timeout                        com.whatsapp                   
+  [39]  08-16 10:30:57.385 1000  0  ON  power_button                   com.whatsapp                   android
+  [40]  08-16 10:30:58.768 1000  0  OFF power_button                   com.whatsapp                   
+  [41]  08-16 10:47:48.556 1000  0  ON  power_button                   com.whatsapp                   android
+  [42]  08-16 10:48:00.395 1000  0  OFF power_button                   com.whatsapp                   
+  [43]  08-16 11:12:39.191 1000  0  ON  power_button                   com.whatsapp                   android
+  [44]  08-16 11:12:51.157 1000  0  OFF power_button                   com.whatsapp                   
+  [45]  08-16 11:14:39.400 1000  0  ON  power_button                   com.whatsapp                   android
+  [46]  08-16 11:14:40.794 1000  0  ON  application                    com.google.android.googlequicksearchbox com.google.android.googlequicksearchbox
+  [47]  08-16 11:14:41.422 10040 0  OFF double_tap                     com.google.android.googlequicksearchbox 
+  [48]  08-16 11:15:50.397 1000  0  ON  power_button                   com.whatsapp                   android
+  [49]  08-16 11:15:56.880 1000  0  OFF power_button                   com.whatsapp                   
+  [50]  08-16 11:18:34.752 1000  0  ON  power_button                   com.whatsapp                   android
+  [51]  08-16 11:18:54.510 1000  0  OFF power_button                   com.sec.android.app.launcher   
+  [52]  08-16 11:20:18.534 1000  0  ON  power_button                   com.sec.android.app.launcher   android
+  [53]  08-16 11:22:02.401 1000  0  OFF power_button                   com.sec.android.app.launcher   
+  [54]  08-16 11:24:45.554 1000  0  ON  power_button                   com.sec.android.app.launcher   android
+  [55]  08-16 11:25:17.391 1000  0  OFF power_button                   com.instagram.android          
+  [56]  08-16 11:34:47.857 1000  0  ON  power_button                   com.instagram.android          android
+  [57]  08-16 11:35:16.245 1000  0  OFF power_button                   com.instagram.android          
+  [58]  08-16 11:35:47.179 1000  0  ON  power_button                   com.instagram.android          android
+  [59]  08-16 11:35:48.908 1000  0  OFF power_button                   com.instagram.android          
+  [60]  08-16 11:35:53.350 1000  0  ON  power_button                   com.instagram.android          android
+  [61]  08-16 11:38:07.476 1000  0  ON  plugged_in                     com.sec.android.app.launcher   android
+  [62]  08-16 11:40:01.890 1000  0  ON  wake_key                       ch.liri.operations             android
+  [63]  08-16 11:54:04.895 1000  0  ON  wake_key                       ch.liri.operations             android
+  [64]  08-16 11:57:51.205 1000  0  ON  wake_key                       com.sec.android.app.launcher   android
+  [65]  08-16 12:02:30.225 1000  0  OFF sleep_button                   com.sec.android.app.launcher   
+  [66]  08-16 12:03:45.395 1000  0  ON  wake_key                       com.sec.android.app.launcher   android
+  [67]  08-16 12:35:39.653 1000  0  OFF sleep_button                   ch.liri.operations             
+  [68]  08-16 12:36:50.843 1000  0  ON  wake_key                       ch.liri.operations             android
+  [69]  08-16 12:39:18.326 1000  0  ON  wake_key                       ch.liri.operations             android
+  [70]  08-16 12:46:26.886 1000  0  OFF sleep_button                   ch.liri.operations             
+  [71]  08-16 12:47:37.056 1000  0  ON  wake_key                       ch.liri.operations             android
+  [72]  08-16 12:55:28.506 1000  0  ON  plugged_in                     ch.liri.operations             android
+  [73]  08-16 12:55:38.508 1000  0  OFF timeout                        ch.liri.operations             
+  [74]  08-16 13:06:45.748 1000  0  ON  power_button                   ch.liri.operations             android
+  [75]  08-16 13:07:23.802 1000  0  OFF timeout                        ch.liri.operations             
+  [76]  08-16 13:16:29.866 1000  0  ON  power_button                   ch.liri.operations             android
+  [77]  08-16 13:17:14.558 1000  0  OFF timeout                        com.sec.android.app.launcher   
+  [78]  08-16 13:17:35.507 1000  0  ON  power_button                   com.sec.android.app.launcher   android
+  [79]  08-16 13:21:27.556 1000  0  OFF timeout                        com.android.settings           
+  [80]  08-16 13:22:35.293 1000  0  ON  power_button                   com.android.settings           android
+  [81]  08-16 13:23:59.094 1000  0  OFF timeout                        ch.liri.operations             
+  [82]  08-16 13:25:10.657 1000  0  ON  wake_key                       ch.liri.operations             android
+  [83]  08-16 13:26:04.807 1000  0  ON  wake_key                       ch.liri.operations             android
+  [84]  08-16 13:26:18.889 1000  0  OFF power_button                   ch.liri.operations             
+  [85]  08-16 13:26:19.353 1000  0  ON  power_button                   ch.liri.operations             android
+  [86]  08-16 13:26:50.788 1000  0  OFF timeout                        ch.liri.operations             
+  [87]  08-16 13:28:43.571 10040 0  ON  application                    ch.liri.operations             com.whatsapp
+  [88]  08-16 13:28:44.847 1000  0  ON  application                    com.whatsapp                   com.whatsapp
+  [89]  08-16 13:28:52.676 1000  0  OFF timeout                        ch.liri.operations             
+  [90]  08-16 13:28:54.991 1000  0  ON  power_button                   ch.liri.operations             android
+  [91]  08-16 13:29:30.791 1000  0  OFF timeout                        ch.liri.operations             
+  [92]  08-16 13:29:43.651 1000  0  ON  wake_key                       ch.liri.operations             android
+  [93]  08-16 13:29:49.649 1000  0  OFF timeout                        ch.liri.operations             
+  [94]  08-16 13:32:24.485 1000  0  ON  power_button                   ch.liri.operations             android
+  [95]  08-16 13:32:47.512 1000  0  ON  wake_key                       ch.liri.operations             android
+  [96]  08-16 13:33:20.171 1000  0  OFF timeout                        ch.liri.operations             
+  [97]  08-16 13:34:45.004 1000  0  ON  power_button                   ch.liri.operations             android
+  [98]  08-16 13:35:26.667 1000  0  OFF timeout                        ch.liri.operations             
+  [99]  08-16 13:37:34.395 1000  0  ON  power_button                   ch.liri.operations             android
+  [100] 08-16 13:41:53.745 1000  0  OFF power_button                   com.instagram.android          
+
+  AutomaticBrightness History:
+  [1]   08-15 21:06:29.447 ShortTermModel: reset data, change configuration
+
+  BrightnessReason History:
+  [1]   08-15 21:06:29.448 override[128] -> scale_factor[129]
+  [2]   08-15 21:06:34.631 manual[120] -> scale_factor[121]
+  [3]   08-16 10:22:20.325 override[255] -> scale_factor[257]
+  [4]   08-16 10:22:37.078 manual[120] -> scale_factor[121]
+  [5]   08-16 10:22:37.692 override[255] -> scale_factor[257]
+  [6]   08-16 10:22:47.815 manual[120] -> scale_factor[121]
+  [7]   08-16 10:22:47.934 override[255] -> scale_factor[257]
+  [8]   08-16 10:28:37.858 override[255] -> scale_factor[257]
+  [9]   08-16 10:28:41.188 manual[120] -> scale_factor[121]
+
+screen on profiler V2: 66
+[  0][08-15 22:10:40.348][T: 214]  [Caller: 6] [WMS:  0] [DSL: 1] [Panel:179] [Frame: -1]
+[  1][08-15 22:11:18.693][T: 199]  [Caller: 3] [WMS:116] [DSL: 1] [Panel:183] [Frame: -1]
+[  2][08-15 22:12:14.255][T: 266]  [Caller:71] [WMS:124] [DSL: 0] [Panel:182] [Frame: -1]
+[  3][08-15 22:13:47.151][T: 283]  [Caller:71] [WMS:129] [DSL: 2] [Panel:178] [Frame: -1]
+[  4][08-15 22:13:56.089][T: 218]  [Caller: 7] [WMS:113] [DSL: 1] [Panel:180] [Frame: -1]
+[  5][08-15 22:14:10.473][T: 203]  [Caller: 3] [WMS:141] [DSL: 1] [Panel:177] [Frame: -1]
+[  6][08-15 22:18:01.150][T: 250]  [Caller:27] [WMS:135] [DSL: 1] [Panel:190] [Frame: -1]
+[  7][08-15 22:18:05.068][T: 227]  [Caller: 8] [WMS: 57] [DSL: 4] [Panel:187] [Frame: -1]
+[  8][08-15 22:19:53.989][T: 261]  [Caller:50] [WMS: 70] [DSL: 1] [Panel:184] [Frame: -1]
+[  9][08-15 23:02:08.437][T: 668]  [Caller:20] [WMS:629] [DSL: 0] [Panel:280] [Frame: -1]
+[ 10][08-15 23:30:55.038][T: 243]  [Caller:13] [WMS:213] [DSL: 0] [Panel:192] [Frame: -1]
+[ 11][08-16 00:09:29.927][T: 425]  [Caller:76] [WMS:341] [DSL: 6] [Panel:245] [Frame: -1]
+[ 12][08-16 01:05:48.055][T: 417]  [Caller:10] [WMS:401] [DSL: 0] [Panel:209] [Frame: -1]
+[ 13][08-16 01:06:14.884][T: 158]  [Caller: 1] [WMS:  0] [DSL: 0] [Panel:129] [Frame: -1]
+[ 14][08-16 01:06:28.574][T: 288]  [Caller:82] [WMS: 68] [DSL: 0] [Panel:185] [Frame: -1]
+[ 15][08-16 01:11:38.876][T: 274]  [Caller:11] [WMS:146] [DSL: 3] [Panel:218] [Frame: -1]
+[ 16][08-16 01:11:53.371][T: 283]  [Caller: 5] [WMS:  0] [DSL: 8] [Panel:229] [Frame: -1]
+[ 17][08-16 01:18:28.890][T: 250]  [Caller: 9] [WMS:219] [DSL: 1] [Panel:219] [Frame: -1]
+[ 18][08-16 01:18:46.622][T: 211]  [Caller: 8] [WMS:101] [DSL: 0] [Panel:180] [Frame: -1]
+[ 19][08-16 01:19:46.471][T: 215]  [Caller:11] [WMS:116] [DSL: 1] [Panel:190] [Frame: -1]
+[ 20][08-16 01:27:13.308][T: 239]  [Caller: 8] [WMS: 95] [DSL: 1] [Panel:195] [Frame: -1]
+[ 21][08-16 01:27:19.742][T: 204]  [Caller: 4] [WMS: 97] [DSL: 0] [Panel:179] [Frame: -1]
+[ 22][08-16 01:27:26.135][T: 205]  [Caller: 1] [WMS: 90] [DSL: 0] [Panel:178] [Frame: -1]
+[ 23][08-16 09:35:52.890][T: 235]  [Caller:12] [WMS:192] [DSL: 1] [Panel:206] [Frame: -1]
+[ 24][08-16 09:35:54.953][T: 200]  [Caller: 2] [WMS: 68] [DSL: 6] [Panel:183] [Frame: -1]
+[ 25][08-16 09:36:19.779][T: 202]  [Caller: 7] [WMS: 38] [DSL: 0] [Panel:183] [Frame: -1]
+[ 26][08-16 09:39:22.310][T: 229]  [Caller:13] [WMS:131] [DSL: 0] [Panel:186] [Frame: -1]
+[ 27][08-16 09:40:31.915][T: 305]  [Caller:94] [WMS: 99] [DSL:11] [Panel:182] [Frame: -1]
+[ 28][08-16 09:41:03.787][T: 187]  [Caller: 1] [WMS:171] [DSL: 1] [Panel:177] [Frame: -1]
+[ 29][08-16 09:41:48.822][T: 272]  [Caller:69] [WMS:131] [DSL: 0] [Panel:182] [Frame: -1]
+[ 30][08-16 09:44:08.791][T: 210]  [Caller: 7] [WMS:136] [DSL: 1] [Panel:193] [Frame: -1]
+[ 31][08-16 09:56:55.349][T: 294]  [Caller:69] [WMS:179] [DSL: 1] [Panel:206] [Frame: -1]
+[ 32][08-16 10:02:01.581][T: 318]  [Caller:12] [WMS:294] [DSL: 1] [Panel:183] [Frame: -1]
+[ 33][08-16 10:05:17.738][T: 221]  [Caller:19] [WMS: 48] [DSL: 8] [Panel:182] [Frame: -1]
+[ 34][08-16 10:06:12.341][T: 295]  [Caller:72] [WMS:138] [DSL: 1] [Panel:194] [Frame: -1]
+[ 35][08-16 10:08:25.600][T: 211]  [Caller: 9] [WMS:  0] [DSL: 0] [Panel:159] [Frame: -1]
+[ 36][08-16 10:13:01.272][T: 205]  [Caller: 9] [WMS:  0] [DSL: 0] [Panel:164] [Frame: -1]
+[ 37][08-16 10:22:13.743][T: 199]  [Caller: 9] [WMS:  0] [DSL: 0] [Panel:153] [Frame: -1]
+[ 38][08-16 10:28:31.383][T: 406]  [Caller:17] [WMS:378] [DSL: 1] [Panel:197] [Frame: -1]
+[ 39][08-16 10:29:50.494][T: 353]  [Caller:18] [WMS:310] [DSL: 0] [Panel:188] [Frame: -1]
+[ 40][08-16 10:30:57.385][T: 225]  [Caller:21] [WMS:146] [DSL: 0] [Panel:182] [Frame: -1]
+[ 41][08-16 10:47:48.554][T: 586]  [Caller:29] [WMS:539] [DSL: 1] [Panel:249] [Frame: -1]
+[ 42][08-16 11:12:39.190][T: 625]  [Caller:41] [WMS:562] [DSL: 0] [Panel:268] [Frame: -1]
+[ 43][08-16 11:14:39.400][T: 207]  [Caller:12] [WMS:  0] [DSL: 1] [Panel:147] [Frame: -1]
+[ 44][08-16 11:15:50.396][T: 288]  [Caller:72] [WMS:203] [DSL: 8] [Panel:179] [Frame: -1]
+[ 45][08-16 11:18:34.751][T: 425]  [Caller:13] [WMS:404] [DSL: 3] [Panel:201] [Frame: -1]
+[ 46][08-16 11:20:18.534][T: 356]  [Caller:14] [WMS:333] [DSL: 1] [Panel:180] [Frame: -1]
+[ 47][08-16 11:24:45.554][T: 403]  [Caller:16] [WMS:369] [DSL: 1] [Panel:186] [Frame: -1]
+[ 48][08-16 11:34:47.856][T: 624]  [Caller:30] [WMS:580] [DSL: 4] [Panel:275] [Frame: -1]
+[ 49][08-16 11:35:47.178][T: 226]  [Caller: 9] [WMS:151] [DSL:11] [Panel:181] [Frame: -1]
+[ 50][08-16 11:35:53.348][T: 254]  [Caller: 3] [WMS:151] [DSL:24] [Panel:211] [Frame: -1]
+[ 51][08-16 12:03:45.394][T: 215]  [Caller: 9] [WMS:  0] [DSL: 1] [Panel:186] [Frame: -1]
+[ 52][08-16 12:36:50.843][T: 218]  [Caller: 5] [WMS:  0] [DSL: 0] [Panel:185] [Frame: -1]
+[ 53][08-16 12:47:37.054][T: 196]  [Caller:10] [WMS:  0] [DSL: 1] [Panel:165] [Frame: -1]
+[ 54][08-16 13:06:45.748][T: 323]  [Caller:27] [WMS:271] [DSL: 0] [Panel:234] [Frame: -1]
+[ 55][08-16 13:16:29.866][T: 333]  [Caller:15] [WMS:256] [DSL: 0] [Panel:283] [Frame: -1]
+[ 56][08-16 13:17:35.507][T: 294]  [Caller:69] [WMS:170] [DSL: 1] [Panel:214] [Frame: -1]
+[ 57][08-16 13:22:35.292][T: 323]  [Caller:44] [WMS:174] [DSL: 2] [Panel:247] [Frame: -1]
+[ 58][08-16 13:25:10.655][T: 239]  [Caller: 6] [WMS:178] [DSL: 1] [Panel:204] [Frame: -1]
+[ 59][08-16 13:26:19.353][T: 659]  [Caller: 4] [WMS:648] [DSL: 0] [Panel:193] [Frame: -1]
+[ 60][08-16 13:28:43.570][T: 698]  [Caller:14] [WMS:675] [DSL:63] [Panel:304] [Frame: -1]
+[ 61][08-16 13:28:54.991][T: 237]  [Caller:21] [WMS:162] [DSL: 0] [Panel:187] [Frame: -1]
+[ 62][08-16 13:29:43.649][T: 227]  [Caller: 8] [WMS:101] [DSL: 6] [Panel:182] [Frame: -1]
+[ 63][08-16 13:32:24.485][T: 266]  [Caller:29] [WMS:133] [DSL: 0] [Panel:196] [Frame: -1]
+[ 64][08-16 13:34:45.003][T: 473]  [Caller:22] [WMS:436] [DSL: 6] [Panel:210] [Frame: -1]
+[ 65][08-16 13:37:34.395][T: 224]  [Caller:11] [WMS:165] [DSL: 0] [Panel:181] [Frame: -1]
+
+screen off profiler V2: 67
+[OFF][  0][08-15 21:42:39.261][T: 623]  [Caller:351] [Cfp:263] [Cfa: 7] [Panel:194]
+[OFF][  1][08-15 22:10:45.722][T: 358]  [Caller:303] [Cfp: 47] [Cfa: 7] [Panel:154]
+[OFF][  2][08-15 22:11:58.050][T: 101]  [Caller: 1] [Cfp: 36] [Cfa:57] [Panel:146]
+[OFF][  3][08-15 22:12:28.511][T:  62]  [Caller: 0] [Cfp: 27] [Cfa:30] [Panel:154]
+[OFF][  4][08-15 22:13:53.082][T:  37]  [Caller: 0] [Cfp: 30] [Cfa: 5] [Panel:151]
+[OFF][  5][08-15 22:14:09.918][T: 434]  [Caller:328] [Cfp: 39] [Cfa:64] [Panel:158]
+[OFF][  6][08-15 22:17:32.891][T: 435]  [Caller:334] [Cfp: 35] [Cfa:64] [Panel:159]
+[OFF][  7][08-15 22:18:03.295][T: 398]  [Caller:328] [Cfp: 37] [Cfa:31] [Panel:156]
+[OFF][  8][08-15 22:19:18.972][T: 392]  [Caller:348] [Cfp: 31] [Cfa:10] [Panel:158]
+[OFF][  9][08-15 22:20:13.994][T:  28]  [Caller: 1] [Cfp: 21] [Cfa: 4] [Panel:148]
+[OFF][ 10][08-15 23:04:15.296][T: 354]  [Caller:306] [Cfp: 39] [Cfa: 3] [Panel:159]
+[OFF][ 11][08-15 23:31:01.033][T:  75]  [Caller: 0] [Cfp: 40] [Cfa:31] [Panel:158]
+[OFF][ 12][08-16 00:16:16.174][T: 375]  [Caller:333] [Cfp: 32] [Cfa: 4] [Panel:169]
+[OFF][ 13][08-16 01:06:09.956][T: 469]  [Caller:361] [Cfp: 64] [Cfa:40] [Panel:156]
+[OFF][ 14][08-16 01:06:20.350][T: 452]  [Caller:413] [Cfp: 25] [Cfa: 4] [Panel:155]
+[OFF][ 15][08-16 01:10:26.732][T: 390]  [Caller:340] [Cfp: 35] [Cfa:13] [Panel:169]
+[OFF][ 16][08-16 01:11:47.377][T: 360]  [Caller:324] [Cfp: 31] [Cfa: 3] [Panel:152]
+[OFF][ 17][08-16 01:13:47.315][T: 405]  [Caller:359] [Cfp: 40] [Cfa: 4] [Panel:166]
+[OFF][ 18][08-16 01:18:34.887][T:  41]  [Caller: 0] [Cfp: 30] [Cfa: 8] [Panel:152]
+[OFF][ 19][08-16 01:18:49.568][T: 384]  [Caller:341] [Cfp: 30] [Cfa:10] [Panel:160]
+[OFF][ 20][08-16 01:27:06.767][T: 372]  [Caller:333] [Cfp: 31] [Cfa: 4] [Panel:155]
+[OFF][ 21][08-16 01:27:19.301][T:  41]  [Caller: 0] [Cfp: 28] [Cfa:11] [Panel:150]
+[OFF][ 22][08-16 01:27:25.739][T:  59]  [Caller: 0] [Cfp: 28] [Cfa:28] [Panel:152]
+[OFF][ 23][08-16 01:46:48.228][T: 426]  [Caller:386] [Cfp: 30] [Cfa: 4] [Panel:158]
+[OFF][ 24][08-16 09:35:54.541][T: 399]  [Caller:354] [Cfp: 39] [Cfa: 4] [Panel:155]
+[OFF][ 25][08-16 09:36:00.704][T: 394]  [Caller:353] [Cfp: 32] [Cfa: 3] [Panel:157]
+[OFF][ 26][08-16 09:38:46.737][T: 358]  [Caller:312] [Cfp: 36] [Cfa: 6] [Panel:180]
+[OFF][ 27][08-16 09:39:28.300][T:  64]  [Caller: 0] [Cfp: 36] [Cfa:18] [Panel:160]
+[OFF][ 28][08-16 09:41:03.344][T: 373]  [Caller:336] [Cfp: 29] [Cfa: 6] [Panel:154]
+[OFF][ 29][08-16 09:41:09.788][T:  57]  [Caller: 0] [Cfp: 26] [Cfa:29] [Panel:154]
+[OFF][ 30][08-16 09:43:57.671][T:  89]  [Caller: 0] [Cfp: 70] [Cfa:10] [Panel:156]
+[OFF][ 31][08-16 09:56:28.052][T: 418]  [Caller:344] [Cfp: 49] [Cfa:22] [Panel:165]
+[OFF][ 32][08-16 09:57:28.933][T:  41]  [Caller: 0] [Cfp: 32] [Cfa: 6] [Panel:162]
+[OFF][ 33][08-16 10:03:50.537][T: 347]  [Caller:301] [Cfp: 25] [Cfa:19] [Panel:165]
+[OFF][ 34][08-16 10:05:21.475][T: 419]  [Caller:360] [Cfp: 35] [Cfa:20] [Panel:156]
+[OFF][ 35][08-16 10:06:14.554][T: 400]  [Caller:356] [Cfp: 34] [Cfa: 7] [Panel:147]
+[OFF][ 36][08-16 10:08:29.067][T: 343]  [Caller:308] [Cfp: 25] [Cfa: 4] [Panel:157]
+[OFF][ 37][08-16 10:13:08.176][T:  66]  [Caller: 0] [Cfp: 34] [Cfa:28] [Panel:159]
+[OFF][ 38][08-16 10:22:53.199][T: 468]  [Caller:315] [Cfp: 45] [Cfa:103] [Panel:154]
+[OFF][ 39][08-16 10:29:28.047][T: 356]  [Caller:301] [Cfp: 35] [Cfa:15] [Panel:162]
+[OFF][ 40][08-16 10:29:57.465][T:  65]  [Caller: 0] [Cfp: 47] [Cfa: 1] [Panel:160]
+[OFF][ 41][08-16 10:30:58.766][T: 372]  [Caller:332] [Cfp: 30] [Cfa: 6] [Panel:155]
+[OFF][ 42][08-16 10:48:00.394][T: 449]  [Caller:366] [Cfp: 38] [Cfa:42] [Panel:148]
+[OFF][ 43][08-16 11:12:51.154][T: 398]  [Caller:344] [Cfp: 44] [Cfa: 8] [Panel:216]
+[OFF][ 44][08-16 11:14:41.414][T:  89]  [Caller: 6] [Cfp: 64] [Cfa: 4] [Panel:156]
+[OFF][ 45][08-16 11:15:56.878][T: 374]  [Caller:326] [Cfp: 34] [Cfa:11] [Panel:150]
+[OFF][ 46][08-16 11:18:54.509][T: 355]  [Caller:315] [Cfp: 29] [Cfa: 8] [Panel:150]
+[OFF][ 47][08-16 11:22:02.400][T: 396]  [Caller:308] [Cfp: 28] [Cfa:52] [Panel:176]
+[OFF][ 48][08-16 11:25:17.389][T: 434]  [Caller:370] [Cfp: 43] [Cfa:16] [Panel:173]
+[OFF][ 49][08-16 11:35:16.243][T: 432]  [Caller:330] [Cfp: 48] [Cfa:50] [Panel:162]
+[OFF][ 50][08-16 11:35:48.907][T: 339]  [Caller:280] [Cfp: 28] [Cfa:29] [Panel:153]
+[OFF][ 51][08-16 12:02:30.223][T: 120]  [Caller: 1] [Cfp: 67] [Cfa:46] [Panel:178]
+[OFF][ 52][08-16 12:35:39.651][T:  91]  [Caller: 7] [Cfp: 51] [Cfa:26] [Panel:213]
+[OFF][ 53][08-16 12:46:26.884][T:  84]  [Caller: 2] [Cfp: 51] [Cfa:26] [Panel:161]
+[OFF][ 54][08-16 12:55:38.505][T: 117]  [Caller: 1] [Cfp: 78] [Cfa:22] [Panel:153]
+[OFF][ 55][08-16 13:07:23.800][T:  78]  [Caller: 1] [Cfp: 60] [Cfa: 6] [Panel:193]
+[OFF][ 56][08-16 13:17:14.557][T: 103]  [Caller: 0] [Cfp: 54] [Cfa:44] [Panel:164]
+[OFF][ 57][08-16 13:21:27.554][T:  84]  [Caller: 0] [Cfp: 46] [Cfa:24] [Panel:180]
+[OFF][ 58][08-16 13:23:59.091][T: 109]  [Caller: 0] [Cfp: 68] [Cfa:31] [Panel:152]
+[OFF][ 59][08-16 13:26:18.888][T: 455]  [Caller:359] [Cfp: 51] [Cfa:42] [Panel:185]
+[OFF][ 60][08-16 13:26:50.786][T:  59]  [Caller: 0] [Cfp: 52] [Cfa: 3] [Panel:185]
+[OFF][ 61][08-16 13:28:52.673][T:  68]  [Caller: 0] [Cfp: 48] [Cfa: 8] [Panel:148]
+[OFF][ 62][08-16 13:29:30.786][T: 111]  [Caller: 0] [Cfp: 53] [Cfa:48] [Panel:162]
+[OFF][ 63][08-16 13:29:49.646][T:  45]  [Caller: 1] [Cfp: 32] [Cfa: 5] [Panel:148]
+[OFF][ 64][08-16 13:33:20.170][T: 108]  [Caller: 0] [Cfp: 51] [Cfa:50] [Panel:172]
+[OFF][ 65][08-16 13:35:26.665][T: 112]  [Caller: 1] [Cfp: 56] [Cfa:51] [Panel:162]
+[OFF][ 66][08-16 13:41:53.744][T: 374]  [Caller:313] [Cfp: 44] [Cfa:13] [Panel:165]
+
+Battery saving stats:
+  Battery Saver is currently: OFF
+    Times full enabled: 0
+    Times adaptive enabled: 0
+  
+  Drain stats:
+                     Battery saver OFF                          ON
+  NonDoze NonIntr:     52m    322mAh(  4%)    369,5mAh/h          0m      0mAh(  0%)      0,0mAh/h
+             Intr:     68m    670mAh( 25%)    586,1mAh/h          0m      0mAh(  0%)      0,0mAh/h
+  Deep    NonIntr:     15m     22mAh(  1%)     87,5mAh/h          0m      0mAh(  0%)      0,0mAh/h
+             Intr:      0m      0mAh(  0%)      0,0mAh/h          0m      0mAh(  0%)      0,0mAh/h
+  Light   NonIntr:    226m    511mAh( 13%)    135,2mAh/h          0m      0mAh(  0%)      0,0mAh/h
+             Intr:      2m     62mAh(  1%)   1591,5mAh/h          0m      0mAh(  0%)      0,0mAh/h
+
+Battery saver policy (*NOTE* they only apply when battery saver is ON):
+  Settings: battery_saver_constants
+    value: 
+  Settings: (overlay)
+    value: 
+  DeviceConfig: battery_saver
+    location_mode: 
+  mAccessibilityEnabled=false
+  mAutomotiveProjectionActive=false
+  mPolicyLevel=0
+  
+  Policy 'default full'
+    advertise_is_enabled=true
+    disable_vibration=false
+    disable_animation=false
+    defer_full_backup=true
+    defer_keyvalue_backup=true
+    enable_firewall=true
+    enable_datasaver=false
+    disable_launch_boost=true
+    enable_brightness_adjustment=true
+    adjust_brightness_factor=0.9
+    location_mode=1
+    force_all_apps_standby=true
+    force_background_check=true
+    disable_optional_sensors=true
+    disable_aod=true
+    soundtrigger_mode=1
+    enable_quick_doze=true
+    enable_night_mode=false
+  
+  Policy 'current full'
+    advertise_is_enabled=true
+    disable_vibration=false
+    disable_animation=false
+    defer_full_backup=true
+    defer_keyvalue_backup=true
+    enable_firewall=true
+    enable_datasaver=false
+    disable_launch_boost=true
+    enable_brightness_adjustment=true
+    adjust_brightness_factor=0.9
+    location_mode=1
+    force_all_apps_standby=true
+    force_background_check=true
+    disable_optional_sensors=true
+    disable_aod=true
+    soundtrigger_mode=1
+    enable_quick_doze=true
+    enable_night_mode=false
+  
+  Policy 'default adaptive'
+    advertise_is_enabled=false
+    disable_vibration=false
+    disable_animation=false
+    defer_full_backup=false
+    defer_keyvalue_backup=false
+    enable_firewall=false
+    enable_datasaver=false
+    disable_launch_boost=false
+    enable_brightness_adjustment=false
+    adjust_brightness_factor=1.0
+    location_mode=0
+    force_all_apps_standby=false
+    force_background_check=false
+    disable_optional_sensors=false
+    disable_aod=false
+    soundtrigger_mode=0
+    enable_quick_doze=false
+    enable_night_mode=false
+  
+  Policy 'current adaptive'
+    advertise_is_enabled=false
+    disable_vibration=false
+    disable_animation=false
+    defer_full_backup=false
+    defer_keyvalue_backup=false
+    enable_firewall=false
+    enable_datasaver=false
+    disable_launch_boost=false
+    enable_brightness_adjustment=false
+    adjust_brightness_factor=1.0
+    location_mode=0
+    force_all_apps_standby=false
+    force_background_check=false
+    disable_optional_sensors=false
+    disable_aod=false
+    soundtrigger_mode=0
+    enable_quick_doze=false
+    enable_night_mode=false
+  
+  Policy 'effective'
+    advertise_is_enabled=false
+    disable_vibration=false
+    disable_animation=false
+    defer_full_backup=false
+    defer_keyvalue_backup=false
+    enable_firewall=false
+    enable_datasaver=false
+    disable_launch_boost=false
+    enable_brightness_adjustment=false
+    adjust_brightness_factor=1.0
+    location_mode=0
+    force_all_apps_standby=false
+    force_background_check=false
+    disable_optional_sensors=false
+    disable_aod=false
+    soundtrigger_mode=0
+    enable_quick_doze=false
+    enable_night_mode=false
+
+Battery saver state machine:
+  Enabled=false
+    full=false
+    adaptive=false
+  mState=1
+  mLastChangedIntReason=0
+  mLastChangedStrReason=null
+  mBootCompleted=true
+  mSettingsLoaded=true
+  mBatteryStatusSet=true
+  mIsPowered=false
+  mBatteryLevel=89
+  mIsBatteryLevelLow=false
+  mSettingAutomaticBatterySaver=0
+  mSettingBatterySaverEnabled=false
+  mSettingBatterySaverEnabledSticky=false
+  mSettingBatterySaverStickyAutoDisableEnabled=true
+  mSettingBatterySaverStickyAutoDisableThreshold=90
+  mSettingBatterySaverTriggerThreshold=0
+  mBatterySaverStickyBehaviourDisabled=false
+  mBatterySaverTurnedOffNotificationEnabled=true
+  mDynamicPowerSavingsDefaultDisableThreshold=80
+  mDynamicPowerSavingsDisableThreshold=80
+  mDynamicPowerSavingsEnableBatterySaver=false
+  mLastAdaptiveBatterySaverChangedExternallyElapsed=0
+AttentionDetector:
+ mIsSettingEnabled=false
+ mMaxExtensionMillis=900000
+ mPreDimCheckDurationMillis=2000
+ mEffectivePostDimTimeout=0
+ mLastUserActivityTime(excludingAttention)=46152695
+ mAttentionServiceSupported=false
+ mRequested=false
+
+Profile power states: size=0
+
+SuspendBlockerMonitor:
+
+    CallBack History = 200
+[08-16 10:06:12.376] [         display state on] [ACQ]
+[08-16 10:06:14.614] [         display state on] [REL]
+[08-16 10:08:25.643] [         display state on] [ACQ]
+[08-16 10:08:29.109] [         display state on] [REL]
+[08-16 10:13:01.304] [         display state on] [ACQ]
+[08-16 10:13:08.252] [         display state on] [REL]
+[08-16 10:20:42.241] [          [0]early wakeup] [ACQ]
+[08-16 10:20:45.249] [          [0]early wakeup] [REL]
+[08-16 10:21:04.061] [          [0]early wakeup] [ACQ]
+[08-16 10:21:07.060] [          [0]early wakeup] [REL]
+[08-16 10:21:10.476] [          [0]early wakeup] [ACQ]
+[08-16 10:21:13.476] [          [0]early wakeup] [REL]
+[08-16 10:22:08.926] [          [0]early wakeup] [ACQ]
+[08-16 10:22:11.927] [          [0]early wakeup] [REL]
+[08-16 10:22:13.781] [         display state on] [ACQ]
+[08-16 10:22:20.325] [    [0]vrr ramp animation] [ACQ]
+[08-16 10:22:20.755] [    [0]vrr ramp animation] [REL]
+[08-16 10:22:37.078] [    [0]vrr ramp animation] [ACQ]
+[08-16 10:22:37.509] [    [0]vrr ramp animation] [REL]
+[08-16 10:22:37.692] [    [0]vrr ramp animation] [ACQ]
+[08-16 10:22:38.126] [    [0]vrr ramp animation] [REL]
+[08-16 10:22:41.341] [    [0]vrr ramp animation] [ACQ]
+[08-16 10:22:42.932] [    [0]vrr ramp animation] [REL]
+[08-16 10:22:44.689] [    [0]vrr ramp animation] [ACQ]
+[08-16 10:22:45.295] [    [0]vrr ramp animation] [REL]
+[08-16 10:22:47.815] [    [0]vrr ramp animation] [ACQ]
+[08-16 10:22:48.247] [    [0]vrr ramp animation] [REL]
+[08-16 10:22:53.387] [         display state on] [REL]
+[08-16 10:28:31.405] [         display state on] [ACQ]
+[08-16 10:28:37.859] [    [0]vrr ramp animation] [ACQ]
+[08-16 10:28:38.285] [    [0]vrr ramp animation] [REL]
+[08-16 10:28:41.190] [    [0]vrr ramp animation] [ACQ]
+[08-16 10:28:41.613] [    [0]vrr ramp animation] [REL]
+[08-16 10:28:59.477] [         [0]prox debounce] [ACQ]
+[08-16 10:28:59.478] [         [0]prox positive] [ACQ]
+[08-16 10:28:59.495] [         [0]prox debounce] [REL]
+[08-16 10:28:59.500] [         [0]prox positive] [REL]
+[08-16 10:28:59.519] [         display state on] [REL]
+[08-16 10:29:25.180] [         [0]prox debounce] [ACQ]
+[08-16 10:29:25.226] [         [0]prox negative] [ACQ]
+[08-16 10:29:25.233] [         [0]prox debounce] [REL]
+[08-16 10:29:25.236] [         [0]prox negative] [REL]
+[08-16 10:29:25.242] [         display state on] [ACQ]
+[08-16 10:29:28.121] [         display state on] [REL]
+[08-16 10:29:50.522] [         display state on] [ACQ]
+[08-16 10:29:57.541] [         display state on] [REL]
+[08-16 10:30:57.408] [         display state on] [ACQ]
+[08-16 10:30:58.817] [         display state on] [REL]
+[08-16 10:47:48.616] [         display state on] [ACQ]
+[08-16 10:48:00.517] [         display state on] [REL]
+[08-16 11:12:39.249] [         display state on] [ACQ]
+[08-16 11:12:51.255] [         display state on] [REL]
+[08-16 11:14:39.448] [         display state on] [ACQ]
+[08-16 11:14:41.560] [         display state on] [REL]
+[08-16 11:15:50.433] [         display state on] [ACQ]
+[08-16 11:15:56.942] [         display state on] [REL]
+[08-16 11:18:34.786] [         display state on] [ACQ]
+[08-16 11:18:54.579] [         display state on] [REL]
+[08-16 11:20:18.567] [         display state on] [ACQ]
+[08-16 11:22:02.527] [         display state on] [REL]
+[08-16 11:24:45.585] [         display state on] [ACQ]
+[08-16 11:25:17.501] [         display state on] [REL]
+[08-16 11:34:47.907] [         display state on] [ACQ]
+[08-16 11:35:16.367] [         display state on] [REL]
+[08-16 11:35:47.215] [         display state on] [ACQ]
+[08-16 11:35:48.971] [         display state on] [REL]
+[08-16 11:35:53.389] [         display state on] [ACQ]
+[08-16 11:36:43.028] [    [0]vrr ramp animation] [ACQ]
+[08-16 11:36:43.840] [    [0]vrr ramp animation] [REL]
+[08-16 11:37:12.025] [    [0]vrr ramp animation] [ACQ]
+[08-16 11:37:12.411] [    [0]vrr ramp animation] [REL]
+[08-16 11:37:59.342] [    [0]vrr ramp animation] [ACQ]
+[08-16 11:38:00.160] [    [0]vrr ramp animation] [REL]
+[08-16 11:38:07.470] [    [0]vrr ramp animation] [ACQ]
+[08-16 11:38:07.849] [    [0]vrr ramp animation] [REL]
+[08-16 11:38:27.484] [    [0]vrr ramp animation] [ACQ]
+[08-16 11:38:28.316] [    [0]vrr ramp animation] [REL]
+[08-16 11:42:48.081] [    [0]vrr ramp animation] [ACQ]
+[08-16 11:42:48.461] [    [0]vrr ramp animation] [REL]
+[08-16 11:43:08.111] [    [0]vrr ramp animation] [ACQ]
+[08-16 11:43:08.921] [    [0]vrr ramp animation] [REL]
+[08-16 11:47:03.484] [    [0]vrr ramp animation] [ACQ]
+[08-16 11:47:03.867] [    [0]vrr ramp animation] [REL]
+[08-16 11:54:25.670] [    [0]vrr ramp animation] [ACQ]
+[08-16 11:54:26.494] [    [0]vrr ramp animation] [REL]
+[08-16 11:57:57.837] [    [0]vrr ramp animation] [ACQ]
+[08-16 11:57:58.216] [    [0]vrr ramp animation] [REL]
+[08-16 12:00:38.544] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:00:39.382] [    [0]vrr ramp animation] [REL]
+[08-16 12:02:30.378] [         display state on] [REL]
+[08-16 12:03:45.413] [         display state on] [ACQ]
+[08-16 12:12:59.395] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:13:00.217] [    [0]vrr ramp animation] [REL]
+[08-16 12:13:55.433] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:13:55.812] [    [0]vrr ramp animation] [REL]
+[08-16 12:14:21.624] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:14:22.423] [    [0]vrr ramp animation] [REL]
+[08-16 12:21:55.940] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:21:56.321] [    [0]vrr ramp animation] [REL]
+[08-16 12:23:01.960] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:23:02.766] [    [0]vrr ramp animation] [REL]
+[08-16 12:24:01.869] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:24:02.249] [    [0]vrr ramp animation] [REL]
+[08-16 12:24:21.974] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:24:22.796] [    [0]vrr ramp animation] [REL]
+[08-16 12:27:51.862] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:27:52.242] [    [0]vrr ramp animation] [REL]
+[08-16 12:28:11.958] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:28:12.768] [    [0]vrr ramp animation] [REL]
+[08-16 12:28:42.908] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:28:43.289] [    [0]vrr ramp animation] [REL]
+[08-16 12:29:02.932] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:29:03.733] [    [0]vrr ramp animation] [REL]
+[08-16 12:33:45.802] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:33:46.183] [    [0]vrr ramp animation] [REL]
+[08-16 12:34:05.827] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:34:06.662] [    [0]vrr ramp animation] [REL]
+[08-16 12:35:39.765] [         display state on] [REL]
+[08-16 12:36:50.871] [         display state on] [ACQ]
+[08-16 12:37:14.082] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:37:14.885] [    [0]vrr ramp animation] [REL]
+[08-16 12:39:19.446] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:39:19.825] [    [0]vrr ramp animation] [REL]
+[08-16 12:39:46.311] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:39:47.115] [    [0]vrr ramp animation] [REL]
+[08-16 12:41:52.465] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:41:52.847] [    [0]vrr ramp animation] [REL]
+[08-16 12:42:12.471] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:42:13.289] [    [0]vrr ramp animation] [REL]
+[08-16 12:44:56.476] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:44:56.860] [    [0]vrr ramp animation] [REL]
+[08-16 12:46:12.454] [    [0]vrr ramp animation] [ACQ]
+[08-16 12:46:13.263] [    [0]vrr ramp animation] [REL]
+[08-16 12:46:26.989] [         display state on] [REL]
+[08-16 12:47:37.075] [         display state on] [ACQ]
+[08-16 12:55:38.642] [         display state on] [REL]
+[08-16 13:06:45.784] [         display state on] [ACQ]
+[08-16 13:07:13.821] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:07:14.636] [    [0]vrr ramp animation] [REL]
+[08-16 13:07:23.921] [         display state on] [REL]
+[08-16 13:16:29.901] [         display state on] [ACQ]
+[08-16 13:17:04.581] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:17:05.418] [    [0]vrr ramp animation] [REL]
+[08-16 13:17:14.686] [         display state on] [REL]
+[08-16 13:17:35.518] [         display state on] [ACQ]
+[08-16 13:18:35.566] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:18:36.389] [    [0]vrr ramp animation] [REL]
+[08-16 13:18:37.770] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:18:38.163] [    [0]vrr ramp animation] [REL]
+[08-16 13:19:16.204] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:19:17.023] [    [0]vrr ramp animation] [REL]
+[08-16 13:19:19.619] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:19:19.997] [    [0]vrr ramp animation] [REL]
+[08-16 13:19:58.363] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:19:59.170] [    [0]vrr ramp animation] [REL]
+[08-16 13:19:59.643] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:20:00.020] [    [0]vrr ramp animation] [REL]
+[08-16 13:20:40.000] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:20:40.819] [    [0]vrr ramp animation] [REL]
+[08-16 13:20:43.609] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:20:43.988] [    [0]vrr ramp animation] [REL]
+[08-16 13:21:17.566] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:21:18.379] [    [0]vrr ramp animation] [REL]
+[08-16 13:21:27.682] [         display state on] [REL]
+[08-16 13:22:35.325] [         display state on] [ACQ]
+[08-16 13:23:49.107] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:23:49.911] [    [0]vrr ramp animation] [REL]
+[08-16 13:23:59.240] [         display state on] [REL]
+[08-16 13:25:10.684] [         display state on] [ACQ]
+[08-16 13:25:35.196] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:25:36.003] [    [0]vrr ramp animation] [REL]
+[08-16 13:25:37.237] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:25:37.620] [    [0]vrr ramp animation] [REL]
+[08-16 13:26:19.035] [         display state on] [REL]
+[08-16 13:26:19.388] [         display state on] [ACQ]
+[08-16 13:26:40.796] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:26:41.627] [    [0]vrr ramp animation] [REL]
+[08-16 13:26:50.868] [         display state on] [REL]
+[08-16 13:28:43.711] [         display state on] [ACQ]
+[08-16 13:28:52.755] [         display state on] [REL]
+[08-16 13:28:55.020] [         display state on] [ACQ]
+[08-16 13:29:20.799] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:29:21.631] [    [0]vrr ramp animation] [REL]
+[08-16 13:29:30.923] [         display state on] [REL]
+[08-16 13:29:43.686] [         display state on] [ACQ]
+[08-16 13:29:49.701] [         display state on] [REL]
+[08-16 13:32:24.526] [         display state on] [ACQ]
+[08-16 13:32:47.321] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:32:48.129] [    [0]vrr ramp animation] [REL]
+[08-16 13:32:48.730] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:32:49.130] [    [0]vrr ramp animation] [REL]
+[08-16 13:33:10.182] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:33:11.002] [    [0]vrr ramp animation] [REL]
+[08-16 13:33:20.300] [         display state on] [REL]
+[08-16 13:34:45.052] [         display state on] [ACQ]
+[08-16 13:35:16.680] [    [0]vrr ramp animation] [ACQ]
+[08-16 13:35:17.505] [    [0]vrr ramp animation] [REL]
+[08-16 13:35:26.798] [         display state on] [REL]
+[08-16 13:37:34.427] [         display state on] [ACQ]
+[08-16 13:41:53.837] [         display state on] [REL]
+
+
+
+Power Group User Activity:
+groupId: 0
+userActivitySummary=0x4
+mWakeLockSummary=0x41
+lastUserActivityTime=46149391 (175130 ms ago)
+lastUserActivityTimeNoChangeLights=46028541 (295980 ms ago)
+mLastWakeReason=1
+mLastSleepReason=4
+mDimDuration=-1
+mWakefulness=3
+mIsDefaultGroupAdjacent=false
+mSupportsSandman=true
+mDreamManagerAttemptedDozing=true
+mScreenOffTimeout=-1
+
+Wireless Charger Detector State:
+  mGravitySensor={Sensor name="gravity  Non-wakeup", vendor="QTI", version=1, type=9, maxRange=156.91, resolution=0.01, power=0.515, minDelay=5000}
+  mPoweredWirelessly=false
+  mAtRest=false
+  mRestX=0.0, mRestY=0.0, mRestZ=0.0
+  mDetectionInProgress=false
+  mDetectionStartTime=0 (never)
+  mMustUpdateRestPosition=false
+  mTotalSamples=0
+  mMovingSamples=0
+  mFirstSampleX=0.0, mFirstSampleY=0.0, mFirstSampleZ=0.0
+  mLastSampleX=0.0, mLastSampleY=0.0, mLastSampleZ=0.0
+Notifier:
+Partial Wakelock Log:
+Wake Lock Log
+  08-15 21:06:48.030 - 1041 - ACQ AudioMix (partial)
+  08-15 21:07:22.065 - 15010231 (com.google.android.gsf,...) - ACQ *gms_scheduler*/c.g.a.g/.p.s.s.PhenotypeConfigurator (partial)
+  08-15 21:07:40.751 - 15010231 (com.google.android.gsf,...) - ACQ *gms_scheduler*/c.g.a.g/.d.DroidGuardFastRefreshGmsTaskBoundService (partial)
+  08-15 21:08:01.767 - 10888 (com.sipnetic.app) - ACQ Sipnetic (partial)
+  08-15 21:08:26.059 - 15010231 (com.google.android.gsf,...) - ACQ *gms_scheduler*/c.g.a.g/.p.g.PayGcmTaskService (partial)
+  08-15 21:08:26.126 - 10231 (com.google.android.gsf,...) - ACQ *gms_scheduler*:internal (partial)
+  08-15 21:14:47.569 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-15 21:32:57.159 - 10296 (com.microsoft.office.word,...) - ACQ *alarm* (partial)
+  08-15 21:48:53.789 - 10375 (com.gopro.smarty) - ACQ *alarm* (partial)
+  08-15 21:48:59.916 - 10565 (com.adobe.reader) - ACQ *alarm* (partial)
+  08-15 21:54:06.068 - 10040 (com.samsung.android.app.routines,...) - ACQ charging_info (draw)
+  08-15 21:54:00.961 - 1000 (System) - ACQ *alarm* (partial)
+  08-15 22:02:02.432 - 10231 (com.google.android.gsf,...) - ACQ *gms_scheduler*/c.g.a.g/.c.u.QosUploaderService (partial)
+  08-15 22:02:04.963 - 10231 (com.google.android.gsf,...) - ACQ *gms_scheduler*/c.g.a.g/.a.s.PoseDataManagementService (partial)
+  08-15 22:02:05.186 - 15010231 (com.google.android.gsf,...) - ACQ *gms_scheduler*/c.g.a.g/.s.f.FederatedJobHistoryService (partial)
+  08-15 22:02:07.648 - 10111 (com.samsung.android.smartsuggestions) - ACQ *job*r/#ObserverWorker#@androidx.work.systemjobscheduler@com.samsung.android.smartsuggestions/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-15 22:02:05.676 - 10231 (com.google.android.gsf,...) - ACQ *gms_scheduler*/c.g.a.g/.s.f.BrellaInvocationService (partial)
+  08-15 22:04:49.199 - 10231 (com.google.android.gsf,...) - ACQ GCM_READ (partial)
+  08-15 22:03:00.081 - 1000 (System) - ACQ *alarm* (partial)
+  08-15 22:07:41.343 - 10040 (com.samsung.android.app.routines,...) - ACQ NotificationManagerService:post:com.android.systemui (partial)
+  08-15 22:02:05.389 - 10231 (com.google.android.gsf,...) - ACQ *gms_scheduler*/c.g.a.g/.s.s.h.HousekeepingTrainTaskService (partial)
+  08-15 22:08:54.286 - 10040 (com.samsung.android.app.routines,...) - ACQ charging_info (draw)
+  08-15 22:11:18.597 - 10145 (com.github.android) - ACQ NotificationManagerService:post:com.github.android (partial)
+  08-15 22:11:18.597 - 1000 (System) - ACQ Prevent Sleep by AssistantDelay (partial)
+  08-15 22:11:28.049 - 10145 (com.github.android) - ACQ *launch* (partial)
+  08-15 22:13:53.344 - 1000 (System) - ACQ dream:doze (doze)
+  08-15 22:13:56.087 - 1000 (System) - ACQ PhoneWindowManager.mPowerKeyWakeLock (partial)
+  08-15 22:13:56.122 - 1000 (System) - ACQ SemFace (partial)
+  08-15 22:11:58.381 - 1000 (System) - ACQ dream:doze (doze)
+  08-15 22:14:10.532 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-15 22:14:46.207 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-15 22:17:47.808 - 10040 (com.samsung.android.app.routines,...) - ACQ AOD_DRAW (draw)
+  08-15 22:18:06.196 - 1027 (com.android.nfc,...) - ACQ NfcService:mRoutingWakeLock (partial)
+  08-15 22:19:20.166 - 1000 (System) - ACQ BiometricUI:P (partial)
+  08-15 22:19:20.166 - 1000 (System) - ACQ BiometricUI:D (draw)
+  08-15 22:19:23.208 - 10040 (com.samsung.android.app.routines,...) - ACQ *vibrator* (partial)
+  08-15 22:19:19.264 - 1000 (System) - ACQ dream:doze (doze)
+  08-15 22:41:45.133 - 1000 (System) - ACQ Prevent Sleep by AssistantDelay (partial)
+  08-15 22:42:33.364 - 1000 (System) - ACQ *alarm* (partial)
+  08-15 22:41:45.070 - 10641 (com.mgoogle.android.gms) - ACQ *alarm* (partial)
+  08-15 23:02:35.420 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-15 23:03:54.804 - 1041 - ACQ AudioMix (partial)
+  08-15 23:04:31.918 - 1000 (System) - ACQ *alarm* (partial)
+  08-15 23:04:37.121 - 10231 (com.google.android.gsf,...) - ACQ PendingIntentClient (partial)
+  08-15 23:06:16.522 - 10641 (com.mgoogle.android.gms) - ACQ mcs (partial)
+  08-15 23:25:55.632 - 10231 (com.google.android.gsf,...) - ACQ GCoreFlp (partial)
+  08-15 23:56:40.733 - 1000 (System) - ACQ NetworkLocationScanner (partial)
+  08-15 23:56:42.873 - 10231 (com.google.android.gsf,...) - ACQ CMWakeLock (partial)
+  08-15 23:56:40.743 - 10231 (com.google.android.gsf,...) - ACQ CollectionLib-SigCollector (partial)
+  08-15 23:56:40.733 - 10231 (com.google.android.gsf,...) - ACQ GCoreFlp (partial)
+  08-15 23:57:35.129 - 10040 (com.samsung.android.app.routines,...) - ACQ DozeScreenState (draw)
+  08-15 23:57:35.123 - 1000 (System) - ACQ BiometricUI:D (draw)
+  08-15 23:57:50.280 - 10040 (com.samsung.android.app.routines,...) - ACQ Doze (draw)
+  08-15 23:56:31.827 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-15 23:56:50.239 - 10040 (com.samsung.android.app.routines,...) - ACQ AOD_EnsureWorkingTime (draw)
+  08-15 23:59:16.357 - 10040 (com.samsung.android.app.routines,...) - ACQ charging_info (draw)
+  08-16 00:12:32.380 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 00:11:24.190 - 10231 (com.google.android.gsf,...) - ACQ CollectionLib-SigCollector (partial)
+  08-16 00:11:01.065 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 00:22:36.830 - 1000 (System) - ACQ deviceidle_maint (partial)
+  08-16 00:42:23.966 - 15010231 (com.google.android.gsf,...) - ACQ *location* (partial)
+  08-16 01:04:13.486 - 10231 (com.google.android.gsf,...) - ACQ Icing (partial)
+  08-16 01:10:28.420 - 1000 (System) - ACQ BiometricUI:P (partial)
+  08-16 01:11:57.374 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 01:11:53.690 - 10040 (com.samsung.android.app.routines,...) - ACQ Doze (draw)
+  08-16 01:12:23.484 - 10231 (com.google.android.gsf,...) - ACQ *alarm* (partial)
+  08-16 01:13:47.638 - 1000 (System) - ACQ dream:doze (doze)
+  08-16 01:19:49.643 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 01:27:13.382 - 1000 (System) - ACQ SemFace (partial)
+  08-16 01:28:00.643 - 10463 (com.google.android.apps.translate) - ACQ *alarm* (partial)
+  08-16 01:30:29.397 - 10231 (com.google.android.gsf,...) - ACQ NetworkLocationScanner (partial)
+  08-16 01:37:07.324 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 01:37:16.084 - 10710 (com.facebook.katana) - ACQ *alarm* (partial)
+  08-16 01:37:32.515 - 10231 (com.google.android.gsf,...) - ACQ CollectionLib-SigCollector (partial)
+  08-16 01:40:41.296 - 10196 (com.sec.android.daemonapp) - ACQ *alarm* (partial)
+  08-16 01:46:48.618 - 1000 (System) - ACQ dream:doze (doze)
+  08-16 01:59:00.243 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 01:57:00.204 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 01:58:42.479 - 10040 (com.samsung.android.app.routines,...) - ACQ charging_info (draw)
+  08-16 02:04:29.033 - 1000 (System) - ACQ *backup*-0-6905 (partial)
+  08-16 02:15:01.842 - 15010233 (com.android.vending) - ACQ *alarm* (partial)
+  08-16 02:21:00.767 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 02:14:02.022 - 10040 (com.samsung.android.app.routines,...) - ACQ charging_info (draw)
+  08-16 03:27:13.173 - 10753 (com.microsoft.office.outlook) - ACQ *alarm* (partial)
+  08-16 03:31:12.846 - 1000 (System) - ACQ *backup*-0-6905 (partial)
+  08-16 03:31:07.753 - 1000 (System) - ACQ *backup*-0-6905 (partial)
+  08-16 04:32:51.700 - 10231 (com.google.android.gsf,...) - ACQ *location* (partial)
+  08-16 06:26:11.150 - 15010231 (com.google.android.gsf,...) - ACQ CallbackRunner (partial)
+  08-16 06:27:02.618 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 06:26:03.182 - 10231 (com.google.android.gsf,...) - ACQ PendingIntentClient (partial)
+  08-16 06:26:03.140 - 1000 (System) - ACQ NetworkLocationLocator (partial)
+  08-16 06:26:03.182 - 1000 (System) - ACQ *location* (partial)
+  08-16 08:06:19.524 - 1000 (System) - ACQ *location* (partial)
+  08-16 08:52:41.002 - 10765 (com.whatsapp) - ACQ WorkManager: ProcessorForegroundLck (partial)
+  08-16 08:53:10.679 - 1000 (System) - ACQ Prevent Sleep by AssistantDelay (partial)
+  08-16 09:36:55.129 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 09:38:47.064 - 10040 (com.samsung.android.app.routines,...) - ACQ Scrims (draw)
+  08-16 09:38:48.057 - 1000 (System) - ACQ BiometricUI:D (draw)
+  08-16 09:39:01.415 - 10040 (com.samsung.android.app.routines,...) - ACQ charging_info (draw)
+  08-16 09:39:22.304 - 1000 (System) - ACQ PhoneWindowManager.mPowerKeyWakeLock (partial)
+  08-16 09:36:40.975 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 09:41:03.870 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 09:41:23.853 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 09:45:21.714 - 10179 (com.samsung.android.honeyboard) - ACQ *alarm* (partial)
+  08-16 09:45:22.275 - 10765 (com.whatsapp) - ACQ *launch* (partial)
+  08-16 09:47:40.990 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 09:56:28.410 - 10040 (com.samsung.android.app.routines,...) - ACQ Doze (draw)
+  08-16 09:56:55.393 - 1000 (System) - ACQ SemFace (partial)
+  08-16 09:56:58.741 - 15010231 (com.google.android.gsf,...) - ACQ IntentOp:c.g.a.g/.c.GmsIntentOperationService (partial)
+  08-16 10:02:10.424 - 10765 (com.whatsapp) - ACQ AudioIn (partial)
+  08-16 10:02:10.509 - 10765 (com.whatsapp) - ACQ com.whatsapp:VoiceService Proximity (prox)
+  08-16 10:03:50.595 - 1000 (System) - ACQ ActivityManager-Sleep (partial)
+  08-16 10:03:50.871 - 10040 (com.samsung.android.app.routines,...) - ACQ show keyguard (partial)
+  08-16 10:04:03.527 - 10765 (com.whatsapp) - ACQ com.whatsapp:sendinactive (partial)
+  08-16 10:07:03.345 - 10040 (com.samsung.android.app.routines,...) - ACQ charging_info (draw)
+  08-16 10:03:50.868 - 1000 (System) - ACQ dream:doze (doze)
+  08-16 10:13:08.485 - 1000 (System) - ACQ dream:doze (doze)
+  08-16 10:07:32.918 - 10785 (com.google.android.apps.youtube.music) - ACQ AudioMix (partial)
+  08-16 10:12:49.999 - 10785 (com.google.android.apps.youtube.music) - ACQ AudioMix (partial)
+  08-16 10:13:14.234 - 10231 (com.google.android.gsf,...) - ACQ CallbackRunner (partial)
+  08-16 10:05:35.625 - 1000 (System) - ACQ BiometricUI:D (draw)
+  08-16 10:20:24.645 - 10231 (com.google.android.gsf,...) - ACQ IntentOp:.c.b.BackgroundBroadcastReceiverSupport$PersistentReceiverIntentOperation (partial)
+  08-16 10:21:10.656 - 10231 (com.google.android.gsf,...) - ACQ PendingIntentClient (partial)
+  08-16 10:20:23.820 - 1041 - ACQ AudioMix (partial)
+  08-16 10:19:17.110 - 10231 (com.google.android.gsf,...) - ACQ NetworkLocationLocator (partial)
+  08-16 10:23:14.118 - 10231 (com.google.android.gsf,...) - ACQ CollectionLib-SigCollector (partial)
+  08-16 10:24:11.656 - 10785 (com.google.android.apps.youtube.music) - ACQ AudioMix (partial)
+  08-16 10:26:40.381 - 10234 (com.google.android.googlequicksearchbox) - ACQ Icing (partial)
+  08-16 10:27:33.881 - 15010231 (com.google.android.gsf,...) - ACQ *location* (partial)
+  08-16 10:27:34.866 - 1000 (System) - ACQ *location*:GnssLocationProvider (partial)
+  08-16 10:29:02.417 - 10231 (com.google.android.gsf,...) - ACQ *alarm* (partial)
+  08-16 10:29:03.316 - 10231 (com.google.android.gsf,...) - ACQ FusedLocation (partial)
+  08-16 10:29:08.871 - 1000 (System) - ACQ *location* (partial)
+  08-16 10:29:08.868 - 1000 (System) - ACQ *location*:GnssLocationProvider (partial)
+  08-16 10:29:08.877 - 10231 (com.google.android.gsf,...) - ACQ CMWakeLock (partial)
+  08-16 10:29:08.709 - 1000 (System) - ACQ NetworkLocationScanner (partial)
+  08-16 10:29:10.420 - 10231 (com.google.android.gsf,...) - ACQ *location* (partial)
+  08-16 10:28:57.214 - 10765 (com.whatsapp) - ACQ com.whatsapp:VoiceService (partial)
+  08-16 10:28:57.447 - 10765 (com.whatsapp) - ACQ com.whatsapp:VoiceService Proximity (prox)
+  08-16 10:28:58.022 - 1041 - ACQ AudioMix (partial)
+  08-16 10:28:57.396 - 1000 (System) - ACQ handleAudioDeviceEvent (partial)
+  08-16 10:28:58.518 - 10765 (com.whatsapp) - ACQ AudioIn (partial)
+  08-16 10:28:58.563 - 10765 (com.whatsapp) - ACQ AudioMix (partial)
+  08-16 10:29:28.445 - 1000 (System) - ACQ dream:doze (doze)
+  08-16 10:29:50.587 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 10:39:01.867 - 1000 (System) - ACQ BiometricUI:P (partial)
+  08-16 10:41:47.614 - 10231 (com.google.android.gsf,...) - ACQ CollectionLib-SigCollector (partial)
+  08-16 10:43:56.473 - 10765 (com.whatsapp) - ACQ *alarm* (partial)
+  08-16 10:46:54.576 - 10641 (com.mgoogle.android.gms) - ACQ NotificationManagerService:post:com.mgoogle.android.gms (partial)
+  08-16 10:46:54.562 - 10641 (com.mgoogle.android.gms) - ACQ androidx.core:wake:com.mgoogle.android.gms/org.microg.gms.gcm.McsService (partial)
+  08-16 10:58:13.463 - 15010231 (com.google.android.gsf,...) - ACQ CollectionLib-SigCollector (partial)
+  08-16 11:12:45.763 - 1000 (System) - ACQ SyncLoopWakeLock (partial)
+  08-16 11:12:51.625 - 1000 (System) - ACQ dream:doze (doze)
+  08-16 11:14:37.668 - 1000 (System) - ACQ BiometricUI:P (partial)
+  08-16 11:14:37.673 - 1000 (System) - ACQ BiometricUI:D (draw)
+  08-16 11:14:41.843 - 10040 (com.samsung.android.app.routines,...) - ACQ AOD_EnsureWorkingTime (draw)
+  08-16 11:14:42.365 - 10040 (com.samsung.android.app.routines,...) - ACQ charging_info (draw)
+  08-16 11:15:56.975 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 11:14:41.827 - 1000 (System) - ACQ dream:doze (doze)
+  08-16 11:18:54.621 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 11:20:57.036 - 1027 (com.android.nfc,...) - ACQ *alarm* (partial)
+  08-16 11:24:53.501 - 10785 (com.google.android.apps.youtube.music) - ACQ AudioMix (partial)
+  08-16 11:32:40.319 - 15010231 (com.google.android.gsf,...) - ACQ CollectionLib-SigCollector (partial)
+  08-16 11:35:00.315 - 10231 (com.google.android.gsf,...) - ACQ GCoreFlp (partial)
+  08-16 11:35:51.931 - 10231 (com.google.android.gsf,...) - ACQ *gms_scheduler*/c.g.a.g/.c.u.QosUploaderService (partial)
+  08-16 11:48:29.358 - 10599 (com.toyota.oneapp.eu) - ACQ *alarm* (partial)
+  08-16 11:51:54.032 - 10753 (com.microsoft.office.outlook) - ACQ *alarm* (partial)
+  08-16 11:52:38.624 - 10266 (com.google.android.permissioncontroller) - ACQ *launch* (partial)
+  08-16 11:55:00.347 - 10710 (com.facebook.katana) - ACQ *alarm* (partial)
+  08-16 11:56:36.871 - 10250 (com.google.android.youtube) - ACQ *alarm* (partial)
+  08-16 11:58:36.869 - 10084 (com.samsung.android.mcfds) - ACQ *alarm* (partial)
+  08-16 11:59:47.059 - 10266 (com.google.android.permissioncontroller) - ACQ *launch* (partial)
+  08-16 12:01:36.869 - 1027 (com.android.nfc,...) - ACQ *alarm* (partial)
+  08-16 12:05:57.554 - 1027 (com.android.nfc,...) - ACQ *alarm* (partial)
+  08-16 12:07:26.779 - 10753 (com.microsoft.office.outlook) - ACQ *alarm* (partial)
+  08-16 12:08:21.787 - 10266 (com.google.android.permissioncontroller) - ACQ *launch* (partial)
+  08-16 12:10:29.601 - 10898 - ACQ NetworkLocationScanner (partial)
+  08-16 12:10:01.349 - 10898 - ACQ NetworkLocationLocator (partial)
+  08-16 12:09:54.077 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 12:08:34.373 - 15010231 (com.google.android.gsf,...) - ACQ *location* (partial)
+  08-16 12:07:21.371 - 10266 (com.google.android.permissioncontroller) - ACQ *launch* (partial)
+  08-16 12:04:29.065 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 12:10:44.447 - 15005004 (com.samsung.cmh,...) - ACQ *alarm* (partial)
+  08-16 12:16:24.873 - 10898 - ACQ GCoreFlp (partial)
+  08-16 12:16:45.185 - 10231 (com.google.android.gsf,...) - ACQ *location* (partial)
+  08-16 12:12:36.868 - 10288 (com.facebook.orca) - ACQ *alarm* (partial)
+  08-16 12:15:52.283 - 10898 - ACQ NetworkLocationScanner (partial)
+  08-16 12:16:14.702 - 10231 (com.google.android.gsf,...) - ACQ IntentOp:.f.s.l.LocationAssigningIntentOperation (partial)
+  08-16 12:16:24.882 - 10231 (com.google.android.gsf,...) - ACQ CallbackRunner (partial)
+  08-16 12:23:27.124 - 10266 (com.google.android.permissioncontroller) - ACQ *launch* (partial)
+  08-16 12:25:14.141 - 15005004 (com.samsung.cmh,...) - ACQ *alarm* (partial)
+  08-16 12:32:10.401 - 10266 (com.google.android.permissioncontroller) - ACQ *launch* (partial)
+  08-16 12:32:10.679 - 10900 - ACQ NotificationManagerService:post:ch.liri.operations (partial)
+  08-16 12:32:07.603 - 10266 (com.google.android.permissioncontroller) - ACQ *launch* (partial)
+  08-16 12:38:55.053 - 15010231 (com.google.android.gsf,...) - ACQ *alarm* (partial)
+  08-16 12:40:36.873 - 10084 (com.samsung.android.mcfds) - ACQ *alarm* (partial)
+  08-16 12:42:58.451 - 10266 (com.google.android.permissioncontroller) - ACQ *launch* (partial)
+  08-16 12:44:43.808 - 10900 - ACQ NetworkLocationLocator (partial)
+  08-16 13:07:07.619 - 10900 - ACQ GCoreFlp (partial)
+  08-16 13:17:40.011 - 10233 (com.android.vending) - ACQ NotificationManagerService:post:com.android.vending (partial)
+  08-16 13:22:37.361 - 1041 - ACQ AudioMix (partial)
+  08-16 13:25:36.869 - 1027 (com.android.nfc,...) - ACQ *alarm* (partial)
+  08-16 13:25:45.781 - 10266 (com.google.android.permissioncontroller) - ACQ *launch* (partial)
+  08-16 13:25:45.953 - 10901 (ch.liri.operations) - ACQ NotificationManagerService:post:ch.liri.operations (partial)
+  08-16 13:28:53.136 - 1000 (System) - ACQ WifiSuspend (partial)
+  08-16 13:28:28.379 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:26:51.180 - 10040 (com.samsung.android.app.routines,...) - ACQ AOD_EnsureWorkingTime (draw)
+  08-16 13:28:57.089 - 1041 - ACQ AudioMix (partial)
+  08-16 13:37:39.307 - 10901 (ch.liri.operations) - ACQ GCoreFlp (partial)
+  08-16 13:37:39.304 - 10901 (ch.liri.operations) - ACQ NetworkLocationScanner (partial)
+  08-16 13:37:40.264 - 15010223 (com.google.android.as) - ACQ NetworkLocationLocator (partial)
+  08-16 13:37:45.466 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 13:37:27.140 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 13:37:41.781 - 10231 (com.google.android.gsf,...) - ACQ PendingIntentClient (partial)
+  08-16 13:37:46.404 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:37:46.425 - 1000 (System) - REL NetworkStats
+  08-16 13:37:47.432 - 1041 (System) - REL AudioMix
+  08-16 13:37:47.433 - 1041 (System) - REL AudioMix
+  08-16 13:37:47.435 - 1041 (System) - REL AudioMix
+  08-16 13:37:47.437 - 1041 (System) - REL AudioMix
+  08-16 13:37:47.437 - 1041 (System) - REL AudioMix
+  08-16 13:37:47.439 - 1041 (System) - REL AudioMix
+  08-16 13:37:47.441 - 1041 (System) - REL AudioMix
+  08-16 13:37:47.728 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:37:47.744 - 1000 (System) - REL NetworkStats
+  08-16 13:37:49.092 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:37:49.111 - 1000 (System) - REL NetworkStats
+  08-16 13:37:49.983 - 10231 (com.google.android.gsf,...) - ACQ GCM_READ (partial)
+  08-16 13:37:49.989 - 10231 (com.google.android.gsf,...) - ACQ GCM_WORK (partial)
+  08-16 13:37:49.991 - 10231 (com.google.android.gsf,...) - REL GCM_READ
+  08-16 13:37:50.004 - 10657 (com.zhiliaoapp.musically) - ACQ GOOGLE_C2DM (partial)
+  08-16 13:37:50.010 - 10231 (com.google.android.gsf,...) - REL GCM_WORK
+  08-16 13:37:50.452 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:37:50.476 - 1000 (System) - REL NetworkStats
+  08-16 13:37:50.934 - 10657 (com.zhiliaoapp.musically) - REL GOOGLE_C2DM
+  08-16 13:37:50.988 - 10657 (com.zhiliaoapp.musically) - ACQ wake:com.google.firebase.iid.WakeLockHolder (partial)
+  08-16 13:37:51.134 - 10657 (com.zhiliaoapp.musically) - REL wake:com.google.firebase.iid.WakeLockHolder
+  08-16 13:37:51.907 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:37:51.916 - 1000 (System) - REL NetworkStats
+  08-16 13:37:52.408 - 10657 (com.zhiliaoapp.musically) - ACQ NotificationManagerService:post:com.zhiliaoapp.musically (partial)
+  08-16 13:37:52.409 - 1000 (System) - ACQ Prevent Sleep by AssistantDelay (partial)
+  08-16 13:37:52.412 - 10657 (com.zhiliaoapp.musically) - REL NotificationManagerService:post:com.zhiliaoapp.musically
+  08-16 13:37:52.910 - 1000 (System) - REL Prevent Sleep by AssistantDelay
+  08-16 13:37:53.296 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:37:53.313 - 1000 (System) - REL NetworkStats
+  08-16 13:37:54.642 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:37:54.659 - 1000 (System) - REL NetworkStats
+  08-16 13:37:56.067 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:37:56.094 - 1000 (System) - REL NetworkStats
+  08-16 13:37:57.133 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:37:57.133 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:37:57.133 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:37:57.136 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:37:57.136 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:37:57.137 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:37:57.137 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:37:57.627 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:37:57.639 - 1000 (System) - REL NetworkStats
+  08-16 13:37:58.920 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:37:58.930 - 1000 (System) - REL NetworkStats
+  08-16 13:37:59.139 - 1041 (System) - REL AudioMix
+  08-16 13:37:59.140 - 1041 (System) - REL AudioMix
+  08-16 13:37:59.140 - 1041 (System) - REL AudioMix
+  08-16 13:37:59.141 - 1041 (System) - REL AudioMix
+  08-16 13:37:59.142 - 1041 (System) - REL AudioMix
+  08-16 13:37:59.143 - 1041 (System) - REL AudioMix
+  08-16 13:37:59.144 - 1041 (System) - REL AudioMix
+  08-16 13:38:00.002 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 13:38:00.007 - 1000 (System) - REL *alarm*
+  08-16 13:38:00.163 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:00.173 - 1000 (System) - REL NetworkStats
+  08-16 13:38:01.432 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:01.444 - 1000 (System) - REL NetworkStats
+  08-16 13:38:02.734 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:02.745 - 1000 (System) - REL NetworkStats
+  08-16 13:38:05.665 - 10510 (com.linkedin.android) - ACQ *alarm* (partial)
+  08-16 13:38:05.704 - 10671 (digifit.virtuagym.client.android) - ACQ *job*r/#LogstashClientWorker#@androidx.work.systemjobscheduler@digifit.virtuagym.client.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:05.706 - 10671 (digifit.virtuagym.client.android) - ACQ *job*r/#LogstashClientWorker#@androidx.work.systemjobscheduler@digifit.virtuagym.client.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:05.709 - 10067 (com.facebook.services) - REL *alarm*
+  08-16 13:38:05.715 - 10671 (digifit.virtuagym.client.android) - REL *job*r/#LogstashClientWorker#@androidx.work.systemjobscheduler@digifit.virtuagym.client.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:05.715 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:05.716 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:05.718 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:05.718 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:05.719 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:05.720 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:05.720 - 10510 (com.linkedin.android) - ACQ *job*r/@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:05.720 - 10510 (com.linkedin.android) - ACQ *job*r/@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:05.721 - 10510 (com.linkedin.android) - REL *job*r/@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:05.721 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:05.721 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:05.722 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:05.798 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:38:05.799 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:38:05.799 - 1000 (System) - ACQ *telephony-radio* (partial)
+  08-16 13:38:05.812 - 1000 (System) - REL *telephony-radio*
+  08-16 13:38:05.812 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:38:05.813 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:38:05.940 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:38:05.941 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:38:05.941 - 1000 (System) - ACQ *telephony-radio* (partial)
+  08-16 13:38:05.945 - 1000 (System) - REL *telephony-radio*
+  08-16 13:38:05.945 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:38:05.945 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:38:06.191 - 10671 (digifit.virtuagym.client.android) - REL *job*r/#LogstashClientWorker#@androidx.work.systemjobscheduler@digifit.virtuagym.client.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.196 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.196 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.197 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.379 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.380 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.381 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.381 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.382 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.383 - 10510 (com.linkedin.android) - ACQ *job*r/@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.383 - 10510 (com.linkedin.android) - ACQ *job*r/@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.383 - 10510 (com.linkedin.android) - REL *job*r/@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.384 - 10510 (com.linkedin.android) - REL *job*r/@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.384 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.384 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.385 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.385 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.385 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.385 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.386 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.386 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.386 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.387 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.387 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.444 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.453 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.453 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:38:06.469 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.474 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.476 - 10510 (com.linkedin.android) - ACQ *job*r/com.linkedin.android/.notifications.push.RegistrationJobIntentServiceImpl (partial)
+  08-16 13:38:06.476 - 10510 (com.linkedin.android) - ACQ *job*r/com.linkedin.android/.notifications.push.RegistrationJobIntentServiceImpl (partial)
+  08-16 13:38:06.478 - 10510 (com.linkedin.android) - REL *job*r/com.linkedin.android/.notifications.push.RegistrationJobIntentServiceImpl
+  08-16 13:38:06.494 - 10510 (com.linkedin.android) - REL *job*r/com.linkedin.android/.notifications.push.RegistrationJobIntentServiceImpl
+  08-16 13:38:06.554 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.768 - 10510 (com.linkedin.android) - REL *job*r/@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:06.983 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:07.148 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:38:07.249 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:07.261 - 1000 (System) - REL NetworkStats
+  08-16 13:38:08.941 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 13:38:08.951 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:38:08.951 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:38:08.951 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:38:08.968 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:38:08.968 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:38:08.968 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:38:09.142 - 1001 (com.android.stk,...) - REL RILJ_ACK_WL
+  08-16 13:38:19.486 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:19.508 - 1000 (System) - REL NetworkStats
+  08-16 13:38:21.828 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:21.863 - 1000 (System) - REL NetworkStats
+  08-16 13:38:31.780 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:31.809 - 1000 (System) - REL NetworkStats
+  08-16 13:38:33.172 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:38:33.172 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:38:33.174 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:38:33.175 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:38:33.176 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:38:33.176 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:38:33.176 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:38:35.178 - 1041 (System) - REL AudioMix
+  08-16 13:38:35.180 - 1041 (System) - REL AudioMix
+  08-16 13:38:35.180 - 1041 (System) - REL AudioMix
+  08-16 13:38:35.181 - 1041 (System) - REL AudioMix
+  08-16 13:38:35.181 - 1041 (System) - REL AudioMix
+  08-16 13:38:35.182 - 1041 (System) - REL AudioMix
+  08-16 13:38:35.183 - 1041 (System) - REL AudioMix
+  08-16 13:38:37.852 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:37.883 - 1000 (System) - REL NetworkStats
+  08-16 13:38:40.318 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:40.333 - 1000 (System) - REL NetworkStats
+  08-16 13:38:44.679 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:44.702 - 1000 (System) - REL NetworkStats
+  08-16 13:38:45.341 - 10641 (com.mgoogle.android.gms) - ACQ *alarm* (partial)
+  08-16 13:38:45.349 - 10641 (com.mgoogle.android.gms) - REL *alarm*
+  08-16 13:38:45.368 - 10641 (com.mgoogle.android.gms) - ACQ mcs (partial)
+  08-16 13:38:45.399 - 10641 (com.mgoogle.android.gms) - REL mcs
+  08-16 13:38:45.431 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 13:38:45.457 - 1000 (System) - REL *alarm*
+  08-16 13:38:49.604 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:49.632 - 1000 (System) - REL NetworkStats
+  08-16 13:38:54.506 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:54.535 - 1000 (System) - REL NetworkStats
+  08-16 13:38:59.424 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:38:59.443 - 1000 (System) - REL NetworkStats
+  08-16 13:39:00.001 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 13:39:00.007 - 1000 (System) - REL *alarm*
+  08-16 13:39:04.394 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:04.414 - 1000 (System) - REL NetworkStats
+  08-16 13:39:09.274 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:09.292 - 1000 (System) - REL NetworkStats
+  08-16 13:39:14.555 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:14.576 - 1000 (System) - REL NetworkStats
+  08-16 13:39:19.626 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:19.653 - 1000 (System) - REL NetworkStats
+  08-16 13:39:26.459 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:26.481 - 1000 (System) - REL NetworkStats
+  08-16 13:39:28.545 - 10231 (com.google.android.gsf,...) - ACQ GCM_READ (partial)
+  08-16 13:39:28.553 - 10231 (com.google.android.gsf,...) - ACQ GCM_WORK (partial)
+  08-16 13:39:28.554 - 10231 (com.google.android.gsf,...) - REL GCM_READ
+  08-16 13:39:28.581 - 10657 (com.zhiliaoapp.musically) - ACQ GOOGLE_C2DM (partial)
+  08-16 13:39:28.603 - 10231 (com.google.android.gsf,...) - REL GCM_WORK
+  08-16 13:39:28.611 - 10231 (com.google.android.gsf,...) - ACQ GCM_WORK (partial)
+  08-16 13:39:28.615 - 10231 (com.google.android.gsf,...) - REL GCM_WORK
+  08-16 13:39:28.704 - 10657 (com.zhiliaoapp.musically) - REL GOOGLE_C2DM
+  08-16 13:39:28.738 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:28.738 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:28.738 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:28.752 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:28.767 - 1000 (System) - REL NetworkStats
+  08-16 13:39:28.788 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:28.788 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:28.788 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:28.793 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 13:39:28.797 - 10657 (com.zhiliaoapp.musically) - ACQ wake:com.google.firebase.iid.WakeLockHolder (partial)
+  08-16 13:39:28.813 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:28.819 - 1000 (System) - REL NetworkStats
+  08-16 13:39:28.843 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 13:39:28.859 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:28.861 - 10231 (com.google.android.gsf,...) - ACQ GCM_WORK (partial)
+  08-16 13:39:28.864 - 10231 (com.google.android.gsf,...) - REL GCM_WORK
+  08-16 13:39:28.864 - 1000 (System) - REL NetworkStats
+  08-16 13:39:28.933 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:28.933 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:28.933 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:28.936 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:28.936 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:28.936 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:28.938 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:28.938 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:28.939 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:28.939 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:28.939 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:28.939 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:28.979 - 10657 (com.zhiliaoapp.musically) - REL wake:com.google.firebase.iid.WakeLockHolder
+  08-16 13:39:29.050 - 1001 (com.android.stk,...) - REL RILJ_ACK_WL
+  08-16 13:39:29.201 - 1001 (com.android.stk,...) - REL RILJ_ACK_WL
+  08-16 13:39:32.232 - 10451 (com.instagram.android) - ACQ *launch* (partial)
+  08-16 13:39:32.232 - 10302 (com.samsung.mediasearch) - ACQ *job*r/com.samsung.mediasearch/.service.MediaSearchJobService (partial)
+  08-16 13:39:32.232 - 10302 (com.samsung.mediasearch) - ACQ *job*r/com.samsung.mediasearch/.service.MediaSearchJobService (partial)
+  08-16 13:39:32.246 - 10302 (com.samsung.mediasearch) - REL *job*r/com.samsung.mediasearch/.service.MediaSearchJobService
+  08-16 13:39:32.247 - 10250 (com.google.android.youtube) - ACQ *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.youtube/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:32.248 - 10250 (com.google.android.youtube) - ACQ *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.youtube/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:32.254 - 10250 (com.google.android.youtube) - REL *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.youtube/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:32.397 - 10451 (com.instagram.android) - REL AudioMix
+  08-16 13:39:32.397 - 1041 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 13:39:32.653 - 10451 (com.instagram.android) - REL *launch*
+  08-16 13:39:32.969 - 10250 (com.google.android.youtube) - ACQ *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.youtube/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:32.970 - 10250 (com.google.android.youtube) - ACQ *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.youtube/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:32.970 - 10250 (com.google.android.youtube) - REL *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.youtube/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:32.971 - 10250 (com.google.android.youtube) - REL *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.youtube/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:32.988 - 10250 (com.google.android.youtube) - REL *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.youtube/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:33.453 - 1041 (com.google.android.youtube) - ACQ AudioMix (partial)
+  08-16 13:39:33.453 - 1041 (com.google.android.youtube) - ACQ AudioMix (partial)
+  08-16 13:39:33.454 - 1041 (com.google.android.youtube) - ACQ AudioMix (partial)
+  08-16 13:39:33.454 - 1041 (com.google.android.youtube) - ACQ AudioMix (partial)
+  08-16 13:39:33.455 - 1041 (com.google.android.youtube) - ACQ AudioMix (partial)
+  08-16 13:39:33.455 - 1041 (com.google.android.youtube) - ACQ AudioMix (partial)
+  08-16 13:39:33.456 - 1041 (com.google.android.youtube) - ACQ AudioMix (partial)
+  08-16 13:39:33.754 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:33.754 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:33.756 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:33.757 - 10785 (com.google.android.apps.youtube.music) - ACQ *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.apps.youtube.music/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:33.757 - 10785 (com.google.android.apps.youtube.music) - ACQ *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.apps.youtube.music/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:33.769 - 10785 (com.google.android.apps.youtube.music) - REL *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.apps.youtube.music/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:33.860 - 10710 (com.facebook.katana) - ACQ *job*r/com.facebook.katana/com.facebook.falco.jobscheduler.FFJobService (partial)
+  08-16 13:39:33.863 - 10710 (com.facebook.katana) - ACQ *job*r/com.facebook.katana/com.facebook.falco.jobscheduler.FFJobService (partial)
+  08-16 13:39:33.907 - 10710 (com.facebook.katana) - REL *job*r/com.facebook.katana/com.facebook.falco.jobscheduler.FFJobService
+  08-16 13:39:33.943 - 10785 (com.google.android.apps.youtube.music) - REL *job*r/#des_dispatch_all_task#@androidx.work.systemjobscheduler@com.google.android.apps.youtube.music/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:34.266 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:34.266 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:34.267 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:34.339 - 1041 (com.duckduckgo.mobile.android) - REL AudioMix
+  08-16 13:39:34.383 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:34.426 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 13:39:34.530 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:34.563 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:34.563 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:34.566 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:34.582 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:34.582 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:34.583 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:34.607 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:34.607 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:34.608 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:34.632 - 1001 (com.android.stk,...) - REL RILJ_ACK_WL
+  08-16 13:39:34.664 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:34.677 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:34.680 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:34.686 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:34.686 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:34.688 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:34.801 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:35.386 - 10302 (com.samsung.mediasearch) - REL *job*r/com.samsung.mediasearch/.service.MediaSearchJobService
+  08-16 13:39:35.405 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:35.412 - 1000 (System) - REL NetworkStats
+  08-16 13:39:35.457 - 1041 (System) - REL AudioMix
+  08-16 13:39:35.458 - 1041 (System) - REL AudioMix
+  08-16 13:39:35.460 - 1041 (System) - REL AudioMix
+  08-16 13:39:35.460 - 1041 (System) - REL AudioMix
+  08-16 13:39:35.460 - 1041 (System) - REL AudioMix
+  08-16 13:39:35.461 - 1041 (System) - REL AudioMix
+  08-16 13:39:35.465 - 1041 (System) - REL AudioMix
+  08-16 13:39:36.865 - 10710 (com.facebook.katana) - ACQ *alarm* (partial)
+  08-16 13:39:36.870 - 1027 (com.android.nfc,...) - REL *alarm*
+  08-16 13:39:37.221 - 1041 (com.android.nfc,...) - ACQ AudioMix (partial)
+  08-16 13:39:37.227 - 1041 (com.android.nfc,...) - ACQ AudioMix (partial)
+  08-16 13:39:37.228 - 1041 (com.android.nfc,...) - ACQ AudioMix (partial)
+  08-16 13:39:37.229 - 1041 (com.android.nfc,...) - ACQ AudioMix (partial)
+  08-16 13:39:37.229 - 1041 (com.android.nfc,...) - ACQ AudioMix (partial)
+  08-16 13:39:37.229 - 1041 (com.android.nfc,...) - ACQ AudioMix (partial)
+  08-16 13:39:37.230 - 1041 (com.android.nfc,...) - ACQ AudioMix (partial)
+  08-16 13:39:37.230 - 1041 (com.android.nfc,...) - ACQ AudioMix (partial)
+  08-16 13:39:37.240 - 1041 (com.android.nfc,...) - REL AudioMix
+  08-16 13:39:37.240 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 13:39:38.298 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:38.306 - 1000 (System) - REL NetworkStats
+  08-16 13:39:39.223 - 1041 (System) - REL AudioMix
+  08-16 13:39:39.229 - 1041 (System) - REL AudioMix
+  08-16 13:39:39.231 - 1041 (System) - REL AudioMix
+  08-16 13:39:39.232 - 1041 (System) - REL AudioMix
+  08-16 13:39:39.232 - 1041 (System) - REL AudioMix
+  08-16 13:39:39.233 - 1041 (System) - REL AudioMix
+  08-16 13:39:39.235 - 1041 (System) - REL AudioMix
+  08-16 13:39:39.561 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:39.570 - 1000 (System) - REL NetworkStats
+  08-16 13:39:40.848 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:40.862 - 1000 (System) - REL NetworkStats
+  08-16 13:39:41.624 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 13:39:41.830 - 1001 (com.android.stk,...) - REL RILJ_ACK_WL
+  08-16 13:39:42.734 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:42.734 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:42.734 - 1000 (System) - ACQ *telephony-radio* (partial)
+  08-16 13:39:42.745 - 1000 (System) - REL *telephony-radio*
+  08-16 13:39:42.745 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:42.746 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:42.801 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 13:39:43.011 - 1001 (com.android.stk,...) - REL RILJ_ACK_WL
+  08-16 13:39:44.417 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:39:44.417 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:39:44.417 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:39:44.418 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:39:44.418 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:39:44.418 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:39:44.419 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:39:45.395 - 10641 (com.mgoogle.android.gms) - ACQ *alarm* (partial)
+  08-16 13:39:45.400 - 10641 (com.mgoogle.android.gms) - REL *alarm*
+  08-16 13:39:45.406 - 10641 (com.mgoogle.android.gms) - ACQ mcs (partial)
+  08-16 13:39:45.425 - 10641 (com.mgoogle.android.gms) - REL mcs
+  08-16 13:39:46.416 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:39:46.421 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:39:46.422 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:39:46.423 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:39:46.425 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:39:46.426 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:39:46.430 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:39:47.071 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:47.079 - 1000 (System) - REL NetworkStats
+  08-16 13:39:47.253 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:39:47.255 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:39:47.255 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:39:47.255 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:39:47.256 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:39:47.258 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:39:47.258 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:39:47.644 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 13:39:47.657 - 1000 (System) - ACQ ImsService (partial)
+  08-16 13:39:47.658 - 1000 (System) - REL *alarm*
+  08-16 13:39:47.697 - 1000 (System) - REL ImsService
+  08-16 13:39:48.354 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:48.363 - 1000 (System) - REL NetworkStats
+  08-16 13:39:48.952 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 13:39:49.162 - 1001 (com.android.stk,...) - REL RILJ_ACK_WL
+  08-16 13:39:49.258 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:49.258 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:49.259 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:49.260 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:49.260 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:49.261 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:49.261 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:50.018 - 10040 (com.samsung.android.app.routines,...) - ACQ *vibrator* (partial)
+  08-16 13:39:50.105 - 10710 (com.facebook.katana) - REL *job*r/com.facebook.katana/com.facebook.falco.jobscheduler.FFJobService
+  08-16 13:39:50.141 - 10040 (com.samsung.android.app.routines,...) - REL *vibrator*
+  08-16 13:39:50.166 - 10451 (com.instagram.android) - REL AudioMix
+  08-16 13:39:50.166 - 1041 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 13:39:50.193 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:50.201 - 1000 (System) - REL NetworkStats
+  08-16 13:39:50.275 - 10167 (com.facebook.appmanager) - ACQ *job*r/com.facebook.appmanager/com.facebook.oxygen.common.jobqueue.JobQueueService (partial)
+  08-16 13:39:50.276 - 10167 (com.facebook.appmanager) - ACQ *job*r/com.facebook.appmanager/com.facebook.oxygen.common.jobqueue.JobQueueService (partial)
+  08-16 13:39:50.278 - 10167 (com.facebook.appmanager) - REL *job*r/com.facebook.appmanager/com.facebook.oxygen.common.jobqueue.JobQueueService
+  08-16 13:39:50.321 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 13:39:50.425 - 10167 (com.facebook.appmanager) - ACQ *job*r/com.facebook.appmanager/com.facebook.oxygen.appmanager.update.core.UpdateService (partial)
+  08-16 13:39:50.426 - 10167 (com.facebook.appmanager) - ACQ *job*r/com.facebook.appmanager/com.facebook.oxygen.appmanager.update.core.UpdateService (partial)
+  08-16 13:39:50.427 - 10167 (com.facebook.appmanager) - REL *job*r/com.facebook.appmanager/com.facebook.oxygen.appmanager.update.core.UpdateService
+  08-16 13:39:50.520 - 10167 (com.facebook.appmanager) - REL *job*r/com.facebook.appmanager/com.facebook.oxygen.appmanager.update.core.UpdateService
+  08-16 13:39:50.521 - 10167 (com.facebook.appmanager) - ACQ *job*r/com.facebook.appmanager/com.facebook.oxygen.appmanager.update.core.UpdateService (partial)
+  08-16 13:39:50.522 - 10167 (com.facebook.appmanager) - ACQ *job*r/com.facebook.appmanager/com.facebook.oxygen.appmanager.update.core.UpdateService (partial)
+  08-16 13:39:50.523 - 10167 (com.facebook.appmanager) - REL *job*r/com.facebook.appmanager/com.facebook.oxygen.appmanager.update.core.UpdateService
+  08-16 13:39:50.526 - 1001 (com.android.stk,...) - REL RILJ_ACK_WL
+  08-16 13:39:50.530 - 10167 (com.facebook.appmanager) - REL *job*r/com.facebook.appmanager/com.facebook.oxygen.appmanager.update.core.UpdateService
+  08-16 13:39:50.669 - 10040 (com.samsung.android.app.routines,...) - ACQ *vibrator* (partial)
+  08-16 13:39:50.697 - 10451 (com.instagram.android) - ACQ *launch* (partial)
+  08-16 13:39:50.791 - 10451 (com.instagram.android) - REL *launch*
+  08-16 13:39:50.791 - 10040 (com.samsung.android.app.routines,...) - REL *vibrator*
+  08-16 13:39:50.889 - 1041 (com.samsung.android.app.routines,...) - ACQ AudioMix (partial)
+  08-16 13:39:50.890 - 1041 (com.samsung.android.app.routines,...) - ACQ AudioMix (partial)
+  08-16 13:39:50.890 - 1041 (com.samsung.android.app.routines,...) - ACQ AudioMix (partial)
+  08-16 13:39:50.890 - 1041 (com.samsung.android.app.routines,...) - ACQ AudioMix (partial)
+  08-16 13:39:50.891 - 1041 (com.samsung.android.app.routines,...) - ACQ AudioMix (partial)
+  08-16 13:39:50.891 - 1041 (com.samsung.android.app.routines,...) - ACQ AudioMix (partial)
+  08-16 13:39:50.891 - 1041 (com.samsung.android.app.routines,...) - ACQ AudioMix (partial)
+  08-16 13:39:50.902 - 10167 (com.facebook.appmanager) - REL *job*r/com.facebook.appmanager/com.facebook.oxygen.common.jobqueue.JobQueueService
+  08-16 13:39:50.903 - 1041 (com.facebook.appmanager) - REL AudioMix
+  08-16 13:39:50.903 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 13:39:51.530 - 10231 (com.google.android.gsf,...) - ACQ IntentOp:.c.b.BackgroundBroadcastReceiverSupport$PersistentReceiverIntentOperation (partial)
+  08-16 13:39:51.544 - 10231 (com.google.android.gsf,...) - REL IntentOp:.c.b.BackgroundBroadcastReceiverSupport$PersistentReceiverIntentOperation
+  08-16 13:39:51.742 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.742 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.742 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.780 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.780 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.780 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.789 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.789 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.789 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.797 - 1000 (System) - ACQ *job*r/#PushRegistrationWorker#@androidx.work.systemjobscheduler@com.samsung.euicc/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:51.798 - 1000 (System) - ACQ *job*r/#PushRegistrationWorker#@androidx.work.systemjobscheduler@com.samsung.euicc/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:51.800 - 1000 (System) - REL *job*r/#PushRegistrationWorker#@androidx.work.systemjobscheduler@com.samsung.euicc/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:51.804 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.804 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.809 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.815 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.815 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.815 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.824 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.824 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.825 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.828 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.829 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.829 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.832 - 1000 (System) - REL *job*r/#PushRegistrationWorker#@androidx.work.systemjobscheduler@com.samsung.euicc/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:51.859 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.859 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.859 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.861 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:51.861 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:51.861 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:52.041 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:52.041 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:52.041 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:52.043 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:52.043 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:52.043 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:52.051 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:52.051 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:39:52.051 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:39:52.895 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:52.895 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:52.896 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:52.896 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:52.896 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:52.898 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:52.899 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:39:53.979 - 10111 (com.samsung.android.smartsuggestions) - ACQ *alarm* (partial)
+  08-16 13:39:53.982 - 10111 (com.samsung.android.smartsuggestions) - ACQ *job*r/#AppsDataWorker#@androidx.work.systemjobscheduler@com.samsung.android.smartsuggestions/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:53.984 - 1027 (com.android.nfc,...) - REL *alarm*
+  08-16 13:39:53.984 - 10111 (com.samsung.android.smartsuggestions) - ACQ *job*r/#AppsDataWorker#@androidx.work.systemjobscheduler@com.samsung.android.smartsuggestions/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:53.987 - 10111 (com.samsung.android.smartsuggestions) - REL *job*r/#AppsDataWorker#@androidx.work.systemjobscheduler@com.samsung.android.smartsuggestions/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:54.031 - 10111 (com.samsung.android.smartsuggestions) - REL *job*r/#AppsDataWorker#@androidx.work.systemjobscheduler@com.samsung.android.smartsuggestions/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:54.185 - 1041 (com.samsung.android.smartsuggestions) - ACQ AudioMix (partial)
+  08-16 13:39:54.185 - 1041 (com.samsung.android.smartsuggestions) - ACQ AudioMix (partial)
+  08-16 13:39:54.187 - 1041 (com.samsung.android.smartsuggestions) - ACQ AudioMix (partial)
+  08-16 13:39:54.187 - 1041 (com.samsung.android.smartsuggestions) - ACQ AudioMix (partial)
+  08-16 13:39:54.187 - 1041 (com.samsung.android.smartsuggestions) - ACQ AudioMix (partial)
+  08-16 13:39:54.187 - 1041 (com.samsung.android.smartsuggestions) - ACQ AudioMix (partial)
+  08-16 13:39:54.187 - 1041 (com.samsung.android.smartsuggestions) - ACQ AudioMix (partial)
+  08-16 13:39:55.008 - 1001 (com.android.stk,...) - ACQ RILJ_ACK_WL (partial)
+  08-16 13:39:55.023 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:55.024 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:55.024 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:55.026 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:55.027 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:55.027 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:55.033 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:55.033 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:55.034 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:55.035 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:55.035 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:39:55.036 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:39:55.281 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:55.290 - 1000 (System) - REL NetworkStats
+  08-16 13:39:55.593 - 1001 (com.android.stk,...) - REL RILJ_ACK_WL
+  08-16 13:39:56.071 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:56.072 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:56.074 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:56.088 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:56.088 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:56.089 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:56.187 - 1041 (com.linkedin.android) - REL AudioMix
+  08-16 13:39:56.187 - 1041 (com.linkedin.android) - REL AudioMix
+  08-16 13:39:56.188 - 1041 (com.linkedin.android) - REL AudioMix
+  08-16 13:39:56.192 - 1041 (com.linkedin.android) - REL AudioMix
+  08-16 13:39:56.194 - 1041 (com.linkedin.android) - REL AudioMix
+  08-16 13:39:56.195 - 1041 (com.linkedin.android) - REL AudioMix
+  08-16 13:39:56.196 - 1041 (com.linkedin.android) - REL AudioMix
+  08-16 13:39:56.690 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:56.696 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:56.697 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:56.697 - 10510 (com.linkedin.android) - ACQ *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:39:56.697 - 1000 (System) - REL NetworkStats
+  08-16 13:39:56.698 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:57.150 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:57.189 - 10510 (com.linkedin.android) - REL *job*r/#RestProxyWorker#@androidx.work.systemjobscheduler@com.linkedin.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:39:57.197 - 10248 (com.google.android.gm) - ACQ Icing (partial)
+  08-16 13:39:57.740 - 10248 (com.google.android.gm) - REL Icing
+  08-16 13:39:57.945 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:39:57.956 - 1000 (System) - REL NetworkStats
+  08-16 13:40:00.001 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 13:40:00.004 - 1000 (System) - REL *alarm*
+  08-16 13:40:06.211 - 10451 (com.instagram.android) - REL AudioMix
+  08-16 13:40:06.211 - 1041 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 13:40:06.697 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:06.697 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:06.698 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:06.706 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:06.706 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:06.706 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:06.731 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:40:06.731 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:40:06.731 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:40:06.731 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:40:06.732 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:40:06.732 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:40:06.732 - 1041 (com.android.stk,...) - ACQ AudioMix (partial)
+  08-16 13:40:06.744 - 1041 (com.android.stk,...) - REL AudioMix
+  08-16 13:40:06.744 - 10451 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 13:40:07.821 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:40:07.833 - 1000 (System) - REL NetworkStats
+  08-16 13:40:08.734 - 1041 (System) - REL AudioMix
+  08-16 13:40:08.735 - 1041 (System) - REL AudioMix
+  08-16 13:40:08.736 - 1041 (System) - REL AudioMix
+  08-16 13:40:08.736 - 1041 (System) - REL AudioMix
+  08-16 13:40:08.738 - 1041 (System) - REL AudioMix
+  08-16 13:40:08.739 - 1041 (System) - REL AudioMix
+  08-16 13:40:08.741 - 1041 (System) - REL AudioMix
+  08-16 13:40:10.068 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:40:10.092 - 1000 (System) - REL NetworkStats
+  08-16 13:40:12.576 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:40:12.600 - 1000 (System) - REL NetworkStats
+  08-16 13:40:16.736 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:40:16.759 - 1000 (System) - REL NetworkStats
+  08-16 13:40:21.830 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:40:21.854 - 1000 (System) - REL NetworkStats
+  08-16 13:40:39.705 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:40:39.706 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:40:39.706 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:40:39.708 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:40:39.708 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:40:39.709 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:40:39.710 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:40:39.761 - 10657 (com.zhiliaoapp.musically) - ACQ *job*r/com.zhiliaoapp.musically/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService (partial)
+  08-16 13:40:39.761 - 10657 (com.zhiliaoapp.musically) - ACQ *job*r/com.zhiliaoapp.musically/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService (partial)
+  08-16 13:40:39.768 - 10657 (com.zhiliaoapp.musically) - REL *job*r/com.zhiliaoapp.musically/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService
+  08-16 13:40:39.769 - 1000 (System) - ACQ *job*r/com.samsung.euicc/.lpaService.NotificationJobService (partial)
+  08-16 13:40:39.770 - 1000 (System) - ACQ *job*r/com.samsung.euicc/.lpaService.NotificationJobService (partial)
+  08-16 13:40:39.788 - 1000 (System) - REL *job*r/com.samsung.euicc/.lpaService.NotificationJobService
+  08-16 13:40:39.794 - 1000 (System) - REL *job*r/com.samsung.euicc/.lpaService.NotificationJobService
+  08-16 13:40:40.283 - 10657 (com.zhiliaoapp.musically) - REL *job*r/com.zhiliaoapp.musically/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService
+  08-16 13:40:41.709 - 1041 (com.zhiliaoapp.musically) - REL AudioMix
+  08-16 13:40:41.709 - 1041 (com.zhiliaoapp.musically) - REL AudioMix
+  08-16 13:40:41.710 - 1041 (com.zhiliaoapp.musically) - REL AudioMix
+  08-16 13:40:41.710 - 1041 (com.zhiliaoapp.musically) - REL AudioMix
+  08-16 13:40:41.711 - 1041 (com.zhiliaoapp.musically) - REL AudioMix
+  08-16 13:40:41.711 - 1041 (com.zhiliaoapp.musically) - REL AudioMix
+  08-16 13:40:41.714 - 1041 (com.zhiliaoapp.musically) - REL AudioMix
+  08-16 13:40:42.251 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:40:42.265 - 1000 (System) - REL NetworkStats
+  08-16 13:40:45.423 - 10641 (com.mgoogle.android.gms) - ACQ *alarm* (partial)
+  08-16 13:40:45.428 - 10641 (com.mgoogle.android.gms) - REL *alarm*
+  08-16 13:40:45.444 - 10641 (com.mgoogle.android.gms) - ACQ mcs (partial)
+  08-16 13:40:45.483 - 10641 (com.mgoogle.android.gms) - REL mcs
+  08-16 13:40:52.148 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.149 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.149 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.187 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.187 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.188 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.196 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.197 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.197 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.250 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.250 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.251 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.256 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.256 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.256 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.265 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.265 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.265 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.283 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.283 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.283 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.319 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.319 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.320 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.324 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.324 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.324 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.358 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.358 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.359 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.360 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.361 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.361 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.369 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.369 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.369 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.377 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.377 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.377 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.406 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.406 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.407 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.410 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.411 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.411 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.429 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.429 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.429 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.431 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.431 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.431 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.440 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:40:52.440 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:40:52.441 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:00.000 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 13:41:00.001 - 1000 (System) - REL *alarm*
+  08-16 13:41:00.021 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:00.022 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:00.022 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:00.023 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:00.023 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:00.023 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:00.024 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:02.025 - 1041 (System) - REL AudioMix
+  08-16 13:41:02.025 - 1041 (System) - REL AudioMix
+  08-16 13:41:02.026 - 1041 (System) - REL AudioMix
+  08-16 13:41:02.026 - 1041 (System) - REL AudioMix
+  08-16 13:41:02.027 - 1041 (System) - REL AudioMix
+  08-16 13:41:02.027 - 1041 (System) - REL AudioMix
+  08-16 13:41:02.028 - 1041 (System) - REL AudioMix
+  08-16 13:41:04.993 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:41:05.017 - 1000 (System) - REL NetworkStats
+  08-16 13:41:06.737 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 13:41:06.757 - 1000 (System) - REL *alarm*
+  08-16 13:41:07.629 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:41:07.652 - 1000 (System) - REL NetworkStats
+  08-16 13:41:11.981 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:41:12.003 - 1000 (System) - REL NetworkStats
+  08-16 13:41:27.901 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:27.901 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:27.902 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:27.902 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:27.902 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:27.902 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:27.902 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:29.907 - 1041 (System) - REL AudioMix
+  08-16 13:41:29.909 - 1041 (System) - REL AudioMix
+  08-16 13:41:29.910 - 1041 (System) - REL AudioMix
+  08-16 13:41:29.911 - 1041 (System) - REL AudioMix
+  08-16 13:41:29.912 - 1041 (System) - REL AudioMix
+  08-16 13:41:29.912 - 1041 (System) - REL AudioMix
+  08-16 13:41:29.914 - 1041 (System) - REL AudioMix
+  08-16 13:41:36.874 - 1027 (com.android.nfc,...) - ACQ *alarm* (partial)
+  08-16 13:41:36.889 - 1027 (com.android.nfc,...) - REL *alarm*
+  08-16 13:41:37.828 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:41:37.851 - 1000 (System) - REL NetworkStats
+  08-16 13:41:45.476 - 10641 (com.mgoogle.android.gms) - ACQ *alarm* (partial)
+  08-16 13:41:45.484 - 10641 (com.mgoogle.android.gms) - ACQ mcs (partial)
+  08-16 13:41:45.486 - 10641 (com.mgoogle.android.gms) - REL *alarm*
+  08-16 13:41:45.506 - 10641 (com.mgoogle.android.gms) - REL mcs
+  08-16 13:41:51.117 - 1041 (com.mgoogle.android.gms) - ACQ AudioMix (partial)
+  08-16 13:41:51.118 - 1041 (com.mgoogle.android.gms) - ACQ AudioMix (partial)
+  08-16 13:41:51.118 - 1041 (com.mgoogle.android.gms) - ACQ AudioMix (partial)
+  08-16 13:41:51.118 - 1041 (com.mgoogle.android.gms) - ACQ AudioMix (partial)
+  08-16 13:41:51.118 - 1041 (com.mgoogle.android.gms) - ACQ AudioMix (partial)
+  08-16 13:41:51.118 - 1041 (com.mgoogle.android.gms) - ACQ AudioMix (partial)
+  08-16 13:41:51.119 - 1041 (com.mgoogle.android.gms) - ACQ AudioMix (partial)
+  08-16 13:41:53.119 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:41:53.122 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:41:53.123 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:41:53.123 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:41:53.124 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:41:53.125 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:41:53.126 - 1041 (com.mgoogle.android.gms) - REL AudioMix
+  08-16 13:41:53.434 - 1000 (System) - ACQ PhoneWindowManager.mPowerKeyWakeLock (partial)
+  08-16 13:41:53.572 - 1000 (System) - REL PhoneWindowManager.mPowerKeyWakeLock
+  08-16 13:41:53.781 - 1041 (System) - ACQ AudioMix (partial)
+  08-16 13:41:53.790 - 1041 (System) - REL AudioMix
+  08-16 13:41:53.790 - 10040 (com.samsung.android.app.routines,...) - ACQ AudioMix (partial)
+  08-16 13:41:53.824 - 1000 (System) - ACQ ActivityManager-Sleep (partial)
+  08-16 13:41:53.910 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:41:53.921 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:41:53.921 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:41:53.929 - 1027 (com.android.nfc,...) - ACQ NfcService:mRoutingWakeLock (partial)
+  08-16 13:41:53.930 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.931 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.931 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.932 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:41:53.932 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:41:53.932 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:41:53.934 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.934 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.935 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.936 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.939 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.939 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.943 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:41:53.946 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.947 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.947 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:41:53.947 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:41:53.947 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.949 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:41:53.949 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:41:53.949 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:41:53.951 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.951 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.951 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.954 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.955 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.955 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.956 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.956 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.957 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.960 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.960 - 1001 (com.android.stk,...) - ACQ *telephony-radio* (partial)
+  08-16 13:41:53.960 - 1001 (com.android.stk,...) - REL *telephony-radio*
+  08-16 13:41:53.987 - 1027 (com.android.nfc,...) - REL NfcService:mRoutingWakeLock
+  08-16 13:41:54.006 - 1000 (System) - REL ActivityManager-Sleep
+  08-16 13:41:54.007 - 10451 (com.instagram.android) - REL AudioMix
+  08-16 13:41:54.007 - 1041 (com.instagram.android) - ACQ AudioMix (partial)
+  08-16 13:41:54.009 - 1000 (System) - ACQ dream:dream (partial)
+  08-16 13:41:54.081 - 10040 (com.samsung.android.app.routines,...) - REL AudioMix
+  08-16 13:41:54.081 - 1041 (com.samsung.android.app.routines,...) - ACQ AudioMix (partial)
+  08-16 13:41:54.096 - 10040 (com.samsung.android.app.routines,...) - ACQ Doze (draw)
+  08-16 13:41:54.128 - 10040 (com.samsung.android.app.routines,...) - ACQ Scrims (draw)
+  08-16 13:41:54.185 - 1000 (System) - ACQ dream:doze (doze)
+  08-16 13:41:54.189 - 10040 (com.samsung.android.app.routines,...) - ACQ show keyguard (partial)
+  08-16 13:41:54.191 - 10040 (com.samsung.android.app.routines,...) - ACQ AOD_EnsureWorkingTime (draw)
+  08-16 13:41:54.205 - 1000 (System) - ACQ motion_service (partial)
+  08-16 13:41:54.207 - 1000 (System) - REL motion_service
+  08-16 13:41:54.209 - 1000 (System) - REL dream:dream
+  08-16 13:41:54.209 - 1027 (com.android.nfc,...) - ACQ NfcService:mRoutingWakeLock (partial)
+  08-16 13:41:54.210 - 1027 (com.android.nfc,...) - REL NfcService:mRoutingWakeLock
+  08-16 13:41:54.229 - 10040 (com.samsung.android.app.routines,...) - REL Scrims
+  08-16 13:41:54.241 - 10040 (com.samsung.android.app.routines,...) - REL show keyguard
+  08-16 13:41:54.251 - 1027 (com.android.nfc,...) - ACQ NfcService:mRoutingWakeLock (partial)
+  08-16 13:41:54.253 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:41:54.254 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:41:54.254 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:41:54.262 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:41:54.262 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:41:54.265 - 1027 (com.android.nfc,...) - REL NfcService:mRoutingWakeLock
+  08-16 13:41:54.267 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:41:54.285 - 10231 (com.google.android.gsf,...) - ACQ CallbackRunner (partial)
+  08-16 13:41:54.304 - 10040 (com.samsung.android.app.routines,...) - REL Doze
+  08-16 13:41:54.321 - 10231 (com.google.android.gsf,...) - ACQ PendingIntentClient (partial)
+  08-16 13:41:54.331 - 10231 (com.google.android.gsf,...) - REL PendingIntentClient
+  08-16 13:41:54.342 - 10231 (com.google.android.gsf,...) - ACQ PendingIntentClient (partial)
+  08-16 13:41:54.347 - 10231 (com.google.android.gsf,...) - REL PendingIntentClient
+  08-16 13:41:54.347 - 10231 (com.google.android.gsf,...) - ACQ PendingIntentClient (partial)
+  08-16 13:41:54.348 - 1000 (System) - ACQ WifiSuspend (partial)
+  08-16 13:41:54.372 - 10231 (com.google.android.gsf,...) - REL CallbackRunner
+  08-16 13:41:54.381 - 10901 (ch.liri.operations) - ACQ GCoreFlp (partial)
+  08-16 13:41:54.386 - 1000 (System) - REL WifiSuspend
+  08-16 13:41:54.390 - 10901 (ch.liri.operations) - REL GCoreFlp
+  08-16 13:41:54.409 - 10231 (com.google.android.gsf,...) - REL PendingIntentClient
+  08-16 13:41:55.704 - 10040 (com.samsung.android.app.routines,...) - REL AOD_EnsureWorkingTime
+  08-16 13:41:55.896 - 1041 (com.samsung.android.app.routines,...) - REL AudioMix
+  08-16 13:41:56.143 - 1041 (com.samsung.android.app.routines,...) - REL AudioMix
+  08-16 13:42:00.475 - 10167 (com.facebook.appmanager) - ACQ *job*r/com.facebook.appmanager/com.facebook.oxygen.common.jobqueue.JobQueueService (partial)
+  08-16 13:42:00.476 - 10167 (com.facebook.appmanager) - ACQ *job*r/com.facebook.appmanager/com.facebook.oxygen.common.jobqueue.JobQueueService (partial)
+  08-16 13:42:00.481 - 10167 (com.facebook.appmanager) - REL *job*r/com.facebook.appmanager/com.facebook.oxygen.common.jobqueue.JobQueueService
+  08-16 13:42:00.495 - 10167 (com.facebook.appmanager) - REL *job*r/com.facebook.appmanager/com.facebook.oxygen.common.jobqueue.JobQueueService
+  08-16 13:42:45.506 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 13:42:45.531 - 10641 (com.mgoogle.android.gms) - ACQ mcs (partial)
+  08-16 13:42:45.553 - 10641 (com.mgoogle.android.gms) - REL mcs
+  08-16 13:42:46.075 - 10451 (com.instagram.android) - REL *alarm*
+  08-16 13:42:54.284 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:42:54.285 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:42:54.285 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:42:54.298 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:42:54.298 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:42:54.299 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:43:05.864 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:43:05.865 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:43:05.865 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:43:05.871 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:43:05.872 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:43:05.873 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:43:05.880 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:43:05.880 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:43:05.880 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:43:05.884 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:43:05.884 - 1001 (com.android.stk,...) - ACQ *telephony-sem-radio* (partial)
+  08-16 13:43:05.885 - 1001 (com.android.stk,...) - REL *telephony-sem-radio*
+  08-16 13:43:45.550 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 13:43:45.566 - 10641 (com.mgoogle.android.gms) - ACQ mcs (partial)
+  08-16 13:43:45.581 - 10641 (com.mgoogle.android.gms) - REL mcs
+  08-16 13:43:45.896 - 10451 (com.instagram.android) - REL *alarm*
+  08-16 13:43:54.300 - 1000 (System) - ACQ *alarm* (partial)
+  08-16 13:43:54.320 - 1000 (System) - ACQ deviceidle_going_idle (partial)
+  08-16 13:43:54.321 - 10231 (com.google.android.gsf,...) - ACQ GCM_WORK (partial)
+  08-16 13:43:54.331 - 10231 (com.google.android.gsf,...) - ACQ GCM_HB_ALARM (partial)
+  08-16 13:43:54.337 - 10167 (com.facebook.appmanager) - REL *alarm*
+  08-16 13:43:54.341 - 10231 (com.google.android.gsf,...) - REL GCM_WORK
+  08-16 13:43:54.345 - 10231 (com.google.android.gsf,...) - ACQ GCM_WORK (partial)
+  08-16 13:43:54.348 - 10231 (com.google.android.gsf,...) - REL GCM_HB_ALARM
+  08-16 13:43:54.349 - 10231 (com.google.android.gsf,...) - REL GCM_WORK
+  08-16 13:43:54.376 - 10231 (com.google.android.gsf,...) - ACQ GCM_READ (partial)
+  08-16 13:43:54.378 - 10231 (com.google.android.gsf,...) - ACQ GCM_WORK (partial)
+  08-16 13:43:54.380 - 10231 (com.google.android.gsf,...) - REL GCM_READ
+  08-16 13:43:54.400 - 1000 (System) - REL deviceidle_going_idle
+  08-16 13:43:54.405 - 10167 (com.facebook.appmanager) - ACQ *job*r/com.facebook.appmanager/com.facebook.analytics2.logger.legacy.uploader.LollipopUploadService (partial)
+  08-16 13:43:54.406 - 10167 (com.facebook.appmanager) - ACQ *job*r/com.facebook.appmanager/com.facebook.analytics2.logger.legacy.uploader.LollipopUploadService (partial)
+  08-16 13:43:54.408 - 10167 (com.facebook.appmanager) - REL *job*r/com.facebook.appmanager/com.facebook.analytics2.logger.legacy.uploader.LollipopUploadService
+  08-16 13:43:54.408 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:43:54.409 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:43:54.411 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:43:54.411 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:43:54.411 - 10508 (com.duckduckgo.mobile.android) - ACQ *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService (partial)
+  08-16 13:43:54.413 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:43:54.413 - 10231 (com.google.android.gsf,...) - REL GCM_WORK
+  08-16 13:43:54.422 - 10167 (com.facebook.appmanager) - REL *job*r/com.facebook.appmanager/com.facebook.analytics2.logger.legacy.uploader.LollipopUploadService
+  08-16 13:43:55.169 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:43:55.170 - 10508 (com.duckduckgo.mobile.android) - REL *job*r/com.duckduckgo.mobile.android/androidx.work.impl.background.systemjob.SystemJobService
+  08-16 13:44:45.639 - 1000 (System) - ACQ NetworkStats (partial)
+  08-16 13:44:45.669 - 1000 (System) - REL NetworkStats
+  -
+  Events: 1043, Time-Resets: 111
+  Buffer, Bytes used: 3068
+  Tag Database: size(64), entries: 64, Bytes used: 7350
+
+Full Wakelock Log:
+Wake Lock Log
+  08-16 00:10:52.252 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 00:11:00.064 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:11:00.276 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:12:15.908 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:12:16.636 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:12:17.995 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:12:18.184 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:12:21.989 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:12:22.217 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:12:24.090 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:12:24.294 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:12:56.338 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:12:56.555 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:13:20.119 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:13:20.324 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:13:22.834 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:13:23.041 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:14:04.080 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:14:04.250 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:14:05.441 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:14:05.665 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:14:08.215 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:14:08.448 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:15:01.132 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:15:01.329 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:15:04.469 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:15:04.682 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:15:07.964 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 00:15:08.159 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:16:16.252 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 00:16:16.326 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 01:05:50.110 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 01:05:50.166 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 01:06:30.221 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:06:33.635 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:06:33.725 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 01:06:44.392 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 01:06:44.430 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:06:45.122 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:06:45.177 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 01:06:45.242 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:06:47.303 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:06:47.537 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:07:01.773 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:07:01.990 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:07:02.985 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:07:03.190 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:07:05.732 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:07:06.267 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:07:08.353 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:07:08.552 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:07:09.378 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:07:09.587 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:07:35.130 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:07:35.324 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:07:37.638 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:07:37.837 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:07:58.032 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:07:58.238 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:08:15.374 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:08:16.430 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:08:16.632 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:08:50.953 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:08:51.165 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:08:59.711 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:08:59.922 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:09:00.859 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:09:03.151 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:09:03.383 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:09:08.034 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:09:31.854 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:09:32.089 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:09:41.964 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:09:42.176 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:09:44.422 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:09:44.629 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:09:51.580 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:09:51.794 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:10:00.630 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:10:06.585 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:10:09.717 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:10:12.234 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:10:13.737 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:10:26.823 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:10:26.879 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 01:11:44.518 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:11:44.554 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 01:11:44.593 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:11:45.469 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:11:45.751 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:11:47.437 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:11:47.459 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 01:11:51.496 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:11:52.597 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:11:57.139 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:11:57.180 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 01:12:12.081 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:12:12.281 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:12:35.178 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:12:35.417 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:12:36.246 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:12:36.450 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:12:54.534 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:13:39.458 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:13:39.766 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:13:47.406 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:13:47.422 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 01:19:49.210 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:19:49.274 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 01:19:49.418 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:20:07.421 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:20:07.637 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:20:09.952 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:20:10.165 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:20:38.346 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:20:38.561 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:20:59.213 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:21:23.895 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:21:25.472 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:21:43.984 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:21:44.195 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:21:47.313 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:21:47.679 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:22:15.566 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:22:15.772 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:22:37.848 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:22:38.056 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:23:09.615 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:23:09.822 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:23:51.307 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:23:51.510 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:25:29.388 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:25:29.611 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:26:47.777 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:26:48.449 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:27:06.875 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:27:06.902 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 01:29:38.466 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:29:38.549 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 01:29:38.626 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:30:48.467 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:31:00.218 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:31:33.282 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:32:12.919 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:32:13.115 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:32:25.549 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:32:25.775 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:34:50.944 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:34:50.958 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 01:34:56.059 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 01:34:56.098 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:34:57.204 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:34:57.380 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:36:55.536 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:36:55.740 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:36:57.124 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:36:57.309 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:36:57.701 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:36:57.912 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:37:05.057 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:37:05.269 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:37:05.968 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:37:06.038 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 01:37:07.154 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:37:07.196 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 01:37:22.834 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:37:23.050 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:37:26.503 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:37:26.669 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:37:28.341 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:37:28.502 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:37:35.050 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:37:35.218 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:37:38.670 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:37:38.917 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:37:41.247 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:37:41.433 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:38:05.012 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:38:05.235 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:38:07.024 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:38:07.243 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:38:50.259 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:38:50.465 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:41:07.199 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:41:07.434 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:42:09.553 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:42:09.767 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:43:20.041 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:43:25.483 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:43:33.055 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:43:33.292 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:43:44.646 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:43:44.871 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:43:46.214 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:44:54.648 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:44:58.048 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:45:04.289 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:45:30.075 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 01:45:30.315 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:46:48.314 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 01:46:48.345 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 09:36:22.476 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:36:25.475 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:36:44.677 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:36:54.922 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:36:54.957 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 09:36:55.032 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:37:23.791 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:37:23.992 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:37:26.817 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:37:27.035 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:38:46.813 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:38:46.831 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 09:42:24.478 - 10234 (com.google.android.googlequicksearchbox) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 09:42:27.432 - 10234 (com.google.android.googlequicksearchbox) - REL WindowManager/displayId:0
+  08-16 09:44:30.436 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:44:30.530 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 09:44:30.675 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:44:30.679 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:44:35.292 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:44:35.482 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:44:37.138 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:44:37.159 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 09:46:27.602 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:46:27.649 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 09:46:27.692 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:46:27.693 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:46:30.596 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:46:31.075 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:46:35.997 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:46:36.241 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:46:48.292 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:46:48.508 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:46:49.572 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:46:54.336 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:46:59.364 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:46:59.598 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:47:38.340 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:47:38.352 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 09:47:40.685 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:47:40.730 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 09:48:08.973 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:48:09.176 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:48:15.093 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:48:15.338 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:48:22.138 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:48:22.359 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:48:22.540 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:48:22.742 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:49:08.498 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:49:08.727 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:49:09.316 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:49:09.528 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:50:19.317 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:50:22.597 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:50:31.577 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:50:31.800 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:50:40.133 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:50:40.408 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:51:07.353 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:51:08.040 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:51:13.967 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:51:14.179 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:52:22.327 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:52:22.544 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:53:00.098 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 09:53:00.163 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 09:53:30.896 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:53:31.119 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:53:34.939 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:53:35.148 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:53:59.760 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:54:00.891 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:54:44.943 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 09:54:57.031 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 09:56:27.145 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 09:56:27.163 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 10:22:18.153 - 10294 (com.samsung.android.spay) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 10:22:19.562 - 10294 (com.samsung.android.spay) - REL WindowManager/displayId:0
+  08-16 10:22:49.163 - 10294 (com.samsung.android.spay) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 10:22:53.418 - 10294 (com.samsung.android.spay) - REL WindowManager/displayId:0
+  08-16 11:20:51.958 - 10785 (com.google.android.apps.youtube.music) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 11:21:02.436 - 10785 (com.google.android.apps.youtube.music) - REL WindowManager/displayId:0
+  08-16 11:24:52.154 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 11:24:52.305 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 11:24:52.359 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 11:24:52.395 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 11:24:52.941 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 11:24:58.643 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 11:24:58.741 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 11:25:17.551 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 11:34:49.402 - 10040 (com.samsung.android.app.routines,...) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 11:34:50.993 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 11:34:51.072 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 11:34:52.772 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 11:34:52.852 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 11:34:55.423 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 11:34:55.477 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 11:34:56.292 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 11:34:56.377 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 11:34:56.480 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 11:35:06.106 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 11:35:06.289 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 11:35:16.380 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 11:35:16.405 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 11:35:59.510 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 11:35:59.676 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 11:36:08.179 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 11:36:10.021 - 10040 (com.samsung.android.app.routines,...) - REL WindowManager/displayId:0
+  08-16 11:47:03.482 - 10898 (com.samsung.android.app.routines,...) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 11:54:05.646 - 10898 (com.samsung.android.app.routines,...) - REL WindowManager/displayId:0
+  08-16 11:57:57.832 - 10898 (com.samsung.android.app.routines,...) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 12:00:18.531 - 10898 (com.samsung.android.app.routines,...) - REL WindowManager/displayId:0
+  08-16 12:03:48.922 - 10040 (com.samsung.android.app.routines,...) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 12:03:49.180 - 10040 (com.samsung.android.app.routines,...) - REL WindowManager/displayId:0
+  08-16 12:03:51.402 - 10040 (com.samsung.android.app.routines,...) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 12:03:51.938 - 10898 (com.samsung.android.app.routines,...) - REL WindowManager/displayId:0
+  08-16 12:03:54.701 - 10898 (com.samsung.android.app.routines,...) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 12:08:43.858 - 10898 (com.samsung.android.app.routines,...) - REL WindowManager/displayId:0
+  08-16 12:45:15.287 - 10294 (com.samsung.android.spay) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 12:45:16.267 - 10294 (com.samsung.android.spay) - REL WindowManager/displayId:0
+  08-16 12:45:18.448 - 10294 (com.samsung.android.spay) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 12:45:18.966 - 10294 (com.samsung.android.spay) - REL WindowManager/displayId:0
+  08-16 13:16:41.049 - 10040 (com.samsung.android.app.routines,...) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 13:16:44.553 - 10040 (com.samsung.android.app.routines,...) - REL WindowManager/displayId:0
+  08-16 13:18:37.769 - 10040 (com.samsung.android.app.routines,...) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 13:18:39.992 - 10040 (com.samsung.android.app.routines,...) - REL WindowManager/displayId:0
+  08-16 13:19:38.321 - 10040 (com.samsung.android.app.routines,...) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 13:19:38.338 - 10040 (com.samsung.android.app.routines,...) - REL WindowManager/displayId:0
+  08-16 13:20:03.027 - 10040 (com.samsung.android.app.routines,...) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 13:20:03.038 - 10040 (com.samsung.android.app.routines,...) - REL WindowManager/displayId:0
+  08-16 13:25:39.814 - 10040 (com.samsung.android.app.routines,...) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 13:25:39.886 - 10040 (com.samsung.android.app.routines,...) - REL WindowManager/displayId:0
+  08-16 13:28:42.836 - 1000 (System) - ACQ InCallWakeLockController (full)
+  08-16 13:28:44.997 - 10765 (com.whatsapp) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 13:28:46.143 - 1000 (System) - REL InCallWakeLockController
+  08-16 13:28:46.167 - 10765 (com.whatsapp) - REL WindowManager/displayId:0
+  08-16 13:37:41.128 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:37:41.338 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 13:37:41.383 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 13:37:41.401 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:37:41.830 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:37:43.238 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:37:43.306 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 13:37:44.482 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 13:37:44.509 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:37:45.187 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:37:45.227 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 13:37:45.297 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:37:57.018 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:37:57.210 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:38:33.040 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:38:33.222 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:38:34.418 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:38:34.639 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:39:32.249 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:39:32.264 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 13:39:36.962 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 13:39:37.041 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:39:44.170 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:39:44.400 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:39:46.047 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:39:46.245 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:39:47.123 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:39:47.330 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:39:47.975 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:39:48.164 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:39:48.913 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:39:49.140 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:39:50.004 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:39:50.096 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  08-16 13:39:50.731 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:39:50.812 - 10451 (com.instagram.android) - ACQ WindowManager/displayId:0 (screen-bright,on-after-release)
+  08-16 13:39:51.329 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:39:54.076 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:39:54.324 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:40:06.053 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:40:06.622 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:40:39.589 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:40:59.932 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:41:00.149 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:41:00.740 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:41:01.731 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:41:01.941 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:41:16.622 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:41:27.799 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:41:28.010 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:41:51.017 - 10451 (com.instagram.android) - ACQ GrootPlayer:WakeLock (screen-bright)
+  08-16 13:41:51.213 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:41:53.856 - 10451 (com.instagram.android) - REL GrootPlayer:WakeLock
+  08-16 13:41:53.923 - 10451 (com.instagram.android) - REL WindowManager/displayId:0
+  -
+  Events: 391, Time-Resets: 233
+  Buffer, Bytes used: 3071
+  Tag Database: size(16), entries: 10, Bytes used: 856
+
+
+Wakefulness Session Observer:
+default timeout: 30000
+override timeout: -1
+  Wakefulness Session Power Group powerGroupId: 0
+    current wakefulness: 3
+    current user activity event: 0
+    current user activity duration: 171855
+    previous user activity event: 2
+    previous user activity duration: 172045
+    is in override timeout: false
+    mIsInteractive: false
+    current screen policy: 1
+    current screen policy duration: 171925
+    previous screen policy: 0
+    past screen policy duration: 434
+
+AmbientDisplaySuppressionController:
+ ambientDisplaySuppressed=false
+ mSuppressionTokens={}
+ mSuppressions={}
+
+Low Power Standby Controller:
+  mIsActive=false
+  mIsEnabled=false
+  mSupportedConfig=false
+  mEnabledByDefaultConfig=false
+  mStandbyTimeoutConfig=0
+  mEnableCustomPolicy=false
+  Allowed UIDs=[]
+  
+  UID allowed reasons:
+
+ScreenTimeoutOverridePolicy:
+  mScreenTimeoutOverrideConfig=-1
+  mLastAutoReleaseReason=-1
+PowerManagerFlags:
+ enable_early_screen_timeout_detector:                 true (def:true)
+ improve_wakelock_latency:                             true (def:true)
+ per_display_wake_by_touch:                            true (def:true)
+ move_wsc_logging_to_notifier:                         true (def:true)
+ lock_on_unplug:                                       true (def:true)
+ wakelock_attribution_via_workchain:                   true (def:true)
+ disable_frozen_process_wakelocks:                     true (def:true)
+ force_disable_wakelocks:                              true (def:true)
+ enable_app_wakelock_data_source:                      true (def:true)
+ partial_sleep_wakelocks:                              false (def:false)
+ separate_timeouts_flicker:                            true (def:true)
+ wake_adjacent_displays_on_wakeup_call:                true (def:true)

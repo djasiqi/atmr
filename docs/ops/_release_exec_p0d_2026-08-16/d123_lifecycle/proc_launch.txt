@@ -1,0 +1,25 @@
+﻿  *APP* UID 10903 ProcessRecord{8ff5714 2922:ch.liri.operations/u0a903}
+    class=ch.liri.operations.MainApplication
+    dir=/data/app/~~le3lbrlDb0U4Kn_n58YDxg==/ch.liri.operations-Cn88aJOd_LYEWYkuyI2i_g==/base.apk publicDir=/data/app/~~le3lbrlDb0U4Kn_n58YDxg==/ch.liri.operations-Cn88aJOd_LYEWYkuyI2i_g==/base.apk data=/data/user/0/ch.liri.operations
+    packageList={ch.liri.operations}
+      - ServiceRecord{ae797d6 u0 ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService c:ch.liri.operations}
+      - ServiceRecord{c809852 u0 ch.liri.operations/expo.modules.location.services.LocationTaskService c:ch.liri.operations}
+      - ConnectionRecord{dd611d9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@81fe420 flags=0x1}
+      - ConnectionRecord{fddfff1 u0 CR IMP ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService:@c28db98 flags=0x41}
+        -> ContentProviderRecord{85184dc u0 ch.liri.operations/expo.modules.clipboard.ClipboardFileProvider}
+        -> ContentProviderRecord{f58c9e5 u0 ch.liri.operations/com.canhub.cropper.CropFileProvider}
+        -> ContentProviderRecord{26fecba u0 ch.liri.operations/androidx.startup.InitializationProvider}
+        -> ContentProviderRecord{5a4a76b u0 ch.liri.operations/io.sentry.android.core.SentryPerformanceProvider}
+        -> ContentProviderRecord{9e012c8 u0 ch.liri.operations/io.invertase.notifee.NotifeeInitProvider}
+        -> ContentProviderRecord{8d11f61 u0 ch.liri.operations/io.sentry.android.core.SentryInitProvider}
+        -> ContentProviderRecord{ea01a86 u0 ch.liri.operations/com.reactnativecommunity.webview.RNCWebViewFileProvider}
+        -> ContentProviderRecord{be44f47 u0 ch.liri.operations/com.google.mlkit.common.internal.MlKitInitProvider}
+        -> ContentProviderRecord{8479374 u0 ch.liri.operations/io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider}
+        -> ContentProviderRecord{51f509d u0 ch.liri.operations/expo.modules.filesystem.FileSystemFileProvider}
+        -> ContentProviderRecord{f535912 u0 ch.liri.operations/com.google.firebase.provider.FirebaseInitProvider}
+        -> ContentProviderRecord{18c98e3 u0 ch.liri.operations/expo.modules.imagepicker.fileprovider.ImagePickerFileProvider}
+      - 9f1b707/com.android.providers.settings/.SettingsProvider->2922:ch.liri.operations/u0a903 s1/1 u0/0 +11m14s140ms
+      - ReceiverList{44baeb 2922 ch.liri.operations/10903/u0 remote:cfe1e3a}
+      - ReceiverList{60ca3a9 2922 ch.liri.operations/10903/u0 remote:cd15b30}
+      - ReceiverList{b755d12 2922 ch.liri.operations/10903/u0 remote:c36e49d}
+      - ReceiverList{de3d87e 2922 ch.liri.operations/10903/u0 remote:625ba39}

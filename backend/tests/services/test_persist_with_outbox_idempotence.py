@@ -62,7 +62,6 @@ def test_event_id_duplicate_same_hash_returns_duplicate():
         "driver_id": 1,
         "company_id": 1,
         "location_event_id": "eid-1",
-        "capture_id": "eid-1",
         "tracking_session_id": "s1",
         "session_generation": 1,
         "sequence_id": 1,
@@ -85,7 +84,7 @@ def test_event_id_duplicate_same_hash_returns_duplicate():
             return MagicMock()
         if "INSERT INTO tracking_ingest_events" in sql:
             return SimpleNamespace(first=lambda: None)
-        if "SELECT event_payload_hash" in sql:
+        if "FROM tracking_ingest_events" in sql and "event_payload_hash" in sql:
             return _mappings_first({"event_payload_hash": same_hash})
         raise AssertionError(f"unexpected SQL: {sql}")
 
@@ -105,11 +104,10 @@ def test_event_id_duplicate_same_hash_returns_duplicate():
         recorded_at="2026-01-01T00:00:00+00:00",
         source="http",
     )
-    assert result == {
-        "status": "duplicate",
-        "reason": "same_event_already_persisted",
-        "location_event_id": "eid-1",
-    }
+    assert result["status"] == "duplicate"
+    assert result["reason"] == "same_event_already_persisted"
+    assert result["location_event_id"] == "eid-1"
+    assert result["duplicate_decision"] == "duplicate_exact_hash"
 
 
 def test_persisted_outbox_uses_nested_processed_envelope():

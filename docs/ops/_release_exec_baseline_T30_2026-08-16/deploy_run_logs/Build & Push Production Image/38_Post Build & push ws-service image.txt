@@ -1,0 +1,23 @@
+﻿2026-08-15T23:28:49.4314944Z Post job cleanup.
+2026-08-15T23:28:49.6787741Z ##[group]Generating build summary
+2026-08-15T23:28:49.7547893Z exporting build record to /home/runner/work/_temp/docker-actions-toolkit-hXpyFO/export
+2026-08-15T23:28:49.8929175Z [command]/usr/bin/docker buildx history export --builder builder-3cd82bd2-cd56-4291-a4b6-ecead00cd9de --output /home/runner/work/_temp/docker-actions-toolkit-hXpyFO/export/***~atmr~1GZ3QS.dockerbuild 1gz3qsobmlxil5099pq9yyrpd --finalize
+2026-08-15T23:28:50.1851181Z Build record written to /home/runner/work/_temp/docker-actions-toolkit-hXpyFO/export/***~atmr~1GZ3QS.dockerbuild (83.92 KB)
+2026-08-15T23:28:50.1854007Z Uploading ***~atmr~1GZ3QS.dockerbuild as an artifact
+2026-08-15T23:28:50.1860195Z Artifact name is valid!
+2026-08-15T23:28:50.1862220Z Root directory input is valid!
+2026-08-15T23:28:50.4953075Z Uploading artifact: ***~atmr~1GZ3QS.dockerbuild
+2026-08-15T23:28:50.4997247Z Beginning upload of artifact content to blob storage
+2026-08-15T23:28:50.9434911Z Uploaded bytes 85929
+2026-08-15T23:28:51.0209831Z Finished uploading artifact content to blob storage!
+2026-08-15T23:28:51.0211030Z SHA256 digest of uploaded artifact is e8d7be2597f40c320859588e14c90bfab8f23eb778e3cb2b810e4230056ec5ab
+2026-08-15T23:28:51.0212225Z Finalizing artifact upload
+2026-08-15T23:28:51.3922405Z Artifact ***~atmr~1GZ3QS.dockerbuild successfully finalized. Artifact ID 9254628764
+2026-08-15T23:28:51.3924007Z Artifact download URL: https://github.com/***/atmr/actions/runs/31914382468/artifacts/9254628764
+2026-08-15T23:28:51.3961629Z Writing summary
+2026-08-15T23:28:51.3974783Z ##[endgroup]
+2026-08-15T23:28:51.3975789Z ##[group]Removing temp folder /home/runner/work/_temp/docker-actions-toolkit-nxzv7f
+2026-08-15T23:28:51.3978610Z ##[endgroup]
+2026-08-15T23:28:51.3979601Z ##[group]Post cache
+2026-08-15T23:28:51.3980162Z State not set
+2026-08-15T23:28:51.3980926Z ##[endgroup]

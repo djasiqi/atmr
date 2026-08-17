@@ -1,0 +1,9 @@
+﻿--------- beginning of main
+08-14 17:02:53.322 21719 21994 I ReactNativeJS: Running "main" with {"rootTag":1,"initialProps":{},"fabric":true}
+08-14 17:02:57.201 21719 21994 W ReactNativeJS: '[Reanimated] Reduced motion setting is enabled on this device. This warning is visible only in the development mode. Some animations will be disabled by default. You can override the behavior for individual animations, see https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#reduced-motion-setting-is-enabled-on-this-device.', { [Stack] name: 'Stack' }
+08-14 17:03:01.041 21719 21994 I ReactNativeJS: '[driver-telemetry] tracking.background.task.registration_status', { source: 'driver.services.backgroundLocationTask',
+08-14 17:03:01.041 21719 21994 I ReactNativeJS:   task_name: 'background-location-task',
+08-14 17:03:01.041 21719 21994 I ReactNativeJS:   task_defined: true,
+08-14 17:03:01.041 21719 21994 I ReactNativeJS:   task_started: true,
+08-14 17:03:01.041 21719 21994 I ReactNativeJS:   runtime: 'dev_client_or_standalone',
+08-14 17:03:01.041 21719 21994 I ReactNativeJS:   bg_flag_enabled: true }

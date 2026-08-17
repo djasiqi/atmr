@@ -1,0 +1,25 @@
+﻿  *APP* UID 10903 ProcessRecord{8ff5714 2922:ch.liri.operations/u0a903}
+    class=ch.liri.operations.MainApplication
+    dir=/data/app/~~le3lbrlDb0U4Kn_n58YDxg==/ch.liri.operations-Cn88aJOd_LYEWYkuyI2i_g==/base.apk publicDir=/data/app/~~le3lbrlDb0U4Kn_n58YDxg==/ch.liri.operations-Cn88aJOd_LYEWYkuyI2i_g==/base.apk data=/data/user/0/ch.liri.operations
+    packageList={ch.liri.operations}
+      - ServiceRecord{ae797d6 u0 ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService c:ch.liri.operations}
+      - ServiceRecord{c809852 u0 ch.liri.operations/expo.modules.location.services.LocationTaskService c:ch.liri.operations}
+      - ConnectionRecord{3d5b16 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e2fc831 flags=0x1}
+      - ConnectionRecord{d7b408 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d9d05ab flags=0x1}
+      - ConnectionRecord{e3bf75 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@89f96ac flags=0x1}
+      - ConnectionRecord{1550b8d u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@384a424 flags=0x1}
+      - ConnectionRecord{18e91b7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8b920b6 flags=0x1}
+      - ConnectionRecord{1b27ca8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5b90ccb flags=0x1}
+      - ConnectionRecord{2974104 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@eb6f917 flags=0x1}
+      - ConnectionRecord{30fda80 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5cc5b03 flags=0x1}
+      - ConnectionRecord{350158f u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5316cee flags=0x1}
+      - ConnectionRecord{36403ac u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@197fd5f flags=0x1}
+      - ConnectionRecord{43efe02 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@7efb34d flags=0x1}
+      - ConnectionRecord{472aa8d u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6295f24 flags=0x1}
+      - ConnectionRecord{4a451df u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@49aa87e flags=0x1}
+      - ConnectionRecord{4b10c74 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4940c47 flags=0x1}
+      - ConnectionRecord{4ea242f u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@406120e flags=0x1}
+      - ConnectionRecord{54d83f4 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f81b1c7 flags=0x1}
+      - ConnectionRecord{59fd6ce u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d947fc9 flags=0x1}
+      - ConnectionRecord{5a37288 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@45eae2b flags=0x1}
+      - ConnectionRecord{5ad053c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@de4cb2f flags=0x1}

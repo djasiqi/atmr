@@ -1,0 +1,49 @@
+﻿{
+  "id": "ab91958e-d00d-4d40-8304-128f0a7065f0",
+  "status": "FINISHED",
+  "platform": "ANDROID",
+  "artifacts": {
+    "buildUrl": "https://expo.dev/artifacts/eas/_YpZ7mZ4KywK4ySN2eLa1wgAodK9HIzfsFUNf8xTZAA.aab",
+    "applicationArchiveUrl": "https://expo.dev/artifacts/eas/_YpZ7mZ4KywK4ySN2eLa1wgAodK9HIzfsFUNf8xTZAA.aab"
+  },
+  "fingerprint": {
+    "id": "01a00f48-5198-7174-8db1-cff216de5d74",
+    "hash": "1dfdaf604b873234b4109a75d2b82804400c1859"
+  },
+  "initiatingActor": {
+    "id": "f8512c47-8a63-4320-9be6-979f4740caff",
+    "displayName": "drinjasiqi"
+  },
+  "logFiles": [
+    "https://storage.googleapis.com/eas-workflows-production/logs/3be107c7-29d2-4987-91a0-8d7c31604891/ab91958e-d00d-4d40-8304-128f0a7065f0/2026-08-17T10%3A33%3A17Z-0d71e9b3-6b7b-483d-bc1f-b721106def11.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260817%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260817T105643Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=26042693d8fa72975055a67e5b02537a14ed41835fa4974efb7757cc226807fd9eea70d87ef56571e9262612c2e7297cf05f9c45a07b8cfba0633b401cf78c083a2d969906e7ff1a0c982ed74a156de6cd8711cd4f7e97388cc9b2b193f68e7020eeaab77e5f0cb0c1c3437ee40a2e7536bd368fd62e5e0a7b818c6dda8930efebb7843ba4601195819cf9b2a37df2243557e4ba5fb58fb4546ef79faf5abac9d5c3d8af7e560e9937f501ad60ce8b78e7642037476ef3970e7aac73d778a18d4dc85c32175250b0358c850011f310a1de1177c757ecabe0a9f2e65e15aace12326843694dc0b96f48a6462ce6da0535803faee481832c38bcd0c3f922be97d8"
+  ],
+  "project": {
+    "id": "3be107c7-29d2-4987-91a0-8d7c31604891",
+    "name": "operations-app",
+    "slug": "operations-app",
+    "ownerAccount": {
+      "id": "b714e8e7-a921-4b60-adce-4bb87b393737",
+      "name": "drinjasiqi"
+    }
+  },
+  "channel": "production",
+  "distribution": "STORE",
+  "buildProfile": "production",
+  "sdkVersion": "54.0.0",
+  "appVersion": "1.0.11",
+  "appBuildVersion": "132",
+  "runtimeVersion": "1.0.11",
+  "gitCommitHash": "a851cf1520bc2ed66f9e5f7b0acb6114cf1ff133",
+  "gitCommitMessage": "feat(tracking): freeze D5 ownership patch + B3 telemetry types\n\nCanary-validated STOP ownership (B2, L1, transient loss, owner_version_mismatch) with typed DriverTelemetryEventName/source. No backend changes. DISTRIBUTION remains NO-GO pending production AAB (QA off).\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+  "priority": "NORMAL",
+  "createdAt": "2026-08-17T10:33:12.755Z",
+  "updatedAt": "2026-08-17T10:57:47.842Z",
+  "completedAt": "2026-08-17T10:57:47.603Z",
+  "expirationDate": "2026-09-16T10:33:12.845Z",
+  "isForIosSimulator": false,
+  "metrics": {
+    "buildWaitTime": 2459,
+    "buildQueueTime": 6526,
+    "buildDuration": 1465863
+  }
+}

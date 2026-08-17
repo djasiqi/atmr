@@ -1,0 +1,28 @@
+﻿{
+  "kind": "g5-t30-baseline-live",
+  "captured_at_utc": "2026-08-15T23:17:24Z",
+  "host": "atmr-prod-fsn1",
+  "mutation": false,
+  "api_git_sha": "927640a0995a7025edfae3d31802998948a866d5",
+  "topology": {
+    "api_celery_ws": "sha-927640a0995a Up",
+    "consumer_outbox": "sha-390076efc61c Up",
+    "fanout_dlq": "sha-16fd3e52418d Created",
+    "fanout_hold_enabled": false,
+    "fanout_up": 0
+  },
+  "prometheus_up": {
+    "atmr-backend": 1,
+    "atmr-ws-service": 1,
+    "atmr-tracking-kafka-consumer": 1,
+    "atmr-tracking-processed-fanout": 0
+  },
+  "rates_5m": {
+    "driver_location_received": 0,
+    "driver_location_ingested": 0,
+    "driver_location_processed": 0,
+    "driver_location_dedup_skipped": 0,
+    "driver_device_health_received": null
+  },
+  "note": "Night window: LOC rates ~0 expected. Fanout HOLD confirmed ENABLED=false Created."
+}

@@ -1,0 +1,26 @@
+﻿08-16 14:21:13.854  1860  1860 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-16 14:21:13.900 16027 16818 I SAMSUNGWALLET: [Hint_SimpleHintProcessMonitor] isHomePackageRunning topPkgName = ch.liri.operations, topClsName = ch.liri.operations.MainActivity, return false , se : false
+08-16 14:21:13.916 16027 16027 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 14:21:13.918 16027 16027 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 14:21:13.943  4933  5229 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 14:21:14.032  2286  6841 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 14:21:14.032  2286  6841 W libc    : Access denied finding property "vendor.gpp.create_frc_extension"
+08-16 14:21:14.137  1860  2017 I SurfaceFlinger: id=13386 Removed Surface(name=1f6499c ch.liri.operations/ch.liri.operations.MainActivity#13383)/@0x40396c0 - animation-leash of starting_reveal#13386 (188)
+08-16 14:21:14.138  1860  1860 I SurfaceFlinger: destroyed Surface(name=1f6499c ch.liri.operations/ch.liri.operations.MainActivity#13383)/@0x40396c0 - animation-leash of starting_reveal#13386 form LifecycleManager
+08-16 14:21:14.138  1860  1860 I SurfaceFlinger: id=13386 onLayerDestroyed from LayerHierarchyBuilder(RequestedLayerState{Surface(name=1f6499c ch.liri.operations/ch.liri.operations.MainActivity#13383)/@0x40396c0 - animation-leash of starting_reveal#13386 !handle})
+08-16 14:21:14.138  1860  1860 I SurfaceFlinger: id=13386 Destroyed Surface(name=1f6499c ch.liri.operations/ch.liri.operations.MainActivity#13383)/@0x40396c0 - animation-leash of starting_reveal#13386
+08-16 14:21:14.140  1860  1860 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-16 14:21:14.151  3001  3826 I ActivityManager: Process com.google.android.apps.messaging (pid 2554) has died: prcp  +1 BFGS(167,1052)
+08-16 14:21:14.164  4933  5229 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 14:21:14.540  1860  1860 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-16 14:21:14.595  4196  4239 D SatelliteController: isCarrierRoamingNtnEligible: satellite access is not allowed
+08-16 14:21:14.736  3001  3038 W ProcessStats: Tracking association SourceState{cf5a7b com.samsung.android.smartsuggestions:search/10111 BFgs #177892} whose proc state 4 is better than process ProcessState{477a4de com.samsung.cmh/5004 pkg=com.samsung.cmh} proc state 15 (8 skipped)
+08-16 14:21:14.958  1860  1860 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-16 14:21:15.175  1860  1860 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-16 14:21:15.342  1860  1860 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-16 14:21:15.543  1860  1860 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-16 14:21:15.744  1860  1860 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-16 14:21:15.759 25981 25981 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services ch.liri.operations'
+08-16 14:21:15.960  1860  1860 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-16 14:21:16.160  1860  1860 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-16 14:21:16.189  3001  7137 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, callerUserId: 0

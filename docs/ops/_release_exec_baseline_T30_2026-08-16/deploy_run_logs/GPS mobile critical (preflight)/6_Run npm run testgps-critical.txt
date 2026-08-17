@@ -1,0 +1,182 @@
+﻿2026-08-15T23:19:14.3357860Z ##[group]Run npm run test:gps-critical
+2026-08-15T23:19:14.3358218Z [36;1mnpm run test:gps-critical[0m
+2026-08-15T23:19:14.3396904Z shell: /usr/bin/bash -e {0}
+2026-08-15T23:19:14.3397167Z env:
+2026-08-15T23:19:14.3397382Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:19:14.3397666Z ##[endgroup]
+2026-08-15T23:19:14.4584460Z 
+2026-08-15T23:19:14.4585093Z > lirie-unified-app@0.1.0 test:gps-critical
+2026-08-15T23:19:14.4588150Z > jest --watchAll=false --runInBand --forceExit --testPathPattern="(driverTrackingQueue(\.|\.p0|\.http|\.p03)|driverTrackingBridge|driverTrackingFixAge|driverRealtimeBridge|localDriverLocationFreshness|fleetMapStale|useCompanyDriverLiveTracking|trackingRuntimeRegistry|trackingQueueStore)"
+2026-08-15T23:19:14.4590143Z 
+2026-08-15T23:19:19.2662914Z PASS src/features/driver/services/driverTrackingBridge.test.ts
+2026-08-15T23:19:19.4897034Z PASS src/features/driver/services/trackingQueueStore.test.ts
+2026-08-15T23:19:19.5648793Z   ● Console
+2026-08-15T23:19:19.5649609Z 
+2026-08-15T23:19:19.5650338Z     console.error
+2026-08-15T23:19:19.5651240Z       [trackingQueueStore] CRITICAL sqlite_npe_detected {
+2026-08-15T23:19:19.5652805Z         error: "Error: Call to function 'NativeDatabase.prepareAsync' has been rejected -> Caused by: java.lang.NullPointerException"
+2026-08-15T23:19:19.5654155Z       }
+2026-08-15T23:19:19.5654574Z 
+2026-08-15T23:19:19.5656783Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5658693Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5661074Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5662768Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5663721Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5670083Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5670942Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5671444Z 
+2026-08-15T23:19:19.5672106Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5673466Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:354:5)
+2026-08-15T23:19:19.5674596Z           at Generator.throw (<anonymous>)
+2026-08-15T23:19:19.5675707Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5677011Z       at _throw (node_modules/@babel/runtime/helpers/asyncToGenerator.js:20:9)
+2026-08-15T23:19:19.5677790Z 
+2026-08-15T23:19:19.5678166Z     console.error
+2026-08-15T23:19:19.5678949Z       [trackingQueueStore] CRITICAL sqlite_npe_detected {
+2026-08-15T23:19:19.5680955Z         error: "Error: Call to function 'NativeDatabase.prepareAsync' has been rejected -> Caused by: java.lang.NullPointerException"
+2026-08-15T23:19:19.5682207Z       }
+2026-08-15T23:19:19.5682605Z 
+2026-08-15T23:19:19.5684468Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5686144Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5688404Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5690828Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5692312Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5693262Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5694053Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5694627Z 
+2026-08-15T23:19:19.5695307Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5697119Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:354:5)
+2026-08-15T23:19:19.5698356Z           at Generator.throw (<anonymous>)
+2026-08-15T23:19:19.5699903Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5701310Z       at _throw (node_modules/@babel/runtime/helpers/asyncToGenerator.js:20:9)
+2026-08-15T23:19:19.5702083Z 
+2026-08-15T23:19:19.5702451Z     console.error
+2026-08-15T23:19:19.5703298Z       [trackingQueueStore] CRITICAL sqlite_npe_recovery_exhausted {
+2026-08-15T23:19:19.5704892Z         error: "Error: Call to function 'NativeDatabase.prepareAsync' has been rejected -> Caused by: java.lang.NullPointerException"
+2026-08-15T23:19:19.5706282Z       }
+2026-08-15T23:19:19.5706737Z 
+2026-08-15T23:19:19.5708661Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5711230Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5713025Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5714512Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5715465Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5716539Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5717233Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5717553Z 
+2026-08-15T23:19:19.5718339Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5719802Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:377:9)
+2026-08-15T23:19:19.5720790Z           at Generator.throw (<anonymous>)
+2026-08-15T23:19:19.5721763Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5722966Z       at _throw (node_modules/@babel/runtime/helpers/asyncToGenerator.js:20:9)
+2026-08-15T23:19:19.5723558Z 
+2026-08-15T23:19:19.5723763Z     console.error
+2026-08-15T23:19:19.5724661Z       [trackingQueueStore] CRITICAL sqlite_open_failed { error: 'Error: boom', platform: 'native' }
+2026-08-15T23:19:19.5725422Z 
+2026-08-15T23:19:19.5727188Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5728987Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5731283Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5732805Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5733593Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5734319Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5734961Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5735265Z 
+2026-08-15T23:19:19.5735734Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5736899Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:331:3)
+2026-08-15T23:19:19.5737872Z           at Generator.throw (<anonymous>)
+2026-08-15T23:19:19.5738824Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5740450Z       at _throw (node_modules/@babel/runtime/helpers/asyncToGenerator.js:20:9)
+2026-08-15T23:19:19.5741048Z 
+2026-08-15T23:19:19.5741249Z     console.error
+2026-08-15T23:19:19.5742137Z       [trackingQueueStore] CRITICAL upsert_rejected_durable_unavailable { locationEventId: 'x1' }
+2026-08-15T23:19:19.5742916Z 
+2026-08-15T23:19:19.5744972Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5746763Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5748403Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5750171Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5750911Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5751620Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5752243Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5752551Z 
+2026-08-15T23:19:19.5753024Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5754189Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:755:9)
+2026-08-15T23:19:19.5755500Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5756661Z       at _next (node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+2026-08-15T23:19:19.5757250Z 
+2026-08-15T23:19:19.5757454Z     console.error
+2026-08-15T23:19:19.5758051Z       [trackingQueueStore] CRITICAL sqlite_npe_detected {
+2026-08-15T23:19:19.5759677Z         error: "Error: Call to function 'NativeDatabase.prepareAsync' has been rejected -> Caused by: java.lang.NullPointerException"
+2026-08-15T23:19:19.5760821Z       }
+2026-08-15T23:19:19.5761061Z 
+2026-08-15T23:19:19.5763083Z     [0m [90m 169 |[39m [36mfunction[39m emitCriticalTelemetry(event[33m:[39m string[33m,[39m detail[33m?[39m[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[33m:[39m [36mvoid[39m {
+2026-08-15T23:19:19.5764800Z      [90m 170 |[39m   [36mtry[39m {
+2026-08-15T23:19:19.5766441Z     [31m[1m>[22m[39m[90m 171 |[39m     console[33m.[39merror([32m`[trackingQueueStore] CRITICAL ${event}`[39m[33m,[39m detail [33m?[39m[33m?[39m {})[33m;[39m
+2026-08-15T23:19:19.5767973Z      [90m     |[39m             [31m[1m^[22m[39m
+2026-08-15T23:19:19.5768718Z      [90m 172 |[39m   } [36mcatch[39m {
+2026-08-15T23:19:19.5769690Z      [90m 173 |[39m     [90m// ignore[39m
+2026-08-15T23:19:19.5770336Z      [90m 174 |[39m   }[0m
+2026-08-15T23:19:19.5770643Z 
+2026-08-15T23:19:19.5771104Z       at error (src/features/driver/services/trackingQueueStore.ts:171:13)
+2026-08-15T23:19:19.5772243Z       at emitCriticalTelemetry (src/features/driver/services/trackingQueueStore.ts:354:5)
+2026-08-15T23:19:19.5773200Z           at Generator.throw (<anonymous>)
+2026-08-15T23:19:19.5774156Z       at asyncGeneratorStep (node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+2026-08-15T23:19:19.5775331Z       at _throw (node_modules/@babel/runtime/helpers/asyncToGenerator.js:20:9)
+2026-08-15T23:19:19.5775924Z 
+2026-08-15T23:19:19.7426899Z PASS src/features/driver/services/driverTrackingQueue.ledgerClient.test.ts
+2026-08-15T23:19:19.8921864Z PASS src/features/driver/services/driverTrackingQueue.test.ts
+2026-08-15T23:19:20.1535075Z PASS src/features/driver/services/driverTrackingQueue.p03DrainGuard.test.ts
+2026-08-15T23:19:20.2950489Z PASS src/features/driver/services/driverTrackingQueue.p0DurableAck.test.ts
+2026-08-15T23:19:20.4118008Z PASS src/features/driver/services/driverTrackingQueue.http202AckSemantics.test.ts
+2026-08-15T23:19:20.7172119Z PASS src/features/company/realtime/useCompanyDriverLiveTracking.test.ts
+2026-08-15T23:19:25.9017687Z PASS src/features/driver/services/driverRealtimeBridge.test.ts (5.174 s)
+2026-08-15T23:19:25.9072771Z   ● Console
+2026-08-15T23:19:25.9073070Z 
+2026-08-15T23:19:25.9073252Z     console.info
+2026-08-15T23:19:25.9073768Z       [driver-telemetry] tracking.batch.ack {
+2026-08-15T23:19:25.9074391Z         source: 'driver.realtime.bridge',
+2026-08-15T23:19:25.9075471Z         context_id: 'driver:1',
+2026-08-15T23:19:25.9075969Z         socket_acked_count: 2,
+2026-08-15T23:19:25.9076467Z         ack_last_sequence_id: 15,
+2026-08-15T23:19:25.9076926Z         durable_purge: false
+2026-08-15T23:19:25.9077358Z       }
+2026-08-15T23:19:25.9077542Z 
+2026-08-15T23:19:25.9077900Z       at info (src/core/observability/driverTelemetry.ts:240:11)
+2026-08-15T23:19:25.9078358Z 
+2026-08-15T23:19:25.9078524Z     console.info
+2026-08-15T23:19:25.9079069Z       [driver-telemetry] tracking.batch.ingest_disabled {
+2026-08-15T23:19:25.9080024Z         source: 'driver.realtime.bridge',
+2026-08-15T23:19:25.9080674Z         context_id: 'driver:1',
+2026-08-15T23:19:25.9081196Z         retry_event_ids_count: 2
+2026-08-15T23:19:25.9081652Z       }
+2026-08-15T23:19:25.9081848Z 
+2026-08-15T23:19:25.9082200Z       at info (src/core/observability/driverTelemetry.ts:240:11)
+2026-08-15T23:19:25.9082666Z 
+2026-08-15T23:19:25.9082823Z     console.info
+2026-08-15T23:19:25.9083331Z       [driver-telemetry] tracking.batch.rate_limited {
+2026-08-15T23:19:25.9083973Z         source: 'driver.realtime.bridge',
+2026-08-15T23:19:25.9084501Z         context_id: 'driver:1',
+2026-08-15T23:19:25.9084940Z         retry_after_ms: 4000
+2026-08-15T23:19:25.9085327Z       }
+2026-08-15T23:19:25.9085500Z 
+2026-08-15T23:19:25.9085852Z       at info (src/core/observability/driverTelemetry.ts:240:11)
+2026-08-15T23:19:25.9086298Z 
+2026-08-15T23:19:25.9086440Z     console.info
+2026-08-15T23:19:25.9086957Z       [driver-telemetry] tracking.batch.session_conflict {
+2026-08-15T23:19:25.9087602Z         source: 'driver.realtime.bridge',
+2026-08-15T23:19:25.9088133Z         context_id: 'driver:1',
+2026-08-15T23:19:25.9088885Z         stale_acked_count: 1,
+2026-08-15T23:19:25.9089619Z         ack_last_sequence_id: 42
+2026-08-15T23:19:25.9090059Z       }
+2026-08-15T23:19:25.9090247Z 
+2026-08-15T23:19:25.9090614Z       at info (src/core/observability/driverTelemetry.ts:240:11)
+2026-08-15T23:19:25.9091089Z 
+2026-08-15T23:19:26.0015553Z PASS src/features/driver/services/trackingRuntimeRegistry.test.ts
+2026-08-15T23:19:26.0769143Z PASS src/features/company/utils/localDriverLocationFreshness.test.ts
+2026-08-15T23:19:26.1959140Z PASS src/features/company/components/maps/fleetMapStale.test.ts
+2026-08-15T23:19:26.2668199Z PASS src/features/driver/services/driverTrackingFixAge.test.ts
+2026-08-15T23:19:26.2683252Z 
+2026-08-15T23:19:26.2692754Z Test Suites: 13 passed, 13 total
+2026-08-15T23:19:26.2693325Z Tests:       103 passed, 103 total
+2026-08-15T23:19:26.2693633Z Snapshots:   0 total
+2026-08-15T23:19:26.2693886Z Time:        10.902 s
+2026-08-15T23:19:26.2695176Z Ran all test suites matching /(driverTrackingQueue(\.|\.p0|\.http|\.p03)|driverTrackingBridge|driverTrackingFixAge|driverRealtimeBridge|localDriverLocationFreshness|fleetMapStale|useCompanyDriverLiveTracking|trackingRuntimeRegistry|trackingQueueStore)/i.
+2026-08-15T23:19:26.2705149Z Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

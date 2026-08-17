@@ -1,0 +1,116 @@
+﻿2026-08-15T23:18:21.5856971Z ##[group]Run actions/checkout@v7
+2026-08-15T23:18:21.5857881Z with:
+2026-08-15T23:18:21.5858373Z   repository: djasiqi/atmr
+2026-08-15T23:18:21.5862588Z   token: ***
+2026-08-15T23:18:21.5863051Z   ssh-strict: true
+2026-08-15T23:18:21.5863508Z   ssh-user: git
+2026-08-15T23:18:21.5863957Z   persist-credentials: true
+2026-08-15T23:18:21.5864460Z   clean: true
+2026-08-15T23:18:21.5864917Z   sparse-checkout-cone-mode: true
+2026-08-15T23:18:21.5865449Z   fetch-depth: 1
+2026-08-15T23:18:21.5865887Z   fetch-tags: false
+2026-08-15T23:18:21.5866332Z   show-progress: true
+2026-08-15T23:18:21.5866796Z   lfs: false
+2026-08-15T23:18:21.5867207Z   submodules: false
+2026-08-15T23:18:21.5867664Z   set-safe-directory: true
+2026-08-15T23:18:21.5868170Z   allow-unsafe-pr-checkout: false
+2026-08-15T23:18:21.5868973Z env:
+2026-08-15T23:18:21.5869696Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:18:21.5870274Z ##[endgroup]
+2026-08-15T23:18:21.6939801Z Syncing repository: djasiqi/atmr
+2026-08-15T23:18:21.6941916Z ##[group]Getting Git version info
+2026-08-15T23:18:21.6942761Z Working directory is '/home/runner/work/atmr/atmr'
+2026-08-15T23:18:21.6943894Z [command]/usr/bin/git version
+2026-08-15T23:18:21.7071509Z git version 2.54.0
+2026-08-15T23:18:21.7100455Z ##[endgroup]
+2026-08-15T23:18:21.7118348Z Temporarily overriding HOME='/home/runner/work/_temp/0129f1f9-9af0-41e1-a1ac-90242c503abf' before making global git config changes
+2026-08-15T23:18:21.7121097Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-15T23:18:21.7125270Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/atmr/atmr
+2026-08-15T23:18:21.7180620Z Deleting the contents of '/home/runner/work/atmr/atmr'
+2026-08-15T23:18:21.7184400Z ##[group]Determining repository object format
+2026-08-15T23:18:21.7186336Z ##[endgroup]
+2026-08-15T23:18:21.7187475Z ##[group]Initializing the repository
+2026-08-15T23:18:21.7190926Z [command]/usr/bin/git init /home/runner/work/atmr/atmr
+2026-08-15T23:18:21.7339354Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-08-15T23:18:21.7341753Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-08-15T23:18:21.7343248Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-08-15T23:18:21.7344480Z hint: call:
+2026-08-15T23:18:21.7345090Z hint:
+2026-08-15T23:18:21.7345868Z hint: 	git config --global init.defaultBranch <name>
+2026-08-15T23:18:21.7346830Z hint:
+2026-08-15T23:18:21.7347720Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-08-15T23:18:21.7349192Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-08-15T23:18:21.7350575Z hint:
+2026-08-15T23:18:21.7351206Z hint: 	git branch -m <name>
+2026-08-15T23:18:21.7351967Z hint:
+2026-08-15T23:18:21.7352940Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-08-15T23:18:21.7354466Z Initialized empty Git repository in /home/runner/work/atmr/atmr/.git/
+2026-08-15T23:18:21.7359766Z [command]/usr/bin/git remote add origin https://github.com/djasiqi/atmr
+2026-08-15T23:18:21.7417340Z ##[endgroup]
+2026-08-15T23:18:21.7418275Z ##[group]Disabling automatic garbage collection
+2026-08-15T23:18:21.7422822Z [command]/usr/bin/git config --local gc.auto 0
+2026-08-15T23:18:21.7479874Z ##[endgroup]
+2026-08-15T23:18:21.7481838Z ##[group]Setting up auth
+2026-08-15T23:18:21.7483796Z Removing SSH command configuration
+2026-08-15T23:18:21.7484936Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-15T23:18:21.7537050Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-15T23:18:21.7968903Z Removing HTTP extra header
+2026-08-15T23:18:21.7975599Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-15T23:18:21.8011372Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-15T23:18:21.8233629Z Removing includeIf entries pointing to credentials config files
+2026-08-15T23:18:21.8240504Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-15T23:18:21.8278824Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-15T23:18:21.8542464Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-08-15T23:18:21.8594481Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/atmr/atmr/.git.path /home/runner/work/_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:18:21.8634352Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/atmr/atmr/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:18:21.8682864Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:18:21.8723577Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-e86a32a1-0220-4f2f-9bc4-e3209287f77a.config
+2026-08-15T23:18:21.8756631Z ##[endgroup]
+2026-08-15T23:18:21.8757449Z ##[group]Fetching the repository
+2026-08-15T23:18:21.8767489Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +286737a2362eb1e38013c72d04be23fcd608210e:refs/remotes/origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:27.0498140Z From https://github.com/djasiqi/atmr
+2026-08-15T23:18:27.0500996Z  * [new ref]         286737a2362eb1e38013c72d04be23fcd608210e -> origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:27.0534410Z [command]/usr/bin/git branch --list --remote origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:27.0572412Z   origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:27.0584237Z [command]/usr/bin/git rev-parse refs/remotes/origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:27.0615512Z 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:18:27.0620709Z ##[endgroup]
+2026-08-15T23:18:27.0621995Z ##[group]Determining the checkout info
+2026-08-15T23:18:27.0622955Z ##[endgroup]
+2026-08-15T23:18:27.0627613Z [command]/usr/bin/git sparse-checkout disable
+2026-08-15T23:18:27.0682197Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-08-15T23:18:27.0716883Z ##[group]Checking out the ref
+2026-08-15T23:18:27.0722432Z [command]/usr/bin/git checkout --progress --force -B release/gps-p0-2026-08-15 refs/remotes/origin/release/gps-p0-2026-08-15
+2026-08-15T23:18:28.1394636Z Updating files:  74% (3914/5249)
+2026-08-15T23:18:28.1624076Z Updating files:  75% (3937/5249)
+2026-08-15T23:18:28.1657068Z Updating files:  76% (3990/5249)
+2026-08-15T23:18:28.1685074Z Updating files:  77% (4042/5249)
+2026-08-15T23:18:28.1710231Z Updating files:  78% (4095/5249)
+2026-08-15T23:18:28.1739727Z Updating files:  79% (4147/5249)
+2026-08-15T23:18:28.1765405Z Updating files:  80% (4200/5249)
+2026-08-15T23:18:28.1792532Z Updating files:  81% (4252/5249)
+2026-08-15T23:18:28.1824725Z Updating files:  82% (4305/5249)
+2026-08-15T23:18:28.1854861Z Updating files:  83% (4357/5249)
+2026-08-15T23:18:28.1885569Z Updating files:  84% (4410/5249)
+2026-08-15T23:18:28.1917337Z Updating files:  85% (4462/5249)
+2026-08-15T23:18:28.1950244Z Updating files:  86% (4515/5249)
+2026-08-15T23:18:28.1981886Z Updating files:  87% (4567/5249)
+2026-08-15T23:18:28.2012853Z Updating files:  88% (4620/5249)
+2026-08-15T23:18:28.2039067Z Updating files:  89% (4672/5249)
+2026-08-15T23:18:28.2070061Z Updating files:  90% (4725/5249)
+2026-08-15T23:18:28.2106341Z Updating files:  91% (4777/5249)
+2026-08-15T23:18:28.2133376Z Updating files:  92% (4830/5249)
+2026-08-15T23:18:28.3190787Z Updating files:  93% (4882/5249)
+2026-08-15T23:18:28.3227259Z Updating files:  94% (4935/5249)
+2026-08-15T23:18:28.3262610Z Updating files:  95% (4987/5249)
+2026-08-15T23:18:28.3290070Z Updating files:  96% (5040/5249)
+2026-08-15T23:18:28.3321014Z Updating files:  97% (5092/5249)
+2026-08-15T23:18:28.3367994Z Updating files:  98% (5145/5249)
+2026-08-15T23:18:28.3426665Z Updating files:  99% (5197/5249)
+2026-08-15T23:18:28.3428990Z Updating files: 100% (5249/5249)
+2026-08-15T23:18:28.3431375Z Updating files: 100% (5249/5249), done.
+2026-08-15T23:18:28.3540028Z Switched to a new branch 'release/gps-p0-2026-08-15'
+2026-08-15T23:18:28.3543852Z branch 'release/gps-p0-2026-08-15' set up to track 'origin/release/gps-p0-2026-08-15'.
+2026-08-15T23:18:28.4066084Z ##[endgroup]
+2026-08-15T23:18:28.4119929Z [command]/usr/bin/git log -1 --format=%H
+2026-08-15T23:18:28.4148083Z 286737a2362eb1e38013c72d04be23fcd608210e

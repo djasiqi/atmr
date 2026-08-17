@@ -1,0 +1,13 @@
+﻿08-17 01:09:52.508  4559  4604 I RegiGvnBase: checkRegiStatus: getState()=IDLE mIsUpdateRegistering=false
+08-17 01:09:54.553 15695 15898 I TaskService: Finished task 'background-location-task' with eventId 'd0370636-3c37-4286-86f0-05e370361c67'.
+08-17 01:10:01.932  4559  4604 I RegiGvnBase: checkRegiStatus: getState()=IDLE mIsUpdateRegistering=false
+08-17 01:10:05.119  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-17 01:10:11.375  4559  4604 I RegiGvnBase: checkRegiStatus: getState()=IDLE mIsUpdateRegistering=false
+08-17 01:10:13.153 15695 15898 I TaskService: Finished task 'background-location-task' with eventId '22acc6cc-0ce6-490b-816f-45fcd2911f2a'.
+08-17 01:10:20.698  4559  4604 I RegiGvnBase: checkRegiStatus: getState()=IDLE mIsUpdateRegistering=false
+08-17 01:10:30.137  4559  4604 I RegiGvnBase: checkRegiStatus: getState()=IDLE mIsUpdateRegistering=false
+08-17 01:10:32.234 15695 15898 I TaskService: Finished task 'background-location-task' with eventId 'a99fd48e-da2c-406c-96a1-b637c158aac3'.
+08-17 01:10:39.762  4559  4604 I RegiGvnBase: checkRegiStatus: getState()=IDLE mIsUpdateRegistering=false
+08-17 01:10:49.201  4559  4604 I RegiGvnBase: checkRegiStatus: getState()=IDLE mIsUpdateRegistering=false
+08-17 01:10:51.468 15695 15898 I TaskService: Finished task 'background-location-task' with eventId '20d01471-cd3e-469e-852b-0276d3e6f616'.
+08-17 01:10:58.632  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'

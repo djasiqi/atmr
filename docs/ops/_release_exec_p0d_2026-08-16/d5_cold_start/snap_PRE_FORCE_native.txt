@@ -1,0 +1,39 @@
+﻿08-16 21:12:04.089  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:12:07.532 32365 32436 I ReactNativeJS: '[driver-telemetry] tracking.background.start_deferred', { source: 'driver.services.backgroundLocationTask',
+08-16 21:12:07.533 32365 32436 I ReactNativeJS: '[driver-telemetry] tracking.background.wake_restart', { source: 'driver.services.backgroundLocationTask',
+08-16 21:12:07.599 32365 32436 I ReactNativeJS: '[driver-telemetry] tracking.background.task.tick', { source: 'driver.tasks.locationTask', queue_depth: 1 }
+08-16 21:12:07.600 32365 32441 I TaskService: Finished task 'driver-location-background-task' with eventId '6926e9f2-0410-4f54-bf3e-8144590e2966'.
+08-16 21:12:09.220  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:12:14.340  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:12:19.514  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:12:24.634  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:12:29.756  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:12:34.854  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:12:39.960  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:12:45.118  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:12:45.556  4453  7096 I FusedLocation: (REDACTED) stationary throttling engaged @%s
+08-16 21:12:45.591  4453  7097 I FusedLocation: (REDACTED) stationary throttling engaged @%s
+08-16 21:12:47.327  4453  7098 I FusedLocation: stationary throttling disengaged [CONTEXT service_id=6 ]
+08-16 21:12:47.519  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 21:12:47.520  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too old
+08-16 21:12:47.521  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 21:12:47.521  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 21:12:47.529  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786907563913 / elapsed=86791277000000
+08-16 21:12:47.795 32365 32441 I TaskService: Registered task with name 'background-location-task' for app with scoping identifier 'ch.liri.operations'.
+08-16 21:12:47.796  3001  5066 I ActivityManager: Background started FGS: Allowed [callingPackage: ch.liri.operations; callingUid: 10907; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:0; bindFromPackage:null: isBindService:false]
+08-16 21:12:47.810  3001  5066 I ActivityManager: Background started FGS: Allowed [callingPackage: ch.liri.operations; callingUid: 10907; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:0; bindFromPackage:null: isBindService:true]
+08-16 21:12:47.813 32365 32365 I LocationTaskConsumer: Started location updates via LocationCallback (FGS path)
+08-16 21:12:47.974 32365 32441 I TaskService: Finished task 'background-location-task' with eventId '7e0ab191-8ffa-40d0-a329-c71fe27a96fc'.
+08-16 21:12:48.918 32365 32365 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 21:12:50.233  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:12:50.315  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 21:12:50.315  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 21:12:50.316  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 21:12:50.316  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 21:12:50.316  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 21:12:50.316  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 21:12:50.317  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 21:12:50.317  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 21:12:50.317  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 21:12:50.319  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0342369 / time=1786907570302 / elapsed=86797665337411
+08-16 21:12:50.424  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'

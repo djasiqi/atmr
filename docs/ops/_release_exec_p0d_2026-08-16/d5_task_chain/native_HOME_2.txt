@@ -1,0 +1,577 @@
+﻿08-16 18:03:31.268  3001  5064 D ActivityTaskManager: startActivityAsUser: callingPid=27837, callingUid=2000, caller=com.android.server.am.ActivityManagerService.startActivityAsUserWithFeature:27 com.android.server.am.ActivityManagerShellCommand.runStartActivity:591 com.android.server.am.ActivityManagerShellCommand.onCommand:1059 com.android.modules.utils.BasicShellCommandHandler.exec:97 android.os.ShellCommand.exec:38 com.android.server.am.ActivityManagerService.onShellCommand:164 android.os.Binder.shellCommand:1219 
+08-16 18:03:31.270  3001  5064 W ActivityTaskManager: callingPackage for (uid=2000, pid=27837) has no WPC
+08-16 18:03:31.273  3001  5064 D WindowManager: Transition is created, t=TransitionRecord{ce31e49 id=-1 type=OPEN flags=0x0 parallelCollectType=NONE recentsDisplayId=-1}, caller=com.android.server.wm.Transition.<init>:203 com.android.server.wm.TransitionController.createAndStartCollecting:106 com.android.server.wm.ActivityStarter.executeRequest:3691 com.android.server.wm.ActivityStarter.execute:1751 com.android.server.wm.ActivityTaskManagerService.startActivityAsUser:95 
+08-16 18:03:31.273  3001  5064 D BLASTSyncEngine: SyncGroup is created, id=3700, name=Transition-OPEN, caller=com.android.server.wm.BLASTSyncEngine.prepareSyncSet:60 com.android.server.wm.TransitionController.moveToCollecting:67 com.android.server.wm.TransitionController.createAndStartCollecting:109 com.android.server.wm.ActivityStarter.executeRequest:3691 com.android.server.wm.ActivityStarter.execute:1751 com.android.server.wm.ActivityTaskManagerService.startActivityAsUser:95 com.android.server.am.ActivityManagerService.startActivityAsUserWithFeature:27 
+08-16 18:03:31.273  3001  5064 V WindowManager: Start collecting in Transition: TransitionRecord{ce31e49 id=3700 type=OPEN flags=0x0 parallelCollectType=NONE recentsDisplayId=-1}, caller=com.android.server.wm.TransitionController.createAndStartCollecting:109 com.android.server.wm.ActivityStarter.executeRequest:3691 com.android.server.wm.ActivityStarter.execute:1751 com.android.server.wm.ActivityTaskManagerService.startActivityAsUser:95 com.android.server.am.ActivityManagerService.startActivityAsUserWithFeature:27 
+08-16 18:03:31.274  3001  5064 V WindowManager: Collecting in transition 3700: ActivityRecord{90461006 u0 ch.liri.operations/.MainActivity, caller=com.android.server.wm.TransitionController.collect:7 com.android.server.wm.ActivityStarter.startActivityUnchecked:98 com.android.server.wm.ActivityStarter.executeRequest:3744 com.android.server.wm.ActivityStarter.execute:1751 com.android.server.wm.ActivityTaskManagerService.startActivityAsUser:95 
+08-16 18:03:31.277  3001  5064 D ActivityTaskManager: scheduleTopResumedActivityChanged, onTop=false, r=ActivityRecord{106955170 u0 com.android.vending/com.google.android.finsky.playcoreacquisition.PlayCoreAcquisitionActivity t1328}, caller=com.android.server.wm.ActivityTaskSupervisor.scheduleTopResumedActivityStateLossIfNeeded:19 com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:44 com.android.server.wm.TaskDisplayArea.positionChildAt:253 com.android.server.wm.Task.moveToFront:40 com.android.server.wm.ActivityRecord.moveFocusableActivityToTop:251 com.android.server.wm.Task.moveTaskToFront:212 
+08-16 18:03:31.278  3001  5064 D ActivityTaskManager: addStartingWindow: type=1 typeParameter=21e
+08-16 18:03:31.280  3001  5064 V WindowManager: }, caller=com.android.server.wm.ActivityStarter.handleStartResult:983 com.android.server.wm.ActivityStarter.startActivityUnchecked:124 com.android.server.wm.ActivityStarter.executeRequest:3744 com.android.server.wm.ActivityStarter.execute:1751 com.android.server.wm.ActivityTaskManagerService.startActivityAsUser:95 
+08-16 18:03:31.280  3001  5064 I ActivityTaskManager: START u0 {flg=0x10000000 xflg=0x5 cmp=ch.liri.operations/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (com.android.shell) (BAL_ALLOW_PERMISSION) result code=2
+08-16 18:03:31.292  3001  5064 D WindowManager: Changing focus from Window{8e90cd6 u0 com.android.vending/com.google.android.finsky.playcoreacquisition.PlayCoreAcquisitionActivity} to null displayId=0 Callers=com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:91 com.android.server.wm.TaskFragment.setResumedActivity:29 com.android.server.wm.ActivityRecord.setState:100 
+08-16 18:03:31.294  3001  5064 D ActivityTaskManager: scheduleTopResumedActivityChanged, onTop=true, r=ActivityRecord{217526614 u0 ch.liri.operations/.MainActivity t1322}, caller=com.android.server.wm.ActivityTaskSupervisor.scheduleTopResumedActivityStateIfNeeded:18 com.android.server.wm.ActivityTaskSupervisor.handleTopResumedStateReleasedIfNeeded:57 com.android.server.wm.ActivityRecord.activityPaused:94 com.android.server.wm.ActivityClientController.activityPaused:26 android.app.IActivityClientController$Stub.onTransact:812 com.android.server.wm.ActivityClientController.onTransact:1 
+08-16 18:03:31.295  3001  5064 D BLASTSyncEngine: SyncGroup 3700:  Unfinished container: ActivityRecord{217526614 u0 ch.liri.operations/.MainActivity t1322} mSyncState=2
+08-16 18:03:31.297  3001  3354 V WindowManager: SyncGroup 3700: Finished!
+08-16 18:03:31.366 13893 14029 I ReactNativeJS: '[FCM-GATE] register effect start', { source: 'driver.notifications.bridge',
+08-16 18:03:31.366 13893 14029 I ReactNativeJS:   stage: 'app_foreground',
+08-16 18:03:31.366 13893 14029 I ReactNativeJS:   enabled: true,
+08-16 18:03:31.366 13893 14029 I ReactNativeJS:   fcmEnabled: true }
+08-16 18:03:31.375  4933  4977 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#3700) android.os.BinderProxy@1cfd8a8@0
+08-16 18:03:31.376  4933  4977 I SurfaceControlRegistry: apply, t=FinishTransaction_SyncId<3700>, caller=android.view.SurfaceControl$Transaction.apply:3581 android.view.SurfaceControl$Transaction.apply:3569 android.view.SurfaceControl$Transaction.apply:3519 com.android.wm.shell.transition.Transitions.onFinish:381 com.android.wm.shell.transition.Transitions$$ExternalSyntheticLambda8.onTransitionFinished:12 com.android.wm.shell.transition.DefaultTransitionHandler$$ExternalSyntheticLambda2.run:276 
+08-16 18:03:31.378  3001  3350 V WindowManager: Finish Transition (#3700): created at 08-16 18:03:31.273 collect-started=0.661ms request-sent=7.2ms started=13.411ms ready=21.122ms sent=27.895ms commit=56.358ms finished=105.182ms
+08-16 18:03:31.380  3001  5018 D ChangeTransitionController: onTransitionFinished: TransitionRecord{ce31e49 id=3700 type=OPEN flags=0x0 parallelCollectType=NONE recentsDisplayId=-1 c=[
+08-16 18:03:31.380  4933  4977 V WindowManagerShell: All active transition animations finished
+08-16 18:03:31.433 13893 14029 W ReactNativeJS: MapViewDirections Error: Error on GMAPS route request: This IP, site or mobile application is not authorized to use this API key. Request received from IP address 194.230.196.30, with empty referer
+08-16 18:03:31.435 13893 14029 W ReactNativeJS: MapViewDirections Error: Error on GMAPS route request: This IP, site or mobile application is not authorized to use this API key. Request received from IP address 194.230.196.30, with empty referer
+08-16 18:03:31.437 13893 14029 W ReactNativeJS: MapViewDirections Error: Error on GMAPS route request: This IP, site or mobile application is not authorized to use this API key. Request received from IP address 194.230.196.30, with empty referer
+08-16 18:03:31.439 13893 14029 W ReactNativeJS: MapViewDirections Error: Error on GMAPS route request: This IP, site or mobile application is not authorized to use this API key. Request received from IP address 194.230.196.30, with empty referer
+08-16 18:03:31.439 13893 14029 W ReactNativeJS: MapViewDirections Error: Error on GMAPS route request: This IP, site or mobile application is not authorized to use this API key. Request received from IP address 194.230.196.30, with empty referer
+08-16 18:03:31.440 13893 14029 W ReactNativeJS: MapViewDirections Error: Error on GMAPS route request: This IP, site or mobile application is not authorized to use this API key. Request received from IP address 194.230.196.30, with empty referer
+08-16 18:03:31.440 13893 14029 W ReactNativeJS: MapViewDirections Error: Error on GMAPS route request: This IP, site or mobile application is not authorized to use this API key. Request received from IP address 194.230.196.30, with empty referer
+08-16 18:03:31.445 13893 13893 D VRI[MainActivity]@2c53f43: reportDrawFinished seqId=0
+08-16 18:03:31.448  3001  5018 V WindowManager: Schedule remove starting ActivityRecord{217526614 u0 ch.liri.operations/.MainActivity t1322} startingWindow=Window{7bb980 u0 SnapshotStartingWindow for taskId=1322} animate=false Callers=com.android.server.wm.ActivityRecord.removeStartingWindow:178 com.android.server.wm.ActivityRecord.onCopySplashScreenFinish:56 com.android.server.wm.ActivityTaskManagerService.onSplashScreenViewCopyFinished:41 android.app.IActivityTaskManager$Stub.onTransact:3414 com.android.server.wm.ActivityTaskManagerService.onTransact:1 
+08-16 18:03:31.508 13893 14029 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-16 18:03:31.508 13893 14029 I ReactNativeJS:   stage: 'app_foreground' }
+08-16 18:03:31.508 13893 14029 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-16 18:03:31.517 13893 14029 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-16 18:03:31.518 13893 14029 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-16 18:03:31.518 13893 14029 I ReactNativeJS:   stage: 'app_foreground',
+08-16 18:03:31.518 13893 14029 I ReactNativeJS:   tokenLength: 142 }
+08-16 18:03:31.519 13893 14029 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-16 18:03:31.519 13893 14029 I ReactNativeJS:   stage: 'app_foreground',
+08-16 18:03:31.519 13893 14029 I ReactNativeJS:   provider: 'fcm' }
+08-16 18:03:31.563  3001  3354 E WindowManager: win=Window{7bb980 u0 SnapshotStartingWindow for taskId=1322 EXITING} destroySurfaces: appStopped=false cleanupOnResume=false win.mWindowRemovalAllowed=true win.mRemoveOnExit=true win.mViewVisibility=0 caller=com.android.server.wm.WindowState.onExitAnimationDone:224 com.android.server.wm.WindowState.onAnimationFinished:174 com.android.server.wm.WindowContainer$$ExternalSyntheticLambda8.onAnimationFinished:3 com.android.server.wm.SurfaceAnimator$$ExternalSyntheticLambda0.onAnimationFinished:69 com.android.server.wm.LocalAnimationAdapter$$ExternalSyntheticLambda0.run:10 android.os.Handler.handleCallback:1070 android.os.Handler.dispatchMessage:125 
+08-16 18:03:31.952 13893 14029 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+08-16 18:03:32.232 13893 14029 W ReactNativeJS: MapViewDirections Error: Error on GMAPS route request: This IP, site or mobile application is not authorized to use this API key. Request received from IP address 194.230.196.30, with empty referer
+08-16 18:03:32.277 13893 14029 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+08-16 18:03:34.331 23846 23846 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 18:03:34.807  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:34.812  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:34.814  3001  5066 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:34.819  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:03:34.909 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:34.909 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:34.909 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:34.909 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:35.197  3001  3375 W ActivityManager: Stopping service due to app idle: u0a765 -1m53s376ms com.whatsapp/.messageservice.messaging.MessageService
+08-16 18:03:35.808  3001  5064 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:37.125  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:37.125  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:37.125  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:03:37.125  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:37.130  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:03:37.133  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:03:37.134  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:37.134  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:03:37.134  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:37.134  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:37.134  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:37.134  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:03:37.134  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:37.135  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:37.137  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.106121615 / time=1786896216990 / elapsed=75444353287586
+08-16 18:03:44.979  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:44.982  3001  5066 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:44.985  3001  5066 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:44.990  3001  5066 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:03:45.002 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:45.003 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:45.003 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:45.003 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:45.981  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:47.332  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:47.332  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:47.333  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:47.334  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:03:47.335  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:47.335  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:03:47.335  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:47.335  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:47.335  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:47.336  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:47.340  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:47.342  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.11001905 / time=1786896227188 / elapsed=75454552401961
+08-16 18:03:55.159  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:55.165  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:55.167  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:55.172  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:03:55.197 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:55.197 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:55.197 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:55.197 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:03:56.161  3001  7120 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:03:57.388  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:57.388  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:57.388  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:03:57.388  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:57.389  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:03:57.389  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:03:57.389  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:57.390  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:57.390  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:57.390  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:57.390  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:03:57.390  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:57.391  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:03:57.393  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.11791586 / time=1786896237330 / elapsed=75464694707601
+08-16 18:04:05.182  3001  5074 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:05.186  3001  5074 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:05.188  3001  7122 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:05.198  3001  5064 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:04:05.341 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:05.341 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:05.341 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:05.342 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:06.183  3001  5074 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:07.537  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:07.537  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:07.538  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:07.540  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:07.540  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:07.540  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:07.540  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:07.540  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:07.540  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:07.540  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:07.541  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:07.549  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.120517805 / time=1786896247474 / elapsed=75474837976649
+08-16 18:04:15.345  3001  5233 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:15.348  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:15.352  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:15.357  3001  5233 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:04:15.486 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:15.486 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:15.487 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:15.487 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:16.347  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:17.679  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:17.679  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:17.679  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:17.679  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:17.681  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:17.681  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:17.681  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:17.682  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:17.682  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:17.682  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:17.682  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:17.682  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:17.682  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:17.682  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:17.683  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.12709977 / time=1786896257560 / elapsed=75484924522221
+08-16 18:04:25.496  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:25.500  3001  7119 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:25.503  3001  7119 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:25.509  3001  7119 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:04:25.564 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:25.564 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:25.564 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:25.564 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:26.498  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:27.860  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:27.860  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:27.860  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:27.861  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:27.862  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:27.862  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:27.862  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:27.862  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:27.862  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:27.863  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:27.863  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:27.869  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.12986133 / time=1786896267759 / elapsed=75495123048241
+08-16 18:04:32.647 24115 28170 I Finsky:background: [1673] GUC: Finished game usage collection and storing into ValueStore.
+08-16 18:04:32.648 24115 24143 I Finsky:background: [1633] GUC: Collection part finished. Proceeding to upload.
+08-16 18:04:32.650 24115 28170 I Finsky:background: [1673] GUC: ValueStore cleanup finished.
+08-16 18:04:32.651 24115 28170 I Finsky:background: [1673] GUC: Upload part finished.
+08-16 18:04:32.664 24115 28170 I Finsky:background: [1673] SCH: jobFinished: 59-1. TimeElapsed: 1167ms.
+08-16 18:04:32.673 24115 28168 I Finsky:background: [1671] SCH: job service finished with id 10880.
+08-16 18:04:33.472 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:33.472 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:33.472 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:33.472 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:33.523  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:33.527  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:33.528  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:33.533  3001  5233 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:04:34.455  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:35.850  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:35.850  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:35.850  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:35.850  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:35.853  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:35.856  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:35.858  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:35.858  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:35.859  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:35.859  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:35.859  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:35.859  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:35.859  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:35.860  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:35.860  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:35.863  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.13255364 / time=1786896275716 / elapsed=75503080098189
+08-16 18:04:41.915 28213 28213 I Finsky:quick_launch: [2] Finished reading experiment flags from file [0tGUNCGIkbk4o6-fQ335kUYSKwVj4lusnHT-A5Dsy08] numFlags=2528.
+08-16 18:04:41.946 28213 28213 I Finsky:quick_launch: [2] Finished reading experiment flags from file [YPXGgfrk9c24il_xq6x08EAm0a_nvpsBKAhrIz7JX0k] numFlags=2069.
+08-16 18:04:41.948 28213 28213 I Finsky:quick_launch: [2] Finished reading experiment flags from file [wvI_UOgYFoKt4VihpiVE9iik-HAP_EEPqJoc1wkSf10] numFlags=2069.
+08-16 18:04:42.024 28213 28237 I Finsky:quick_launch: [1651] Finished reading experiment flags from file [Se-xCc4LzNyh3UrKMIU2sUf-PUKz4oQEbpKZDMuaFno] numFlags=2057.
+08-16 18:04:42.339 24674 28202 I Finsky  : [1747] SCH: jobFinished: 16-16161616. TimeElapsed: 968ms.
+08-16 18:04:42.354 24674 28200 I Finsky  : [1745] SCH: job service finished with id 9986.
+08-16 18:04:43.626  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:43.631  3001  7077 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:43.634  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:43.639  3001  7077 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:04:43.733 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:43.733 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:43.733 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:43.733 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:44.628  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:45.977  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:45.977  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:45.978  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:45.979  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:45.979  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:45.979  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:45.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:45.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:45.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:45.980  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:45.982  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:45.982  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:45.982  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.13406964 / time=1786896285914 / elapsed=75513278581626
+08-16 18:04:53.799  3001  7126 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:53.803  3001  7126 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:53.807  3001  7126 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:53.815  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:04:53.929 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:53.929 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:53.929 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:53.929 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:04:54.801  3001  7119 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:04:55.099  3001  7119 I ActivityManager: Background started FGS: Allowed [callingPackage: com.whatsapp; callingUid: 10765; uidState: SVC ; uidBFSL: n/a; intent: Intent { xflg=0x4 cmp=com.whatsapp/.messaging.service.GcmFGService }; code:PUSH_MESSAGING; tempAllowListReason:<5c755b2 com.google.android.c2dm.intent.RECEIVE/u0,reasonCode:PUSH_MESSAGING,duration:20000,callingUid:10231>; allowWiu:-1; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:0; bindFromPackage:null: isBindService:false]
+08-16 18:04:55.111  3001  4185 I ActivityManager: Background started FGS: Allowed [callingPackage: com.whatsapp; callingUid: 10765; uidState: FGS ; uidBFSL: [BFSL]; intent: Intent { cmp=com.whatsapp/.messaging.service.GcmFGService }; code:PROC_STATE_FGS; tempAllowListReason:<5c755b2 com.google.android.c2dm.intent.RECEIVE/u0,reasonCode:PUSH_MESSAGING,duration:20000,callingUid:10231>; allowWiu:-1; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:0; bindFromPackage:null: isBindService:false]
+08-16 18:04:56.087  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:56.087  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:56.087  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:56.087  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:56.091  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:56.091  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:56.092  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:56.092  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:56.093  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:56.093  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:56.093  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:56.093  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:56.093  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:56.094  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:04:56.094  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:04:56.096  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.12932202 / time=1786896296000 / elapsed=75523364949803
+08-16 18:04:56.816  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 18:04:56.816  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 18:04:56.816  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 18:04:56.816  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 18:04:56.816  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 18:04:56.835  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished:3
+08-16 18:04:56.841  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 18:04:56.841  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 18:04:56.841  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 18:04:56.841  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 18:04:56.841  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 18:04:56.876  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 18:04:56.880  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 18:04:56.916  4933  4933 D VRI[NotificationShade]@989aeef: reportDrawFinished seqId=33
+08-16 18:04:56.941  4933  4933 D VRI[NotificationShade]@989aeef: reportDrawFinished seqId=33
+08-16 18:04:57.898  3001  3859 D VibrationThread: Vibration 1050 finished with EndInfo{status=FINISHED, endedBy=null}
+08-16 18:04:57.900  3001  3859 D VibratorManagerService: Vibration for uid=1000 and with attrs=VibrationAttributes{mUsage=NOTIFICATION, mAudioUsage= USAGE_UNKNOWN, mFlags=0, tags=} ended with status FINISHED
+08-16 18:05:02.536  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 18:05:02.541  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.runAnimationFinishedRunnables:19
+08-16 18:05:02.541  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.onChildAnimationFinished:10
+08-16 18:05:02.541  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.StackStateAnimator.onAnimationFinished:3
+08-16 18:05:02.541  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.runAnimationFinishedRunnables:19
+08-16 18:05:02.541  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.onChildAnimationFinished:10
+08-16 18:05:02.541  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.StackStateAnimator.onAnimationFinished:3
+08-16 18:05:02.544  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 18:05:02.569  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 18:05:02.570  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 18:05:03.931  3001  5233 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:03.937  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:03.939  3001  7077 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:03.945  3001  7077 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:05:04.005 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:04.006 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:04.006 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:04.006 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:04.933  3001  7119 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:05.962 23846 23846 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 18:05:06.297  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:06.298  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:06.298  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:06.299  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:06.300  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:06.300  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:06.300  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:06.300  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:06.300  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:06.300  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:06.301  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:06.301  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:06.301  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.12691252 / time=1786896306199 / elapsed=75533563425585
+08-16 18:05:14.093  3001  4185 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:14.098  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:14.103  3001  7119 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:14.111  3001  5233 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:05:14.216 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:14.216 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:14.216 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:14.216 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:15.094  3001  7119 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:16.425  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:16.425  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:16.425  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:16.426  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:16.426  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:16.427  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:16.427  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:16.427  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:16.428  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:16.428  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:16.428  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:16.428  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:16.428  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:16.429  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:16.429  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:16.431  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.12567261 / time=1786896316330 / elapsed=75543694707601
+08-16 18:05:22.462  3001  3351 W ActivityTaskManager: callingPackage for (uid=-1, pid=0) has no WPC
+08-16 18:05:22.466  3001  3351 D ActivityTaskManager: scheduleTopResumedActivityChanged, onTop=false, r=ActivityRecord{217526614 u0 ch.liri.operations/.MainActivity t1322}, caller=com.android.server.wm.ActivityTaskSupervisor.scheduleTopResumedActivityStateLossIfNeeded:19 com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:44 com.android.server.wm.TaskDisplayArea.positionChildAt:253 com.android.server.wm.WindowContainer.positionChildAt:100 com.android.server.wm.Task.positionChildAt:19 com.android.server.wm.Task.moveToFront:40 
+08-16 18:05:22.466  3001  3351 D ActivityTaskManager: addStartingWindow: type=0 typeParameter=36
+08-16 18:05:22.469  3001  3351 D WindowManager: Changing focus from Window{6d94ed9 u0 ch.liri.operations/ch.liri.operations.MainActivity} to null displayId=0 Callers=com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:91 com.android.server.wm.TaskFragment.setResumedActivity:29 com.android.server.wm.ActivityRecord.setState:100 
+08-16 18:05:22.471  3001  3351 I ActivityTaskManager: START u0 {act=android.intent.action.MAIN cat=[android.intent.category.HOME] flg=0x10000100 cmp=com.sec.android.app.launcher/.activities.LauncherActivity (has extras)} with LAUNCH_SINGLE_TASK from uid 0 (BAL_ALLOW_ALLOWLISTED_UID) result code=2
+08-16 18:05:22.471  3001  5233 D ActivityTaskManager: scheduleTopResumedActivityChanged, onTop=true, r=ActivityRecord{149188390 u0 com.sec.android.app.launcher/.activities.LauncherActivity t1269}, caller=com.android.server.wm.ActivityTaskSupervisor.scheduleTopResumedActivityStateIfNeeded:18 com.android.server.wm.ActivityTaskSupervisor.handleTopResumedStateReleasedIfNeeded:57 com.android.server.wm.ActivityClientController.activityTopResumedStateLost:20 android.app.IActivityClientController$Stub.onTransact:803 com.android.server.wm.ActivityClientController.onTransact:1 android.os.Binder.execTransactInternal:1514 
+08-16 18:05:22.473  3001  3354 D BLASTSyncEngine: SyncGroup 3701:  Unfinished container: ActivityRecord{149188390 u0 com.sec.android.app.launcher/.activities.LauncherActivity t1269} mSyncState=2
+08-16 18:05:22.490  3001  3351 D BLASTSyncEngine: SyncGroup 3701:  Unfinished container: ActivityRecord{149188390 u0 com.sec.android.app.launcher/.activities.LauncherActivity t1269} mSyncState=2
+08-16 18:05:22.499  3001  7137 D BLASTSyncEngine: SyncGroup 3701:  Unfinished container: ActivityRecord{149188390 u0 com.sec.android.app.launcher/.activities.LauncherActivity t1269} mSyncState=2
+08-16 18:05:22.504  3001  3354 D BLASTSyncEngine: SyncGroup 3701:  Unfinished container: ActivityRecord{149188390 u0 com.sec.android.app.launcher/.activities.LauncherActivity t1269} mSyncState=2
+08-16 18:05:22.504  3001  3354 D BLASTSyncEngine: SyncGroup 3701:  Unfinished container: ActivityRecord{149188390 u0 com.sec.android.app.launcher/.activities.LauncherActivity t1269} mSyncState=2
+08-16 18:05:22.511  3001  3354 V WindowManager: SyncGroup 3701: Finished!
+08-16 18:05:22.517  3001  3354 I ActivityTaskManager: done cause=notifyTransitionStarting drawn timestamp=59812670808327 info=TransitionInfo{c28a5cf a=ActivityRecord{149188390 u0 com.sec.android.app.launcher/.activities.LauncherActivity t1269} r=null d=true}
+08-16 18:05:22.522  3001  4185 W ActivityTaskManager: setRunningRemoteTransition: no process for null
+08-16 18:05:22.549  4933  6422 W WindowManagerShell: Received remote transition finished callback for (#3701), callingPid=5289
+08-16 18:05:22.549  4933  4977 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#3701) android.os.BinderProxy@8f0eec@0
+08-16 18:05:22.549  4933  4977 I SurfaceControlRegistry: apply, t=FinishTransaction_SyncId<3701>, caller=android.view.SurfaceControl$Transaction.apply:3581 android.view.SurfaceControl$Transaction.apply:3569 android.view.SurfaceControl$Transaction.apply:3519 com.android.wm.shell.transition.Transitions.onFinish:381 com.android.wm.shell.transition.Transitions$$ExternalSyntheticLambda8.onTransitionFinished:12 com.android.wm.shell.transition.RemoteTransitionHandler$1$$ExternalSyntheticLambda0.run:133 
+08-16 18:05:22.552  3001  3350 V WindowManager: Finish Transition (#3701): created at 08-16 18:05:22.463 collect-started=1.135ms request-sent=6.72ms started=8.936ms ready=8.93ms sent=51.613ms commit=16.844ms finished=88.124ms
+08-16 18:05:22.552  3001  4185 D ChangeTransitionController: onTransitionFinished: TransitionRecord{f23991 id=3701 type=OPEN flags=0x0 parallelCollectType=NONE recentsDisplayId=-1 c=[
+08-16 18:05:22.552  4933  4977 V WindowManagerShell: All active transition animations finished
+08-16 18:05:24.234  3001  7077 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:24.237  3001  7077 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:24.241  3001  7077 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:24.247  3001  5233 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:05:24.341 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:24.341 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:24.343 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:24.344 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:25.242  3001  5233 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:26.513  3001  4100 I SemWifiEleStateTracker: Monitoring finished by expiration count
+08-16 18:05:26.616  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:26.616  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:26.618  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:26.619  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:26.620  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:26.620  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:26.621  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:26.621  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:26.621  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:26.621  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:26.622  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.12106935 / time=1786896326484 / elapsed=75553848200301
+08-16 18:05:26.622  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:26.622  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:34.397  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:34.400  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:34.403  3001  7119 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:34.407  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:05:34.490 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:34.491 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:34.491 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:34.491 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:35.400  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:35.993  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 18:05:36.007  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.008  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.008  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.008  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.009  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.010  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.011  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.011  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.012  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.012  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.012  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.012  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.012  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.014  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.014  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.015  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.116968825 / time=1786896335898 / elapsed=75563262066030
+08-16 18:05:36.739  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.739  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.739  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.740  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.740  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.741  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.742  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.742  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.742  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.742  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.742  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.742  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.742  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.742  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.742  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.742  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:36.743  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:36.745  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=2.6886835 / time=1786896336682 / elapsed=75564046548478
+08-16 18:05:44.541  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:44.549  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:44.554  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:44.559  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:05:44.684 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:44.685 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:44.685 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:44.686 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:45.543  3001  7077 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:46.903  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:46.905  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:46.906  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:46.907  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:46.908  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:46.909  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:46.909  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:46.909  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:46.911  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:46.911  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:46.912  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=2.5186923 / time=1786896346769 / elapsed=75574132706342
+08-16 18:05:54.285 23846 23846 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 18:05:54.693  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:54.697  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:54.699  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:54.705  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:05:54.770 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:54.771 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:54.773 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:54.773 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:05:55.695  3001  7077 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:05:57.022  4453 28487 I NetworkScheduler.Stats: (REDACTED) Task %s/%s finished executing. cause:%s result: %s elapsed_millis: %s uptime_millis: %s exec_start_elapsed_seconds: %s
+08-16 18:05:57.048  4453  4453 D BoundBrokerSvc: onRebind: Intent { act=com.google.android.gms.findmydevice.spot.locationreporting.LocationReportUploadGmsTaskService.ACTION_TASK_READY dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentInternalBoundBrokerService }
+08-16 18:05:57.052  4453 28469 I NetworkScheduler.Stats: (REDACTED) Task %s/%s finished executing. cause:%s result: %s elapsed_millis: %s uptime_millis: %s exec_start_elapsed_seconds: %s
+08-16 18:05:57.053  4453  4453 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.findmydevice.spot.locationreporting.LocationReportUploadGmsTaskService.ACTION_TASK_READY dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentInternalBoundBrokerService }
+08-16 18:05:57.085  4453 28469 I NetworkScheduler.Stats: (REDACTED) Task %s/%s finished executing. cause:%s result: %s elapsed_millis: %s uptime_millis: %s exec_start_elapsed_seconds: %s
+08-16 18:05:57.155  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:57.155  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:57.155  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:57.155  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:57.156  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:57.157  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:57.158  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:57.158  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:57.163  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:57.163  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:57.163  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:57.163  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:57.163  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:57.165  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:05:57.165  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:05:57.167  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.36972126 / time=1786896357078 / elapsed=75584442920926
+08-16 18:05:57.337  4453 28515 I NetworkScheduler.Stats: (REDACTED) Task %s/%s finished executing. cause:%s result: %s elapsed_millis: %s uptime_millis: %s exec_start_elapsed_seconds: %s
+08-16 18:05:57.860  4453 28629 I NetworkScheduler.Stats: (REDACTED) Task %s/%s finished executing. cause:%s result: %s elapsed_millis: %s uptime_millis: %s exec_start_elapsed_seconds: %s
+08-16 18:06:04.947  3001  7119 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:04.951  3001  3037 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:04.954  3001  7126 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:04.958  3001  7126 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:06:05.083 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:05.083 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:05.084 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:05.086 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:05.949  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:07.316  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:07.318  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:07.321  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:07.322  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:07.323  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:07.323  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:07.323  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:07.323  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:07.323  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:07.323  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:07.324  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:07.324  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:07.326  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.15996823 / time=1786896367277 / elapsed=75594641056759
+08-16 18:06:14.994  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:14.998  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:15.001  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:15.006  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:06:15.282 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:15.285 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:15.287 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:15.287 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:15.996  3001  7137 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:17.333  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:17.333  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:17.333  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:17.333  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:17.335  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:17.336  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:17.336  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:17.336  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:17.337  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:17.337  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:17.337  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:17.337  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:17.337  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:17.338  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:17.338  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:17.342  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.09774152 / time=1786896377250 / elapsed=75604614993842
+08-16 18:06:25.138  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:25.140  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:25.143  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:25.151  3001  5233 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:06:25.255 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:25.257 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:25.258 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:25.261 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:26.139  3001  3826 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:27.511  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:27.511  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:27.511  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:27.513  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:27.513  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:27.513  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:27.514  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:27.514  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:27.514  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:27.514  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:27.515  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:27.515  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:27.520  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.086703755 / time=1786896387448 / elapsed=75614812989758
+08-16 18:06:35.298  3001  7077 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:35.303  3001  7121 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:35.304  3001  7077 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:35.311  3001  7126 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 79 startTime of in progress event=1786896155211
+08-16 18:06:35.451 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:35.452 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:35.454 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:35.455 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 18:06:36.298  3001  7126 W AppOps  : Noting op not finished: uid 10231 pkg com.google.android.gms code 113 startTime of in progress event=1786896155211
+08-16 18:06:37.638  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:37.638  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:37.638  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:37.638  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:37.640  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:37.641  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:37.642  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:37.642  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:37.642  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:37.642  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:37.642  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:37.642  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:37.642  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:37.643  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 18:06:37.643  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 18:06:37.645  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0808095 / time=1786896397534 / elapsed=75624898869029

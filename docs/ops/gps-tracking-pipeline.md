@@ -148,6 +148,12 @@ availability_presence → disponibilité flotte (HTTP only, fenêtre 07h–19h, 
 mission_live          → suivi opérationnel (socket + HTTP, EN_ROUTE / ARRIVED / IN_PROGRESS / ASSIGNED ≤ T-30)
 ```
 
+### POSITION vs PRÉSENCE (figé)
+
+**Immobile ≠ stale.** En mission active, `stale` = âge du dernier fix reçu (`now - location.timestamp`), jamais « coords identiques ».  
+Deux axes : **POSITION** (lat/lon) et **PRÉSENCE GPS** (timestamp du dernier fix). Heartbeat ~20–30 s à l’arrêt autorisé / requis pour la fraîcheur.  
+Détail figé : [gps-presence-vs-position-model.md](gps-presence-vs-position-model.md).
+
 Statuts terminaux (`COMPLETED`, `CANCELLED`, `NO_SHOW`, `EXPIRED`) : `resolveMissionTrackingMode → null` → retour `availability_presence` si fenêtre flotte.
 
 ## Transport positions

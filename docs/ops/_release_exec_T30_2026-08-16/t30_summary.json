@@ -1,0 +1,29 @@
+{
+  "kind": "g5-t30-post-release",
+  "captured_at_utc": "2026-08-16T00:23:51Z",
+  "release_tip": "286737a2362eb1e38013c72d04be23fcd608210e",
+  "docker_tag": "sha-286737a2362e",
+  "verdict": "VERT",
+  "caveat": "Night window: LOC rates still ~0 (same as T-30 baseline). Real traffic / canary FG-BG still required for full T+30 LOC persistence proof.",
+  "topology": {
+    "api_celery_ws": "sha-286737a2362e Up healthy Restart=0",
+    "consumer_outbox": "sha-286737a2362e Up healthy Restart=0",
+    "fanout_dlq": "sha-286737a2362e Created ENABLED=false",
+    "fanout_up": 0
+  },
+  "prometheus_up": {
+    "atmr-backend": 1,
+    "atmr-ws-service": 1,
+    "atmr-tracking-kafka-consumer": 1,
+    "atmr-tracking-processed-fanout": 0
+  },
+  "rates_5m": {
+    "driver_location_received": null,
+    "driver_location_ingested": null,
+    "driver_location_processed": null,
+    "dedup_invalid_ledger": 0,
+    "dedup_unproven": 0,
+    "dedup_claim_in_flight": 0,
+    "device_health_received": 0
+  }
+}

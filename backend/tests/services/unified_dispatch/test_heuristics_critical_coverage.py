@@ -157,6 +157,8 @@ def test_helpers_baseline_counter_coords():
     ha = h.HeuristicAssignment(1, 2, 0.5, "regular", "bad", "bad")  # type: ignore[arg-type]
     dumped = ha.to_dict()
     assert dumped["booking_id"] == 1
+    assert h._check_driver_window_feasible((0, 480), 600) is True
+    assert h._check_driver_window_feasible((120, 480), 30) is False
 
 
 def test_can_be_pooled_fallback_adresse():

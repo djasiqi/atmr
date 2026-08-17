@@ -1,0 +1,9 @@
+﻿­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=1)
+LABEL T3_shade
+HEALTH_N 18
+H|2026-08-14 10:21:24.633147+02:00|background|fgs=True|nat=True|ph=startLocationUpdatesAsync|bef=False|aft=None|nfix=1|fix=2|cr=|err=|trig=health_monitor:fgs_not_running
+SUMMARY flips=6 nlo=0 failish=0
+FGS_TRUE_RATIO 15/18
+LOC_N 4
+LOC_LAST [(datetime.datetime(2026, 8, 14, 10, 22, 30, 457853, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),), (datetime.datetime(2026, 8, 14, 10, 21, 25, 370188, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),), (datetime.datetime(2026, 8, 14, 10, 21, 24, 104627, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),)]

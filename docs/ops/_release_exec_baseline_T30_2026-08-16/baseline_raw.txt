@@ -1,0 +1,90 @@
+﻿=== META ===
+atmr-prod-fsn1
+2026-08-15T23:17:24Z
+=== GIT_SHA env (production) ===
+DOCKER_TAG=***
+GIT_SHA=***
+SENTRY_RELEASE=***
+GIT_SHA=927640a0995a7025edfae3d31802998948a866d5
+SENTRY_RELEASE=927640a0995a7025edfae3d31802998948a866d5
+=== CONTAINERS ===
+NAMES                              STATUS                IMAGE
+atmr-flower                        Up 4 days (healthy)   djasiqi/atmr-backend:sha-927640a0995a
+atmr-celery-beat                   Up 4 days (healthy)   djasiqi/atmr-backend:sha-927640a0995a
+atmr-celery-worker                 Up 4 days (healthy)   djasiqi/atmr-backend:sha-927640a0995a
+atmr-ws-service                    Up 4 days (healthy)   djasiqi/atmr-ws-service:sha-927640a0995a
+atmr-autoheal                      Up 4 days (healthy)   willfarrell/autoheal:latest
+atmr-backend-1                     Up 4 days (healthy)   djasiqi/atmr-backend:sha-927640a0995a
+atmr-pgbouncer                     Up 4 days (healthy)   edoburu/pgbouncer:latest
+atmr-postgres                      Up 4 days (healthy)   postgis/postgis:15-3.5
+atmr-redis                         Up 4 days (healthy)   redis:7-alpine
+atmr-osrm                          Up 4 days             osrm/osrm-backend:latest
+atmr-tracking-processed-fanout-1   Created               djasiqi/atmr-backend:sha-16fd3e52418d
+atmr-tracking-processed-fanout-2   Created               djasiqi/atmr-backend:sha-16fd3e52418d
+atmr-kafka-dlq-consumer            Created               djasiqi/atmr-backend:sha-16fd3e52418d
+atmr-kafka-topics-init             Created               confluentinc/cp-kafka:7.6.0
+atmr-tracking-outbox-publisher-1   Up 4 days (healthy)   djasiqi/atmr-backend:sha-390076efc61c
+atmr-tracking-kafka-consumer-1     Up 4 days (healthy)   djasiqi/atmr-backend:sha-390076efc61c
+atmr-alertmanager                  Up 5 days (healthy)   atmr-alertmanager
+atmr-prometheus                    Up 5 days (healthy)   prom/prometheus:v2.48.0
+atmr-grafana                       Up 5 days (healthy)   grafana/grafana:10.2.0
+traefik                            Up 9 days             traefik:v3.1
+atmr-kafka-broker-2                Up 9 days (healthy)   confluentinc/cp-kafka:7.6.0
+atmr-kafka-broker-3                Up 9 days (healthy)   confluentinc/cp-kafka:7.6.0
+atmr-kafka-broker-1                Up 9 days (healthy)   confluentinc/cp-kafka:7.6.0
+atmr-zookeeper-3                   Up 9 days (healthy)   confluentinc/cp-zookeeper:7.5.0
+atmr-zookeeper                     Up 9 days (healthy)   confluentinc/cp-zookeeper:7.5.0
+atmr-zookeeper-2                   Up 9 days (healthy)   confluentinc/cp-zookeeper:7.5.0
+atmr-redis-failover                Up 9 days (healthy)   redis:7-alpine
+=== IMAGE DIGESTS (backend tags of interest) ===
+djasiqi/atmr-ws-service:sha-927640a0995a 7c2cb66e40b0 sha256:b7808fa5ad70c36fa1aad4b5a6c92d17f14699788109d50d511b8cd6d4217b68
+djasiqi/atmr-backend:sha-927640a0995a 9f4dc958e062 sha256:ef11af68bc76b49e7827a4d2a5fca05cfec931334840ef504eb58eb8a0f681bb
+djasiqi/atmr-ws-service:sha-16fd3e52418d 5c55998580d3 sha256:029030ffd1678a301eb442cfba524c7982e610dda89e2d595c9e92adc0cb8d8c
+djasiqi/atmr-backend:sha-16fd3e52418d f0919cd25a03 sha256:cbf141b424c6a451ad51fd34b1b6b154cb68b4504b6f7c8190fe73313537330e
+djasiqi/atmr-backend:sha-390076efc61c 780a166c04b9 sha256:fb919878b7297417c0ed89c01a9f4ffc61dd9dd4c75f394ab227c36c79f41acf
+=== FANOUT HOLD ENV ===
+-- atmr-tracking-processed-fanout-1
+created
+SENTRY_DSN=[REDACTED]
+SENTRY_TRACES_SAMPLE_RATE=0.1
+GIT_SHA=16fd3e52418dfe88039b82f35ccc5326ec4fa993
+SENTRY_RELEASE=16fd3e52418dfe88039b82f35ccc5326ec4fa993
+TRACKING_PROCESSED_FANOUT_ENABLED=false
+-- atmr-tracking-processed-fanout-2
+created
+SENTRY_TRACES_SAMPLE_RATE=0.1
+GIT_SHA=16fd3e52418dfe88039b82f35ccc5326ec4fa993
+SENTRY_RELEASE=16fd3e52418dfe88039b82f35ccc5326ec4fa993
+TRACKING_PROCESSED_FANOUT_ENABLED=false
+SENTRY_DSN=[REDACTED]
+-- atmr-kafka-dlq-consumer
+created
+TRACKING_PROCESSED_FANOUT_ENABLED=true
+GIT_SHA=16fd3e52418dfe88039b82f35ccc5326ec4fa993
+SENTRY_RELEASE=16fd3e52418dfe88039b82f35ccc5326ec4fa993
+SENTRY_TRACES_SAMPLE_RATE=0.1
+SENTRY_DSN=[REDACTED]
+=== PROMETHEUS UP (sample) ===
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up","component":"api","environment":"production","instance":"backend:5000","job":"atmr-backend","service":"atmr-backend"},"value":[1786835844.843,"1"]},{"metric":{"__name__":"up","component":"cache","environment":"production","instance":"redis-exporter:9121","job":"redis","service":"redis"},"value":[1786835844.843,"0"]},{"metric":{"__name__":"up","component":"containers","environment":"production","instance":"cadvisor:8080","job":"cadvisor","service":"cadvisor"},"value":[1786835844.843,"0"]},{"metric":{"__name__":"up","component":"database","environment":"production","instance":"postgres-exporter:9187","job":"postgres","service":"postgres"},"value":[1786835844.843,"0"]},{"metric":{"__name__":"up","component":"kafka-fanout","environment":"production","instance":"tracking-processed-fanout:9116","job":"atmr-tracking-processed-fanout","service":"tracking-processed-fanout"},"value":[1786835844.843,"0"]},{"metric":{"__name__":"up","component":"kafka-ingest","environment":"production","instance":"tracking-kafka-consumer:9115","job":"atmr-tracking-kafka-consumer","service":"tracking-kafka-consumer"},"value":[1786835844.843,"1"]},{"metric":{"__name__":"up","component":"monitoring","instance":"alertmanager:9093","job":"alertmanager","service":"alertmanager"},"value":[1786835844.843,"1"]},{"metric":{"__name__":"up","component":"monitoring","instance":"localhost:9090","job":"prometheus","service":"prometheus"},"value":[1786835844.843,"1"]},{"metric":{"__name__":"up","component":"realtime","environment":"production","instance":"ws-service:8001","job":"atmr-ws-service","service":"atmr-ws-service"},"value":[1786835844.843,"1"]},{"metric":{"__name__":"up","component":"system","environment":"production","instance":"node-exporter:9100","job":"node","service":"node"},"value":[1786835844.843,"0"]},{"metric":{"__name__":"up","environment":"production","instance":"http://backend:5000/api/v1/ready","job":"blackbox-api-ready","probe":"internal-ready"},"value":[1786835844.843,"0"]}]}}
+=== METRIC RATES SAMPLE ===
+QUERY sum(rate(driver_location_received_total[5m]))
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1786835845.066,"0"]}]}}
+QUERY sum(rate(driver_location_ingested_total[5m]))
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1786835845.229,"0"]}]}}
+QUERY sum(rate(driver_location_processed_total[5m]))
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1786835845.391,"0"]}]}}
+QUERY sum(rate(driver_location_dedup_skipped_total[5m]))
+{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1786835845.564,"0"]}]}}
+QUERY sum(rate(driver_device_health_received_total[5m]))
+{"status":"success","data":{"resultType":"vector","result":[]}}
+=== ALEMBIC (read-only) ===
+ssh : Error response from daemon: No such container: sh
+Au caractère C:\Users\jasiq\AppData\Local\Temp\ps-script-271b7e3e-e96e-42d2-abc7-7660656fbb45.ps1:153 : 11
++ $remote | ssh -o BatchMode=yes "${user}@${host_}" "cat > $remotePath  ...
++           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Error response ...h container: sh:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+alembic_skip
+=== DONE ===
+

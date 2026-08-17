@@ -23,19 +23,25 @@ Freeze amont : [gps-p0-global-freeze-2026-08-15.md](gps-p0-global-freeze-2026-08
 | Gate | Objet | Statut | Commentaire |
 |------|--------|--------|-------------|
 | **G0** | SHA P0 individuels | **✅** | Freeze cherry-pick |
-| **G0** | SHA release unique (TIP RC) | **⏳** | Base = `927640a0…` ; branche **NO-GO** |
+| **G0** | release composition (dry-run) | **❌ ROUGE** | Cherry-pick brut FAIL — [dry-run](gps-p0-cherry-pick-dry-run-2026-08-15.md) |
+| **G0** | backport autonome `927640a0` | **⏳ IN PROGRESS** | Branche `backport/gps-p0-927640a0` ; A+B verts — [statut](gps-p0-backport-927640a0-status-2026-08-15.md) |
+| **G0** | SHA release unique (TIP RC) | **❌ NO-GO** | Pas de TIP propre ; `release/gps-p0-*` **interdite** |
 | **G1** | inventaire + prod current | **✅** | `9b6638784019` ; `25ce766952e2` absente |
-| **G1** | migration dans release P0 | **✅ orienté** | Cherry-pick P0 **sans** `25ce766952e2` (confirmer dry-run) — [audit skew](gps-p0-deploy-skew-audit-2026-08-15.md) |
+| **G1** | migration dans release P0 | **❌ ROUGE** | Aucun path alembic, mais fuites `capture_id`/ingress via conflits — [dry-run](gps-p0-cherry-pick-dry-run-2026-08-15.md) |
 | **G2** | snapshot prod | **✅** | |
 | **G2** | image alignment | **✅ expliqué** | Dual pipeline + HOLD ; consumer reste `390076ef` — [audit](gps-p0-deploy-skew-audit-2026-08-15.md) |
-| **G3** | N/N-1 | **⏳** | Après branche release |
+| **G3** | N/N-1 | **⏳** | Bloqué tant que G0 ROUGE |
 | **G4** | rollback | **❌** | `previous-release.json` absent |
 | **G5** | baseline prod | **✅ partielle** | fanout up=0 attendu sous HOLD |
 
 ```text
 G0–G5 tous VERTS  = NON
+G0 composition    = ROUGE (dry-run 2026-08-15)
 PROD DEPLOY       = NO-GO ❌
 TAG RC            = NO-GO
+BRANCHE RELEASE   = NO-GO
+ALEMBIC           = NO-GO
+anti-skew plan    = DRAFT only (non figé)
 ```
 
 ---
@@ -398,4 +404,6 @@ tant que G0–G5 ne sont pas tous VERTS
 ## Implémentation
 
 ✅ **Implémenté** : OPTION B tranchée ; packs P0 commités (SHAs) ; dossier readiness + tentative snapshot (SSH bloqué) ; **PROD DEPLOY / ALEMBIC / PURGE = NO-GO**.  
-**Reste à faire** : snapshot prod live → branche `release/gps-p0-*` cherry-pick → G0–G5 VERT → GO deploy explicite.
+✅ **Implémenté** (2026-08-15) : dry-run cherry-pick sur `927640a0` — **FAIL** (3 conflits ; composite `--theirs` contaminé `capture_id`/ingress) — [gps-p0-cherry-pick-dry-run-2026-08-15.md](gps-p0-cherry-pick-dry-run-2026-08-15.md). Plan anti-skew en DRAFT seulement.
+
+**Reste à faire** : reconstruire un composite viable sur `927640a0` (packs/backport, pas cherry-pick brut des 5 SHAs) → re-dry-run VERT → seulement alors branche `release/gps-p0-*` + figer anti-skew → G0–G5 VERT → GO deploy explicite.

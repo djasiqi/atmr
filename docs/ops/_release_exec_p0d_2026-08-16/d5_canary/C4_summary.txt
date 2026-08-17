@@ -1,0 +1,92 @@
+# C4 summary — 2026-08-17
+
+```text
+BINARY     = 1.0.11 / versionCode 129 (EAS 456f60f0)
+INJECT     = lirie://canary/d5-c4-unknown-l1?started_age_sec=120
+DEVICE     = SM-S911B
+DRIVER     = 20135
+MISSION    = booking 38243
+WINDOW     = 03:02:12 -> 03:07:33 (+02)
+BACKEND    = OBSERVATION ONLY
+```
+
+## Smoking gun (logcat)
+
+```text
+03:03:48.835  [D5-C4] inject_unknown_start  mission_id=38243 anti_zombie_would_trigger=false
+03:03:48.835  [D5-C4] unknown_no_anti_zombie
+03:03:49.287  tracking.watch.restarted  reason=canary_c4_l1 recovery_level=L1
+03:03:49.288  [D5-C4] l1_restart_done  ok=true destructive=false
+03:03:58.828  TaskService Unregistering task 'background-location-task'   << FIRST DIVERGENCE
+03:03:59.831  TaskService Registered task 'background-location-task'
+03:05:51.692  TaskService Unregistering task 'background-location-task'
+03:05:52.524  TaskService Registered task 'background-location-task'
+```
+
+Notes:
+- Aucun `tracking.anti_zombie.triggered`
+- Aucun `lifecycle.stop.requested` / `stop.executed`
+- Aucun `recovery_level=L2`
+- Les 2 Unregister n'ont PAS de marqueur owner STOP ; corrélés à remount UI
+  (deep-link VIEW / navigation ScrollView+Dialog) + Register immédiat (~1 s)
+
+## Gate C4
+
+```text
+self-heal L1 observé (watch.restarted L1)     = OUI
+UNKNOWN → anti_zombie / destructive restart   = 0
+self_heal_restart via stopBackground          = 0 (pas de stop.executed)
+Unregister background-location-task           = 2  ← FAIL gate
+Register↔Unregister storm (~300 ms rafale)    = 0 (paire Unreg→Reg espacée ~1 s)
+Finished                                      = 12 continue
+PUT                                           = continue (48–84 /60s POST)
+FGS                                           = isFg=true startReq=true (fgCount 1→3)
+```
+
+## FIRST divergence (figée)
+
+```text
+T0 = 03:03:49.288  l1_restart_done ok
+T1 = 03:03:58.828  Unregister background-location-task (~9.5 s après L1)
+     sans lifecycle.stop.* / sans anti_zombie
+→ gate "unexpected Unregister = 0" cassée
+```
+
+## Verdict
+
+```text
+C4 = FAIL
+
+SELF-HEAL L1 DIRECT DESTRUCTIVE STOP = EXCLUDED ✅
+  (stop_requested=0 / lifecycle.stop.*=0 / L2=0)
+
+C4 FAILURE = UNREGISTER POST-L1 PAR UN AUTRE CHEMIN ★
+CALLER     = OPEN ★
+  → voir C4_UNREG_ATTRIBUTION.md
+  corrélation forte : REQUEST_PERMISSIONS (L1 requestForegroundPermissionsAsync)
+                      + transient_loss.pending (non confirmé) + AppState churn
+
+RE-RUN C4  = NO-GO (attendre NATIVE_STOP_ENTRY discriminant)
+DISTRIBUTION = NO-GO
+```
+
+## Artefacts
+
+- timeline_C4.txt / samples_C4.csv
+- logcat_C4_continuous.txt
+- d5-canary-129.apk
+- run_d5_c4.ps1 / canaryD5UnknownSelfHeal.ts
+
+## Next (protocole)
+
+```text
+C1 = PASS
+C2 = PASS
+C3 = PASS
+C4 = FAIL → STOP
+     pas de déclaration D5 PATCH CANARY = VALIDATED
+DISTRIBUTION = NO-GO
+```
+
+Investiguer la cause des Unregister post-L1 / remount deep-link
+avant re-run C4 (ne pas ship).

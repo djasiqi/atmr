@@ -1,0 +1,120 @@
+﻿--------- beginning of main
+08-16 12:41:21.673 29405 29472 I ReactNativeJS: Running "main"
+08-16 12:41:21.772 29405 29472 I ReactNativeJS: '[driver-telemetry] tracking.background.task.registration_status', { source: 'driver.services.backgroundLocationTask',
+08-16 12:41:21.772 29405 29472 I ReactNativeJS:   task_name: 'background-location-task',
+08-16 12:41:21.772 29405 29472 I ReactNativeJS:   task_defined: true,
+08-16 12:41:21.772 29405 29472 I ReactNativeJS:   task_started: false,
+08-16 12:41:21.772 29405 29472 I ReactNativeJS:   runtime: 'dev_client_or_standalone',
+08-16 12:41:21.772 29405 29472 I ReactNativeJS:   bg_flag_enabled: true }
+08-16 12:41:21.877 29405 29472 I ReactNativeJS: '[BootSplash] state', '{"status":"idle","introState":"loading","animFinished":false,"showLottieLayer":false,"showOverlay":true,"overlayMounted":true,"elapsedMs":15}'
+08-16 12:41:21.882 29405 29472 I ReactNativeJS: '[BootSplash] status transition', 'idle', '->', 'bootstrapping'
+08-16 12:41:21.882 29405 29472 I ReactNativeJS: '[BootSplash] state', '{"status":"bootstrapping","introState":"loading","animFinished":false,"showLottieLayer":false,"showOverlay":true,"overlayMounted":true,"elapsedMs":20}'
+08-16 12:41:21.883 29405 29472 I ReactNativeJS: '[BootSplash] state', '{"status":"bootstrapping","introState":"skip","animFinished":false,"showLottieLayer":false,"showOverlay":false,"overlayMounted":true,"elapsedMs":21}'
+08-16 12:41:21.961 29405 29472 I ReactNativeJS: '[FCM-GATE] DriverNotificationsBridge state', { enabled: false,
+08-16 12:41:21.961 29405 29472 I ReactNativeJS:   driverId: 20135,
+08-16 12:41:21.961 29405 29472 I ReactNativeJS:   pushEnabled: true,
+08-16 12:41:21.961 29405 29472 I ReactNativeJS:   fcmEnabled: true,
+08-16 12:41:21.961 29405 29472 I ReactNativeJS:   status: 'bootstrapping',
+08-16 12:41:21.961 29405 29472 I ReactNativeJS:   contextType: 'driver' }
+08-16 12:41:22.397 29405 29472 I ReactNativeJS: '[BootSplash] overlay hidden after', 534, 'ms'
+08-16 12:41:22.402 29405 29472 I ReactNativeJS: '[BootSplash] state', '{"status":"bootstrapping","introState":"skip","animFinished":false,"showLottieLayer":false,"showOverlay":false,"overlayMounted":false,"elapsedMs":539}'
+08-16 12:41:22.564 29405 29472 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+08-16 12:41:22.844 29405 29472 I ReactNativeJS: '[FCM-GATE] register effect start', { source: 'driver.notifications.bridge',
+08-16 12:41:22.844 29405 29472 I ReactNativeJS:   stage: 'session_ready',
+08-16 12:41:22.844 29405 29472 I ReactNativeJS:   enabled: true,
+08-16 12:41:22.844 29405 29472 I ReactNativeJS:   fcmEnabled: true }
+08-16 12:41:22.844 29405 29472 I ReactNativeJS: '[FCM-GATE] DriverNotificationsBridge state', { enabled: true,
+08-16 12:41:22.844 29405 29472 I ReactNativeJS:   driverId: 20135,
+08-16 12:41:22.844 29405 29472 I ReactNativeJS:   pushEnabled: true,
+08-16 12:41:22.844 29405 29472 I ReactNativeJS:   fcmEnabled: true,
+08-16 12:41:22.844 29405 29472 I ReactNativeJS:   status: 'ready',
+08-16 12:41:22.844 29405 29472 I ReactNativeJS:   contextType: 'driver' }
+08-16 12:41:22.848 29405 29472 I ReactNativeJS: '[BootSplash] status transition', 'bootstrapping', '->', 'ready'
+08-16 12:41:22.849 29405 29472 I ReactNativeJS: '[BootSplash] state', '{"status":"ready","introState":"skip","animFinished":false,"showLottieLayer":false,"showOverlay":false,"overlayMounted":false,"elapsedMs":986}'
+08-16 12:41:22.854 29405 29472 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+08-16 12:41:23.210 29405 29472 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-16 12:41:23.210 29405 29472 I ReactNativeJS:   stage: 'session_ready' }
+08-16 12:41:23.210 29405 29472 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-16 12:41:23.303 29405 29472 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-16 12:41:23.303 29405 29472 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-16 12:41:23.303 29405 29472 I ReactNativeJS:   stage: 'session_ready',
+08-16 12:41:23.303 29405 29472 I ReactNativeJS:   tokenLength: 142 }
+08-16 12:41:23.303 29405 29472 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-16 12:41:23.303 29405 29472 I ReactNativeJS:   stage: 'session_ready',
+08-16 12:41:23.303 29405 29472 I ReactNativeJS:   provider: 'fcm' }
+08-16 12:41:23.513 29405 29472 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+08-16 12:41:23.566 29405 29472 I ReactNativeJS: '[FCM-GATE] register effect start', { source: 'driver.notifications.bridge',
+08-16 12:41:23.566 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:23.566 29405 29472 I ReactNativeJS:   enabled: true,
+08-16 12:41:23.566 29405 29472 I ReactNativeJS:   fcmEnabled: true }
+08-16 12:41:23.647 29405 29472 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-16 12:41:23.647 29405 29472 I ReactNativeJS:   stage: 'app_foreground' }
+08-16 12:41:23.647 29405 29472 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-16 12:41:23.804 29405 29472 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+08-16 12:41:23.806 29405 29472 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-16 12:41:23.806 29405 29472 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-16 12:41:23.806 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:23.806 29405 29472 I ReactNativeJS:   tokenLength: 142 }
+08-16 12:41:23.807 29405 29472 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-16 12:41:23.807 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:23.807 29405 29472 I ReactNativeJS:   provider: 'fcm' }
+08-16 12:41:23.912 29405 29472 I ReactNativeJS: '[FCM-GATE] register effect start', { source: 'driver.notifications.bridge',
+08-16 12:41:23.912 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:23.912 29405 29472 I ReactNativeJS:   enabled: true,
+08-16 12:41:23.912 29405 29472 I ReactNativeJS:   fcmEnabled: true }
+08-16 12:41:23.948 29405 29472 W ReactNativeJS: MapViewDirections Error: Error on GMAPS route request: This IP, site or mobile application is not authorized to use this API key. Request received from IP address 194.230.196.30, with empty referer
+08-16 12:41:23.981 29405 29472 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-16 12:41:23.981 29405 29472 I ReactNativeJS:   stage: 'app_foreground' }
+08-16 12:41:23.981 29405 29472 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-16 12:41:24.017 29405 29472 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-16 12:41:24.017 29405 29472 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-16 12:41:24.017 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:24.017 29405 29472 I ReactNativeJS:   tokenLength: 142 }
+08-16 12:41:24.017 29405 29472 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-16 12:41:24.017 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:24.017 29405 29472 I ReactNativeJS:   provider: 'fcm' }
+08-16 12:41:24.085 29405 29472 I ReactNativeJS: '[FCM-GATE] register effect start', { source: 'driver.notifications.bridge',
+08-16 12:41:24.085 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:24.085 29405 29472 I ReactNativeJS:   enabled: true,
+08-16 12:41:24.085 29405 29472 I ReactNativeJS:   fcmEnabled: true }
+08-16 12:41:24.159 29405 29472 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-16 12:41:24.159 29405 29472 I ReactNativeJS:   stage: 'app_foreground' }
+08-16 12:41:24.159 29405 29472 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-16 12:41:24.178 29405 29472 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-16 12:41:24.178 29405 29472 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-16 12:41:24.178 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:24.178 29405 29472 I ReactNativeJS:   tokenLength: 142 }
+08-16 12:41:24.179 29405 29472 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-16 12:41:24.179 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:24.179 29405 29472 I ReactNativeJS:   provider: 'fcm' }
+08-16 12:41:24.348 29405 29472 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+08-16 12:41:32.223 29405 29472 I ReactNativeJS: '[FCM-GATE] register effect start', { source: 'driver.notifications.bridge',
+08-16 12:41:32.223 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:32.223 29405 29472 I ReactNativeJS:   enabled: true,
+08-16 12:41:32.223 29405 29472 I ReactNativeJS:   fcmEnabled: true }
+08-16 12:41:32.277 29405 29472 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-16 12:41:32.277 29405 29472 I ReactNativeJS:   stage: 'app_foreground' }
+08-16 12:41:32.277 29405 29472 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-16 12:41:32.280 29405 29472 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-16 12:41:32.280 29405 29472 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-16 12:41:32.280 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:32.280 29405 29472 I ReactNativeJS:   tokenLength: 142 }
+08-16 12:41:32.281 29405 29472 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-16 12:41:32.281 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:32.281 29405 29472 I ReactNativeJS:   provider: 'fcm' }
+08-16 12:41:32.492 29405 29472 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+08-16 12:41:40.339 29405 29472 I ReactNativeJS: '[FCM-GATE] register effect start', { source: 'driver.notifications.bridge',
+08-16 12:41:40.339 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:40.339 29405 29472 I ReactNativeJS:   enabled: true,
+08-16 12:41:40.339 29405 29472 I ReactNativeJS:   fcmEnabled: true }
+08-16 12:41:40.407 29405 29472 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-16 12:41:40.407 29405 29472 I ReactNativeJS:   stage: 'app_foreground' }
+08-16 12:41:40.407 29405 29472 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-16 12:41:40.410 29405 29472 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-16 12:41:40.410 29405 29472 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-16 12:41:40.410 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:40.410 29405 29472 I ReactNativeJS:   tokenLength: 142 }
+08-16 12:41:40.411 29405 29472 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-16 12:41:40.411 29405 29472 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:41:40.411 29405 29472 I ReactNativeJS:   provider: 'fcm' }
+08-16 12:41:40.588 29405 29472 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.

@@ -1,0 +1,400 @@
+﻿08-16 19:18:14.854 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=51ms). msg={ when=-53ms what=0 obj=MessageData(executionLock=java.lang.Object@f5e0e5, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:14.876 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=21ms). msg={ when=-70ms what=0 obj=MessageData(executionLock=java.lang.Object@954b7ba, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:14.887 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=9ms). msg={ when=-52ms what=0 obj=MessageData(executionLock=java.lang.Object@ce9166b, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:14.898  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:14.906 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=18ms). msg={ when=-52ms what=0 obj=MessageData(executionLock=java.lang.Object@5d555c8, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:15.673  3001  4041 D BiometricStateCallback: Client finished, state updated to 0, client {[580] com.android.server.biometrics.sensors.fingerprint.aidl.SemFingerprintAuthenticationClient, proto=3, owner=com.android.systemui, cookie=0, requestId=117, userId=0}
+08-16 19:18:15.673  3001  4041 D BiometricSchedulerOperation: [Finished / destroy]: {[580] com.android.server.biometrics.sensors.fingerprint.aidl.SemFingerprintAuthenticationClient, proto=3, owner=com.android.systemui, cookie=0, requestId=117, userId=0}
+08-16 19:18:15.698  3001  4042 D BiometricSchedulerOperation: [Finished / destroy]: {[581] com.android.server.biometrics.sensors.face.aidl.FaceAuthenticationClient, proto=3, owner=com.android.systemui, cookie=0, requestId=135, userId=0}
+08-16 19:18:15.700  4933  4933 D KeyguardViewMediator: OnHideAnimationFinished.run(0)
+08-16 19:18:15.701  3001  4042 I FaceAuthenticationClient: mSemCancelDaemonCallback.onClientFinished
+08-16 19:18:15.703  3001  4042 D BiometricSchedulerOperation: [Finished / destroy]: {[583] com.android.server.biometrics.sensors.face.aidl.FaceResetLockoutClient, proto=12, owner=android, cookie=0, requestId=-1, userId=0}
+08-16 19:18:15.714  3001  7119 D BLASTSyncEngine: SyncGroup 3838:  Unfinished container: ActivityRecord{60177111 u0 ch.liri.operations/.MainActivity t1332} mSyncState=2
+08-16 19:18:15.715  3001  3354 D BLASTSyncEngine: SyncGroup 3838:  Unfinished container: ActivityRecord{60177111 u0 ch.liri.operations/.MainActivity t1332} mSyncState=2
+08-16 19:18:15.724  3001  4185 D BLASTSyncEngine: SyncGroup 3838:  Unfinished container: ActivityRecord{60177111 u0 ch.liri.operations/.MainActivity t1332} mSyncState=2
+08-16 19:18:15.727  3001  3354 V WindowManager: SyncGroup 3838: Finished!
+08-16 19:18:15.730  4933  4933 I KeyguardTransitionRepository: FINISHED transition: TransitionStep(from=LOCKSCREEN, to=GONE, value=1.0, transitionState=FINISHED, ownerName=FromLockscreenTransitionInteractor(keyguard interactor says keyguard is going away))
+08-16 19:18:15.751  4933  4977 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#3838) android.os.BinderProxy@d6662e1@0
+08-16 19:18:15.751  4933  4977 I SurfaceControlRegistry: apply, t=FinishTransaction_SyncId<3838>, caller=android.view.SurfaceControl$Transaction.apply:3581 android.view.SurfaceControl$Transaction.apply:3569 android.view.SurfaceControl$Transaction.apply:3519 com.android.wm.shell.transition.Transitions.onFinish:381 com.android.wm.shell.transition.Transitions$$ExternalSyntheticLambda8.onTransitionFinished:12 com.android.wm.shell.keyguard.KeyguardTransitionHandler$1$$ExternalSyntheticLambda0.run:16 
+08-16 19:18:15.754  3001  5075 D ChangeTransitionController: onTransitionFinished: TransitionRecord{d11e011 id=3838 type=TO_BACK flags=0x104 parallelCollectType=NONE recentsDisplayId=-1 c=[
+08-16 19:18:15.754  4933  4977 V WindowManagerShell: All active transition animations finished
+08-16 19:18:15.755  3001  3350 V WindowManager: Finish Transition (#3838): created at 08-16 19:18:15.706 collect-started=0.146ms request-sent=0.238ms started=7.567ms ready=7.559ms sent=24.499ms commit=14.894ms finished=47.613ms
+08-16 19:18:15.783  1042  1128 D DrmLibTime: time_getutcsec finished! 
+08-16 19:18:15.783  1042  1128 D DrmLibTime: iotcl_continue_command finished! and return 0 
+08-16 19:18:15.803  4933  4933 D LockscreenShadeTransitionController: onStateChanged SHADE and notify onExpansionFinished
+08-16 19:18:15.803  4933  4933 D LockScreenNotiIconCoordinator: onExpansionFinished
+08-16 19:18:15.812  4933  4933 D KeyguardViewMediator: onKeyguardExitFinished()
+08-16 19:18:15.813  4933  5084 D KeyguardViewMediator: updateActivityLockScreenState(false, false, onKeyguardExitFinished: remote animation disabled)
+08-16 19:18:15.842 13893 13893 D VRI[MainActivity]@51386f3: reportDrawFinished seqId=0
+08-16 19:18:15.869  3001  7120 V WindowManager: Schedule remove starting ActivityRecord{60177111 u0 ch.liri.operations/.MainActivity t1332} startingWindow=Window{4fe0d4e u0 SnapshotStartingWindow for taskId=1332} animate=false Callers=com.android.server.wm.ActivityRecord.removeStartingWindow:178 com.android.server.wm.ActivityRecord.onCopySplashScreenFinish:56 com.android.server.wm.ActivityTaskManagerService.onSplashScreenViewCopyFinished:41 android.app.IActivityTaskManager$Stub.onTransact:3414 com.android.server.wm.ActivityTaskManagerService.onTransact:1 
+08-16 19:18:15.875 13893 13893 D VRI[MainActivity]@51386f3: reportDrawFinished seqId=0
+08-16 19:18:16.001  3001  3354 E WindowManager: win=Window{4fe0d4e u0 SnapshotStartingWindow for taskId=1332 EXITING} destroySurfaces: appStopped=false cleanupOnResume=false win.mWindowRemovalAllowed=true win.mRemoveOnExit=true win.mViewVisibility=0 caller=com.android.server.wm.WindowState.onExitAnimationDone:224 com.android.server.wm.WindowState.onAnimationFinished:174 com.android.server.wm.WindowContainer$$ExternalSyntheticLambda8.onAnimationFinished:3 com.android.server.wm.SurfaceAnimator$$ExternalSyntheticLambda0.onAnimationFinished:69 com.android.server.wm.LocalAnimationAdapter$$ExternalSyntheticLambda0.run:10 android.os.Handler.handleCallback:1070 android.os.Handler.dispatchMessage:125 
+08-16 19:18:16.057  4933  4933 D KeyguardUnlock: notifyFinishedKeyguardExitAnimation
+08-16 19:18:16.313  1042  1128 D DrmLibTime: time_getutcsec finished! 
+08-16 19:18:16.313  1042  1128 D DrmLibTime: iotcl_continue_command finished! and return 0 
+08-16 19:18:16.324  3001  4042 D BiometricSchedulerOperation: [Finished / destroy]: {[584] com.android.server.biometrics.sensors.face.aidl.SemFaceSessionCloseClient, proto=0, owner=android, cookie=0, requestId=-1, userId=0}
+08-16 19:18:16.407  1042  1128 D DrmLibTime: time_getutcsec finished! 
+08-16 19:18:16.407  1042  1128 D DrmLibTime: iotcl_continue_command finished! and return 0 
+08-16 19:18:16.468  1042  1202 D OPS_SERVICE: ioctl_continue_command finished! and return 0 
+08-16 19:18:16.469  1042  1202 D OPS_SERVICE: ioctl_continue_command finished! and return 0 
+08-16 19:18:16.551  1042  1128 D DrmLibTime: time_getutcsec finished! 
+08-16 19:18:16.551  1042  1128 D DrmLibTime: iotcl_continue_command finished! and return 0 
+08-16 19:18:16.617  1042  1128 D DrmLibTime: time_getutcsec finished! 
+08-16 19:18:16.617  1042  1128 D DrmLibTime: iotcl_continue_command finished! and return 0 
+08-16 19:18:16.676  1042  1202 D OPS_SERVICE: ioctl_continue_command finished! and return 0 
+08-16 19:18:16.676  1042  1202 D OPS_SERVICE: ioctl_continue_command finished! and return 0 
+08-16 19:18:16.854  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:16.854  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:16.918  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:16.931  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:16.956 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=8ms). msg={ when=-7ms what=0 obj=MessageData(executionLock=java.lang.Object@5cf1f3f, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:16.967 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=11ms). msg={ when=-17ms what=0 obj=MessageData(executionLock=java.lang.Object@e6fb00c, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:17.032 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=15ms). msg={ when=-15ms what=0 obj=MessageData(executionLock=java.lang.Object@dba8fd3, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:17.044 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=12ms). msg={ when=-12ms what=0 obj=MessageData(executionLock=java.lang.Object@73b710, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:17.066  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.066  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.067  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.067  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.067  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.067  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.067  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.069  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.069  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.070  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.070  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.071  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:17.079  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786900697062 / elapsed=79924426092706
+08-16 19:18:17.086  4453  4463 E ActivityThread: scheduleRegisteredReceiver() called for android.app.PendingIntent$FinishedDispatcher@1c5ab43 and Intent { act=com.google.android.gms.geotimezone.GEOFENCE_FIRED flg=0x10 xflg=0x4 pkg=com.google.android.gms (has extras) } from com.google.android.gms (UID: 10231) without mechanism to propagate the sender's identity
+08-16 19:18:17.086  4453  4463 I Geofencer: (REDACTED) Batched PI for %s finished with code %d
+08-16 19:18:17.134  3001  3975 I serviceDiscovery: [MdnsAdvertiser.wlan0] Probing finished for service 91
+08-16 19:18:17.168  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 19:18:17.168  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 19:18:17.168  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 19:18:17.168  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 19:18:17.168  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 19:18:17.173  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished:3
+08-16 19:18:17.175  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 19:18:17.175  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 19:18:17.175  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 19:18:17.175  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 19:18:17.175  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 19:18:17.189  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:17.189  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:17.215  4933  4933 D VRI[NotificationShade]@989aeef: reportDrawFinished seqId=33
+08-16 19:18:17.226  4933  4933 D VRI[NotificationShade]@989aeef: reportDrawFinished seqId=33
+08-16 19:18:17.500  1042  1128 D DrmLibTime: time_getutcsec finished! 
+08-16 19:18:17.500  1042  1128 D DrmLibTime: iotcl_continue_command finished! and return 0 
+08-16 19:18:17.703  3001 23407 D LsLogger: Save Finished!
+08-16 19:18:19.063  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.063  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.063  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.063  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.064  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.064  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.064  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.064  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.065  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.065  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.065  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.065  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.065  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.065  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.065  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.067  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.067  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.067  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786900697616 / elapsed=79924980000000
+08-16 19:18:19.215  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:19.216  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.runAnimationFinishedRunnables:19
+08-16 19:18:19.216  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.onChildAnimationFinished:10
+08-16 19:18:19.216  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.StackStateAnimator.onAnimationFinished:3
+08-16 19:18:19.217  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.runAnimationFinishedRunnables:19
+08-16 19:18:19.217  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.onChildAnimationFinished:10
+08-16 19:18:19.217  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.StackStateAnimator.onAnimationFinished:3
+08-16 19:18:19.219  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:19.248  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:19.249  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:19.272  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:19.277  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:19.304 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=10ms). msg={ when=-11ms what=0 obj=MessageData(executionLock=java.lang.Object@462dc27, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:19.312 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=7ms). msg={ when=-12ms what=0 obj=MessageData(executionLock=java.lang.Object@a55ced4, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:19.381 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=12ms). msg={ when=-11ms what=0 obj=MessageData(executionLock=java.lang.Object@da5383b, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:19.418 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=32ms). msg={ when=-32ms what=0 obj=MessageData(executionLock=java.lang.Object@f1d1b58, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:19.500  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.500  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.500  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.500  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.500  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.500  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.500  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.500  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:19.503  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786900699498 / elapsed=79926862796403
+08-16 19:18:19.515  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 19:18:19.515  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 19:18:19.515  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 19:18:19.515  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 19:18:19.515  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 19:18:19.518  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished:3
+08-16 19:18:19.520  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 19:18:19.520  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 19:18:19.520  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 19:18:19.520  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 19:18:19.520  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 19:18:19.540  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:19.540  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:19.555  4933  4933 D VRI[NotificationShade]@989aeef: reportDrawFinished seqId=33
+08-16 19:18:19.559  4933 22846 I AODAddLogTextTask: addLogText finished , for 1 ms
+08-16 19:18:21.602  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:21.602  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.runAnimationFinishedRunnables:19
+08-16 19:18:21.602  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.onChildAnimationFinished:10
+08-16 19:18:21.602  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.StackStateAnimator.onAnimationFinished:3
+08-16 19:18:21.603  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.runAnimationFinishedRunnables:19
+08-16 19:18:21.603  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.onChildAnimationFinished:10
+08-16 19:18:21.603  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.StackStateAnimator.onAnimationFinished:3
+08-16 19:18:21.604  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:21.610  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:21.610  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:21.686  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:21.686  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:21.714 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=12ms). msg={ when=-12ms what=0 obj=MessageData(executionLock=java.lang.Object@c98980f, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:21.721 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=6ms). msg={ when=-13ms what=0 obj=MessageData(executionLock=java.lang.Object@5e7809c, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:21.795 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=7ms). msg={ when=-7ms what=0 obj=MessageData(executionLock=java.lang.Object@261afa3, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:21.809 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=14ms). msg={ when=-20ms what=0 obj=MessageData(executionLock=java.lang.Object@22da2a0, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:21.857  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:21.858  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:21.860  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:21.861  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:21.861  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:21.862  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:21.862  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:21.862  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:21.862  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:21.863  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:21.863  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:21.863  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786900701856 / elapsed=79929220716298
+08-16 19:18:21.934  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 19:18:21.934  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 19:18:21.934  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 19:18:21.934  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 19:18:21.934  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 19:18:21.938  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished:3
+08-16 19:18:21.941  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 19:18:21.941  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 19:18:21.941  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 19:18:21.941  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 19:18:21.941  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 19:18:21.955  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:21.956  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:21.970  4933  4933 D VRI[NotificationShade]@989aeef: reportDrawFinished seqId=33
+08-16 19:18:22.136  4933  4933 D QSScrimViewSwitch: 0 => 8: sb: SHADE | cks: GONE | ts: FINISHED | sps: SCREEN_ON | lsse: 0.0 | lse: 0.33483484 | qe: 0.0 | sba: 0.0
+08-16 19:18:24.169  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:24.170  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:24.171  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:24.235  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:24.245  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:24.267 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=17ms). msg={ when=-17ms what=0 obj=MessageData(executionLock=java.lang.Object@4c6f2f7, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:24.277 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=9ms). msg={ when=-27ms what=0 obj=MessageData(executionLock=java.lang.Object@8c6e564, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:24.354 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=14ms). msg={ when=-14ms what=0 obj=MessageData(executionLock=java.lang.Object@84960b, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:24.362 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=6ms). msg={ when=-15ms what=0 obj=MessageData(executionLock=java.lang.Object@5ad6ce8, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:24.457  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.457  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.457  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.458  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.458  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.458  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.458  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.459  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.461  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.461  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.461  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.463  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.463  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:24.465  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786900704450 / elapsed=79931814156922
+08-16 19:18:24.488  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:24.488  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:25.337  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:25.338  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:25.361  3001  3859 D VibrationThread: Vibration 1118 finished with EndInfo{status=FINISHED, endedBy=null}
+08-16 19:18:25.362  3001  3859 D VibratorManagerService: Vibration for uid=10040 and with attrs=VibrationAttributes{mUsage=TOUCH, mAudioUsage= USAGE_UNKNOWN, mFlags=0, tags=} ended with status FINISHED
+08-16 19:18:26.572  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:26.572  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:26.573  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:26.628  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:26.633  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:26.636  1042  1202 D OPS_SERVICE: ioctl_continue_command finished! and return 0 
+08-16 19:18:26.637  1042  1202 D OPS_SERVICE: ioctl_continue_command finished! and return 0 
+08-16 19:18:26.651 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=6ms). msg={ when=-7ms what=0 obj=MessageData(executionLock=java.lang.Object@b608cdf, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:26.657 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=5ms). msg={ when=-11ms what=0 obj=MessageData(executionLock=java.lang.Object@6821d2c, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:26.738 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=9ms). msg={ when=-9ms what=0 obj=MessageData(executionLock=java.lang.Object@9fe8b73, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:26.747 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=8ms). msg={ when=-17ms what=0 obj=MessageData(executionLock=java.lang.Object@dd09a30, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:26.780  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.780  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.780  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.783  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.783  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.783  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.783  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.784  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.786  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.786  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.786  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.786  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.786  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.787  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.787  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:26.788  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786900706777 / elapsed=79934141688119
+08-16 19:18:26.883  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:26.883  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:27.341  4933  4933 D QSScrimViewSwitch: 8 => 0: sb: SHADE | cks: GONE | ts: FINISHED | sps: SCREEN_ON | lsse: 0.0 | lse: 0.0 | qe: 0.0 | sba: 0.0
+08-16 19:18:28.289  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.289  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.289  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.290  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.290  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.290  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.290  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.290  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.290  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.290  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.290  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.290  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.291  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.291  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.291  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.291  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.291  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:28.292  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786900707064 / elapsed=79934428000000
+08-16 19:18:28.324  4933  4933 D VRI[Arr├¬ter de caster┬á?]@3b300ae: reportDrawFinished seqId=0
+08-16 19:18:28.944  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:28.945  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:28.970 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=5ms). msg={ when=-4ms what=0 obj=MessageData(executionLock=java.lang.Object@d7405c7, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:28.982 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=12ms). msg={ when=-12ms what=0 obj=MessageData(executionLock=java.lang.Object@31347f4, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:29.065 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=6ms). msg={ when=-8ms what=0 obj=MessageData(executionLock=java.lang.Object@c9c2fdb, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:29.072 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=7ms). msg={ when=-14ms what=0 obj=MessageData(executionLock=java.lang.Object@3774a78, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:29.129  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.129  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.130  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.130  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.130  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.131  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:29.132  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786900709127 / elapsed=79936491276451
+08-16 19:18:29.195  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 19:18:29.195  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 19:18:29.195  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 19:18:29.195  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 19:18:29.195  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 19:18:29.199  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished:3
+08-16 19:18:29.201  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 19:18:29.201  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 19:18:29.201  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 19:18:29.201  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 19:18:29.201  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 19:18:29.216  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:29.216  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:29.234  4933  4933 D VRI[NotificationShade]@989aeef: reportDrawFinished seqId=33
+08-16 19:18:29.243  4933  4933 D VRI[NotificationShade]@989aeef: reportDrawFinished seqId=33
+08-16 19:18:31.261  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:31.262  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.runAnimationFinishedRunnables:19
+08-16 19:18:31.262  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.onChildAnimationFinished:10
+08-16 19:18:31.262  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.StackStateAnimator.onAnimationFinished:3
+08-16 19:18:31.262  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.runAnimationFinishedRunnables:19
+08-16 19:18:31.262  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.onChildAnimationFinished:10
+08-16 19:18:31.262  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.StackStateAnimator.onAnimationFinished:3
+08-16 19:18:31.263  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:31.270  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:31.271  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:31.345  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:31.350  5727  5830 I NewStopController_FLP: Already finished to monitor
+08-16 19:18:31.380 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=10ms). msg={ when=-10ms what=0 obj=MessageData(executionLock=java.lang.Object@d2bfdaf, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:31.386 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=6ms). msg={ when=-12ms what=0 obj=MessageData(executionLock=java.lang.Object@76085bc, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:31.467 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=14ms). msg={ when=-16ms what=0 obj=MessageData(executionLock=java.lang.Object@862343, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:31.483 17251 17368 I Routine@Core[5.0.03.22]: COORD/CoordinatorRequestHandler: messageHandler.handleMessage: finished (totalElapsed=15ms). msg={ when=-23ms what=0 obj=MessageData(executionLock=java.lang.Object@ad9dc0, operation=CONDITION_STATE_CHANGED, extras=Bundle[{package_name=com.samsung.android.app.routines, tag=specific_time_v3}], isCompleted=true) target=ck.p async=false heapIndex=-1 }
+08-16 19:18:31.500  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.501  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.502  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.502  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.502  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.502  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.502  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.502  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.502  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:31.503  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786900711498 / elapsed=79938862463117
+08-16 19:18:31.595  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 19:18:31.595  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 19:18:31.595  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 19:18:31.595  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 19:18:31.595  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 19:18:31.599  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished:3
+08-16 19:18:31.600  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.collection.coordinator.HeadsUpCoordinator$bindForAsyncHeadsUp$2.onHeadsUpBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:3)
+08-16 19:18:31.600  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.interruption.HeadsUpViewBinder$$ExternalSyntheticLambda0.onBindFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:49)
+08-16 19:18:31.600  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.RowContentBindStage$1.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:110)
+08-16 19:18:31.600  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl$AsyncInflationTask.onAsyncInflationFinished(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:407)
+08-16 19:18:31.600  4933  4933 W Resources: 	at com.android.systemui.statusbar.notification.row.NotificationRowContentBinder$InflationCallback.onAsyncInflationFinished$1(qb/111793157 0edda2d3e2dfbf48c55a975bd3d9c33935787dd743200b1e18e44fc9474e07e7:1)
+08-16 19:18:31.615  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:31.616  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:31.632  4933  4933 D VRI[NotificationShade]@989aeef: reportDrawFinished seqId=33
+08-16 19:18:31.642  4933  4933 D VRI[NotificationShade]@989aeef: reportDrawFinished seqId=33
+08-16 19:18:34.564  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:34.565  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.runAnimationFinishedRunnables:19
+08-16 19:18:34.565  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.onChildAnimationFinished:10
+08-16 19:18:34.565  4933  4933 D QuickPanelLog:  - com.android.systemui.statusbar.notification.stack.StackStateAnimator.onAnimationFinished:3
+08-16 19:18:34.566  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.runAnimationFinishedRunnables:19
+08-16 19:18:34.566  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout.onChildAnimationFinished:10
+08-16 19:18:34.566  4933  4933 D SecPanelSplitHelper:  - com.android.systemui.statusbar.notification.stack.StackStateAnimator.onAnimationFinished:3
+08-16 19:18:34.567  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:34.574  4933  4933 D StackScroller: getGlobalAnimationFinishedListener animation end
+08-16 19:18:34.575  4933  4933 D StackScroller: onChildAnimationFinished clearTemporaryViews
+08-16 19:18:36.667 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:18:36.667 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:18:36.667 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:18:36.667 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:18:37.577  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:37.578  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:37.580  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:37.582  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:37.582  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:37.583  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:37.586  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:37.587  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:37.588  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:37.589  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.0 / time=1786900716277 / elapsed=79943641000000
+08-16 19:18:37.599  4453  4461 E ActivityThread: scheduleRegisteredReceiver() called for android.app.PendingIntent$FinishedDispatcher@1ce35c5 and Intent { act=com.google.android.gms.geotimezone.GEOFENCE_FIRED flg=0x10 xflg=0x4 pkg=com.google.android.gms (has extras) } from com.google.android.gms (UID: 10231) without mechanism to propagate the sender's identity
+08-16 19:18:37.600  4453  4461 I Geofencer: (REDACTED) Batched PI for %s finished with code %d
+08-16 19:18:37.641  7047  8518 I SDHMS:y : Polling event handleUpdatedDeltaLocked finished.
+08-16 19:18:44.285 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:18:44.285 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:18:44.285 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:18:44.285 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 19:18:46.979  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:46.982  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:46.988  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:18:46.988  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:46.988  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:18:46.988  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:46.988  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:46.989  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too close
+08-16 19:18:46.989  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:46.989  4453  7898 I FusedLocation: (REDACTED) location delivery to %s blocked - too fast
+08-16 19:18:46.990  5727  5830 I GmsPassiveListener_FLP: onGmsLocationChanged, provider=fused / speed=0.91834307 / time=1786900725521 / elapsed=79952885000000

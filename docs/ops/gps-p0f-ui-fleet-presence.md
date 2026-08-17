@@ -11,6 +11,8 @@
 - **Présence GPS** (`resolveDriverLocationPresence`) — `live` | `recent` | `stale` | `last_known` | `offline_unknown`.
 - **Device** (`tracking_display_status`, ex. `degraded_constrained`) — diagnostic, hors machine de fraîcheur.
 
+Invariant amont figé (mission active) : **immobile ≠ stale** — la fraîcheur se calcule sur l’âge du fix, pas sur le changement de coords. Voir [gps-presence-vs-position-model.md](gps-presence-vs-position-model.md).
+
 ## Modules
 
 | Surface | Fichier |

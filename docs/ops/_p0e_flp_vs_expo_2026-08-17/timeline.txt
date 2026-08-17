@@ -1,0 +1,8 @@
+2026-08-17T20:23:18.3741913+02:00 [FLP_EXPO] START window=75s
+2026-08-17T20:23:21.1671260+02:00 [FLP_EXPO] FOCUS   mCurrentFocus=Window{3da3a72 u0 NotificationShade}
+2026-08-17T20:23:33.4281878+02:00 [FLP_EXPO] SAMPLE t=+0s uptime=42 131s fused_age=4,5s lat=46.211593 lon=6.126211 gps_age=4,5s unavail_d=0 finished_d=0 dle_n=0 max_seq=0 canon=-1
+2026-08-17T20:24:01.1889007+02:00 [FLP_EXPO] SAMPLE t=+27s uptime=42 158s fused_age=1,7s lat=46.211602 lon=6.126221 gps_age=1,7s unavail_d=3 finished_d=2 dle_n=0 max_seq=0 canon=-1
+2026-08-17T20:24:29.4073689+02:00 [FLP_EXPO] SAMPLE t=+55s uptime=42 186s fused_age=5,5s lat=46.211599 lon=6.126214 gps_age=5,5s unavail_d=2 finished_d=1 dle_n=0 max_seq=0 canon=-1
+2026-08-17T20:24:48.9533515+02:00 [FLP_EXPO] SUMMARY freshFixAgeLt30=True fusedEtMoved=True firstEt=42126.495 lastEt=42180.495
+2026-08-17T20:24:48.9624846+02:00 [FLP_EXPO] SUMMARY unavail_lines=4 finished_lines=3 dle_n=0 max_seq=0 sess=trk_sess_1786991006079_9m3wr4ud
+2026-08-17T20:24:48.9664819+02:00 [FLP_EXPO] VERDICT_CAS A_FLP_FRESH_EXPO_UNAVAILABLE

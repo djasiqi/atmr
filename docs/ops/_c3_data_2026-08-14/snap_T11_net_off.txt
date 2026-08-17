@@ -1,0 +1,9 @@
+﻿­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=1)
+LABEL T11_net_off
+HEALTH_N 1
+H|2026-08-14 10:42:50.551668+02:00|active|fgs=False|nat=False|ph=startLocationUpdatesAsync|bef=False|aft=False|nfix=370|fix=None|cr=fgs_not_running|err=[nlo_start_cap_mssp1e69_gn05m8w1wp] ensure_manager_state:fgs_recover: Error/ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED: Call to function 'ExpoLocation.startLocationUpdatesAsync' has |trig=health_monitor:fgs_not_running
+SUMMARY flips=0 nlo=1 failish=0
+FGS_TRUE_RATIO 0/1
+LOC_N 0
+LOC_LAST [(datetime.datetime(2026, 8, 14, 10, 36, 41, 380644, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),), (datetime.datetime(2026, 8, 14, 10, 36, 29, 398654, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),), (datetime.datetime(2026, 8, 14, 10, 30, 39, 79859, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),)]

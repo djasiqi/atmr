@@ -1,0 +1,43 @@
+﻿# D5 canary analyze â€” 2026-08-17T01:41:58.3620257+02:00
+
+Logcat: c:\Users\jasiq\atmr\docs\ops\_release_exec_p0d_2026-08-16\d5_canary\logcat_C2_continuous.txt
+StormWindowMs: 500
+
+## Compteurs
+
+| Signal | Count |
+|--------|------:|
+| Unregister background-location-task | 0 |
+| Register (approx) | 0 |
+| Storm pairs (â‰¤500ms) | 0 |
+| Finished background-location-task | 70 |
+| Could not find a location task | 0 |
+| stop.requested (JS/native) | 0 |
+| stop.abandoned | 0 |
+| stop.executed | 0 |
+| self_heal / L2 hits | 0 |
+| transient_loss.pending | 0 |
+| transient_loss.confirmed | 0 |
+
+## Verdict auto
+
+**PASS**
+
+Reasons: none
+
+## InterprÃ©tation manuelle obligatoire
+
+- Classer chaque Unregister : LEGITIME (logout / mission terminale) vs INATTENDU (IN_PROGRESS).
+- Smoking gun PASS ownership : stop.requested â†’ abandoned (stale) â†’ Finished continue.
+- Smoking gun FAIL D5 : Unregisterâ†”Register storm + cut Finished/PUT/LOC.
+
+## Gate figÃ©e
+
+```
+unexpected Unregister = 0  (manuel)
+storm = 0
+missing task = 0
+Finished cadence = continue
+PUT/LOC = continue (hors de ce script â€” check SSH/PG)
+DISTRIBUTION = NO-GO jusqu'Ã  CANARY VALIDATED
+```

@@ -1,0 +1,27 @@
+{
+  "diff": {
+    "case": "D4-B",
+    "note": "same event_id+sequence+coords; recorded_at/sent_at mutated on retry",
+    "same_event_id": true,
+    "hash_equal": false,
+    "accepted_hash": "db6ef1eae59f3e175fd9da8ac77f8f7f8fa641d9e61291c7a82251e570decc6f",
+    "dlq_hash_recomputed": "146ce55d000c777ea00ce928a91983294805e447837059ce233fa8dd522d855f",
+    "same_sequence": true,
+    "accepted_sequence": 10,
+    "dlq_sequence": 10,
+    "same_session": true,
+    "same_generation": true,
+    "accepted_recorded_at": "2026-08-16 13:57:08.992849+00:00",
+    "dlq_recorded_at": "2026-08-16T13:58:09.908303+00:00",
+    "dlq_sent_at": "2026-08-16T13:58:09.910255+00:00",
+    "coords_equal": true,
+    "accepted_latlon": [46.2116156, 6.1262053],
+    "dlq_latlon": [46.2116156, 6.1262053],
+    "accepted_accuracy": 7.803999900817871,
+    "dlq_accuracy": 7.803999900817871,
+    "accepted_mission_id": 38224,
+    "dlq_mission_id": 38224
+  },
+  "raw_v2_same_eid_offsets": [4252, 4253, 4255, 4258, 4261, 4264],
+  "mechanism": "HTTP body sends timestamp not recorded_at; ingress sets recorded_at=now each PUT; location_event_id=item.id stable"
+}

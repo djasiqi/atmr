@@ -1,0 +1,117 @@
+﻿2026-08-15T23:42:10.0886882Z ##[group]Run actions/checkout@v7
+2026-08-15T23:42:10.0887259Z with:
+2026-08-15T23:42:10.0887542Z   ref: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:42:10.0887953Z   repository: ***/atmr
+2026-08-15T23:42:10.0890008Z   token: ***
+2026-08-15T23:42:10.0890272Z   ssh-strict: true
+2026-08-15T23:42:10.0890538Z   ssh-user: git
+2026-08-15T23:42:10.0890808Z   persist-credentials: true
+2026-08-15T23:42:10.0891094Z   clean: true
+2026-08-15T23:42:10.0891362Z   sparse-checkout-cone-mode: true
+2026-08-15T23:42:10.0891665Z   fetch-depth: 1
+2026-08-15T23:42:10.0891922Z   fetch-tags: false
+2026-08-15T23:42:10.0892186Z   show-progress: true
+2026-08-15T23:42:10.0892452Z   lfs: false
+2026-08-15T23:42:10.0892699Z   submodules: false
+2026-08-15T23:42:10.0892966Z   set-safe-directory: true
+2026-08-15T23:42:10.0893264Z   allow-unsafe-pr-checkout: false
+2026-08-15T23:42:10.0893552Z env:
+2026-08-15T23:42:10.0893817Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:42:10.0894142Z   SSH_HOST: ***
+2026-08-15T23:42:10.0894439Z   SSH_USER: ***
+2026-08-15T23:42:10.0894697Z   SSH_PORT: ***
+2026-08-15T23:42:10.0896279Z   SSH_KEY: ***
+2026-08-15T23:42:10.0896569Z   DOCKER_IMAGE: ***
+2026-08-15T23:42:10.0896845Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:42:10.0897176Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:42:10.0897476Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:42:10.0897916Z   IMAGE_DIGEST: sha256:02053f7361d2000a61a0e13a0151b95a9c65481326c20453075037bc9129cbe1
+2026-08-15T23:42:10.0898344Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:42:10.0898627Z ##[endgroup]
+2026-08-15T23:42:10.1676848Z Syncing repository: ***/atmr
+2026-08-15T23:42:10.1678933Z ##[group]Getting Git version info
+2026-08-15T23:42:10.1679531Z Working directory is '/home/runner/work/atmr/atmr'
+2026-08-15T23:42:10.1680412Z [command]/usr/bin/git version
+2026-08-15T23:42:10.1680854Z git version 2.54.0
+2026-08-15T23:42:10.1698278Z ##[endgroup]
+2026-08-15T23:42:10.1704900Z Temporarily overriding HOME='/home/runner/work/_temp/09a95ac5-6d2e-4596-98e9-c69fd8e83f14' before making global git config changes
+2026-08-15T23:42:10.1706474Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-15T23:42:10.1710736Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/atmr/atmr
+2026-08-15T23:42:10.1743456Z Deleting the contents of '/home/runner/work/atmr/atmr'
+2026-08-15T23:42:10.1751431Z ##[group]Determining repository object format
+2026-08-15T23:42:10.1752243Z ##[endgroup]
+2026-08-15T23:42:10.1752875Z ##[group]Initializing the repository
+2026-08-15T23:42:10.1754403Z [command]/usr/bin/git init /home/runner/work/atmr/atmr
+2026-08-15T23:42:10.1847937Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-08-15T23:42:10.1849132Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-08-15T23:42:10.1852109Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-08-15T23:42:10.1852952Z hint: call:
+2026-08-15T23:42:10.1853512Z hint:
+2026-08-15T23:42:10.1854202Z hint: 	git config --global init.defaultBranch <name>
+2026-08-15T23:42:10.1855145Z hint:
+2026-08-15T23:42:10.1855973Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-08-15T23:42:10.1857207Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-08-15T23:42:10.1858002Z hint:
+2026-08-15T23:42:10.1858537Z hint: 	git branch -m <name>
+2026-08-15T23:42:10.1859131Z hint:
+2026-08-15T23:42:10.1859859Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-08-15T23:42:10.1861005Z Initialized empty Git repository in /home/runner/work/atmr/atmr/.git/
+2026-08-15T23:42:10.1863511Z [command]/usr/bin/git remote add origin https://github.com/***/atmr
+2026-08-15T23:42:10.1888191Z ##[endgroup]
+2026-08-15T23:42:10.1889036Z ##[group]Disabling automatic garbage collection
+2026-08-15T23:42:10.1892360Z [command]/usr/bin/git config --local gc.auto 0
+2026-08-15T23:42:10.1920652Z ##[endgroup]
+2026-08-15T23:42:10.1921681Z ##[group]Setting up auth
+2026-08-15T23:42:10.1922409Z Removing SSH command configuration
+2026-08-15T23:42:10.1927232Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-15T23:42:10.1958110Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-15T23:42:10.2231765Z Removing HTTP extra header
+2026-08-15T23:42:10.2237709Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-15T23:42:10.2270571Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-15T23:42:10.2483866Z Removing includeIf entries pointing to credentials config files
+2026-08-15T23:42:10.2488393Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-15T23:42:10.2524649Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-15T23:42:10.2720778Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-8fb9af73-258e-40d6-8ef1-a4f83af871ec.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-08-15T23:42:10.2755631Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/atmr/atmr/.git.path /home/runner/work/_temp/git-credentials-8fb9af73-258e-40d6-8ef1-a4f83af871ec.config
+2026-08-15T23:42:10.2785084Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/atmr/atmr/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-8fb9af73-258e-40d6-8ef1-a4f83af871ec.config
+2026-08-15T23:42:10.2813535Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-8fb9af73-258e-40d6-8ef1-a4f83af871ec.config
+2026-08-15T23:42:10.2842243Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-8fb9af73-258e-40d6-8ef1-a4f83af871ec.config
+2026-08-15T23:42:10.2869622Z ##[endgroup]
+2026-08-15T23:42:10.2870129Z ##[group]Fetching the repository
+2026-08-15T23:42:10.2875017Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:42:16.9301561Z From https://github.com/***/atmr
+2026-08-15T23:42:16.9302291Z  * branch            286737a2362eb1e38013c72d04be23fcd608210e -> FETCH_HEAD
+2026-08-15T23:42:16.9327933Z [command]/usr/bin/git rev-parse --verify --quiet 286737a2362eb1e38013c72d04be23fcd608210e^{object}
+2026-08-15T23:42:16.9355992Z 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:42:16.9362173Z ##[endgroup]
+2026-08-15T23:42:16.9362633Z ##[group]Determining the checkout info
+2026-08-15T23:42:16.9363058Z ##[endgroup]
+2026-08-15T23:42:16.9365284Z [command]/usr/bin/git sparse-checkout disable
+2026-08-15T23:42:16.9402787Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-08-15T23:42:16.9431515Z ##[group]Checking out the ref
+2026-08-15T23:42:16.9435374Z [command]/usr/bin/git checkout --progress --force 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:42:17.9502924Z Updating files:  98% (5193/5249)
+2026-08-15T23:42:17.9548495Z Updating files:  99% (5197/5249)
+2026-08-15T23:42:17.9549104Z Updating files: 100% (5249/5249)
+2026-08-15T23:42:17.9549606Z Updating files: 100% (5249/5249), done.
+2026-08-15T23:42:17.9593790Z Note: switching to '286737a2362eb1e38013c72d04be23fcd608210e'.
+2026-08-15T23:42:17.9594509Z 
+2026-08-15T23:42:17.9595070Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-08-15T23:42:17.9595875Z changes and commit them, and you can discard any commits you make in this
+2026-08-15T23:42:17.9596329Z state without impacting any branches by switching back to a branch.
+2026-08-15T23:42:17.9596845Z 
+2026-08-15T23:42:17.9597077Z If you want to create a new branch to retain commits you create, you may
+2026-08-15T23:42:17.9597510Z do so (now or later) by using -c with the switch command. Example:
+2026-08-15T23:42:17.9597754Z 
+2026-08-15T23:42:17.9597874Z   git switch -c <new-branch-name>
+2026-08-15T23:42:17.9598039Z 
+2026-08-15T23:42:17.9598148Z Or undo this operation with:
+2026-08-15T23:42:17.9598306Z 
+2026-08-15T23:42:17.9598400Z   git switch -
+2026-08-15T23:42:17.9598563Z 
+2026-08-15T23:42:17.9598767Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-08-15T23:42:17.9599034Z 
+2026-08-15T23:42:17.9599278Z HEAD is now at 286737a feat(tracking): backport OBSERVABILITY ages and health classes on 927640a0
+2026-08-15T23:42:18.0029733Z ##[endgroup]
+2026-08-15T23:42:18.0069611Z [command]/usr/bin/git log -1 --format=%H
+2026-08-15T23:42:18.0094786Z 286737a2362eb1e38013c72d04be23fcd608210e

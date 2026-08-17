@@ -1,0 +1,32 @@
+﻿ssh : /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning: 
+Au caractère C:\Users\jasiq\atmr\docs\ops\_release_exec_p0d_2026-08-16\canary_p0d\run_canary_smoke_p0d.ps1:174 : 10
++   $out = ssh -o BatchMode=yes $sshTarget "docker exec atmr-backend-1  ...
++          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/usr/local/lib/...cationWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  from eventlet.patcher import is_monkey_patched  # type: ignore
+[2.9] OpenTelemetry non install├® - installer avec: pip install -r requirements-otel.txt
+­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+[2026-08-16 15:21:26,877] WARNING in app: [Security] Niveau de log forc├® ├á WARNING en production (APP_LOG_LEVEL 
+ignor├® pour s├®curit├®)
+LABEL PRE
+NOW 2026-08-16T15:21:32.680960+00:00
+LOC_N 6
+LOC 2026-08-16 15:21:30.348091+00:00 rec= 2026-08-16 14:03:51.464000+00:00 seq= 30 eid= trk_1786889031559_nalljl9m sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:21:30.323589+00:00 rec= 2026-08-16 14:03:31.083000+00:00 seq= 29 eid= trk_1786889011194_mxw2y5sx sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:21:29.792130+00:00 rec= 2026-08-16 14:03:13.039000+00:00 seq= 28 eid= trk_1786888993102_aesm5zju sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:21:25.106947+00:00 rec= 2026-08-16 14:02:53.537000+00:00 seq= 27 eid= trk_1786888973662_2keltump sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:21:25.088893+00:00 rec= 2026-08-16 14:02:33.251000+00:00 seq= 26 eid= trk_1786888953303_ujr3333i sid= trk_sess_1786888547392_4
+LOC 2026-08-16 15:21:25.045125+00:00 rec= 2026-08-16 14:02:12.964000+00:00 seq= 25 eid= trk_1786888933022_ty0m9dc5 sid= trk_sess_1786888547392_4
+INGEST {'mx': 30, 'n': 6, 'last_rec': datetime.datetime(2026, 8, 16, 14, 3, 51, 464000, tzinfo=datetime.timezone.utc)}
+ACTIVE [(38224, 'IN_PROGRESS')]
+MULTI_ROW_SAME_EID []

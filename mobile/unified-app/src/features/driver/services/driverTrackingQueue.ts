@@ -26,6 +26,7 @@ import {
 import { trackingQueueStore } from "./trackingQueueStore";
 import { createCaptureId } from "./captureId";
 import { fetchTrackingWatermark, registerTrackingSession } from "./trackingSessionsApi";
+import { freezeTrackingLocationPayload } from "./freezeTrackingLocationPayload";
 
 function allowMemoryFallback(): boolean {
   return (
@@ -817,12 +818,45 @@ class DriverTrackingQueue {
   /**
    * Rotation / création locale + register awaité.
    * Tant que non READY, aucun enqueue ledger n'est autorisé (drop observé).
+   *
+   * Q3-A : ne crée une session que pour raisons explicites
+   * (`session_conflict`, `begin_new`, `ttl_or_missing`). Une session locale
+   * déjà READY et non expirée refuse tout autre motif (défense en profondeur
+   * contre reconnect→reconcile abusif).
+   * Concurrent : `rotateInFlight` coalesce — la 2e demande attend puis no-op.
    */
   private async rotateTrackingSessionAwaited(reason: string): Promise<void> {
     if (this.rotateInFlight) {
       await this.rotateInFlight;
+      emitDriverTelemetry("tracking.session.rotate_skipped", {
+        source: "driver.tracking.queue",
+        reason,
+        skip_cause: "rotate_in_flight_coalesced",
+        tracking_session_id: this.trackingSessionId || null,
+        session_generation: this.sessionGeneration,
+      });
       return;
     }
+
+    const explicitRotate =
+      reason === "session_conflict" ||
+      reason === "begin_new" ||
+      reason === "ttl_or_missing";
+    if (
+      this.isLedgerSessionReady() &&
+      !this.sessionNeedsRotation() &&
+      !explicitRotate
+    ) {
+      emitDriverTelemetry("tracking.session.rotate_skipped", {
+        source: "driver.tracking.queue",
+        reason,
+        skip_cause: "ready_session_no_explicit_conflict",
+        tracking_session_id: this.trackingSessionId || null,
+        session_generation: this.sessionGeneration,
+      });
+      return;
+    }
+
     // CREATING synchrone avant tout await — observable immédiatement pour les tests / enqueue concurrents.
     this.setSessionReadiness("CREATING", reason);
     this.createLocalTrackingSession();
@@ -1490,8 +1524,27 @@ class DriverTrackingQueue {
       entry.captureId ??
       entry.payload.captureId ??
       createCaptureId();
+    const eventId = buildQueueId();
+    const enqueuedAtIso = new Date(nowMs()).toISOString();
+    const frozenPayload = freezeTrackingLocationPayload({
+      eventId,
+      sequenceId,
+      trackingSessionId: this.trackingSessionId,
+      sessionGeneration: this.sessionGeneration,
+      captureId,
+      locationMode,
+      missionId: entry.missionId,
+      payload: {
+        ...entry.payload,
+        locationMode,
+        trackingGenerationId,
+        missionContextVersion,
+        captureId,
+      },
+      enqueuedAtIso,
+    });
     const item: DriverTrackingQueueItem = {
-      id: buildQueueId(),
+      id: eventId,
       sequenceId,
       trackingSessionId: this.trackingSessionId,
       sessionGeneration: this.sessionGeneration,
@@ -1503,14 +1556,7 @@ class DriverTrackingQueue {
       captureId,
       trackingGenerationId,
       missionContextVersion,
-      payload: {
-        ...entry.payload,
-        locationMode,
-        trackingEventId: undefined,
-        captureId: captureId ?? entry.payload.captureId,
-        trackingGenerationId,
-        missionContextVersion,
-      },
+      payload: frozenPayload,
       queuedAt: nowMs(),
       retryCount: 0,
       deliveryState: "queued",
@@ -1519,8 +1565,6 @@ class DriverTrackingQueue {
       lastError: null,
       persistState: "non_ingested",
     };
-    item.payload.trackingEventId = item.id;
-
     // SQLite INSERT avant de considérer la capture conservée (natif).
     try {
       await trackingQueueStore.upsert({
@@ -1906,13 +1950,19 @@ class DriverTrackingQueue {
           drainedThisFlush += 1;
           this.drainedInCurrentMinute += 1;
           const ack = await sendDriverLocation({
+            // Payload figé à l'enqueue — overlays uniquement si absents (rehydratation legacy).
             ...item.payload,
-            locationMode: item.locationMode,
-            trackingEventId: item.id,
-            trackingSessionId: item.trackingSessionId,
-            sessionGeneration: item.sessionGeneration,
-            sequenceId: item.sequenceId,
-            captureId: item.captureId ?? item.payload.captureId ?? null,
+            locationMode: item.payload.locationMode ?? item.locationMode,
+            trackingEventId: item.payload.trackingEventId ?? item.id,
+            trackingSessionId:
+              item.payload.trackingSessionId ?? item.trackingSessionId,
+            sessionGeneration:
+              item.payload.sessionGeneration ?? item.sessionGeneration,
+            sequenceId: item.payload.sequenceId ?? item.sequenceId,
+            captureId:
+              item.payload.captureId ??
+              item.captureId ??
+              null,
           });
           sent += 1;
           lastBackendAckRequestEventId = item.id;

@@ -1,0 +1,31 @@
+﻿ssh : /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning: 
+Au caractère C:\Users\jasiq\atmr\docs\ops\_release_exec_p0d_2026-08-16\d5_cold_start\run_d5_cold_start_prod126.ps1:97 
+: 15
++ ...   $locOut = ssh -o BatchMode=yes -o ConnectTimeout=20 $ssh "docker cp ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/usr/local/lib/...cationWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  from eventlet.patcher import is_monkey_patched  # type: ignore
+[2.9] OpenTelemetry non install├® - installer avec: pip install -r requirements-otel.txt
+­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+[2026-08-16 19:00:01,901] WARNING in app: [Security] Niveau de log forc├® ├á WARNING en production (APP_LOG_LEVEL 
+ignor├® pour s├®curit├®)
+NOW 2026-08-16T19:00:09.502231+00:00
+N 8
+LOC 2026-08-16 18:56:42.979198+00:00 rec 2026-08-16 18:56:42.420406+00:00 seq 10 m 38224
+LOC 2026-08-16 18:56:29.211762+00:00 rec 2026-08-16 18:56:28.687193+00:00 seq 9 m 38224
+LOC 2026-08-16 18:56:10.631686+00:00 rec 2026-08-16 18:56:10.064152+00:00 seq 8 m 38224
+LOC 2026-08-16 18:55:51.714586+00:00 rec 2026-08-16 18:55:51.329386+00:00 seq 7 m 38224
+LOC 2026-08-16 18:55:44.000609+00:00 rec 2026-08-16 18:55:43.497426+00:00 seq 6 m 38224
+LOC 2026-08-16 18:55:36.307028+00:00 rec 2026-08-16 18:55:35.486451+00:00 seq 5 m 38224
+LOC 2026-08-16 18:55:32.669248+00:00 rec 2026-08-16 18:55:32.465226+00:00 seq 4 m 38224
+LOC 2026-08-16 18:55:27.441175+00:00 rec 2026-08-16 18:55:27.215435+00:00 seq 3 m 38224

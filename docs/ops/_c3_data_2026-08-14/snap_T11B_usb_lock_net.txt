@@ -1,0 +1,13 @@
+﻿­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=1)
+LABEL T11B_usb_lock_net
+HEALTH_N 5
+H|2026-08-14 10:48:32.555400+02:00|active|fgs=False|nat=False|ph=startLocationUpdatesAsync|bef=False|aft=False|nfix=712|fix=None|cr=fgs_not_running|err=[nlo_start_cap_mssp1e69_gn05m8w1wp] ensure_manager_state:fgs_recover: Error/ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED: Call to function 'ExpoLocation.startLocationUpdatesAsync' has |trig=anti_zombie_fix_stale
+H|2026-08-14 10:50:50.598211+02:00|active|fgs=False|nat=False|ph=startLocationUpdatesAsync|bef=False|aft=False|nfix=850|fix=None|cr=fgs_not_running|err=[nlo_start_cap_mssp1e69_gn05m8w1wp] ensure_manager_state:fgs_recover: Error/ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED: Call to function 'ExpoLocation.startLocationUpdatesAsync' has |trig=None
+H|2026-08-14 10:51:50.706652+02:00|active|fgs=False|nat=False|ph=startLocationUpdatesAsync|bef=False|aft=False|nfix=910|fix=None|cr=fgs_not_running|err=[nlo_start_cap_mssp1e69_gn05m8w1wp] ensure_manager_state:fgs_recover: Error/ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED: Call to function 'ExpoLocation.startLocationUpdatesAsync' has |trig=health_monitor:fgs_not_running
+H|2026-08-14 10:53:04.621154+02:00|background|fgs=False|nat=False|ph=startLocationUpdatesAsync|bef=False|aft=False|nfix=984|fix=None|cr=fgs_not_running|err=[nlo_start_cap_mssp1e69_gn05m8w1wp] ensure_manager_state:fgs_recover: Error/ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED: Call to function 'ExpoLocation.startLocationUpdatesAsync' has |trig=None
+H|2026-08-14 10:53:04.645237+02:00|background|fgs=False|nat=False|ph=startLocationUpdatesAsync|bef=False|aft=False|nfix=984|fix=None|cr=fgs_not_running|err=[nlo_start_cap_mssp1e69_gn05m8w1wp] ensure_manager_state:fgs_recover: Error/ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED: Call to function 'ExpoLocation.startLocationUpdatesAsync' has |trig=health_monitor:fgs_not_running
+SUMMARY flips=1 nlo=5 failish=0
+FGS_TRUE_RATIO 0/5
+LOC_N 0
+LOC_LAST [(datetime.datetime(2026, 8, 14, 10, 36, 41, 380644, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),), (datetime.datetime(2026, 8, 14, 10, 36, 29, 398654, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),), (datetime.datetime(2026, 8, 14, 10, 30, 39, 79859, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),)]

@@ -1,0 +1,100 @@
+﻿08-17 18:57:27.640  5690 14296 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:57:28.364  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:57:29.413 14889 15163 I TaskService: Finished task 'background-location-task' with eventId '982472ce-f629-4e74-8ae1-f26e793e039a'.
+08-17 18:57:30.815  2986  3943 D GnssLocationProvider_ex: (20, GPS, L1, 18,4, 0) 
+08-17 18:57:30.816  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=18, top6=18, visibleSv=1, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:57:30.818  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:57:33.814  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:57:33.815  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:57:35.824 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:57:37.089  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:57:38.757  2986  3943 D GnssLocationProvider_ex: (20, GPS, L1, 17,4, 0) 
+08-17 18:57:38.761  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=17, top6=17, visibleSv=1, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:57:38.763  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:57:39.139  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:57:39.139  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:57:44.737  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:57:45.130  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:57:45.131  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:57:45.663 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:57:46.746  2986  3943 D GnssLocationProvider_ex: (20, GPS, L1, 16,9, 0) 
+08-17 18:57:46.749  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=16, top6=16, visibleSv=1, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:57:46.751  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:57:49.611 14889 15163 I TaskService: Finished task 'background-location-task' with eventId 'b65d482c-09dc-458e-b25a-b1afe04f59b6'.
+08-17 18:57:50.151  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:57:50.152  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:57:51.755  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:57:54.759  2986  3943 D GnssLocationProvider_ex: (20, GPS, L1, 17,4, 0) 
+08-17 18:57:54.766  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=17, top6=17, visibleSv=1, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:57:54.770  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:57:54.815 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:57:55.181  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:57:55.181  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:57:59.769  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:58:00.207  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:58:00.208  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:58:02.761  2986  3943 D GnssLocationProvider_ex: (20, GPS, L1, 17,4, 0) 
+08-17 18:58:02.762  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=17, top6=17, visibleSv=1, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:58:02.765  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:58:04.989 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:58:05.233  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:58:05.233  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:58:07.766  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:58:09.903 14889 15163 I TaskService: Finished task 'background-location-task' with eventId '0833418f-f685-4920-bbc5-e8cfbc7a71a1'.
+08-17 18:58:10.263  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:58:10.263  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:58:10.820  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=15, top6=15, visibleSv=1, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:58:10.820  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:58:10.822  2986  3943 D GnssLocationProvider_ex: (20, GPS, L1, 15,6, 0) 
+08-17 18:58:16.305 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:58:16.459  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:58:16.459  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:58:16.677  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:58:18.745  2986  3943 D GnssLocationProvider_ex: (20, GPS, L1, 15,6, 0) 
+08-17 18:58:18.747  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=15, top6=15, visibleSv=1, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:58:18.749  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:58:19.476  2986  4788 D SLocation: CommonUtil - check android.permission.ACCESS_COARSE_LOCATION Permission pid=30913, uid=10084, hasPermission=true
+08-17 18:58:19.476  2986  4788 D SLocation: CommonUtil - check android.permission.ACCESS_FINE_LOCATION Permission pid=30913, uid=10084, hasPermission=true
+08-17 18:58:21.483  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:58:21.483  5690 14296 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:58:23.752  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:58:25.276 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:58:26.515  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:58:26.516  5690 14296 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:58:26.750  2986  3943 D GnssLocationProvider_ex: (20, GPS, L1, 15,6, 0) 
+08-17 18:58:26.752  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=15, top6=15, visibleSv=1, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:58:26.756  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:58:30.352 14889 15163 I TaskService: Finished task 'background-location-task' with eventId '89e6be98-6c9f-46c0-b844-10c5679ad0dc'.
+08-17 18:58:32.569  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:58:32.570  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:58:32.619  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:58:34.813  2986  3943 D GnssLocationProvider_ex: (20, GPS, L1, 11,8, 0) (21, BEIDOU, L1, 17,6, 0) 
+08-17 18:58:34.815  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=14, top6=14, visibleSv=2, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:58:34.817  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:58:38.188 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:58:39.486  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:58:39.487  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:58:40.480  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:58:42.746  2986  3943 D GnssLocationProvider_ex: (20, GPS, L1, 11,8, 0) (21, BEIDOU, L1, 17,6, 0) 
+08-17 18:58:42.747  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=14, top6=14, visibleSv=2, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:58:42.748  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:58:44.999  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:58:44.999  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:58:46.055 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:58:47.750  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:58:50.016  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:58:50.016  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:58:50.440 14889 15163 I TaskService: Finished task 'background-location-task' with eventId 'b428b46e-af1a-4ff3-86ce-e85b9e18d97d'.
+08-17 18:58:50.750  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=17, top6=17, visibleSv=1, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:58:50.753  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:58:55.044  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:58:55.045  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:58:55.751  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:58:55.753 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:58:58.750  5690  5795 I GnssEngineManager_FLP: updateSatelliteStatus, top4=16, top6=16, visibleSv=1, usedSv=0, usedL5Sv=0 (usedGps=0, usedGlo=0, usedBds=0, usedGal=0)
+08-17 18:58:58.754  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to SHADOW
+08-17 18:59:00.066  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:59:00.066  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-17 18:59:03.756  5690  5795 I GpsSession_FLP: State[SATELLITE] is changed to NO_SATELLITE
+08-17 18:59:05.079  2986  3369 I NSLocationMonitor: getGPSUsingApps() called
+08-17 18:59:05.080  5690 28341 I NSLocationManager_FLP: getGPSUsingApps, No change

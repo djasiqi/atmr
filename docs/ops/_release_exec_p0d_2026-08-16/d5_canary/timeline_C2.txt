@@ -1,0 +1,84 @@
+2026-08-17T01:17:28.7215887+02:00 [C2] PREFLIGHT versionName=1.0.11 versionCode=127
+2026-08-17T01:17:29.1391069+02:00 [C2] LOGCAT_PID=46612 file=c:\Users\jasiq\atmr\docs\ops\_release_exec_p0d_2026-08-16\d5_canary\logcat_C2_continuous.txt
+2026-08-17T01:17:29.1416496+02:00 [C2] BACKEND=OBSERVATION_ONLY DRIVER=20135 Cycles=8 FgSec=40 HomeSec=40
+2026-08-17T01:17:32.4795652+02:00 [C2] READY_CHECK isFg=true startReq=true fgCount=9
+2026-08-17T01:17:32.4942089+02:00 [C2] PHASE_BEGIN FG cycle=1 sec=40
+2026-08-17T01:17:48.8157860+02:00 [C2] SAMPLE phase=FG c=1 t=+0s fg=9 binds=9 isFg=true startReq=true finished=0 unreg=0 transient=0 PUT=24 LOC=-1
+2026-08-17T01:18:24.8767981+02:00 [C2] SAMPLE phase=FG c=1 t=+36s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=75 LOC=-1
+2026-08-17T01:19:01.3743228+02:00 [C2] SAMPLE phase=FG c=1 t=+40s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=90 LOC=-1
+2026-08-17T01:19:01.3762255+02:00 [C2] PHASE_END FG cycle=1
+2026-08-17T01:19:01.3782306+02:00 [C2] PHASE_BEGIN HOME cycle=1 sec=40
+2026-08-17T01:19:17.5500794+02:00 [C2] SAMPLE phase=HOME c=1 t=+0s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=60 LOC=-1
+2026-08-17T01:19:53.6445674+02:00 [C2] SAMPLE phase=HOME c=1 t=+36s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=6 LOC=-1
+2026-08-17T01:20:29.9940862+02:00 [C2] SAMPLE phase=HOME c=1 t=+40s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=12 LOC=-1
+2026-08-17T01:20:29.9960849+02:00 [C2] PHASE_END HOME cycle=1
+2026-08-17T01:20:29.9970870+02:00 [C2] PHASE_BEGIN FG cycle=2 sec=40
+2026-08-17T01:20:48.0197310+02:00 [C2] SAMPLE phase=FG c=2 t=+0s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 transient=0 PUT=18 LOC=-1
+2026-08-17T01:21:29.2972599+02:00 [C2] SAMPLE phase=FG c=2 t=+38s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=76 LOC=-1
+2026-08-17T01:22:08.5097932+02:00 [C2] SAMPLE phase=FG c=2 t=+40s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=66 LOC=-1
+2026-08-17T01:22:08.5124694+02:00 [C2] PHASE_END FG cycle=2
+2026-08-17T01:22:08.5156567+02:00 [C2] PHASE_BEGIN HOME cycle=2 sec=40
+2026-08-17T01:22:24.5439209+02:00 [C2] SAMPLE phase=HOME c=2 t=+0s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=54 LOC=-1
+2026-08-17T01:23:01.2634615+02:00 [C2] SAMPLE phase=HOME c=2 t=+36s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 transient=0 PUT=18 LOC=-1
+2026-08-17T01:23:37.1932847+02:00 [C2] SAMPLE phase=HOME c=2 t=+40s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 transient=0 PUT=12 LOC=-1
+2026-08-17T01:23:37.1942834+02:00 [C2] PHASE_END HOME cycle=2
+2026-08-17T01:23:37.1962875+02:00 [C2] PHASE_BEGIN FG cycle=3 sec=40
+2026-08-17T01:23:54.3191531+02:00 [C2] SAMPLE phase=FG c=3 t=+0s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 transient=0 PUT=15 LOC=-1
+2026-08-17T01:24:32.4195466+02:00 [C2] SAMPLE phase=FG c=3 t=+37s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=54 LOC=-1
+2026-08-17T01:25:11.8313480+02:00 [C2] SAMPLE phase=FG c=3 t=+40s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=28 LOC=-1
+2026-08-17T01:25:11.8338685+02:00 [C2] PHASE_END FG cycle=3
+2026-08-17T01:25:11.8360688+02:00 [C2] PHASE_BEGIN HOME cycle=3 sec=40
+2026-08-17T01:25:27.9259906+02:00 [C2] SAMPLE phase=HOME c=3 t=+0s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=15 LOC=-1
+2026-08-17T01:26:04.6114813+02:00 [C2] SAMPLE phase=HOME c=3 t=+36s fg=9 binds=9 isFg=true startReq=true finished=0 unreg=0 transient=0 PUT=8 LOC=-1
+2026-08-17T01:26:40.9542625+02:00 [C2] SAMPLE phase=HOME c=3 t=+40s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=6 LOC=-1
+2026-08-17T01:26:40.9557681+02:00 [C2] PHASE_END HOME cycle=3
+2026-08-17T01:26:40.9567791+02:00 [C2] PHASE_BEGIN FG cycle=4 sec=40
+2026-08-17T01:26:57.5842596+02:00 [C2] SAMPLE phase=FG c=4 t=+0s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 transient=0 PUT=14 LOC=-1
+2026-08-17T01:27:34.2777817+02:00 [C2] SAMPLE phase=FG c=4 t=+36s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=34 LOC=-1
+2026-08-17T01:28:10.5260264+02:00 [C2] SAMPLE phase=FG c=4 t=+40s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=18 LOC=-1
+2026-08-17T01:28:10.5285451+02:00 [C2] PHASE_END FG cycle=4
+2026-08-17T01:28:10.5305446+02:00 [C2] PHASE_BEGIN HOME cycle=4 sec=40
+2026-08-17T01:28:27.3183982+02:00 [C2] SAMPLE phase=HOME c=4 t=+0s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=10 LOC=-1
+2026-08-17T01:29:04.7690580+02:00 [C2] SAMPLE phase=HOME c=4 t=+37s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=5 LOC=-1
+2026-08-17T01:29:42.5567909+02:00 [C2] SAMPLE phase=HOME c=4 t=+40s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=8 LOC=-1
+2026-08-17T01:29:42.5603171+02:00 [C2] PHASE_END HOME cycle=4
+2026-08-17T01:29:42.5622050+02:00 [C2] PHASE_BEGIN FG cycle=5 sec=40
+2026-08-17T01:29:59.1680898+02:00 [C2] SAMPLE phase=FG c=5 t=+0s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=15 LOC=-1
+2026-08-17T01:30:38.5741191+02:00 [C2] SAMPLE phase=FG c=5 t=+36s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=26 LOC=-1
+2026-08-17T01:31:19.6944186+02:00 [C2] SAMPLE phase=FG c=5 t=+40s fg=9 binds=9 isFg=true startReq=true finished=0 unreg=0 transient=0 PUT=17 LOC=-1
+2026-08-17T01:31:19.6964088+02:00 [C2] PHASE_END FG cycle=5
+2026-08-17T01:31:19.6984169+02:00 [C2] PHASE_BEGIN HOME cycle=5 sec=40
+2026-08-17T01:31:36.9969162+02:00 [C2] SAMPLE phase=HOME c=5 t=+0s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=16 LOC=-1
+2026-08-17T01:32:14.2280136+02:00 [C2] SAMPLE phase=HOME c=5 t=+37s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=9 LOC=-1
+2026-08-17T01:32:51.5853480+02:00 [C2] SAMPLE phase=HOME c=5 t=+40s fg=9 binds=9 isFg=true startReq=true finished=3 unreg=0 transient=0 PUT=8 LOC=-1
+2026-08-17T01:32:51.5883472+02:00 [C2] PHASE_END HOME cycle=5
+2026-08-17T01:32:51.5907452+02:00 [C2] PHASE_BEGIN FG cycle=6 sec=40
+2026-08-17T01:33:14.0819569+02:00 [C2] SAMPLE phase=FG c=6 t=+0s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 transient=0 PUT=18 LOC=-1
+2026-08-17T01:33:54.5564469+02:00 [C2] SAMPLE phase=FG c=6 t=+40s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=47 LOC=-1
+2026-08-17T01:33:54.5584480+02:00 [C2] PHASE_END FG cycle=6
+2026-08-17T01:33:54.5604475+02:00 [C2] PHASE_BEGIN HOME cycle=6 sec=40
+2026-08-17T01:34:15.0659274+02:00 [C2] SAMPLE phase=HOME c=6 t=+0s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=45 LOC=-1
+2026-08-17T01:34:51.3128152+02:00 [C2] SAMPLE phase=HOME c=6 t=+40s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=21 LOC=-1
+2026-08-17T01:34:51.3145040+02:00 [C2] PHASE_END HOME cycle=6
+2026-08-17T01:34:51.3173909+02:00 [C2] PHASE_BEGIN FG cycle=7 sec=40
+2026-08-17T01:35:08.0851277+02:00 [C2] SAMPLE phase=FG c=7 t=+0s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 transient=0 PUT=12 LOC=-1
+2026-08-17T01:35:44.4038614+02:00 [C2] SAMPLE phase=FG c=7 t=+37s fg=9 binds=9 isFg=true startReq=true finished=3 unreg=0 transient=0 PUT=12 LOC=-1
+2026-08-17T01:36:21.4074748+02:00 [C2] SAMPLE phase=FG c=7 t=+40s fg=9 binds=9 isFg=true startReq=true finished=4 unreg=0 transient=0 PUT=12 LOC=-1
+2026-08-17T01:36:21.4096301+02:00 [C2] PHASE_END FG cycle=7
+2026-08-17T01:36:21.4121137+02:00 [C2] PHASE_BEGIN HOME cycle=7 sec=40
+2026-08-17T01:36:37.8820775+02:00 [C2] SAMPLE phase=HOME c=7 t=+0s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 transient=0 PUT=12 LOC=-1
+2026-08-17T01:37:14.5406868+02:00 [C2] SAMPLE phase=HOME c=7 t=+36s fg=9 binds=9 isFg=true startReq=true finished=0 unreg=0 transient=0 PUT=60 LOC=-1
+2026-08-17T01:37:51.1190235+02:00 [C2] SAMPLE phase=HOME c=7 t=+40s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 transient=0 PUT=48 LOC=-1
+2026-08-17T01:37:51.1223996+02:00 [C2] PHASE_END HOME cycle=7
+2026-08-17T01:37:51.1252447+02:00 [C2] PHASE_BEGIN FG cycle=8 sec=40
+2026-08-17T01:38:07.6374310+02:00 [C2] SAMPLE phase=FG c=8 t=+0s fg=9 binds=9 isFg=true startReq=true finished=2 unreg=0 transient=0 PUT=21 LOC=-1
+2026-08-17T01:38:43.3765686+02:00 [C2] SAMPLE phase=FG c=8 t=+36s fg=9 binds=9 isFg=true startReq=true finished=0 unreg=0 transient=0 PUT=51 LOC=-1
+2026-08-17T01:39:19.8402912+02:00 [C2] SAMPLE phase=FG c=8 t=+40s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=63 LOC=-1
+2026-08-17T01:39:19.8422923+02:00 [C2] PHASE_END FG cycle=8
+2026-08-17T01:39:19.8432932+02:00 [C2] PHASE_BEGIN HOME cycle=8 sec=40
+2026-08-17T01:39:36.4116842+02:00 [C2] SAMPLE phase=HOME c=8 t=+0s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=56 LOC=-1
+2026-08-17T01:40:13.0786879+02:00 [C2] SAMPLE phase=HOME c=8 t=+36s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=27 LOC=-1
+2026-08-17T01:40:49.8025814+02:00 [C2] SAMPLE phase=HOME c=8 t=+40s fg=9 binds=9 isFg=true startReq=true finished=1 unreg=0 transient=0 PUT=9 LOC=-1
+2026-08-17T01:40:49.8050830+02:00 [C2] PHASE_END HOME cycle=8
+2026-08-17T01:40:49.8482352+02:00 [C2] LOGCAT_STOPPED
+2026-08-17T01:40:49.8502309+02:00 [C2] END_C2_OK

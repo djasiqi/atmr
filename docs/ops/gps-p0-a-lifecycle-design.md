@@ -2,12 +2,14 @@
 
 ```text
 TICKET                     = P0-A
-PHASE                      = IMPLEMENTATION (runtime)
-STATUT                     = IMPLEMENTED — canary A seul en attente
+PHASE                      = CLOSED
+STATUT                     = CLOSED / PASS ✅ (canary A + A+B + C3)
 DIAGNOSTIC                 = CLOSED (voir gps-c3-execution-2026-08-14.md)
 ROOT CAUSE A               = CONFIRMED (A1 + ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED)
-RUNTIME PATCH              = GO reçu — patch A livré (sans P0-B)
-INDÉPENDANCE               = PR séparée de P0-B
+RUNTIME PATCH              = LIVRÉ + canary PASS
+C3 GLOBAL                  = PASS (gps-c3-ab-canary-2026-08-14.md)
+SUITE                      = P0-C (gps-p0-c-loc-stale-after-pause.md)
+INDÉPENDANCE               = PR séparée de P0-B / P0-C
 ```
 
 Documents liés :

@@ -1,0 +1,30 @@
+﻿  * ServiceRecord{c809852 u0 ch.liri.operations/expo.modules.location.services.LocationTaskService c:ch.liri.operations}
+    intent={cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService}
+    getFgsAllowWiu_legacy=PROC_STATE_TOP
+    getFgsAllowWiu_new=PROC_STATE_TOP
+    getFgsAllowWiu_forStart=PROC_STATE_TOP
+    getFgsAllowWiu_forCapabilities=PROC_STATE_TOP
+    getFgsAllowStart_legacy=PROC_STATE_TOP
+    getFgsAllowStart_new=PROC_STATE_TOP
+    getFgsAllowStart=PROC_STATE_TOP
+    startForegroundCount=1
+    infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10903; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<null>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:0; bindFromPackage:null: isBindService:true]
+    isForeground=true foregroundId=481756 types=0x00000008 foregroundNoti=Notification(channel=ch.liri.operations:background-location-task shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=NO_CLEAR|FOREGROUND_SERVICE color=0xff0a7f59 category=service vis=PRIVATE semFlags=0x0 semPriority=0 semMissedCount=0 semScenarioType=0)
+    lastActivity=-1m13s197ms restartTime=-1m13s201ms createdFromFg=true
+    startRequested=true delayedStop=false stopIfKilled=true callStart=true lastStartId=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+      intent={xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService}
+          ConnectionRecord{dd611d9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@81fe420 flags=0x1}
+      ConnectionRecord{dd611d9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@81fe420 flags=0x1}
+    getFgsAllowWiu_legacy=DENIED
+    getFgsAllowWiu_new=DENIED
+    getFgsAllowWiu_forStart=DENIED
+    getFgsAllowWiu_forCapabilities=DENIED
+    getFgsAllowStart_legacy=DENIED
+    getFgsAllowStart_new=DENIED
+    getFgsAllowStart=DENIED
+    startForegroundCount=0
+    infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10903; uidState: TPSL; uidBFSL: n/a; intent: Intent { act=com.google.firebase.MESSAGING_EVENT xflg=0x4 pkg=ch.liri.operations }; code:DENIED; tempAllowListReason:<null>; allowWiu:-1; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:0; bindFromPackage:null: isBindService:true]
+    lastActivity=-7m57s106ms restartTime=-7m57s106ms createdFromFg=false
+  * ConnectionRecord{dd611d9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@81fe420 flags=0x1}
+    binding=AppBindRecord{72c9ced ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}

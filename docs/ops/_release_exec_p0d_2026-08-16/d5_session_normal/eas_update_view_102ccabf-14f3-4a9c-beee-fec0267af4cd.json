@@ -1,0 +1,26 @@
+﻿[
+  {
+    "id": "019fec15-c69f-7bb9-b67c-58ceb1fde4af",
+    "createdAt": "2026-08-10T14:31:17.919Z",
+    "group": "102ccabf-14f3-4a9c-beee-fec0267af4cd",
+    "branch": "production",
+    "message": "fix(iOS): marqueurs PNG Metro decouples socket + splash first-launch",
+    "runtimeVersion": "1.0.11",
+    "platform": "ios",
+    "manifestPermalink": "https://u.expo.dev/update/019fec15-c69f-7bb9-b67c-58ceb1fde4af",
+    "isRollBackToEmbedded": false,
+    "gitCommitHash": "ad183d2d7672b7a6693cccde6607d7e3fcbb1f8a"
+  },
+  {
+    "id": "019fec15-c69f-7a13-b49f-b60aea9e3439",
+    "createdAt": "2026-08-10T14:31:17.919Z",
+    "group": "102ccabf-14f3-4a9c-beee-fec0267af4cd",
+    "branch": "production",
+    "message": "fix(iOS): marqueurs PNG Metro decouples socket + splash first-launch",
+    "runtimeVersion": "1.0.11",
+    "platform": "android",
+    "manifestPermalink": "https://u.expo.dev/update/019fec15-c69f-7a13-b49f-b60aea9e3439",
+    "isRollBackToEmbedded": false,
+    "gitCommitHash": "ad183d2d7672b7a6693cccde6607d7e3fcbb1f8a"
+  }
+]

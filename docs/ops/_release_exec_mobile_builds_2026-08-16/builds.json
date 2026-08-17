@@ -1,0 +1,65 @@
+﻿{
+  "launched_at": "2026-08-16T08:06:26Z",
+  "source_sha": "286737a2362eb1e38013c72d04be23fcd608210e",
+  "tag_rc": "gps-p0-rc-2026-08-15",
+  "worktree": "C:/Users/jasiq/atmr.worktrees/gps-p0-g3-nn1",
+  "branch_used": "detached @ release tip (NOT feat/tracking-p0-p7-firewall)",
+  "profile": "production",
+  "channel": "production",
+  "version": "1.0.11",
+  "runtimeVersion": "1.0.11",
+  "sdkVersion": "54.0.0",
+  "track_status": "Play Internal smoke FAIL (= sideload); P0-D OPEN; GENERAL DISTRIBUTION NO-GO",
+  "gps_p0_ops_status": "CLOSED / PASS — independent track; binary smoke does not reopen P0-A/B/ledger; P0-D OPEN for prod binary FGS",
+  "android_install": {
+    "at": "2026-08-16T12:18+02:00",
+    "device": "RFCW20QC53W",
+    "versionName": "1.0.11",
+    "versionCode": 126,
+    "method": "AAB → bundletool universal APK → adb install",
+    "signing_note": "re-signed with debug.keystore for sideload (no local upload keystore)",
+    "standalone_launch": true,
+    "smoke_result": "FAIL — FGS/LOC BG+lock",
+    "evidence": "docs/ops/_release_exec_mobile_builds_2026-08-16/INSTALL_ANDROID_2026-08-16.md"
+  },
+  "play_internal": {
+    "prep": "GO",
+    "submit_at": "2026-08-16T11:14:55Z",
+    "eas_submission_id": "427b7707-140d-4910-97d0-c78297a93dc3",
+    "track": "internal",
+    "release_status": "COMPLETED",
+    "build_id": "a2970b22-6b5c-4390-a81b-74588e06b50b",
+    "versionCode": 126,
+    "rebuild": false,
+    "general_distribution": "NO-GO",
+    "install_on_device": "DONE",
+    "installer": "com.android.vending",
+    "smoke": "FAIL — identical to sideload (fgs_not_running, no BG/lock LOC)",
+    "smoke_at": "2026-08-16T11:27Z",
+    "evidence": "docs/ops/_release_exec_mobile_builds_2026-08-16/SMOKE_PLAY_INTERNAL_REPORT.md",
+    "p0d": "docs/ops/gps-p0-d-android-prod-binary-fgs-bg-2026-08-16.md"
+  },
+  "submit": "INTERNAL_ONLY (production track NO-GO)",
+  "eas_update_production": "NO-GO",
+  "smoke_after_finished": [
+    "install production build (no Metro / DevLauncher)",
+    "login chauffeur + mission",
+    "LOC FG + HOME/BG + lock/unlock",
+    "LOC persisted",
+    "overlap / auth_not_usable / gen_null = 0"
+  ],
+  "builds": {
+    "android": {
+      "id": "a2970b22-6b5c-4390-a81b-74588e06b50b",
+      "appBuildVersion": "126",
+      "status_at_launch": "IN_PROGRESS",
+      "url": "https://expo.dev/accounts/drinjasiqi/projects/operations-app/builds/a2970b22-6b5c-4390-a81b-74588e06b50b"
+    },
+    "ios": {
+      "id": "6012a3af-2a00-4035-945e-21edd9c3a374",
+      "appBuildVersion": "70",
+      "status_at_launch": "IN_PROGRESS",
+      "url": "https://expo.dev/accounts/drinjasiqi/projects/operations-app/builds/6012a3af-2a00-4035-945e-21edd9c3a374"
+    }
+  }
+}

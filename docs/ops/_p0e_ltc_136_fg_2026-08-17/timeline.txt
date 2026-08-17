@@ -1,0 +1,7 @@
+2026-08-17T21:13:33.7349576+02:00 [LTC136] START window=75s expect=136
+2026-08-17T21:13:50.1867832+02:00 [LTC136] SAMPLE t=+0s fused_age=11,2s p2b=0(+0) p2c=0(+0) p5acc=0 p5rej=0 p8js=0 p8empty=0 finished=0 unavail=0 dle=0
+2026-08-17T21:14:18.5564009+02:00 [LTC136] SAMPLE t=+28s fused_age=10,6s p2b=0(+0) p2c=3(+3) p5acc=0 p5rej=0 p8js=0 p8empty=0 finished=0 unavail=2 dle=0
+2026-08-17T21:14:47.1425214+02:00 [LTC136] SAMPLE t=+56s fused_age=8,3s p2b=1(+1) p2c=9(+6) p5acc=1 p5rej=0 p8js=1 p8empty=0 finished=1 unavail=5 dle=0
+2026-08-17T21:15:05.5475065+02:00 [LTC136] SAMPLE t=+75s fused_age=6,4s p2b=2(+1) p2c=11(+2) p5acc=2 p5rej=0 p8js=2 p8empty=0 finished=2 unavail=5 dle=0
+2026-08-17T21:15:18.6170291+02:00 [LTC136] SUMMARY p2b=3 p2bNonEmpty=3 p2c=14 p2cFalse=7 p5acc=3 p5rej=0 p8js=3 p8empty=0 dle=0
+2026-08-17T21:15:18.6230271+02:00 [LTC136] VERDICT_CAS A4b_JS_NO_DLE

@@ -1,0 +1,39 @@
+{
+  "canary": "DIURNE_POST_RELEASE_TIP",
+  "date": "2026-08-16",
+  "mode": "lirie_dev_metro_staging",
+  "tip_sha": "286737a2362eb1e38013c72d04be23fcd608210e",
+  "api_target": "staging http://127.0.0.1:15100 (adb reverse)",
+  "driver_id": 19,
+  "mission_id": 27,
+  "device": "RFCW20QC53W SM-S911B",
+  "phases": ["PRE", "FG_120s", "BG_120s", "LOCK_75s", "STEADY_120s"],
+  "signals": {
+    "P0A_overlap": 0,
+    "P0A_ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED": 0,
+    "P0A_native_start_error_logcat": 0,
+    "P0A_native_start_error_pg": 0,
+    "P0B_auth_not_usable": 0,
+    "LEDGER_generation_null_logcat": 0,
+    "LEDGER_holish_logcat": 0,
+    "LOC_persisted_progress": true,
+    "LOC_N_PRE": 4,
+    "LOC_N_FG": 18,
+    "LOC_N_BG": 24,
+    "LOC_N_LOCK": 25,
+    "LOC_N_MOVE": 25,
+    "LOC_mission_id_on_rows": 27,
+    "OBS_nfix_seen_fresh": true,
+    "OBS_no_false_gnss_stale_flagged": true
+  },
+  "claims_redis": {
+    "PRE": 6,
+    "MOVE": 37,
+    "note": "keys present during active ingest with TTL — not treated as orphan growth without TTL= -1; sample TTLs in evidence"
+  },
+  "verdict": "VERT",
+  "closes_gps_p0_ops": true,
+  "does_not_validate": "EAS production binary (no Metro / DevLauncher)",
+  "scope_note": "Valide tip JS 286737a2 via Dev Client/Metro + pipeline staging. Piste A (GPS P0 backend/ledger/ops) CLOSED. Piste B (binaire EAS production + smoke hors Metro avant diffusion) reste EN COURS — ne rouvre pas P0.",
+  "evidence_dir": "docs/ops/_release_exec_canary_diurne_2026-08-16/"
+}

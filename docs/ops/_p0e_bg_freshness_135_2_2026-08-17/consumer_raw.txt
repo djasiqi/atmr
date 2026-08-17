@@ -1,0 +1,9 @@
+﻿2026-08-17 16:52:37,865 [INFO] services.tracking.location_candidate: [p5b_promote] canonical driver_id=20135 capture_id=cap_msxh28dv_09dbx3axx1 event_id=trk_1786985557139_f02jwa34 gen=1706 seq=1
+2026-08-17 16:52:46,592 [INFO] services.tracking.location_candidate: [p5b_promote] canonical driver_id=20135 capture_id=cap_msxh2fd1_s5gr0ppwqm event_id=trk_1786985566021_31j9w78c gen=1706 seq=2
+2026-08-17 16:52:54,799 [INFO] services.tracking.location_candidate: [p5b_promote] canonical driver_id=20135 capture_id=cap_msxh2lkl_6vyhfv453g event_id=trk_1786985574069_wov5sd7k gen=1706 seq=3
+2026-08-17 16:52:58,463 [INFO] services.tracking.location_candidate: [p5b_promote] canonical driver_id=20135 capture_id=cap_msxh2o4b_oft23am9dl event_id=trk_1786985577371_3v01ty9k gen=1706 seq=4
+2026-08-17 16:53:05,112 [INFO] services.tracking.location_candidate: [p5b_promote] canonical driver_id=20135 capture_id=cap_msxh2tmu_ma0mry4b6t event_id=trk_1786985584518_o6sj2eyi gen=1706 seq=5
+2026-08-17 16:53:26,040 [INFO] services.tracking.location_candidate: [p5b_promote] canonical driver_id=20135 capture_id=cap_msxh39cg_n80pvxdjgo event_id=trk_1786985604880_gyw46jag gen=1706 seq=6
+2026-08-17 16:53:46,965 [INFO] services.tracking.location_candidate: [p5b_promote] canonical driver_id=20135 capture_id=cap_msxh3p1g_qm0te851fd event_id=trk_1786985625220_6vjrmxcq gen=1706 seq=7
+2026-08-17 16:54:29,329 [INFO] kafka.cluster: Updated metadata: ClusterMetadata(brokers: 3, topics: 1, coordinators: 1)
+2026-08-17 16:55:01,124 [INFO] kafka.cluster: Updated metadata: ClusterMetadata(brokers: 3, topics: 1, coordinators: 0)

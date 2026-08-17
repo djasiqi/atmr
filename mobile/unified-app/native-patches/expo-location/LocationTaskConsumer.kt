@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.Looper
 import android.os.PersistableBundle
+import android.os.SystemClock
 import android.util.Log
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationAvailability
@@ -38,6 +39,10 @@ import expo.modules.location.services.LocationTaskService
 import expo.modules.location.services.LocationTaskService.ServiceBinder
 import kotlin.math.abs
 
+/**
+ * Patch ATMR : FGS via LocationCallback (Android 14+/16) + instrumentation RCA P1–P8.
+ * Tags logcat : ATMR_LTC_P1 … ATMR_LTC_P8 (filtre adb: `ATMR_LTC_P`).
+ */
 class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsInterface?) : TaskConsumer(context, taskManagerUtils), TaskConsumerInterface, LifecycleEventListener {
   private var mTask: TaskInterface? = null
   private var mPendingIntent: PendingIntent? = null
@@ -86,22 +91,49 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
   }
 
   override fun didReceiveBroadcast(intent: Intent) {
-    mTask ?: return
+    // P1 — PendingIntent path (non-FGS / legacy)
+    Log.i(DIAG, "P1 didReceiveBroadcast received=true action=${intent.action}")
+    mTask ?: run {
+      Log.w(DIAG, "P1 abort task=null")
+      return
+    }
     val result = LocationResult.extractResult(intent)
     if (result != null) {
       val locations = result.locations
+      val first = locations.firstOrNull()
+      // P2
+      Log.i(
+        DIAG,
+        "P2 LocationResult null=false size=${locations.size} " +
+          "time=${first?.time} ertNanos=${first?.elapsedRealtimeNanos} " +
+          "lat=${first?.latitude} lon=${first?.longitude}"
+      )
       deferLocations(locations)
       maybeReportDeferredLocations()
     } else {
+      Log.w(DIAG, "P2 LocationResult null=true → fallback lastLocation")
       try {
         mLocationClient.lastLocation.addOnCompleteListener { task ->
-          task.result?.let {
+          val loc = task.result
+          val ageMs = if (loc != null) {
+            SystemClock.elapsedRealtime() - (loc.elapsedRealtimeNanos / 1_000_000L)
+          } else {
+            -1L
+          }
+          // P3
+          Log.i(
+            DIAG,
+            "P3 fallback lastLocation null=${loc == null} ageMs=$ageMs " +
+              "time=${loc?.time} lat=${loc?.latitude} lon=${loc?.longitude}"
+          )
+          loc?.let {
             deferLocations(listOf(it))
             maybeReportDeferredLocations()
           }
         }
       } catch (e: SecurityException) {
         Log.e(TAG, "Cannot get last location: " + e.message)
+        Log.e(DIAG, "P3 SecurityException ${e.message}")
       }
     }
   }
@@ -119,6 +151,8 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
         locationBundles.add(locationBundle)
       }
     }
+    // P7
+    Log.i(DIAG, "P7 didExecuteJob bundles.size=${locationBundles.size} rawData.size=${data.size}")
     executeTaskWithLocationBundles(locationBundles) { jobService.jobFinished(params, false) }
 
     // Returning `true` indicates that the job is still running, but in async mode.
@@ -160,6 +194,7 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
 
     try {
       mLocationClient.requestLocationUpdates(locationRequest, intent)
+      Log.i(DIAG, "P0 requestLocationUpdates PendingIntent path")
     } catch (e: SecurityException) {
       Log.w(TAG, "Location request has been rejected.", e)
     }
@@ -170,14 +205,32 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
     val callback = object : LocationCallback() {
       override fun onLocationResult(locationResult: LocationResult) {
         val locations = locationResult.locations
+        val first = locations.firstOrNull()
+        // P2b — chemin FGS LocationCallback (ATMR), équivalent extractResult
+        Log.i(
+          DIAG,
+          "P2b onLocationResult size=${locations.size} " +
+            "time=${first?.time} ertNanos=${first?.elapsedRealtimeNanos} " +
+            "lat=${first?.latitude} lon=${first?.longitude} " +
+            "sLastTimestamp=$sLastTimestamp"
+        )
         if (locations.isNotEmpty()) {
           deferLocations(locations)
           maybeReportDeferredLocations()
+        } else {
+          Log.w(DIAG, "P2b empty locations — no defer")
         }
       }
 
       override fun onLocationAvailability(locationAvailability: LocationAvailability) {
-        if (!locationAvailability.isLocationAvailable) {
+        val available = locationAvailability.isLocationAvailable
+        // P2c — origine exacte du log historique « Location unavailable… »
+        Log.i(
+          DIAG,
+          "P2c onLocationAvailability isLocationAvailable=$available " +
+            "deferred.size=${mDeferredLocations.size} hostPaused=$mIsHostPaused"
+        )
+        if (!available) {
           Log.w(TAG, "Location unavailable for foreground-service task delivery")
         }
       }
@@ -186,8 +239,10 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
     try {
       mLocationClient.requestLocationUpdates(locationRequest, callback, Looper.getMainLooper())
       Log.i(TAG, "Started location updates via LocationCallback (FGS path)")
+      Log.i(DIAG, "P0 requestLocationUpdates LocationCallback FGS path")
     } catch (e: SecurityException) {
       Log.w(TAG, "Location callback request has been rejected.", e)
+      Log.e(DIAG, "P0 SecurityException ${e.message}")
     }
   }
 
@@ -296,22 +351,40 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
   }
 
   private fun maybeReportDeferredLocations() {
-    if (!shouldReportDeferredLocations()) {
+    val should = shouldReportDeferredLocations()
+    // P4
+    Log.i(
+      DIAG,
+      "P4 defer/report deferred.size=${mDeferredLocations.size} " +
+        "hostPaused=$mIsHostPaused shouldReport=$should " +
+        "deferredDistance=$mDeferredDistance sLastTimestamp=$sLastTimestamp"
+    )
+    if (!should) {
       return
     }
     val context = context.applicationContext
     val data: MutableList<PersistableBundle> = ArrayList()
+    var accepted = 0
+    var rejectedTs = 0
     for (location in mDeferredLocations) {
       val timestamp = location.time
-
-      // Some devices may broadcast the same location multiple times (mostly twice) so we're filtering out these locations,
-      // so only one location at the specific timestamp can schedule a job.
-      if (timestamp > sLastTimestamp) {
+      val ok = timestamp > sLastTimestamp
+      // P5
+      Log.i(
+        DIAG,
+        "P5 filter incoming.time=$timestamp sLastTimestamp=$sLastTimestamp accepted=$ok " +
+          "lat=${location.latitude} lon=${location.longitude}"
+      )
+      if (ok) {
         val bundle = LocationResponse(location).toBundle(PersistableBundle::class.java)
         data.add(bundle)
         sLastTimestamp = timestamp
+        accepted++
+      } else {
+        rejectedTs++
       }
     }
+    Log.i(DIAG, "P5 summary accepted=$accepted rejectedTs=$rejectedTs bundles=${data.size}")
     if (data.size > 0) {
       // Save last reported location, reset the distance and clear a list of locations.
       mLastReportedLocation = mDeferredLocations[mDeferredLocations.size - 1]
@@ -328,12 +401,17 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
           locationBundle.putBundle("coords", coordsBundle)
           locationBundles.add(locationBundle)
         }
+        // P6 — chemin direct FGS (pas JobScheduler)
+        Log.i(DIAG, "P6 directFGS execute bundles.size=${locationBundles.size}")
         executeTaskWithLocationBundles(locationBundles) { /* direct FGS path */ }
         return
       }
 
-      // Schedule new job.
+      // P6 — JobScheduler
+      Log.i(DIAG, "P6 scheduleJob bundles.size=${data.size}")
       taskManagerUtils.scheduleJob(context, mTask, data)
+    } else {
+      Log.w(DIAG, "P6 skip — no bundles after timestamp filter")
     }
   }
 
@@ -360,10 +438,18 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
 
   private fun executeTaskWithLocationBundles(locationBundles: ArrayList<Bundle>, callback: TaskExecutionCallback) {
     if (locationBundles.size > 0 && mTask != null) {
+      // P8 — JS task avec locations
+      Log.i(DIAG, "P8 executeTask JS=true bundles.size=${locationBundles.size}")
       val data = Bundle()
       data.putParcelableArrayList("locations", locationBundles)
       mTask?.execute(data, null, callback)
     } else {
+      // P8 — Finished sans location (smoking gun observé)
+      Log.w(
+        DIAG,
+        "P8 executeTask JS=false FinishedWithoutLocation " +
+          "bundles.size=${locationBundles.size} taskNull=${mTask == null}"
+      )
       callback.onFinished(null)
     }
   }
@@ -383,6 +469,8 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
 
   companion object {
     private const val TAG = "LocationTaskConsumer"
+    /** Filtre logcat : `adb logcat -s ATMR_LTC_P:I LocationTaskConsumer:W` */
+    private const val DIAG = "ATMR_LTC_P"
     private const val FOREGROUND_SERVICE_KEY = "foregroundService"
     private var sLastTimestamp: Long = 0
     fun shouldUseForegroundService(options: Map<String?, Any?>): Boolean {

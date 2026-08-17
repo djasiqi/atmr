@@ -1,0 +1,44 @@
+2026-08-17T18:42:57.8536293+02:00 [BG135] PREFLIGHT versionCode=135 expect=135
+2026-08-17T18:43:00.6695581+02:00 [BG135] CONFLICT_BASELINE_4m=96
+2026-08-17T18:43:00.6715586+02:00 [BG135] FG_WARM 20s
+2026-08-17T18:43:04.3528744+02:00 [BG135] READY isFg=true startReq=true
+2026-08-17T18:43:05.3249749+02:00 [BG135] SAMPLE phase=FG t=+0s put15=13 isFg=true startReq=true finished=0 conflictCum=96
+2026-08-17T18:43:21.7267294+02:00 [BG135] SAMPLE phase=FG t=+16s put15=3 isFg=true startReq=true finished=1 conflictCum=96
+2026-08-17T18:43:26.0218031+02:00 [BG135] SAMPLE phase=FG t=+20s put15=0 isFg=true startReq=true finished=1 conflictCum=96
+2026-08-17T18:43:26.0238099+02:00 [BG135] HOME press - remote timeline 120s
+2026-08-17T18:43:29.9907428+02:00 [BG135] SAMPLE phase=HOME t=+0s put15=0 isFg=true startReq=true finished=0 conflictCum=103
+2026-08-17T18:43:47.0223382+02:00 [BG135] SAMPLE phase=HOME t=+17s put15=20 isFg=true startReq=true finished=1 conflictCum=118
+2026-08-17T18:44:04.5846462+02:00 [BG135] SAMPLE phase=HOME t=+34s put15=16 isFg=true startReq=true finished=1 conflictCum=110
+2026-08-17T18:44:21.4596593+02:00 [BG135] SAMPLE phase=HOME t=+51s put15=0 isFg=true startReq=true finished=1 conflictCum=92
+2026-08-17T18:44:38.5052445+02:00 [BG135] SAMPLE phase=HOME t=+68s put15=3 isFg=true startReq=true finished=2 conflictCum=76
+2026-08-17T18:44:55.7458371+02:00 [BG135] SAMPLE phase=HOME t=+85s put15=3 isFg=true startReq=true finished=3 conflictCum=78
+2026-08-17T18:45:13.5848502+02:00 [BG135] SAMPLE phase=HOME t=+103s put15=3 isFg=true startReq=true finished=4 conflictCum=78
+2026-08-17T18:45:30.5825769+02:00 [BG135] SAMPLE phase=HOME t=+120s put15=9 isFg=true startReq=true finished=1 conflictCum=68
+2026-08-17T18:45:30.5845719+02:00 [BG135] WAIT remote job
+2026-08-17T18:45:42.1150483+02:00 [BG135] CONFLICT_HOME_START=103 AFTER=60 DELTA=-43
+2026-08-17T18:45:42.1170533+02:00 [BG135] REMOTE_OUT
+2026-08-17T18:45:42.1348647+02:00 [BG135] SRV ­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+2026-08-17T18:45:42.1368638+02:00 [BG135] SRV Ô£à [Socket.IO] Message queue Redis active (workers=6)
+2026-08-17T18:45:42.1398676+02:00 [BG135] SRV BG_FRESHNESS_RCA_START 2026-08-17T16:43:39.268760+00:00
+2026-08-17T18:45:42.1418651+02:00 [BG135] SRV phase=HOME driver=20135 window=120s poll=15.0s
+2026-08-17T18:45:42.1428688+02:00 [BG135] SRV PG_FIRST True
+2026-08-17T18:45:42.1438646+02:00 [BG135] SRV SAMPLE n=1 t=+0s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4568 rest_src=db_fallback
+2026-08-17T18:45:42.1458634+02:00 [BG135] SRV SAMPLE n=2 t=+15s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4583 rest_src=db_fallback
+2026-08-17T18:45:42.1478650+02:00 [BG135] SRV SAMPLE n=3 t=+30s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4598 rest_src=db_fallback
+2026-08-17T18:45:42.1498651+02:00 [BG135] SRV SAMPLE n=4 t=+45s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4613 rest_src=db_fallback
+2026-08-17T18:45:42.1518636+02:00 [BG135] SRV SAMPLE n=5 t=+60s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4628 rest_src=db_fallback
+2026-08-17T18:45:42.1528634+02:00 [BG135] SRV SAMPLE n=6 t=+75s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4643 rest_src=db_fallback
+2026-08-17T18:45:42.1548662+02:00 [BG135] SRV SAMPLE n=7 t=+90s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4658 rest_src=db_fallback
+2026-08-17T18:45:42.1578669+02:00 [BG135] SRV SAMPLE n=8 t=+105s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4673 rest_src=db_fallback
+2026-08-17T18:45:42.1588649+02:00 [BG135] SRV SAMPLE n=9 t=+120s phase=HOME dle_id=6442 dle_seq=34 dle_rec=2026-08-17 15:24:24.244000+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=-1 canon_rec= ttl=-2 canon_sess=None canon_eid=None rest_status=last_known rest_age=4688 rest_src=db_fallback
+2026-08-17T18:45:42.1608642+02:00 [BG135] SRV SUMMARY
+2026-08-17T18:45:42.1628727+02:00 [BG135] SRV   dle_delta_id=0 dle_delta_seq=0
+2026-08-17T18:45:42.1658722+02:00 [BG135] SRV   canon_delta_seq=-1
+2026-08-17T18:45:42.1678749+02:00 [BG135] SRV   rest_statuses=['last_known', 'last_known', 'last_known', 'last_known', 'last_known', 'last_known', 'last_known', 'last_known', 'last_known']
+2026-08-17T18:45:42.1698712+02:00 [BG135] SRV   first_dle={'id': 6442, 'sequence_id': 34, 'tracking_session_id': 'trk_sess_1786979474208_5whqvvm6', 'location_event_id': 'trk_1786980266550_htjp3662', 'recorded_at': datetime.datetime(2026, 8, 17, 15, 24, 24, 244000, tzinfo=datetime.timezone.utc), 'created_at': datetime.datetime(2026, 8, 17, 16, 39, 50, 790005, tzinfo=datetime.timezone.utc), 'mission_id': 38243}
+2026-08-17T18:45:42.1718757+02:00 [BG135] SRV   last_dle={'id': 6442, 'sequence_id': 34, 'tracking_session_id': 'trk_sess_1786979474208_5whqvvm6', 'location_event_id': 'trk_1786980266550_htjp3662', 'recorded_at': datetime.datetime(2026, 8, 17, 15, 24, 24, 244000, tzinfo=datetime.timezone.utc), 'created_at': datetime.datetime(2026, 8, 17, 16, 39, 50, 790005, tzinfo=datetime.timezone.utc), 'mission_id': 38243}
+2026-08-17T18:45:42.1738774+02:00 [BG135] SRV HYPOTHESIS A_or_D low_pg_and_canonical
+2026-08-17T18:45:42.1758711+02:00 [BG135] SRV BG_FRESHNESS_RCA_END 2026-08-17T16:45:39.534919+00:00
+2026-08-17T18:45:42.8482806+02:00 [BG135] CONFLICT_LINES_SINCE_3m=50
+2026-08-17T18:45:42.9676989+02:00 [BG135] GATE fgs=True conflict0=False dleAdv=False(0) canonAdv=False(-1) restOk=False hyp=A_or_D
+2026-08-17T18:45:42.9696999+02:00 [BG135] VERDICT BG_FRESHNESS_FIX_CANARY_FAIL conflict>0

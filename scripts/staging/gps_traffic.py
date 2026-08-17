@@ -36,6 +36,8 @@ def _put(token: str, payload: dict) -> tuple[int, str]:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "X-Requested-With": "staging-gps-generator",
+            # Talisman force_https (FLASK_CONFIG=production) : ProxyFix lit ce header.
+            "X-Forwarded-Proto": "https",
         },
     )
     try:
@@ -47,13 +49,27 @@ def _put(token: str, payload: dict) -> tuple[int, str]:
         return 0, str(exc)
 
 
-def _point(mission_id: int | None, seq: int) -> dict:
+def _point(
+    mission_id: int | None,
+    seq: int,
+    *,
+    session_id: str,
+    capture_id: str | None = None,
+    generation: int = 1,
+) -> dict:
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    event_id = str(uuid.uuid4())
+    cap = capture_id or event_id
     data: dict = {
         "latitude": LAT + (seq % 50) * 0.00001,
         "longitude": LON + (seq % 50) * 0.00001,
         "recorded_at": now,
-        "location_event_id": str(uuid.uuid4()),
+        "location_event_id": event_id,
+        "capture_id": cap,
+        "captureId": cap,
+        "tracking_session_id": session_id,
+        "session_generation": generation,
+        "sequence_id": seq + 1,
         "location_mode": "mission_live",
         "accuracy": 8,
     }
@@ -95,8 +111,11 @@ def run_profile(name: str, *, count: int, interval: float) -> None:
         token = sc["token"]
         mission_id = sc.get("mission_id")
         print(f"=== {sc_name} expected={sc.get('expected_reason')} ===")
+        session_id = f"stg-{sc_name}-{uuid.uuid4().hex[:10]}"
         for i in range(count):
-            status, body = _put(token, _point(mission_id, i))
+            status, body = _put(
+                token, _point(mission_id, i, session_id=session_id)
+            )
             print(f"  {sc_name}#{i} HTTP {status} {body[:160]}")
             if sc_name == "mismatch_canonical" and i == 0:
                 _poison_canonical(

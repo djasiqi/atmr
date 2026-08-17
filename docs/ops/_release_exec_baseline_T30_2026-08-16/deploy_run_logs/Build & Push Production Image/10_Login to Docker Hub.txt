@@ -1,0 +1,18 @@
+﻿2026-08-15T23:20:23.5781693Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T23:20:23.5782994Z ##[group]Run docker/login-action@v3
+2026-08-15T23:20:23.5783281Z with:
+2026-08-15T23:20:23.5783513Z   username: ***
+2026-08-15T23:20:23.5783809Z   password: ***
+2026-08-15T23:20:23.5784036Z   logout: true
+2026-08-15T23:20:23.5784249Z env:
+2026-08-15T23:20:23.5784472Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:20:23.5784809Z   DOCKER_IMAGE: ***
+2026-08-15T23:20:23.5785056Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:20:23.5785380Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:20:23.5785619Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:20:23.5785918Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:20:23.5786241Z ##[endgroup]
+2026-08-15T23:20:23.8934566Z Logging into docker.io...
+2026-08-15T23:20:23.8957696Z (node:3339) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-15T23:20:23.8959072Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-15T23:20:24.4562783Z Login Succeeded!

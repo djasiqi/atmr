@@ -85,8 +85,7 @@ index 0000000..9e26dfe
 \ No newline at end of file
 diff --git a/node_modules/expo-location/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar b/node_modules/expo-location/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar
 new file mode 100644
-index 0000000..a0f9381
-Binary files /dev/null and b/node_modules/expo-location/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt b/node_modules/expo-location/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt
 new file mode 100644
 index 0000000..e69de29
@@ -222,168 +221,127 @@ index 0000000..1749253
 +expo.modules.location
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab
 new file mode 100644
-index 0000000..fb02570
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream
 new file mode 100644
-index 0000000..bb8b175
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len
 new file mode 100644
-index 0000000..d339424
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len
 new file mode 100644
-index 0000000..a541356
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at
 new file mode 100644
-index 0000000..3b663b9
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i
 new file mode 100644
-index 0000000..0245a98
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab
 new file mode 100644
-index 0000000..68da687
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream
 new file mode 100644
-index 0000000..472ba89
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len
 new file mode 100644
-index 0000000..6a08eee
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len
 new file mode 100644
-index 0000000..486fe1a
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at
 new file mode 100644
-index 0000000..12cb7c9
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i
 new file mode 100644
-index 0000000..6862540
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab
 new file mode 100644
-index 0000000..efbfa75
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream
 new file mode 100644
-index 0000000..472ba89
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len
 new file mode 100644
-index 0000000..6a08eee
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len
 new file mode 100644
-index 0000000..486fe1a
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at
 new file mode 100644
-index 0000000..08a2199
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i
 new file mode 100644
-index 0000000..6862540
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab
 new file mode 100644
-index 0000000..bdf584a
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream
 new file mode 100644
-index 0000000..4ef3759
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len
 new file mode 100644
-index 0000000..066dfb4
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len
 new file mode 100644
-index 0000000..2a17e6e
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at
 new file mode 100644
-index 0000000..dfa12f5
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i
 new file mode 100644
-index 0000000..16cb839
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab
 new file mode 100644
-index 0000000..b4952a2
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream
 new file mode 100644
-index 0000000..a58d14e
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len
 new file mode 100644
-index 0000000..007f6a3
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len
 new file mode 100644
-index 0000000..dcae7a8
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at
 new file mode 100644
-index 0000000..eff3c89
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i
 new file mode 100644
-index 0000000..474077d
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab
 new file mode 100644
-index 0000000..4a9ed7b
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream
 new file mode 100644
-index 0000000..e15618a
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len
 new file mode 100644
-index 0000000..fcdd9c0
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len
 new file mode 100644
-index 0000000..9001288
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values
 new file mode 100644
-index 0000000..aba50fd
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at
 new file mode 100644
-index 0000000..bb856bc
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.s b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.s
 new file mode 100644
 index 0000000..8599f12
@@ -394,96 +352,73 @@ index 0000000..8599f12
 \ No newline at end of file
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i
 new file mode 100644
-index 0000000..cb2a3d2
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab
 new file mode 100644
-index 0000000..93ad9f6
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream
 new file mode 100644
-index 0000000..bb8b175
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len
 new file mode 100644
-index 0000000..d339424
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len
 new file mode 100644
-index 0000000..a541356
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at
 new file mode 100644
-index 0000000..9faac6e
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i
 new file mode 100644
-index 0000000..0245a98
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab
 new file mode 100644
-index 0000000..8392c4f
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream
 new file mode 100644
-index 0000000..506e2c2
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len
 new file mode 100644
-index 0000000..f01f42f
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len
 new file mode 100644
-index 0000000..003bc0e
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at
 new file mode 100644
-index 0000000..e8c0a81
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i
 new file mode 100644
-index 0000000..d572c4c
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab
 new file mode 100644
-index 0000000..d88ecc2
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream
 new file mode 100644
-index 0000000..6d53eff
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len
 new file mode 100644
-index 0000000..661b2b3
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len
 new file mode 100644
-index 0000000..b287d95
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at
 new file mode 100644
-index 0000000..022a008
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i
 new file mode 100644
-index 0000000..f0f4cf1
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/counters.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/counters.tab
 new file mode 100644
 index 0000000..920202f
@@ -495,100 +430,76 @@ index 0000000..920202f
 \ No newline at end of file
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab
 new file mode 100644
-index 0000000..82e890b
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream
 new file mode 100644
-index 0000000..bb8b175
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len
 new file mode 100644
-index 0000000..d339424
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len
 new file mode 100644
-index 0000000..a541356
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at
 new file mode 100644
-index 0000000..afce831
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i
 new file mode 100644
-index 0000000..0245a98
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab
 new file mode 100644
-index 0000000..2074f64
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream
 new file mode 100644
-index 0000000..b73411e
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len
 new file mode 100644
-index 0000000..296694d
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len
 new file mode 100644
-index 0000000..a541356
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at
 new file mode 100644
-index 0000000..8f3c8b3
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i
 new file mode 100644
-index 0000000..fd27401
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab
 new file mode 100644
-index 0000000..b625a1e
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream
 new file mode 100644
-index 0000000..c9b0270
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len
 new file mode 100644
-index 0000000..ecf5cc4
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.len
 new file mode 100644
-index 0000000..22abebb
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at
 new file mode 100644
-index 0000000..2c4c48f
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i
 new file mode 100644
-index 0000000..022d0c4
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len
 new file mode 100644
-index 0000000..131e265
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin
 new file mode 100644
-index 0000000..02bb924
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin
 new file mode 100644
-index 0000000..b1dd9ae
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin
 new file mode 100644
-index 0000000..8b34f35
-Binary files /dev/null and b/node_modules/expo-location/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/outputs/logs/manifest-merger-debug-report.txt b/node_modules/expo-location/android/build/outputs/logs/manifest-merger-debug-report.txt
 new file mode 100644
 index 0000000..4fe142f
@@ -631,494 +542,375 @@ index 0000000..4fe142f
 +		INJECTED from C:\Users\jasiq\atmr\mobile\unified-app\node_modules\expo-location\android\src\main\AndroidManifest.xml
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/META-INF/expo-location_debug.kotlin_module b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/META-INF/expo-location_debug.kotlin_module
 new file mode 100644
-index 0000000..9dbc290
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/META-INF/expo-location_debug.kotlin_module differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/AppForegroundedSingleton.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/AppForegroundedSingleton.class
 new file mode 100644
-index 0000000..3e492e5
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/AppForegroundedSingleton.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/ConversionException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/ConversionException.class
 new file mode 100644
-index 0000000..d541f9a
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/ConversionException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/CurrentLocationIsUnavailableException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/CurrentLocationIsUnavailableException.class
 new file mode 100644
-index 0000000..751d98d
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/CurrentLocationIsUnavailableException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/ForegroundServicePermissionsException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/ForegroundServicePermissionsException.class
 new file mode 100644
-index 0000000..56cfef5
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/ForegroundServicePermissionsException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/ForegroundServiceStartNotAllowedException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/ForegroundServiceStartNotAllowedException.class
 new file mode 100644
-index 0000000..16e557d
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/ForegroundServiceStartNotAllowedException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/GeocodeException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/GeocodeException.class
 new file mode 100644
-index 0000000..70c0492
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/GeocodeException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/GeofencingException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/GeofencingException.class
 new file mode 100644
-index 0000000..1850914
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/GeofencingException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationAccuracy.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationAccuracy.class
 new file mode 100644
-index 0000000..0c37152
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationAccuracy.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationActivityResultListener.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationActivityResultListener.class
 new file mode 100644
-index 0000000..0a11914
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationActivityResultListener.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationBackgroundUnauthorizedException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationBackgroundUnauthorizedException.class
 new file mode 100644
-index 0000000..5b4ec7d
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationBackgroundUnauthorizedException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion$askForPermissionsWithPermissionsManager$2$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion$askForPermissionsWithPermissionsManager$2$1.class
 new file mode 100644
-index 0000000..e3eb195
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion$askForPermissionsWithPermissionsManager$2$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion$getPermissionsWithPermissionsManager$2$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion$getPermissionsWithPermissionsManager$2$1.class
 new file mode 100644
-index 0000000..89ef71b
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion$getPermissionsWithPermissionsManager$2$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion$requestContinuousUpdates$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion$requestContinuousUpdates$1.class
 new file mode 100644
-index 0000000..4b81b5f
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion$requestContinuousUpdates$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion.class
 new file mode 100644
-index 0000000..143546a
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers$Companion.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers.class
 new file mode 100644
-index 0000000..c475dab
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationHelpers.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$Companion.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$Companion.class
 new file mode 100644
-index 0000000..fed8da3
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$Companion.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$1$12$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$1$12$1.class
 new file mode 100644
-index 0000000..be920c1
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$1$12$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$1$16$1$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$1$16$1$1.class
 new file mode 100644
-index 0000000..9137ce6
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$1$16$1$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$1.class
 new file mode 100644
-index 0000000..6f4ab04
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$10.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$10.class
 new file mode 100644
-index 0000000..9e056e7
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$10.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$11.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$11.class
 new file mode 100644
-index 0000000..d7bcfb1
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$11.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$12.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$12.class
 new file mode 100644
-index 0000000..4a7a8c7
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$12.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$13.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$13.class
 new file mode 100644
-index 0000000..4c73f7a
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$13.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$14.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$14.class
 new file mode 100644
-index 0000000..9d10e6d
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$14.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$15.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$15.class
 new file mode 100644
-index 0000000..96d1c3a
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$15.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$16.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$16.class
 new file mode 100644
-index 0000000..2cdb2e0
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$16.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$17.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$17.class
 new file mode 100644
-index 0000000..eafd9f3
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$17.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$18.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$18.class
 new file mode 100644
-index 0000000..ed2d8f2
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$18.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$19.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$19.class
 new file mode 100644
-index 0000000..7f64501
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$19.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$2.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$2.class
 new file mode 100644
-index 0000000..8fda0c5
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$2.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$20.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$20.class
 new file mode 100644
-index 0000000..59744a0
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$20.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$21.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$21.class
 new file mode 100644
-index 0000000..13eafb8
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$21.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$22.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$22.class
 new file mode 100644
-index 0000000..e5be231
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$22.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$23.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$23.class
 new file mode 100644
-index 0000000..55e32c3
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$23.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$24.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$24.class
 new file mode 100644
-index 0000000..ddf45ac
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$24.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$25.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$25.class
 new file mode 100644
-index 0000000..e8e0045
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$25.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$26.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$26.class
 new file mode 100644
-index 0000000..4be6d72
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$26.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$3.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$3.class
 new file mode 100644
-index 0000000..f7ff468
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$3.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$4.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$4.class
 new file mode 100644
-index 0000000..0a19bf1
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$4.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$5.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$5.class
 new file mode 100644
-index 0000000..87dfc5d
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$5.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$6.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$6.class
 new file mode 100644
-index 0000000..7327167
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$6.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$7.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$7.class
 new file mode 100644
-index 0000000..ab044d0
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$7.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$8.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$8.class
 new file mode 100644
-index 0000000..8cf8560
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$8.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$9.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$9.class
 new file mode 100644
-index 0000000..4748b3b
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunction$9.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$1.class
 new file mode 100644
-index 0000000..7301102
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$2.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$2.class
 new file mode 100644
-index 0000000..509552b
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$2.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$3.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$3.class
 new file mode 100644
-index 0000000..0bda660
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$3.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$4.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$4.class
 new file mode 100644
-index 0000000..35cf55e
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$4.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$5.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$5.class
 new file mode 100644
-index 0000000..0370ae4
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$5.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$1.class
 new file mode 100644
-index 0000000..10fc322
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$10.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$10.class
 new file mode 100644
-index 0000000..958da73
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$10.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$11.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$11.class
 new file mode 100644
-index 0000000..b2c9c4a
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$11.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$12.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$12.class
 new file mode 100644
-index 0000000..683867b
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$12.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$13.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$13.class
 new file mode 100644
-index 0000000..0507d6c
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$13.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$2.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$2.class
 new file mode 100644
-index 0000000..1f4e96f
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$2.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$3.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$3.class
 new file mode 100644
-index 0000000..3b03fe1
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$3.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$4.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$4.class
 new file mode 100644
-index 0000000..9adf9e3
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$4.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$5.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$5.class
 new file mode 100644
-index 0000000..98a942c
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$5.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$6.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$6.class
 new file mode 100644
-index 0000000..1e4dc16
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$6.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$7.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$7.class
 new file mode 100644
-index 0000000..145b573
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$7.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$8.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$8.class
 new file mode 100644
-index 0000000..b5778a2
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$8.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$9.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$9.class
 new file mode 100644
-index 0000000..8ecde4c
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$Coroutine$9.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$OnActivityEntersBackground$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$OnActivityEntersBackground$1.class
 new file mode 100644
-index 0000000..c2a7db1
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$OnActivityEntersBackground$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$OnActivityEntersForeground$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$OnActivityEntersForeground$1.class
 new file mode 100644
-index 0000000..7e49309
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$OnActivityEntersForeground$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$OnCreate$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$OnCreate$1.class
 new file mode 100644
-index 0000000..eb93475
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$definition$lambda$27$$inlined$OnCreate$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getCurrentPositionAsync$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getCurrentPositionAsync$1.class
 new file mode 100644
-index 0000000..fb248d0
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getCurrentPositionAsync$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getForegroundPermissionsAsync$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getForegroundPermissionsAsync$1.class
 new file mode 100644
-index 0000000..f183508
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getForegroundPermissionsAsync$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownLocation$2$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownLocation$2$1.class
 new file mode 100644
-index 0000000..f99ae58
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownLocation$2$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownLocation$2$2.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownLocation$2$2.class
 new file mode 100644
-index 0000000..6fa3515
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownLocation$2$2.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownLocation$2$3.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownLocation$2$3.class
 new file mode 100644
-index 0000000..63e524a
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownLocation$2$3.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownPositionAsync$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownPositionAsync$1.class
 new file mode 100644
-index 0000000..416ea08
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$getLastKnownPositionAsync$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$requestBackgroundPermissionsAsync$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$requestBackgroundPermissionsAsync$1.class
 new file mode 100644
-index 0000000..0830dc8
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$requestBackgroundPermissionsAsync$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$requestLocationUpdates$locationCallback$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$requestLocationUpdates$locationCallback$1.class
 new file mode 100644
-index 0000000..fa73a8d
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$requestLocationUpdates$locationCallback$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$sam$com_google_android_gms_tasks_OnSuccessListener$0.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$sam$com_google_android_gms_tasks_OnSuccessListener$0.class
 new file mode 100644
-index 0000000..ee86980
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$sam$com_google_android_gms_tasks_OnSuccessListener$0.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$startHeadingUpdate$locationCallback$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$startHeadingUpdate$locationCallback$1.class
 new file mode 100644
-index 0000000..e90c510
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule$startHeadingUpdate$locationCallback$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule.class
 new file mode 100644
-index 0000000..1970a80
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationModule.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationParams.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationParams.class
 new file mode 100644
-index 0000000..3fa31d2
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationParams.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestCallbacks$DefaultImpls.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestCallbacks$DefaultImpls.class
 new file mode 100644
-index 0000000..3b890f7
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestCallbacks$DefaultImpls.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestCallbacks.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestCallbacks.class
 new file mode 100644
-index 0000000..2d04e5e
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestCallbacks.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestCancelledException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestCancelledException.class
 new file mode 100644
-index 0000000..8096d90
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestCancelledException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestRejectedException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestRejectedException.class
 new file mode 100644
-index 0000000..2d6c9c3
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationRequestRejectedException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationSettingsUnsatisfiedException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationSettingsUnsatisfiedException.class
 new file mode 100644
-index 0000000..4445fbd
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationSettingsUnsatisfiedException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationUnauthorizedException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationUnauthorizedException.class
 new file mode 100644
-index 0000000..ac7013e
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationUnauthorizedException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationUnavailableException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationUnavailableException.class
 new file mode 100644
-index 0000000..c0d429b
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationUnavailableException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationUnknownException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationUnknownException.class
 new file mode 100644
-index 0000000..7ba6d05
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/LocationUnknownException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/MissingUIManagerException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/MissingUIManagerException.class
 new file mode 100644
-index 0000000..a5c1ea9
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/MissingUIManagerException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/NoGeocodeException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/NoGeocodeException.class
 new file mode 100644
-index 0000000..18e25bf
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/NoGeocodeException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/NoPermissionInManifestException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/NoPermissionInManifestException.class
 new file mode 100644
-index 0000000..dd4cdfa
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/NoPermissionInManifestException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/NoPermissionsModuleException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/NoPermissionsModuleException.class
 new file mode 100644
-index 0000000..1b4fa59
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/NoPermissionsModuleException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/SensorManagerUnavailable.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/SensorManagerUnavailable.class
 new file mode 100644
-index 0000000..fe1305c
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/SensorManagerUnavailable.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/TaskManagerNotFoundException.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/TaskManagerNotFoundException.class
 new file mode 100644
-index 0000000..b21daff
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/TaskManagerNotFoundException.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeocodeResponse$Companion.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeocodeResponse$Companion.class
 new file mode 100644
-index 0000000..4594cdf
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeocodeResponse$Companion.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeocodeResponse.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeocodeResponse.class
 new file mode 100644
-index 0000000..323b042
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeocodeResponse.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeofencingOptions.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeofencingOptions.class
 new file mode 100644
-index 0000000..23c3d87
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeofencingOptions.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeofencingRegionState.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeofencingRegionState.class
 new file mode 100644
-index 0000000..6b6304c
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/GeofencingRegionState.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/Heading.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/Heading.class
 new file mode 100644
-index 0000000..daa3a19
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/Heading.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/HeadingEventResponse.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/HeadingEventResponse.class
 new file mode 100644
-index 0000000..42df519
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/HeadingEventResponse.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationLastKnownOptions.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationLastKnownOptions.class
 new file mode 100644
-index 0000000..e03a270
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationLastKnownOptions.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationObjectCoords.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationObjectCoords.class
 new file mode 100644
-index 0000000..4fe7eae
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationObjectCoords.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationOptions.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationOptions.class
 new file mode 100644
-index 0000000..aef6cbb
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationOptions.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationProviderStatus.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationProviderStatus.class
 new file mode 100644
-index 0000000..2f4464c
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationProviderStatus.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationResponse.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationResponse.class
 new file mode 100644
-index 0000000..fd56574
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationResponse.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationTaskOptions.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationTaskOptions.class
 new file mode 100644
-index 0000000..7c851d5
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationTaskOptions.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationTaskServiceOptions.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationTaskServiceOptions.class
 new file mode 100644
-index 0000000..cceca64
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/LocationTaskServiceOptions.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/PermissionDetailsLocationAndroid.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/PermissionDetailsLocationAndroid.class
 new file mode 100644
-index 0000000..fecb2b3
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/PermissionDetailsLocationAndroid.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/PermissionRequestResponse.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/PermissionRequestResponse.class
 new file mode 100644
-index 0000000..e2bd092
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/PermissionRequestResponse.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/Region.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/Region.class
 new file mode 100644
-index 0000000..6e2ff56
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/Region.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/ReverseGeocodeLocation.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/ReverseGeocodeLocation.class
 new file mode 100644
-index 0000000..365345e
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/ReverseGeocodeLocation.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/ReverseGeocodeResponse$Companion.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/ReverseGeocodeResponse$Companion.class
 new file mode 100644
-index 0000000..950e4f1
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/ReverseGeocodeResponse$Companion.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/ReverseGeocodeResponse.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/ReverseGeocodeResponse.class
 new file mode 100644
-index 0000000..0caf54d
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/records/ReverseGeocodeResponse.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/services/LocationTaskService$Companion.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/services/LocationTaskService$Companion.class
 new file mode 100644
-index 0000000..9015ddb
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/services/LocationTaskService$Companion.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/services/LocationTaskService$ServiceBinder.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/services/LocationTaskService$ServiceBinder.class
 new file mode 100644
-index 0000000..2a88d1a
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/services/LocationTaskService$ServiceBinder.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/services/LocationTaskService.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/services/LocationTaskService.class
 new file mode 100644
-index 0000000..e2ceab8
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/services/LocationTaskService.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/GeofencingTaskConsumer$Companion.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/GeofencingTaskConsumer$Companion.class
 new file mode 100644
-index 0000000..c93a3fc
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/GeofencingTaskConsumer$Companion.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/GeofencingTaskConsumer.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/GeofencingTaskConsumer.class
 new file mode 100644
-index 0000000..7a0b1ec
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/GeofencingTaskConsumer.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer$Companion.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer$Companion.class
 new file mode 100644
-index 0000000..0196bbd
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer$Companion.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer$maybeStartForegroundService$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer$maybeStartForegroundService$1.class
 new file mode 100644
-index 0000000..7ef0c6c
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer$maybeStartForegroundService$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer$startLocationUpdatesWithCallback$callback$1.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer$startLocationUpdatesWithCallback$callback$1.class
 new file mode 100644
-index 0000000..c67caff
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer$startLocationUpdatesWithCallback$callback$1.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer.class b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer.class
 new file mode 100644
-index 0000000..02ea466
-Binary files /dev/null and b/node_modules/expo-location/android/build/tmp/kotlin-classes/debug/expo/modules/location/taskConsumers/LocationTaskConsumer.class differ
+index 0000000..e69de29
 diff --git a/node_modules/expo-location/android/src/main/java/expo/modules/location/taskConsumers/LocationTaskConsumer.kt b/node_modules/expo-location/android/src/main/java/expo/modules/location/taskConsumers/LocationTaskConsumer.kt
-index e659285..447ddb9 100644
+index e659285..2910d4d 100644
 --- a/node_modules/expo-location/android/src/main/java/expo/modules/location/taskConsumers/LocationTaskConsumer.kt
 +++ b/node_modules/expo-location/android/src/main/java/expo/modules/location/taskConsumers/LocationTaskConsumer.kt
-@@ -11,9 +11,12 @@ import android.location.Location
+@@ -11,9 +11,13 @@ import android.location.Location
  import android.os.Build
  import android.os.Bundle
  import android.os.IBinder
 +import android.os.Looper
  import android.os.PersistableBundle
++import android.os.SystemClock
  import android.util.Log
  import com.google.android.gms.location.FusedLocationProviderClient
 +import com.google.android.gms.location.LocationAvailability
@@ -1126,7 +918,16 @@ index e659285..447ddb9 100644
  import com.google.android.gms.location.LocationRequest
  import com.google.android.gms.location.LocationResult
  import com.google.android.gms.location.LocationServices
-@@ -40,6 +43,7 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+@@ -35,11 +39,16 @@ import expo.modules.location.services.LocationTaskService
+ import expo.modules.location.services.LocationTaskService.ServiceBinder
+ import kotlin.math.abs
+ 
++/**
++ * Patch ATMR : FGS via LocationCallback (Android 14+/16) + instrumentation RCA P1–P8.
++ * Tags logcat : ATMR_LTC_P1 … ATMR_LTC_P8 (filtre adb: `ATMR_LTC_P`).
++ */
+ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsInterface?) : TaskConsumer(context, taskManagerUtils), TaskConsumerInterface, LifecycleEventListener {
+   private var mTask: TaskInterface? = null
    private var mPendingIntent: PendingIntent? = null
    private var mService: LocationTaskService? = null
    private var mLocationRequest: LocationRequest? = null
@@ -1134,7 +935,7 @@ index e659285..447ddb9 100644
    private var mLastReportedLocation: Location? = null
    private var mDeferredDistance = 0.0
    private val mDeferredLocations: MutableList<Location> = ArrayList()
-@@ -55,8 +59,11 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+@@ -55,8 +64,11 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
  
    override fun didRegister(task: TaskInterface) {
      mTask = task
@@ -1148,7 +949,7 @@ index e659285..447ddb9 100644
    }
  
    override fun didUnregister() {
-@@ -70,12 +77,12 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+@@ -70,31 +82,58 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
    override fun setOptions(options: Map<String, Any>) {
      super.setOptions(options)
  
@@ -1166,7 +967,64 @@ index e659285..447ddb9 100644
    }
  
    override fun didReceiveBroadcast(intent: Intent) {
-@@ -135,12 +142,17 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+-    mTask ?: return
++    // P1 — PendingIntent path (non-FGS / legacy)
++    Log.i(DIAG, "P1 didReceiveBroadcast received=true action=${intent.action}")
++    mTask ?: run {
++      Log.w(DIAG, "P1 abort task=null")
++      return
++    }
+     val result = LocationResult.extractResult(intent)
+     if (result != null) {
+       val locations = result.locations
++      val first = locations.firstOrNull()
++      // P2
++      Log.i(
++        DIAG,
++        "P2 LocationResult null=false size=${locations.size} " +
++          "time=${first?.time} ertNanos=${first?.elapsedRealtimeNanos} " +
++          "lat=${first?.latitude} lon=${first?.longitude}"
++      )
+       deferLocations(locations)
+       maybeReportDeferredLocations()
+     } else {
++      Log.w(DIAG, "P2 LocationResult null=true → fallback lastLocation")
+       try {
+         mLocationClient.lastLocation.addOnCompleteListener { task ->
+-          task.result?.let {
++          val loc = task.result
++          val ageMs = if (loc != null) {
++            SystemClock.elapsedRealtime() - (loc.elapsedRealtimeNanos / 1_000_000L)
++          } else {
++            -1L
++          }
++          // P3
++          Log.i(
++            DIAG,
++            "P3 fallback lastLocation null=${loc == null} ageMs=$ageMs " +
++              "time=${loc?.time} lat=${loc?.latitude} lon=${loc?.longitude}"
++          )
++          loc?.let {
+             deferLocations(listOf(it))
+             maybeReportDeferredLocations()
+           }
+         }
+       } catch (e: SecurityException) {
+         Log.e(TAG, "Cannot get last location: " + e.message)
++        Log.e(DIAG, "P3 SecurityException ${e.message}")
+       }
+     }
+   }
+@@ -112,6 +151,8 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+         locationBundles.add(locationBundle)
+       }
+     }
++    // P7
++    Log.i(DIAG, "P7 didExecuteJob bundles.size=${locationBundles.size} rawData.size=${data.size}")
+     executeTaskWithLocationBundles(locationBundles) { jobService.jobFinished(params, false) }
+ 
+     // Returning `true` indicates that the job is still running, but in async mode.
+@@ -135,12 +176,17 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
        return
      }
      mLocationRequest = LocationHelpers.prepareLocationRequest(LocationOptions(task.options))
@@ -1186,7 +1044,13 @@ index e659285..447ddb9 100644
      val intent = mPendingIntent ?: run {
        Log.w(TAG, "Could not find intent for the location update")
        return
-@@ -153,16 +165,56 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+@@ -148,21 +194,82 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+ 
+     try {
+       mLocationClient.requestLocationUpdates(locationRequest, intent)
++      Log.i(DIAG, "P0 requestLocationUpdates PendingIntent path")
+     } catch (e: SecurityException) {
+       Log.w(TAG, "Location request has been rejected.", e)
      }
    }
  
@@ -1195,14 +1059,32 @@ index e659285..447ddb9 100644
 +    val callback = object : LocationCallback() {
 +      override fun onLocationResult(locationResult: LocationResult) {
 +        val locations = locationResult.locations
++        val first = locations.firstOrNull()
++        // P2b — chemin FGS LocationCallback (ATMR), équivalent extractResult
++        Log.i(
++          DIAG,
++          "P2b onLocationResult size=${locations.size} " +
++            "time=${first?.time} ertNanos=${first?.elapsedRealtimeNanos} " +
++            "lat=${first?.latitude} lon=${first?.longitude} " +
++            "sLastTimestamp=$sLastTimestamp"
++        )
 +        if (locations.isNotEmpty()) {
 +          deferLocations(locations)
 +          maybeReportDeferredLocations()
++        } else {
++          Log.w(DIAG, "P2b empty locations — no defer")
 +        }
 +      }
 +
 +      override fun onLocationAvailability(locationAvailability: LocationAvailability) {
-+        if (!locationAvailability.isLocationAvailable) {
++        val available = locationAvailability.isLocationAvailable
++        // P2c — origine exacte du log historique « Location unavailable… »
++        Log.i(
++          DIAG,
++          "P2c onLocationAvailability isLocationAvailable=$available " +
++            "deferred.size=${mDeferredLocations.size} hostPaused=$mIsHostPaused"
++        )
++        if (!available) {
 +          Log.w(TAG, "Location unavailable for foreground-service task delivery")
 +        }
 +      }
@@ -1211,8 +1093,10 @@ index e659285..447ddb9 100644
 +    try {
 +      mLocationClient.requestLocationUpdates(locationRequest, callback, Looper.getMainLooper())
 +      Log.i(TAG, "Started location updates via LocationCallback (FGS path)")
++      Log.i(DIAG, "P0 requestLocationUpdates LocationCallback FGS path")
 +    } catch (e: SecurityException) {
 +      Log.w(TAG, "Location callback request has been rejected.", e)
++      Log.e(DIAG, "P0 SecurityException ${e.message}")
 +    }
 +  }
 +
@@ -1243,7 +1127,7 @@ index e659285..447ddb9 100644
        return
      }
      if (!AppForegroundedSingleton.isForegrounded) {
-@@ -187,11 +239,12 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+@@ -187,11 +294,12 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
        return
      }
  
@@ -1257,7 +1141,7 @@ index e659285..447ddb9 100644
  
        // extras param name is appId for legacy reasons
        extras.putString("appId", task.appScopeKey)
-@@ -207,6 +260,8 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+@@ -207,6 +315,8 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
              mService?.let {
                it.setParentContext(context)
                it.startForeground(serviceOptions)
@@ -1266,7 +1150,7 @@ index e659285..447ddb9 100644
              }
            }
  
-@@ -219,7 +274,8 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+@@ -219,7 +329,8 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
        )
      } else {
        // Restart the service with new service options.
@@ -1276,10 +1160,56 @@ index e659285..447ddb9 100644
      }
    }
  
-@@ -262,6 +318,20 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+@@ -240,30 +351,67 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+   }
+ 
+   private fun maybeReportDeferredLocations() {
+-    if (!shouldReportDeferredLocations()) {
++    val should = shouldReportDeferredLocations()
++    // P4
++    Log.i(
++      DIAG,
++      "P4 defer/report deferred.size=${mDeferredLocations.size} " +
++        "hostPaused=$mIsHostPaused shouldReport=$should " +
++        "deferredDistance=$mDeferredDistance sLastTimestamp=$sLastTimestamp"
++    )
++    if (!should) {
+       return
+     }
+     val context = context.applicationContext
+     val data: MutableList<PersistableBundle> = ArrayList()
++    var accepted = 0
++    var rejectedTs = 0
+     for (location in mDeferredLocations) {
+       val timestamp = location.time
+-
+-      // Some devices may broadcast the same location multiple times (mostly twice) so we're filtering out these locations,
+-      // so only one location at the specific timestamp can schedule a job.
+-      if (timestamp > sLastTimestamp) {
++      val ok = timestamp > sLastTimestamp
++      // P5
++      Log.i(
++        DIAG,
++        "P5 filter incoming.time=$timestamp sLastTimestamp=$sLastTimestamp accepted=$ok " +
++          "lat=${location.latitude} lon=${location.longitude}"
++      )
++      if (ok) {
+         val bundle = LocationResponse(location).toBundle(PersistableBundle::class.java)
+         data.add(bundle)
+         sLastTimestamp = timestamp
++        accepted++
++      } else {
++        rejectedTs++
+       }
+     }
++    Log.i(DIAG, "P5 summary accepted=$accepted rejectedTs=$rejectedTs bundles=${data.size}")
+     if (data.size > 0) {
+       // Save last reported location, reset the distance and clear a list of locations.
+       mLastReportedLocation = mDeferredLocations[mDeferredLocations.size - 1]
        mDeferredDistance = 0.0
        mDeferredLocations.clear()
  
+-      // Schedule new job.
 +      if (mService != null && mLocationCallback != null) {
 +        val locationBundles = ArrayList<Bundle>()
 +        for (persistableLocationBundle in data) {
@@ -1290,10 +1220,45 @@ index e659285..447ddb9 100644
 +          locationBundle.putBundle("coords", coordsBundle)
 +          locationBundles.add(locationBundle)
 +        }
++        // P6 — chemin direct FGS (pas JobScheduler)
++        Log.i(DIAG, "P6 directFGS execute bundles.size=${locationBundles.size}")
 +        executeTaskWithLocationBundles(locationBundles) { /* direct FGS path */ }
 +        return
 +      }
 +
-       // Schedule new job.
++      // P6 — JobScheduler
++      Log.i(DIAG, "P6 scheduleJob bundles.size=${data.size}")
        taskManagerUtils.scheduleJob(context, mTask, data)
++    } else {
++      Log.w(DIAG, "P6 skip — no bundles after timestamp filter")
      }
+   }
+ 
+@@ -290,10 +438,18 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+ 
+   private fun executeTaskWithLocationBundles(locationBundles: ArrayList<Bundle>, callback: TaskExecutionCallback) {
+     if (locationBundles.size > 0 && mTask != null) {
++      // P8 — JS task avec locations
++      Log.i(DIAG, "P8 executeTask JS=true bundles.size=${locationBundles.size}")
+       val data = Bundle()
+       data.putParcelableArrayList("locations", locationBundles)
+       mTask?.execute(data, null, callback)
+     } else {
++      // P8 — Finished sans location (smoking gun observé)
++      Log.w(
++        DIAG,
++        "P8 executeTask JS=false FinishedWithoutLocation " +
++          "bundles.size=${locationBundles.size} taskNull=${mTask == null}"
++      )
+       callback.onFinished(null)
+     }
+   }
+@@ -313,6 +469,8 @@ class LocationTaskConsumer(context: Context, taskManagerUtils: TaskManagerUtilsI
+ 
+   companion object {
+     private const val TAG = "LocationTaskConsumer"
++    /** Filtre logcat : `adb logcat -s ATMR_LTC_P:I LocationTaskConsumer:W` */
++    private const val DIAG = "ATMR_LTC_P"
+     private const val FOREGROUND_SERVICE_KEY = "foregroundService"
+     private var sLastTimestamp: Long = 0
+     fun shouldUseForegroundService(options: Map<String?, Any?>): Boolean {

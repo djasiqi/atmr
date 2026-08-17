@@ -25,7 +25,9 @@ rand_hex() {
 fernet_key() {
   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" \
     2>/dev/null \
-    || python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+    || python -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())" \
+    2>/dev/null \
+    || docker compose exec -T atmr_api python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 }
 
 cp "$EXAMPLE" "$TARGET"

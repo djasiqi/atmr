@@ -6,7 +6,6 @@ Puis commit PG ; le consumer RAW commit l'offset ensuite.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from datetime import UTC, datetime
@@ -25,8 +24,10 @@ class PersistConflictError(Exception):
 
 
 def _payload_hash(payload: dict[str, Any]) -> str:
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    """Alias v1 : hash legacy sans ``capture_id`` (P0-D)."""
+    from services.tracking.location_idempotency import legacy_payload_hash
+
+    return legacy_payload_hash(payload)
 
 
 def _parse_recorded_at(raw: Any) -> datetime:
@@ -76,11 +77,11 @@ def persist_location_event_with_outbox(
         merged_extra,
         location_event_id=location_event_id,
     )
-    payload = {
+    # Payload métier pour hash v1 : sans capture_id (parité prod / anti faux conflict).
+    hash_payload = {
         "driver_id": driver_id,
         "company_id": company_id,
         "location_event_id": location_event_id,
-        "capture_id": effective_capture,
         "tracking_session_id": tracking_session_id,
         "session_generation": session_generation,
         "sequence_id": sequence_id,
@@ -94,11 +95,16 @@ def persist_location_event_with_outbox(
         "heading": heading,
         "mission_id": mission_id,
         "schema_version": schema_version,
-        **merged_extra,
+    }
+    # Envelope / outbox peuvent encore porter capture_id — hors hash.
+    payload = {
+        **hash_payload,
+        "capture_id": effective_capture,
+        **{k: v for k, v in merged_extra.items() if k != "capture_id"},
     }
     payload["capture_id"] = effective_capture
     payload["location_event_id"] = location_event_id
-    phash = _payload_hash(payload)
+    phash = _payload_hash(hash_payload)
 
     # Lock watermark session
     session.execute(
@@ -150,8 +156,24 @@ def persist_location_event_with_outbox(
             session.execute(
                 text(
                     """
-                SELECT event_payload_hash FROM tracking_ingest_events
-                WHERE driver_id = :driver_id AND location_event_id = :eid
+                SELECT
+                    i.event_payload_hash,
+                    i.driver_id,
+                    i.location_event_id,
+                    i.tracking_session_id,
+                    i.sequence_id,
+                    i.session_generation,
+                    i.recorded_at,
+                    l.raw_latitude,
+                    l.raw_longitude,
+                    l.accuracy_m,
+                    l.speed_mps,
+                    l.heading
+                FROM tracking_ingest_events i
+                LEFT JOIN driver_location_events l
+                  ON l.driver_id = i.driver_id
+                 AND l.location_event_id = i.location_event_id
+                WHERE i.driver_id = :driver_id AND i.location_event_id = :eid
                 """
                 ),
                 {"driver_id": driver_id, "eid": location_event_id},
@@ -160,13 +182,31 @@ def persist_location_event_with_outbox(
             .first()
         )
         if existing is not None:
-            if str(existing["event_payload_hash"]) != phash:
-                raise PersistConflictError("event_id_payload_conflict")
-            return {
-                "status": "duplicate",
-                "reason": "same_event_already_persisted",
-                "location_event_id": location_event_id,
-            }
+            from services.tracking.location_idempotency import (
+                DuplicateDecision,
+                compare_persisted_event,
+            )
+
+            decision = compare_persisted_event(
+                existing_row=existing,
+                incoming_payload=hash_payload,
+                incoming_hash=phash,
+            )
+            if decision == DuplicateDecision.DUPLICATE_EXACT_HASH:
+                return {
+                    "status": "duplicate",
+                    "reason": "same_event_already_persisted",
+                    "location_event_id": location_event_id,
+                    "duplicate_decision": decision.value,
+                }
+            if decision == DuplicateDecision.DUPLICATE_LEGACY_EQUIVALENT:
+                return {
+                    "status": "duplicate",
+                    "reason": "legacy_business_equivalent",
+                    "location_event_id": location_event_id,
+                    "duplicate_decision": decision.value,
+                }
+            raise PersistConflictError("event_id_payload_conflict")
 
         # Même (driver, session, sequence) déjà pris par un autre location_event_id
         # (rejeu Kafka / recyclage compteur Redis http-legacy).

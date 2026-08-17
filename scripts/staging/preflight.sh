@@ -77,7 +77,7 @@ grep -q "^APP_ENV=staging" "$EXAMPLE" || fail "example: APP_ENV=staging attendu"
 if grep -Eiq 'STAGING_BACKEND_IMAGE=.*:latest' "$EXAMPLE"; then
   fail "example: latest interdit"
 fi
-grep -q "sha-26338ec0e0f1" "$EXAMPLE" || fail "example: tag sha-26338ec0e0f1 manquant"
+grep -q "sha-d5694d8e7cec" "$EXAMPLE" || fail "example: tag sha-d5694d8e7cec manquant"
 
 if [[ "$COMPOSE_ONLY" -eq 1 ]]; then
   pass "scan fichiers staging (compose-only) — 0 référence production"
@@ -92,17 +92,17 @@ if grep -q "CHANGE_ME_GENERATE" "$ENV_FILE"; then
   fail "$ENV_FILE contient encore CHANGE_ME_GENERATE"
 fi
 
-IMAGE="$(grep -E '^STAGING_BACKEND_IMAGE=' "$ENV_FILE" | tail -1 | cut -d= -f2-)"
+IMAGE="$(grep -E '^STAGING_BACKEND_IMAGE=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '\r')"
 [[ -n "$IMAGE" ]] || fail "STAGING_BACKEND_IMAGE vide"
 [[ "$IMAGE" != *":latest"* ]] || fail "STAGING_BACKEND_IMAGE=latest interdit"
-[[ "$IMAGE" == *"sha-26338ec0"* ]] || fail "STAGING_BACKEND_IMAGE doit pinner sha-26338ec0…"
+[[ "$IMAGE" == *"sha-d5694d8e7cec"* ]] || fail "STAGING_BACKEND_IMAGE doit pinner sha-d5694d8e7cec"
 
-MODE="$(grep -E '^TRACKING_MISSION_FIREWALL_MODE=' "$ENV_FILE" | tail -1 | cut -d= -f2-)"
+MODE="$(grep -E '^TRACKING_MISSION_FIREWALL_MODE=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '\r')"
 [[ "$MODE" == "off" || "$MODE" == "observe" || "$MODE" == "enforce_mission" || "$MODE" == "strict" ]] || fail "MODE invalide: $MODE"
 
-APPENV="$(grep -E '^APP_ENV=' "$ENV_FILE" | tail -1 | cut -d= -f2-)"
+APPENV="$(grep -E '^APP_ENV=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '\r')"
 [[ "$APPENV" == "staging" ]] || fail "APP_ENV doit être staging (vu: $APPENV)"
-FLASKCFG="$(grep -E '^FLASK_CONFIG=' "$ENV_FILE" | tail -1 | cut -d= -f2-)"
+FLASKCFG="$(grep -E '^FLASK_CONFIG=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '\r')"
 [[ "$FLASKCFG" == "production" ]] || fail "FLASK_CONFIG doit être production (vu: $FLASKCFG)"
 
 # Hosts DB/Redis/Kafka du fichier env ne doivent pas viser un FQDN prod

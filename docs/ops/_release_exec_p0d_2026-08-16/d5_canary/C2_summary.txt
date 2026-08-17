@@ -1,0 +1,59 @@
+# C2 summary — 2026-08-17
+
+```text
+BINARY     = 1.0.11 / versionCode 127 (EAS e6e67963)
+DEVICE     = SM-S911B
+DRIVER     = 20135
+MISSION    = booking 38243 IN_PROGRESS (confirmed end)
+WINDOW     = ~01:16 -> 01:40 (+02)
+PROTOCOL   = 8 cycles FG 40s / HOME 40s
+BACKEND    = OBSERVATION ONLY
+```
+
+## Gate C2
+
+```text
+unexpected Unregister (background-location-task) = 0
+  (2x "Unregistering" noise = BatteryNotLow / NetworkStats — NOT TaskService)
+Register/Unregister storm                         = 0
+transient_loss -> immediate STOP                  = 0
+stop.executed / lifecycle destructif              = 0
+Finished background-location                      = 70 (cadence continue)
+Could not find a location task                    = 0
+PUT (rolling samples)                             = 5-63 continue
+LOC PG C2 window                                  = 134 events
+FGS startForegroundCount                          = 9 stable
+startRequested                                    = true entire window
+```
+
+## Verdict
+
+```text
+C2 = PASS
+
+unexpected Unregister = 0
+storm = 0
+transient loss -> immediate STOP = 0
+stale STOP -> native = 0 (none observed; no destructif)
+Finished continue
+PUT continue
+LOC continue
+```
+
+## Artefacts
+
+- timeline_C2.txt
+- samples_C2.csv
+- logcat_C2_continuous.txt (~54 MB)
+- analyze_verdict.txt (auto PASS on C2 logcat)
+- run_d5_c2.ps1
+
+## Next
+
+```text
+C1 = PASS
+C2 = PASS
+C3 = NEXT (missionId null -> confirm ~2.5s)
+C4 = PENDING
+DISTRIBUTION = NO-GO
+```

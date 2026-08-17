@@ -1,0 +1,1 @@
+﻿08-17 18:45:27.588  7432  7720 I TaskService: Finished task 'background-location-task' with eventId '444f236d-7809-4d25-bfed-f5934a522cdd'.

@@ -1,0 +1,14 @@
+﻿08-17 21:45:28.941 17393 17460 I ReactNativeJS: ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-17 21:45:28.942 17393 17460 I ReactNativeJS: ATMR_JS_J J4_TRACKING_CONTEXT missionId=38243 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-msxn6uli-f8pjm9tmdu owner_mission=38243
+08-17 21:45:28.946 17393 17460 I ReactNativeJS: ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-17T19:45:26.659Z lat=46.2115991 lon=6.1262035 age_ms=2287
+08-17 21:45:28.946 17393 17460 I ReactNativeJS: ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-17 21:45:28.955 17393 17460 I ReactNativeJS: ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1786995928946_mpvjz3jr capture_id=cap_msxn8jg2_cv4b710lmu seq=69 recorded_at=2026-08-17T19:45:26.659Z inserted=true
+08-17 21:45:28.955 17393 17460 I ReactNativeJS: ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1786995928946_mpvjz3jr reason=ok
+08-17 21:45:29.367 17393 17460 I ReactNativeJS: ATMR_JS_J J7_FLUSH_RESULT sent=3 queue_depth=296 backend_acked=0 dropped=0 last_event_id=trk_1786990013757_28orbghr
+08-17 21:45:48.045 17393 17460 I ReactNativeJS: ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-17 21:45:48.138 17393 17460 I ReactNativeJS: ATMR_JS_J J4_TRACKING_CONTEXT missionId=38243 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-msxn6uli-f8pjm9tmdu owner_mission=38243
+08-17 21:45:48.251 17393 17460 I ReactNativeJS: ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-17T19:45:45.755Z lat=46.2115982 lon=6.1261955 age_ms=2496
+08-17 21:45:48.251 17393 17460 I ReactNativeJS: ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-17 21:45:48.290 17393 17460 I ReactNativeJS: ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1786995948251_21nxmq3b capture_id=cap_msxn8ycb_lpbqkxpjp1 seq=71 recorded_at=2026-08-17T19:45:45.755Z inserted=true
+08-17 21:45:48.290 17393 17460 I ReactNativeJS: ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1786995948251_21nxmq3b reason=ok
+08-17 21:45:48.727 17393 17460 I ReactNativeJS: ATMR_JS_J J7_FLUSH_RESULT sent=3 queue_depth=292 backend_acked=0 dropped=0 last_event_id=trk_1786990127345_f85vufrv

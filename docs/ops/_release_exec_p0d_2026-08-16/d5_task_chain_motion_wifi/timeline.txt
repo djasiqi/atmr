@@ -1,0 +1,7 @@
+2026-08-16T19:08:00.8169358+02:00 D5_START driver=20135     versionCode=126 minSdk=24 targetSdk=36     versionName=1.0.11 BACKEND=FROZEN
+2026-08-16T19:08:04.4071062+02:00 PHASE_FG 30s
+2026-08-16T19:08:04.7486720+02:00 FGS_FG0 isForeground=true startRequested=true allow=PROC_STATE_TOP
+2026-08-16T19:08:04.9049911+02:00 FUSED_FG0 hits=0
+2026-08-16T19:08:35.5889796+02:00 NATIVE_FG finishedish=0 unavailable=12 telem_invokeish=0 telem_skipish=0
+2026-08-16T19:08:35.7872028+02:00 FGS_FG1 isForeground=true startRequested=true allow=PROC_STATE_TOP
+2026-08-16T19:08:37.7531744+02:00 PUT_FG n_tail=0 last=

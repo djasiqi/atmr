@@ -1,0 +1,20 @@
+﻿­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=1)
+LABEL PRE
+NOW 2026-08-16T09:58:04.931878+00:00
+BOOK27 27 IN_PROGRESS 19
+HEALTH_N 11
+NATIVE_ERR 0
+FGS_T 5 / 11
+NAT_T 5 / 11
+H 2026-08-16 11:58:00.664452+02:00 app= active fgs= False nat= False track= True fix= None nfix= None cr= fgs_not_running err= 
+H 2026-08-16 11:58:00.593849+02:00 app= active fgs= False nat= False track= True fix= None nfix= None cr= fgs_not_running err= 
+H 2026-08-16 11:58:00.503059+02:00 app= active fgs= False nat= False track= True fix= None nfix= None cr= fgs_not_running err= 
+H 2026-08-16 11:58:00.432541+02:00 app= active fgs= True nat= True track= True fix= None nfix= None cr= None err= 
+H 2026-08-16 11:53:38.978340+02:00 app= active fgs= True nat= True track= True fix= None nfix= None cr= None err= 
+H 2026-08-16 11:52:38.870773+02:00 app= active fgs= True nat= True track= True fix= None nfix= None cr= None err= 
+LOC_N 4
+LOC 2026-08-16 11:53:40.627779+02:00 mission= None
+LOC 2026-08-16 11:52:44.366324+02:00 mission= None
+LOC 2026-08-16 11:51:41.500520+02:00 mission= None
+LOC 2026-08-16 11:50:40.076786+02:00 mission= None

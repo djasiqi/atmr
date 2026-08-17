@@ -1,0 +1,16 @@
+# RC132 — Install confirmation
+
+```text
+DATE           = 2026-08-17
+DEVICE         = SM-S911B @ 192.168.1.33:34343
+SOURCE AAB     = ab91958e… / artifact _YpZ7mZ4…aab
+SHA S          = a851cf1520bc2ed66f9e5f7b0acb6114cf1ff133
+versionCode    = 132 ✅
+versionName    = 1.0.11 ✅
+INSTALL        = Success ✅
+
+NOTE SIGNATURE = uninstall + re-sign debug local via bundletool
+  (keystore Play EAS non dispo en local pour install-apks)
+  Contenu binaire = AAB production 132 / SHA S
+  Données app précédentes = EFFACÉES → login chauffeur requis avant smoke
+```

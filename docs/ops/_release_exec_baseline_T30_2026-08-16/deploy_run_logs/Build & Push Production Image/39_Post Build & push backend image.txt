@@ -1,0 +1,23 @@
+﻿2026-08-15T23:28:51.4159355Z Post job cleanup.
+2026-08-15T23:28:51.6632612Z ##[group]Generating build summary
+2026-08-15T23:28:51.7370031Z exporting build record to /home/runner/work/_temp/docker-actions-toolkit-YUB2Mx/export
+2026-08-15T23:28:51.8637117Z [command]/usr/bin/docker buildx history export --builder builder-3cd82bd2-cd56-4291-a4b6-ecead00cd9de --output /home/runner/work/_temp/docker-actions-toolkit-YUB2Mx/export/***~atmr~MQTT5J.dockerbuild mqtt5jfhnku2md07quc0k5omg --finalize
+2026-08-15T23:28:52.1471489Z Build record written to /home/runner/work/_temp/docker-actions-toolkit-YUB2Mx/export/***~atmr~MQTT5J.dockerbuild (135.63 KB)
+2026-08-15T23:28:52.1472669Z Uploading ***~atmr~MQTT5J.dockerbuild as an artifact
+2026-08-15T23:28:52.1473731Z Artifact name is valid!
+2026-08-15T23:28:52.1485001Z Root directory input is valid!
+2026-08-15T23:28:52.4610545Z Uploading artifact: ***~atmr~MQTT5J.dockerbuild
+2026-08-15T23:28:52.4652170Z Beginning upload of artifact content to blob storage
+2026-08-15T23:28:52.9735547Z Uploaded bytes 138886
+2026-08-15T23:28:53.0510293Z Finished uploading artifact content to blob storage!
+2026-08-15T23:28:53.0511504Z SHA256 digest of uploaded artifact is 03ffd0e2e88b587d0f8ed49e66972e139856d3299a979e77151845b97b165afd
+2026-08-15T23:28:53.0513012Z Finalizing artifact upload
+2026-08-15T23:28:53.4610919Z Artifact ***~atmr~MQTT5J.dockerbuild successfully finalized. Artifact ID 9254629111
+2026-08-15T23:28:53.4612286Z Artifact download URL: https://github.com/***/atmr/actions/runs/31914382468/artifacts/9254629111
+2026-08-15T23:28:53.4652566Z Writing summary
+2026-08-15T23:28:53.4665961Z ##[endgroup]
+2026-08-15T23:28:53.4667050Z ##[group]Removing temp folder /home/runner/work/_temp/docker-actions-toolkit-n2To6T
+2026-08-15T23:28:53.4669183Z ##[endgroup]
+2026-08-15T23:28:53.4669941Z ##[group]Post cache
+2026-08-15T23:28:53.4670747Z State not set
+2026-08-15T23:28:53.4671508Z ##[endgroup]

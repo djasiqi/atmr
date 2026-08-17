@@ -1,0 +1,14 @@
+# D5 C3 — build 128 (inject transient)
+
+```text
+REASON           = C3 requires QA-gated deep-link inject (absent on 127)
+PROFILE          = production-apk
+BUILD_ID         = 29c1441c-0e06-49d1-8ba3-8b6236ebcf40
+URL              = https://expo.dev/accounts/drinjasiqi/projects/operations-app/builds/29c1441c-0e06-49d1-8ba3-8b6236ebcf40
+versionCode      = 128
+INJECT           = lirie://canary/d5-c3-transient?hole_ms=1000
+STATUS           = BUILDING
+DISTRIBUTION     = NO-GO
+BACKEND          = observation only
+GPS UI freshness = NOT D5 (deferred)
+```

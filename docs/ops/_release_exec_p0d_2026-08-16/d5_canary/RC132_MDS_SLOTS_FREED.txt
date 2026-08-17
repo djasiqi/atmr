@@ -1,0 +1,13 @@
+# RC132 — Libération slots appareils (MDS)
+
+```text
+DATE        = 2026-08-17
+DRIVER_ID   = 20135
+user_id     = 78842
+BEFORE      = 5/5 active (77EE2C, 36CC21, F2FA73, DECF20, A9C465 — S23 de Drin)
+AFTER       = 0 active
+REASON      = ops_rc132_smoke_free_device_slots
+ACTION      = revoke_all_user_sessions + publish_session_revoked
+```
+
+Relancer « Se connecter » sur le device RC132.

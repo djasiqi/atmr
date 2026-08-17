@@ -1,0 +1,11 @@
+﻿getFgsAllowWiu_legacy=PROC_STATE_TOP
+getFgsAllowWiu_new=PROC_STATE_TOP
+getFgsAllowWiu_forStart=PROC_STATE_TOP
+getFgsAllowWiu_forCapabilities=PROC_STATE_TOP
+getFgsAllowStart_legacy=PROC_STATE_TOP
+getFgsAllowStart_new=PROC_STATE_TOP
+getFgsAllowStart=PROC_STATE_TOP
+startForegroundCount=3
+infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10902; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:2; bindFromPackage:null: isBindService:true]
+lastActivity=-2m15s95ms restartTime=-4m25s828ms createdFromFg=true
+startRequested=true delayedStop=false stopIfKilled=true callStart=true lastStartId=3

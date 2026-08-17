@@ -52,6 +52,7 @@ import {
   type NativeStartRunResult,
   type NativeStopRunResult,
 } from "./nativeTrackingLifecycle";
+import { atmrJsDiag } from "./atmrJsTaskDiag";
 
 /**
  * Notifie le heartbeat de santé tracking en cas d'échec de démarrage natif —
@@ -731,7 +732,17 @@ function defineTaskIfNeeded() {
       data?: { locations?: Location.LocationObject[] };
       error?: Error;
     }) => {
+      const locationsEnter = Array.isArray(data?.locations) ? data.locations : [];
+      // J1 — entrée handler applicatif (après P8 natif)
+      atmrJsDiag("J1_TASK_ENTER", {
+        locations_count: locationsEnter.length,
+        task_error: error?.message ?? null,
+      });
       if (error) {
+        atmrJsDiag("J3_LOCATION_DECISION", {
+          accepted: false,
+          reason: "task_error",
+        });
         emitDriverTelemetry("tracking.background.task.error", {
           source: "driver.services.backgroundLocationTask",
           reason: error.message,
@@ -739,8 +750,18 @@ function defineTaskIfNeeded() {
         });
         return;
       }
-      if (!isFeatureEnabled("tracking_background_enabled")) return;
+      if (!isFeatureEnabled("tracking_background_enabled")) {
+        atmrJsDiag("J3_LOCATION_DECISION", {
+          accepted: false,
+          reason: "feature_disabled",
+        });
+        return;
+      }
       if (await isKillSwitchEnabled()) {
+        atmrJsDiag("J3_LOCATION_DECISION", {
+          accepted: false,
+          reason: "kill_switch_enabled",
+        });
         emitDriverTelemetry("tracking.background.task.skipped", {
           source: "driver.services.backgroundLocationTask",
           reason: "kill_switch_enabled",
@@ -752,12 +773,18 @@ function defineTaskIfNeeded() {
       // P0 : lease AVANT taskContext / SQLite / enqueue (fail-closed réseau).
       const lease = await readTrackingContextLease();
       if (!leaseAllowsCapture(lease)) {
+        const reason =
+          lease?.state === "switching"
+            ? "lease_switching_capture_blocked"
+            : "context_not_driver";
+        atmrJsDiag("J3_LOCATION_DECISION", {
+          accepted: false,
+          reason,
+          lease_state: lease?.state ?? "absent",
+        });
         emitDriverTelemetry("tracking.background.task.skipped", {
           source: "driver.services.backgroundLocationTask",
-          reason:
-            lease?.state === "switching"
-              ? "lease_switching_capture_blocked"
-              : "context_not_driver",
+          reason,
           lease_state: lease?.state ?? "absent",
           task_name: BACKGROUND_LOCATION_TASK_NAME,
         });
@@ -766,6 +793,10 @@ function defineTaskIfNeeded() {
 
       const context = await readTaskContext();
       if (!context) {
+        atmrJsDiag("J3_LOCATION_DECISION", {
+          accepted: false,
+          reason: "no_active_context",
+        });
         emitDriverTelemetry("tracking.background.task.skipped", {
           source: "driver.services.backgroundLocationTask",
           reason: "no_active_context",
@@ -773,6 +804,16 @@ function defineTaskIfNeeded() {
         });
         return;
       }
+
+      // J4 — contexte tracking résolu
+      atmrJsDiag("J4_TRACKING_CONTEXT", {
+        missionId: context.missionId,
+        missionStatus: context.missionStatus,
+        taskMode: context.taskMode,
+        lease_state: lease?.state ?? "absent",
+        owner_gen: context.nativeOwner?.trackingGenerationId ?? null,
+        owner_mission: context.nativeOwner?.missionId ?? null,
+      });
 
       const auth = getTrackingAuthAvailability();
       const authUsable =
@@ -786,6 +827,10 @@ function defineTaskIfNeeded() {
       // Pendant switching : capture locale OK si owner présent et lease fromDriver ;
       // owner/lease génération ne matchent que sur driver_active.
       if (lease?.state === "driver_active" && !ownerCheck.ok) {
+        atmrJsDiag("J3_LOCATION_DECISION", {
+          accepted: false,
+          reason: ownerCheck.reason,
+        });
         emitDriverTelemetry("tracking.background.task.skipped", {
           source: "driver.services.backgroundLocationTask",
           reason: ownerCheck.reason,
@@ -803,6 +848,10 @@ function defineTaskIfNeeded() {
           (typeof lease.missionContextVersion === "number" &&
             context.nativeOwner.missionContextVersion !== lease.missionContextVersion))
       ) {
+        atmrJsDiag("J3_LOCATION_DECISION", {
+          accepted: false,
+          reason: "mission_or_version_mismatch",
+        });
         emitDriverTelemetry("tracking.background.task.skipped", {
           source: "driver.services.backgroundLocationTask",
           reason: "mission_or_version_mismatch",
@@ -818,6 +867,10 @@ function defineTaskIfNeeded() {
       }
       if (lease?.state === "switching") {
         if (!context.nativeOwner) {
+          atmrJsDiag("J3_LOCATION_DECISION", {
+            accepted: false,
+            reason: "missing_native_owner",
+          });
           emitDriverTelemetry("tracking.background.task.skipped", {
             source: "driver.services.backgroundLocationTask",
             reason: "missing_native_owner",
@@ -826,6 +879,10 @@ function defineTaskIfNeeded() {
           return;
         }
         if (!authUsable) {
+          atmrJsDiag("J3_LOCATION_DECISION", {
+            accepted: false,
+            reason: "auth_not_usable",
+          });
           emitDriverTelemetry("tracking.background.task.skipped", {
             source: "driver.services.backgroundLocationTask",
             reason: "auth_not_usable",
@@ -841,6 +898,12 @@ function defineTaskIfNeeded() {
         isTrackingActiveStatus(context.missionStatus);
       const isPresenceContext = context.taskMode === "presence_window";
       if (!isMissionContext && !isPresenceContext) {
+        atmrJsDiag("J3_LOCATION_DECISION", {
+          accepted: false,
+          reason: "context_ineligible",
+          task_mode: context.taskMode,
+          missionStatus: context.missionStatus,
+        });
         emitDriverTelemetry("tracking.background.task.skipped", {
           source: "driver.services.backgroundLocationTask",
           reason: "context_ineligible",
@@ -856,6 +919,10 @@ function defineTaskIfNeeded() {
           context.nativeOwner?.trackingGenerationId ?? null;
         const expectedMissionContextVersion =
           context.nativeOwner?.missionContextVersion ?? null;
+        atmrJsDiag("J3_LOCATION_DECISION", {
+          accepted: false,
+          reason: "presence_window_closed",
+        });
         emitDriverTelemetry("tracking.background.task.skipped", {
           source: "driver.services.backgroundLocationTask",
           reason: "presence_window_closed",
@@ -873,6 +940,12 @@ function defineTaskIfNeeded() {
       // pas prêt doit bloquer net (jamais de fallback HTTP silencieux depuis le background task).
       const health = await trackingQueueStore.initAndHealthcheckHeadless();
       if (!health.durable || !health.schemaReady) {
+        atmrJsDiag("J3_LOCATION_DECISION", {
+          accepted: false,
+          reason: "sqlite_headless_not_ready",
+          durable: health.durable,
+          schema_ready: health.schemaReady,
+        });
         emitDriverTelemetry("sqlite_headless_init_failed", {
           source: "driver.services.backgroundLocationTask",
           task_name: BACKGROUND_LOCATION_TASK_NAME,
@@ -883,7 +956,7 @@ function defineTaskIfNeeded() {
         return;
       }
 
-      const locations = Array.isArray(data?.locations) ? data.locations : [];
+      const locations = locationsEnter;
       setLastTaskInvokedAt(Date.now());
       emitDriverTelemetry("tracking.background.task_invoked", {
         source: "driver.services.backgroundLocationTask",
@@ -903,6 +976,19 @@ function defineTaskIfNeeded() {
         const timestamp = new Date(location.timestamp ?? Date.now()).toISOString();
         const lat = location.coords.latitude;
         const lon = location.coords.longitude;
+        const ageMs = Math.max(0, Date.now() - (location.timestamp ?? Date.now()));
+        // J2 — location extraite
+        atmrJsDiag("J2_LOCATION_SELECTED", {
+          recorded_at: timestamp,
+          lat,
+          lon,
+          age_ms: ageMs,
+        });
+        // J3 — acceptée pour enqueue (pas de dedupe JS ici)
+        atmrJsDiag("J3_LOCATION_DECISION", {
+          accepted: true,
+          reason: "pass_gates",
+        });
         const osIdRaw = (location as unknown as { id?: unknown }).id;
         const osId = typeof osIdRaw === "string" ? osIdRaw : null;
         const captureId = osId ? `os:${osId}` : createCaptureId();
@@ -910,7 +996,7 @@ function defineTaskIfNeeded() {
           context.nativeOwner?.trackingGenerationId ?? null;
         const missionContextVersion =
           context.nativeOwner?.missionContextVersion ?? null;
-        await driverTrackingQueue.enqueue({
+        const enqueued = await driverTrackingQueue.enqueue({
           missionId: context.missionId,
           appState: "background" as AppStateStatus,
           locationMode: mode,
@@ -931,10 +1017,28 @@ function defineTaskIfNeeded() {
             missionContextVersion,
           },
         });
+        // J5 / J6 — freeze + enqueue (null = dropEnqueueObserved)
+        atmrJsDiag("J5_PAYLOAD_FROZEN", {
+          event_id: enqueued?.id ?? null,
+          capture_id: enqueued?.captureId ?? captureId,
+          seq: enqueued?.sequenceId ?? null,
+          recorded_at: enqueued?.payload?.recordedAt ?? enqueued?.payload?.timestamp ?? null,
+          inserted: enqueued != null,
+        });
+        atmrJsDiag("J6_ENQUEUE_RESULT", {
+          inserted: enqueued != null,
+          event_id: enqueued?.id ?? null,
+          reason: enqueued == null ? "enqueue_returned_null" : "ok",
+        });
       }
 
       // Transport : uniquement si lease driver_active
       if (!leaseAllowsTransport(lease)) {
+        atmrJsDiag("J7_FLUSH_RESULT", {
+          skipped: true,
+          reason: "transport_blocked_lease",
+          lease_state: lease?.state ?? "absent",
+        });
         emitDriverTelemetry("tracking.background.task.skipped", {
           source: "driver.services.backgroundLocationTask",
           reason: "transport_blocked_lease",
@@ -975,6 +1079,14 @@ function defineTaskIfNeeded() {
           forceHttpFallback: true,
         });
       }
+      // J7 — flush
+      atmrJsDiag("J7_FLUSH_RESULT", {
+        sent: flushResult.sent,
+        queue_depth: flushResult.queueDepth,
+        backend_acked: flushResult.backendAcked,
+        dropped: flushResult.dropped,
+        last_event_id: flushResult.lastBackendAckRequestEventId ?? null,
+      });
       emitDriverTelemetry("tracking.background.task.flush", {
         source: "driver.services.backgroundLocationTask",
         task_name: BACKGROUND_LOCATION_TASK_NAME,

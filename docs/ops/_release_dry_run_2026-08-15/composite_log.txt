@@ -1,0 +1,5 @@
+a32c4d92 feat(tracking): P0-C observability ages and health classification
+f138db48 fix(backend): C-LEDGER-SERVER claim lifecycle Option B
+196b0889 fix(mobile): C-LEDGER-CLIENT no HOL on incomplete ledger ids
+d9f6f09a fix(mobile): P0-B headless auth presence hydration
+50fbb1d0 fix(tracking): P0-A native lifecycle state machine for canary A

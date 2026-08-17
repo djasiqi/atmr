@@ -2,17 +2,26 @@ import React from "react";
 import { StyleSheet, View } from "react-native";
 import { AppText } from "../../../design/ui/AppText";
 import type { DriverBackgroundTrackingUiState } from "../hooks/useDriverBackgroundTrackingUi";
+import { useTrackingState } from "../hooks/useTrackingState";
 
 type Props = {
   ui: DriverBackgroundTrackingUiState;
 };
 
-function formatTs(ts: number | null): string {
+function formatTs(ts: number | null | undefined): string {
   if (ts == null) return "never";
   return new Date(ts).toLocaleTimeString("fr-CH");
 }
 
+function shortId(id: string | null | undefined): string {
+  if (id == null || id.length === 0) return "null";
+  if (id.length <= 24) return id;
+  return `…${id.slice(-20)}`;
+}
+
 export function DriverTrackingQaPanel({ ui }: Props) {
+  const tracking = useTrackingState();
+
   return (
     <View style={styles.panel}>
       <AppText variant="label" style={styles.title}>
@@ -53,6 +62,40 @@ export function DriverTrackingQaPanel({ ui }: Props) {
       <AppText variant="bodyMuted" style={styles.line}>
         Last invoked: {formatTs(ui.lastTaskInvokedAt)}
       </AppText>
+      <AppText variant="label" style={styles.section}>
+        Q1 ACK (bridge) — source de vérité RCA
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        lastAckStatus: {tracking.lastAckStatus ?? "null"}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        lastAckError: {tracking.lastAckError ?? "null"}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        lastAckSeq: {tracking.lastAckAttemptSeq ?? "null"}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        lastAckEventId: {tracking.lastAckEventId ?? "null"}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        currentSeq: {tracking.currentAttemptSeq}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        currentEventId: {tracking.currentAttemptEventId ?? "null"}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        queueDepth: {tracking.queueDepth}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        lastAckIsQueued: {tracking.lastAckIsQueued ? "yes" : "no"}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        lastAckAt: {formatTs(tracking.lastAckAt)}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        ids(short): cur={shortId(tracking.currentAttemptEventId)} ack=
+        {shortId(tracking.lastAckEventId)}
+      </AppText>
     </View>
   );
 }
@@ -68,6 +111,11 @@ const styles = StyleSheet.create({
   },
   title: {
     marginBottom: 6,
+    fontWeight: "600",
+  },
+  section: {
+    marginTop: 10,
+    marginBottom: 4,
     fontWeight: "600",
   },
   line: {

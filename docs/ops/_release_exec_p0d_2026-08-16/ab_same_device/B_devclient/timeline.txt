@@ -1,0 +1,90 @@
+2026-08-16T13:58:49.2158934+02:00 PHASE_FG
+2026-08-16T13:58:49.2704779+02:00 SNAP_B_FG
+2026-08-16T13:58:49.7816686+02:00   getFgsAllowWiu_legacy=PROC_STATE_TOP
+2026-08-16T13:58:49.7851907+02:00   getFgsAllowWiu_new=PROC_STATE_TOP
+2026-08-16T13:58:49.7891895+02:00   getFgsAllowWiu_forStart=PROC_STATE_TOP
+2026-08-16T13:58:49.7921959+02:00   getFgsAllowWiu_forCapabilities=PROC_STATE_TOP
+2026-08-16T13:58:49.7967073+02:00   getFgsAllowStart_legacy=PROC_STATE_TOP
+2026-08-16T13:58:49.8002150+02:00   getFgsAllowStart_new=PROC_STATE_TOP
+2026-08-16T13:58:49.8047489+02:00   getFgsAllowStart=PROC_STATE_TOP
+2026-08-16T13:58:49.8087526+02:00   startForegroundCount=3
+2026-08-16T13:58:49.8117487+02:00   infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10902; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:2; bindFromPackage:null: isBindService:true]
+2026-08-16T13:58:49.8157486+02:00   lastActivity=-1m3s850ms restartTime=-3m14s583ms createdFromFg=true
+2026-08-16T13:58:49.8197500+02:00   startRequested=true delayedStop=false stopIfKilled=true callStart=true lastStartId=3
+2026-08-16T13:58:49.8242622+02:00 PHASE_HOME_60s
+2026-08-16T13:59:04.9690302+02:00 SNAP_B_HOME_15s
+2026-08-16T13:59:05.2976469+02:00   getFgsAllowWiu_legacy=PROC_STATE_TOP
+2026-08-16T13:59:05.3023461+02:00   getFgsAllowWiu_new=PROC_STATE_TOP
+2026-08-16T13:59:05.3066265+02:00   getFgsAllowWiu_forStart=PROC_STATE_TOP
+2026-08-16T13:59:05.3168138+02:00   getFgsAllowWiu_forCapabilities=PROC_STATE_TOP
+2026-08-16T13:59:05.3247774+02:00   getFgsAllowStart_legacy=PROC_STATE_TOP
+2026-08-16T13:59:05.3299908+02:00   getFgsAllowStart_new=PROC_STATE_TOP
+2026-08-16T13:59:05.3338851+02:00   getFgsAllowStart=PROC_STATE_TOP
+2026-08-16T13:59:05.3384770+02:00   startForegroundCount=3
+2026-08-16T13:59:05.3426898+02:00   infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10902; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:2; bindFromPackage:null: isBindService:true]
+2026-08-16T13:59:05.3461237+02:00   lastActivity=-1m19s579ms restartTime=-3m30s312ms createdFromFg=true
+2026-08-16T13:59:05.3494824+02:00   startRequested=true delayedStop=false stopIfKilled=true callStart=true lastStartId=3
+2026-08-16T13:59:50.3597535+02:00 SNAP_B_HOME_60s
+2026-08-16T13:59:50.5042207+02:00   getFgsAllowWiu_legacy=PROC_STATE_TOP
+2026-08-16T13:59:50.5067310+02:00   getFgsAllowWiu_new=PROC_STATE_TOP
+2026-08-16T13:59:50.5092529+02:00   getFgsAllowWiu_forStart=PROC_STATE_TOP
+2026-08-16T13:59:50.5122650+02:00   getFgsAllowWiu_forCapabilities=PROC_STATE_TOP
+2026-08-16T13:59:50.5165775+02:00   getFgsAllowStart_legacy=PROC_STATE_TOP
+2026-08-16T13:59:50.5197923+02:00   getFgsAllowStart_new=PROC_STATE_TOP
+2026-08-16T13:59:50.5227914+02:00   getFgsAllowStart=PROC_STATE_TOP
+2026-08-16T13:59:50.5257932+02:00   startForegroundCount=3
+2026-08-16T13:59:50.5297918+02:00   infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10902; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:2; bindFromPackage:null: isBindService:true]
+2026-08-16T13:59:50.5347944+02:00   lastActivity=-2m4s797ms restartTime=-4m15s530ms createdFromFg=true
+2026-08-16T13:59:50.5377916+02:00   startRequested=true delayedStop=false stopIfKilled=true callStart=true lastStartId=3
+2026-08-16T13:59:50.5407906+02:00 PHASE_BACK
+2026-08-16T14:00:00.6992016+02:00 SNAP_B_BACK
+2026-08-16T14:00:00.7965275+02:00   getFgsAllowWiu_legacy=PROC_STATE_TOP
+2026-08-16T14:00:00.7985289+02:00   getFgsAllowWiu_new=PROC_STATE_TOP
+2026-08-16T14:00:00.8015278+02:00   getFgsAllowWiu_forStart=PROC_STATE_TOP
+2026-08-16T14:00:00.8092206+02:00   getFgsAllowWiu_forCapabilities=PROC_STATE_TOP
+2026-08-16T14:00:00.8122157+02:00   getFgsAllowStart_legacy=PROC_STATE_TOP
+2026-08-16T14:00:00.8152174+02:00   getFgsAllowStart_new=PROC_STATE_TOP
+2026-08-16T14:00:00.8162186+02:00   getFgsAllowStart=PROC_STATE_TOP
+2026-08-16T14:00:00.8192211+02:00   startForegroundCount=3
+2026-08-16T14:00:00.8212296+02:00   infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10902; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:2; bindFromPackage:null: isBindService:true]
+2026-08-16T14:00:00.8232305+02:00   lastActivity=-2m15s95ms restartTime=-4m25s828ms createdFromFg=true
+2026-08-16T14:00:00.8252292+02:00   startRequested=true delayedStop=false stopIfKilled=true callStart=true lastStartId=3
+2026-08-16T14:00:00.8262304+02:00 PHASE_LOCK_60s
+2026-08-16T14:00:15.9644767+02:00 SNAP_B_LOCK_15s
+2026-08-16T14:00:16.0763946+02:00   getFgsAllowWiu_legacy=PROC_STATE_TOP
+2026-08-16T14:00:16.0793996+02:00   getFgsAllowWiu_new=PROC_STATE_TOP
+2026-08-16T14:00:16.0815430+02:00   getFgsAllowWiu_forStart=PROC_STATE_TOP
+2026-08-16T14:00:16.0842589+02:00   getFgsAllowWiu_forCapabilities=PROC_STATE_TOP
+2026-08-16T14:00:16.0881908+02:00   getFgsAllowStart_legacy=PROC_STATE_TOP
+2026-08-16T14:00:16.0906136+02:00   getFgsAllowStart_new=PROC_STATE_TOP
+2026-08-16T14:00:16.0927739+02:00   getFgsAllowStart=PROC_STATE_TOP
+2026-08-16T14:00:16.0963156+02:00   startForegroundCount=3
+2026-08-16T14:00:16.0993139+02:00   infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10902; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:2; bindFromPackage:null: isBindService:true]
+2026-08-16T14:00:16.1013116+02:00   lastActivity=-2m30s358ms restartTime=-4m41s91ms createdFromFg=true
+2026-08-16T14:00:16.1043143+02:00   startRequested=true delayedStop=false stopIfKilled=true callStart=true lastStartId=3
+2026-08-16T14:01:01.1086956+02:00 SNAP_B_LOCK_60s
+2026-08-16T14:01:01.2413786+02:00   getFgsAllowWiu_legacy=PROC_STATE_TOP
+2026-08-16T14:01:01.2451961+02:00   getFgsAllowWiu_new=PROC_STATE_TOP
+2026-08-16T14:01:01.2496583+02:00   getFgsAllowWiu_forStart=PROC_STATE_TOP
+2026-08-16T14:01:01.2528781+02:00   getFgsAllowWiu_forCapabilities=PROC_STATE_TOP
+2026-08-16T14:01:01.2602042+02:00   getFgsAllowStart_legacy=PROC_STATE_TOP
+2026-08-16T14:01:01.2648370+02:00   getFgsAllowStart_new=PROC_STATE_TOP
+2026-08-16T14:01:01.2676577+02:00   getFgsAllowStart=PROC_STATE_TOP
+2026-08-16T14:01:01.2716029+02:00   startForegroundCount=3
+2026-08-16T14:01:01.2750235+02:00   infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10902; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:2; bindFromPackage:null: isBindService:true]
+2026-08-16T14:01:01.2792899+02:00   lastActivity=-3m15s526ms restartTime=-5m26s259ms createdFromFg=true
+2026-08-16T14:01:01.2823575+02:00   startRequested=true delayedStop=false stopIfKilled=true callStart=true lastStartId=3
+2026-08-16T14:01:01.2863736+02:00 PHASE_UNLOCK
+2026-08-16T14:01:21.0939481+02:00 SNAP_B_UNLOCK
+2026-08-16T14:01:21.2451925+02:00   getFgsAllowWiu_legacy=PROC_STATE_TOP
+2026-08-16T14:01:21.2485662+02:00   getFgsAllowWiu_new=PROC_STATE_TOP
+2026-08-16T14:01:21.2520919+02:00   getFgsAllowWiu_forStart=PROC_STATE_TOP
+2026-08-16T14:01:21.2550940+02:00   getFgsAllowWiu_forCapabilities=PROC_STATE_TOP
+2026-08-16T14:01:21.2593272+02:00   getFgsAllowStart_legacy=PROC_STATE_TOP
+2026-08-16T14:01:21.2621454+02:00   getFgsAllowStart_new=PROC_STATE_TOP
+2026-08-16T14:01:21.2651809+02:00   getFgsAllowStart=PROC_STATE_TOP
+2026-08-16T14:01:21.2695735+02:00   startForegroundCount=3
+2026-08-16T14:01:21.2736145+02:00   infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10902; uidState: TOP ; uidBFSL: [BFSL]; intent: Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }; code:PROC_STATE_TOP; tempAllowListReason:<,reasonCode:SYSTEM_ALLOW_LISTED,duration:9223372036854775807,callingUid:-1>; allowWiu:12; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:2; bindFromPackage:null: isBindService:true]
+2026-08-16T14:01:21.2769480+02:00   lastActivity=-3m35s544ms restartTime=-5m46s277ms createdFromFg=true
+2026-08-16T14:01:21.2822426+02:00   startRequested=true delayedStop=false stopIfKilled=true callStart=true lastStartId=3
+2026-08-16T14:01:37.9380553+02:00 PHASE_B_DONE

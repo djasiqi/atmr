@@ -1,0 +1,10 @@
+﻿08-16 14:21:23.929  2922  2922 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 14:21:24.311  3001  5012 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, callerUserId: 0
+08-16 14:21:26.255  3001  3375 W ProcessStats: Tracking association SourceState{ef4875e system/1000 BFgs #178007} whose proc state 4 is better than process ProcessState{e5e5f59 com.samsung.android.biometrics.app.setting/1000 pkg=com.samsung.android.biometrics.app.setting} proc state 15 (5 skipped)
+08-16 14:21:26.925 11931 11989 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 14:21:26.927 11931 11989 W libc    : Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-16 14:21:30.309  4196  4239 D SatelliteController: isCarrierRoamingNtnEligible: satellite access is not allowed
+08-16 14:21:34.557  2922  2922 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 14:21:36.268  3001  3829 W ProcessStats: Tracking association SourceState{ef4875e system/1000 BFgs #178082} whose proc state 4 is better than process ProcessState{e5e5f59 com.samsung.android.biometrics.app.setting/1000 pkg=com.samsung.android.biometrics.app.setting} proc state 15 (1 skipped)
+08-16 14:21:45.013  2922  2922 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 14:21:45.288 25981 25981 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services ch.liri.operations'

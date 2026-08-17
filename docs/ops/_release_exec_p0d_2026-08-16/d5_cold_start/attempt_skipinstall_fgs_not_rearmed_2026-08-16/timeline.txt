@@ -1,0 +1,10 @@
+2026-08-16T20:56:27.1302358+02:00 [COLD] LAUNCH MainActivity - login driver 20135 + mission required
+2026-08-16T20:56:27.2914903+02:00 [COLD] WAIT_READY LocationTaskService max=120s
+2026-08-16T20:56:27.6704483+02:00 [COLD] READY_PRE_COLD - taking pre-force snapshot then force-stop
+2026-08-16T20:56:27.6799669+02:00 [COLD] SNAP_BEGIN PRE_FORCE
+2026-08-16T20:56:48.9285334+02:00 [COLD] SNAP PRE_FORCE fgCount=1 binds=1 isFg=true startReq=true finished=2 unavailable=1 nlo_start=0 nlo_stop=0 recover=8 startTel=0 PUT=20 LOC=0 lastAct=-1m13s37ms
+2026-08-16T20:56:48.9340653+02:00 [COLD] FORCE_STOP
+2026-08-16T20:56:51.3272938+02:00 [COLD] PID_AFTER_STOP='' (expect empty)
+2026-08-16T20:56:51.6894211+02:00 [COLD] RELAUNCH cold
+2026-08-16T21:00:12.1137633+02:00 [COLD] SNAP T0_FAIL fgCount=NA binds=0 isFg=NA startReq=NA finished=0 unavailable=0 nlo_start=0 nlo_stop=0 recover=1 startTel=0 PUT=0 LOC=0 lastAct=NA
+2026-08-16T21:00:12.1165544+02:00 [COLD] END_FAIL

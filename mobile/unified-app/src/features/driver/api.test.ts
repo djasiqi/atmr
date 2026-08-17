@@ -148,6 +148,9 @@ describe("driver secondary api contracts", () => {
       latitude: 46.2,
       longitude: 6.1,
       trackingEventId: "evt-1",
+      timestamp: "2026-08-17T15:00:00.000Z",
+      recordedAt: "2026-08-17T15:00:00.000Z",
+      sentAt: "2026-08-17T15:00:00.100Z",
     });
     expect(ack.ack_status).toBe("partially_ingested");
     expect(ack.ingested_event_ids).toEqual(["a"]);
@@ -156,6 +159,9 @@ describe("driver secondary api contracts", () => {
       "/driver/me/location",
       expect.objectContaining({
         capture_id: null,
+        recorded_at: "2026-08-17T15:00:00.000Z",
+        timestamp: "2026-08-17T15:00:00.000Z",
+        sent_at: "2026-08-17T15:00:00.100Z",
       }),
       expect.objectContaining({
         headers: expect.objectContaining({
@@ -167,6 +173,15 @@ describe("driver secondary api contracts", () => {
     );
   });
 
+  it("fail-closes location put without recorded_at/timestamp", async () => {
+    await expect(
+      sendDriverLocation({ latitude: 46.2, longitude: 6.1 })
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/missing_recorded_at/),
+    });
+    expect(mockPut).not.toHaveBeenCalled();
+  });
+
   it("fail-closes on invalid ack event id lists", async () => {
     mockPut.mockResolvedValueOnce({
       data: {
@@ -175,7 +190,12 @@ describe("driver secondary api contracts", () => {
       },
     });
     await expect(
-      sendDriverLocation({ latitude: 46.2, longitude: 6.1 })
+      sendDriverLocation({
+        latitude: 46.2,
+        longitude: 6.1,
+        timestamp: "2026-08-17T15:00:00.000Z",
+        recordedAt: "2026-08-17T15:00:00.000Z",
+      })
     ).rejects.toMatchObject({
       message: expect.stringMatching(/ack_event_ids_invalid/),
     });

@@ -1,0 +1,19 @@
+﻿2026-08-15T23:28:53.8592216Z Post job cleanup.
+2026-08-15T23:28:53.8596576Z ##[start-action display=Restore DB from cache;id=__fc94cc6d-eac3-476f-9879-01aabfd87138.__actions_cache]
+2026-08-15T23:28:53.8632770Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T23:28:53.8634088Z Post job cleanup.
+2026-08-15T23:28:53.9809694Z (node:10112) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-15T23:28:53.9811047Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-15T23:28:53.9974708Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/atmr/atmr --files-from manifest.txt --use-compress-program zstdmt
+2026-08-15T23:28:55.8265050Z Failed to save: Unable to reserve cache with key cache-trivy-2026-08-15, another job may be creating this cache.
+2026-08-15T23:28:55.8411720Z ##[end-action id=__fc94cc6d-eac3-476f-9879-01aabfd87138.__actions_cache;outcome=success;conclusion=success;duration_ms=1981]
+2026-08-15T23:28:55.8414770Z ##[start-action display=Install Trivy;id=__fc94cc6d-eac3-476f-9879-01aabfd87138.__aquasecurity_setup-trivy]
+2026-08-15T23:28:55.8499486Z Post job cleanup.
+2026-08-15T23:28:55.8503783Z ##[start-action display=Restore Trivy binary from cache;id=__fc94cc6d-eac3-476f-9879-01aabfd87138.__aquasecurity_setup-trivy.cache]
+2026-08-15T23:28:55.8541031Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T23:28:55.8542339Z Post job cleanup.
+2026-08-15T23:28:55.9643661Z Cache hit occurred on the primary key trivy-binary-v0.69.3-Linux-X64, not saving cache.
+2026-08-15T23:28:55.9645182Z (node:10132) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-15T23:28:55.9646102Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-15T23:28:55.9704640Z ##[end-action id=__fc94cc6d-eac3-476f-9879-01aabfd87138.__aquasecurity_setup-trivy.cache;outcome=success;conclusion=success;duration_ms=119]
+2026-08-15T23:28:55.9709388Z ##[end-action id=__fc94cc6d-eac3-476f-9879-01aabfd87138.__aquasecurity_setup-trivy;outcome=success;conclusion=success;duration_ms=129]

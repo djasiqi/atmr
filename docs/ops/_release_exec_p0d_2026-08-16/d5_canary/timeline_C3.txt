@@ -1,0 +1,21 @@
+2026-08-17T02:20:32.0777654+02:00 [C3] PREFLIGHT versionName=1.0.11 versionCode=128 minRequired=128
+2026-08-17T02:20:32.5307252+02:00 [C3] LOGCAT_PID=35904
+2026-08-17T02:20:32.5337219+02:00 [C3] BACKEND=OBSERVATION_ONLY DRIVER=20135 HoleMs=1000
+2026-08-17T02:20:36.7717661+02:00 [C3] READY_CHECK isFg=true startReq=true fgCount=1
+2026-08-17T02:20:36.7913231+02:00 [C3] PHASE_BEGIN PRE sec=60
+2026-08-17T02:20:53.3854271+02:00 [C3] SAMPLE phase=PRE t=+0s fg=1 binds=1 isFg=true startReq=true finished=0 unreg=0 c3marks=0 PUT=63 LOC=-1
+2026-08-17T02:21:29.1838741+02:00 [C3] SAMPLE phase=PRE t=+37s fg=1 binds=1 isFg=true startReq=true finished=1 unreg=0 c3marks=0 PUT=60 LOC=-1
+2026-08-17T02:22:06.6822466+02:00 [C3] SAMPLE phase=PRE t=+60s fg=1 binds=1 isFg=true startReq=true finished=1 unreg=0 c3marks=0 PUT=60 LOC=-1
+2026-08-17T02:22:06.6847112+02:00 [C3] PHASE_END PRE
+2026-08-17T02:22:06.6857106+02:00 [C3] INJECT_DEEPLINK hole_ms=1000
+2026-08-17T02:22:27.5872219+02:00 [C3] SAMPLE phase=INJECT t=+0s fg=1 binds=1 isFg=true startReq=true finished=2 unreg=0 c3marks=3 PUT=61 LOC=-1
+2026-08-17T02:22:27.5899542+02:00 [C3] PHASE_BEGIN POST sec=180
+2026-08-17T02:22:43.5529666+02:00 [C3] SAMPLE phase=POST t=+0s fg=1 binds=1 isFg=true startReq=true finished=1 unreg=0 c3marks=3 PUT=57 LOC=-1
+2026-08-17T02:23:19.9762424+02:00 [C3] SAMPLE phase=POST t=+36s fg=2 binds=2 isFg=true startReq=true finished=2 unreg=0 c3marks=0 PUT=58 LOC=-1
+2026-08-17T02:23:55.7432995+02:00 [C3] SAMPLE phase=POST t=+72s fg=2 binds=2 isFg=true startReq=true finished=1 unreg=0 c3marks=0 PUT=72 LOC=-1
+2026-08-17T02:24:32.2577896+02:00 [C3] SAMPLE phase=POST t=+108s fg=2 binds=2 isFg=true startReq=true finished=2 unreg=0 c3marks=0 PUT=59 LOC=-1
+2026-08-17T02:25:08.8728795+02:00 [C3] SAMPLE phase=POST t=+145s fg=2 binds=2 isFg=true startReq=true finished=2 unreg=0 c3marks=0 PUT=60 LOC=-1
+2026-08-17T02:25:45.3602429+02:00 [C3] SAMPLE phase=POST t=+180s fg=2 binds=2 isFg=true startReq=true finished=1 unreg=0 c3marks=0 PUT=63 LOC=-1
+2026-08-17T02:25:45.3635283+02:00 [C3] PHASE_END POST
+2026-08-17T02:25:45.4147661+02:00 [C3] LOGCAT_STOPPED
+2026-08-17T02:25:45.4169820+02:00 [C3] END_C3_OK

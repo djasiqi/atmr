@@ -1,0 +1,22 @@
+﻿­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+BG_FRESHNESS_RCA_START 2026-08-17T16:55:17.983621+00:00
+phase=HOME driver=20135 window=120s poll=15.0s
+PG_FIRST True
+SAMPLE n=1 t=+0s phase=HOME dle_id=6449 dle_seq=7 dle_rec=2026-08-17 16:53:42.994000+00:00 dle_sess=trk_sess_1786985556979_ypmkdr5z canon_seq=7 canon_rec=2026-08-17T16:53:42.994Z ttl=1109 canon_sess=trk_sess_1786985556979_ypmkdr5z canon_eid=trk_1786985625220_6vjrmxcq rest_status=stale rest_age=95 rest_src=None
+SAMPLE n=2 t=+15s phase=HOME dle_id=6449 dle_seq=7 dle_rec=2026-08-17 16:53:42.994000+00:00 dle_sess=trk_sess_1786985556979_ypmkdr5z canon_seq=7 canon_rec=2026-08-17T16:53:42.994Z ttl=1094 canon_sess=trk_sess_1786985556979_ypmkdr5z canon_eid=trk_1786985625220_6vjrmxcq rest_status=stale rest_age=110 rest_src=None
+SAMPLE n=3 t=+30s phase=HOME dle_id=6449 dle_seq=7 dle_rec=2026-08-17 16:53:42.994000+00:00 dle_sess=trk_sess_1786985556979_ypmkdr5z canon_seq=7 canon_rec=2026-08-17T16:53:42.994Z ttl=1079 canon_sess=trk_sess_1786985556979_ypmkdr5z canon_eid=trk_1786985625220_6vjrmxcq rest_status=stale rest_age=125 rest_src=None
+SAMPLE n=4 t=+45s phase=HOME dle_id=6449 dle_seq=7 dle_rec=2026-08-17 16:53:42.994000+00:00 dle_sess=trk_sess_1786985556979_ypmkdr5z canon_seq=7 canon_rec=2026-08-17T16:53:42.994Z ttl=1064 canon_sess=trk_sess_1786985556979_ypmkdr5z canon_eid=trk_1786985625220_6vjrmxcq rest_status=stale rest_age=140 rest_src=None
+SAMPLE n=5 t=+60s phase=HOME dle_id=6449 dle_seq=7 dle_rec=2026-08-17 16:53:42.994000+00:00 dle_sess=trk_sess_1786985556979_ypmkdr5z canon_seq=7 canon_rec=2026-08-17T16:53:42.994Z ttl=1049 canon_sess=trk_sess_1786985556979_ypmkdr5z canon_eid=trk_1786985625220_6vjrmxcq rest_status=stale rest_age=155 rest_src=None
+SAMPLE n=6 t=+75s phase=HOME dle_id=6449 dle_seq=7 dle_rec=2026-08-17 16:53:42.994000+00:00 dle_sess=trk_sess_1786985556979_ypmkdr5z canon_seq=7 canon_rec=2026-08-17T16:53:42.994Z ttl=1034 canon_sess=trk_sess_1786985556979_ypmkdr5z canon_eid=trk_1786985625220_6vjrmxcq rest_status=stale rest_age=170 rest_src=None
+SAMPLE n=7 t=+90s phase=HOME dle_id=6449 dle_seq=7 dle_rec=2026-08-17 16:53:42.994000+00:00 dle_sess=trk_sess_1786985556979_ypmkdr5z canon_seq=7 canon_rec=2026-08-17T16:53:42.994Z ttl=1019 canon_sess=trk_sess_1786985556979_ypmkdr5z canon_eid=trk_1786985625220_6vjrmxcq rest_status=stale rest_age=185 rest_src=None
+SAMPLE n=8 t=+105s phase=HOME dle_id=6449 dle_seq=7 dle_rec=2026-08-17 16:53:42.994000+00:00 dle_sess=trk_sess_1786985556979_ypmkdr5z canon_seq=7 canon_rec=2026-08-17T16:53:42.994Z ttl=1004 canon_sess=trk_sess_1786985556979_ypmkdr5z canon_eid=trk_1786985625220_6vjrmxcq rest_status=stale rest_age=200 rest_src=None
+SAMPLE n=9 t=+120s phase=HOME dle_id=6449 dle_seq=7 dle_rec=2026-08-17 16:53:42.994000+00:00 dle_sess=trk_sess_1786985556979_ypmkdr5z canon_seq=7 canon_rec=2026-08-17T16:53:42.994Z ttl=989 canon_sess=trk_sess_1786985556979_ypmkdr5z canon_eid=trk_1786985625220_6vjrmxcq rest_status=stale rest_age=215 rest_src=None
+SUMMARY
+  dle_delta_id=0 dle_delta_seq=0
+  canon_delta_seq=0
+  rest_statuses=['stale', 'stale', 'stale', 'stale', 'stale', 'stale', 'stale', 'stale', 'stale']
+  first_dle={'id': 6449, 'sequence_id': 7, 'tracking_session_id': 'trk_sess_1786985556979_ypmkdr5z', 'location_event_id': 'trk_1786985625220_6vjrmxcq', 'recorded_at': datetime.datetime(2026, 8, 17, 16, 53, 42, 994000, tzinfo=datetime.timezone.utc), 'created_at': datetime.datetime(2026, 8, 17, 16, 53, 46, 949073, tzinfo=datetime.timezone.utc), 'mission_id': 38243}
+  last_dle={'id': 6449, 'sequence_id': 7, 'tracking_session_id': 'trk_sess_1786985556979_ypmkdr5z', 'location_event_id': 'trk_1786985625220_6vjrmxcq', 'recorded_at': datetime.datetime(2026, 8, 17, 16, 53, 42, 994000, tzinfo=datetime.timezone.utc), 'created_at': datetime.datetime(2026, 8, 17, 16, 53, 46, 949073, tzinfo=datetime.timezone.utc), 'mission_id': 38243}
+HYPOTHESIS A_or_D low_pg_and_canonical
+BG_FRESHNESS_RCA_END 2026-08-17T16:57:18.274350+00:00

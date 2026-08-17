@@ -1,0 +1,24 @@
+2026-08-16T15:57:02.5559783+02:00 D3C_START device=RFCW20QC53W home=180s interval=10s
+2026-08-16T15:57:04.0745145+02:00 POINT_wait pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=296 unavailHits=0 startedCb=0 lmsPkg=0
+2026-08-16T15:57:04.0792680+02:00 HEALTHY_FGS
+2026-08-16T15:57:05.0146204+02:00 POINT_T0 pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=296 unavailHits=0 startedCb=0 lmsPkg=0
+2026-08-16T15:57:05.0176236+02:00 HOME
+2026-08-16T15:57:16.0000419+02:00 POINT_HOME_10s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=296 unavailHits=1 startedCb=0 lmsPkg=0
+2026-08-16T15:57:27.0576349+02:00 POINT_HOME_20s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=296 unavailHits=2 startedCb=0 lmsPkg=0
+2026-08-16T15:57:38.5856093+02:00 POINT_HOME_30s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=296 unavailHits=3 startedCb=0 lmsPkg=0
+2026-08-16T15:57:50.0140042+02:00 POINT_HOME_40s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=296 unavailHits=2 startedCb=0 lmsPkg=0
+2026-08-16T15:58:01.6371651+02:00 POINT_HOME_50s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=296 unavailHits=3 startedCb=0 lmsPkg=0
+2026-08-16T15:58:13.0132154+02:00 POINT_HOME_60s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=296 unavailHits=3 startedCb=0 lmsPkg=0
+2026-08-16T15:58:24.4399558+02:00 POINT_HOME_70s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=296 unavailHits=3 startedCb=0 lmsPkg=0
+2026-08-16T15:58:35.7038746+02:00 POINT_HOME_80s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=296 unavailHits=4 startedCb=0 lmsPkg=0
+2026-08-16T15:58:46.7742828+02:00 POINT_HOME_90s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=295 unavailHits=4 startedCb=0 lmsPkg=0
+2026-08-16T15:58:57.9990735+02:00 POINT_HOME_100s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=293 unavailHits=4 startedCb=0 lmsPkg=0
+2026-08-16T15:59:09.2682049+02:00 POINT_HOME_110s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=293 unavailHits=6 startedCb=0 lmsPkg=0
+2026-08-16T15:59:20.3418334+02:00 POINT_HOME_120s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=293 unavailHits=6 startedCb=0 lmsPkg=0
+2026-08-16T15:59:31.7496107+02:00 POINT_HOME_130s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=293 unavailHits=6 startedCb=0 lmsPkg=0
+2026-08-16T15:59:42.9846227+02:00 POINT_HOME_140s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=293 unavailHits=6 startedCb=0 lmsPkg=0
+2026-08-16T15:59:54.0207583+02:00 POINT_HOME_150s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=293 unavailHits=6 startedCb=0 lmsPkg=0
+2026-08-16T16:00:05.1120877+02:00 POINT_HOME_160s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=292 unavailHits=5 startedCb=0 lmsPkg=0
+2026-08-16T16:00:16.1739524+02:00 POINT_HOME_170s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=292 unavailHits=5 startedCb=0 lmsPkg=0
+2026-08-16T16:00:27.2426796+02:00 POINT_HOME_180s pid=13893 fg=True sr=True allow=PROC_STATE_TOP hasLocReg=True activeReqs=290 unavailHits=5 startedCb=0 lmsPkg=0
+2026-08-16T16:00:28.1785457+02:00 D3C_END

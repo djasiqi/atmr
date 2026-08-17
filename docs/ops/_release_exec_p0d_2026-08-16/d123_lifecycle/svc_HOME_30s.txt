@@ -1,0 +1,101 @@
+﻿ACTIVITY MANAGER SERVICES (dumpsys activity services)
+  User 0 active services:
+  * ServiceRecord{c809852 u0 ch.liri.operations/expo.modules.location.services.LocationTaskService c:ch.liri.operations}
+    intent={cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService}
+    packageName=ch.liri.operations
+    processName=ch.liri.operations
+    targetSdkVersion=36
+    baseDir=/data/app/~~le3lbrlDb0U4Kn_n58YDxg==/ch.liri.operations-Cn88aJOd_LYEWYkuyI2i_g==/base.apk
+    dataDir=/data/user/0/ch.liri.operations
+    app=ProcessRecord{8ff5714 2922:ch.liri.operations/u0a903}
+    useNewWiuLogic_forCapabilities()=true
+    useNewWiuLogic_forStart()=true
+    useNewBfslLogic()=true
+    mAllowWiu_noBinding=DENIED
+    mAllowWiu_inBindService=DENIED
+    mAllowWiu_byBindings=DENIED
+    getFgsAllowWiu_legacy=DENIED
+    getFgsAllowWiu_new=DENIED
+    getFgsAllowWiu_forStart=DENIED
+    getFgsAllowWiu_forCapabilities=DENIED
+    allowUiJobScheduling=false
+    recentCallingPackage=ch.liri.operations
+    recentCallingUid=10903
+    mAllowStart_noBinding=DENIED
+    mAllowStart_inBindService=DENIED
+    mAllowStart_byBindings=DENIED
+    getFgsAllowStart_legacy=DENIED
+    getFgsAllowStart_new=DENIED
+    getFgsAllowStart=DENIED
+    startForegroundCount=1
+    infoAllowStartForeground=null
+    createTime=-3m32s523ms startingBgTimeout=--
+    lastActivity=-3m30s635ms restartTime=-3m30s639ms createdFromFg=true
+    startRequested=false delayedStop=false stopIfKilled=true callStart=false lastStartId=1
+ startCommandResult=3
+    Delivered Starts:
+    #0 id=1 dur=-3m30s637ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    Bindings:
+    * IntentBindRecord{8548f17 CREATE}:
+      intent={xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService}
+      binder=android.os.BinderProxy@2641f04
+      requested=true received=true hasBound=true doRebind=false
+      * Client AppBindRecord{72c9ced ProcessRecord{8ff5714 2922:ch.liri.operations/u0a903}}
+        Per-process Connections:
+          ConnectionRecord{dd611d9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@81fe420 flags=0x1}
+    All Connections:
+      ConnectionRecord{dd611d9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@81fe420 flags=0x1}
+
+  * ServiceRecord{ae797d6 u0 ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService c:ch.liri.operations}
+    intent={act=com.google.firebase.MESSAGING_EVENT pkg=ch.liri.operations}
+    packageName=ch.liri.operations
+    processName=ch.liri.operations
+    targetSdkVersion=36
+    baseDir=/data/app/~~le3lbrlDb0U4Kn_n58YDxg==/ch.liri.operations-Cn88aJOd_LYEWYkuyI2i_g==/base.apk
+    dataDir=/data/user/0/ch.liri.operations
+    app=ProcessRecord{8ff5714 2922:ch.liri.operations/u0a903}
+    useNewWiuLogic_forCapabilities()=true
+    useNewWiuLogic_forStart()=true
+    useNewBfslLogic()=true
+    mAllowWiu_noBinding=DENIED
+    mAllowWiu_inBindService=DENIED
+    mAllowWiu_byBindings=DENIED
+    getFgsAllowWiu_legacy=DENIED
+    getFgsAllowWiu_new=DENIED
+    getFgsAllowWiu_forStart=DENIED
+    getFgsAllowWiu_forCapabilities=DENIED
+    allowUiJobScheduling=false
+    recentCallingPackage=ch.liri.operations
+    recentCallingUid=10903
+    mAllowStart_noBinding=DENIED
+    mAllowStart_inBindService=DENIED
+    mAllowStart_byBindings=DENIED
+    getFgsAllowStart_legacy=DENIED
+    getFgsAllowStart_new=DENIED
+    getFgsAllowStart=DENIED
+    startForegroundCount=0
+    infoAllowStartForeground=[callingPackage: ch.liri.operations; callingUid: 10903; uidState: TPSL; uidBFSL: n/a; intent: Intent { act=com.google.firebase.MESSAGING_EVENT xflg=0x4 pkg=ch.liri.operations }; code:DENIED; tempAllowListReason:<null>; allowWiu:-1; targetSdkVersion:36; callerTargetSdkVersion:36; startForegroundCount:0; bindFromPackage:null: isBindService:true]
+    createTime=-12m33s588ms startingBgTimeout=--
+    lastActivity=-10m14s543ms restartTime=-10m14s543ms createdFromFg=false
+    Bindings:
+    * IntentBindRecord{21d3722 CREATE}:
+      intent={act=com.google.firebase.MESSAGING_EVENT xflg=0x4 pkg=ch.liri.operations}
+      binder=android.os.BinderProxy@38905b3
+      requested=true received=true hasBound=true doRebind=false
+      * Client AppBindRecord{c862770 ProcessRecord{8ff5714 2922:ch.liri.operations/u0a903}}
+        Per-process Connections:
+          ConnectionRecord{fddfff1 u0 CR IMP ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService:@c28db98 flags=0x41}
+    All Connections:
+      ConnectionRecord{fddfff1 u0 CR IMP ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService:@c28db98 flags=0x41}
+
+  Connection bindings to services:
+  * ConnectionRecord{dd611d9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@81fe420 flags=0x1}
+    binding=AppBindRecord{72c9ced ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@81fe420 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{fddfff1 u0 CR IMP ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService:@c28db98 flags=0x41}
+    binding=AppBindRecord{c862770 ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService:ch.liri.operations}
+    conn=android.os.BinderProxy@c28db98 flags=0x41
+    ongoingCalls=false
+

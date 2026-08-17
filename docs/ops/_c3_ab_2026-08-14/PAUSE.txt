@@ -1,0 +1,17 @@
+REPRISE TERMINÉE — 2026-08-14 ~18:18 Genève
+
+Clarification pause :
+- PAUSE initiale (~17:19) : runner semblait coupé pendant T12
+- Timeline réelle : T12 a bien fini (17:15→17:20) + DONE_FULL_C3_AB 17:22:49
+- Captures T12 principales = PASS (LOC m26, auth=0, err_fg=0)
+
+Reprise 18:12 (device :40175 + Metro) :
+- Pré-check fragile (auth_not_usable=1 ponctuel, LOC 15m=0)
+- T12 rejeu 5 min : A/B orchestration OK ; LOC stagnant (fix_stale, last LOC 17:20:10, ingested_non_persisted)
+
+Freeze officiel :
+P0-A/B CLOSED PASS ; CANARY A+B / FULL C3 / C3 GLOBAL = PASS
+P0-C OPEN / DIAGNOSTIC ; PATCH P0-C = NO-GO
+Prochain GO : diagnostic read-only (corrélation sequence ↔ ACK ↔ 17:20:10)
+Doc : docs/ops/gps-p0-c-loc-stale-after-pause.md
+

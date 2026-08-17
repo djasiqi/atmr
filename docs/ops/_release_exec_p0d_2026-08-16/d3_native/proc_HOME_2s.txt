@@ -1,0 +1,273 @@
+﻿  *APP* UID 10903 ProcessRecord{b19038f 22921:ch.liri.operations/u0a903}
+    user #0 uid=10903 gids={3003, 50903, 20903, 9997}
+    mRequiredAbi=arm64-v8a instructionSet=arm64
+    class=ch.liri.operations.MainApplication
+    dir=/data/app/~~le3lbrlDb0U4Kn_n58YDxg==/ch.liri.operations-Cn88aJOd_LYEWYkuyI2i_g==/base.apk publicDir=/data/app/~~le3lbrlDb0U4Kn_n58YDxg==/ch.liri.operations-Cn88aJOd_LYEWYkuyI2i_g==/base.apk data=/data/user/0/ch.liri.operations
+    packageList={ch.liri.operations}
+    packageDependencies={com.google.android.webview}
+    compat={480dpi}
+    thread=com.android.server.am.ApplicationThreadDeferred@da54f69
+    pid=22921
+    lastActivityTime=-3s48ms    startUpTime=-57s962ms    startElapsedTime=-1m1s40ms
+    startSeq=5135
+    mountMode=DEFAULT
+    pendingUiClean=true
+    lastRssTime=-14s239ms rssProcState=2 rssStatType=0 nextRssTime=+45s757ms
+    lastRss=195MB lastCachedRss=0,00
+    trimMemoryLevel=0
+    procStateMemTracker: best=1 (1=1 1.5x)
+    lastRequestedGc=-57s913ms lastLowMemory=-57s913ms reportLowMemory=false
+    currentHostingComponentTypes=0x380 historicalHostingComponentTypes=0x3a0
+    reportedInteraction=false fgInteractionTime=-2s210ms
+    adjSeq=187318 lruSeq=114738
+    oom adj: max=1001 curRaw=50 setRaw=50 cur=50 set=50
+    mCurSchedGroup=7 setSchedGroup=7 systemNoUi=false
+    curProcState=4 mRepProcState=4 setProcState=4 lastStateTime=-57s669ms
+    curCapability=L--NFUATI setCapability=L--NFUATI
+--
+      - ServiceRecord{2fbe4f8 u0 ch.liri.operations/expo.modules.location.services.LocationTaskService c:ch.liri.operations}
+    mConnections:
+      - ConnectionRecord{82cdbc0 u0 CR WACT CAPS com.google.android.gms/.chimera.PersistentDirectBootAwareApiService:@1a39943 flags=0x1081}
+      - ConnectionRecord{9da3036 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4d43dd1 flags=0x1}
+      - ConnectionRecord{9f3b83e u0 CR WACT CAPS com.google.android.gms/.chimera.PersistentDirectBootAwareApiService:@c8e40f9 flags=0x1081}
+      - ConnectionRecord{b1e9ef2 u0 CR WACT CAPS com.google.android.gms/.chimera.PersistentApiService:@45681fd flags=0x1081}
+      - ConnectionRecord{e1ae4d1 u0 CR WACT CAPS com.google.android.gms/com.google.android.location.internal.GoogleLocationManagerService:@628c7f8 flags=0x1081}
+    scheduleServiceTimeoutPending=false
+    Published Providers:
+      - expo.modules.clipboard.ClipboardFileProvider
+        -> ContentProviderRecord{1cafdee u0 ch.liri.operations/expo.modules.clipboard.ClipboardFileProvider}
+      - com.canhub.cropper.CropFileProvider
+        -> ContentProviderRecord{e0d28f u0 ch.liri.operations/com.canhub.cropper.CropFileProvider}
+      - androidx.startup.InitializationProvider
+        -> ContentProviderRecord{97b691c u0 ch.liri.operations/androidx.startup.InitializationProvider}
+      - io.sentry.android.core.SentryPerformanceProvider
+        -> ContentProviderRecord{b3a7925 u0 ch.liri.operations/io.sentry.android.core.SentryPerformanceProvider}
+      - io.invertase.notifee.NotifeeInitProvider
+        -> ContentProviderRecord{6d0afa u0 ch.liri.operations/io.invertase.notifee.NotifeeInitProvider}
+      - io.sentry.android.core.SentryInitProvider
+        -> ContentProviderRecord{f2208ab u0 ch.liri.operations/io.sentry.android.core.SentryInitProvider}
+      - com.reactnativecommunity.webview.RNCWebViewFileProvider
+        -> ContentProviderRecord{f63fb08 u0 ch.liri.operations/com.reactnativecommunity.webview.RNCWebViewFileProvider}
+      - com.google.mlkit.common.internal.MlKitInitProvider
+        -> ContentProviderRecord{43e82a1 u0 ch.liri.operations/com.google.mlkit.common.internal.MlKitInitProvider}
+      - io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider
+        -> ContentProviderRecord{3f0dcc6 u0 ch.liri.operations/io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider}
+      - expo.modules.filesystem.FileSystemFileProvider
+        -> ContentProviderRecord{7f68487 u0 ch.liri.operations/expo.modules.filesystem.FileSystemFileProvider}
+      - com.google.firebase.provider.FirebaseInitProvider
+        -> ContentProviderRecord{7c1bfb4 u0 ch.liri.operations/com.google.firebase.provider.FirebaseInitProvider}
+      - expo.modules.imagepicker.fileprovider.ImagePickerFileProvider
+        -> ContentProviderRecord{f1fa7dd u0 ch.liri.operations/expo.modules.imagepicker.fileprovider.ImagePickerFileProvider}
+    Connected Providers:
+      - 9f1b707/com.android.providers.settings/.SettingsProvider->22921:ch.liri.operations/u0a903 s1/1 u0/0 +1m0s930ms
+    mIsReceivingBroadcast=false
+    mBroadcastReceiverSchedGroup=-2147483648
+    mReceivers:
+      - ReceiverList{850bbab 22921 ch.liri.operations/10903/u0 remote:92aa9fa}
+      - ReceiverList{8e3f3ec 22921 ch.liri.operations/10903/u0 remote:cdc869f}
+      - ReceiverList{d9cacee 22921 ch.liri.operations/10903/u0 remote:a045a69}
+      - ReceiverList{df61a65 22921 ch.liri.operations/10903/u0 remote:1c7c75c}
+    lastCompactTime=0 lastCompactProfile=null
+    hasPendingCompaction=false    isFreezeExempt=false isPendingFreeze=false isFrozen=false
+    earliestFreezableTimeMs=-1s796ms
+    Activities:
+      - ActivityRecord{78023148 u0 ch.liri.operations/.MainActivity t1312}
+    Recent Tasks:
+      - Task{176d1b5 #1312 type=standard A=10903:ch.liri.operations}
+     Configuration={0.8 228mcc2mnc [fr_CH,sq_AL,en_GB] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off mOverlappingWithCutout=false} s.2590 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=32 themeSeq=0}
+     OverrideConfiguration={0.8 228mcc2mnc [fr_CH,sq_AL,en_GB] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off mOverlappingWithCutout=false} s.2 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=32 themeSeq=0}
+     mLastReportedConfiguration={0.8 228mcc2mnc [fr_CH,sq_AL,en_GB] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off mOverlappingWithCutout=false} s.2590 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=32 themeSeq=0}
+  *APP* UID 10204 ProcessRecord{b85f21f 21820:com.samsung.android.app.reminder/u0a204}
+    user #0 uid=10204 gids={3003, 50204, 20204, 9997}
+    mRequiredAbi=arm64-v8a instructionSet=arm64
+    class=com.samsung.android.app.reminder.application.ReminderApp
+    dir=/data/app/~~BkYVKrMqjICMrAIYgNL_BQ==/com.samsung.android.app.reminder-VPLTbPQhwrhAv2PpUILYaQ==/base.apk publicDir=/data/app/~~BkYVKrMqjICMrAIYgNL_BQ==/com.samsung.android.app.reminder-VPLTbPQhwrhAv2PpUILYaQ==/base.apk data=/data/user/0/com.samsung.android.app.reminder
+    packageList={com.samsung.android.app.reminder}
+    compat={480dpi}
+    thread=com.android.server.am.ApplicationThreadDeferred@78dff52
+    pid=21820
+    lastActivityTime=-1m54s350ms    startUpTime=-2m0s626ms    startElapsedTime=-2m3s704ms
+    startSeq=5128
+    mountMode=DEFAULT
+    lastCpuTime=0
+    lastRssTime=-52s770ms rssProcState=19 rssStatType=0 nextRssTime=+7s221ms
+    lastRss=70MB lastCachedRss=70MB
+    trimMemoryLevel=0
+    procStateMemTracker: best=4 (4=4 1.0x)
+--
+    Proc # 1: fg +50 F/S/FGS  L--NFUATI  t: 0 22921:ch.liri.operations/u0a903 (fg-service-act)
+        oom: max=1001 curRaw=50 setRaw=50 cur=50 set=50
+        state: cur=FGS  set=FGS  lastRss=195MB lastCachedRss=0,00
+        cached=false empty=false hasAboveClient=false
+    Proc #70: vis    F/ /BTOP ---NFU-TI  t: 0 2320:com.skms.android.agent:remote/1000 (service)
+        com.skms.android.agent/.SKMSAgentService<=Proc{7851:com.samsung.android.carkey/u0a102}
+        oom: max=1001 curRaw=100 setRaw=100 cur=100 set=100
+        state: cur=BTOP set=BTOP lastRss=59MB lastCachedRss=59MB
+        cached=false empty=false hasAboveClient=false
+    Proc #45: vis    F/ /BTOP ---NFU-TI  t: 0 7851:com.samsung.android.carkey/u0a102 (service)
+        com.samsung.android.carkey/.seinterface.service.SecureElementInterfaceService<=Proc{4107:com.google.android.gms/u0a231}
+        oom: max=1001 curRaw=100 setRaw=100 cur=100 set=100
+        state: cur=BTOP set=BTOP lastRss=64MB lastCachedRss=64MB
+        cached=false empty=false hasAboveClient=false
+    Proc # 3: vis    F/ /BTOP LCMNFUATI  t: 0 4107:com.google.android.gms/u0a231 (service)
+        com.google.android.gms/.chimera.GmsApiService<=Proc{4453:com.google.android.gms.persistent/u0a231}
+        oom: max=1001 curRaw=100 setRaw=100 cur=100 set=100
+        state: cur=BTOP set=BTOP lastRss=140MB lastCachedRss=140MB
+        cached=false empty=false hasAboveClient=false
+    Proc # 2: vis    F/ /BTOP LCMNFUATI  t: 0 4453:com.google.android.gms.persistent/u0a231 (service)
+        com.google.android.gms/.chimera.PersistentApiService<=Proc{15125:com.google.android.googlequicksearchbox:googleapp/u0a234}
+--
+  mPreviousProcess: ProcessRecord{b19038f 22921:ch.liri.operations/u0a903}
+
+  UID states:
+    UID 1000: UidRecord{db1057d 1000 PER  change:procadj procs:0 seq(1049609,988185)} caps=LCMNFUATI
+      curProcState=0 curCapability=LCMNFUATI
+      proc=ProcessRecord{de1f8f7 17416:com.samsung.android.vtcamerasettings/1000}
+      proc=ProcessRecord{d2b3b61 14960:com.samsung.android.biometrics.app.setting/1000}
+      proc=ProcessRecord{cbb753f 4559:com.sec.imsservice/1000}
+      proc=ProcessRecord{cb951f7 2196:com.samsung.android.fmm/1000}
+      proc=ProcessRecord{ba15196 22838:com.samsung.euicc/1000}
+      proc=ProcessRecord{8686522 11345:com.samsung.android.knox.zt.framework/1000}
+      proc=ProcessRecord{746e47d 19960:com.samsung.android.wifi.ai/1000}
+      proc=ProcessRecord{6eee623 4306:com.samsung.android.mdecservice/1000}
+      proc=ProcessRecord{6ed133a 29232:com.android.settings/1000}
+      proc=ProcessRecord{6461b62 7047:com.sec.android.sdhms/1000}
+      proc=ProcessRecord{608a52e 11762:com.samsung.SMT/1000}
+      proc=ProcessRecord{5bdba44 2320:com.skms.android.agent:remote/1000}
+      proc=ProcessRecord{56843c4 4606:com.sec.imsservice:ImsUpdateService/1000}
+      proc=ProcessRecord{50457d6 6948:com.qualcomm.qti.services.systemhelper:systemhelper_service/1000}
+      proc=ProcessRecord{4a30647 4269:com.sec.epdg/1000}
+      proc=ProcessRecord{3a83548 22320:com.samsung.android.dqagent/1000}
+--
+      proc=ProcessRecord{b19038f 22921:ch.liri.operations/u0a903}
+    UID u0ai0: UidRecord{732ab30 u0ai0 CACC bg:+43m8s972ms idle change:procadj procs:0 seq(1049398,912812)} caps=---------
+      curProcState=17 curCapability=---------
+      proc=ProcessRecord{e6d9ba 13826:com.instagram.android:sandboxed_process0:com.facebook.browser.helium.content.SandboxedProcessService0:0/u0a451i-9000}
+    UID u0ai1: UidRecord{7dbb3a9 u0ai1 CACC bg:+5h1m10s275ms idle change:procadj procs:0 seq(1049397,371019)} caps=---------
+      curProcState=17 curCapability=---------
+      proc=ProcessRecord{9cc9b74 14005:com.instagram.android:zygote_warmer:com.facebook.browser.helium.preload.AppZygoteWarmerService/u0a451i-8999}
+    UID u0ai106: UidRecord{6ff2d2e u0ai106 CACC bg:+4h54m23s266ms idle change:procadj procs:0 seq(1049396,1042808)} caps=---------
+      curProcState=17 curCapability=---------
+      proc=ProcessRecord{34058f9 18840:com.android.chrome:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:6/u0a243i-8894}
+    UID u0ai9000: UidRecord{9fe70cf u0ai9000 CACC bg:+3h12m51s620ms idle change:procadj procs:0 seq(1049395,922564)} caps=---------
+      curProcState=17 curCapability=---------
+      proc=ProcessRecord{25c694c 10482:com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0/u0a248i0}
+    UID u0i20: UidRecord{6cf4a5c u0i20 CACC bg:+4h53m29s112ms idle change:procadj procs:0 seq(1049394,388490)} caps=---------
+      curProcState=17 curCapability=---------
+      proc=ProcessRecord{48b7cd8 20699:com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0/u0a757i20}
+    UID u0i21: UidRecord{e12e165 u0i21 CACC bg:+1h18m6s772ms idle change:procadj procs:0 seq(1049393,918020)} caps=---------
+      curProcState=17 curCapability=---------
+      proc=ProcessRecord{9c4690c 23860:com.sec.android.app.sbrowser:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0/u0a304i21}
+    UID u150a47: UidRecord{86cef3e u150a47 CEM  bg:+2m1s342ms idle change:procadj procs:0 seq(1049392,1040843)} caps=---------
+      curProcState=19 curCapability=---------
+--
+    #122: fg +50 FGS  L--NFUATI 22921:ch.liri.operations/u0a903 act:activities|recents
+    #121: vis    BTOP LCMNFUATI 4453:com.google.android.gms.persistent/u0a231 act:client
+    #120: vis    BTOP LCMNFUATI 4107:com.google.android.gms/u0a231 act:client
+    #119: picked  CAC  --------- 29232:com.android.settings/1000 act:activities|recents
+    #118: cch    CACC -------T- 31260:com.samsung.android.ce/u0a84 act:client
+    #117: cch    CAC  --------- 17971:com.android.chrome/u0a243 act:activities
+    #116: fg     BTOP ---NFU-TI 10586:com.google.android.adservices.api/u0a274 act:client
+    #115: vis    IMPB -------TI 7813:com.samsung.android.honeyboard/u0a179 act:treated
+    #114: picked  CAC  --------- 389:com.instagram.android/u0a451 act:activities|recents
+    #113: cch+10 CACC --------- 14005:com.instagram.android:zygote_warmer:com.facebook.browser.helium.preload.AppZygoteWarmerService/u0a451i-8999 act:client
+    #112: cch+10 CAC  --------- 20444:com.android.vending/u0a233 act:activities|recents
+    #111: cch+20 CACC --------- 13826:com.instagram.android:sandboxed_process0:com.facebook.browser.helium.content.SandboxedProcessService0:0/u0a451i-9000 act:client
+    #110: picked  CRE  --------- 32497:com.whatsapp/u0a765 act:recents
+    #109: cch+20 CAC  --------- 24888:com.sec.android.gallery3d/u0a116 act:activities|recents
+    #108: cch+30 CAC  --------- 23731:com.sec.android.app.sbrowser/u0a304 act:activities|recents
+    #107: cch+30 CACC --------- 23860:com.sec.android.app.sbrowser:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0/u0a304i21 act:client
+    #106: cch+30 CACC --------- 23837:com.samsung.android.intellivoiceservice:translation/u0a308 act:client
+    #105: cch+40 CACC --------- 23161:com.samsung.android.privateaccesstokens/u0a360 act:client
+    #104: cch+40 CACC --------- 31016:com.samsung.android.samsungpass/u0a114 act:client
+    #103: cch+40 CACC --------- 23894:com.sec.android.app.sbrowser:privileged_process0/u0a304 act:client
+    #102: cch+50 CAC  --------- 10149:de.tchibo.app/u0a374 act:activities|recents
+--
+    Proc # 1: fg +50 F/S/FGS  L--NFUATI  t: 0 22921:ch.liri.operations/u0a903 (fg-service-act)
+    Proc #70: vis    F/ /BTOP ---NFU-TI  t: 0 2320:com.skms.android.agent:remote/1000 (service)
+        com.skms.android.agent/.SKMSAgentService<=Proc{7851:com.samsung.android.carkey/u0a102}
+    Proc #45: vis    F/ /BTOP ---NFU-TI  t: 0 7851:com.samsung.android.carkey/u0a102 (service)
+        com.samsung.android.carkey/.seinterface.service.SecureElementInterfaceService<=Proc{4107:com.google.android.gms/u0a231}
+    Proc # 3: vis    F/ /BTOP LCMNFUATI  t: 0 4107:com.google.android.gms/u0a231 (service)
+        com.google.android.gms/.chimera.GmsApiService<=Proc{4453:com.google.android.gms.persistent/u0a231}
+    Proc # 2: vis    F/ /BTOP LCMNFUATI  t: 0 4453:com.google.android.gms.persistent/u0a231 (service)
+        com.google.android.gms/.chimera.PersistentApiService<=Proc{15125:com.google.android.googlequicksearchbox:googleapp/u0a234}
+    Proc #23: vis    F/S/FGS  ---NFUATI  t: 0 23585:com.tailscale.ipn/u0a896 (service)
+        com.tailscale.ipn/.IPNService<=Proc{3001:system/1000}
+    Proc #105: vis    F/ /BFGS ---NFU-TI  t: 0 5415:com.samsung.android.knox.containercore/5250 (service)
+        com.samsung.android.knox.containercore/.service.ContainerCoreService<=Proc{3001:system/1000}
+    Proc #103: vis    T/ /BFGS ---NFU-TI  t: 0 11762:com.samsung.SMT/1000 (service)
+        com.samsung.SMT/.SamsungTTSService<=Proc{3001:system/1000}
+    Proc #101: vis    F/ /BFGS LCMNFUATI  t: 0 9442:com.samsung.android.smartsuggestions/u150a111 (service)
+        com.samsung.android.smartsuggestions/.extservice.services.ContentCaptureService<=Proc{3001:system/1000}
+    Proc #96: vis    F/ /BFGS ----F--TI  t: 0 21846:com.sec.android.daemonapp:weather_content_provider/u0a196 (provider)
+        com.sec.android.daemonapp/.provider.SystemLevelContentProvider<=Proc{4935:com.samsung.android.wallpaper.live/u0a209}
+    Proc #95: vis    F/ /BFGS LCMNFUATI  t: 0 4935:com.samsung.android.wallpaper.live/u0a209 (service)
+        com.samsung.android.wallpaper.live/.layered.LayeredWallpaperService<=Proc{3001:system/1000}
+--
+    PID #22921: ProcessRecord{b19038f 22921:ch.liri.operations/u0a903}
+    PID #23161: ProcessRecord{417170c 23161:com.samsung.android.privateaccesstokens/u0a360}
+    PID #23170: ProcessRecord{4da8411 23170:com.samsung.android.mobileservice/u150a107}
+    PID #23173: ProcessRecord{800a449 23173:com.google.android.youtube/u0a250}
+    PID #23585: ProcessRecord{adb363e 23585:com.tailscale.ipn/u0a896}
+    PID #23595: ProcessRecord{70a248e 23595:com.google.android.permissioncontroller/u0a266}
+    PID #23731: ProcessRecord{4fee7d1 23731:com.sec.android.app.sbrowser/u0a304}
+    PID #23833: ProcessRecord{db3bf1d 23833:com.google.android.projection.gearhead:car/u0a221}
+    PID #23834: ProcessRecord{7316592 23834:com.samsung.android.authfw/5278}
+    PID #23837: ProcessRecord{fce8c68 23837:com.samsung.android.intellivoiceservice:translation/u0a308}
+    PID #23860: ProcessRecord{9c4690c 23860:com.sec.android.app.sbrowser:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0/u0a304i21}
+    PID #23894: ProcessRecord{5a809df 23894:com.sec.android.app.sbrowser:privileged_process0/u0a304}
+    PID #24001: ProcessRecord{db6e917 24001:com.samsung.android.providers.media/u150a57}
+    PID #24888: ProcessRecord{78272fc 24888:com.sec.android.gallery3d/u0a116}
+    PID #26759: ProcessRecord{926ce2 26759:com.samsung.android.mobileservice/u0a107}
+    PID #28486: ProcessRecord{d1d1fb9 28486:com.facebook.services/u0a67}
+    PID #29232: ProcessRecord{6ed133a 29232:com.android.settings/1000}
+    PID #30466: ProcessRecord{e73fa5d 30466:android.process.acore/u150a48}
+    PID #30613: ProcessRecord{1be3c44 30613:android.process.acore/u0a48}
+    PID #31016: ProcessRecord{bdb8b35 31016:com.samsung.android.samsungpass/u0a114}
+    PID #31260: ProcessRecord{3851aab 31260:com.samsung.android.ce/u0a84}
+--
+  mPreviousProcess: ProcessRecord{b19038f 22921:ch.liri.operations/u0a903}
+  mPreviousProcessVisibleTime: +13h40m15s261ms
+  mGlobalConfiguration: {0.8 228mcc2mnc [fr_CH,sq_AL,en_GB] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=undefined mOverlappingWithCutout=false} s.2429 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=32 themeSeq=0}
+  Display override configurations:
+    0: {0.8 228mcc2mnc [fr_CH,sq_AL,en_GB] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=undefined mOverlappingWithCutout=false} s.2429 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=32 themeSeq=0}
+  mConfigWillChange: false
+  mWakefulness=Awake
+  mSleeping=false
+  mShuttingDown=false mTestPssMode=false
+  mVrController=[VrState=0x0,VrRenderThreadTid=0]
+  mAllowAppSwitchUids:
+    User 0: Type VoiceInteractionManager = u0a234
+  mControllerDescription: pid = 22902 uid = 2000
+  mGoingToSleepWakeLock=WakeLock{928028c held=false, refCount=0}
+  mLaunchingActivityWakeLock=WakeLock{b17edd5 held=false, refCount=811}
+  mProcessLimit: 550
+  mNumNonCachedProcs: 74
+  mNumCachedHiddenProcs: 22
+  mProcessLimitOverride(OverrideMaxCachedProcesses): -1
+  DHA_CACHE_MIN: 4
+  DHA_CACHE_MAX: 518
+--
+  MLList AUF Process name : [0_&_ch.liri.operations, 0_&_com.whatsapp, 0_&_com.instagram.android, 0_&_com.google.android.apps.maps, 0_&_com.android.settings]
+
+  mUidObservers:
+    1000 null com.android.server.pm.ShortcutService$4: GONE STATE (cut=-1)
+    1041 audioserver android.app.IUidObserver$Stub$Proxy: IDLE ACT GONE STATE (cut=-1)
+    1000 android android.app.ActivityManager$MyUidObserver: GONE STATE (cut=4)
+      Last 1001: 0
+      Last 1002: 0
+      Last 1027: 0
+      Last 1068: 0
+      Last 1073: 0
+      Last 5004: 19
+      Last 5009: 19
+      Last 5013: 19
+      Last 5025: 5
+      Last 5250: 19
+      Last 5278: 19
+      Last 5279: 6
+      Last 5554: 19
+      Last u0a40: 1
+      Last u0a47: 19
+

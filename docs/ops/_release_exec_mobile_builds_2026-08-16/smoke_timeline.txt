@@ -1,0 +1,22 @@
+2026-08-16T12:28:24.0139920+02:00 SMOKE_START driver=20135 device=RFCW20QC53W standalone=1 tip=286737a2 versionCode=126
+2026-08-16T12:28:26.7354686+02:00 SIG_PRE auth_not_usable=0 err_fg=0 native_start_error=0 overlap=0 gen_null=0 metroish=0 pid=21943
+2026-08-16T12:28:42.8875203+02:00 SNAP_PRE LABEL PRE | NOW 2026-08-16T10:28:28+00:00 | /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning:  | Eventlet is deprecated. It is currently being maintained in bugfix mode, and | we strongly recommend against using it for new projects. | System.Management.Automation.RemoteException | If you are already using Eventlet, we recommend migrating to a different | framework.  For more detail see | https://eventlet.readthedocs.io/en/latest/asyncio/migration.html | System.Management.Automation.RemoteException
+2026-08-16T12:28:42.8915206+02:00 PHASE_FG 120s â€
+2026-08-16T12:30:44.2055520+02:00 SIG_BG auth_not_usable=0 err_fg=0 native_start_error=0 overlap=0 gen_null=0 metroish=0 pid=21943
+2026-08-16T12:31:00.3180844+02:00 SNAP_BG LABEL BG | NOW 2026-08-16T10:30:46+00:00 | /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning:  | Eventlet is deprecated. It is currently being maintained in bugfix mode, and | we strongly recommend against using it for new projects. | System.Management.Automation.RemoteException | If you are already using Eventlet, we recommend migrating to a different | framework.  For more detail see | https://eventlet.readthedocs.io/en/latest/asyncio/migration.html | System.Management.Automation.RemoteException
+2026-08-16T12:31:00.3209943+02:00 PHASE_LOCK 75s â€
+2026-08-16T12:31:37.6829851+02:00 SMOKE_START driver=20135 device=RFCW20QC53W standalone=1 tip=286737a2 versionCode=126
+2026-08-16T12:31:41.6174494+02:00 SIG_PRE auth_not_usable=0 err_fg=0 native_start_error=0 overlap=0 gen_null=0 metroish=0 pid=21943
+2026-08-16T12:31:57.1512124+02:00 SNAP_PRE LABEL PRE | NOW 2026-08-16T10:31:54.792238+00:00 | ACTIVE [(38224, 'IN_PROGRESS')]
+2026-08-16T12:31:57.1539460+02:00 PHASE_FG 90s
+2026-08-16T12:33:29.9033326+02:00 SIG_FG auth_not_usable=0 err_fg=0 native_start_error=0 overlap=0 gen_null=0 metroish=0 pid=21943
+2026-08-16T12:33:45.7574541+02:00 SNAP_FG LABEL FG | NOW 2026-08-16T10:33:43.421882+00:00 | ACTIVE [(38224, 'IN_PROGRESS')]
+2026-08-16T12:33:45.7608840+02:00 PHASE_BG 90s
+2026-08-16T12:35:17.4806393+02:00 SIG_BG auth_not_usable=0 err_fg=0 native_start_error=0 overlap=0 gen_null=0 metroish=0 pid=21943
+2026-08-16T12:35:32.4935278+02:00 SNAP_BG LABEL BG | NOW 2026-08-16T10:35:30.205850+00:00 | ACTIVE [(38224, 'IN_PROGRESS')]
+2026-08-16T12:35:32.4963593+02:00 PHASE_LOCK 70s
+2026-08-16T12:37:23.5330465+02:00 SIG_LOCK auth_not_usable=0 err_fg=0 native_start_error=0 overlap=0 gen_null=0 metroish=0 pid=21943
+2026-08-16T12:37:39.3389062+02:00 SMOKE_END
+2026-08-16T12:44:41.6725217+02:00 SIG_R2_FG auth_not_usable=0 err_fg=0 native_start_error=0 overlap=0 gen_null=0 pid=29405
+2026-08-16T12:46:06.8450256+02:00 SIG_R2_BG auth_not_usable=0 err_fg=0 native_start_error=0 overlap=0 gen_null=0 pid=29405
+2026-08-16T12:48:02.0463587+02:00 SIG_R2_LOCK auth_not_usable=0 err_fg=0 native_start_error=0 overlap=0 gen_null=0 pid=29405

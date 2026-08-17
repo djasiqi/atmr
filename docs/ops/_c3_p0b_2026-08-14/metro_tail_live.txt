@@ -1,0 +1,80 @@
+﻿ INFO  [perf-kpi] perf.react_query.invalidate {"duration_ms": 397, "invalidate_sub_key": "driver-company-bookings-today.driver:19", "query_key": "[\"driver-company-bookings-today\",\"driver:19\"]", "role": "driver", "screen": "/", "source": "perf.instrumentation", "timestamp_client": "2026-08-14T12:59:15.390Z", "trigger": "query_client"}
+ INFO  [driver-telemetry] auth.refresh.endpoint_used {"endpoint": "refresh-token", "source": "core.api.client"}
+ INFO  [FCM-GATE] register effect start {"enabled": true, "fcmEnabled": true, "source": "driver.notifications.bridge", "stage": "app_foreground"}
+ INFO  [driver-telemetry] driver.foreground.resume.resync.coalesced {"context_id": "driver:19", "foreground_resume_resync_coalesced_total": 1, "source": "driver.sync_engine"}
+ INFO  [driver-telemetry] driver.runtime.resume.start {"app_state": "active", "context_id": "driver:19", "resume_attempt_id": "driver:19:1786712357800:58", "source": "driver.runtime.resume"}
+ INFO  [driver-telemetry] driver.network.profile {"network_profile_active": "normal", "recommended_sync_interval_ms": 10000, "source": "core.api.client"}
+ INFO  [driver-telemetry] driver.http.timeout {"endpoint": "/driver/me/device-health", "network_profile_active": "normal", "source": "core.api.client", "timeout_ms": 15000}
+ INFO  [driver-telemetry] driver.network.profile {"network_profile_active": "normal", "recommended_sync_interval_ms": 10000, "source": "core.api.client"}
+ INFO  [driver-telemetry] driver.http.timeout {"endpoint": "/driver/me/device-health", "network_profile_active": "normal", "source": "core.api.client", "timeout_ms": 15000}
+ INFO  [FCM-GATE] requesting token {"source": "driver.notifications.bridge", "stage": "app_foreground"}
+ INFO  [driver-telemetry] driver.push.fcm.get_token_start {"platform": "android", "source": "driver.firebaseMessaging"}
+ INFO  [FCM-GATE] getDriverFcmToken start {"platform": "android"}
+ INFO  [perf-kpi] perf.js_long_task {"duration_ms": 589.2499479949474, "role": "driver", "screen": "/", "source": "perf.instrumentation", "timestamp_client": "2026-08-14T12:59:17.868Z"}
+ INFO  [FCM-GATE] getToken success {"tokenLength": 142}
+ INFO  [driver-telemetry] driver.push.fcm.token {"source": "driver.firebaseMessaging", "token_present": true}
+ INFO  [FCM-GATE] token received {"source": "driver.notifications.bridge", "stage": "app_foreground", "tokenLength": 142}
+ INFO  [driver-telemetry] driver_push.token_acquired {"provider": "fcm", "source": "driver.notifications.bridge", "stage": "app_foreground", "token_length": 142}
+ INFO  [FCM-GATE] posting token {"provider": "fcm", "source": "driver.notifications.bridge", "stage": "app_foreground"}
+ INFO  [driver-telemetry] driver.network.profile {"network_profile_active": "normal", "recommended_sync_interval_ms": 10000, "source": "core.api.client"}
+ INFO  [driver-telemetry] driver.http.timeout {"endpoint": "/driver/me/telemetry/push", "network_profile_active": "normal", "source": "core.api.client", "timeout_ms": 15000}
+ INFO  [driver-telemetry] driver.network.profile {"network_profile_active": "normal", "recommended_sync_interval_ms": 10000, "source": "core.api.client"}
+ INFO  [driver-telemetry] driver.http.timeout {"endpoint": "/driver/save-push-token", "network_profile_active": "normal", "source": "core.api.client", "timeout_ms": 15000}
+ INFO  [driver-telemetry] auth.refresh.endpoint_used {"endpoint": "refresh-token", "source": "core.api.client"}
+ INFO  [driver-telemetry] tracking.device_health.sent {"battery_optimized": false, "constraint_reason": null, "fgs_running": true, "kind": "tracking_health", "source": "driver.device_health", "trigger_reason": "health_monitor_ok"}
+ INFO  [driver-telemetry] tracking.device_health.sent {"battery_optimized": false, "constraint_reason": null, "fgs_running": true, "kind": "tracking_health", "source": "driver.device_health", "trigger_reason": null}
+ INFO  [driver-telemetry] push.token.registered {"provider": "fcm", "source": "driver.notifications.bridge"}
+ INFO  [driver-telemetry] driver_push.register_success {"provider": "fcm", "source": "driver.notifications.bridge"}
+ INFO  [driver-telemetry] driver.network.profile {"network_profile_active": "normal", "recommended_sync_interval_ms": 10000, "source": "core.api.client"}
+ INFO  [driver-telemetry] driver.http.timeout {"endpoint": "/driver/me/telemetry/push", "network_profile_active": "normal", "source": "core.api.client", "timeout_ms": 15000}
+ INFO  [perf-kpi] perf.realtime.notify {"duration_ms": 1, "listener_count": 3, "role": "driver", "screen": "/", "source": "perf.instrumentation", "timestamp_client": "2026-08-14T12:59:18.198Z"}
+ INFO  [driver-telemetry] realtime.transport.state {"actual_transport": "polling", "connected": true, "mode": "socket", "source": "core.realtime.manager", "transport_authority": "polling"}
+ INFO  [perf-kpi] perf.realtime.notify {"duration_ms": 1, "listener_count": 3, "role": "driver", "screen": "/", "source": "perf.instrumentation", "timestamp_client": "2026-08-14T12:59:18.201Z"}
+ LOG  [DriverSocket] {"contextId": "driver:19", "hasToken": true, "path": "/socket.io", "socketUrl": "http://127.0.0.1:15100", "surface": "driver", "transports": ["websocket", "polling"], "urlEnvSource": "EXPO_PUBLIC_DRIVER_SOCKET_URL"}
+ INFO  [driver-telemetry] driver.network.profile {"network_profile_active": "normal", "recommended_sync_interval_ms": 10000, "source": "core.api.client"}
+ INFO  [driver-telemetry] driver.http.timeout {"endpoint": "/driver/me/tracking/sessions", "network_profile_active": "normal", "source": "core.api.client", "timeout_ms": 15000}
+ INFO  [driver-telemetry] driver.network.profile {"network_profile_active": "normal", "recommended_sync_interval_ms": 10000, "source": "core.api.client"}
+ INFO  [driver-telemetry] driver.http.timeout {"endpoint": "/driver/me/bookings/since", "network_profile_active": "normal", "source": "core.api.client", "timeout_ms": 15000}
+ INFO  [driver-telemetry] tracking.session.reconciled {"previous_session_id": "trk_sess_1786712352079_vls8zadn", "rebound_count": 0, "released_socket_count": 0, "source": "driver.tracking.queue", "tracking_session_id": "trk_sess_1786712358204_svrkfzdj"}
+ INFO  [driver-telemetry] tracking.queue.flush {"backend_acked": 0, "dropped": 0, "flush_path": "http_fallback", "network_profile_active": "poor", "oldest_item_age_ms": null, "queue_depth": 0, "retried": 0, "sent": 0, "socket_emitted": 0, "source": "driver.tracking.queue", "tracking_queue_oldest_age_ms": null}
+ INFO  [driver-telemetry] tracking.flush.transport {"backend_acked": 0, "sent": 0, "socket_emitted": 0, "source": "driver.tracking.queue", "transport": "http"}
+ INFO  [perf-kpi] perf.runtime.socket_reconnect_failed_total {"context_id": "driver:19", "source": "perf.runtime_stability", "timestamp_client": "2026-08-14T12:59:18.387Z", "total": 67}
+ INFO  [driver-telemetry] realtime.transport.state {"actual_transport": "polling", "connected": false, "mode": "polling", "source": "core.realtime.manager", "transport_authority": "degraded"}
+ INFO  [perf-kpi] perf.realtime.notify {"duration_ms": 1, "listener_count": 3, "role": "driver", "screen": "/", "source": "perf.instrumentation", "timestamp_client": "2026-08-14T12:59:18.391Z"}
+ INFO  [driver-telemetry] realtime.socket.disconnect {"context_id": "driver:19", "reason": "websocket error", "source": "core.realtime.manager"}
+ INFO  [driver-telemetry] realtime.transport.mismatch {"actual_transport": "polling", "context_id": "driver:19", "desired_transport": "socket", "source": "core.realtime.manager"}
+ INFO  [driver-telemetry] realtime.reconnect.circuit_breaker_blocked {"context_id": "driver:19", "source": "core.realtime.manager"}
+ INFO  [driver-telemetry] auth.refresh.endpoint_used {"endpoint": "refresh-token", "source": "core.api.client"}
+ INFO  [driver-telemetry] realtime.transport.state {"actual_transport": "polling", "connected": false, "mode": "polling", "source": "core.realtime.manager", "transport_authority": "reconcile"}
+ INFO  [perf-kpi] perf.realtime.notify {"duration_ms": 0, "listener_count": 3, "role": "driver", "screen": "/", "source": "perf.instrumentation", "timestamp_client": "2026-08-14T12:59:18.399Z"}
+ INFO  [driver-telemetry] realtime.transport.authority {"reason": "since", "source": "core.realtime.manager", "transport_authority": "reconcile"}
+ INFO  [driver-telemetry] realtime.reconcile.since {"context_id": "driver:19", "max_incremental_window_ms": 900000, "mission_reconcile_since_total": 1, "since_age_ms": 3099, "source": "driver.sync.reconcile"}
+ INFO  [driver-telemetry] tracking.queue.flush {"backend_acked": 0, "dropped": 0, "flush_path": "http_fallback", "network_profile_active": "poor", "oldest_item_age_ms": null, "queue_depth": 0, "retried": 0, "sent": 0, "socket_emitted": 0, "source": "driver.tracking.queue", "tracking_queue_oldest_age_ms": null}
+ INFO  [driver-telemetry] tracking.flush.transport {"backend_acked": 0, "sent": 0, "socket_emitted": 0, "source": "driver.tracking.queue", "transport": "http"}
+ INFO  [driver-telemetry] tracking.queue.flush {"backend_acked": 0, "dropped": 0, "flush_path": "http_fallback", "network_profile_active": "poor", "oldest_item_age_ms": null, "queue_depth": 0, "retried": 0, "sent": 0, "socket_emitted": 0, "source": "driver.tracking.queue", "tracking_queue_oldest_age_ms": null}
+ INFO  [driver-telemetry] tracking.flush.transport {"backend_acked": 0, "sent": 0, "socket_emitted": 0, "source": "driver.tracking.queue", "transport": "http"}
+ INFO  [driver-telemetry] driver.runtime.resync {"context_id": "driver:19", "resume_attempt_id": "driver:19:1786712357800:58", "source": "driver.runtime.resume", "trigger": "foreground"}
+ INFO  [driver-telemetry] driver.runtime.resume.success {"context_id": "driver:19", "resume_attempt_id": "driver:19:1786712357800:58", "retry_count": 0, "source": "driver.runtime.resume"}
+ INFO  [driver-telemetry] driver.network.profile {"network_profile_active": "normal", "recommended_sync_interval_ms": 10000, "source": "core.api.client"}
+ INFO  [driver-telemetry] driver.http.timeout {"endpoint": "/driver/me/bookings", "network_profile_active": "normal", "source": "core.api.client", "timeout_ms": 15000}
+ INFO  [driver-telemetry] driver.network.profile {"network_profile_active": "normal", "recommended_sync_interval_ms": 10000, "source": "core.api.client"}
+ INFO  [driver-telemetry] driver.http.timeout {"endpoint": "/driver/me/bookings/since", "network_profile_active": "normal", "source": "core.api.client", "timeout_ms": 15000}
+ INFO  [driver-telemetry] driver.network.profile {"network_profile_active": "normal", "recommended_sync_interval_ms": 10000, "source": "core.api.client"}
+ INFO  [driver-telemetry] driver.http.timeout {"endpoint": "/driver/me/company-bookings/today", "network_profile_active": "normal", "source": "core.api.client", "timeout_ms": 15000}
+ INFO  [perf-kpi] perf.react_query.invalidate {"duration_ms": 15, "invalidate_sub_key": "driver-sync-state.driver:19", "query_key": "[\"driver-sync-state\",\"driver:19\"]", "role": "driver", "screen": "/", "source": "perf.instrumentation", "timestamp_client": "2026-08-14T12:59:18.432Z", "trigger": "query_client"}
+ INFO  [driver-telemetry] driver.network.profile {"network_profile_active": "normal", "recommended_sync_interval_ms": 10000, "source": "core.api.client"}
+ INFO  [driver-telemetry] driver.http.timeout {"endpoint": "/driver/me/bookings/since", "network_profile_active": "normal", "source": "core.api.client", "timeout_ms": 15000}
+ INFO  [perf-kpi] perf.react_query.invalidate {"duration_ms": 227, "invalidate_sub_key": "driver-company-bookings-today.driver:19", "query_key": "[\"driver-company-bookings-today\",\"driver:19\"]", "role": "driver", "screen": "/", "source": "perf.instrumentation", "timestamp_client": "2026-08-14T12:59:18.644Z", "trigger": "query_client"}
+ INFO  [perf-kpi] perf.react_query.invalidate {"duration_ms": 305, "invalidate_sub_key": "driver-missions.driver:19", "query_key": "[\"driver-missions\",\"driver:19\"]", "role": "driver", "screen": "/", "source": "perf.instrumentation", "timestamp_client": "2026-08-14T12:59:18.721Z", "trigger": "query_client"}
+ INFO  [driver-telemetry] realtime.reconcile.since {"context_id": "driver:19", "max_incremental_window_ms": 900000, "mission_reconcile_since_total": 1, "since_age_ms": 171, "source": "driver.sync.reconcile"}
+ INFO  [driver-telemetry] driver.runtime.reconcile {"context_id": "driver:19", "source": "driver.sync.orchestrator", "trigger": "reconnect"}
+ INFO  [FCM-GATE] register effect start {"enabled": true, "fcmEnabled": true, "source": "driver.notifications.bridge", "stage": "app_foreground"}
+ INFO  [driver-telemetry] driver.foreground.resume.resync {"context_id": "driver:19", "foreground_resume_resync_total": 1, "source": "driver.sync_engine"}
+ INFO  [driver-telemetry] driver.runtime.resume.start {"app_state": "active", "context_id": "driver:19", "resume_attempt_id": "driver:19:1786712361176:59", "source": "driver.runtime.resume"}
+ INFO  [driver-telemetry] tracking.device_health.send_skipped {"age_ms": 3369, "reason": "throttled", "source": "driver.device_health", "trigger_reason": null}
+ INFO  [perf-kpi] perf.js_long_task {"duration_ms": 580.2588540017605, "role": "driver", "screen": "/", "source": "perf.instrumentation", "timestamp_client": "2026-08-14T12:59:21.196Z"}
+ INFO  [driver-telemetry] tracking.device_health.send_skipped {"age_ms": 3436, "reason": "throttled", "source": "driver.device_health", "trigger_reason": "health_monitor_ok"}
+ INFO  [FCM-GATE] requesting token {"source": "driver.notifications.bridge", "stage": "app_foreground"}
+ INFO  [driver-telemetry] driver.push.fcm.get_token_start {"platform": "android", "source": "driver.firebaseMessaging"}
+ INFO  [FCM-GATE] getDriverFcmToken start {"platform": "android"}
+ INFO  [FCM-GATE] getToken success {"tokenLength": 142}

@@ -1,0 +1,1 @@
+﻿08-16 21:19:29.502  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'

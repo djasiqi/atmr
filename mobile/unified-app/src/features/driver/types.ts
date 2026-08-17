@@ -61,7 +61,12 @@ export type DriverLocationPayload = {
   accuracy?: number;
   heading?: number;
   speed?: number;
+  /** Instant GNSS / fix — figé à l'enqueue ; alias wire `timestamp`. */
   timestamp?: string;
+  /** Instant métier hashé serveur — figé à l'enqueue ; wire `recorded_at`. */
+  recordedAt?: string;
+  /** Instant 1ʳᵉ mise en file — figé à l'enqueue ; wire `sent_at` (hors hash). */
+  sentAt?: string;
   isBackground?: boolean;
   missionId?: number | null;
   locationMode?: "mission_live" | "availability_presence" | "observability_only";

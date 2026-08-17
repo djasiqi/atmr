@@ -1,0 +1,22 @@
+# D5 — Build 130 instrumentation frontières natives
+
+```text
+REASON           = Attribuer Unregister W1/W2 (C4 FAIL) sans re-run canary global
+PROFILE          = production-apk
+BUILD_ID         = 97b3d437-9f7f-4b94-8b19-df690a51a816
+URL              = https://expo.dev/accounts/drinjasiqi/projects/operations-app/builds/97b3d437-9f7f-4b94-8b19-df690a51a816
+versionCode      = 130
+CHANGES          = NATIVE_START/STOP_ENTRY|EXIT + TASK_REG_STATE + PERMISSION_*
+B2/transient/L1  = INCHANGÉ
+C4 RE-RUN        = HOLD (après install 130 seulement attribution W1/W2)
+DISTRIBUTION     = NO-GO
+STATUS           = BUILDING
+```
+
+Logcat markers : `[D5-NATIVE]`
+
+Discriminant :
+```text
+TaskService Unregister ∧ NATIVE_STOP_ENTRY absent → Expo/TaskManager LEADING
+NATIVE_STOP_ENTRY → Unregister → caller applicatif résiduel
+```

@@ -20,6 +20,7 @@ import {
   readDriverProfileCache,
   writeDriverProfileCache,
 } from "./services/driverProfileCache";
+import { buildDriverLocationHttpBody } from "./services/freezeTrackingLocationPayload";
 
 /** Correspond au JSON renvoyé par PUT /driver/me/bookings/:id/status. */
 export type DriverStatusUpdateResult = {
@@ -236,22 +237,9 @@ export function asAckStringArray(value: unknown): string[] | null {
 
 export async function sendDriverLocation(payload: DriverLocationPayload): Promise<DriverLocationAck> {
   return runWithCircuitBreaker("tracking_http", async () => {
-    const { data } = await apiClient.put("/driver/me/location", {
-      latitude: payload.latitude,
-      longitude: payload.longitude,
-      accuracy: payload.accuracy ?? null,
-      heading: payload.heading ?? null,
-      speed: payload.speed ?? null,
-      is_background: payload.isBackground ?? false,
-      mission_id: payload.missionId ?? null,
-      timestamp: payload.timestamp ?? new Date().toISOString(),
-      location_mode: payload.locationMode ?? "availability_presence",
-      tracking_event_id: payload.trackingEventId ?? null,
-      tracking_session_id: payload.trackingSessionId ?? null,
-      session_generation: payload.sessionGeneration ?? null,
-      sequence_id: payload.sequenceId ?? null,
-      capture_id: payload.captureId ?? null,
-    }, {
+    // P0-E : jamais régénérer recorded_at/timestamp au retry (D4-B / BG_FRESHNESS).
+    const body = buildDriverLocationHttpBody(payload);
+    const { data } = await apiClient.put("/driver/me/location", body, {
       headers: {
         "X-Allow-Offline-Attempt": "1",
         ...(payload.trackingEventId

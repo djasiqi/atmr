@@ -2,12 +2,13 @@
 
 ```text
 TICKET                     = P0-A
-STATUT                     = IMPLEMENTED — canary A seul en attente
+STATUT                     = CLOSED / PASS ✅ (canary A + A+B + C3)
 ROOT CAUSE                 = CONFIRMED (A1 + ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED)
 DESIGN                     = gps-p0-a-lifecycle-design.md
 RCA                        = gps-mission-26-rca-2026-08-14.md
-C3                         = gps-c3-execution-2026-08-14.md
-INDÉPENDANCE               = ne pas fusionner avec P0-B
+C3                         = gps-c3-ab-canary-2026-08-14.md (PASS)
+SUITE                      = P0-C (gps-p0-c-loc-stale-after-pause.md) — ne pas rouvrir A
+INDÉPENDANCE               = ne pas fusionner avec P0-B / P0-C
 ```
 
 ## Problème
@@ -207,12 +208,12 @@ tracking.background.stop_failed
 ```text
 P0-A IMPLEMENTED   = YES
 BUILD CANARY A     = GO (EAS d85e3254 @479cd60d / tag gps-canary-p0a-2026-08-14)
-P0-B               = NO-GO
-C3                 = FAIL jusqu’au rejeu
+CANARY A           = PASS ✅ (gps-c3-p0a-canary-2026-08-14.md)
+P0-B               = CLOSED / PASS ✅
+C3 GLOBAL          = PASS ✅ (gps-c3-ab-canary-2026-08-14.md)
+P0-C               = OPEN (gps-p0-c-loc-stale-after-pause.md) — ne pas rouvrir A
 ```
 
-**Reste à faire** :
+✅ **Implémenté** : canary A + A+B + C3 PASS. Ticket **CLOSED**.
 
-1. Installer APK canary A + Metro sur `479cd60d` (pré-check 8 points).
-2. Si pré-check propre → scénarios A (shade / HOME↔app / lock / AppState / anti-zombie / 5 min).
-3. Seulement après validation A → P0-B.
+**Reste à faire** : rien sur A — suite diagnostic = [P0-C](gps-p0-c-loc-stale-after-pause.md).

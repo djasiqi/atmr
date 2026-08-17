@@ -1,20 +1,21 @@
 # Environnement staging GPS isolé
 
-Stack Docker **dédiée** pour valider `26338ec0` en `observe`.  
+Stack Docker **dédiée** pour valider le SHA applicatif GPS en `observe`.  
 Ce n’est **pas** la production, **pas** la démo, **pas** un overlay de `docker-compose.production.yml`.
 
-Contrat observe : [`gps-staging-observe-gate.md`](./gps-staging-observe-gate.md).
+Contrat observe : [`gps-staging-observe-gate.md`](./gps-staging-observe-gate.md).  
+Contrat P5-B A/B : [`gps-staging-p5b-gate.md`](./gps-staging-p5b-gate.md).
 
 ```text
 PROJET COMPOSE     = atmrstg
 RÉSEAU             = atmrstg_internal
 VOLUMES            = atmrstg_pg_data / atmrstg_redis_data / atmrstg_kafka_data
-IMAGE              = docker.io/djasiqi/atmr-backend:sha-26338ec0e0f1
-SHA COMPLET        = 26338ec0e0f124bac7b253b067970e08530aec3f
+IMAGE              = docker.io/djasiqi/atmr-backend:sha-d5694d8e7cec
+SHA COMPLET        = d5694d8e7cec190978098db6eb20f242226784a8
 MODE DÉFAUT        = off
 FLASK_CONFIG       = production
 APP_ENV            = staging
-APPLICATION TESTÉE = 26338ec0 (image sha-26338ec0e0f1)
+APPLICATION TESTÉE = d5694d8 (image sha-d5694d8e7cec)
 HARNESS            = commit docs/compose/scripts (≠ SHA applicatif)
 BIND               = 127.0.0.1 uniquement
 ```
@@ -31,6 +32,10 @@ BIND               = 127.0.0.1 uniquement
 | `scripts/staging/seed_gps_fixtures.py` | Scénarios GPS synthétiques |
 | `scripts/staging/gps_traffic.py` | Replay / burst HTTP |
 | `scripts/staging/capture_metrics.sh` | Snapshot Prometheus |
+| `scripts/staging/p5b_proof.py` | Preuves P5-B 1–11 + replay B outbox |
+| `scripts/staging/socket_real_proof.py` | Preuve Socket.IO réelle (client éphémère) |
+| `scripts/staging/capture_canary_metrics.sh` | Snapshot Prometheus canary GPS réel |
+| `docs/ops/gps-canary-real-devices.md` | Runbook canary Android + iOS |
 
 ## Isolation (non négociable)
 
@@ -61,7 +66,7 @@ bash scripts/staging/preflight.sh --compose-only
 bash scripts/staging/init-env.sh
 bash scripts/staging/preflight.sh
 
-# Image : GitHub Actions « Build & Deploy » sur 26338ec0 avec skip_deploy=true
+# Image : GitHub Actions « Build & Deploy » sur d5694d8 avec skip_deploy=true
 
 docker compose -f docker-compose.staging.yml --env-file .env.staging up -d
 docker compose -f docker-compose.staging.yml --env-file .env.staging exec -T backend flask db upgrade

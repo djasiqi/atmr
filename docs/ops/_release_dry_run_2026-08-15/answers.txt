@@ -1,0 +1,4 @@
+Q1=NO conflicts on P0-A CLIENT SERVER
+Q2=NO semantic scope contaminated by --theirs
+Q3=migration file NO; 25ce766 mentions YES in docs/code leak
+Q4=NO ledger+ingress broken; P0-A/B/OBS jest pass only

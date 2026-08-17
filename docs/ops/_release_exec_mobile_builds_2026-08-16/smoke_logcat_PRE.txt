@@ -1,0 +1,16 @@
+﻿--------- beginning of main
+08-16 12:31:39.362 21943 22017 I ReactNativeJS: '[FCM-GATE] register effect start', { source: 'driver.notifications.bridge',
+08-16 12:31:39.362 21943 22017 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:31:39.362 21943 22017 I ReactNativeJS:   enabled: true,
+08-16 12:31:39.362 21943 22017 I ReactNativeJS:   fcmEnabled: true }
+08-16 12:31:39.458 21943 22017 I ReactNativeJS: '[FCM-GATE] requesting token', { source: 'driver.notifications.bridge',
+08-16 12:31:39.458 21943 22017 I ReactNativeJS:   stage: 'app_foreground' }
+08-16 12:31:39.458 21943 22017 I ReactNativeJS: '[FCM-GATE] getDriverFcmToken start', { platform: 'android' }
+08-16 12:31:39.461 21943 22017 I ReactNativeJS: '[FCM-GATE] getToken success', { tokenLength: 142 }
+08-16 12:31:39.461 21943 22017 I ReactNativeJS: '[FCM-GATE] token received', { source: 'driver.notifications.bridge',
+08-16 12:31:39.461 21943 22017 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:31:39.461 21943 22017 I ReactNativeJS:   tokenLength: 142 }
+08-16 12:31:39.461 21943 22017 I ReactNativeJS: '[FCM-GATE] posting token', { source: 'driver.notifications.bridge',
+08-16 12:31:39.461 21943 22017 I ReactNativeJS:   stage: 'app_foreground',
+08-16 12:31:39.461 21943 22017 I ReactNativeJS:   provider: 'fcm' }
+08-16 12:31:39.733 21943 22017 W ReactNativeJS: Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.

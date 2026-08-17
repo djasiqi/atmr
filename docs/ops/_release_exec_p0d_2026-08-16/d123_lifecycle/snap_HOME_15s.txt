@@ -1,0 +1,46 @@
+﻿ssh : /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning: 
+Au caractère C:\Users\jasiq\atmr\docs\ops\_release_exec_p0d_2026-08-16\run_d123_lifecycle_capture.ps1:91 : 10
++   $out = ssh -o BatchMode=yes $sshTarget "docker exec atmr-backend-1  ...
++          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/usr/local/lib/...cationWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  from eventlet.patcher import is_monkey_patched  # type: ignore
+[2.9] OpenTelemetry non install├® - installer avec: pip install -r requirements-otel.txt
+­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=6)
+[2026-08-16 12:21:52,667] WARNING in app: [Security] Niveau de log forc├® ├á WARNING en production (APP_LOG_LEVEL 
+ignor├® pour s├®curit├®)
+LABEL HOME_15s
+NOW 2026-08-16T12:21:59.245970+00:00
+HEALTH_N 10
+FGS_TRUE_N 4
+FGS_FALSE_N 6
+H 2026-08-16 12:19:53.472377+00:00 app= background trk= True fgs= True ntask= True fix_age= None task_age= 11 cstr= None trig= health_monitor_ok phase= None err= 
+H 2026-08-16 12:19:53.462226+00:00 app= active trk= True fgs= True ntask= True fix_age= None task_age= 11 cstr= None trig= None phase= None err= 
+H 2026-08-16 12:18:47.957190+00:00 app= active trk= True fgs= True ntask= True fix_age= None task_age= 2 cstr= None trig= health_monitor_ok phase= None err= 
+H 2026-08-16 12:18:47.893390+00:00 app= active trk= True fgs= True ntask= True fix_age= None task_age= 2 cstr= None trig= None phase= None err= 
+H 2026-08-16 12:18:44.932609+00:00 app= background trk= True fgs= False ntask= False fix_age= None task_age= None cstr= battery_optimized trig= health_monitor:fgs_not_running phase= None err= 
+H 2026-08-16 12:18:44.883916+00:00 app= active trk= True fgs= False ntask= False fix_age= None task_age= None cstr= battery_optimized trig= health_monitor:fgs_not_running phase= None err= 
+H 2026-08-16 12:18:44.834903+00:00 app= active trk= True fgs= False ntask= False fix_age= None task_age= None cstr= battery_optimized trig= None phase= None err= 
+H 2026-08-16 12:18:44.830425+00:00 app= active trk= True fgs= False ntask= False fix_age= None task_age= None cstr= battery_optimized trig= None phase= None err= 
+H 2026-08-16 12:18:44.757488+00:00 app= background trk= True fgs= False ntask= False fix_age= None task_age= None cstr= battery_optimized trig= health_monitor:fgs_not_running phase= None err= 
+H 2026-08-16 12:18:43.710157+00:00 app= active trk= True fgs= False ntask= False fix_age= None task_age= None cstr= battery_optimized trig= None phase= None err= 
+LOC_N 10
+LOC 2026-08-16 12:20:21.261293+00:00 mission= 38224
+LOC 2026-08-16 12:20:02.899882+00:00 mission= 38224
+LOC 2026-08-16 12:19:42.865483+00:00 mission= 38224
+LOC 2026-08-16 12:19:23.956361+00:00 mission= 38224
+LOC 2026-08-16 12:19:14.738029+00:00 mission= 38224
+LOC 2026-08-16 12:19:04.884941+00:00 mission= 38224
+LOC 2026-08-16 12:19:04.357622+00:00 mission= 38224
+LOC 2026-08-16 12:18:56.653007+00:00 mission= 38224
+LOC 2026-08-16 12:18:46.918901+00:00 mission= 38224
+LOC 2026-08-16 12:18:46.362257+00:00 mission= 38224

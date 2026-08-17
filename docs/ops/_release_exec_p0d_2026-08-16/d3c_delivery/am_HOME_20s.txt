@@ -1,0 +1,12 @@
+﻿08-16 15:57:05.384  3001  3354 I ActivityTaskManager: done cause=notifyTransitionStarting drawn timestamp=52208326952894 info=TransitionInfo{31be1fb a=ActivityRecord{149188390 u0 com.sec.android.app.launcher/.activities.LauncherActivity t1269} r=null d=true}
+08-16 15:57:05.395  3001  6987 W ActivityTaskManager: setRunningRemoteTransition: no process for null
+08-16 15:57:08.820 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:09.073 13893 14034 I TaskService: Finished task 'background-location-task' with eventId '278e9fa3-6beb-42c0-8360-9e83e10e9692'.
+08-16 15:57:13.871  3001  3376 I ActivityManager: Start proc 15378:com.google.android.gms/u150a231 for service {com.google.android.gms/com.google.android.gms.pay.gcmtask.PayGcmTaskService}
+08-16 15:57:16.778 13893 13893 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-16 15:57:17.095  3001  5018 D ActivityTaskManager: startActivityAsUser: callingPid=3001, callingUid=1000, caller=com.android.server.wm.ActivityTaskManagerService.startActivity:123 android.app.Instrumentation.execStartActivity:2030 android.app.ContextImpl.startActivity:1246 com.android.server.am.ActivityManagerService.doActiveLaunch:101 android.app.IActivityManager$Stub.onTransact:5130 com.android.server.am.ActivityManagerService.onTransact:426 android.os.Binder.execTransactInternal:1514 
+08-16 15:57:17.095  3001  5018 D ActivityTaskManager: request preloading for newly launching app
+08-16 15:57:17.096  3001  5018 I ActivityTaskManager: starting ActiveLaunch
+08-16 15:57:17.661  3001  5018 D ActivityTaskManager: startActivityAsUser: callingPid=3001, callingUid=1000, caller=com.android.server.wm.ActivityTaskManagerService.startActivity:123 android.app.Instrumentation.execStartActivity:2030 android.app.ContextImpl.startActivity:1246 com.android.server.am.ActivityManagerService.doActiveLaunch:101 android.app.IActivityManager$Stub.onTransact:5130 com.android.server.am.ActivityManagerService.onTransact:426 android.os.Binder.execTransactInternal:1514 
+08-16 15:57:17.662  3001  5018 D ActivityTaskManager: request preloading for newly launching app
+08-16 15:57:17.662  3001  5018 I ActivityTaskManager: starting ActiveLaunch

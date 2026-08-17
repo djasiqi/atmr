@@ -1,0 +1,156 @@
+﻿
+ INFO  [driver-telemetry] tracking.background.start_requested {"app_state": "active", "app_state_at_request": 
+"active", "bg_permission": "granted", "fg_permission": "granted", "hasStartedLocationUpdatesAsync_before": false, 
+"isTaskRegisteredAsync_before": false, "mission_id": 26, "native_owner": {"driverId": 0, "missionContextVersion": 1, 
+"missionId": 26, "sessionGenerationId": 1, "trackingGenerationId": "trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": 
+"driver:0:company:unknown"}, "reason": "ensure_manager_state", "source": "driver.services.backgroundLocationTask", 
+"start_attempt_id": "nlo_start_cap_mssyd81r_b09a4vhf58", "start_in_flight": 1, "start_reason": "ensure_manager_state", 
+"start_requested_at": 1786712292351, "stop_in_flight": 0, "task_defined": true, "task_mode": "mission", 
+"task_started": false}
+ INFO  [driver-telemetry] tracking.background.start_success {"app_state": "active", "app_state_at_request": "active", 
+"app_state_at_resolve": "active", "hasStartedLocationUpdatesAsync_after": true, 
+"hasStartedLocationUpdatesAsync_before": false, "isTaskRegisteredAsync_after": true, "isTaskRegisteredAsync_before": 
+false, "mission_id": 26, "native_owner": {"driverId": 0, "missionContextVersion": 1, "missionId": 26, 
+"sessionGenerationId": 1, "trackingGenerationId": "trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": 
+"driver:0:company:unknown"}, "outcome": "started", "reason": "ensure_manager_state", "source": 
+"driver.services.backgroundLocationTask", "start_attempt_id": "nlo_start_cap_mssyd81r_b09a4vhf58", "start_in_flight": 
+1, "start_reason": "ensure_manager_state", "start_requested_at": 1786712292351, "stop_in_flight": 0, "task_defined": 
+true, "task_mode": "mission", "task_started": true}
+ INFO  [driver-telemetry] tracking.background.task.started {"battery_degrades_gps": false, "battery_level": 
+0.4300000071525574, "distance_m": 0, "interval_ms": 20000, "low_battery_mode": false, "mission_id": 26, "source": 
+"driver.services.backgroundLocationTask", "start_attempt_id": "nlo_start_cap_mssyd81r_b09a4vhf58", "task_mode": 
+"mission", "task_name": "background-location-task"}
+ INFO  [driver-telemetry] tracking.background.stop_requested {"app_state_at_request": "active", 
+"hasStartedLocationUpdatesAsync_before": true, "isTaskRegisteredAsync_before": true, "mission_id": null, 
+"native_owner": null, "source": "driver.services.backgroundLocationTask", "start_in_flight": 0, "stop_attempt_id": 
+"nlo_stop_cap_mssyd84o_nb07m5g8ud", "stop_in_flight": 1, "stop_reason": "stale_native_owner", "stop_requested_at": 
+1786712292456, "task_name": "background-location-task"}
+ INFO  [driver-telemetry] tracking.background.stop_success {"app_state_at_request": "active", "app_state_at_resolve": 
+"active", "hasStartedLocationUpdatesAsync_after": false, "hasStartedLocationUpdatesAsync_before": true, 
+"isTaskRegisteredAsync_after": false, "isTaskRegisteredAsync_before": true, "mission_id": null, "native_owner": null, 
+"source": "driver.services.backgroundLocationTask", "start_in_flight": 0, "stop_attempt_id": 
+"nlo_stop_cap_mssyd84o_nb07m5g8ud", "stop_in_flight": 1, "stop_reason": "stale_native_owner", "stop_requested_at": 
+1786712292456, "task_name": "background-location-task"}
+ INFO  [driver-telemetry] tracking.background.start_requested {"app_state": "active", "app_state_at_request": 
+"active", "bg_permission": "granted", "fg_permission": "granted", "hasStartedLocationUpdatesAsync_before": false, 
+"isTaskRegisteredAsync_before": false, "mission_id": 26, "native_owner": {"driverId": 0, "missionContextVersion": 1, 
+"missionId": 26, "sessionGenerationId": 1, "trackingGenerationId": "trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": 
+"driver:0:company:unknown"}, "reason": "ensure_manager_state", "source": "driver.services.backgroundLocationTask", 
+"start_attempt_id": "nlo_start_cap_mssyd8il_n4p5rgantz", "start_in_flight": 1, "start_reason": "ensure_manager_state", 
+"start_requested_at": 1786712292957, "stop_in_flight": 0, "task_defined": true, "task_mode": "mission", 
+"task_started": false}
+ INFO  [driver-telemetry] tracking.background.start_success {"app_state": "active", "app_state_at_request": "active", 
+"app_state_at_resolve": "active", "hasStartedLocationUpdatesAsync_after": true, 
+"hasStartedLocationUpdatesAsync_before": false, "isTaskRegisteredAsync_after": true, "isTaskRegisteredAsync_before": 
+false, "mission_id": 26, "native_owner": {"driverId": 0, "missionContextVersion": 1, "missionId": 26, 
+"sessionGenerationId": 1, "trackingGenerationId": "trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": 
+"driver:0:company:unknown"}, "outcome": "started", "reason": "ensure_manager_state", "source": 
+"driver.services.backgroundLocationTask", "start_attempt_id": "nlo_start_cap_mssyd8il_n4p5rgantz", "start_in_flight": 
+1, "start_reason": "ensure_manager_state", "start_requested_at": 1786712292957, "stop_in_flight": 0, "task_defined": 
+true, "task_mode": "mission", "task_started": true}
+ INFO  [driver-telemetry] tracking.background.task.started {"battery_degrades_gps": false, "battery_level": 
+0.4300000071525574, "distance_m": 0, "interval_ms": 20000, "low_battery_mode": false, "mission_id": 26, "source": 
+"driver.services.backgroundLocationTask", "start_attempt_id": "nlo_start_cap_mssyd8il_n4p5rgantz", "task_mode": 
+"mission", "task_name": "background-location-task"}
+ INFO  [driver-telemetry] tracking.background.stop_requested {"app_state_at_request": "active", 
+"hasStartedLocationUpdatesAsync_before": true, "isTaskRegisteredAsync_before": true, "mission_id": 26, "native_owner": 
+{"driverId": 0, "missionContextVersion": 1, "missionId": 26, "sessionGenerationId": 1, "trackingGenerationId": 
+"trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": "driver:0:company:unknown"}, "source": 
+"driver.services.backgroundLocationTask", "start_in_flight": 0, "stop_attempt_id": "nlo_stop_cap_mssyd8l2_u3pfm8fa6s", 
+"stop_in_flight": 1, "stop_reason": "stale_native_owner", "stop_requested_at": 1786712293046, "task_name": 
+"background-location-task"}
+ INFO  [driver-telemetry] tracking.background.stop_success {"app_state_at_request": "active", "app_state_at_resolve": 
+"active", "hasStartedLocationUpdatesAsync_after": false, "hasStartedLocationUpdatesAsync_before": true, 
+"isTaskRegisteredAsync_after": false, "isTaskRegisteredAsync_before": true, "mission_id": 26, "native_owner": 
+{"driverId": 0, "missionContextVersion": 1, "missionId": 26, "sessionGenerationId": 1, "trackingGenerationId": 
+"trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": "driver:0:company:unknown"}, "source": 
+"driver.services.backgroundLocationTask", "start_in_flight": 0, "stop_attempt_id": "nlo_stop_cap_mssyd8l2_u3pfm8fa6s", 
+"stop_in_flight": 1, "stop_reason": "stale_native_owner", "stop_requested_at": 1786712293046, "task_name": 
+"background-location-task"}
+ INFO  [driver-telemetry] tracking.background.start_requested {"app_state": "active", "app_state_at_request": 
+"active", "bg_permission": "granted", "fg_permission": "granted", "hasStartedLocationUpdatesAsync_before": false, 
+"isTaskRegisteredAsync_before": false, "mission_id": 26, "native_owner": {"driverId": 0, "missionContextVersion": 1, 
+"missionId": 26, "sessionGenerationId": 1, "trackingGenerationId": "trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": 
+"driver:0:company:unknown"}, "reason": "ensure_manager_state", "source": "driver.services.backgroundLocationTask", 
+"start_attempt_id": "nlo_start_cap_mssyd8vz_fgubkrs949", "start_in_flight": 1, "start_reason": "ensure_manager_state", 
+"start_requested_at": 1786712293439, "stop_in_flight": 0, "task_defined": true, "task_mode": "mission", 
+"task_started": false}
+ INFO  [driver-telemetry] tracking.background.start_success {"app_state": "active", "app_state_at_request": "active", 
+"app_state_at_resolve": "active", "hasStartedLocationUpdatesAsync_after": true, 
+"hasStartedLocationUpdatesAsync_before": false, "isTaskRegisteredAsync_after": true, "isTaskRegisteredAsync_before": 
+false, "mission_id": 26, "native_owner": {"driverId": 0, "missionContextVersion": 1, "missionId": 26, 
+"sessionGenerationId": 1, "trackingGenerationId": "trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": 
+"driver:0:company:unknown"}, "outcome": "started", "reason": "ensure_manager_state", "source": 
+"driver.services.backgroundLocationTask", "start_attempt_id": "nlo_start_cap_mssyd8vz_fgubkrs949", "start_in_flight": 
+1, "start_reason": "ensure_manager_state", "start_requested_at": 1786712293439, "stop_in_flight": 0, "task_defined": 
+true, "task_mode": "mission", "task_started": true}
+ INFO  [driver-telemetry] tracking.background.task.started {"battery_degrades_gps": false, "battery_level": 
+0.4300000071525574, "distance_m": 0, "interval_ms": 20000, "low_battery_mode": false, "mission_id": 26, "source": 
+"driver.services.backgroundLocationTask", "start_attempt_id": "nlo_start_cap_mssyd8vz_fgubkrs949", "task_mode": 
+"mission", "task_name": "background-location-task"}
+ INFO  [driver-telemetry] tracking.background.stop_requested {"app_state_at_request": "active", 
+"hasStartedLocationUpdatesAsync_before": true, "isTaskRegisteredAsync_before": true, "mission_id": 26, "native_owner": 
+{"driverId": 0, "missionContextVersion": 1, "missionId": 26, "sessionGenerationId": 1, "trackingGenerationId": 
+"trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": "driver:0:company:unknown"}, "source": 
+"driver.services.backgroundLocationTask", "start_in_flight": 0, "stop_attempt_id": "nlo_stop_cap_mssyd8yr_f0xk36htfn", 
+"stop_in_flight": 1, "stop_reason": "stale_native_owner", "stop_requested_at": 1786712293539, "task_name": 
+"background-location-task"}
+ INFO  [driver-telemetry] tracking.background.stop_success {"app_state_at_request": "active", "app_state_at_resolve": 
+"active", "hasStartedLocationUpdatesAsync_after": false, "hasStartedLocationUpdatesAsync_before": true, 
+"isTaskRegisteredAsync_after": false, "isTaskRegisteredAsync_before": true, "mission_id": 26, "native_owner": 
+{"driverId": 0, "missionContextVersion": 1, "missionId": 26, "sessionGenerationId": 1, "trackingGenerationId": 
+"trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": "driver:0:company:unknown"}, "source": 
+"driver.services.backgroundLocationTask", "start_in_flight": 0, "stop_attempt_id": "nlo_stop_cap_mssyd8yr_f0xk36htfn", 
+"stop_in_flight": 1, "stop_reason": "stale_native_owner", "stop_requested_at": 1786712293539, "task_name": 
+"background-location-task"}
+ INFO  [driver-telemetry] tracking.background.start_requested {"app_state": "active", "app_state_at_request": 
+"active", "bg_permission": "granted", "fg_permission": "granted", "hasStartedLocationUpdatesAsync_before": false, 
+"isTaskRegisteredAsync_before": false, "mission_id": 26, "native_owner": null, "reason": "ensure_manager_state", 
+"source": "driver.services.backgroundLocationTask", "start_attempt_id": "nlo_start_cap_mssyd9bz_nz963sq02z", 
+"start_in_flight": 1, "start_reason": "ensure_manager_state", "start_requested_at": 1786712294015, "stop_in_flight": 
+0, "task_defined": true, "task_mode": "mission", "task_started": false}
+ INFO  [driver-telemetry] tracking.background.start_success {"app_state": "active", "app_state_at_request": "active", 
+"app_state_at_resolve": "active", "hasStartedLocationUpdatesAsync_after": true, 
+"hasStartedLocationUpdatesAsync_before": false, "isTaskRegisteredAsync_after": true, "isTaskRegisteredAsync_before": 
+false, "mission_id": 26, "native_owner": null, "outcome": "started", "reason": "ensure_manager_state", "source": 
+"driver.services.backgroundLocationTask", "start_attempt_id": "nlo_start_cap_mssyd9bz_nz963sq02z", "start_in_flight": 
+1, "start_reason": "ensure_manager_state", "start_requested_at": 1786712294015, "stop_in_flight": 0, "task_defined": 
+true, "task_mode": "mission", "task_started": true}
+ INFO  [driver-telemetry] tracking.background.task.started {"battery_degrades_gps": false, "battery_level": 
+0.4300000071525574, "distance_m": 0, "interval_ms": 20000, "low_battery_mode": false, "mission_id": 26, "source": 
+"driver.services.backgroundLocationTask", "start_attempt_id": "nlo_start_cap_mssyd9bz_nz963sq02z", "task_mode": 
+"mission", "task_name": "background-location-task"}
+ INFO  [driver-telemetry] tracking.background.stop_requested {"app_state_at_request": "active", 
+"hasStartedLocationUpdatesAsync_before": true, "isTaskRegisteredAsync_before": true, "mission_id": null, 
+"native_owner": null, "source": "driver.services.backgroundLocationTask", "start_in_flight": 0, "stop_attempt_id": 
+"nlo_stop_cap_mssyd9fp_cxb12hfdbq", "stop_in_flight": 1, "stop_reason": "stale_native_owner", "stop_requested_at": 
+1786712294149, "task_name": "background-location-task"}
+ INFO  [driver-telemetry] tracking.background.stop_success {"app_state_at_request": "active", "app_state_at_resolve": 
+"active", "hasStartedLocationUpdatesAsync_after": false, "hasStartedLocationUpdatesAsync_before": true, 
+"isTaskRegisteredAsync_after": false, "isTaskRegisteredAsync_before": true, "mission_id": null, "native_owner": null, 
+"source": "driver.services.backgroundLocationTask", "start_in_flight": 0, "stop_attempt_id": 
+"nlo_stop_cap_mssyd9fp_cxb12hfdbq", "stop_in_flight": 1, "stop_reason": "stale_native_owner", "stop_requested_at": 
+1786712294149, "task_name": "background-location-task"}
+ INFO  [driver-telemetry] tracking.background.start_requested {"app_state": "active", "app_state_at_request": 
+"active", "bg_permission": "granted", "fg_permission": "granted", "hasStartedLocationUpdatesAsync_before": false, 
+"isTaskRegisteredAsync_before": false, "mission_id": 26, "native_owner": {"driverId": 0, "missionContextVersion": 1, 
+"missionId": 26, "sessionGenerationId": 1, "trackingGenerationId": "trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": 
+"driver:0:company:unknown"}, "reason": "ensure_manager_state", "source": "driver.services.backgroundLocationTask", 
+"start_attempt_id": "nlo_start_cap_mssyd9pb_2lwamzfkld", "start_in_flight": 1, "start_reason": "ensure_manager_state", 
+"start_requested_at": 1786712294495, "stop_in_flight": 0, "task_defined": true, "task_mode": "mission", 
+"task_started": false}
+ INFO  [driver-telemetry] tracking.background.start_success {"app_state": "active", "app_state_at_request": "active", 
+"app_state_at_resolve": "active", "hasStartedLocationUpdatesAsync_after": true, 
+"hasStartedLocationUpdatesAsync_before": false, "isTaskRegisteredAsync_after": true, "isTaskRegisteredAsync_before": 
+false, "mission_id": 26, "native_owner": {"driverId": 0, "missionContextVersion": 1, "missionId": 26, 
+"sessionGenerationId": 1, "trackingGenerationId": "trk-mssy5w5q-e9lxg6s5ot", "trackingIdentityId": 
+"driver:0:company:unknown"}, "outcome": "started", "reason": "ensure_manager_state", "source": 
+"driver.services.backgroundLocationTask", "start_attempt_id": "nlo_start_cap_mssyd9pb_2lwamzfkld", "start_in_flight": 
+1, "start_reason": "ensure_manager_state", "start_requested_at": 1786712294495, "stop_in_flight": 0, "task_defined": 
+true, "task_mode": "mission", "task_started": true}
+ INFO  [driver-telemetry] tracking.background.task.started {"battery_degrades_gps": false, "battery_level": 
+0.4300000071525574, "distance_m": 0, "interval_ms": 20000, "low_battery_mode": false, "mission_id": 26, "source": 
+"driver.services.backgroundLocationTask", "start_attempt_id": "nlo_start_cap_mssyd9pb_2lwamzfkld", "task_mode": 
+"mission", "task_name": "background-location-task"}
+
+

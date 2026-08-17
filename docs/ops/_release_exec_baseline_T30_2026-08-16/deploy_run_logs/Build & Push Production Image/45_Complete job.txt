@@ -1,0 +1,8 @@
+﻿2026-08-15T23:29:04.0719164Z Evaluate and set job outputs
+2026-08-15T23:29:04.0724255Z Set output 'push_success'
+2026-08-15T23:29:04.0726076Z Set output 'docker_tag'
+2026-08-15T23:29:04.0726991Z Set output 'source_sha'
+2026-08-15T23:29:04.0727540Z Set output 'backend_image_digest'
+2026-08-15T23:29:04.0728120Z Set output 'ws_service_image_digest'
+2026-08-15T23:29:04.0729356Z Cleaning up orphan processes
+2026-08-15T23:29:04.1066737Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809, actions/upload-artifact@v4, docker/login-action@v3, docker/setup-buildx-action@v3, docker/setup-qemu-action@v3. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

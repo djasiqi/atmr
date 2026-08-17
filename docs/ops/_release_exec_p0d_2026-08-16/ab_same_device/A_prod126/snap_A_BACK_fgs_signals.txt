@@ -1,0 +1,24 @@
+﻿
+docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:17:    
+getFgsAllowWiu_legacy=DENIED
+docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:18:    
+getFgsAllowWiu_new=DENIED
+docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:19:    
+getFgsAllowWiu_forStart=DENIED
+docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:20:    
+getFgsAllowWiu_forCapabilities=DENIED
+docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:27:    
+getFgsAllowStart_legacy=DENIED
+docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:28:    
+getFgsAllowStart_new=DENIED
+docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:29:    
+getFgsAllowStart=DENIED
+docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:30:    
+startForegroundCount=99
+docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:33:    
+lastActivity=-19m20s681ms restartTime=-22m1s958ms createdFromFg=true
+docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:34:    
+startRequested=false delayedStop=false stopIfKilled=true callStart=false lastStartId=100
+docs\ops\_release_exec_p0d_2026-08-16\ab_same_device\A_prod126\snap_A_BACK_location_task.txt:35: startCommandResult=3
+
+

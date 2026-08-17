@@ -1,0 +1,22 @@
+﻿2026-08-15T23:28:04.3380704Z ##[group]Run WS_TAG="***/atmr-ws-service:sha-286737a2362e"
+2026-08-15T23:28:04.3381191Z [36;1mWS_TAG="***/atmr-ws-service:sha-286737a2362e"[0m
+2026-08-15T23:28:04.3381529Z [36;1mfor i in {1..5}; do[0m
+2026-08-15T23:28:04.3381883Z [36;1m  if docker manifest inspect "${WS_TAG}" > /dev/null 2>&1; then[0m
+2026-08-15T23:28:04.3382390Z [36;1m    echo "✅ Image ws-service ${WS_TAG} trouvée sur Docker Hub"[0m
+2026-08-15T23:28:04.3382771Z [36;1m    exit 0[0m
+2026-08-15T23:28:04.3383135Z [36;1m  fi[0m
+2026-08-15T23:28:04.3383586Z [36;1m  echo "  Tentative $i/5: ws-service non visible, attente 5s..."[0m
+2026-08-15T23:28:04.3384181Z [36;1m  sleep 5[0m
+2026-08-15T23:28:04.3384553Z [36;1mdone[0m
+2026-08-15T23:28:04.3385048Z [36;1mecho "❌ Image ws-service ${WS_TAG} introuvable sur Docker Hub"[0m
+2026-08-15T23:28:04.3385553Z [36;1mexit 1[0m
+2026-08-15T23:28:04.3423200Z shell: /usr/bin/bash -e {0}
+2026-08-15T23:28:04.3423746Z env:
+2026-08-15T23:28:04.3424083Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:28:04.3435961Z   DOCKER_IMAGE: ***
+2026-08-15T23:28:04.3436443Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:28:04.3436900Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:28:04.3437151Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:28:04.3437459Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:28:04.3437791Z ##[endgroup]
+2026-08-15T23:28:06.9975173Z ✅ Image ws-service ***/atmr-ws-service:sha-286737a2362e trouvée sur Docker Hub

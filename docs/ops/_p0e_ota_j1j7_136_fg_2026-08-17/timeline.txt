@@ -1,0 +1,8 @@
+2026-08-17T21:44:05.1415199+02:00 [OTA_J] START force-stop + reopen to load OTA (runtime 1.0.12 / production)
+2026-08-17T21:44:07.4941320+02:00 [OTA_J] OTA wait 30s (checkAutomatically ON_LOAD)
+2026-08-17T21:44:42.1049075+02:00 [OTA_J] LOGCAT CLEARED - FG window=75s
+2026-08-17T21:44:55.1404008+02:00 [OTA_J] SAMPLE t=+0s fused=0,8s p5acc=1 p8js=1 J1=1 J2=1 J3=1 J4=1 J5=1 J6=1 J7=1 dle=0
+2026-08-17T21:45:24.9009143+02:00 [OTA_J] SAMPLE t=+28s fused=5,3s p5acc=0 p8js=0 J1=0 J2=0 J3=0 J4=0 J5=0 J6=0 J7=0 dle=0
+2026-08-17T21:45:54.2918881+02:00 [OTA_J] SAMPLE t=+58s fused=4,7s p5acc=1 p8js=1 J1=1 J2=1 J3=1 J4=1 J5=1 J6=1 J7=1 dle=0
+2026-08-17T21:46:11.4645283+02:00 [OTA_J] SUMMARY p8js=2 j1=2 j2=2 j3=2 j3rej=0 j4=2 j5=2 j6=2 j6ins=2 j6null=0 j7=2 dle=0
+2026-08-17T21:46:11.4721111+02:00 [OTA_J] FIRST_STOP J7_OK_DLE0 :: J7 ok mais DLE=0 - ingest serveur (hors A4b local)

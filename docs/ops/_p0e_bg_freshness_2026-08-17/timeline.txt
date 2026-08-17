@@ -1,0 +1,40 @@
+2026-08-17T17:27:05.7987488+02:00 [BG_FRESH] FG_WARM 20s
+2026-08-17T17:27:09.7600634+02:00 [BG_FRESH] READY isFg=true startReq=true
+2026-08-17T17:27:10.6816885+02:00 [BG_FRESH] PUT_SAMPLE phase=FG t=+0s put15=12 isFg=true startReq=true finished=0
+2026-08-17T17:27:27.3493855+02:00 [BG_FRESH] PUT_SAMPLE phase=FG t=+16s put15=30 isFg=true startReq=true finished=1
+2026-08-17T17:27:30.4786263+02:00 [BG_FRESH] PUT_SAMPLE phase=FG t=+20s put15=30 isFg=true startReq=true finished=1
+2026-08-17T17:27:30.4806253+02:00 [BG_FRESH] HOME press - start remote server timeline 120s
+2026-08-17T17:27:33.7937713+02:00 [BG_FRESH] PUT_SAMPLE phase=HOME t=+0s put15=24 isFg=true startReq=true finished=1
+2026-08-17T17:27:50.0645656+02:00 [BG_FRESH] PUT_SAMPLE phase=HOME t=+16s put15=3 isFg=true startReq=true finished=2
+2026-08-17T17:28:06.9063043+02:00 [BG_FRESH] PUT_SAMPLE phase=HOME t=+32s put15=3 isFg=true startReq=true finished=3
+2026-08-17T17:28:23.2537211+02:00 [BG_FRESH] PUT_SAMPLE phase=HOME t=+49s put15=0 isFg=true startReq=true finished=3
+2026-08-17T17:28:39.4527293+02:00 [BG_FRESH] PUT_SAMPLE phase=HOME t=+66s put15=0 isFg=true startReq=true finished=3
+2026-08-17T17:28:55.5575432+02:00 [BG_FRESH] PUT_SAMPLE phase=HOME t=+82s put15=3 isFg=true startReq=true finished=4
+2026-08-17T17:29:12.2662158+02:00 [BG_FRESH] PUT_SAMPLE phase=HOME t=+98s put15=3 isFg=true startReq=true finished=5
+2026-08-17T17:29:28.4261821+02:00 [BG_FRESH] PUT_SAMPLE phase=HOME t=+115s put15=3 isFg=true startReq=true finished=5
+2026-08-17T17:29:44.8496706+02:00 [BG_FRESH] PUT_SAMPLE phase=HOME t=+120s put15=3 isFg=true startReq=true finished=4
+2026-08-17T17:29:44.8526677+02:00 [BG_FRESH] WAIT remote job
+2026-08-17T17:29:45.5977626+02:00 [BG_FRESH] REMOTE_OUT
+2026-08-17T17:29:45.6057928+02:00 [BG_FRESH] SRV ­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+2026-08-17T17:29:45.6077959+02:00 [BG_FRESH] SRV Ô£à [Socket.IO] Message queue Redis active (workers=6)
+2026-08-17T17:29:45.6097692+02:00 [BG_FRESH] SRV BG_FRESHNESS_RCA_START 2026-08-17T15:27:44.191632+00:00
+2026-08-17T17:29:45.6137894+02:00 [BG_FRESH] SRV phase=HOME driver=20135 window=120s poll=15.0s
+2026-08-17T17:29:45.6157732+02:00 [BG_FRESH] SRV PG_FIRST True
+2026-08-17T17:29:45.6167666+02:00 [BG_FRESH] SRV SAMPLE n=1 t=+0s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1188 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=live rest_age=13 rest_src=None
+2026-08-17T17:29:45.6187661+02:00 [BG_FRESH] SRV SAMPLE n=2 t=+15s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1173 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=recent rest_age=28 rest_src=None
+2026-08-17T17:29:45.6207627+02:00 [BG_FRESH] SRV SAMPLE n=3 t=+30s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1158 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=recent rest_age=43 rest_src=None
+2026-08-17T17:29:45.6217730+02:00 [BG_FRESH] SRV SAMPLE n=4 t=+45s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1143 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=recent rest_age=58 rest_src=None
+2026-08-17T17:29:45.6237913+02:00 [BG_FRESH] SRV SAMPLE n=5 t=+60s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1128 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=recent rest_age=73 rest_src=None
+2026-08-17T17:29:45.6248000+02:00 [BG_FRESH] SRV SAMPLE n=6 t=+75s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1113 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=recent rest_age=88 rest_src=None
+2026-08-17T17:29:45.6277671+02:00 [BG_FRESH] SRV SAMPLE n=7 t=+90s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1098 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=stale rest_age=103 rest_src=None
+2026-08-17T17:29:45.6287665+02:00 [BG_FRESH] SRV SAMPLE n=8 t=+105s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1083 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=stale rest_age=118 rest_src=None
+2026-08-17T17:29:45.6307915+02:00 [BG_FRESH] SRV SAMPLE n=9 t=+120s phase=HOME dle_id=6441 dle_seq=46 dle_rec=2026-08-17 15:27:31.105881+00:00 dle_sess=trk_sess_1786979474208_5whqvvm6 canon_seq=46 canon_rec=2026-08-17T15:27:31.105Z ttl=1068 canon_sess=trk_sess_1786979474208_5whqvvm6 canon_eid=trk_1786980441803_k6c7ottu rest_status=stale rest_age=133 rest_src=None
+2026-08-17T17:29:45.6317668+02:00 [BG_FRESH] SRV SUMMARY
+2026-08-17T17:29:45.6337658+02:00 [BG_FRESH] SRV   dle_delta_id=0 dle_delta_seq=0
+2026-08-17T17:29:45.6357669+02:00 [BG_FRESH] SRV   canon_delta_seq=0
+2026-08-17T17:29:45.6377895+02:00 [BG_FRESH] SRV   rest_statuses=['live', 'recent', 'recent', 'recent', 'recent', 'recent', 'stale', 'stale', 'stale']
+2026-08-17T17:29:45.6387643+02:00 [BG_FRESH] SRV   first_dle={'id': 6441, 'sequence_id': 46, 'tracking_session_id': 'trk_sess_1786979474208_5whqvvm6', 'location_event_id': 'trk_1786980441803_k6c7ottu', 'recorded_at': datetime.datetime(2026, 8, 17, 15, 27, 31, 105881, tzinfo=datetime.timezone.utc), 'created_at': datetime.datetime(2026, 8, 17, 15, 27, 32, 12096, tzinfo=datetime.timezone.utc), 'mission_id': 38243}
+2026-08-17T17:29:45.6407636+02:00 [BG_FRESH] SRV   last_dle={'id': 6441, 'sequence_id': 46, 'tracking_session_id': 'trk_sess_1786979474208_5whqvvm6', 'location_event_id': 'trk_1786980441803_k6c7ottu', 'recorded_at': datetime.datetime(2026, 8, 17, 15, 27, 31, 105881, tzinfo=datetime.timezone.utc), 'created_at': datetime.datetime(2026, 8, 17, 15, 27, 32, 12096, tzinfo=datetime.timezone.utc), 'mission_id': 38243}
+2026-08-17T17:29:45.6427759+02:00 [BG_FRESH] SRV HYPOTHESIS A_or_D low_pg_and_canonical
+2026-08-17T17:29:45.6447686+02:00 [BG_FRESH] SRV BG_FRESHNESS_RCA_END 2026-08-17T15:29:44.491882+00:00
+2026-08-17T17:29:45.6467686+02:00 [BG_FRESH] END_BG_FRESHNESS_CAPTURE

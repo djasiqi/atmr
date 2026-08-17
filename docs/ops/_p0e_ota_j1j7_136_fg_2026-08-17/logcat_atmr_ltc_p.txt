@@ -1,0 +1,24 @@
+﻿08-17 21:45:06.905 17393 17393 I ATMR_LTC_P: P4 defer/report deferred.size=0 hostPaused=false shouldReport=false deferredDistance=0.0 sLastTimestamp=1786995899697
+08-17 21:45:15.032 17393 17393 I ATMR_LTC_P: P4 defer/report deferred.size=0 hostPaused=false shouldReport=false deferredDistance=0.0 sLastTimestamp=1786995899697
+08-17 21:45:17.246 17393 17393 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=false
+08-17 21:45:18.739 17393 17393 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=true deferred.size=0 hostPaused=false
+08-17 21:45:25.680 17393 17393 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=false
+08-17 21:45:28.935 17393 17393 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=true deferred.size=0 hostPaused=false
+08-17 21:45:28.940 17393 17393 I ATMR_LTC_P: P2b onLocationResult size=1 time=1786995926659 ertNanos=47056438000000 lat=46.2115991 lon=6.1262035 sLastTimestamp=1786995899697
+08-17 21:45:28.940 17393 17393 I ATMR_LTC_P: P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=1.951755404472351 sLastTimestamp=1786995899697
+08-17 21:45:28.940 17393 17393 I ATMR_LTC_P: P5 filter incoming.time=1786995926659 sLastTimestamp=1786995899697 accepted=true lat=46.2115991 lon=6.1262035
+08-17 21:45:28.940 17393 17393 I ATMR_LTC_P: P5 summary accepted=1 rejectedTs=0 bundles=1
+08-17 21:45:28.940 17393 17393 I ATMR_LTC_P: P6 directFGS execute bundles.size=1
+08-17 21:45:28.940 17393 17393 I ATMR_LTC_P: P8 executeTask JS=true bundles.size=1
+08-17 21:45:34.663 17393 17393 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=false
+08-17 21:45:35.524 17393 17393 I ATMR_LTC_P: P4 defer/report deferred.size=0 hostPaused=false shouldReport=false deferredDistance=0.0 sLastTimestamp=1786995926659
+08-17 21:45:37.641 17393 17393 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=true deferred.size=0 hostPaused=true
+08-17 21:45:43.602 17393 17393 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=true
+08-17 21:45:48.036 17393 17393 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=true deferred.size=0 hostPaused=true
+08-17 21:45:48.043 17393 17393 I ATMR_LTC_P: P2b onLocationResult size=1 time=1786995945755 ertNanos=47075534000000 lat=46.2115982 lon=6.1261955 sLastTimestamp=1786995926659
+08-17 21:45:48.043 17393 17393 I ATMR_LTC_P: P4 defer/report deferred.size=1 hostPaused=true shouldReport=true deferredDistance=0.6253930926322937 sLastTimestamp=1786995926659
+08-17 21:45:48.043 17393 17393 I ATMR_LTC_P: P5 filter incoming.time=1786995945755 sLastTimestamp=1786995926659 accepted=true lat=46.2115982 lon=6.1261955
+08-17 21:45:48.043 17393 17393 I ATMR_LTC_P: P5 summary accepted=1 rejectedTs=0 bundles=1
+08-17 21:45:48.043 17393 17393 I ATMR_LTC_P: P6 directFGS execute bundles.size=1
+08-17 21:45:48.043 17393 17393 I ATMR_LTC_P: P8 executeTask JS=true bundles.size=1
+08-17 21:45:53.759 17393 17393 I ATMR_LTC_P: P2c onLocationAvailability isLocationAvailable=false deferred.size=0 hostPaused=true

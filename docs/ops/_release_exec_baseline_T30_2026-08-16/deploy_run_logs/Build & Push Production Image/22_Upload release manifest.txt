@@ -1,0 +1,31 @@
+﻿2026-08-15T23:28:43.7666670Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T23:28:43.7668714Z ##[group]Run actions/upload-artifact@v4
+2026-08-15T23:28:43.7669085Z with:
+2026-08-15T23:28:43.7669322Z   name: release-manifest
+2026-08-15T23:28:43.7669610Z   path: release-manifest.json
+2026-08-15T23:28:43.7669904Z   if-no-files-found: warn
+2026-08-15T23:28:43.7670181Z   compression-level: 6
+2026-08-15T23:28:43.7670438Z   overwrite: false
+2026-08-15T23:28:43.7670689Z   include-hidden-files: false
+2026-08-15T23:28:43.7670957Z env:
+2026-08-15T23:28:43.7671194Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:28:43.7671794Z   DOCKER_IMAGE: ***
+2026-08-15T23:28:43.7672061Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:28:43.7672398Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:28:43.7672679Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:28:43.7672996Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:28:43.7673350Z ##[endgroup]
+2026-08-15T23:28:43.9423641Z (node:9755) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-15T23:28:43.9424854Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-15T23:28:43.9473985Z With the provided path, there will be 1 file uploaded
+2026-08-15T23:28:43.9496107Z Artifact name is valid!
+2026-08-15T23:28:43.9509730Z Root directory input is valid!
+2026-08-15T23:28:44.2674577Z Beginning upload of artifact content to blob storage
+2026-08-15T23:28:44.2868269Z (node:9755) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-08-15T23:28:44.5746843Z Uploaded bytes 508
+2026-08-15T23:28:44.6538004Z Finished uploading artifact content to blob storage!
+2026-08-15T23:28:44.6539459Z SHA256 digest of uploaded artifact zip is 3eacb32f88ef2ddcf5005cc385ce94d9a2df7b118e4e65313fdf35e556f17c4b
+2026-08-15T23:28:44.6540617Z Finalizing artifact upload
+2026-08-15T23:28:44.8835805Z Artifact release-manifest.zip successfully finalized. Artifact ID 9254627703
+2026-08-15T23:28:44.8837120Z Artifact release-manifest has been successfully uploaded! Final size is 508 bytes. Artifact ID is 9254627703
+2026-08-15T23:28:44.8843472Z Artifact download URL: https://github.com/***/atmr/actions/runs/31914382468/artifacts/9254627703

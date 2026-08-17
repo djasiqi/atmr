@@ -1,0 +1,24 @@
+﻿08-17 18:57:05.760 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:57:08.457  5851  5851 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-17 18:57:08.992 14889 15163 I TaskService: Finished task 'background-location-task' with eventId '0fb698a7-b846-46b6-a3b5-a9b069c07c95'.
+08-17 18:57:15.715 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:57:21.728  5851  5851 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-17 18:57:26.831 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:57:29.413 14889 15163 I TaskService: Finished task 'background-location-task' with eventId '982472ce-f629-4e74-8ae1-f26e793e039a'.
+08-17 18:57:35.824 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:57:45.663 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:57:49.611 14889 15163 I TaskService: Finished task 'background-location-task' with eventId 'b65d482c-09dc-458e-b25a-b1afe04f59b6'.
+08-17 18:57:51.236  5851  5851 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-17 18:57:54.815 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:58:04.989 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:58:09.903 14889 15163 I TaskService: Finished task 'background-location-task' with eventId '0833418f-f685-4920-bbc5-e8cfbc7a71a1'.
+08-17 18:58:16.305 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:58:19.440  2986  4788 D SLocation: BatchCoreManager - send flush request to core
+08-17 18:58:19.477  2986  4788 D SLocation: BatchCoreManager - onFlushFinished called
+08-17 18:58:25.276 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:58:30.352 14889 15163 I TaskService: Finished task 'background-location-task' with eventId '89e6be98-6c9f-46c0-b844-10c5679ad0dc'.
+08-17 18:58:38.188 14889 14889 W LocationTaskConsumer: Location unavailable for foreground-service task delivery
+08-17 18:58:42.749 12906 13417 D WM-Processor: Work WorkGenerationalId(workSpecId=2df7985b-1086-4e8c-b577-660d35ae16da, generation=0) is already enqueued for processing
+08-17 18:58:43.785  6951  6951 I MediaServiceV2: Work enqueued for intent: Intent { act=android.intent.action.MEDIA_SCANNER_SCAN_FILE dat=file:///... flg=0x1000010 xflg=0x4 cmp=com.google.android.providers.media.module/com.android.providers.media.MediaServiceV2 }
+08-17 18:58:43.807  6951  6951 I MediaServiceV2: Work enqueued for intent: Intent { act=android.intent.action.MEDIA_SCANNER_SCAN_FILE dat=file:///... flg=0x1000010 xflg=0x4 cmp=com.google.android.providers.media.module/com.android.providers.media.MediaServiceV2 }
+08-17 18:58:43.834  6951  7052 I WM-WorkerWrapper: Setting status to enqueued for 8af8141f-f4e3-42e4-9568-e939a3caf948

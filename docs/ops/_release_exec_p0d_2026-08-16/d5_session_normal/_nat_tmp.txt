@@ -1,0 +1,6 @@
+﻿08-16 21:34:03.612  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:34:51.287  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:35:42.074  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:36:28.930  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'
+08-16 21:36:37.610 18062 18135 I TaskService: Finished task 'driver-location-background-task' with eventId 'bca3f134-e87c-4235-8585-5ce9409ff799'.
+08-16 21:37:16.464  6506  6506 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:dumpsys activity services LocationTaskService'

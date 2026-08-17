@@ -1,0 +1,842 @@
+﻿Activity Resolver Table:
+  Schemes:
+      exp+operations-app:
+        e9c8cb4 ch.liri.operations/.MainActivity filter 9e1452
+          Action: "android.intent.action.VIEW"
+          Category: "android.intent.category.DEFAULT"
+          Category: "android.intent.category.BROWSABLE"
+          Scheme: "lirie"
+          Scheme: "exp+operations-app"
+      https:
+        e9c8cb4 ch.liri.operations/.MainActivity filter 6ebd323
+          Action: "android.intent.action.VIEW"
+          Category: "android.intent.category.BROWSABLE"
+          Category: "android.intent.category.DEFAULT"
+          Scheme: "https"
+          Authority: "app.lirie.ch": -1
+          Authority: "app.lirie.ch": -1
+          Path: "PatternMatcher{PREFIX: /activate-account}"
+          Path: "PatternMatcher{PREFIX: /reset-password}"
+          AutoVerify=true
+      lirie:
+        e9c8cb4 ch.liri.operations/.MainActivity filter 9e1452
+          Action: "android.intent.action.VIEW"
+          Category: "android.intent.category.DEFAULT"
+          Category: "android.intent.category.BROWSABLE"
+          Scheme: "lirie"
+          Scheme: "exp+operations-app"
+
+  Non-Data Actions:
+      android.intent.action.MAIN:
+        e9c8cb4 ch.liri.operations/.MainActivity filter 2bef0dd
+          Action: "android.intent.action.MAIN"
+          Category: "android.intent.category.LAUNCHER"
+
+Receiver Resolver Table:
+  Non-Data Actions:
+      android.intent.action.BATTERY_OKAY:
+        7e17338 ch.liri.operations/androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryNotLowProxy filter 1694f11
+          Action: "android.intent.action.BATTERY_OKAY"
+          Action: "android.intent.action.BATTERY_LOW"
+      android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED:
+        7ea21bd ch.liri.operations/app.notifee.core.AlarmPermissionBroadcastReceiver filter a2623b2
+          Action: "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED"
+      android.intent.action.ACTION_POWER_DISCONNECTED:
+        dfbdbaa ch.liri.operations/androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryChargingProxy filter a6839b
+          Action: "android.intent.action.ACTION_POWER_DISCONNECTED"
+          Action: "android.intent.action.ACTION_POWER_CONNECTED"
+      android.intent.action.QUICKBOOT_POWERON:
+        2e5239e ch.liri.operations/expo.modules.notifications.service.NotificationsService filter 69e7e7f
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "expo.modules.notifications.NOTIFICATION_EVENT"
+          Action: "android.intent.action.BOOT_COMPLETED"
+          Action: "android.intent.action.MY_PACKAGE_REPLACED"
+          Action: "android.intent.action.REBOOT"
+          mPriority=-1, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+        f073367 ch.liri.operations/app.notifee.core.RebootBroadcastReceiver filter 647514
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "android.intent.action.BOOT_COMPLETED"
+        ec99f03 ch.liri.operations/app.notifee.core.NotificationAlarmReceiver filter 99dce80
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "android.intent.action.BOOT_COMPLETED"
+      com.htc.intent.action.QUICKBOOT_POWERON:
+        2e5239e ch.liri.operations/expo.modules.notifications.service.NotificationsService filter 69e7e7f
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "expo.modules.notifications.NOTIFICATION_EVENT"
+          Action: "android.intent.action.BOOT_COMPLETED"
+          Action: "android.intent.action.MY_PACKAGE_REPLACED"
+          Action: "android.intent.action.REBOOT"
+          mPriority=-1, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+        f073367 ch.liri.operations/app.notifee.core.RebootBroadcastReceiver filter 647514
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "android.intent.action.BOOT_COMPLETED"
+        ec99f03 ch.liri.operations/app.notifee.core.NotificationAlarmReceiver filter 99dce80
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "android.intent.action.BOOT_COMPLETED"
+      androidx.profileinstaller.action.SAVE_PROFILE:
+        69a835a ch.liri.operations/androidx.profileinstaller.ProfileInstallReceiver filter dab1e81
+          Action: "androidx.profileinstaller.action.SAVE_PROFILE"
+      android.intent.action.DEVICE_STORAGE_LOW:
+        8140876 ch.liri.operations/androidx.work.impl.background.systemalarm.ConstraintProxy$StorageNotLowProxy filter c5fbe77
+          Action: "android.intent.action.DEVICE_STORAGE_LOW"
+          Action: "android.intent.action.DEVICE_STORAGE_OK"
+      android.net.conn.CONNECTIVITY_CHANGE:
+        7d68ae4 ch.liri.operations/androidx.work.impl.background.systemalarm.ConstraintProxy$NetworkStateProxy filter 502cb4d
+          Action: "android.net.conn.CONNECTIVITY_CHANGE"
+      expo.modules.taskManager.TaskBroadcastReceiver.INTENT_ACTION:
+        596527c ch.liri.operations/expo.modules.taskManager.TaskBroadcastReceiver filter 60b1705
+          Action: "expo.modules.taskManager.TaskBroadcastReceiver.INTENT_ACTION"
+          Action: "android.intent.action.BOOT_COMPLETED"
+          Action: "android.intent.action.MY_PACKAGE_REPLACED"
+      expo.modules.notifications.NOTIFICATION_EVENT:
+        2e5239e ch.liri.operations/expo.modules.notifications.service.NotificationsService filter 69e7e7f
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "expo.modules.notifications.NOTIFICATION_EVENT"
+          Action: "android.intent.action.BOOT_COMPLETED"
+          Action: "android.intent.action.MY_PACKAGE_REPLACED"
+          Action: "android.intent.action.REBOOT"
+          mPriority=-1, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+      android.intent.action.DEVICE_STORAGE_OK:
+        8140876 ch.liri.operations/androidx.work.impl.background.systemalarm.ConstraintProxy$StorageNotLowProxy filter c5fbe77
+          Action: "android.intent.action.DEVICE_STORAGE_LOW"
+          Action: "android.intent.action.DEVICE_STORAGE_OK"
+      androidx.profileinstaller.action.INSTALL_PROFILE:
+        69a835a ch.liri.operations/androidx.profileinstaller.ProfileInstallReceiver filter 56b898b
+          Action: "androidx.profileinstaller.action.INSTALL_PROFILE"
+      com.google.android.c2dm.intent.RECEIVE:
+        ccfc020 ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingReceiver filter 9bebdd9
+          Action: "com.google.android.c2dm.intent.RECEIVE"
+        140be4c ch.liri.operations/com.google.firebase.iid.FirebaseInstanceIdReceiver filter d545e95
+          Action: "com.google.android.c2dm.intent.RECEIVE"
+      android.app.action.APP_BLOCK_STATE_CHANGED:
+        41c1cb9 ch.liri.operations/app.notifee.core.BlockStateBroadcastReceiver filter cec8fe
+          Action: "android.app.action.APP_BLOCK_STATE_CHANGED"
+          Action: "android.app.action.NOTIFICATION_CHANNEL_GROUP_BLOCK_STATE_CHANGED"
+          Action: "android.app.action.NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED"
+      android.intent.action.BATTERY_LOW:
+        7e17338 ch.liri.operations/androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryNotLowProxy filter 1694f11
+          Action: "android.intent.action.BATTERY_OKAY"
+          Action: "android.intent.action.BATTERY_LOW"
+      android.intent.action.TIMEZONE_CHANGED:
+        6b03602 ch.liri.operations/androidx.work.impl.background.systemalarm.RescheduleReceiver filter 107cb13
+          Action: "android.intent.action.TIMEZONE_CHANGED"
+          Action: "android.intent.action.TIME_SET"
+          Action: "android.intent.action.BOOT_COMPLETED"
+      android.intent.action.TIME_SET:
+        6b03602 ch.liri.operations/androidx.work.impl.background.systemalarm.RescheduleReceiver filter 107cb13
+          Action: "android.intent.action.TIMEZONE_CHANGED"
+          Action: "android.intent.action.TIME_SET"
+          Action: "android.intent.action.BOOT_COMPLETED"
+      androidx.profileinstaller.action.SKIP_FILE:
+        69a835a ch.liri.operations/androidx.profileinstaller.ProfileInstallReceiver filter f341a68
+          Action: "androidx.profileinstaller.action.SKIP_FILE"
+      androidx.profileinstaller.action.BENCHMARK_OPERATION:
+        69a835a ch.liri.operations/androidx.profileinstaller.ProfileInstallReceiver filter ded7b26
+          Action: "androidx.profileinstaller.action.BENCHMARK_OPERATION"
+      android.intent.action.BOOT_COMPLETED:
+        2e5239e ch.liri.operations/expo.modules.notifications.service.NotificationsService filter 69e7e7f
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "expo.modules.notifications.NOTIFICATION_EVENT"
+          Action: "android.intent.action.BOOT_COMPLETED"
+          Action: "android.intent.action.MY_PACKAGE_REPLACED"
+          Action: "android.intent.action.REBOOT"
+          mPriority=-1, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+        6b03602 ch.liri.operations/androidx.work.impl.background.systemalarm.RescheduleReceiver filter 107cb13
+          Action: "android.intent.action.TIMEZONE_CHANGED"
+          Action: "android.intent.action.TIME_SET"
+          Action: "android.intent.action.BOOT_COMPLETED"
+        596527c ch.liri.operations/expo.modules.taskManager.TaskBroadcastReceiver filter 60b1705
+          Action: "expo.modules.taskManager.TaskBroadcastReceiver.INTENT_ACTION"
+          Action: "android.intent.action.BOOT_COMPLETED"
+          Action: "android.intent.action.MY_PACKAGE_REPLACED"
+        f073367 ch.liri.operations/app.notifee.core.RebootBroadcastReceiver filter 647514
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "android.intent.action.BOOT_COMPLETED"
+        ec99f03 ch.liri.operations/app.notifee.core.NotificationAlarmReceiver filter 99dce80
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "android.intent.action.BOOT_COMPLETED"
+      android.app.action.NOTIFICATION_CHANNEL_GROUP_BLOCK_STATE_CHANGED:
+        41c1cb9 ch.liri.operations/app.notifee.core.BlockStateBroadcastReceiver filter cec8fe
+          Action: "android.app.action.APP_BLOCK_STATE_CHANGED"
+          Action: "android.app.action.NOTIFICATION_CHANNEL_GROUP_BLOCK_STATE_CHANGED"
+          Action: "android.app.action.NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED"
+      android.intent.action.ACTION_POWER_CONNECTED:
+        dfbdbaa ch.liri.operations/androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryChargingProxy filter a6839b
+          Action: "android.intent.action.ACTION_POWER_DISCONNECTED"
+          Action: "android.intent.action.ACTION_POWER_CONNECTED"
+      android.app.action.NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED:
+        41c1cb9 ch.liri.operations/app.notifee.core.BlockStateBroadcastReceiver filter cec8fe
+          Action: "android.app.action.APP_BLOCK_STATE_CHANGED"
+          Action: "android.app.action.NOTIFICATION_CHANNEL_GROUP_BLOCK_STATE_CHANGED"
+          Action: "android.app.action.NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED"
+      androidx.work.diagnostics.REQUEST_DIAGNOSTICS:
+        2efb04e ch.liri.operations/androidx.work.impl.diagnostics.DiagnosticsReceiver filter 21a056f
+          Action: "androidx.work.diagnostics.REQUEST_DIAGNOSTICS"
+      android.intent.action.MY_PACKAGE_REPLACED:
+        2e5239e ch.liri.operations/expo.modules.notifications.service.NotificationsService filter 69e7e7f
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "expo.modules.notifications.NOTIFICATION_EVENT"
+          Action: "android.intent.action.BOOT_COMPLETED"
+          Action: "android.intent.action.MY_PACKAGE_REPLACED"
+          Action: "android.intent.action.REBOOT"
+          mPriority=-1, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+        596527c ch.liri.operations/expo.modules.taskManager.TaskBroadcastReceiver filter 60b1705
+          Action: "expo.modules.taskManager.TaskBroadcastReceiver.INTENT_ACTION"
+          Action: "android.intent.action.BOOT_COMPLETED"
+          Action: "android.intent.action.MY_PACKAGE_REPLACED"
+      androidx.work.impl.background.systemalarm.UpdateProxies:
+        3e37150 ch.liri.operations/androidx.work.impl.background.systemalarm.ConstraintProxyUpdateReceiver filter 83dcf49
+          Action: "androidx.work.impl.background.systemalarm.UpdateProxies"
+      android.intent.action.REBOOT:
+        2e5239e ch.liri.operations/expo.modules.notifications.service.NotificationsService filter 69e7e7f
+          Action: "android.intent.action.QUICKBOOT_POWERON"
+          Action: "com.htc.intent.action.QUICKBOOT_POWERON"
+          Action: "expo.modules.notifications.NOTIFICATION_EVENT"
+          Action: "android.intent.action.BOOT_COMPLETED"
+          Action: "android.intent.action.MY_PACKAGE_REPLACED"
+          Action: "android.intent.action.REBOOT"
+          mPriority=-1, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+
+Service Resolver Table:
+  Non-Data Actions:
+      androidx.media3.session.MediaSessionService:
+        8d8cb75 ch.liri.operations/expo.modules.audio.service.AudioControlsService filter 3ca770a
+          Action: "androidx.media3.session.MediaSessionService"
+      com.google.firebase.MESSAGING_EVENT:
+        bbd285f ch.liri.operations/io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService filter a5152ac
+          Action: "com.google.firebase.MESSAGING_EVENT"
+        477a9f1 ch.liri.operations/expo.modules.notifications.service.ExpoFirebaseMessagingService filter e20f9d6
+          Action: "com.google.firebase.MESSAGING_EVENT"
+          mPriority=-1, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+        1adc457 ch.liri.operations/com.google.firebase.messaging.FirebaseMessagingService filter b194b44
+          Action: "com.google.firebase.MESSAGING_EVENT"
+          mPriority=-500, mOrder=0, mHasStaticPartialTypes=false, mHasDynamicPartialTypes=false
+      com.google.android.gms.metadata.MODULE_DEPENDENCIES:
+        935eb7b ch.liri.operations/com.google.android.gms.metadata.ModuleDependencies filter 5d6ed98
+          Action: "com.google.android.gms.metadata.MODULE_DEPENDENCIES"
+
+Domain verification status:
+  ch.liri.operations:
+    ID: a37f5133-168e-4724-84f5-85982e916411
+    Signatures: [4D:3C:C4:CE:6B:6A:AE:99:76:19:8A:C1:93:DA:64:61:B0:9B:5A:AA:63:D3:FF:C3:3B:73:AD:84:DC:27:03:C0]
+    Domain verification state:
+      app.lirie.ch: verified
+    User all:
+      Verification link handling allowed: true
+      Selection state:
+        Disabled:
+          app.lirie.ch
+
+Permissions:
+  Permission [ch.liri.operations.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION] (e801849):
+    sourcePackage=ch.liri.operations
+    uid=10901 gids=[] type=0 prot=signature
+    perm=PermissionInfo{601c9c0 ch.liri.operations.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION}
+    flags=0x0
+
+Registered ContentProviders:
+  ch.liri.operations/expo.modules.clipboard.ClipboardFileProvider:
+    Provider{4bb96f9 ch.liri.operations/expo.modules.clipboard.ClipboardFileProvider}
+  ch.liri.operations/com.canhub.cropper.CropFileProvider:
+    Provider{975563e ch.liri.operations/com.canhub.cropper.CropFileProvider}
+  ch.liri.operations/androidx.startup.InitializationProvider:
+    Provider{930cc9f ch.liri.operations/androidx.startup.InitializationProvider}
+  ch.liri.operations/io.sentry.android.core.SentryPerformanceProvider:
+    Provider{a19c1ec ch.liri.operations/io.sentry.android.core.SentryPerformanceProvider}
+  ch.liri.operations/io.invertase.notifee.NotifeeInitProvider:
+    Provider{e95a9b5 ch.liri.operations/io.invertase.notifee.NotifeeInitProvider}
+  ch.liri.operations/io.sentry.android.core.SentryInitProvider:
+    Provider{66c984a ch.liri.operations/io.sentry.android.core.SentryInitProvider}
+  ch.liri.operations/com.reactnativecommunity.webview.RNCWebViewFileProvider:
+    Provider{5df93bb ch.liri.operations/com.reactnativecommunity.webview.RNCWebViewFileProvider}
+  ch.liri.operations/com.google.mlkit.common.internal.MlKitInitProvider:
+    Provider{cd710d8 ch.liri.operations/com.google.mlkit.common.internal.MlKitInitProvider}
+  ch.liri.operations/io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider:
+    Provider{dc42c31 ch.liri.operations/io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider}
+  ch.liri.operations/expo.modules.filesystem.FileSystemFileProvider:
+    Provider{e3ef16 ch.liri.operations/expo.modules.filesystem.FileSystemFileProvider}
+  ch.liri.operations/com.google.firebase.provider.FirebaseInitProvider:
+    Provider{4e9b097 ch.liri.operations/com.google.firebase.provider.FirebaseInitProvider}
+  ch.liri.operations/expo.modules.imagepicker.fileprovider.ImagePickerFileProvider:
+    Provider{7186284 ch.liri.operations/expo.modules.imagepicker.fileprovider.ImagePickerFileProvider}
+
+ContentProvider Authorities:
+  [ch.liri.operations.cropper.fileprovider]:
+    Provider{975563e ch.liri.operations/com.canhub.cropper.CropFileProvider}
+      applicationInfo=ApplicationInfo{566c54e ch.liri.operations}
+  [ch.liri.operations.ClipboardFileProvider]:
+    Provider{4bb96f9 ch.liri.operations/expo.modules.clipboard.ClipboardFileProvider}
+      applicationInfo=ApplicationInfo{533f66f ch.liri.operations}
+  [ch.liri.operations.ImagePickerFileProvider]:
+    Provider{7186284 ch.liri.operations/expo.modules.imagepicker.fileprovider.ImagePickerFileProvider}
+      applicationInfo=ApplicationInfo{50fef7c ch.liri.operations}
+  [ch.liri.operations.reactnativefirebaseappinitprovider]:
+    Provider{dc42c31 ch.liri.operations/io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider}
+      applicationInfo=ApplicationInfo{8a8f005 ch.liri.operations}
+  [ch.liri.operations.fileprovider]:
+    Provider{5df93bb ch.liri.operations/com.reactnativecommunity.webview.RNCWebViewFileProvider}
+      applicationInfo=ApplicationInfo{1ede85a ch.liri.operations}
+  [ch.liri.operations.SentryPerformanceProvider]:
+    Provider{a19c1ec ch.liri.operations/io.sentry.android.core.SentryPerformanceProvider}
+      applicationInfo=ApplicationInfo{eb38a8b ch.liri.operations}
+  [ch.liri.operations.mlkitinitprovider]:
+    Provider{cd710d8 ch.liri.operations/com.google.mlkit.common.internal.MlKitInitProvider}
+      applicationInfo=ApplicationInfo{92a8768 ch.liri.operations}
+  [ch.liri.operations.notifee-init-provider]:
+    Provider{e95a9b5 ch.liri.operations/io.invertase.notifee.NotifeeInitProvider}
+      applicationInfo=ApplicationInfo{ecd8781 ch.liri.operations}
+  [ch.liri.operations.FileSystemFileProvider]:
+    Provider{e3ef16 ch.liri.operations/expo.modules.filesystem.FileSystemFileProvider}
+      applicationInfo=ApplicationInfo{b923026 ch.liri.operations}
+  [ch.liri.operations.SentryInitProvider]:
+    Provider{66c984a ch.liri.operations/io.sentry.android.core.SentryInitProvider}
+      applicationInfo=ApplicationInfo{b4e4467 ch.liri.operations}
+  [ch.liri.operations.firebaseinitprovider]:
+    Provider{4e9b097 ch.liri.operations/com.google.firebase.provider.FirebaseInitProvider}
+      applicationInfo=ApplicationInfo{7d4b214 ch.liri.operations}
+  [ch.liri.operations.androidx-startup]:
+    Provider{930cc9f ch.liri.operations/androidx.startup.InitializationProvider}
+      applicationInfo=ApplicationInfo{34a1abd ch.liri.operations}
+
+Key Set Manager:
+  [ch.liri.operations]
+      Signing KeySets: 1071
+
+Packages:
+  Package [ch.liri.operations] (78783a1):
+    appId=10901
+    pkg=Package{e5449c6 ch.liri.operations}
+    codePath=/data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==
+    resourcePath=/data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==
+    legacyNativeLibraryDir=/data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==/lib
+    extractNativeLibs=false
+    primaryCpuAbi=arm64-v8a
+    secondaryCpuAbi=null
+    cpuAbiOverride=null
+    versionCode=126 minSdk=24 targetSdk=36
+    minExtensionVersions=[]
+    versionName=1.0.11
+    hiddenApiEnforcementPolicy=2
+    usesNonSdkApi=false
+    splits=[base, config.arm64_v8a, config.en, config.fr, config.sq, config.xxhdpi]
+    apkSigningVersion=3
+    flags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP KILL_AFTER_RESTORE ]
+    privateFlags=[ PRIVATE_FLAG_ACTIVITIES_RESIZE_MODE_RESIZEABLE_VIA_SDK_VERSION ALLOW_AUDIO_PLAYBACK_CAPTURE HAS_DOMAIN_URLS PARTIALLY_DIRECT_BOOT_AWARE PRIVATE_FLAG_ALLOW_NATIVE_HEAP_POINTER_TAGGING ]
+    forceQueryable=false
+    pageSizeCompat=0
+    queriesPackages=[com.google.android.apps.maps]
+    queriesIntents=[Intent { act=android.intent.action.VIEW cat=[android.intent.category.BROWSABLE] dat=https:/... }, Intent { act=org.chromium.intent.action.PAY }, Intent { act=org.chromium.intent.action.IS_READY_TO_PAY }, Intent { act=org.chromium.intent.action.UPDATE_PAYMENT_DETAILS }, Intent { act=android.support.customtabs.action.CustomTabsService }, Intent { act=android.media.action.IMAGE_CAPTURE }, Intent { act=android.media.action.ACTION_VIDEO_CAPTURE }, Intent { act=android.intent.action.GET_CONTENT cat=[android.intent.category.OPENABLE] dat=content://*/... typ=*/* }, Intent { act=android.intent.action.OPEN_DOCUMENT_TREE }, Intent { act=android.intent.action.OPEN_DOCUMENT cat=[android.intent.category.DEFAULT,android.intent.category.OPENABLE] dat=content://*/... typ=*/* }]
+    scannedAsStoppedSystemApp=false
+    supportsScreens=[small, medium, large, xlarge, resizeable, anyDensity]
+    usesOptionalLibraries:
+      org.apache.http.legacy
+    usesLibraryFiles:
+      /system/framework/org.apache.http.legacy.jar
+    timeStamp=2026-08-16 13:18:19
+    lastUpdateTime=2026-08-16 13:18:27
+    installerPackageName=com.android.vending
+    installerPackageUid=10233
+    initiatingPackageName=com.android.vending
+    originatingPackageName=null
+    updateOwnerPackageName=com.android.vending
+    category=manifest: -1, override: -1, by user: -1
+    packageSource=0
+    appMetadataFilePath=null
+    appMetadataSource=0
+    signatures=PackageSignatures{d81ed87 version:3, signatures:[3797ce55], past signatures:[]}
+    installPermissionsFixed=false
+    pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP KILL_AFTER_RESTORE ]
+    privatePkgFlags=[ PRIVATE_FLAG_ACTIVITIES_RESIZE_MODE_RESIZEABLE_VIA_SDK_VERSION ALLOW_AUDIO_PLAYBACK_CAPTURE HAS_DOMAIN_URLS PARTIALLY_DIRECT_BOOT_AWARE PRIVATE_FLAG_ALLOW_NATIVE_HEAP_POINTER_TAGGING ]
+    apexModuleName=null
+    componentsDeclared=44
+    declared permissions:
+      ch.liri.operations.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION: prot=signature
+    requested permissions:
+      com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE
+      com.sonyericsson.home.permission.BROADCAST_BADGE
+      android.permission.POST_NOTIFICATIONS
+      com.google.android.c2dm.permission.RECEIVE
+      android.permission.ACCESS_FINE_LOCATION
+      android.permission.MODIFY_AUDIO_SETTINGS
+      android.permission.ACCESS_NOTIFICATION_POLICY
+      com.oppo.launcher.permission.WRITE_SETTINGS
+      me.everything.badger.permission.BADGE_COUNT_READ
+      com.anddoes.launcher.permission.UPDATE_COUNT
+      com.sec.android.provider.badge.permission.READ
+      android.permission.FOREGROUND_SERVICE
+      me.everything.badger.permission.BADGE_COUNT_WRITE
+      com.huawei.android.launcher.permission.WRITE_SETTINGS
+      android.permission.RECEIVE_BOOT_COMPLETED
+      android.permission.FOREGROUND_SERVICE_LOCATION
+      android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+      android.permission.INTERNET
+      com.android.vending.CHECK_LICENSE
+      ch.liri.operations.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+      android.permission.ACCESS_COARSE_LOCATION
+      android.permission.READ_APP_BADGE
+      com.majeur.launcher.permission.UPDATE_BADGE
+      android.permission.FOREGROUND_SERVICE_DATA_SYNC
+      android.permission.ACCESS_NETWORK_STATE
+      com.oppo.launcher.permission.READ_SETTINGS
+      android.permission.CAMERA
+      com.sonymobile.home.permission.PROVIDER_INSERT_BADGE
+      com.huawei.android.launcher.permission.READ_SETTINGS
+      android.permission.USE_FINGERPRINT
+      com.sec.android.provider.badge.permission.WRITE
+      android.permission.SCHEDULE_EXACT_ALARM
+      android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK
+      android.permission.VIBRATE
+      com.huawei.android.launcher.permission.CHANGE_BADGE
+      android.permission.ACCESS_WIFI_STATE
+      android.permission.USE_BIOMETRIC
+      com.htc.launcher.permission.UPDATE_SHORTCUT
+      android.permission.RECORD_AUDIO
+      com.htc.launcher.permission.READ_SETTINGS
+      android.permission.WAKE_LOCK
+      android.permission.ACCESS_BACKGROUND_LOCATION
+    install permissions:
+      com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE: granted=true
+      com.google.android.c2dm.permission.RECEIVE: granted=true
+      android.permission.MODIFY_AUDIO_SETTINGS: granted=true
+      android.permission.ACCESS_NOTIFICATION_POLICY: granted=true
+      com.sec.android.provider.badge.permission.READ: granted=true
+      android.permission.FOREGROUND_SERVICE: granted=true
+      android.permission.RECEIVE_BOOT_COMPLETED: granted=true
+      android.permission.FOREGROUND_SERVICE_LOCATION: granted=true
+      android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: granted=true
+      android.permission.INTERNET: granted=true
+      com.android.vending.CHECK_LICENSE: granted=true
+      ch.liri.operations.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION: granted=true
+      android.permission.FOREGROUND_SERVICE_DATA_SYNC: granted=true
+      android.permission.ACCESS_NETWORK_STATE: granted=true
+      android.permission.USE_FINGERPRINT: granted=true
+      android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK: granted=true
+      android.permission.VIBRATE: granted=true
+      android.permission.ACCESS_WIFI_STATE: granted=true
+      android.permission.USE_BIOMETRIC: granted=true
+      android.permission.WAKE_LOCK: granted=true
+    User 0: ceDataInode=1952510 deDataInode=1947640 installed=true hidden=false suspended=false distractionFlags=0 stopped=false notLaunched=false enabled=0 instant=false virtual=false quarantined=false
+      installReason=4
+      dataDir=/data/user/0/ch.liri.operations
+      firstInstallTime=2026-08-16 13:18:27
+      uninstallReason=0
+      overlay paths:
+        /product/overlay/NavigationBarModeGestural/NavigationBarModeGesturalOverlay.apk
+        /data/resource-cache/android-SemWT_G_MonetPalette-VBkj.frro
+      legacy overlay paths:
+        /product/overlay/NavigationBarModeGestural/NavigationBarModeGesturalOverlay.apk
+      lastDisabledCaller: com.android.vending
+      gids=[3003]
+      runtime permissions:
+        android.permission.POST_NOTIFICATIONS: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.ACCESS_FINE_LOCATION: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED|524288]
+        android.permission.ACCESS_COARSE_LOCATION: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.CAMERA: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.RECORD_AUDIO: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.ACCESS_BACKGROUND_LOCATION: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED|RESTRICTION_INSTALLER_EXEMPT]
+      enabledComponents:
+        androidx.work.impl.background.systemalarm.RescheduleReceiver
+        androidx.work.impl.background.systemjob.SystemJobService
+    User 150: ceDataInode=0 deDataInode=0 installed=false hidden=false suspended=false distractionFlags=0 stopped=true notLaunched=true enabled=0 instant=false virtual=false quarantined=false
+      installReason=0
+      dataDir=null
+      firstInstallTime=1970-01-01 01:00:00
+      uninstallReason=0
+      gids=[3003]
+      runtime permissions:
+        android.permission.ACCESS_BACKGROUND_LOCATION: granted=false, flags=[ RESTRICTION_UPGRADE_EXEMPT]
+
+Queries:
+  system apps queryable: false
+  queries via forceQueryable:
+  queries via package name:
+    ch.liri.operations:
+      com.google.android.apps.maps
+  queries via component:
+    com.app.tgtg:
+      ch.liri.operations
+    com.samsung.android.bixby.agent:
+      ch.liri.operations
+    com.android.settings.intelligence:
+      ch.liri.operations
+    com.google.android.apps.accessibility.voiceaccess:
+      ch.liri.operations
+    com.google.android.as:
+      ch.liri.operations
+    com.google.android.as.oss:
+      ch.liri.operations
+    com.google.android.apps.messaging:
+      ch.liri.operations
+    com.zzkko:
+      ch.liri.operations
+    com.facebook.orca:
+      ch.liri.operations
+    com.samsung.android.spay:
+      ch.liri.operations
+    ch.protonvpn.android:
+      ch.liri.operations
+    com.hm.goe:
+      ch.liri.operations
+    com.amazon.dee.app:
+      ch.liri.operations
+    in.playsimple.wordsearch:
+      ch.liri.operations
+    difficult.climbing.game:
+      ch.liri.operations
+    com.snapchat.android:
+      ch.liri.operations
+    com.amazon.mShop.android.shopping:
+      ch.liri.operations
+    ch.autoscout24.autoscout24:
+      ch.liri.operations
+    com.revolut.revolut:
+      ch.liri.operations
+    com.ecffri.arrows:
+      ch.liri.operations
+    com.wallet.crypto.trustapp:
+      ch.liri.operations
+    bdo.trybe.leomoves:
+      ch.liri.operations
+    com.instagram.android:
+      ch.liri.operations
+    com.samsung.android.mocca:
+      ch.liri.operations
+    com.tradingview.tradingviewapp:
+      ch.liri.operations
+    com.mcdonalds.mobileapp:
+      ch.liri.operations
+    com.wuliang.xapkinstaller:
+      ch.liri.operations
+    com.adobe.reader:
+      ch.liri.operations
+    com.toyota.oneapp.eu:
+      ch.liri.operations
+    com.connect.enduser:
+      ch.liri.operations
+    com.zhiliaoapp.musically:
+      ch.liri.operations
+    gymworkout.gym.gymlog.gymtrainer:
+      ch.liri.operations
+    com.facebook.katana:
+      ch.liri.operations
+    com.airbnb.android:
+      ch.liri.operations
+    com.inditex.zara:
+      ch.liri.operations
+    com.peoplefone.acrobits.android:
+      ch.liri.operations
+    com.microsoft.office.outlook:
+      ch.liri.operations
+    com.whatsapp:
+      ch.liri.operations
+    com.puzzlegames.puzzlebrickslegend:
+      ch.liri.operations
+    com.dreame.smartlife:
+      ch.liri.operations
+    com.easybrain.brick.balls.blast:
+      ch.liri.operations
+    ru.gavrikov.mocklocations:
+      ch.liri.operations
+    video.reface.app:
+      ch.liri.operations
+    ch.liri.operations:
+      com.google.android.documentsui
+      com.microsoft.skydrive
+      com.google.android.googlequicksearchbox
+      com.android.chrome
+      com.google.android.setupwizard
+      com.samsung.android.spay
+      com.sec.android.app.sbrowser
+      com.sec.android.app.music
+      com.google.android.photopicker
+      com.dropbox.android
+      com.amazon.mShop.android.shopping
+      com.instagram.android
+      com.duckduckgo.mobile.android
+      com.wuliang.xapkinstaller
+      com.adobe.reader
+      com.facebook.katana
+      com.google.earth
+  queryable via interaction:
+    User 0:
+      [com.android.inputdevices,com.samsung.android.app.esimkeystring,com.samsung.android.dqagent,com.sec.android.smartfpsadjuster,com.samsung.android.vtcamerasettings,com.sec.android.app.SecSetupWizard,com.sec.android.app.servicemodeapp,com.sec.android.app.RilPhoneNumberService,com.samsung.euicc,com.samsung.android.app.dressroom,com.android.providers.settings,com.samsung.android.wifi.ai,com.sec.mhs.smarttethering,com.samsung.android.bbc.bbcagent,com.samsung.android.bixby.wakeup,com.sec.android.app.hwmoduletest,com.sec.sve,com.sec.imsservice,com.samsung.android.mdecservice,com.samsung.oda.service,com.samsung.android.hdmapp,com.sec.android.emergencylauncher,com.samsung.android.smartswitchassistant,com.samsung.android.knox.mpos,com.sec.android.soagent,com.sec.imslogger,com.samsung.accessibility,com.samsung.gpuwatchapp,com.samsung.android.cameraxservice,com.samsung.android.lool,com.sec.app.RilErrorNotifier,com.samsung.android.photoremasterservice,com.samsung.android.themecenter,com.samsung.android.provider.filterprovider,com.samsung.android.aircommandmanager,com.samsung.android.ese,com.samsung.unifiedtp,com.samsung.android.smartface,com.android.location.fused,com.sec.android.app.factorykeystring,com.samsung.android.vexfwk.service,com.samsung.android.fmm,com.samsung.android.messageguardsync,com.samsung.android.brightnessbackupservice,com.sec.android.app.personalization,com.sec.facatfunction,com.android.server.telecom,com.sec.android.iaft,com.android.keychain,com.sec.automation,com.sec.epdg,com.samsung.android.camerasdkservice,android,com.sec.android.sdhms,com.qualcomm.qti.services.systemhelper,com.samsung.android.svcagent,com.samsung.android.providers.factory,com.samsung.android.emergency,com.samsung.sait.sohservice,com.samsung.android.stickercenter,com.sec.android.diagmonagent,com.samsung.android.da.daagent,com.samsung.aasaservice,com.sec.android.app.parser,com.samsung.android.knox.zt.framework,com.samsung.android.globalpostprocmgr,com.samsung.android.forest,com.samsung.android.knox.attestation,com.android.localtransport,com.qti.snapdragon.qdcm_ff,com.samsung.android.knox.pushmanager,com.wssyncmldm,com.samsung.SMT,com.skms.android.agent,com.samsung.android.motionphoto.app,com.sec.android.app.quicktool,com.sec.android.CcInfo,com.samsung.android.biometrics.app.setting,com.sec.android.app.wlantest,com.android.dynsystem,com.samsung.android.app.omcagent,com.sec.bcservice,com.sem.factoryapp,com.sec.usbsettings,com.sec.modem.settings,com.sec.factory.camera,com.android.settings]:
+        ch.liri.operations
+      [com.samsung.android.app.routines,com.android.systemui,com.samsung.android.app.aodservice]:
+        ch.liri.operations
+      com.sec.android.app.launcher:
+        ch.liri.operations
+      com.microsoft.appmanager:
+        ch.liri.operations
+      com.samsung.android.honeyboard:
+        ch.liri.operations
+      [com.google.android.gsf,com.google.android.gms]:
+        ch.liri.operations
+      com.android.vending:
+        ch.liri.operations
+      com.google.android.permissioncontroller:
+        ch.liri.operations
+      com.google.android.ext.services:
+        ch.liri.operations
+      ch.liri.operations:
+        [com.android.inputdevices,com.samsung.android.app.esimkeystring,com.samsung.android.dqagent,com.sec.android.smartfpsadjuster,com.samsung.android.vtcamerasettings,com.sec.android.app.SecSetupWizard,com.sec.android.app.servicemodeapp,com.sec.android.app.RilPhoneNumberService,com.samsung.euicc,com.samsung.android.app.dressroom,com.android.providers.settings,com.samsung.android.wifi.ai,com.sec.mhs.smarttethering,com.samsung.android.bbc.bbcagent,com.samsung.android.bixby.wakeup,com.sec.android.app.hwmoduletest,com.sec.sve,com.sec.imsservice,com.samsung.android.mdecservice,com.samsung.oda.service,com.samsung.android.hdmapp,com.sec.android.emergencylauncher,com.samsung.android.smartswitchassistant,com.samsung.android.knox.mpos,com.sec.android.soagent,com.sec.imslogger,com.samsung.accessibility,com.samsung.gpuwatchapp,com.samsung.android.cameraxservice,com.samsung.android.lool,com.sec.app.RilErrorNotifier,com.samsung.android.photoremasterservice,com.samsung.android.themecenter,com.samsung.android.provider.filterprovider,com.samsung.android.aircommandmanager,com.samsung.android.ese,com.samsung.unifiedtp,com.samsung.android.smartface,com.android.location.fused,com.sec.android.app.factorykeystring,com.samsung.android.vexfwk.service,com.samsung.android.fmm,com.samsung.android.messageguardsync,com.samsung.android.brightnessbackupservice,com.sec.android.app.personalization,com.sec.facatfunction,com.android.server.telecom,com.sec.android.iaft,com.android.keychain,com.sec.automation,com.sec.epdg,com.samsung.android.camerasdkservice,android,com.sec.android.sdhms,com.qualcomm.qti.services.systemhelper,com.samsung.android.svcagent,com.samsung.android.providers.factory,com.samsung.android.emergency,com.samsung.sait.sohservice,com.samsung.android.stickercenter,com.sec.android.diagmonagent,com.samsung.android.da.daagent,com.samsung.aasaservice,com.sec.android.app.parser,com.samsung.android.knox.zt.framework,com.samsung.android.globalpostprocmgr,com.samsung.android.forest,com.samsung.android.knox.attestation,com.android.localtransport,com.qti.snapdragon.qdcm_ff,com.samsung.android.knox.pushmanager,com.wssyncmldm,com.samsung.SMT,com.skms.android.agent,com.samsung.android.motionphoto.app,com.sec.android.app.quicktool,com.sec.android.CcInfo,com.samsung.android.biometrics.app.setting,com.sec.android.app.wlantest,com.android.dynsystem,com.samsung.android.app.omcagent,com.sec.bcservice,com.sem.factoryapp,com.sec.usbsettings,com.sec.modem.settings,com.sec.factory.camera,com.android.settings]
+        com.google.android.webview
+      [com.android.inputdevices,com.samsung.android.app.esimkeystring,com.samsung.android.dqagent,com.sec.android.smartfpsadjuster,com.samsung.android.vtcamerasettings,com.sec.android.app.SecSetupWizard,com.sec.android.app.servicemodeapp,com.sec.android.app.RilPhoneNumberService,com.samsung.euicc,com.samsung.android.app.dressroom,com.android.providers.settings,com.samsung.android.wifi.ai,com.sec.mhs.smarttethering,com.samsung.android.bbc.bbcagent,com.samsung.android.bixby.wakeup,com.sec.android.app.hwmoduletest,com.sec.sve,com.sec.imsservice,com.samsung.android.mdecservice,com.samsung.oda.service,com.samsung.android.hdmapp,com.sec.android.emergencylauncher,com.samsung.android.smartswitchassistant,com.samsung.android.knox.mpos,com.sec.android.soagent,com.sec.imslogger,com.samsung.accessibility,com.samsung.gpuwatchapp,com.samsung.android.cameraxservice,com.samsung.android.lool,com.sec.app.RilErrorNotifier,com.samsung.android.photoremasterservice,com.samsung.android.themecenter,com.samsung.android.provider.filterprovider,com.samsung.android.aircommandmanager,com.samsung.android.ese,com.samsung.unifiedtp,com.samsung.android.smartface,com.android.location.fused,com.sec.android.app.factorykeystring,com.samsung.android.vexfwk.service,com.samsung.android.fmm,com.samsung.android.messageguardsync,com.samsung.android.brightnessbackupservice,com.sec.android.app.personalization,com.sec.facatfunction,com.android.server.telecom,com.sec.android.iaft,com.android.keychain,com.sec.automation,com.sec.epdg,com.samsung.android.camerasdkservice,android,com.sec.android.sdhms,com.qualcomm.qti.services.systemhelper,com.samsung.android.svcagent,com.samsung.android.providers.factory,com.samsung.android.emergency,com.samsung.sait.sohservice,com.samsung.android.stickercenter,com.sec.android.diagmonagent,com.samsung.android.da.daagent,com.samsung.aasaservice,com.sec.android.app.parser,com.samsung.android.knox.zt.framework,com.samsung.android.globalpostprocmgr,com.samsung.android.forest,com.samsung.android.knox.attestation,com.android.localtransport,com.qti.snapdragon.qdcm_ff,com.samsung.android.knox.pushmanager,com.wssyncmldm,com.samsung.SMT,com.skms.android.agent,com.samsung.android.motionphoto.app,com.sec.android.app.quicktool,com.sec.android.CcInfo,com.samsung.android.biometrics.app.setting,com.sec.android.app.wlantest,com.android.dynsystem,com.samsung.android.app.omcagent,com.sec.bcservice,com.sem.factoryapp,com.sec.usbsettings,com.sec.modem.settings,com.sec.factory.camera,com.android.settings]:
+        ch.liri.operations
+    User 150:
+  queryable via uses-library:
+
+Dexopt state:
+  [ch.liri.operations]
+    path: /data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==/base.apk
+      arm64: [status=speed-profile] [reason=install-dm] [primary-abi]
+        [location is /data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==/oat/arm64/base.odex]
+
+SPEG state:
+  Event #7: 01-08-2026 16:05:20.547 Success com.gen.bettermen took 2315 ms
+  Event #6: 13-07-2026 14:57:42.343 Success org.chromium.webapk.a4f80f005ce063935_v2 took 2346 ms
+  Event #5: 10-06-2026 01:26:36.439 Success ch.liri.operations took 2384 ms
+  Event #4: 09-06-2026 10:11:58.966 Success com.sec.android.app.sbrowser.webapk.wf0b45e5ddf5585a12fb50cacc57e34701 took 2251 ms
+  Event #3: 08-05-2026 01:05:08.895 Success com.petitbambou took 2371 ms
+  Event #2: 14-04-2026 11:02:52.770 Failure com.joytunes.simplypiano took 3417 ms
+  Event #1: 27-12-2025 18:48:07.665 Failure com.fastscreen.mirroringtv took 2631 ms
+  Event #0: 16-11-2025 09:26:52.149 Success ch.liri.operations took 2437 ms
+
+Profile utilization state:
+  Current state:
+    Version: 2.1.2
+    Start reason: boot-no-update
+    Start time: not started
+    Finish time: not finished
+    PU_StatusWatcher:
+      Initial thermal status: 0
+      Thermal status: 0
+      Screen off: false
+      Low battery: true
+    PU_DexoptTrigger:
+      Dexopt concurrency: 4
+      Dexopting: false
+    PU_Storage:
+      Stored apps:
+        com.zhiliaoapp.musically 18
+        com.whatsapp 19
+        com.google.android.gm 168
+        com.sec.android.app.sbrowser 175
+        com.google.android.apps.youtube.music 179
+        jbl.stc.com 187
+        com.snapchat.android 191
+        com.sec.android.gallery3d 201
+        com.sec.android.app.clockpackage 211
+        com.openai.chatgpt 215
+        com.instagram.android 226
+        com.google.android.apps.maps 251
+        com.petitbambou 256
+        com.microsoft.office.outlook 263
+        com.samsung.android.dialer 264
+        com.sipnetic.app 271
+        com.ubs.swidKXJ.android 274
+        com.vsco.cam 292
+        com.peoplefone.acrobits.android 293
+        com.sec.android.app.popupcalculator 296
+        com.samsung.android.app.notes 301
+        com.google.android.apps.authenticator2 306
+        com.ubercab 316
+        com.android.chrome 322
+        com.netflix.mediaclient 322
+        com.samsung.android.calendar 324
+        com.android.settings 326
+        com.procab.immobilier 327
+        nl.degiro.trader 333
+        com.simedhug.huginfokids 341
+        com.dreame.smartlife 342
+        com.x8bit.bitwarden 344
+        com.sec.android.app.camera 353
+        com.facebook.katana 355
+        com.barnasoba.timebetween 356
+        com.einnovation.temu 359
+        de.autodoc.gmbh 362
+        com.sec.android.app.myfiles 374
+        ch.viseca.visecaone 376
+        com.google.android.googlequicksearchbox 377
+        com.toyota.oneapp.eu 377
+        com.bcge.map4.android.release 389
+        com.ubs.swidK2Y.android 393
+        com.adobe.lrmobile 397
+        com.bcge.android.twt 406
+        com.samsung.android.app.contacts 411
+        com.mcdonalds.mobileapp 421
+        com.connect.enduser 423
+        com.microsoft.windowsintune.companyportal 423
+        com.sec.android.easyMover 425
+        com.disney.disneyplus 426
+        ch.liri.operations 429
+        com.android.vending 431
+        com.sec.android.app.music 436
+        com.samsung.knox.securefolder 444
+        ch.tipee.tipeego 446
+        com.mttnow.droid.easyjet 447
+        com.samsung.android.visionintelligence 448
+        com.samsung.android.oneconnect 452
+        com.samsung.android.app.tips 454
+        com.samsung.android.app.reminder 455
+        com.samsung.android.mdx 456
+        com.headway.books 460
+        com.alltrails.alltrails 463
+        com.easybrain.brick.balls.blast 463
+        com.adobe.reader 464
+        com.adobe.spark.post 464
+        air.nn.mobile.app.main 465
+        com.samsung.android.app.routines 467
+        com.google.android.apps.messaging 470
+        com.microsoft.todos 470
+        tv.ipko.android 478
+        com.microsoft.office.word 479
+        com.google.android.calendar 488
+        com.cronto.crontosign.swiss 490
+        com.microsoft.office.excel 503
+        com.bcge.android.mbanking 505
+        com.nimitv.android 511
+        video.reface.app 511
+        com.adobe.scan.android 515
+        com.wuliang.xapkinstaller 517
+        com.zzkko 518
+        ru.gavrikov.mocklocations 520
+        com.google.android.apps.tachyon 525
+        sk.antik.tvklan 525
+        com.google.android.youtube 528
+        digifit.virtuagym.client.android 535
+        com.wbd.stream 538
+        com.dropbox.android 539
+        com.facebook.orca 541
+        ch.yallo.selfcare 547
+        org.telegram.messenger.web 552
+        com.ipko.digitalchannels 556
+        com.gen.workoutme 559
+        com.github.android 561
+        com.amazon.mShop.android.shopping 563
+        com.booking 566
+        com.free.vpn.super.hotspot.open 567
+        com.fitloop 576
+        ch.coop.coopapp 578
+        com.linkedin.android 581
+        com.google.android.apps.playconsole 585
+        com.samsung.android.app.galaxyraw 586
+        ch.autoscout24.autoscout24 591
+        com.gopro.smarty 602
+        com.google.android.apps.translate 604
+        bdo.trybe.leomoves 611
+        ch.migros.app 624
+        com.boozt 642
+        com.azure.authenticator 650
+        ch.protonvpn.android 664
+        air.com.myheritage.mobile 672
+        ch.helsana.myHelsana 672
+        ch.klara.epost 672
+        ch.post.it.pcc 672
+        com.adobe.photoshop.retail 672
+        com.airbnb.android 672
+        com.camsam 672
+        com.ecffri.arrows 672
+        com.enreach.umca.swyx 672
+        com.fujifilm.instaxBo19 672
+        com.fujifilm.instaxup 672
+        com.google.android.apps.books 672
+        com.inditex.zara 672
+        com.microsoft.office.officehubrow 672
+        com.microsoft.office.powerpoint 672
+        com.mysports.branded.nonstopgym 672
+        com.northcube.sleepcycle 672
+        com.nth.swisspost 672
+        com.puzzlegames.puzzlebrickslegend 672
+        com.samsung.android.shealthmonitor 672
+        com.samsung.samsungportablessd 672
+        com.shazam.android 672
+        com.sixt.reservation 672
+        com.strong.mesh.atria 672
+        com.tcx.sipphone14 672
+        com.tripit 672
+        com.universal.remote.multi 672
+        com.wallet.crypto.trustapp 672
+        com.zoundindustries.marshallbt 672
+        de.tchibo.app 672
+        host.exp.exponent 672
+        org.linphone 672
+    Stored PU state:
+      Service:
+        Version: 2.1.2
+        Start reason: boot-after-ota
+        Start time: Sun Aug 02 18:11:45 GMT+02:00 2026 ts=1785687105737
+        Finish time: Sun Aug 02 18:37:51 GMT+02:00 2026 ts=1785688671332
+        Took time 1565sec
+      Watcher:
+        Initial thermal status: 2
+        Thermal status: 1
+        Screen off: true
+        Low battery: false
+      Metrics:
+        Predicted and launched apps: 8
+        Predicted apps: 23
+        Launched apps: 12
+        Best f1Score: 0.57142854, prefixCount: 9, precision: 0.6666667, recall: 0.5
+      Trigger:
+        Dexopt concurrency: 4
+        Dexopting: false
+        Hot apps list:
+          com.whatsapp, w=13, s=OPTIMIZED, optTimeMs=1785687380361, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=10701, filter=speed-profile]
+          com.zhiliaoapp.musically, w=19, s=OPTIMIZED, optTimeMs=1785688636746, cancelCount=1, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=140546, filter=speed-profile]
+          com.instagram.android, w=42, s=OPTIMIZED, optTimeMs=1785688450432, cancelCount=1, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=79793, filter=speed-profile]
+          com.sec.android.gallery3d, w=173, s=OPTIMIZED, optTimeMs=1785687252387, cancelCount=0, dexopt=SKIPPED, [primaryDex=true, reason=boot-after-ota, dex2oatTimeMs=0, filter=speed-profile]
+          com.openai.chatgpt, w=179, s=OPTIMIZED, optTimeMs=1785687377259, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=7434, filter=speed-profile]
+          com.snapchat.android, w=205, s=OPTIMIZED, optTimeMs=1785688419032, cancelCount=1, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=48400, filter=speed-profile]
+          com.google.android.apps.maps, w=209, s=OPTIMIZED, optTimeMs=1785688419874, cancelCount=1, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=49323, filter=speed-profile]
+          com.sec.android.app.sbrowser, w=209, s=OPTIMIZED, optTimeMs=1785688425829, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=6706, filter=speed-profile]
+          com.google.android.gm, w=213, s=OPTIMIZED, optTimeMs=1785688465087, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=44966, filter=speed-profile]
+          com.android.settings, w=215, s=OPTIMIZED, optTimeMs=1785688425930, cancelCount=0, dexopt=SKIPPED, [primaryDex=true, reason=vdex, dex2oatTimeMs=0, filter=verify]
+          com.sec.android.app.camera, w=215, s=OPTIMIZED, optTimeMs=1785688426045, cancelCount=0, dexopt=SKIPPED, [primaryDex=true, reason=boot-after-ota, dex2oatTimeMs=0, filter=speed-profile]
+          com.sec.android.app.popupcalculator, w=221, s=OPTIMIZED, optTimeMs=1785688427803, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=1671, filter=speed-profile]
+          com.android.chrome, w=224, s=OPTIMIZED, optTimeMs=1785688435020, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=2387, filter=speed-profile], [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=4376, filter=speed-profile], [primaryDex=true, reason=vdex-dm, dex2oatTimeMs=0, filter=verify], [primaryDex=true, reason=vdex-dm, dex2oatTimeMs=0, filter=verify], [primaryDex=true, reason=vdex-dm, dex2oatTimeMs=0, filter=verify]
+          com.google.android.apps.youtube.music, w=224, s=OPTIMIZED, optTimeMs=1785688466523, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=31282, filter=speed-profile]
+          com.samsung.android.dialer, w=225, s=OPTIMIZED, optTimeMs=1785688450524, cancelCount=0, dexopt=SKIPPED, [primaryDex=true, reason=boot-after-ota, dex2oatTimeMs=0, filter=speed-profile]
+          com.samsung.android.calendar, w=261, s=OPTIMIZED, optTimeMs=1785688462835, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=12106, filter=speed-profile]
+          com.sec.android.app.clockpackage, w=271, s=OPTIMIZED, optTimeMs=1785688473324, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=10225, filter=speed-profile]
+          com.google.android.googlequicksearchbox, w=278, s=OPTIMIZED, optTimeMs=1785688502404, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=37067, filter=speed-profile]
+          com.mcdonalds.mobileapp, w=331, s=OPTIMIZED, optTimeMs=1785688501160, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=34419, filter=speed-profile]
+          com.google.android.calendar, w=345, s=OPTIMIZED, optTimeMs=1785688496378, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=22903, filter=speed-profile]
+          com.connect.enduser, w=348, s=OPTIMIZED, optTimeMs=1785688640346, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=18204, filter=speed-profile]
+          com.android.vending, w=353, s=OPTIMIZED, optTimeMs=1785688671330, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=23453, filter=speed-profile], [primaryDex=false, reason=vdex, dex2oatTimeMs=0, filter=verify], [primaryDex=false, reason=vdex, dex2oatTimeMs=0, filter=verify], [primaryDex=false, reason=vdex, dex2oatTimeMs=0, filter=verify], [primaryDex=false, reason=vdex, dex2oatTimeMs=0, filter=verify], [primaryDex=false, reason=vdex, dex2oatTimeMs=0, filter=verify], [primaryDex=false, reason=vdex, dex2oatTimeMs=0, filter=verify]
+          com.adobe.reader, w=360, s=OPTIMIZED, optTimeMs=1785688669363, cancelCount=0, dexopt=PERFORMED, [primaryDex=true, reason=profile-utilization, dex2oatTimeMs=20274, filter=speed-profile], [primaryDex=true, reason=vdex-dm, dex2oatTimeMs=0, filter=verify], [primaryDex=true, reason=vdex-dm, dex2oatTimeMs=0, filter=verify], [primaryDex=false, reason=vdex, dex2oatTimeMs=0, filter=verify]
+    Stored SCPM state:
+      packages-9a07:
+        [                                            ]
+      disable-2bb4:
+        [                                            ]
+
+HeimdAllFS state:
+  [ch.liri.operations]
+    path: /data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==/base.apk
+    Compressed? False
+    path: /data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==/split_config.arm64_v8a.apk
+    Compressed? False
+    path: /data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==/split_config.en.apk
+    Compressed? False
+    path: /data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==/split_config.fr.apk
+    Compressed? False
+    path: /data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==/split_config.sq.apk
+    Compressed? False
+    path: /data/app/~~kFV4-cpEn-VdrT9z0M0egQ==/ch.liri.operations-pUh6AJK_JxT1TxthylCUlg==/split_config.xxhdpi.apk
+    Compressed? False
+  [ Summary ]
+    # of packages: 1 / # of packages in DATA: 1 (6)
+    Compressed apks info - sum of orig size: 24096 / sum of compr size : 24096
+  [Lfo status]
+

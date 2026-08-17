@@ -1,0 +1,90 @@
+﻿ssh : /tmp/canary_dlq_probe.py:7: DeprecationWarning: value_deserializer does not implement 
+kafka.serializer.Deserializer
+Au caractère C:\Users\jasiq\atmr\docs\ops\_release_exec_p0d_2026-08-16\canary_p0d\run_canary_smoke_p0d.ps1:181 : 10
++   $out = ssh -o BatchMode=yes $sshTarget "docker exec atmr-tracking-k ...
++          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/tmp/canary_dlq...er.Deserializer:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  consumer = KafkaConsumer(
+{
+  "scanned": 86,
+  "types": {
+    "event_id_payload_conflict": 80
+  },
+  "conflicts_all_window": 80,
+  "conflicts_recent": [
+    {
+      "dlq_offset": 536,
+      "error_type": "event_id_payload_conflict",
+      "eid": "trk_1786888872223_6bkp0g1r",
+      "seq": 22,
+      "recorded_at": "2026-08-16T15:15:37.969954+00:00",
+      "original_offset": 4494
+    },
+    {
+      "dlq_offset": 537,
+      "error_type": "event_id_payload_conflict",
+      "eid": "trk_1786888892408_cep39zqs",
+      "seq": 23,
+      "recorded_at": "2026-08-16T15:15:38.205127+00:00",
+      "original_offset": 4495
+    },
+    {
+      "dlq_offset": 538,
+      "error_type": "event_id_payload_conflict",
+      "eid": "trk_1786888912729_ekkumvl1",
+      "seq": 24,
+      "recorded_at": "2026-08-16T15:15:38.339595+00:00",
+      "original_offset": 4496
+    },
+    {
+      "dlq_offset": 539,
+      "error_type": "event_id_payload_conflict",
+      "eid": "trk_1786888872223_6bkp0g1r",
+      "seq": 22,
+      "recorded_at": "2026-08-16T14:01:12.106Z",
+      "original_offset": 4497
+    },
+    {
+      "dlq_offset": 540,
+      "error_type": "event_id_payload_conflict",
+      "eid": "trk_1786888892408_cep39zqs",
+      "seq": 23,
+      "recorded_at": "2026-08-16T14:01:32.279Z",
+      "original_offset": 4498
+    },
+    {
+      "dlq_offset": 541,
+      "error_type": "event_id_payload_conflict",
+      "eid": "trk_1786888912729_ekkumvl1",
+      "seq": 24,
+      "recorded_at": "2026-08-16T14:01:52.566Z",
+      "original_offset": 4499
+    },
+    {
+      "dlq_offset": 542,
+      "error_type": "event_id_payload_conflict",
+      "eid": "trk_1786888872223_6bkp0g1r",
+      "seq": 22,
+      "recorded_at": "2026-08-16T14:01:12.106Z",
+      "original_offset": 4500
+    },
+    {
+      "dlq_offset": 543,
+      "error_type": "event_id_payload_conflict",
+      "eid": "trk_1786888892408_cep39zqs",
+      "seq": 23,
+      "recorded_at": "2026-08-16T14:01:32.279Z",
+      "original_offset": 4501
+    },
+    {
+      "dlq_offset": 544,
+      "error_type": "event_id_payload_conflict",
+      "eid": "trk_1786888912729_ekkumvl1",
+      "seq": 24,
+      "recorded_at": "2026-08-16T14:01:52.566Z",
+      "original_offset": 4502
+    }
+  ]
+}

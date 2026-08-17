@@ -1,0 +1,1070 @@
+﻿ACTIVITY MANAGER SERVICES (dumpsys activity services)
+  User 0 active services:
+  * ServiceRecord{d04c043 u0 ch.liri.operations/expo.modules.location.services.LocationTaskService c:ch.liri.operations}
+    intent={cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService}
+    packageName=ch.liri.operations
+    processName=ch.liri.operations
+    targetSdkVersion=36
+    baseDir=/data/app/~~bmvu-PtdlRxdIWO5cIxejw==/ch.liri.operations-i5x6631CpqIdq9ZbFUAgAg==/base.apk
+    dataDir=/data/user/0/ch.liri.operations
+    app=ProcessRecord{54f4b8e 10041:ch.liri.operations/u0a907}
+    useNewWiuLogic_forCapabilities()=true
+    useNewWiuLogic_forStart()=true
+    useNewBfslLogic()=true
+    mAllowWiu_noBinding=DENIED
+    mAllowWiu_inBindService=DENIED
+    mAllowWiu_byBindings=DENIED
+    getFgsAllowWiu_legacy=DENIED
+    getFgsAllowWiu_new=DENIED
+    getFgsAllowWiu_forStart=DENIED
+    getFgsAllowWiu_forCapabilities=DENIED
+    allowUiJobScheduling=false
+    recentCallingPackage=ch.liri.operations
+    recentCallingUid=10907
+    mAllowStart_noBinding=DENIED
+    mAllowStart_inBindService=DENIED
+    mAllowStart_byBindings=DENIED
+    getFgsAllowStart_legacy=DENIED
+    getFgsAllowStart_new=DENIED
+    getFgsAllowStart=DENIED
+    startForegroundCount=126
+    infoAllowStartForeground=null
+    createTime=-7m50s240ms startingBgTimeout=--
+    lastActivity=-84ms restartTime=-7m43s237ms createdFromFg=true
+    startRequested=false delayedStop=false stopIfKilled=true callStart=false lastStartId=128
+ startCommandResult=3
+    Delivered Starts:
+    #0 id=1 dur=-7m43s237ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #1 id=2 dur=-1m56s916ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #2 id=3 dur=-1m56s652ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #3 id=4 dur=-1m56s332ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #4 id=5 dur=-1m56s28ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #5 id=6 dur=-1m55s711ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #6 id=7 dur=-1m55s412ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #7 id=8 dur=-1m55s74ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #8 id=9 dur=-1m54s787ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #9 id=10 dur=-1m54s434ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #10 id=11 dur=-1m54s115ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #11 id=12 dur=-1m53s789ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #12 id=13 dur=-1m53s448ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #13 id=14 dur=-1m53s154ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #14 id=15 dur=-1m52s810ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #15 id=16 dur=-1m52s456ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #16 id=17 dur=-1m52s114ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #17 id=18 dur=-1m51s741ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #18 id=19 dur=-1m51s384ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #19 id=20 dur=-1m51s42ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #20 id=21 dur=-1m50s767ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #21 id=22 dur=-1m50s435ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #22 id=23 dur=-1m50s104ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #23 id=24 dur=-1m49s744ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #24 id=25 dur=-1m49s456ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #25 id=26 dur=-1m49s37ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #26 id=27 dur=-1m48s698ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #27 id=28 dur=-1m48s319ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #28 id=29 dur=-1m48s19ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #29 id=30 dur=-1m47s658ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #30 id=31 dur=-1m47s337ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #31 id=32 dur=-1m46s928ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #32 id=33 dur=-1m46s606ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #33 id=34 dur=-1m46s215ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #34 id=35 dur=-1m45s793ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #35 id=36 dur=-1m45s416ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #36 id=37 dur=-1m45s116ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #37 id=38 dur=-1m44s812ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #38 id=39 dur=-1m44s453ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #39 id=40 dur=-1m44s112ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #40 id=41 dur=-1m43s713ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #41 id=42 dur=-1m43s397ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #42 id=43 dur=-1m42s993ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #43 id=44 dur=-1m11s214ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #44 id=45 dur=-1m10s895ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #45 id=46 dur=-1m10s521ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #46 id=47 dur=-1m10s44ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #47 id=48 dur=-1m9s658ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #48 id=49 dur=-1m9s334ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #49 id=50 dur=-1m8s996ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #50 id=51 dur=-1m8s602ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #51 id=52 dur=-1m8s239ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #52 id=53 dur=-1m7s984ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #53 id=54 dur=-1m7s627ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #54 id=55 dur=-1m7s293ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #55 id=56 dur=-1m6s947ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #56 id=57 dur=-1m6s689ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #57 id=58 dur=-1m6s347ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #58 id=59 dur=-1m6s64ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #59 id=60 dur=-20s524ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #60 id=61 dur=-20s206ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #61 id=62 dur=-19s943ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #62 id=63 dur=-19s708ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #63 id=64 dur=-19s423ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #64 id=65 dur=-19s191ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #65 id=66 dur=-18s890ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #66 id=67 dur=-18s607ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #67 id=68 dur=-18s318ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #68 id=69 dur=-18s38ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #69 id=70 dur=-17s766ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #70 id=71 dur=-17s448ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #71 id=72 dur=-17s221ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #72 id=73 dur=-16s847ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #73 id=74 dur=-16s506ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #74 id=75 dur=-16s218ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #75 id=76 dur=-15s902ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #76 id=77 dur=-15s659ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #77 id=78 dur=-15s360ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #78 id=79 dur=-15s8ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #79 id=80 dur=-14s726ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #80 id=81 dur=-14s393ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #81 id=82 dur=-14s45ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #82 id=83 dur=-13s792ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #83 id=84 dur=-13s494ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #84 id=85 dur=-13s189ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #85 id=86 dur=-12s871ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #86 id=87 dur=-12s566ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #87 id=88 dur=-12s217ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #88 id=89 dur=-11s894ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #89 id=90 dur=-11s569ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #90 id=91 dur=-11s239ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #91 id=92 dur=-10s968ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #92 id=93 dur=-10s620ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #93 id=94 dur=-10s335ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #94 id=95 dur=-10s118ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #95 id=96 dur=-9s804ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #96 id=97 dur=-9s523ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #97 id=98 dur=-9s223ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #98 id=99 dur=-8s872ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #99 id=100 dur=-8s590ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #100 id=101 dur=-8s328ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #101 id=102 dur=-8s14ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #102 id=103 dur=-7s734ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #103 id=104 dur=-7s487ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #104 id=105 dur=-7s161ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #105 id=106 dur=-6s904ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #106 id=107 dur=-6s639ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #107 id=108 dur=-6s332ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #108 id=109 dur=-6s38ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #109 id=110 dur=-5s723ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #110 id=111 dur=-5s374ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #111 id=112 dur=-5s73ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #112 id=113 dur=-4s807ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #113 id=114 dur=-4s490ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #114 id=115 dur=-4s234ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #115 id=116 dur=-3s921ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #116 id=117 dur=-3s601ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #117 id=118 dur=-3s303ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #118 id=119 dur=-2s985ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #119 id=120 dur=-2s684ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #120 id=121 dur=-2s377ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #121 id=122 dur=-2s6ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #122 id=123 dur=-1s710ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #123 id=124 dur=-1s442ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #124 id=125 dur=-1s121ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #125 id=126 dur=-766ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #126 id=127 dur=-407ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    #127 id=128 dur=-85ms dxc=1
+      intent=Intent { xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService (has extras) }
+    Bindings:
+    * IntentBindRecord{c38da15 CREATE}:
+      intent={xflg=0x4 cmp=ch.liri.operations/expo.modules.location.services.LocationTaskService}
+      binder=android.os.BinderProxy@7e5712a
+      requested=true received=true hasBound=true doRebind=false
+      * Client AppBindRecord{5a82b1b ProcessRecord{54f4b8e 10041:ch.liri.operations/u0a907}}
+        Per-process Connections:
+          ConnectionRecord{1a78bf u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@7c79ede flags=0x1}
+          ConnectionRecord{3eeeb6 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff2e651 flags=0x1}
+          ConnectionRecord{69da8e u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6793a89 flags=0x1}
+          ConnectionRecord{8261ad u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b96fec4 flags=0x1}
+          ConnectionRecord{9aac96 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2516fb1 flags=0x1}
+          ConnectionRecord{a70443 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@db0d5f2 flags=0x1}
+          ConnectionRecord{bd28b8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8719f1b flags=0x1}
+          ConnectionRecord{e7b301 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2ec30e8 flags=0x1}
+          ConnectionRecord{1189583 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@214e432 flags=0x1}
+          ConnectionRecord{123b5a4 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2cfdc37 flags=0x1}
+          ConnectionRecord{14fafed u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@fab9e04 flags=0x1}
+          ConnectionRecord{1601245 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@20132bc flags=0x1}
+          ConnectionRecord{16192bf u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@7b2e0de flags=0x1}
+          ConnectionRecord{1901c7c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@214b76f flags=0x1}
+          ConnectionRecord{19c4d4c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e02e97f flags=0x1}
+          ConnectionRecord{1a20042 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@350568d flags=0x1}
+          ConnectionRecord{1acb18c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2c136bf flags=0x1}
+          ConnectionRecord{202f915 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@87732cc flags=0x1}
+          ConnectionRecord{24c1e68 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d911d8b flags=0x1}
+          ConnectionRecord{29dde5c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@85ad4cf flags=0x1}
+          ConnectionRecord{2f1a648 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@37a58eb flags=0x1}
+          ConnectionRecord{3195f39 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e148b00 flags=0x1}
+          ConnectionRecord{3658088 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2c8342b flags=0x1}
+          ConnectionRecord{38f46b5 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8b3b2ec flags=0x1}
+          ConnectionRecord{39abcbb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e6c54a flags=0x1}
+          ConnectionRecord{3a1c0d8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@36703bb flags=0x1}
+          ConnectionRecord{3a78484 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f981a97 flags=0x1}
+          ConnectionRecord{3ad00c8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff88d6b flags=0x1}
+          ConnectionRecord{3b63fda u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@85f585 flags=0x1}
+          ConnectionRecord{4157314 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b056967 flags=0x1}
+          ConnectionRecord{469b61e u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4080a59 flags=0x1}
+          ConnectionRecord{497ee51 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ab60778 flags=0x1}
+          ConnectionRecord{49d9f8a u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6d545f5 flags=0x1}
+          ConnectionRecord{4dd6b43 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6b478f2 flags=0x1}
+          ConnectionRecord{4f12c0b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff1fda flags=0x1}
+          ConnectionRecord{5022b83 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@fef1232 flags=0x1}
+          ConnectionRecord{50f1d0f u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@cf1e26e flags=0x1}
+          ConnectionRecord{518c679 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8e00740 flags=0x1}
+          ConnectionRecord{51a59e2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b192ad flags=0x1}
+          ConnectionRecord{535bae3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@543c312 flags=0x1}
+          ConnectionRecord{5395f67 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a1cd726 flags=0x1}
+          ConnectionRecord{55b1fdc u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@da62c4f flags=0x1}
+          ConnectionRecord{595c44a u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@13805b5 flags=0x1}
+          ConnectionRecord{5c8e307 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f2fa546 flags=0x1}
+          ConnectionRecord{5d9f6f7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ba9d2f6 flags=0x1}
+          ConnectionRecord{5e1f8d1 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b0fabf8 flags=0x1}
+          ConnectionRecord{6129795 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3a03b4c flags=0x1}
+          ConnectionRecord{61b1428 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@18f524b flags=0x1}
+          ConnectionRecord{63753af u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5944f8e flags=0x1}
+          ConnectionRecord{65ab2d2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@628f95d flags=0x1}
+          ConnectionRecord{65d560b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@539b1da flags=0x1}
+          ConnectionRecord{6896929 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d7c6b0 flags=0x1}
+          ConnectionRecord{6cc5dc6 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d4367a1 flags=0x1}
+          ConnectionRecord{6dd3ff9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@46c76c0 flags=0x1}
+          ConnectionRecord{7052e57 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@1ebcbd6 flags=0x1}
+          ConnectionRecord{72e56fa u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2417525 flags=0x1}
+          ConnectionRecord{75e4de1 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@bc2eb48 flags=0x1}
+          ConnectionRecord{7c842e3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3eb6b12 flags=0x1}
+          ConnectionRecord{7ce57e8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@23a4d0b flags=0x1}
+          ConnectionRecord{7d3a1a2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@268216d flags=0x1}
+          ConnectionRecord{7dd9811 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3c54038 flags=0x1}
+          ConnectionRecord{8089ecb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c55a59a flags=0x1}
+          ConnectionRecord{827f9c9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6c9b5d0 flags=0x1}
+          ConnectionRecord{84dbc88 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d7be02b flags=0x1}
+          ConnectionRecord{85c5ba9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c2cf330 flags=0x1}
+          ConnectionRecord{878c1ab u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c7707fa flags=0x1}
+          ConnectionRecord{8be037c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@93dda6f flags=0x1}
+          ConnectionRecord{90d513c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4a6c72f flags=0x1}
+          ConnectionRecord{93e399a u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d2ebe45 flags=0x1}
+          ConnectionRecord{94fc91d u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2849df4 flags=0x1}
+          ConnectionRecord{96675d0 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@35a1193 flags=0x1}
+          ConnectionRecord{9ebb808 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@62e99ab flags=0x1}
+          ConnectionRecord{9f0e124 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@23085b7 flags=0x1}
+          ConnectionRecord{9f84f55 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6aefa0c flags=0x1}
+          ConnectionRecord{a15bce2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6c0a1ad flags=0x1}
+          ConnectionRecord{a3ba41c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5e1198f flags=0x1}
+          ConnectionRecord{a681bfc u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a5704ef flags=0x1}
+          ConnectionRecord{a78f340 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ebb5ec3 flags=0x1}
+          ConnectionRecord{a7dd14c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@727fd7f flags=0x1}
+          ConnectionRecord{b21ec68 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c05638b flags=0x1}
+          ConnectionRecord{b226d2b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@956317a flags=0x1}
+          ConnectionRecord{b38e012 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@89a939d flags=0x1}
+          ConnectionRecord{b3eb7c3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4d12772 flags=0x1}
+          ConnectionRecord{b42728c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c015bbf flags=0x1}
+          ConnectionRecord{b4c8855 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e3c770c flags=0x1}
+          ConnectionRecord{b70ffba u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@43648e5 flags=0x1}
+          ConnectionRecord{b9983c7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8cf5106 flags=0x1}
+          ConnectionRecord{bbba5f7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@58ddf6 flags=0x1}
+          ConnectionRecord{bddb7ab u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@71e15fa flags=0x1}
+          ConnectionRecord{be1e905 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@81d2c7c flags=0x1}
+          ConnectionRecord{be23c78 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@cf3a9db flags=0x1}
+          ConnectionRecord{c08b8ed u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6ef2b04 flags=0x1}
+          ConnectionRecord{c091387 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f8847c6 flags=0x1}
+          ConnectionRecord{c0b1ed5 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@15578c flags=0x1}
+          ConnectionRecord{c0b4425 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@934801c flags=0x1}
+          ConnectionRecord{c0f893b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@734f3ca flags=0x1}
+          ConnectionRecord{c11f0fa u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@86b3725 flags=0x1}
+          ConnectionRecord{c4ad34d u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e99b2e4 flags=0x1}
+          ConnectionRecord{cb573dc u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@365504f flags=0x1}
+          ConnectionRecord{cccf870 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a547ab3 flags=0x1}
+          ConnectionRecord{ce74229 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b1163b0 flags=0x1}
+          ConnectionRecord{cf5c252 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c1096dd flags=0x1}
+          ConnectionRecord{d1d43cb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@df1be9a flags=0x1}
+          ConnectionRecord{d370cb7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e1aa7b6 flags=0x1}
+          ConnectionRecord{d4f967b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4e3ee0a flags=0x1}
+          ConnectionRecord{d70ea72 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@99ccb7d flags=0x1}
+          ConnectionRecord{d9e7660 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e067a63 flags=0x1}
+          ConnectionRecord{dae0baa u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b14e95 flags=0x1}
+          ConnectionRecord{dd7cdf8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4e6915b flags=0x1}
+          ConnectionRecord{dd9e995 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f89954c flags=0x1}
+          ConnectionRecord{de989ca u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a117135 flags=0x1}
+          ConnectionRecord{e0c5be4 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f763377 flags=0x1}
+          ConnectionRecord{e18025b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3dd1d6a flags=0x1}
+          ConnectionRecord{e1bc8d0 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d14d093 flags=0x1}
+          ConnectionRecord{e294ac3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b4e2672 flags=0x1}
+          ConnectionRecord{e79dd5d u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ef55b34 flags=0x1}
+          ConnectionRecord{e9426b5 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b4012ec flags=0x1}
+          ConnectionRecord{e9908bf u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@de66ede flags=0x1}
+          ConnectionRecord{eba91f1 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5347598 flags=0x1}
+          ConnectionRecord{ecb64df u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f76277e flags=0x1}
+          ConnectionRecord{efbda83 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a161d32 flags=0x1}
+          ConnectionRecord{f05bcf6 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff70591 flags=0x1}
+          ConnectionRecord{f13b63c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e3a02f flags=0x1}
+          ConnectionRecord{f1bdb11 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@1d6af38 flags=0x1}
+          ConnectionRecord{f3b4579 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a112240 flags=0x1}
+          ConnectionRecord{f82a34c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d4d77f flags=0x1}
+          ConnectionRecord{fb76b29 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@dd490b0 flags=0x1}
+          ConnectionRecord{fca8491 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@9d80eb8 flags=0x1}
+    All Connections:
+      ConnectionRecord{c0b1ed5 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@15578c flags=0x1}
+      ConnectionRecord{bbba5f7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@58ddf6 flags=0x1}
+      ConnectionRecord{3b63fda u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@85f585 flags=0x1}
+      ConnectionRecord{dae0baa u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b14e95 flags=0x1}
+      ConnectionRecord{51a59e2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b192ad flags=0x1}
+      ConnectionRecord{f82a34c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d4d77f flags=0x1}
+      ConnectionRecord{6896929 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d7c6b0 flags=0x1}
+      ConnectionRecord{f13b63c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e3a02f flags=0x1}
+      ConnectionRecord{39abcbb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e6c54a flags=0x1}
+      ConnectionRecord{4f12c0b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff1fda flags=0x1}
+      ConnectionRecord{595c44a u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@13805b5 flags=0x1}
+      ConnectionRecord{61b1428 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@18f524b flags=0x1}
+      ConnectionRecord{f1bdb11 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@1d6af38 flags=0x1}
+      ConnectionRecord{7052e57 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@1ebcbd6 flags=0x1}
+      ConnectionRecord{1601245 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@20132bc flags=0x1}
+      ConnectionRecord{1901c7c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@214b76f flags=0x1}
+      ConnectionRecord{1189583 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@214e432 flags=0x1}
+      ConnectionRecord{9f0e124 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@23085b7 flags=0x1}
+      ConnectionRecord{7ce57e8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@23a4d0b flags=0x1}
+      ConnectionRecord{72e56fa u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2417525 flags=0x1}
+      ConnectionRecord{9aac96 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2516fb1 flags=0x1}
+      ConnectionRecord{7d3a1a2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@268216d flags=0x1}
+      ConnectionRecord{94fc91d u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2849df4 flags=0x1}
+      ConnectionRecord{1acb18c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2c136bf flags=0x1}
+      ConnectionRecord{3658088 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2c8342b flags=0x1}
+      ConnectionRecord{123b5a4 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2cfdc37 flags=0x1}
+      ConnectionRecord{e7b301 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2ec30e8 flags=0x1}
+      ConnectionRecord{1a20042 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@350568d flags=0x1}
+      ConnectionRecord{96675d0 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@35a1193 flags=0x1}
+      ConnectionRecord{cb573dc u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@365504f flags=0x1}
+      ConnectionRecord{3a1c0d8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@36703bb flags=0x1}
+      ConnectionRecord{2f1a648 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@37a58eb flags=0x1}
+      ConnectionRecord{6129795 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3a03b4c flags=0x1}
+      ConnectionRecord{7dd9811 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3c54038 flags=0x1}
+      ConnectionRecord{e18025b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3dd1d6a flags=0x1}
+      ConnectionRecord{7c842e3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3eb6b12 flags=0x1}
+      ConnectionRecord{469b61e u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4080a59 flags=0x1}
+      ConnectionRecord{b70ffba u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@43648e5 flags=0x1}
+      ConnectionRecord{6dd3ff9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@46c76c0 flags=0x1}
+      ConnectionRecord{90d513c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4a6c72f flags=0x1}
+      ConnectionRecord{b3eb7c3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4d12772 flags=0x1}
+      ConnectionRecord{d4f967b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4e3ee0a flags=0x1}
+      ConnectionRecord{dd7cdf8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4e6915b flags=0x1}
+      ConnectionRecord{eba91f1 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5347598 flags=0x1}
+      ConnectionRecord{65d560b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@539b1da flags=0x1}
+      ConnectionRecord{535bae3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@543c312 flags=0x1}
+      ConnectionRecord{63753af u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5944f8e flags=0x1}
+      ConnectionRecord{a3ba41c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5e1198f flags=0x1}
+      ConnectionRecord{65ab2d2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@628f95d flags=0x1}
+      ConnectionRecord{9ebb808 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@62e99ab flags=0x1}
+      ConnectionRecord{69da8e u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6793a89 flags=0x1}
+      ConnectionRecord{9f84f55 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6aefa0c flags=0x1}
+      ConnectionRecord{4dd6b43 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6b478f2 flags=0x1}
+      ConnectionRecord{a15bce2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6c0a1ad flags=0x1}
+      ConnectionRecord{827f9c9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6c9b5d0 flags=0x1}
+      ConnectionRecord{49d9f8a u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6d545f5 flags=0x1}
+      ConnectionRecord{c08b8ed u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6ef2b04 flags=0x1}
+      ConnectionRecord{bddb7ab u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@71e15fa flags=0x1}
+      ConnectionRecord{a7dd14c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@727fd7f flags=0x1}
+      ConnectionRecord{c0f893b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@734f3ca flags=0x1}
+      ConnectionRecord{16192bf u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@7b2e0de flags=0x1}
+      ConnectionRecord{1a78bf u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@7c79ede flags=0x1}
+      ConnectionRecord{be1e905 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@81d2c7c flags=0x1}
+      ConnectionRecord{29dde5c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@85ad4cf flags=0x1}
+      ConnectionRecord{c11f0fa u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@86b3725 flags=0x1}
+      ConnectionRecord{bd28b8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8719f1b flags=0x1}
+      ConnectionRecord{202f915 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@87732cc flags=0x1}
+      ConnectionRecord{b38e012 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@89a939d flags=0x1}
+      ConnectionRecord{38f46b5 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8b3b2ec flags=0x1}
+      ConnectionRecord{b9983c7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8cf5106 flags=0x1}
+      ConnectionRecord{518c679 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8e00740 flags=0x1}
+      ConnectionRecord{c0b4425 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@934801c flags=0x1}
+      ConnectionRecord{8be037c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@93dda6f flags=0x1}
+      ConnectionRecord{b226d2b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@956317a flags=0x1}
+      ConnectionRecord{d70ea72 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@99ccb7d flags=0x1}
+      ConnectionRecord{fca8491 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@9d80eb8 flags=0x1}
+      ConnectionRecord{f3b4579 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a112240 flags=0x1}
+      ConnectionRecord{de989ca u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a117135 flags=0x1}
+      ConnectionRecord{efbda83 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a161d32 flags=0x1}
+      ConnectionRecord{5395f67 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a1cd726 flags=0x1}
+      ConnectionRecord{cccf870 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a547ab3 flags=0x1}
+      ConnectionRecord{a681bfc u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a5704ef flags=0x1}
+      ConnectionRecord{497ee51 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ab60778 flags=0x1}
+      ConnectionRecord{4157314 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b056967 flags=0x1}
+      ConnectionRecord{5e1f8d1 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b0fabf8 flags=0x1}
+      ConnectionRecord{ce74229 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b1163b0 flags=0x1}
+      ConnectionRecord{e9426b5 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b4012ec flags=0x1}
+      ConnectionRecord{e294ac3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b4e2672 flags=0x1}
+      ConnectionRecord{8261ad u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b96fec4 flags=0x1}
+      ConnectionRecord{5d9f6f7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ba9d2f6 flags=0x1}
+      ConnectionRecord{75e4de1 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@bc2eb48 flags=0x1}
+      ConnectionRecord{b42728c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c015bbf flags=0x1}
+      ConnectionRecord{b21ec68 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c05638b flags=0x1}
+      ConnectionRecord{cf5c252 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c1096dd flags=0x1}
+      ConnectionRecord{85c5ba9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c2cf330 flags=0x1}
+      ConnectionRecord{8089ecb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c55a59a flags=0x1}
+      ConnectionRecord{878c1ab u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c7707fa flags=0x1}
+      ConnectionRecord{50f1d0f u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@cf1e26e flags=0x1}
+      ConnectionRecord{be23c78 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@cf3a9db flags=0x1}
+      ConnectionRecord{e1bc8d0 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d14d093 flags=0x1}
+      ConnectionRecord{93e399a u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d2ebe45 flags=0x1}
+      ConnectionRecord{6cc5dc6 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d4367a1 flags=0x1}
+      ConnectionRecord{84dbc88 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d7be02b flags=0x1}
+      ConnectionRecord{24c1e68 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d911d8b flags=0x1}
+      ConnectionRecord{55b1fdc u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@da62c4f flags=0x1}
+      ConnectionRecord{a70443 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@db0d5f2 flags=0x1}
+      ConnectionRecord{fb76b29 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@dd490b0 flags=0x1}
+      ConnectionRecord{e9908bf u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@de66ede flags=0x1}
+      ConnectionRecord{d1d43cb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@df1be9a flags=0x1}
+      ConnectionRecord{19c4d4c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e02e97f flags=0x1}
+      ConnectionRecord{d9e7660 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e067a63 flags=0x1}
+      ConnectionRecord{3195f39 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e148b00 flags=0x1}
+      ConnectionRecord{d370cb7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e1aa7b6 flags=0x1}
+      ConnectionRecord{b4c8855 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e3c770c flags=0x1}
+      ConnectionRecord{c4ad34d u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e99b2e4 flags=0x1}
+      ConnectionRecord{a78f340 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ebb5ec3 flags=0x1}
+      ConnectionRecord{e79dd5d u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ef55b34 flags=0x1}
+      ConnectionRecord{5c8e307 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f2fa546 flags=0x1}
+      ConnectionRecord{ecb64df u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f76277e flags=0x1}
+      ConnectionRecord{e0c5be4 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f763377 flags=0x1}
+      ConnectionRecord{c091387 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f8847c6 flags=0x1}
+      ConnectionRecord{dd9e995 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f89954c flags=0x1}
+      ConnectionRecord{3a78484 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f981a97 flags=0x1}
+      ConnectionRecord{14fafed u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@fab9e04 flags=0x1}
+      ConnectionRecord{5022b83 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@fef1232 flags=0x1}
+      ConnectionRecord{3eeeb6 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff2e651 flags=0x1}
+      ConnectionRecord{f05bcf6 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff70591 flags=0x1}
+      ConnectionRecord{3ad00c8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff88d6b flags=0x1}
+
+  Connection bindings to services:
+  * ConnectionRecord{c0b1ed5 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@15578c flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@15578c flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{bbba5f7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@58ddf6 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@58ddf6 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{3b63fda u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@85f585 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@85f585 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{dae0baa u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b14e95 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@b14e95 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{51a59e2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b192ad flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@b192ad flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{f82a34c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d4d77f flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@d4d77f flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{6896929 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d7c6b0 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@d7c6b0 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{f13b63c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e3a02f flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@e3a02f flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{39abcbb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e6c54a flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@e6c54a flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{4f12c0b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff1fda flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@ff1fda flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{595c44a u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@13805b5 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@13805b5 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{61b1428 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@18f524b flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@18f524b flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{f1bdb11 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@1d6af38 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@1d6af38 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{7052e57 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@1ebcbd6 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@1ebcbd6 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{1601245 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@20132bc flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@20132bc flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{1901c7c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@214b76f flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@214b76f flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{1189583 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@214e432 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@214e432 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{9f0e124 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@23085b7 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@23085b7 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{7ce57e8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@23a4d0b flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@23a4d0b flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{72e56fa u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2417525 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@2417525 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{9aac96 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2516fb1 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@2516fb1 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{7d3a1a2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@268216d flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@268216d flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{94fc91d u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2849df4 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@2849df4 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{1acb18c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2c136bf flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@2c136bf flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{3658088 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2c8342b flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@2c8342b flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{123b5a4 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2cfdc37 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@2cfdc37 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{e7b301 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@2ec30e8 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@2ec30e8 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{1a20042 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@350568d flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@350568d flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{96675d0 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@35a1193 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@35a1193 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{cb573dc u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@365504f flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@365504f flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{3a1c0d8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@36703bb flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@36703bb flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{2f1a648 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@37a58eb flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@37a58eb flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{6129795 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3a03b4c flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@3a03b4c flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{7dd9811 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3c54038 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@3c54038 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{e18025b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3dd1d6a flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@3dd1d6a flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{7c842e3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@3eb6b12 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@3eb6b12 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{469b61e u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4080a59 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@4080a59 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{b70ffba u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@43648e5 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@43648e5 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{6dd3ff9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@46c76c0 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@46c76c0 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{90d513c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4a6c72f flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@4a6c72f flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{b3eb7c3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4d12772 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@4d12772 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{d4f967b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4e3ee0a flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@4e3ee0a flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{dd7cdf8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@4e6915b flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@4e6915b flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{eba91f1 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5347598 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@5347598 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{65d560b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@539b1da flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@539b1da flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{535bae3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@543c312 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@543c312 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{63753af u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5944f8e flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@5944f8e flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{a3ba41c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@5e1198f flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@5e1198f flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{65ab2d2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@628f95d flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@628f95d flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{9ebb808 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@62e99ab flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@62e99ab flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{69da8e u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6793a89 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@6793a89 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{9f84f55 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6aefa0c flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@6aefa0c flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{4dd6b43 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6b478f2 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@6b478f2 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{a15bce2 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6c0a1ad flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@6c0a1ad flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{827f9c9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6c9b5d0 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@6c9b5d0 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{49d9f8a u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6d545f5 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@6d545f5 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{c08b8ed u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@6ef2b04 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@6ef2b04 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{bddb7ab u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@71e15fa flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@71e15fa flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{a7dd14c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@727fd7f flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@727fd7f flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{c0f893b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@734f3ca flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@734f3ca flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{16192bf u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@7b2e0de flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@7b2e0de flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{1a78bf u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@7c79ede flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@7c79ede flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{be1e905 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@81d2c7c flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@81d2c7c flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{29dde5c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@85ad4cf flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@85ad4cf flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{c11f0fa u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@86b3725 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@86b3725 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{bd28b8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8719f1b flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@8719f1b flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{202f915 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@87732cc flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@87732cc flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{b38e012 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@89a939d flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@89a939d flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{38f46b5 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8b3b2ec flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@8b3b2ec flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{b9983c7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8cf5106 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@8cf5106 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{518c679 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@8e00740 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@8e00740 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{c0b4425 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@934801c flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@934801c flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{8be037c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@93dda6f flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@93dda6f flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{b226d2b u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@956317a flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@956317a flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{d70ea72 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@99ccb7d flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@99ccb7d flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{fca8491 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@9d80eb8 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@9d80eb8 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{f3b4579 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a112240 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@a112240 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{de989ca u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a117135 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@a117135 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{efbda83 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a161d32 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@a161d32 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{5395f67 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a1cd726 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@a1cd726 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{cccf870 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a547ab3 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@a547ab3 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{a681bfc u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@a5704ef flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@a5704ef flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{497ee51 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ab60778 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@ab60778 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{4157314 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b056967 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@b056967 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{5e1f8d1 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b0fabf8 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@b0fabf8 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{ce74229 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b1163b0 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@b1163b0 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{e9426b5 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b4012ec flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@b4012ec flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{e294ac3 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b4e2672 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@b4e2672 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{8261ad u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@b96fec4 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@b96fec4 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{5d9f6f7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ba9d2f6 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@ba9d2f6 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{75e4de1 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@bc2eb48 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@bc2eb48 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{b42728c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c015bbf flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@c015bbf flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{b21ec68 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c05638b flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@c05638b flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{cf5c252 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c1096dd flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@c1096dd flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{85c5ba9 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c2cf330 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@c2cf330 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{8089ecb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c55a59a flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@c55a59a flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{878c1ab u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@c7707fa flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@c7707fa flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{50f1d0f u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@cf1e26e flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@cf1e26e flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{be23c78 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@cf3a9db flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@cf3a9db flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{e1bc8d0 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d14d093 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@d14d093 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{93e399a u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d2ebe45 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@d2ebe45 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{6cc5dc6 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d4367a1 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@d4367a1 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{84dbc88 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d7be02b flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@d7be02b flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{24c1e68 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@d911d8b flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@d911d8b flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{55b1fdc u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@da62c4f flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@da62c4f flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{a70443 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@db0d5f2 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@db0d5f2 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{fb76b29 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@dd490b0 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@dd490b0 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{e9908bf u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@de66ede flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@de66ede flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{d1d43cb u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@df1be9a flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@df1be9a flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{19c4d4c u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e02e97f flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@e02e97f flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{d9e7660 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e067a63 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@e067a63 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{3195f39 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e148b00 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@e148b00 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{d370cb7 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e1aa7b6 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@e1aa7b6 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{b4c8855 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e3c770c flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@e3c770c flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{c4ad34d u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@e99b2e4 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@e99b2e4 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{a78f340 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ebb5ec3 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@ebb5ec3 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{e79dd5d u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ef55b34 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@ef55b34 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{5c8e307 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f2fa546 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@f2fa546 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{ecb64df u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f76277e flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@f76277e flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{e0c5be4 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f763377 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@f763377 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{c091387 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f8847c6 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@f8847c6 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{dd9e995 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f89954c flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@f89954c flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{3a78484 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@f981a97 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@f981a97 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{14fafed u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@fab9e04 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@fab9e04 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{5022b83 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@fef1232 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@fef1232 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{3eeeb6 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff2e651 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@ff2e651 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{f05bcf6 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff70591 flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@ff70591 flags=0x1
+    ongoingCalls=false
+  * ConnectionRecord{3ad00c8 u0 CR ch.liri.operations/expo.modules.location.services.LocationTaskService:@ff88d6b flags=0x1}
+    binding=AppBindRecord{5a82b1b ch.liri.operations/expo.modules.location.services.LocationTaskService:ch.liri.operations}
+    conn=android.os.BinderProxy@ff88d6b flags=0x1
+    ongoingCalls=false

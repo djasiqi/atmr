@@ -1,0 +1,11 @@
+﻿­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=1)
+LABEL T6_lock_30s
+HEALTH_N 20
+H|2026-08-14 10:30:55.134636+02:00|background|fgs=False|nat=False|ph=startLocationUpdatesAsync|bef=False|aft=False|nfix=425|fix=3|cr=fgs_not_running|err=[nlo_start_cap_mssot5kp_cg0z8004gq] ensure_manager_state:fgs_recover: Error/ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED: Call to function 'ExpoLocation.startLocationUpdatesAsync' has |trig=native_start_failure:start_exception
+H|2026-08-14 10:31:13.240447+02:00|active|fgs=False|nat=False|ph=startLocationUpdatesAsync|bef=False|aft=False|nfix=458|fix=36|cr=fgs_not_running|err=[nlo_start_cap_mssot5kp_cg0z8004gq] ensure_manager_state:fgs_recover: Error/ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED: Call to function 'ExpoLocation.startLocationUpdatesAsync' has |trig=None
+H|2026-08-14 10:31:13.402442+02:00|background|fgs=False|nat=False|ph=startLocationUpdatesAsync|bef=False|aft=False|nfix=459|fix=36|cr=fgs_not_running|err=[nlo_start_cap_mssot5kp_cg0z8004gq] ensure_manager_state:fgs_recover: Error/ERR_FOREGROUND_SERVICE_START_NOT_ALLOWED: Call to function 'ExpoLocation.startLocationUpdatesAsync' has |trig=health_monitor:fgs_not_running
+SUMMARY flips=9 nlo=3 failish=0
+FGS_TRUE_RATIO 12/20
+LOC_N 2
+LOC_LAST [(datetime.datetime(2026, 8, 14, 10, 30, 39, 79859, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),), (datetime.datetime(2026, 8, 14, 10, 29, 27, 425921, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),), (datetime.datetime(2026, 8, 14, 10, 28, 32, 375110, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))),)]

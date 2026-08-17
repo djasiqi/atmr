@@ -18,7 +18,19 @@ query() {
   echo "## watchdog"
   query 'sum by (reason) (tracking_stale_fix_watchdog_kick_total)'
   echo "## kafka lag"
-  query 'tracking_kafka_consumer_lag'
+  query 'sum(tracking_kafka_consumer_lag)'
+  echo "## kafka dlq"
+  query 'sum(tracking_kafka_dlq_messages_total)'
+  echo "## kafka publish errors"
+  query 'sum(tracking_kafka_publish_errors_total)'
+  echo "## http async accepted"
+  query 'sum(tracking_http_accepted_async_total)'
+  echo "## e2e p50"
+  query 'histogram_quantile(0.50, sum(rate(tracking_kafka_e2e_latency_seconds_bucket[5m])) by (le))'
+  echo "## e2e p95"
+  query 'histogram_quantile(0.95, sum(rate(tracking_kafka_e2e_latency_seconds_bucket[5m])) by (le))'
+  echo "## e2e p99"
+  query 'histogram_quantile(0.99, sum(rate(tracking_kafka_e2e_latency_seconds_bucket[5m])) by (le))'
   echo "## postgres activity"
   query 'pg_stat_activity_count'
   echo "## redis"

@@ -1,0 +1,26 @@
+﻿[
+  {
+    "id": "019fe969-658e-752d-994d-269e4fd24486",
+    "createdAt": "2026-08-10T02:03:46.446Z",
+    "group": "d4392ee1-a7df-4dbe-a5e3-cd39a00b9248",
+    "branch": "production",
+    "message": "fix(gps): pr├®sence FG hors fen├¬tre + v├®rit├® marker canary",
+    "runtimeVersion": "1.0.11",
+    "platform": "ios",
+    "manifestPermalink": "https://u.expo.dev/update/019fe969-658e-752d-994d-269e4fd24486",
+    "isRollBackToEmbedded": false,
+    "gitCommitHash": "0cdd5e2fc553a3c1dbd5221787c251b47b8a27d2"
+  },
+  {
+    "id": "019fe969-658e-7ae8-ab13-ada964a43aff",
+    "createdAt": "2026-08-10T02:03:46.446Z",
+    "group": "d4392ee1-a7df-4dbe-a5e3-cd39a00b9248",
+    "branch": "production",
+    "message": "fix(gps): pr├®sence FG hors fen├¬tre + v├®rit├® marker canary",
+    "runtimeVersion": "1.0.11",
+    "platform": "android",
+    "manifestPermalink": "https://u.expo.dev/update/019fe969-658e-7ae8-ab13-ada964a43aff",
+    "isRollBackToEmbedded": false,
+    "gitCommitHash": "0cdd5e2fc553a3c1dbd5221787c251b47b8a27d2"
+  }
+]

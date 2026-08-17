@@ -1,0 +1,106 @@
+﻿docker : /usr/local/lib/python3.11/site-packages/sentry_sdk/utils.py:1353: EventletDeprecationWarning: 
+Au caractère C:\Users\jasiq\AppData\Local\Temp\ps-script-8098bc78-5b37-4d7f-8f98-192f61a66c8f.ps1:93 : 115
++ ... drivers.py; docker exec atmrstg-backend-1 python /tmp/list_drivers.py ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (/usr/local/lib/...cationWarning: :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  from eventlet.patcher import is_monkey_patched  # type: ignore
+Variables recommand├®es manquantes pour production: SENTRY_DSN. L'application fonctionnera mais certaines 
+fonctionnalit├®s peuvent ├¬tre limit├®es.
+[config] GATEWAY_APP_AUTH_URL=http://127.0.0.1:5000/api/v1/auth/login : en prod Docker, utiliser 
+http://backend:5000/... (d├®finir explicitement dans .env.production)
+[config] GATEWAY_DEMO_AUTH_URL=http://127.0.0.1:5000/api/v1/auth/login : en prod Docker, utiliser 
+http://backend:5000/... (d├®finir explicitement dans .env.production)
+[2026-08-14 13:34:51,198] ERROR in config: SAFERPAY_API_BASE_URL semble pointer vers un environnement de test 
+(https://test.saferpay.com/api) alors que FLASK_CONFIG=production. Corriger l'URL ou definir 
+SAFERPAY_ALLOW_TEST_API_IN_PRODUCTION=1 pour une exception explicite.
+[2.9] OpenTelemetry non install├® - installer avec: pip install -r requirements-otel.txt
+­ƒöî [SOCKET.IO] Flask-SocketIO initialis├® avec path=/socket.io
+Ô£à [Socket.IO] Message queue Redis active (workers=1)
+[2026-08-14 13:34:51,783] WARNING in app: [Security] Niveau de log forc├® ├á WARNING en production (APP_LOG_LEVEL 
+ignor├® pour s├®curit├®)
+DRIVERS 19
+D 1 uid 3 email stgsingle_44cef0eb@staging.invalid role DRIVER active True
+D 2 uid 4 email stgnone_d8f89fec@staging.invalid role DRIVER active True
+D 3 uid 5 email stgamb_eba22200@staging.invalid role DRIVER active True
+D 4 uid 6 email stgstale_d74ffb51@staging.invalid role DRIVER active True
+D 5 uid 7 email stgterm_49a4c08a@staging.invalid role DRIVER active True
+D 6 uid 8 email stgmis_8465dff3@staging.invalid role DRIVER active True
+D 7 uid 11 email stgsingle_13b66aba@staging.invalid role DRIVER active True
+D 8 uid 12 email stgnone_2e00bfbc@staging.invalid role DRIVER active True
+D 9 uid 13 email stgamb_4bc8c314@staging.invalid role DRIVER active True
+D 10 uid 14 email stgstale_574f71f2@staging.invalid role DRIVER active True
+D 11 uid 15 email stgterm_c6fdfea8@staging.invalid role DRIVER active True
+D 12 uid 16 email stgmis_015493c0@staging.invalid role DRIVER active True
+D 13 uid 19 email stgsingle_d2d5dae4@staging.invalid role DRIVER active True
+D 14 uid 20 email stgnone_852144e1@staging.invalid role DRIVER active True
+D 15 uid 21 email stgamb_8da1322a@staging.invalid role DRIVER active True
+D 16 uid 22 email stgstale_00a363a7@staging.invalid role DRIVER active True
+D 17 uid 23 email stgterm_d2ddbf91@staging.invalid role DRIVER active True
+D 18 uid 24 email stgmis_aea85603@staging.invalid role DRIVER active True
+D 19 uid 25 email atmr@atmr.ch role DRIVER active True
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.UndefinedTable: relation "mission" does not exist
+LINE 3:             FROM mission
+                         ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/tmp/list_drivers.py", line 23, in <module>
+    missions = db.session.execute(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/scoping.py", line 764, in execute
+    return self._proxied.execute(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2373, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2280, in _execute_internal
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1421, in execute
+    return meth(
+           ^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedTable) relation "mission" does not exist
+LINE 3:             FROM mission
+                         ^
+
+[SQL: 
+            SELECT id, status, driver_id
+            FROM mission
+            WHERE id = 26 OR driver_id IN (19, 20, 21)
+            ORDER BY id DESC
+            LIMIT 15
+            ]
+(Background on this error at: https://sqlalche.me/e/20/f405)

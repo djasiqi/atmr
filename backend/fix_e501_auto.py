@@ -8,17 +8,21 @@ Stratégie :
 4. Code complexe : SKIP (révision manuelle)
 """
 
+from __future__ import annotations
+
 import json
 import re
 import subprocess
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 MAX_LINE_LENGTH = 88
 MIN_PARTS_IN_ERROR_LINE = 4
+TOP_FILES_TO_ANALYZE = 10
 
 
-def get_e501_errors() -> list[dict[str, Any]]:
+def get_e501_errors(*, cwd: Path | None = None) -> list[dict[str, Any]]:
     """Récupère toutes les erreurs E501 via ruff."""
     result = subprocess.run(
         [
@@ -34,11 +38,11 @@ def get_e501_errors() -> list[dict[str, Any]]:
         ],
         capture_output=True,
         text=True,
-        cwd=Path(__file__).parent,
+        cwd=cwd or Path(__file__).parent,
         check=False,
     )
 
-    errors = []
+    errors: list[dict[str, Any]] = []
     try:
         data = json.loads(result.stdout)
         for item in data:
@@ -74,7 +78,7 @@ def fix_comment_line(line: str) -> list[str]:
 
     # Découper le commentaire en mots
     words = comment_text.split()
-    lines = []
+    lines: list[str] = []
     current_line = ""
 
     for word in words:
@@ -125,9 +129,9 @@ def fix_docstring_line(file_lines: list[str], line_idx: int) -> tuple[list[str],
     return [line], False
 
 
-def analyze_file(filepath: str) -> dict[str, Any]:
+def analyze_file(filepath: str, *, base_dir: Path | None = None) -> dict[str, Any]:
     """Analyse un fichier et retourne les statistiques de correction."""
-    file_path = Path(__file__).parent / filepath
+    file_path = (base_dir or Path(__file__).parent) / filepath
 
     if not file_path.exists():
         return {"error": "File not found"}
@@ -138,7 +142,7 @@ def analyze_file(filepath: str) -> dict[str, Any]:
     except Exception as e:
         return {"error": str(e)}
 
-    stats = {
+    stats: dict[str, Any] = {
         "total_lines": len(lines),
         "e501_lines": 0,
         "comments_fixed": 0,
@@ -163,80 +167,104 @@ def analyze_file(filepath: str) -> dict[str, Any]:
     return stats
 
 
-def main():
-    """Point d'entrée principal."""
-    print("=" * 80)
-    print("ANALYSE DES E501 - Correction Semi-Automatique")
-    print("=" * 80)
-    print()
+def format_file_stats(filepath: str, stats: dict[str, Any]) -> str:
+    """Formate le bloc de stats d'un fichier."""
+    return "\n".join(
+        [
+            f"  {filepath}:",
+            f"    - Commentaires corrigeables : {stats.get('comments_fixed', 0)}",
+            f"    - Docstrings corrigeables   : {stats.get('docstrings_fixed', 0)}",
+            f"    - Révision manuelle         : {stats.get('manual_review', 0)}",
+            "",
+        ]
+    )
 
-    # Récupérer les erreurs
-    print("[1/3] Récupération des erreurs E501 via ruff...")
-    errors = get_e501_errors()
-    print(f"      Trouvé : {len(errors)} lignes avec E501")
-    print()
 
-    # Grouper par fichier
-    from collections import Counter
+def format_global_summary(total_stats: dict[str, int]) -> str:
+    """Formate le résumé global + prochaines étapes."""
+    lines = [
+        "[3/3] RÉSUMÉ GLOBAL (Top 10 fichiers)",
+        "=" * 80,
+        f"  Fichiers analysés           : {total_stats['files']}",
+        f"  Commentaires auto-fixables  : {total_stats['comments_fixable']}",
+        f"  Docstrings auto-fixables    : {total_stats['docstrings_fixable']}",
+        f"  Lignes nécessitant révision : {total_stats['manual_review']}",
+        "=" * 80,
+        "",
+    ]
+    auto_fixable = total_stats["comments_fixable"] + total_stats["docstrings_fixable"]
+    if auto_fixable > 0:
+        lines.extend(
+            [
+                f"[OK] {auto_fixable} lignes peuvent etre corrigees automatiquement",
+                (
+                    f"[!!] {total_stats['manual_review']} lignes necessitent une "
+                    "revision manuelle"
+                ),
+                "",
+                "PROCHAINES ETAPES :",
+                "  1. Implementer la fonction apply_fixes() pour appliquer les corrections",
+                "  2. Creer des backups avant modification",
+                "  3. Tester sur un fichier pilote",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "[!!] Aucune correction automatique triviale detectee",
+                "    La plupart des E501 necessitent une revision manuelle",
+            ]
+        )
+    return "\n".join(lines)
 
+
+def aggregate_top_file_stats(
+    errors: list[dict[str, Any]],
+    *,
+    base_dir: Path | None = None,
+    top_n: int = TOP_FILES_TO_ANALYZE,
+) -> tuple[dict[str, int], str]:
+    """Analyse le top N fichiers et retourne (totaux, rapport texte)."""
     files_counter = Counter(err["file"] for err in errors)
-
-    print("[2/3] Analyse des fichiers...")
-    print()
-
     total_stats = {
         "files": 0,
         "comments_fixable": 0,
         "docstrings_fixable": 0,
         "manual_review": 0,
     }
-
-    # Analyser les 10 premiers fichiers avec le plus d'erreurs
-    top_files = files_counter.most_common(10)
-
-    for filepath, _count in top_files:
-        stats = analyze_file(filepath)
+    blocks: list[str] = []
+    for filepath, _count in files_counter.most_common(top_n):
+        stats = analyze_file(filepath, base_dir=base_dir)
         if "error" in stats:
             continue
-
         total_stats["files"] += 1
         total_stats["comments_fixable"] += stats.get("comments_fixed", 0)
         total_stats["docstrings_fixable"] += stats.get("docstrings_fixed", 0)
         total_stats["manual_review"] += stats.get("manual_review", 0)
+        blocks.append(format_file_stats(filepath, stats))
+    report = "\n".join(blocks)
+    if report:
+        report += "\n"
+    report += format_global_summary(total_stats)
+    return total_stats, report
 
-        print(f"  {filepath}:")
-        print(f"    - Commentaires corrigeables : {stats.get('comments_fixed', 0)}")
-        print(f"    - Docstrings corrigeables   : {stats.get('docstrings_fixed', 0)}")
-        print(f"    - Révision manuelle         : {stats.get('manual_review', 0)}")
-        print()
 
-    print("[3/3] RÉSUMÉ GLOBAL (Top 10 fichiers)")
+def main(*, cwd: Path | None = None, base_dir: Path | None = None) -> None:
+    """Point d'entrée principal."""
     print("=" * 80)
-    print(f"  Fichiers analysés           : {total_stats['files']}")
-    print(f"  Commentaires auto-fixables  : {total_stats['comments_fixable']}")
-    print(f"  Docstrings auto-fixables    : {total_stats['docstrings_fixable']}")
-    print(f"  Lignes nécessitant révision : {total_stats['manual_review']}")
+    print("ANALYSE DES E501 - Correction Semi-Automatique")
     print("=" * 80)
     print()
 
-    auto_fixable = total_stats["comments_fixable"] + total_stats["docstrings_fixable"]
-    if auto_fixable > 0:
-        print(f"[OK] {auto_fixable} lignes peuvent etre corrigees automatiquement")
-        msg = (
-            f"[!!] {total_stats['manual_review']} lignes necessitent une "
-            "revision manuelle"
-        )
-        print(msg)
-        print()
-        print("PROCHAINES ETAPES :")
-        print(
-            "  1. Implementer la fonction apply_fixes() pour appliquer les corrections"
-        )
-        print("  2. Creer des backups avant modification")
-        print("  3. Tester sur un fichier pilote")
-    else:
-        print("[!!] Aucune correction automatique triviale detectee")
-        print("    La plupart des E501 necessitent une revision manuelle")
+    print("[1/3] Récupération des erreurs E501 via ruff...")
+    errors = get_e501_errors(cwd=cwd)
+    print(f"      Trouvé : {len(errors)} lignes avec E501")
+    print()
+
+    print("[2/3] Analyse des fichiers...")
+    print()
+    _total_stats, report = aggregate_top_file_stats(errors, base_dir=base_dir)
+    print(report)
 
 
 if __name__ == "__main__":

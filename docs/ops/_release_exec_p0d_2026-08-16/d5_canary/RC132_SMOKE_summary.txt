@@ -1,0 +1,50 @@
+# RC132 SMOKE — summary
+
+```text
+BINARY     = 1.0.11 / versionCode 132 (AAB production, SHA S a851cf15…)
+DEVICE     = SM-S911B @ 192.168.1.33:34343
+DRIVER     = 20135
+MISSION    = 38243 IN_PROGRESS
+WINDOW     = 2026-08-17 13:15:37 -> 13:21:08 (+02)
+PHASES     = FG 90s + HOME 180s
+BACKEND    = OBSERVATION ONLY
+```
+
+## Gates
+
+```text
+unexpected Unregister background-location-task = 0 ✅
+Register↔Unregister storm                      = 0 ✅
+Finished                                       = continue (deltas 0–3 / fenêtre, sans Unregister) ✅
+PUT /api/v1/driver/me/location                 = continue (6–32 / fenêtre ~60s) ✅
+LOC persisted (fenêtre smoke UTC)              = 14 ✅ (LOC_SMOKE_WINDOW)
+FGS end + post-smoke                           = isFg=true startReq=true ✅
+crash / ANR (package)                          = 0 ✅
+```
+
+### Notes mesure
+
+- `loc_n=-1` dans `samples_RC132_SMOKE.csv` = snapshot Python du script cassé (quoting) — **n’invalide pas** le gate.
+- Gate LOC confirmé hors bande : `LOC_SMOKE_WINDOW=14` ; dernier event `2026-08-17 11:18:26Z` (~+50s HOME). Après cela PUT logcat continue ; densification LOC à surveiller en rollout (non-blocker ownership / Unregister).
+- Préflight : `LOC_120s=7` avant smoke.
+
+## Verdict
+
+```text
+RC132 SMOKE        = PASS ✅
+B2                 = FIXED ✅
+RELEASE REVIEW     = PASS ✅
+RC132              = VALIDATED ✅
+
+PLAY SUBMISSION    = HOLD ⛔ (décision explicite GO/NO-GO rollout requise)
+DISTRIBUTION       = NO-GO jusqu'à GO PLAY ROLLOUT
+ROLLBACK TARGET    = versionCode 126
+```
+
+## Artefacts
+
+- `timeline_RC132_SMOKE.txt` / `samples_RC132_SMOKE.csv`
+- `logcat_RC132_SMOKE_continuous.txt`
+- `run_rc132_smoke.ps1`
+- `B2_PRODUCTION_AAB_132.txt` / `SHA_FINAL_S.txt`
+- `RELEASE_REVIEW_132.md`

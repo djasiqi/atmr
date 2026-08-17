@@ -1,0 +1,35 @@
+﻿2026-08-15T23:28:07.0020863Z ##[group]Run echo "🔍 Vérification que l'image a bien été poussée..."
+2026-08-15T23:28:07.0021795Z [36;1mecho "🔍 Vérification que l'image a bien été poussée..."[0m
+2026-08-15T23:28:07.0022642Z [36;1mIMAGE_TAG="***:sha-286737a2362e"[0m
+2026-08-15T23:28:07.0023202Z [36;1mecho "Image attendue: ${IMAGE_TAG}"[0m
+2026-08-15T23:28:07.0023709Z [36;1m[0m
+2026-08-15T23:28:07.0024055Z [36;1mfor i in {1..5}; do[0m
+2026-08-15T23:28:07.0024661Z [36;1m  if docker manifest inspect "${IMAGE_TAG}" > /dev/null 2>&1; then[0m
+2026-08-15T23:28:07.0025518Z [36;1m    echo "✅ Image ${IMAGE_TAG} trouvée sur Docker Hub"[0m
+2026-08-15T23:28:07.0026186Z [36;1m    echo "success=true" >> $GITHUB_OUTPUT[0m
+2026-08-15T23:28:07.0026724Z [36;1m    exit 0[0m
+2026-08-15T23:28:07.0027119Z [36;1m  fi[0m
+2026-08-15T23:28:07.0027697Z [36;1m  echo "  Tentative $i/5: Image non trouvée, attente 5 secondes..."[0m
+2026-08-15T23:28:07.0028385Z [36;1m  sleep 5[0m
+2026-08-15T23:28:07.0029077Z [36;1mdone[0m
+2026-08-15T23:28:07.0029503Z [36;1m[0m
+2026-08-15T23:28:07.0030160Z [36;1mecho "❌ L'image ${IMAGE_TAG} n'a pas été trouvée sur Docker Hub après 5 tentatives"[0m
+2026-08-15T23:28:07.0031018Z [36;1mecho "success=false" >> $GITHUB_OUTPUT[0m
+2026-08-15T23:28:07.0031606Z [36;1mif [ "false" != "true" ]; then[0m
+2026-08-15T23:28:07.0032865Z [36;1m  echo "⚠️  Le déploiement ne s'exécutera pas car l'image n'existe pas"[0m
+2026-08-15T23:28:07.0033679Z [36;1m  exit 1[0m
+2026-08-15T23:28:07.0034094Z [36;1melse[0m
+2026-08-15T23:28:07.0034799Z [36;1m  echo "ℹ️  Déploiement ignoré (skip_deploy=true), mais l'image n'a pas été trouvée"[0m
+2026-08-15T23:28:07.0035602Z [36;1mfi[0m
+2026-08-15T23:28:07.0090906Z shell: /usr/bin/bash -e {0}
+2026-08-15T23:28:07.0091378Z env:
+2026-08-15T23:28:07.0091790Z   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+2026-08-15T23:28:07.0092271Z   DOCKER_IMAGE: ***
+2026-08-15T23:28:07.0092536Z   DOCKERHUB_USERNAME: ***
+2026-08-15T23:28:07.0092864Z   DOCKERHUB_TOKEN: ***
+2026-08-15T23:28:07.0093112Z   DOCKER_TAG: sha-286737a2362e
+2026-08-15T23:28:07.0093446Z   SOURCE_SHA: 286737a2362eb1e38013c72d04be23fcd608210e
+2026-08-15T23:28:07.0093774Z ##[endgroup]
+2026-08-15T23:28:07.0155968Z 🔍 Vérification que l'image a bien été poussée...
+2026-08-15T23:28:07.0156749Z Image attendue: ***:sha-286737a2362e
+2026-08-15T23:28:09.4075742Z ✅ Image ***:sha-286737a2362e trouvée sur Docker Hub
