@@ -11,7 +11,7 @@ export type TrackingDesiredState = "RUNNING" | "STOPPED" | "RECOVERING";
 
 /** Autorité du STOP demandé. */
 export type TrackingStopAuthority =
-  /** Logout, leave driver, mission terminale, stop métier explicite. */
+  /** Logout, leave driver, stop métier explicite (fin_service). Fin de mission seule ≠ STOP. */
   | "explicit"
   /** Trou React / cache — ne doit pas Unregister immédiatement. */
   | "transient_loss"

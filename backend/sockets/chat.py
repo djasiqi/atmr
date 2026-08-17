@@ -2447,6 +2447,7 @@ def init_chat_socket(socketio: SocketIO):
                 mission_status=mission_status,
                 is_active=bool(getattr(driver, "is_active", True)),
                 presence_status=presence_status,
+                is_available=bool(getattr(driver, "is_available", True)),
             )
             fanout_mission_id = _sanitize_fanout_mission_id(
                 driver.id,
@@ -3155,6 +3156,7 @@ def init_chat_socket(socketio: SocketIO):
                         mission_status=mission_status,
                         is_active=bool(getattr(driver, "is_active", True)),
                         presence_status=presence_status,
+                        is_available=bool(getattr(driver, "is_available", True)),
                     )
                     fanout_mission_id = _sanitize_fanout_mission_id(
                         driver.id,
@@ -3654,6 +3656,7 @@ def init_chat_socket(socketio: SocketIO):
                             mission_status=mission_status,
                             is_active=bool(getattr(driver, "is_active", True)),
                             presence_status=presence_status,
+                            is_available=bool(getattr(driver, "is_available", True)),
                         )
                         ts_val = loc_data.get("ts") or datetime.now(UTC).isoformat()
                         from services.realtime.socketio import (
@@ -3705,6 +3708,7 @@ def init_chat_socket(socketio: SocketIO):
                             mission_status=mission_status,
                             is_active=bool(getattr(driver, "is_active", True)),
                             presence_status="degraded",
+                            is_available=bool(getattr(driver, "is_available", True)),
                         )
                         ts_val = datetime.now(UTC).isoformat()
                         from services.realtime.socketio import (

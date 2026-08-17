@@ -2364,6 +2364,9 @@ class DriverLocation(Resource):
                                                 getattr(driver, "is_active", True)
                                             ),
                                             presence_status=presence_status,
+                                            is_available=bool(
+                                                getattr(driver, "is_available", True)
+                                            ),
                                         )
                                     )
                                     fanout_mission_id = sanitize_fanout_mission_id(

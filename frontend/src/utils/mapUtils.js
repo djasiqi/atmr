@@ -263,6 +263,24 @@ export const getDriverFreshnessLabel = (driver) => {
       : `Dernière position ${absoluteSuffix}`
     : null;
 
+  // C2 situation 1 : hors service ≠ GPS hors ligne
+  if (
+    String(driver?.status || '') === 'off_duty'
+    || String(driver?.service_window_status || '') === 'off_duty'
+    || driver?.is_available === false
+  ) {
+    return 'Hors service';
+  }
+
+  // C2 situation 2 : acquisition
+  if (
+    !recordedAt
+    && (String(driver?.device_health?.tracking_state || '').toLowerCase() === 'starting'
+      || driver?.device_health?.tracking_active === true)
+  ) {
+    return 'Localisation en cours…';
+  }
+
   if (status === 'offline_unknown' && isDeviceHealthSignalActive(driver)) {
     return 'Signal actif · position non synchronisée';
   }
@@ -270,16 +288,28 @@ export const getDriverFreshnessLabel = (driver) => {
   if (status === 'recent') return `Recent · ${relative}`;
   if (status === 'stale') {
     return lastPosLine
-      ? `Signal ancien · ${lastPosLine}`
-      : `Stale · ${relative}`;
+      ? `Dernière position : ${relative}`
+      : `Position périmée · ${relative}`;
   }
   if (status === 'last_known') {
     return lastPosLine
-      ? `GPS hors ligne — ${lastPosLine}`
-      : 'GPS hors ligne — dernière position connue';
+      ? `Dernière position connue — ${lastPosLine}`
+      : 'Dernière position connue';
   }
   if (status === 'offline_unknown') return 'Offline';
   if (status === 'offline' || String(driver?.position_source || '').toLowerCase() === 'db_fallback') {
+    // C2 situation 5 : GPS hors ligne seulement avec preuve pipeline (sinon position ancienne)
+    const dh = driver?.device_health;
+    const pipelineAlive =
+      dh
+      && (dh.tracking_active === true
+        || String(dh.tracking_state || '').toLowerCase() === 'starting'
+        || String(dh.tracking_state || '').toLowerCase() === 'active');
+    if (pipelineAlive) {
+      return lastPosLine
+        ? `Dernière position : ${relative}`
+        : `Position périmée · ${relative}`;
+    }
     return lastPosLine
       ? `GPS hors ligne — ${lastPosLine}`
       : 'GPS hors ligne';

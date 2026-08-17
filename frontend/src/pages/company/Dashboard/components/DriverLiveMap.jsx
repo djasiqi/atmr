@@ -303,8 +303,11 @@ const createStyledTooltip = (driver, opts = {}) => {
     off_duty:    { label: 'Hors service',       dot: '#91A3A0',             bg: '#f1f5f9', color: '#64748b' },
   };
   // Badge principal = métier si en course/assigné, sinon statut visuel GPS.
-  // TIME-4 : « Hors service » uniquement si service_window_status=off_duty (pas mission_override).
-  const isOffDuty = String(serviceWindowStatus || driver?.service_window_status || '') === 'off_duty';
+  // TIME-4 / contrat GPS v4 : « Hors service » si service_window_status=off_duty
+  // OU status fanout off_duty (Driver.is_available=false).
+  const isOffDuty =
+    String(serviceWindowStatus || driver?.service_window_status || '') === 'off_duty'
+    || String(status || '') === 'off_duty';
   const badgeKey = (biz === 'busy' || biz === 'assigned')
     ? biz
     : (isOffDuty ? 'off_duty' : status);

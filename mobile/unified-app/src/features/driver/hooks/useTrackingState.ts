@@ -10,6 +10,7 @@ export type TrackingRuntimeMode =
 export type TrackingState = {
   isTracking: boolean;
   mode: TrackingRuntimeMode;
+  fsmState?: string;
   lastUpdate?: number;
   lastAckAt?: number;
   lastAckIsQueued?: boolean;
@@ -34,6 +35,7 @@ function mapSnapshotToTrackingState(
   return {
     isTracking: snapshot.isRunning,
     mode,
+    fsmState: snapshot.fsmState,
     lastUpdate: snapshot.lastSentAt
       ? Number.isFinite(Date.parse(snapshot.lastSentAt))
         ? Date.parse(snapshot.lastSentAt)
@@ -73,7 +75,8 @@ function trackingSnapshotsEqual(
     a.currentAttemptEventId === b.currentAttemptEventId &&
     a.lastAckEventId === b.lastAckEventId &&
     a.queueDepth === b.queueDepth &&
-    a.missionId === b.missionId
+    a.missionId === b.missionId &&
+    a.fsmState === b.fsmState
   );
 }
 

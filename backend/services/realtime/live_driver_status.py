@@ -272,10 +272,17 @@ def resolve_driver_status_for_fanout(
     mission_status: str,
     is_active: bool,
     presence_status: str,
+    is_available: bool = True,
 ) -> str:
-    """Statut affiché entreprise : offline | busy | assigned | available | *_constrained."""
+    """Statut affiché entreprise : offline | off_duty | busy | assigned | available | *_constrained.
+
+    SoT métier en-service : ``Driver.is_available`` (pas le socket, pas la fraîcheur GPS).
+    ``is_available=False`` → ``off_duty`` (hors service), jamais ``available``.
+    """
     if not is_active:
         return "offline"
+    if not is_available:
+        return "off_duty"
     if mission_status in {
         BookingStatus.EN_ROUTE.value,
         BookingStatus.IN_PROGRESS.value,

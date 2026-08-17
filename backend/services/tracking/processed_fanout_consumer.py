@@ -222,6 +222,11 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
             mission_status=mission_status_resolved,
             is_active=is_active,
             presence_status=presence_status,
+            is_available=(
+                bool(getattr(driver, "is_available", True))
+                if driver is not None
+                else True
+            ),
         )
 
         first_name = None
