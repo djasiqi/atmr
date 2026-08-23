@@ -942,6 +942,15 @@ def _execute_assignment_action(
         # ✅ Mettre à jour le statut de ACCEPTED à ASSIGNED lors de l'assignation
         if booking.status == BookingStatus.ACCEPTED:
             booking.status = BookingStatus.ASSIGNED
+        # ARRIVED-SOT-1B : AgentTools.assign crée parfois l'Assignment, mais
+        # l'écriture Booking.driver_id ici doit toujours passer par le writer.
+        from application.companies.assignment_binding import ensure_booking_assignment
+
+        ensure_booking_assignment(
+            company_id=int(company_id),
+            booking=booking,
+            driver_id=int(driver_id),
+        )
         db.session.add(booking)
         db.session.commit()
 
@@ -3123,6 +3132,16 @@ class MobileUpdateRide(Resource):
                     booking.driver_id = driver_id
                     if booking.status == BookingStatus.ACCEPTED:
                         booking.status = BookingStatus.ASSIGNED
+                    # ARRIVED-SOT-1B : invariant Assignment
+                    from application.companies.assignment_binding import (
+                        ensure_booking_assignment,
+                    )
+
+                    ensure_booking_assignment(
+                        company_id=int(company_id),
+                        booking=booking,
+                        driver_id=int(driver_id),
+                    )
                 except (TypeError, ValueError) as exc:
                     company_mobile_dispatch_ns.abort(
                         400, "driver_id doit être un entier"

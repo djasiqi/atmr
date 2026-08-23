@@ -486,18 +486,25 @@ class AgentTools:
                 existing = existing_list[0] if existing_list else None
 
                 old_driver_id = existing.driver_id if existing else None
+                # ARRIVED-SOT-1B : Booking + Assignment via primitive unique
+                from application.companies.assignment_binding import (
+                    ensure_booking_assignment,
+                )
+                from models.enums import BookingStatus as _BookingStatus
 
-                if existing:
-                    existing.driver_id = driver_id
-                    # Note: Assignment n'a pas de champ notes,
-                    # utiliser decision_explanation si nécessaire
-                else:
-                    existing = Assignment()
-                    existing_any: Any = existing
-                    existing_any.booking_id = job_id
-                    existing_any.driver_id = driver_id
-                    existing_any.status = AssignmentStatus.SCHEDULED
-                    db.session.add(existing)
+                booking.driver_id = driver_id
+                if booking.status in (
+                    _BookingStatus.PENDING,
+                    _BookingStatus.ACCEPTED,
+                ):
+                    booking.status = _BookingStatus.ASSIGNED
+                ensure_booking_assignment(
+                    company_id=int(self.company_id),
+                    booking=booking,
+                    driver_id=int(driver_id),
+                )
+                # Rafraîchir référence assignment (créée/MAJ par le writer)
+                existing = assignment_repo.find_model_by_booking_id(job_id)
 
                 # ✅ NOUVEAU: Associer le booking au groupe si groupable
                 if group_id is not None:

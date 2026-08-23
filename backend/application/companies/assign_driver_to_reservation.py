@@ -71,8 +71,9 @@ class AssignDriverToReservationUseCase:
         status = _status_value(getattr(booking, "status", None))
         # ✅ Convertir en minuscules pour la comparaison
         # (les enums peuvent être en majuscules)
+        # PENDING inclus (ARRIVED-SOT-1B) : point d'entrée unique d'affectation
         status_lower = status.lower() if status else ""
-        if status_lower not in {"accepted", "assigned"}:
+        if status_lower not in {"pending", "accepted", "assigned"}:
             return AssignDriverResult(
                 ok=False,
                 error={"error": "Reservation cannot be assigned in current state"},
