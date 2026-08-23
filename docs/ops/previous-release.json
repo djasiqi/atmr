@@ -11,8 +11,8 @@
   "note": "Rollback cible = topologie PROD actuelle SKEWÉE (snapshot 2026-08-15). Pilote fermé 5 chauffeurs — institution P0 EXCLUDED.",
   "release_type": "PILOTE_PROD_FERME_5_CHAUFFEURS",
   "release_branch": "release/gps-pilot-5-drivers-20260823",
-  "deploy_candidate_sha": "4a22f7a893e9ad7d301ed403db2c1f58e46d8758",
-  "deploy_candidate_tag": "sha-4a22f7a893e9",
+  "deploy_candidate_sha": "ced2e53ef5eb90efe9356c99219862dbb13d0189",
+  "deploy_candidate_tag": "sha-ced2e53ef5eb",
   "release_parent_sha": "a4d5afb74320581f5d58a9d9c25a47b1ec046df8",
   "release_tip_before_deploy": "927640a0995a7025edfae3d31802998948a866d5",
   "excluded_from_pilot": [
