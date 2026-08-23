@@ -8,6 +8,18 @@ import {
   BUSINESS_TZ,
   formatBusinessAbsoluteDayTime,
 } from './businessTime';
+import {
+  resolveGpsDisplayStatus,
+  formatGpsFreshnessLabel,
+} from './gpsFreshnessContract';
+import { resolvePresenceAgeSeconds } from './fleetDriverLocationPresence';
+import {
+  isDeviceHeartbeatFresh,
+  isDeviceHealthSignalActive,
+  isDevicePipelineAlive,
+} from './devicePipelineUtils';
+
+export { isDeviceHeartbeatFresh, isDeviceHealthSignalActive, isDevicePipelineAlive };
 
 // Centre par défaut : Suisse
 export const SWITZERLAND_CENTER = { lat: 46.8182, lng: 8.2275 };
@@ -199,18 +211,6 @@ export const getDriverStatus = (driver) => {
   return 'available';
 };
 
-const DEVICE_HEARTBEAT_FRESH_MS = 120_000;
-
-/** Heartbeat device-health frais (preuve de vie runtime, indépendante de recorded_at / last_fix_age). */
-export function isDeviceHeartbeatFresh(driver, nowMs = Date.now()) {
-  const dh = driver?.device_health;
-  if (!dh || typeof dh !== 'object') return false;
-  const hb = dh.last_heartbeat_at;
-  if (!hb) return false;
-  const ageMs = nowMs - new Date(hb).getTime();
-  return Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= DEVICE_HEARTBEAT_FRESH_MS;
-}
-
 /** C2 : HORS SERVICE métier — jamais « GPS hors ligne ». */
 export function isDriverOffDuty(driver) {
   if (!driver) return false;
@@ -219,26 +219,6 @@ export function isDriverOffDuty(driver) {
   if (status === 'off_duty') return true;
   return String(driver.service_window_status || '') === 'off_duty';
 }
-
-/**
- * Pipeline/runtime vivant : heartbeat frais obligatoire.
- * tracking_active / FGS / task ne sont crédibles que si le heartbeat est frais.
- * last_fix_age n'est PAS une preuve indépendante.
- */
-export function isDevicePipelineAlive(driver, nowMs = Date.now()) {
-  const dh = driver?.device_health;
-  if (!dh || typeof dh !== 'object') return false;
-  if (!isDeviceHeartbeatFresh(driver, nowMs)) return false;
-  if (dh.tracking_active === true) return true;
-  if (dh.native_task_running === true) return true;
-  if (dh.fgs_running === true) return true;
-  const state = String(dh.tracking_state || '').toLowerCase();
-  return state === 'starting' || state === 'active';
-}
-
-/** Signal device_health actif malgré position backend absente (PR2 dispatch). */
-export const isDeviceHealthSignalActive = (driver, nowMs = Date.now()) =>
-  isDevicePipelineAlive(driver, nowMs);
 
 export const formatLastSeen = (lastSeenSeconds) => {
   if (lastSeenSeconds == null || lastSeenSeconds < 0) return 'Dernier signal inconnu';
@@ -256,88 +236,55 @@ export const formatLastSeen = (lastSeenSeconds) => {
   return `il y a ${h} h`;
 };
 
-export const getFreshnessStatus = (driver) => {
+export const getFreshnessStatus = (driver, nowMs = Date.now()) => {
   const trackingDisplay = String(driver?.tracking_display_status || '').toLowerCase();
   if (
-    trackingDisplay === 'live' ||
-    trackingDisplay === 'stale' ||
-    trackingDisplay === 'degraded_constrained' ||
-    trackingDisplay === 'silent_wake_pending' ||
-    trackingDisplay === 'offline_unknown'
+    trackingDisplay === 'degraded_constrained'
+    || trackingDisplay === 'silent_wake_pending'
   ) {
     return trackingDisplay;
   }
-  const backendStatus = String(driver?.location_status || '').toLowerCase();
-  if (
-    backendStatus === 'live'
-    || backendStatus === 'recent'
-    || backendStatus === 'stale'
-    || backendStatus === 'offline'
-    || backendStatus === 'last_known'
-  ) {
-    return backendStatus;
+
+  const ageSeconds = resolvePresenceAgeSeconds(driver, nowMs);
+  const gpsStatus = resolveGpsDisplayStatus(driver, ageSeconds, nowMs);
+
+  if (trackingDisplay === 'live' || trackingDisplay === 'stale' || trackingDisplay === 'offline_unknown') {
+    if (gpsStatus === 'offline_unknown' && trackingDisplay !== 'offline_unknown') {
+      return trackingDisplay;
+    }
   }
-  const v = Number(driver?.last_seen_seconds);
-  if (!Number.isFinite(v)) return 'offline';
-  if (v <= 20) return 'live';
-  if (v <= 90) return 'recent';
-  if (v <= 300) return 'stale';
-  return 'offline';
+
+  return gpsStatus;
 };
 
-export const getDriverFreshnessLabel = (driver) => {
-  const status = getFreshnessStatus(driver);
-  const recordedAt = driver?.recorded_at ?? driver?.timestamp ?? null;
-  const absoluteSuffix = formatAbsolutePositionTime(recordedAt);
-  const relative = formatLastSeen(driver?.last_seen_seconds);
-  const lastPosLine = absoluteSuffix
-    ? relative && relative !== 'Dernier signal inconnu'
-      ? `Dernière position ${absoluteSuffix} · ${relative}`
-      : `Dernière position ${absoluteSuffix}`
-    : null;
-
-  // C2 situation 1 : hors service ≠ GPS hors ligne
+export const getDriverFreshnessLabel = (driver, nowMs = Date.now()) => {
   if (isDriverOffDuty(driver)) {
     return 'Hors service';
   }
 
-  // C2 situation 2 : acquisition
+  const recordedAt = driver?.recorded_at ?? driver?.timestamp ?? null;
+  const ageSeconds = resolvePresenceAgeSeconds(driver, nowMs);
+
   if (
     !recordedAt
-    && isDeviceHeartbeatFresh(driver)
+    && isDeviceHeartbeatFresh(driver, nowMs)
     && (String(driver?.device_health?.tracking_state || '').toLowerCase() === 'starting'
       || driver?.device_health?.tracking_active === true)
   ) {
     return 'Localisation en cours…';
   }
 
-  if (status === 'offline_unknown' && isDeviceHealthSignalActive(driver)) {
+  const status = getFreshnessStatus(driver, nowMs);
+
+  if (status === 'offline_unknown' && isDeviceHealthSignalActive(driver, nowMs)) {
     return 'Signal actif · position non synchronisée';
   }
-  if (status === 'live') return `Live · ${relative}`;
-  if (status === 'recent') return `Recent · ${relative}`;
-  if (status === 'stale') {
-    return lastPosLine
-      ? `Dernière position : ${relative}`
-      : `Position périmée · ${relative}`;
+
+  if (status === 'degraded_constrained' || status === 'silent_wake_pending') {
+    return formatGpsFreshnessLabel('verify', ageSeconds);
   }
-  if (status === 'last_known') {
-    return lastPosLine
-      ? `Dernière position connue — ${lastPosLine}`
-      : 'Dernière position connue';
-  }
-  if (status === 'offline_unknown') return 'Offline';
-  if (status === 'offline' || String(driver?.position_source || '').toLowerCase() === 'db_fallback') {
-    if (isDevicePipelineAlive(driver)) {
-      return lastPosLine
-        ? `Dernière position : ${relative}`
-        : `Position périmée · ${relative}`;
-    }
-    return lastPosLine
-      ? `GPS hors ligne — ${lastPosLine}`
-      : 'GPS hors ligne';
-  }
-  return 'Offline';
+
+  return formatGpsFreshnessLabel(status, ageSeconds);
 };
 
 /**

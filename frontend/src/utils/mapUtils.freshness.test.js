@@ -7,23 +7,42 @@ import {
 } from './mapUtils';
 
 describe('getFreshnessStatus', () => {
-  it('uses backend location_status when available', () => {
-    expect(getFreshnessStatus({ location_status: 'live' })).toBe('live');
-    expect(getFreshnessStatus({ location_status: 'recent' })).toBe('recent');
-    expect(getFreshnessStatus({ location_status: 'stale' })).toBe('stale');
-    expect(getFreshnessStatus({ location_status: 'offline' })).toBe('offline');
-    expect(getFreshnessStatus({ location_status: 'last_known' })).toBe('last_known');
+  const nowMs = Date.parse('2026-08-23T22:00:00.000Z');
+
+  it('PRESENCE : 150 s + pipeline vivant → recent (pas offline)', () => {
+    const driver = {
+      location_mode: 'availability_presence',
+      location_status: 'live',
+      recorded_at: new Date(nowMs - 150_000).toISOString(),
+      device_health: {
+        tracking_active: true,
+        last_heartbeat_at: new Date(nowMs - 30_000).toISOString(),
+      },
+    };
+    expect(getFreshnessStatus(driver, nowMs)).toBe('recent');
   });
 
-  it('backend live ignore last_seen_seconds élevé (stale autoritatif backend)', () => {
-    expect(getFreshnessStatus({ location_status: 'live', last_seen_seconds: 150 })).toBe('live');
+  it('uses backend location_status when pipeline offline and très vieux', () => {
+    const driver = {
+      location_status: 'offline',
+      last_seen_seconds: 901,
+      device_health: {
+        last_heartbeat_at: new Date(nowMs - 10 * 60_000).toISOString(),
+      },
+    };
+    expect(getFreshnessStatus(driver, nowMs)).toBe('offline_unknown');
   });
 
-  it('falls back to last_seen_seconds thresholds', () => {
-    expect(getFreshnessStatus({ last_seen_seconds: 10 })).toBe('live');
-    expect(getFreshnessStatus({ last_seen_seconds: 70 })).toBe('recent');
-    expect(getFreshnessStatus({ last_seen_seconds: 250 })).toBe('stale');
-    expect(getFreshnessStatus({ last_seen_seconds: 901 })).toBe('offline');
+  it('mission_live : seuils plus stricts sans backend', () => {
+    expect(getFreshnessStatus({ location_mode: 'mission_live', last_seen_seconds: 40 }, nowMs)).toBe(
+      'live'
+    );
+    expect(getFreshnessStatus({ location_mode: 'mission_live', last_seen_seconds: 90 }, nowMs)).toBe(
+      'recent'
+    );
+    expect(getFreshnessStatus({ location_mode: 'mission_live', last_seen_seconds: 150 }, nowMs)).toBe(
+      'stale'
+    );
   });
 });
 
@@ -74,5 +93,20 @@ describe('C2 device-health / preuve de vie', () => {
         last_seen_seconds: 900,
       })
     ).toBe('Hors service');
+  });
+
+  it('PRESENCE récente → Position mise à jour (pas Offline)', () => {
+    const label = getDriverFreshnessLabel({
+      is_available: true,
+      status: 'available',
+      location_mode: 'availability_presence',
+      recorded_at: new Date(nowMs - 120_000).toISOString(),
+      device_health: {
+        tracking_active: true,
+        last_heartbeat_at: new Date(nowMs - 30_000).toISOString(),
+      },
+    }, nowMs);
+    expect(label).toContain('Position mise à jour');
+    expect(label).not.toMatch(/Offline|hors ligne/i);
   });
 });

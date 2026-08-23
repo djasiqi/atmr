@@ -1,13 +1,18 @@
 /**
- * Présence GPS flotte (parité mobile driverLocationPresence.ts).
- * Seuils via LOCAL_* — ne pas appeler getFreshnessStatus (20/90/300).
+ * Présence GPS flotte — seuils mode-aware (PRESENCE vs mission_live).
  */
 
 import {
-  LOCAL_LIVE_MAX_SECONDS,
-  LOCAL_RECENT_MAX_SECONDS,
-  localAgeSecondsFromRecordedAt,
-} from './localDriverLocationFreshness';
+  ageToGpsFreshness,
+  resolveGpsDisplayStatus,
+  formatGpsFreshnessLabel as formatGpsLabelFromContract,
+  formatRelativeAgeSeconds,
+  resolveDriverLocationMode,
+} from './gpsFreshnessContract';
+import { localAgeSecondsFromRecordedAt } from './localDriverLocationFreshness';
+
+// Re-export for tests
+export { formatRelativeAgeSeconds };
 
 const FALLBACK_SOURCES = new Set(['db_fallback', 'company_fallback']);
 
@@ -40,91 +45,86 @@ export function resolvePresenceAgeSeconds(driver, nowMs = Date.now()) {
   return null;
 }
 
-function ageToPresence(ageSeconds) {
-  if (ageSeconds <= LOCAL_LIVE_MAX_SECONDS) return 'live';
-  if (ageSeconds <= LOCAL_RECENT_MAX_SECONDS) return 'recent';
-  return 'stale';
+function ageToPresence(ageSeconds, locationMode) {
+  return ageToGpsFreshness(ageSeconds, locationMode);
 }
 
-function degradeByAge(serverFresh, ageSeconds) {
+function degradeByAge(serverFresh, ageSeconds, locationMode) {
   if (ageSeconds == null) return serverFresh;
-  const fromAge = ageToPresence(ageSeconds);
-  const rank = (p) => {
-    if (p === 'live') return 0;
-    if (p === 'recent') return 1;
-    return 2;
-  };
-  return rank(fromAge) > rank(serverFresh) ? fromAge : serverFresh;
+  const fromAge = ageToPresence(ageSeconds, locationMode);
+  const rank = { live: 0, recent: 1, stale: 2, verify: 3 };
+  const serverKey = serverFresh === 'live' || serverFresh === 'recent' ? serverFresh : 'stale';
+  return rank[fromAge] > rank[serverKey] ? fromAge : serverFresh;
 }
 
 function viewFor(presence, ageSeconds) {
   const countedAsLocated = presence === 'live' || presence === 'recent';
-  const isVisuallyStale = presence === 'stale' || presence === 'last_known';
+  const isVisuallyStale =
+    presence === 'stale' || presence === 'verify' || presence === 'last_known';
   const showMarker = presence !== 'offline_unknown';
   return { presence, countedAsLocated, isVisuallyStale, showMarker, ageSeconds };
 }
 
-function fromTrackingDisplayFallback(tracking, ageSeconds, hasCoords) {
+function fromTrackingDisplayFallback(tracking, ageSeconds, hasCoords, locationMode) {
   if (tracking === 'stale') return 'stale';
   if (tracking === 'offline_unknown') {
     return hasCoords ? 'last_known' : 'offline_unknown';
   }
   if (tracking === 'degraded_constrained') {
-    if (ageSeconds != null) return ageToPresence(ageSeconds);
+    if (ageSeconds != null) return ageToPresence(ageSeconds, locationMode);
     return hasCoords ? 'last_known' : 'offline_unknown';
   }
   if (tracking === 'live' || tracking === 'recent') {
-    if (ageSeconds != null) return ageToPresence(ageSeconds);
+    if (ageSeconds != null) return ageToPresence(ageSeconds, locationMode);
     return tracking === 'recent' ? 'recent' : 'live';
   }
-  if (ageSeconds != null) return ageToPresence(ageSeconds);
+  if (ageSeconds != null) return ageToPresence(ageSeconds, locationMode);
   return hasCoords ? 'last_known' : 'offline_unknown';
 }
 
 export function resolveDriverLocationPresence(driver, nowMs = Date.now()) {
   if (!driver) return viewFor('offline_unknown', null);
+
   const hasCoords = hasFiniteCoords(driver);
   const ageSeconds = resolvePresenceAgeSeconds(driver, nowMs);
+  const locationMode = resolveDriverLocationMode(driver);
   const source = normalizeLabel(driver.position_source);
-  const locationStatus = normalizeLabel(driver.location_status);
-  const tracking = normalizeLabel(driver.tracking_display_status);
 
   if (!hasCoords) return viewFor('offline_unknown', ageSeconds);
   if (FALLBACK_SOURCES.has(source)) return viewFor('last_known', ageSeconds);
-  if (locationStatus === 'offline' || locationStatus === 'last_known') {
+
+  const displayStatus = resolveGpsDisplayStatus(driver, ageSeconds, nowMs);
+  if (displayStatus === 'offline_unknown') {
+    return viewFor('offline_unknown', ageSeconds);
+  }
+  if (displayStatus === 'last_known') {
     return viewFor('last_known', ageSeconds);
   }
-  if (locationStatus === 'stale') return viewFor('stale', ageSeconds);
+
+  const locationStatus = normalizeLabel(driver.location_status);
+  const tracking = normalizeLabel(driver.tracking_display_status);
+
+  if (locationStatus === 'offline' || locationStatus === 'last_known') {
+    return viewFor(displayStatus === 'verify' ? 'verify' : 'last_known', ageSeconds);
+  }
+  if (locationStatus === 'stale') {
+    return viewFor(degradeByAge('stale', ageSeconds, locationMode), ageSeconds);
+  }
   if (locationStatus === 'live' || locationStatus === 'recent') {
-    return viewFor(degradeByAge(locationStatus, ageSeconds), ageSeconds);
+    return viewFor(degradeByAge(locationStatus, ageSeconds, locationMode), ageSeconds);
   }
   if (!locationStatus) {
-    return viewFor(fromTrackingDisplayFallback(tracking, ageSeconds, hasCoords), ageSeconds);
+    return viewFor(
+      fromTrackingDisplayFallback(tracking, ageSeconds, hasCoords, locationMode),
+      ageSeconds
+    );
   }
-  if (ageSeconds != null) return viewFor(ageToPresence(ageSeconds), ageSeconds);
+  if (ageSeconds != null) {
+    return viewFor(ageToPresence(ageSeconds, locationMode), ageSeconds);
+  }
   return viewFor('last_known', ageSeconds);
 }
 
-function formatRelativeAge(ageSeconds) {
-  if (ageSeconds == null || !Number.isFinite(ageSeconds)) return null;
-  if (ageSeconds < 60) return `il y a ${Math.max(0, Math.floor(ageSeconds))} s`;
-  const minutes = Math.max(1, Math.round(ageSeconds / 60));
-  return `il y a ${minutes} min`;
-}
-
 export function formatDriverLocationPresenceLabel(view) {
-  const relative = formatRelativeAge(view?.ageSeconds);
-  switch (view?.presence) {
-    case 'live':
-      return relative ? `En direct · ${relative}` : 'En direct';
-    case 'recent':
-      return relative ? `Position récente · ${relative}` : 'Position récente';
-    case 'stale':
-      return relative ? `Position périmée · ${relative}` : 'Position périmée';
-    case 'last_known':
-      return 'Dernière position connue';
-    case 'offline_unknown':
-    default:
-      return 'Aucune position disponible';
-  }
+  return formatGpsLabelFromContract(view?.presence, view?.ageSeconds);
 }

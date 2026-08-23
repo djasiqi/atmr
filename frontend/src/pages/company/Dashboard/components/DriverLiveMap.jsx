@@ -45,6 +45,7 @@ import {
   applyLocalLocationFreshness,
   resolveLocalLocationFreshnessStatus,
 } from '../../../../utils/localDriverLocationFreshness';
+import { resolveDriverLocationMode } from '../../../../utils/gpsFreshnessContract';
 import {
   interpolateMarkerPosition,
   resolveMarkerMotionDurationMs,
@@ -948,12 +949,14 @@ function DriverLiveMap({ drivers: propDrivers }) {
 
       const agedDriver = applyLocalLocationFreshness(d);
       const localStatus = resolveLocalLocationFreshnessStatus(
-        agedDriver.recorded_at ?? agedDriver.timestamp ?? null
+        agedDriver.recorded_at ?? agedDriver.timestamp ?? null,
+        undefined,
+        resolveDriverLocationMode(d)
       );
       const positionSource = String(d.position_source || '').toLowerCase();
       const staleByLocal =
         localStatus === 'stale' ||
-        localStatus === 'offline' ||
+        localStatus === 'verify' ||
         localStatus === 'offline_unknown';
       const staleByProjection =
         projection.visualTreatment === 'gps_stale'
