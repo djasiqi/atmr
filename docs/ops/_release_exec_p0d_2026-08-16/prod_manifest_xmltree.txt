@@ -1,4 +1,4 @@
-﻿N: android=http://schemas.android.com/apk/res/android
+N: android=http://schemas.android.com/apk/res/android
   E: manifest (line=2)
     A: android:versionCode(0x0101021b)=(type 0x10)0x7e
     A: android:versionName(0x0101021c)="1.0.11" (Raw: "1.0.11")
@@ -166,7 +166,7 @@
       A: android:enableOnBackInvokedCallback(0x0101066c)=(type 0x12)0x0
       E: meta-data (line=139)
         A: android:name(0x01010003)="com.google.android.geo.API_KEY" (Raw: "com.google.android.geo.API_KEY")
-        A: android:value(0x01010024)="AIzaSyDnKdA_gP5KqwTf3td3853jJFhW-PUZGvI" (Raw: "AIzaSyDnKdA_gP5KqwTf3td3853jJFhW-PUZGvI")
+        A: android:value(0x01010024)="REDACTED_GOOGLE_API_KEY" (Raw: "REDACTED_GOOGLE_API_KEY")
       E: meta-data (line=142)
         A: android:name(0x01010003)="expo.modules.updates.ENABLED" (Raw: "expo.modules.updates.ENABLED")
         A: android:value(0x01010024)=(type 0x12)0xffffffff

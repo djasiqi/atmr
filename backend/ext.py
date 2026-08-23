@@ -687,6 +687,19 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
                 user_public_id,
             )
 
+    # ✅ Session institution web : sid révoqué / idle (avant blacklist jti)
+    try:
+        from security.institution_session_guard import (
+            is_institution_jwt_revoked_by_session,
+        )
+
+        if is_institution_jwt_revoked_by_session(jwt_payload):
+            return True
+    except Exception:
+        app_logger.exception(
+            "[JWT Security] institution session guard failed"
+        )
+
     # Vérifier si le token est dans la blacklist
     # ✅ SECURITY: Flask-JWT-Extended génère automatiquement un jti
     # pour chaque token
@@ -707,6 +720,36 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
     # Ne pas vérifier la blacklist si pas de jti (le token sera accepté)
     # car on ne peut pas l'identifier de manière fiable sans jti
     return False
+
+
+@jwt.revoked_token_loader
+def revoked_token_callback(_jwt_header, _jwt_payload):
+    """Réponse 401 explicite quand le token est rejeté par la blocklist / garde session."""
+    from flask import g
+
+    from security.web_session_service import SESSION_UPGRADE_REQUIRED
+
+    reason = getattr(g, "jwt_revocation_reason", None) or "token_revoked"
+    messages = {
+        SESSION_UPGRADE_REQUIRED: (
+            "Reconnexion requise pour activer la session sécurisée."
+        ),
+        "idle_timeout": "Session expirée pour inactivité.",
+        "session_revoked": "Session révoquée.",
+        "session_not_found": "Session introuvable.",
+        "session_expired": "Session expirée.",
+    }
+    return (
+        jsonify(
+            {
+                "error": reason,
+                "error_code": reason,
+                "message": messages.get(reason, "Token révoqué ou invalide."),
+                "retryable": False,
+            }
+        ),
+        401,
+    )
 
 
 # ✅ Hardening JWT: Validation explicite de l'audience (défense en profondeur)

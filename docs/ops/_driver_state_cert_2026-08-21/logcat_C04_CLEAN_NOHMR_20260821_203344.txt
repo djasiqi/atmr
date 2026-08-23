@@ -1,4 +1,4 @@
-﻿--------- beginning of main
+--------- beginning of main
 08-21 20:33:50.293  2973  4036 I SemWifiEleStateTracker: Ele Parameters BD : 13 13 13 13 13 13 MD : -119 -119 -119 -119 -119 -119 WD : -26 -27 -26 -24 -26 -25 GC : false false false false false false SC : false false false false false false SH : true false false false false true TB : false false false false false false
 08-21 20:33:50.667  1755  5577 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
 08-21 20:33:50.667  1755  5577 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK ON
@@ -5648,7 +5648,7 @@
 08-21 20:34:02.161 11749 11995 E Google Android Maps SDK: In the Google Developer Console (https://console.developers.google.com)
 08-21 20:34:02.161 11749 11995 E Google Android Maps SDK: Ensure that the "Maps SDK for Android" is enabled.
 08-21 20:34:02.161 11749 11995 E Google Android Maps SDK: Ensure that the following Android Key exists:
-08-21 20:34:02.161 11749 11995 E Google Android Maps SDK: 	API Key: AIzaSyDnKdA_gP5KqwTf3td3853jJFhW-PUZGvI
+08-21 20:34:02.161 11749 11995 E Google Android Maps SDK: 	API Key: REDACTED_GOOGLE_API_KEY
 08-21 20:34:02.161 11749 11995 E Google Android Maps SDK: 	Android Application (<cert_fingerprint>;<package_name>): 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25;ch.liri.operations
 08-21 20:34:02.161  2973  3252 V WindowManager: Starting Transition 1257, caller=com.android.server.wm.WindowOrganizerController.startTransition:43 com.android.server.wm.WindowOrganizerController.startTransition:1 android.window.IWindowOrganizerController$Stub.onTransact:268 
 08-21 20:34:02.162 11749 11855 I ReactNativeJS: '[perf-kpi] perf.js_long_task', { source: 'perf.instrumentation',

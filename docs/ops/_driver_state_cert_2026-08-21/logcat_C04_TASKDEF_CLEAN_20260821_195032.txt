@@ -1,4 +1,4 @@
-﻿--------- beginning of main
+--------- beginning of main
 08-21 19:50:34.871 22576 22576 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
 08-21 19:50:34.871 22576 22576 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
 08-21 19:50:34.872  2973  5083 W ParceledListSlice: Element #166 is 58464 bytes.
@@ -6444,7 +6444,7 @@
 08-21 19:50:47.699 22742 23203 E Google Android Maps SDK: In the Google Developer Console (https://console.developers.google.com)
 08-21 19:50:47.699 22742 23203 E Google Android Maps SDK: Ensure that the "Maps SDK for Android" is enabled.
 08-21 19:50:47.699 22742 23203 E Google Android Maps SDK: Ensure that the following Android Key exists:
-08-21 19:50:47.699 22742 23203 E Google Android Maps SDK: 	API Key: AIzaSyDnKdA_gP5KqwTf3td3853jJFhW-PUZGvI
+08-21 19:50:47.699 22742 23203 E Google Android Maps SDK: 	API Key: REDACTED_GOOGLE_API_KEY
 08-21 19:50:47.699 22742 23203 E Google Android Maps SDK: 	Android Application (<cert_fingerprint>;<package_name>): 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25;ch.liri.operations
 08-21 19:50:47.699  4864  4922 V ShellDesktopMode: DesktopModeLogger: taskInfo map after processing changes 0
 08-21 19:50:47.699  4864  4922 I SurfaceControlRegistry: hide, t=FinishTransaction_SyncId<1206> sc=ActivityRecord{204712460 u0 com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t1894}#9990, caller=android.view.SurfaceControl$Transaction.hide:3705 com.android.wm.shell.transition.Transitions.dispatchReady:1355 com.android.wm.shell.transition.Transitions$TransitionPlayerImpl$$ExternalSyntheticLambda1.run:284 android.os.Handler.handleCallback:1070 android.os.Handler.dispatchMessage:125 android.os.Looper.dispatchMessage:358 
