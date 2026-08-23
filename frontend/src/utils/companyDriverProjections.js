@@ -29,7 +29,6 @@ const CONSTRAINED_DRIVER_STATUSES = new Set([
 ]);
 
 const FRESH_GPS = new Set(['live', 'recent']);
-const STALE_GPS = new Set(['stale', 'verify']);
 
 /**
  * Détecte si un chauffeur est en mode "contraint" (app figée / position figée à cause
