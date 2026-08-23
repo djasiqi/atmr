@@ -1,0 +1,9 @@
+ID=C06
+STATE=S2_EN_ROUTE / app_state=BG (HOME)
+driver_id=20 mission_id=51 mission_status=EN_ROUTE
+tracking_mode=mission_live
+P8=6 J1=6 J7=6 POST_HOME=5/5/5 P9=6 median_delta≈22.6s
+PG_MATCH=6/6 mission_live
+Unregister=0 FLP_REMOVE=0 HMR=0
+VERDICT=PASS
+logcat=logcat_C06_BG_20260821_204704.txt

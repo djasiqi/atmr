@@ -1,0 +1,14 @@
+﻿ID=C07
+TS=20260821_215718
+STATE=ARRIVED_FG
+mission_id=54
+P8=6 J1=6 J7=6 J8=40 P9=6
+P9_unique=6 P9_median_delta=21.8s deltas=21,8/21,4/22/18,9/22,4
+J7_backend_acked_sum=0
+J4_missionId54=5 missionLiveJ4_any=6
+ELIG_mission54=16
+Unregister_loose=0 Unreg_ATMR=0
+FLP_loose=0 FLP_ATMR=0
+FGS_stop=0 FGS_restart=0
+presence_hits=0 statusStop_hits=0
+EIDS=trk_1787342293748_e2dd540,trk_1787342315520_67bee6f3,trk_1787342336927_a85983f6,trk_1787342358895_a63582a2,trk_1787342377747_b56c2355,trk_1787342400139_d6298d6f

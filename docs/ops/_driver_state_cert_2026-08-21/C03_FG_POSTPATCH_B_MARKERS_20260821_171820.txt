@@ -1,0 +1,14 @@
+﻿mission=48
+soft=False
+P9_median=24
+P9_deltas=19,4,25,24
+app_resume_20=24
+app_resume_60=0
+post_soft_presence=0
+post_soft_mission_live=0
+unreg=0
+fgs_restart=0
+remove_nz=0
+fgs_end=True
+last_eid=trk_1787325774803_df43ddc1
+log=c:\Users\jasiq\atmr\docs\ops\_driver_state_cert_2026-08-21\logcat_C03_FG_POSTPATCH_B_20260821_171820.txt

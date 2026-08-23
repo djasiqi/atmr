@@ -1,0 +1,648 @@
+﻿08-21 22:36:05.338 D/SensorManager( 4389): unregisterListener
+08-21 22:36:06.872 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:36:06.873 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:36:06.873 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:36:06.944 I/ATMR_LTC_P(30805): P2b onLocationResult size=1 time=1787344566891 ertNanos=85510624919734 lat=46.1702416 lon=6.0960682 sLastTimestamp=1787344543737 looper=atmr-flp-callback
+08-21 22:36:06.945 I/ATMR_LTC_P(30805): P9 persist event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 recorded_at=2026-08-21T20:36:06.891Z time=1787344566891 lat=46.1702416 lon=6.0960682
+08-21 22:36:06.946 I/ATMR_LTC_P(30805): P9 ingest persisted=1 incoming=1
+08-21 22:36:06.946 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=2 hostPaused=false shouldReport=true deferredDistance=0.4646511375904083 sLastTimestamp=1787344543737
+08-21 22:36:06.946 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344543737 sLastTimestamp=1787344543737 accepted=false lat=46.1702453 lon=6.096071
+08-21 22:36:06.946 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344566891 sLastTimestamp=1787344543737 accepted=true lat=46.1702416 lon=6.0960682
+08-21 22:36:06.946 I/ATMR_LTC_P(30805): P5 summary accepted=1 rejectedTs=1 bundles=1
+08-21 22:36:06.946 I/ATMR_LTC_P(30805): P6 directFGS execute bundles.size=1 (JS best-effort, capture already native)
+08-21 22:36:06.946 I/ATMR_LTC_P(30805): P8 executeTask JS=true bundles.size=1
+08-21 22:36:06.947 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:36:06.956 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=1 time=1787344566891 lat=46.1702416 lon=6.0960682 armed=true
+08-21 22:36:06.956 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344566891:46.170242:6.096068 time=1787344566891
+08-21 22:36:06.956 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344566891:46.170242:6.096068 time=1787344566891
+08-21 22:36:06.956 I/ATMR_LTC_P(30805): P9 ingest persisted=0 incoming=1
+08-21 22:36:06.956 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344566891
+08-21 22:36:06.956 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344566891 sLastTimestamp=1787344566891 accepted=false lat=46.1702416 lon=6.0960682
+08-21 22:36:06.956 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:36:06.956 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:36:06.976 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:36:06.980 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:36:06.982 I/ATMR_LTC_P(30805): P9 peek count=1
+08-21 22:36:06.983 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:36:06.891Z lat=46.1702416 lon=6.0960682 age_ms=92 capture_id=os:1787344566891:46.170242:6.096068 event_id=trk_1787344566891_6ffa7141
+08-21 22:36:06.984 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:36:06.984 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=true loaded=true
+08-21 22:36:06.984 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY item_count=7 load_in_flight=false
+08-21 22:36:06.984 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY session_generation=1145
+08-21 22:36:06.985 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=15 elapsed_ms=1
+08-21 22:36:06.985 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=15 elapsed_ms=1
+08-21 22:36:06.994 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=15 elapsed_ms=10
+08-21 22:36:06.997 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=15 elapsed_ms=10
+08-21 22:36:06.997 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=15 elapsed_ms=13
+08-21 22:36:06.997 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=15 elapsed_ms=13
+08-21 22:36:06.999 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=15 elapsed_ms=15
+08-21 22:36:07.000 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=15 elapsed_ms=15 outcome=inserted
+08-21 22:36:07.000 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 seq=15 recorded_at=2026-08-21T20:36:06.891Z inserted=true
+08-21 22:36:07.000 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344566891_6ffa7141 reason=ok
+08-21 22:36:07.001 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344566891_6ffa7141 capture_id=os:1787344566891:46.170242:6.096068 recorded_at=2026-08-21T20:36:06.891Z enqueue_result=inserted
+08-21 22:36:07.001 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344566891:46.170242:6.096068
+08-21 22:36:07.002 I/ATMR_LTC_P(30805): P9 ack request count=1
+08-21 22:36:07.002 I/ATMR_LTC_P(30805): P9 ack removed=1 remaining=0
+08-21 22:36:07.035 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:36:07.036 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:36:07.037 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:36:07.042 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=0 queue_depth=8 backend_acked=0 dropped=0 last_event_id=null
+08-21 22:36:16.705 D/SensorManager( 4389): unregisterListener
+08-21 22:36:16.742 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:36:16.746 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:36:16.762 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:36:16.762 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:36:17.712 D/SensorManager( 4389): unregisterListener
+08-21 22:36:17.889 D/SensorManager(30805): unregisterListener
+08-21 22:36:17.894 I/ReactNativeJS(30805): ATMR_POC1_M2 ELIGIBILITY result=MISSION mission_id=54 status=IN_PROGRESS
+08-21 22:36:17.898 I/ReactNativeJS(30805): ATMR_JS_J TASKDEF_PROBE task_name=background-location-task taskDefined_local=true taskDefined_registry=true task_registered=true task_started=true js_runtime_id=js_mt3d9j66_4xlm8t app_state=background source=T4_app_state_background exit_reason=background timestamp=1787344577898
+08-21 22:36:17.910 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=mission_live requested_interval=20000 mission_id=54 reason=ensure_manager_state prior_task_mode=mission
+08-21 22:36:17.987 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344566891
+08-21 22:36:17.987 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344566891 sLastTimestamp=1787344566891 accepted=false lat=46.1702416 lon=6.0960682
+08-21 22:36:17.987 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:36:17.987 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:36:17.990 I/ReactNativeJS(30805): ATMR_POC1_M2 ELIGIBILITY result=MISSION mission_id=54 status=IN_PROGRESS
+08-21 22:36:18.016 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=mission_live requested_interval=20000 mission_id=54 reason=ensure_manager_state prior_task_mode=mission
+08-21 22:36:18.048 D/SensorManager( 4389): unregisterListener
+08-21 22:36:18.058 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=null capture_id=cap_mt3etatl_h6qp7ix1bt session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:36:18.058 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=null capture_id=cap_mt3etatl_h6qp7ix1bt session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:36:18.058 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=null capture_id=cap_mt3etatl_h6qp7ix1bt session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY session_generation=1145
+08-21 22:36:18.059 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344578058_h0hub119 capture_id=cap_mt3etatl_h6qp7ix1bt session_id=trk_sess_1787344351701_agykuw51 seq=16 elapsed_ms=1
+08-21 22:36:18.059 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344578058_h0hub119 capture_id=cap_mt3etatl_h6qp7ix1bt session_id=trk_sess_1787344351701_agykuw51 seq=16 elapsed_ms=2
+08-21 22:36:18.060 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume discovered=0 peek=0 module=ready
+08-21 22:36:18.061 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:36:18.061 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:36:18.074 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=mission_live requested_interval=20000 mission_id=54 reason=app_resume prior_task_mode=mission
+08-21 22:36:18.074 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344578058_h0hub119 capture_id=cap_mt3etatl_h6qp7ix1bt session_id=trk_sess_1787344351701_agykuw51 seq=16 elapsed_ms=17
+08-21 22:36:18.075 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344578058_h0hub119 capture_id=cap_mt3etatl_h6qp7ix1bt session_id=trk_sess_1787344351701_agykuw51 seq=16 elapsed_ms=17
+08-21 22:36:18.075 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344578058_h0hub119 capture_id=cap_mt3etatl_h6qp7ix1bt session_id=trk_sess_1787344351701_agykuw51 seq=16 elapsed_ms=18
+08-21 22:36:18.075 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344578058_h0hub119 capture_id=cap_mt3etatl_h6qp7ix1bt session_id=trk_sess_1787344351701_agykuw51 seq=16 elapsed_ms=18
+08-21 22:36:18.083 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344578058_h0hub119 capture_id=cap_mt3etatl_h6qp7ix1bt session_id=trk_sess_1787344351701_agykuw51 seq=16 elapsed_ms=25
+08-21 22:36:18.083 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344578058_h0hub119 capture_id=cap_mt3etatl_h6qp7ix1bt session_id=trk_sess_1787344351701_agykuw51 seq=16 elapsed_ms=26 outcome=inserted
+08-21 22:36:26.772 I/ATMR_LTC_P(30805): P2b onLocationResult size=1 time=1787344586738 ertNanos=85530471467475 lat=46.1702481 lon=6.0960675 sLastTimestamp=1787344566891 looper=atmr-flp-callback
+08-21 22:36:26.772 I/ATMR_LTC_P(30805): P9 persist event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 recorded_at=2026-08-21T20:36:26.738Z time=1787344586738 lat=46.1702481 lon=6.0960675
+08-21 22:36:26.773 I/ATMR_LTC_P(30805): P9 ingest persisted=1 incoming=1
+08-21 22:36:26.773 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=2 hostPaused=false shouldReport=true deferredDistance=0.7245246767997742 sLastTimestamp=1787344566891
+08-21 22:36:26.773 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344566891 sLastTimestamp=1787344566891 accepted=false lat=46.1702416 lon=6.0960682
+08-21 22:36:26.773 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344586738 sLastTimestamp=1787344566891 accepted=true lat=46.1702481 lon=6.0960675
+08-21 22:36:26.773 I/ATMR_LTC_P(30805): P5 summary accepted=1 rejectedTs=1 bundles=1
+08-21 22:36:26.773 I/ATMR_LTC_P(30805): P6 directFGS execute bundles.size=1 (JS best-effort, capture already native)
+08-21 22:36:26.774 I/ATMR_LTC_P(30805): P8 executeTask JS=true bundles.size=1
+08-21 22:36:26.776 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:36:26.776 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=1 time=1787344586738 lat=46.1702481 lon=6.0960675 armed=true
+08-21 22:36:26.777 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344586738:46.170248:6.096068 time=1787344586738
+08-21 22:36:26.777 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344586738:46.170248:6.096068 time=1787344586738
+08-21 22:36:26.777 I/ATMR_LTC_P(30805): P9 ingest persisted=0 incoming=1
+08-21 22:36:26.777 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344586738
+08-21 22:36:26.777 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344586738 sLastTimestamp=1787344586738 accepted=false lat=46.1702481 lon=6.0960675
+08-21 22:36:26.777 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:36:26.777 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:36:26.778 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:36:26.783 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:36:26.785 I/ATMR_LTC_P(30805): P9 peek count=1
+08-21 22:36:26.788 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:36:26.738Z lat=46.1702481 lon=6.0960675 age_ms=49 capture_id=os:1787344586738:46.170248:6.096068 event_id=trk_1787344586738_f43fce9f
+08-21 22:36:26.788 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:36:26.789 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:36:26.789 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:36:26.790 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY session_generation=1145
+08-21 22:36:26.790 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=17 elapsed_ms=2
+08-21 22:36:26.790 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=17 elapsed_ms=2
+08-21 22:36:26.810 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=17 elapsed_ms=22
+08-21 22:36:26.811 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=17 elapsed_ms=23
+08-21 22:36:26.811 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=17 elapsed_ms=23
+08-21 22:36:26.812 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=17 elapsed_ms=23
+08-21 22:36:26.814 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=17 elapsed_ms=25
+08-21 22:36:26.815 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 session_id=trk_sess_1787344351701_agykuw51 seq=17 elapsed_ms=26 outcome=inserted
+08-21 22:36:26.815 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 seq=17 recorded_at=2026-08-21T20:36:26.738Z inserted=true
+08-21 22:36:26.816 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344586738_f43fce9f reason=ok
+08-21 22:36:26.816 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344586738_f43fce9f capture_id=os:1787344586738:46.170248:6.096068 recorded_at=2026-08-21T20:36:26.738Z enqueue_result=inserted
+08-21 22:36:26.817 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344586738:46.170248:6.096068
+08-21 22:36:26.818 I/ATMR_LTC_P(30805): P9 ack request count=1
+08-21 22:36:26.818 I/ATMR_LTC_P(30805): P9 ack removed=1 remaining=0
+08-21 22:36:26.819 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:36:26.821 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:36:26.822 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:36:26.835 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:36:26.836 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:36:26.839 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:36:27.094 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344586738_f43fce9f
+08-21 22:36:27.664 D/SensorManager( 4389): unregisterListener
+08-21 22:36:32.532 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=54 source=ensure_manager_presence_fg
+08-21 22:36:32.664 I/ReactNativeJS(30805): ATMR_POC1_R1 MOBILE_TERMINAL_SEEN mission_id=54 status_received=null source=transient_loss.pending
+08-21 22:36:32.690 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=mission
+08-21 22:36:32.691 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=mission
+08-21 22:36:32.691 I/ReactNativeJS(30805): ATMR_POC1_R3 MODE_TRANSITION from_mode=mission_live to_mode=availability_presence mission_id=null reason=ensure_manager_presence_fg:context_downgrade_to_presence_no_restart
+08-21 22:36:32.691 I/ReactNativeJS(30805): ATMR_POC1_M3 MODE_TRANSITION from_mode=mission_live to_mode=availability_presence mission_id=null reason=ensure_manager_presence_fg:context_downgrade_to_presence_no_restart
+08-21 22:36:32.692 I/ReactNativeJS(30805): '[driver-telemetry] tracking.background.mode_transition', { source: 'driver.services.backgroundLocationTask',
+08-21 22:36:32.693 I/ReactNativeJS(30805): ATMR_POC1_M5 FLP_SOFT_UPDATE_REQUEST from_interval=pending to_interval=60000 requested_mode=availability_presence prior_task_mode=mission mission_id=null reason=ensure_manager_presence_fg
+08-21 22:36:32.693 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST from_interval=pending to_interval=60000 requested_mode=availability_presence prior_task_mode=mission mission_id=null reason=ensure_manager_presence_fg
+08-21 22:36:32.694 I/ATMR_LTC_P(30805): FLP_SOFT_UPDATE_REQUEST from_interval=20000 to_interval=60000 callback_same=true pending_intent_same=true callback_id=226977300 pending_intent_id=265312030
+08-21 22:36:32.695 I/ATMR_LTC_P(30805): FLP_SOFT_UPDATE_RESULT success=true from_interval=20000 to_interval=60000 callback_same=true pending_intent_same=true callback_id=226977300 pending_intent_id=265312030 removeLocationUpdates=0
+08-21 22:36:32.699 I/ReactNativeJS(30805): ATMR_POC1_M6 FLP_SOFT_UPDATE_RESULT success=true from_interval=20000 to_interval=60000 callback_same=true pending_intent_same=true mission_id=null soft_update_reason=null
+08-21 22:36:32.699 I/ReactNativeJS(30805): ATMR_POC1_R6 FLP_SOFT_UPDATE_RESULT success=true from_interval=20000 to_interval=60000 callback_same=true pending_intent_same=true mission_id=null soft_update_reason=null
+08-21 22:36:32.700 I/ReactNativeJS(30805): '[driver-telemetry] tracking.background.flp_soft_update', { source: 'driver.services.backgroundLocationTask',
+08-21 22:36:32.709 I/ReactNativeJS(30805):   detail: 'presence_live_mode_transition',
+08-21 22:36:35.174 I/ReactNativeJS(30805): ATMR_POC1_R1 MOBILE_TERMINAL_SEEN mission_id=54 status_received=null source=transient_loss.confirmed
+08-21 22:36:35.196 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=null source=ensure_presence_after_mission_stop
+08-21 22:36:35.223 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_presence_after_mission_stop prior_task_mode=presence_window
+08-21 22:36:35.223 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_presence_after_mission_stop prior_task_mode=presence_window
+08-21 22:36:35.223 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=ensure_presence_after_mission_stop
+08-21 22:36:38.322 D/SensorManager( 4389): unregisterListener
+08-21 22:36:46.822 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:36:46.823 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:36:46.824 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:36:49.060 D/SensorManager( 4389): unregisterListener
+08-21 22:36:52.767 I/adbd    (25286): adbd service requested 'shell,v2,TERM=dumb:export ANDROID_LOG_TAGS=''; exec logcat '-d' '-v' 'time' '-s' 'ReactNativeJS:I' 'ATMR_LTC_P:I''
+08-21 22:36:59.742 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:36:59.743 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:36:59.924 D/SensorManager( 4389): unregisterListener
+08-21 22:37:00.649 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:37:00.650 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:37:06.841 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:37:06.843 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:37:06.844 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:37:10.478 D/SensorManager( 4389): unregisterListener
+08-21 22:37:20.205 D/SensorManager(30805): unregisterListener
+08-21 22:37:20.209 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=null source=ensure_manager_presence
+08-21 22:37:20.241 I/ReactNativeJS(30805): ATMR_JS_J TASKDEF_PROBE task_name=background-location-task taskDefined_local=true taskDefined_registry=true task_registered=true task_started=true js_runtime_id=js_mt3d9j66_4xlm8t app_state=background source=T4_app_state_background exit_reason=background timestamp=1787344640241
+08-21 22:37:20.272 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence prior_task_mode=presence_window
+08-21 22:37:20.273 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence prior_task_mode=presence_window
+08-21 22:37:20.273 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=ensure_manager_presence
+08-21 22:37:20.286 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344586738
+08-21 22:37:20.286 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344586738 sLastTimestamp=1787344586738 accepted=false lat=46.1702481 lon=6.0960675
+08-21 22:37:20.286 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:37:20.286 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:37:20.293 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=null source=ensure_manager_presence_fg
+08-21 22:37:20.387 D/SensorManager( 4389): unregisterListener
+08-21 22:37:20.414 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=presence_window
+08-21 22:37:20.414 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=presence_window
+08-21 22:37:20.415 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=ensure_manager_presence_fg
+08-21 22:37:20.426 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=app_resume_presence prior_task_mode=presence_window
+08-21 22:37:20.426 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=app_resume_presence prior_task_mode=presence_window
+08-21 22:37:20.426 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=app_resume_presence
+08-21 22:37:20.432 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume_presence discovered=0 peek=0 module=ready
+08-21 22:37:20.433 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:37:20.434 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume_presence discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:37:21.740 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:37:21.741 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:37:21.764 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:37:21.765 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:37:21.770 I/ATMR_LTC_P(30805): P2b onLocationResult size=1 time=1787344641736 ertNanos=85585469757506 lat=46.1702488 lon=6.0960674 sLastTimestamp=1787344586738 looper=atmr-flp-callback
+08-21 22:37:21.771 I/ATMR_LTC_P(30805): P9 persist event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 recorded_at=2026-08-21T20:37:21.736Z time=1787344641736 lat=46.1702488 lon=6.0960674
+08-21 22:37:21.773 I/ATMR_LTC_P(30805): P9 ingest persisted=1 incoming=1
+08-21 22:37:21.773 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=2 hostPaused=false shouldReport=true deferredDistance=0.07819055020809174 sLastTimestamp=1787344586738
+08-21 22:37:21.773 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344586738 sLastTimestamp=1787344586738 accepted=false lat=46.1702481 lon=6.0960675
+08-21 22:37:21.773 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344641736 sLastTimestamp=1787344586738 accepted=true lat=46.1702488 lon=6.0960674
+08-21 22:37:21.773 I/ATMR_LTC_P(30805): P5 summary accepted=1 rejectedTs=1 bundles=1
+08-21 22:37:21.773 I/ATMR_LTC_P(30805): P6 directFGS execute bundles.size=1 (JS best-effort, capture already native)
+08-21 22:37:21.773 I/ATMR_LTC_P(30805): P8 executeTask JS=true bundles.size=1
+08-21 22:37:21.774 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=null capture_id=cap_mt3eunzh_jv5diewuh9 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:37:21.774 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=null capture_id=cap_mt3eunzh_jv5diewuh9 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:37:21.775 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=null capture_id=cap_mt3eunzh_jv5diewuh9 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=2 readiness=READY session_generation=1145
+08-21 22:37:21.775 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344641775_xo7uag7j capture_id=cap_mt3eunzh_jv5diewuh9 session_id=trk_sess_1787344351701_agykuw51 seq=18 elapsed_ms=2
+08-21 22:37:21.776 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344641775_xo7uag7j capture_id=cap_mt3eunzh_jv5diewuh9 session_id=trk_sess_1787344351701_agykuw51 seq=18 elapsed_ms=2
+08-21 22:37:21.777 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:37:21.778 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=1 time=1787344641736 lat=46.1702488 lon=6.0960674 armed=true
+08-21 22:37:21.778 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344641736:46.170249:6.096067 time=1787344641736
+08-21 22:37:21.778 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344641736:46.170249:6.096067 time=1787344641736
+08-21 22:37:21.778 I/ATMR_LTC_P(30805): P9 ingest persisted=0 incoming=1
+08-21 22:37:21.778 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344641736
+08-21 22:37:21.778 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344641736 sLastTimestamp=1787344641736 accepted=false lat=46.1702488 lon=6.0960674
+08-21 22:37:21.778 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:37:21.778 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:37:21.781 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=null missionStatus=null taskMode=presence_window lease_state=driver_active owner_gen=trk-mt3eto27-29lgiadvcs owner_mission=null
+08-21 22:37:21.783 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344641775_xo7uag7j capture_id=cap_mt3eunzh_jv5diewuh9 session_id=trk_sess_1787344351701_agykuw51 seq=18 elapsed_ms=9
+08-21 22:37:21.783 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344641775_xo7uag7j capture_id=cap_mt3eunzh_jv5diewuh9 session_id=trk_sess_1787344351701_agykuw51 seq=18 elapsed_ms=10
+08-21 22:37:21.784 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344641775_xo7uag7j capture_id=cap_mt3eunzh_jv5diewuh9 session_id=trk_sess_1787344351701_agykuw51 seq=18 elapsed_ms=11
+08-21 22:37:21.784 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344641775_xo7uag7j capture_id=cap_mt3eunzh_jv5diewuh9 session_id=trk_sess_1787344351701_agykuw51 seq=18 elapsed_ms=11
+08-21 22:37:21.787 D/SensorManager( 4389): unregisterListener
+08-21 22:37:21.796 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:37:21.797 I/ATMR_LTC_P(30805): P9 peek count=1
+08-21 22:37:21.798 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344641775_xo7uag7j capture_id=cap_mt3eunzh_jv5diewuh9 session_id=trk_sess_1787344351701_agykuw51 seq=18 elapsed_ms=25
+08-21 22:37:21.799 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344641775_xo7uag7j capture_id=cap_mt3eunzh_jv5diewuh9 session_id=trk_sess_1787344351701_agykuw51 seq=18 elapsed_ms=26 outcome=inserted
+08-21 22:37:21.800 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:37:21.736Z lat=46.1702488 lon=6.0960674 age_ms=63 capture_id=os:1787344641736:46.170249:6.096067 event_id=trk_1787344641736_d547da78
+08-21 22:37:21.800 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:37:21.800 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=true loaded=true
+08-21 22:37:21.800 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY item_count=1 load_in_flight=false
+08-21 22:37:21.801 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY session_generation=1145
+08-21 22:37:21.801 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 session_id=trk_sess_1787344351701_agykuw51 seq=19 elapsed_ms=1
+08-21 22:37:21.801 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 session_id=trk_sess_1787344351701_agykuw51 seq=19 elapsed_ms=1
+08-21 22:37:21.807 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 session_id=trk_sess_1787344351701_agykuw51 seq=19 elapsed_ms=6
+08-21 22:37:21.807 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 session_id=trk_sess_1787344351701_agykuw51 seq=19 elapsed_ms=7
+08-21 22:37:21.807 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 session_id=trk_sess_1787344351701_agykuw51 seq=19 elapsed_ms=7
+08-21 22:37:21.808 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 session_id=trk_sess_1787344351701_agykuw51 seq=19 elapsed_ms=7
+08-21 22:37:21.809 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 session_id=trk_sess_1787344351701_agykuw51 seq=19 elapsed_ms=9
+08-21 22:37:21.810 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 session_id=trk_sess_1787344351701_agykuw51 seq=19 elapsed_ms=9 outcome=inserted
+08-21 22:37:21.810 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 seq=19 recorded_at=2026-08-21T20:37:21.736Z inserted=true
+08-21 22:37:21.810 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344641736_d547da78 reason=ok
+08-21 22:37:21.811 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344641736_d547da78 capture_id=os:1787344641736:46.170249:6.096067 recorded_at=2026-08-21T20:37:21.736Z enqueue_result=inserted
+08-21 22:37:21.811 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344641736:46.170249:6.096067
+08-21 22:37:21.812 I/ATMR_LTC_P(30805): P9 ack request count=1
+08-21 22:37:21.812 I/ATMR_LTC_P(30805): P9 ack removed=1 remaining=0
+08-21 22:37:21.831 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:37:21.832 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:37:21.833 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:37:21.834 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=0 queue_depth=2 backend_acked=0 dropped=0 last_event_id=null
+08-21 22:37:26.849 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:37:26.851 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:37:26.852 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:37:30.738 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:37:30.740 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:37:30.776 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:37:30.776 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:37:31.653 D/SensorManager( 4389): unregisterListener
+08-21 22:37:42.226 D/SensorManager( 4389): unregisterListener
+08-21 22:37:46.841 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:37:46.842 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:37:46.843 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:37:53.069 D/SensorManager( 4389): unregisterListener
+08-21 22:38:03.719 D/SensorManager( 4389): unregisterListener
+08-21 22:38:05.332 D/SensorManager(30805): unregisterListener
+08-21 22:38:05.337 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=null source=ensure_manager_presence
+08-21 22:38:05.364 I/ReactNativeJS(30805): ATMR_JS_J TASKDEF_PROBE task_name=background-location-task taskDefined_local=true taskDefined_registry=true task_registered=true task_started=true js_runtime_id=js_mt3d9j66_4xlm8t app_state=background source=T4_app_state_background exit_reason=background timestamp=1787344685363
+08-21 22:38:05.388 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence prior_task_mode=presence_window
+08-21 22:38:05.389 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence prior_task_mode=presence_window
+08-21 22:38:05.390 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=ensure_manager_presence
+08-21 22:38:05.453 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344641736
+08-21 22:38:05.453 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344641736 sLastTimestamp=1787344641736 accepted=false lat=46.1702488 lon=6.0960674
+08-21 22:38:05.453 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:38:05.453 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:38:05.457 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=null source=ensure_manager_presence_fg
+08-21 22:38:05.519 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=null capture_id=cap_mt3evlqn_cffq9p5ner session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:38:05.520 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=null capture_id=cap_mt3evlqn_cffq9p5ner session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY item_count=0 load_in_flight=false
+08-21 22:38:05.520 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=null capture_id=cap_mt3evlqn_cffq9p5ner session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY session_generation=1145
+08-21 22:38:05.520 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344685520_ogpc4ys3 capture_id=cap_mt3evlqn_cffq9p5ner session_id=trk_sess_1787344351701_agykuw51 seq=20 elapsed_ms=1
+08-21 22:38:05.520 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344685520_ogpc4ys3 capture_id=cap_mt3evlqn_cffq9p5ner session_id=trk_sess_1787344351701_agykuw51 seq=20 elapsed_ms=1
+08-21 22:38:05.531 D/SensorManager( 4389): unregisterListener
+08-21 22:38:05.546 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=presence_window
+08-21 22:38:05.546 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=presence_window
+08-21 22:38:05.547 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=ensure_manager_presence_fg
+08-21 22:38:05.553 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344685520_ogpc4ys3 capture_id=cap_mt3evlqn_cffq9p5ner session_id=trk_sess_1787344351701_agykuw51 seq=20 elapsed_ms=34
+08-21 22:38:05.553 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344685520_ogpc4ys3 capture_id=cap_mt3evlqn_cffq9p5ner session_id=trk_sess_1787344351701_agykuw51 seq=20 elapsed_ms=34
+08-21 22:38:05.554 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344685520_ogpc4ys3 capture_id=cap_mt3evlqn_cffq9p5ner session_id=trk_sess_1787344351701_agykuw51 seq=20 elapsed_ms=34
+08-21 22:38:05.554 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344685520_ogpc4ys3 capture_id=cap_mt3evlqn_cffq9p5ner session_id=trk_sess_1787344351701_agykuw51 seq=20 elapsed_ms=35
+08-21 22:38:05.558 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344685520_ogpc4ys3 capture_id=cap_mt3evlqn_cffq9p5ner session_id=trk_sess_1787344351701_agykuw51 seq=20 elapsed_ms=39
+08-21 22:38:05.559 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344685520_ogpc4ys3 capture_id=cap_mt3evlqn_cffq9p5ner session_id=trk_sess_1787344351701_agykuw51 seq=20 elapsed_ms=40 outcome=inserted
+08-21 22:38:05.570 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=app_resume_presence prior_task_mode=presence_window
+08-21 22:38:05.570 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=app_resume_presence prior_task_mode=presence_window
+08-21 22:38:05.570 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=app_resume_presence
+08-21 22:38:05.575 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume_presence discovered=0 peek=0 module=ready
+08-21 22:38:05.576 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:38:05.577 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume_presence discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:38:06.857 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:38:06.859 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:38:06.859 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:38:11.737 D/SensorManager( 4389): unregisterListener
+08-21 22:38:21.739 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:38:21.741 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:38:22.353 D/SensorManager( 4389): unregisterListener
+08-21 22:38:22.752 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:38:22.752 I/ATMR_LTC_P(30805): P2b onLocationResult size=1 time=1787344702736 ertNanos=85646469409149 lat=46.1702547 lon=6.0960753 sLastTimestamp=1787344641736 looper=atmr-flp-callback
+08-21 22:38:22.754 I/ATMR_LTC_P(30805): P9 persist event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 recorded_at=2026-08-21T20:38:22.736Z time=1787344702736 lat=46.1702547 lon=6.0960753
+08-21 22:38:22.755 I/ATMR_LTC_P(30805): P9 ingest persisted=1 incoming=1
+08-21 22:38:22.755 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=2 hostPaused=false shouldReport=true deferredDistance=0.8957053422927856 sLastTimestamp=1787344641736
+08-21 22:38:22.755 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344641736 sLastTimestamp=1787344641736 accepted=false lat=46.1702488 lon=6.0960674
+08-21 22:38:22.755 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344702736 sLastTimestamp=1787344641736 accepted=true lat=46.1702547 lon=6.0960753
+08-21 22:38:22.755 I/ATMR_LTC_P(30805): P5 summary accepted=1 rejectedTs=1 bundles=1
+08-21 22:38:22.755 I/ATMR_LTC_P(30805): P6 directFGS execute bundles.size=1 (JS best-effort, capture already native)
+08-21 22:38:22.755 I/ATMR_LTC_P(30805): P8 executeTask JS=true bundles.size=1
+08-21 22:38:22.758 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:38:22.762 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:38:22.763 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=1 time=1787344702736 lat=46.1702547 lon=6.0960753 armed=true
+08-21 22:38:22.763 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344702736:46.170255:6.096075 time=1787344702736
+08-21 22:38:22.764 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344702736:46.170255:6.096075 time=1787344702736
+08-21 22:38:22.764 I/ATMR_LTC_P(30805): P9 ingest persisted=0 incoming=1
+08-21 22:38:22.764 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344702736
+08-21 22:38:22.764 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344702736 sLastTimestamp=1787344702736 accepted=false lat=46.1702547 lon=6.0960753
+08-21 22:38:22.764 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:38:22.764 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:38:22.766 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=null missionStatus=null taskMode=presence_window lease_state=driver_active owner_gen=trk-mt3eto27-29lgiadvcs owner_mission=null
+08-21 22:38:22.783 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:38:22.784 I/ATMR_LTC_P(30805): P9 peek count=1
+08-21 22:38:22.784 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:38:22.736Z lat=46.1702547 lon=6.0960753 age_ms=48 capture_id=os:1787344702736:46.170255:6.096075 event_id=trk_1787344702736_c83d9524
+08-21 22:38:22.785 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:38:22.785 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:38:22.785 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY item_count=0 load_in_flight=false
+08-21 22:38:22.786 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY session_generation=1145
+08-21 22:38:22.786 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 session_id=trk_sess_1787344351701_agykuw51 seq=21 elapsed_ms=1
+08-21 22:38:22.786 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 session_id=trk_sess_1787344351701_agykuw51 seq=21 elapsed_ms=1
+08-21 22:38:22.791 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 session_id=trk_sess_1787344351701_agykuw51 seq=21 elapsed_ms=5
+08-21 22:38:22.791 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 session_id=trk_sess_1787344351701_agykuw51 seq=21 elapsed_ms=6
+08-21 22:38:22.792 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 session_id=trk_sess_1787344351701_agykuw51 seq=21 elapsed_ms=6
+08-21 22:38:22.792 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 session_id=trk_sess_1787344351701_agykuw51 seq=21 elapsed_ms=7
+08-21 22:38:22.794 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 session_id=trk_sess_1787344351701_agykuw51 seq=21 elapsed_ms=9
+08-21 22:38:22.795 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 session_id=trk_sess_1787344351701_agykuw51 seq=21 elapsed_ms=10 outcome=inserted
+08-21 22:38:22.796 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 seq=21 recorded_at=2026-08-21T20:38:22.736Z inserted=true
+08-21 22:38:22.796 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344702736_c83d9524 reason=ok
+08-21 22:38:22.798 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344702736_c83d9524 capture_id=os:1787344702736:46.170255:6.096075 recorded_at=2026-08-21T20:38:22.736Z enqueue_result=inserted
+08-21 22:38:22.798 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344702736:46.170255:6.096075
+08-21 22:38:22.799 I/ATMR_LTC_P(30805): P9 ack request count=1
+08-21 22:38:22.800 I/ATMR_LTC_P(30805): P9 ack removed=1 remaining=0
+08-21 22:38:22.826 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:38:22.827 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:38:22.828 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:38:23.339 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344702736_c83d9524
+08-21 22:38:26.853 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:38:26.856 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:38:26.857 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:38:31.178 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:38:31.181 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:38:31.767 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:38:31.770 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:38:33.004 D/SensorManager( 4389): unregisterListener
+08-21 22:38:43.757 D/SensorManager( 4389): unregisterListener
+08-21 22:38:46.855 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:38:46.856 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:38:46.857 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:38:54.409 D/SensorManager( 4389): unregisterListener
+08-21 22:38:54.602 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:38:54.608 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:38:55.158 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:38:55.166 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:39:03.744 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:39:03.746 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:39:03.762 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:39:03.764 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:39:04.762 D/SensorManager( 4389): unregisterListener
+08-21 22:39:05.551 D/SensorManager(30805): unregisterListener
+08-21 22:39:05.557 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=null source=ensure_manager_presence
+08-21 22:39:05.563 I/ReactNativeJS(30805): ATMR_JS_J TASKDEF_PROBE task_name=background-location-task taskDefined_local=true taskDefined_registry=true task_registered=true task_started=true js_runtime_id=js_mt3d9j66_4xlm8t app_state=background source=T4_app_state_background exit_reason=background timestamp=1787344745563
+08-21 22:39:05.604 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence prior_task_mode=presence_window
+08-21 22:39:05.604 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence prior_task_mode=presence_window
+08-21 22:39:05.604 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=ensure_manager_presence
+08-21 22:39:05.660 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344702736
+08-21 22:39:05.660 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344702736 sLastTimestamp=1787344702736 accepted=false lat=46.1702547 lon=6.0960753
+08-21 22:39:05.660 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:39:05.660 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:39:05.665 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=null source=ensure_manager_presence_fg
+08-21 22:39:05.768 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=presence_window
+08-21 22:39:05.768 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=presence_window
+08-21 22:39:05.769 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=ensure_manager_presence_fg
+08-21 22:39:05.771 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=null capture_id=cap_mt3eww8a_ofizebbr7d session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:39:05.771 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=null capture_id=cap_mt3eww8a_ofizebbr7d session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:39:05.772 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=null capture_id=cap_mt3eww8a_ofizebbr7d session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY session_generation=1145
+08-21 22:39:05.772 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344745772_t99nhdas capture_id=cap_mt3eww8a_ofizebbr7d session_id=trk_sess_1787344351701_agykuw51 seq=22 elapsed_ms=2
+08-21 22:39:05.772 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344745772_t99nhdas capture_id=cap_mt3eww8a_ofizebbr7d session_id=trk_sess_1787344351701_agykuw51 seq=22 elapsed_ms=2
+08-21 22:39:05.807 D/SensorManager( 4389): unregisterListener
+08-21 22:39:05.810 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344745772_t99nhdas capture_id=cap_mt3eww8a_ofizebbr7d session_id=trk_sess_1787344351701_agykuw51 seq=22 elapsed_ms=40
+08-21 22:39:05.811 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344745772_t99nhdas capture_id=cap_mt3eww8a_ofizebbr7d session_id=trk_sess_1787344351701_agykuw51 seq=22 elapsed_ms=40
+08-21 22:39:05.811 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344745772_t99nhdas capture_id=cap_mt3eww8a_ofizebbr7d session_id=trk_sess_1787344351701_agykuw51 seq=22 elapsed_ms=41
+08-21 22:39:05.811 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344745772_t99nhdas capture_id=cap_mt3eww8a_ofizebbr7d session_id=trk_sess_1787344351701_agykuw51 seq=22 elapsed_ms=41
+08-21 22:39:05.813 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344745772_t99nhdas capture_id=cap_mt3eww8a_ofizebbr7d session_id=trk_sess_1787344351701_agykuw51 seq=22 elapsed_ms=43
+08-21 22:39:05.814 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344745772_t99nhdas capture_id=cap_mt3eww8a_ofizebbr7d session_id=trk_sess_1787344351701_agykuw51 seq=22 elapsed_ms=44 outcome=inserted
+08-21 22:39:05.826 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=app_resume_presence prior_task_mode=presence_window
+08-21 22:39:05.826 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=app_resume_presence prior_task_mode=presence_window
+08-21 22:39:05.826 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=app_resume_presence
+08-21 22:39:05.833 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume_presence discovered=0 peek=0 module=ready
+08-21 22:39:05.834 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:39:05.836 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume_presence discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:39:06.867 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:39:06.869 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:39:06.870 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:39:15.401 D/SensorManager( 4389): unregisterListener
+08-21 22:39:23.775 I/ATMR_LTC_P(30805): P2b onLocationResult size=1 time=1787344763736 ertNanos=85707469887981 lat=46.1702583 lon=6.096076 sLastTimestamp=1787344702736 looper=atmr-flp-callback
+08-21 22:39:23.775 I/ATMR_LTC_P(30805): P9 persist event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 recorded_at=2026-08-21T20:39:23.736Z time=1787344763736 lat=46.1702583 lon=6.096076
+08-21 22:39:23.781 I/ATMR_LTC_P(30805): P9 ingest persisted=1 incoming=1
+08-21 22:39:23.781 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=2 hostPaused=false shouldReport=true deferredDistance=0.4037915766239166 sLastTimestamp=1787344702736
+08-21 22:39:23.781 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344702736 sLastTimestamp=1787344702736 accepted=false lat=46.1702547 lon=6.0960753
+08-21 22:39:23.781 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344763736 sLastTimestamp=1787344702736 accepted=true lat=46.1702583 lon=6.096076
+08-21 22:39:23.781 I/ATMR_LTC_P(30805): P5 summary accepted=1 rejectedTs=1 bundles=1
+08-21 22:39:23.781 I/ATMR_LTC_P(30805): P6 directFGS execute bundles.size=1 (JS best-effort, capture already native)
+08-21 22:39:23.781 I/ATMR_LTC_P(30805): P8 executeTask JS=true bundles.size=1
+08-21 22:39:23.783 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=1 time=1787344763736 lat=46.1702583 lon=6.096076 armed=true
+08-21 22:39:23.783 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:39:23.783 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344763736:46.170258:6.096076 time=1787344763736
+08-21 22:39:23.783 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344763736:46.170258:6.096076 time=1787344763736
+08-21 22:39:23.783 I/ATMR_LTC_P(30805): P9 ingest persisted=0 incoming=1
+08-21 22:39:23.783 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344763736
+08-21 22:39:23.783 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344763736 sLastTimestamp=1787344763736 accepted=false lat=46.1702583 lon=6.096076
+08-21 22:39:23.783 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:39:23.784 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:39:23.786 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=null missionStatus=null taskMode=presence_window lease_state=driver_active owner_gen=trk-mt3eto27-29lgiadvcs owner_mission=null
+08-21 22:39:23.800 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:39:23.801 I/ATMR_LTC_P(30805): P9 peek count=1
+08-21 22:39:23.802 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:39:23.736Z lat=46.1702583 lon=6.096076 age_ms=65 capture_id=os:1787344763736:46.170258:6.096076 event_id=trk_1787344763736_d477b635
+08-21 22:39:23.802 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:39:23.803 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:39:23.803 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:39:23.804 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY session_generation=1145
+08-21 22:39:23.804 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 session_id=trk_sess_1787344351701_agykuw51 seq=23 elapsed_ms=2
+08-21 22:39:23.805 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 session_id=trk_sess_1787344351701_agykuw51 seq=23 elapsed_ms=2
+08-21 22:39:23.808 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 session_id=trk_sess_1787344351701_agykuw51 seq=23 elapsed_ms=5
+08-21 22:39:23.808 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 session_id=trk_sess_1787344351701_agykuw51 seq=23 elapsed_ms=6
+08-21 22:39:23.808 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 session_id=trk_sess_1787344351701_agykuw51 seq=23 elapsed_ms=6
+08-21 22:39:23.809 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 session_id=trk_sess_1787344351701_agykuw51 seq=23 elapsed_ms=6
+08-21 22:39:23.810 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 session_id=trk_sess_1787344351701_agykuw51 seq=23 elapsed_ms=8
+08-21 22:39:23.816 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 session_id=trk_sess_1787344351701_agykuw51 seq=23 elapsed_ms=13 outcome=inserted
+08-21 22:39:23.816 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 seq=23 recorded_at=2026-08-21T20:39:23.736Z inserted=true
+08-21 22:39:23.816 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344763736_d477b635 reason=ok
+08-21 22:39:23.817 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344763736_d477b635 capture_id=os:1787344763736:46.170258:6.096076 recorded_at=2026-08-21T20:39:23.736Z enqueue_result=inserted
+08-21 22:39:23.818 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344763736:46.170258:6.096076
+08-21 22:39:23.818 I/ATMR_LTC_P(30805): P9 ack request count=1
+08-21 22:39:23.819 I/ATMR_LTC_P(30805): P9 ack removed=1 remaining=0
+08-21 22:39:23.838 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:39:23.839 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:39:23.840 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:39:23.996 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344763736_d477b635
+08-21 22:39:26.250 D/SensorManager( 4389): unregisterListener
+08-21 22:39:26.875 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:39:26.876 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:39:26.877 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:39:37.005 D/SensorManager( 4389): unregisterListener
+08-21 22:39:46.872 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:39:46.873 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:39:46.874 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:39:47.740 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:39:47.740 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:39:47.759 D/SensorManager( 4389): unregisterListener
+08-21 22:39:47.768 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:39:47.773 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:39:58.506 D/SensorManager( 4389): unregisterListener
+08-21 22:40:05.696 D/SensorManager(30805): unregisterListener
+08-21 22:40:05.700 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=null source=ensure_manager_presence
+08-21 22:40:05.702 I/ReactNativeJS(30805): ATMR_JS_J TASKDEF_PROBE task_name=background-location-task taskDefined_local=true taskDefined_registry=true task_registered=true task_started=true js_runtime_id=js_mt3d9j66_4xlm8t app_state=background source=T4_app_state_background exit_reason=background timestamp=1787344805702
+08-21 22:40:05.748 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence prior_task_mode=presence_window
+08-21 22:40:05.748 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence prior_task_mode=presence_window
+08-21 22:40:05.749 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=ensure_manager_presence
+08-21 22:40:05.774 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344763736
+08-21 22:40:05.774 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344763736 sLastTimestamp=1787344763736 accepted=false lat=46.1702583 lon=6.096076
+08-21 22:40:05.774 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:40:05.774 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:40:05.779 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=null source=ensure_manager_presence_fg
+08-21 22:40:05.845 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=presence_window
+08-21 22:40:05.845 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=presence_window
+08-21 22:40:05.845 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=ensure_manager_presence_fg
+08-21 22:40:05.881 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=app_resume_presence prior_task_mode=presence_window
+08-21 22:40:05.881 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=app_resume_presence prior_task_mode=presence_window
+08-21 22:40:05.881 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=app_resume_presence
+08-21 22:40:05.888 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume_presence discovered=0 peek=0 module=ready
+08-21 22:40:05.888 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:40:05.889 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume_presence discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:40:06.884 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:40:06.885 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:40:06.886 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:40:07.770 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=null capture_id=cap_mt3ey82g_5k0n07wd1k session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:40:07.771 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=null capture_id=cap_mt3ey82g_5k0n07wd1k session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:40:07.772 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=null capture_id=cap_mt3ey82g_5k0n07wd1k session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=2 readiness=READY session_generation=1145
+08-21 22:40:07.772 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344807772_sw4ge0n5 capture_id=cap_mt3ey82g_5k0n07wd1k session_id=trk_sess_1787344351701_agykuw51 seq=24 elapsed_ms=3
+08-21 22:40:07.773 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344807772_sw4ge0n5 capture_id=cap_mt3ey82g_5k0n07wd1k session_id=trk_sess_1787344351701_agykuw51 seq=24 elapsed_ms=3
+08-21 22:40:07.778 D/SensorManager( 4389): unregisterListener
+08-21 22:40:07.779 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344807772_sw4ge0n5 capture_id=cap_mt3ey82g_5k0n07wd1k session_id=trk_sess_1787344351701_agykuw51 seq=24 elapsed_ms=9
+08-21 22:40:07.780 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344807772_sw4ge0n5 capture_id=cap_mt3ey82g_5k0n07wd1k session_id=trk_sess_1787344351701_agykuw51 seq=24 elapsed_ms=10
+08-21 22:40:07.780 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344807772_sw4ge0n5 capture_id=cap_mt3ey82g_5k0n07wd1k session_id=trk_sess_1787344351701_agykuw51 seq=24 elapsed_ms=11
+08-21 22:40:07.780 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344807772_sw4ge0n5 capture_id=cap_mt3ey82g_5k0n07wd1k session_id=trk_sess_1787344351701_agykuw51 seq=24 elapsed_ms=11
+08-21 22:40:07.782 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344807772_sw4ge0n5 capture_id=cap_mt3ey82g_5k0n07wd1k session_id=trk_sess_1787344351701_agykuw51 seq=24 elapsed_ms=13
+08-21 22:40:07.783 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344807772_sw4ge0n5 capture_id=cap_mt3ey82g_5k0n07wd1k session_id=trk_sess_1787344351701_agykuw51 seq=24 elapsed_ms=14 outcome=inserted
+08-21 22:40:18.890 D/SensorManager( 4389): unregisterListener
+08-21 22:40:19.932 I/ATMR_LTC_P(30805): P2b onLocationResult size=1 time=1787344819848 ertNanos=85763581381049 lat=46.1702602 lon=6.0960719 sLastTimestamp=1787344763736 looper=atmr-flp-callback
+08-21 22:40:19.933 I/ATMR_LTC_P(30805): P9 persist event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 recorded_at=2026-08-21T20:40:19.848Z time=1787344819848 lat=46.1702602 lon=6.0960719
+08-21 22:40:19.933 I/ATMR_LTC_P(30805): P9 ingest persisted=1 incoming=1
+08-21 22:40:19.933 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=2 hostPaused=false shouldReport=true deferredDistance=0.3805963397026062 sLastTimestamp=1787344763736
+08-21 22:40:19.933 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344763736 sLastTimestamp=1787344763736 accepted=false lat=46.1702583 lon=6.096076
+08-21 22:40:19.933 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344819848 sLastTimestamp=1787344763736 accepted=true lat=46.1702602 lon=6.0960719
+08-21 22:40:19.933 I/ATMR_LTC_P(30805): P5 summary accepted=1 rejectedTs=1 bundles=1
+08-21 22:40:19.933 I/ATMR_LTC_P(30805): P6 directFGS execute bundles.size=1 (JS best-effort, capture already native)
+08-21 22:40:19.933 I/ATMR_LTC_P(30805): P8 executeTask JS=true bundles.size=1
+08-21 22:40:19.936 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:40:19.939 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=1 time=1787344819848 lat=46.1702602 lon=6.0960719 armed=true
+08-21 22:40:19.939 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344819848:46.170260:6.096072 time=1787344819848
+08-21 22:40:19.939 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344819848:46.170260:6.096072 time=1787344819848
+08-21 22:40:19.939 I/ATMR_LTC_P(30805): P9 ingest persisted=0 incoming=1
+08-21 22:40:19.939 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344819848
+08-21 22:40:19.939 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344819848 sLastTimestamp=1787344819848 accepted=false lat=46.1702602 lon=6.0960719
+08-21 22:40:19.939 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=null missionStatus=null taskMode=presence_window lease_state=driver_active owner_gen=trk-mt3eto27-29lgiadvcs owner_mission=null
+08-21 22:40:19.939 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:40:19.939 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:40:19.952 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:40:19.953 I/ATMR_LTC_P(30805): P9 peek count=1
+08-21 22:40:19.954 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:40:19.848Z lat=46.1702602 lon=6.0960719 age_ms=106 capture_id=os:1787344819848:46.170260:6.096072 event_id=trk_1787344819848_ab70772d
+08-21 22:40:19.954 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:40:19.955 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:40:19.955 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:40:19.955 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY session_generation=1145
+08-21 22:40:19.956 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 session_id=trk_sess_1787344351701_agykuw51 seq=25 elapsed_ms=1
+08-21 22:40:19.956 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 session_id=trk_sess_1787344351701_agykuw51 seq=25 elapsed_ms=2
+08-21 22:40:19.959 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 session_id=trk_sess_1787344351701_agykuw51 seq=25 elapsed_ms=5
+08-21 22:40:19.960 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 session_id=trk_sess_1787344351701_agykuw51 seq=25 elapsed_ms=5
+08-21 22:40:19.960 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 session_id=trk_sess_1787344351701_agykuw51 seq=25 elapsed_ms=6
+08-21 22:40:19.960 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 session_id=trk_sess_1787344351701_agykuw51 seq=25 elapsed_ms=6
+08-21 22:40:19.962 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 session_id=trk_sess_1787344351701_agykuw51 seq=25 elapsed_ms=7
+08-21 22:40:19.963 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 session_id=trk_sess_1787344351701_agykuw51 seq=25 elapsed_ms=8 outcome=inserted
+08-21 22:40:19.963 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 seq=25 recorded_at=2026-08-21T20:40:19.848Z inserted=true
+08-21 22:40:19.963 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344819848_ab70772d reason=ok
+08-21 22:40:19.964 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344819848_ab70772d capture_id=os:1787344819848:46.170260:6.096072 recorded_at=2026-08-21T20:40:19.848Z enqueue_result=inserted
+08-21 22:40:19.964 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344819848:46.170260:6.096072
+08-21 22:40:19.965 I/ATMR_LTC_P(30805): P9 ack request count=1
+08-21 22:40:19.965 I/ATMR_LTC_P(30805): P9 ack removed=1 remaining=0
+08-21 22:40:19.989 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:40:19.991 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:40:19.991 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:40:20.156 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344819848_ab70772d
+08-21 22:40:26.887 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:40:26.889 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:40:26.890 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:40:29.758 D/SensorManager( 4389): unregisterListener
+08-21 22:40:40.390 D/SensorManager( 4389): unregisterListener
+08-21 22:40:40.739 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:40:40.741 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:40:41.367 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:40:41.367 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:40:46.895 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:40:46.896 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:40:46.897 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:40:49.739 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:40:49.740 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:40:49.759 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:40:49.765 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:40:51.145 D/SensorManager( 4389): unregisterListener
+08-21 22:40:55.251 I/FaceServiceBroadcastReceiver(20927): [ClusteringService: 1.0] unregisterListener completed in time  1 microsec. 
+08-21 22:40:55.255 I/FaceServiceBroadcastReceiver(20926): [ClusteringService: 1.0] unregisterListener completed in time  2 microsec. 
+08-21 22:41:01.894 D/SensorManager( 4389): unregisterListener
+08-21 22:41:05.806 D/SensorManager(30805): unregisterListener
+08-21 22:41:05.810 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=null source=ensure_manager_presence
+08-21 22:41:05.812 I/ReactNativeJS(30805): ATMR_JS_J TASKDEF_PROBE task_name=background-location-task taskDefined_local=true taskDefined_registry=true task_registered=true task_started=true js_runtime_id=js_mt3d9j66_4xlm8t app_state=background source=T4_app_state_background exit_reason=background timestamp=1787344865812
+08-21 22:41:05.867 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence prior_task_mode=presence_window
+08-21 22:41:05.868 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence prior_task_mode=presence_window
+08-21 22:41:05.869 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=ensure_manager_presence
+08-21 22:41:05.875 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344819848
+08-21 22:41:05.875 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344819848 sLastTimestamp=1787344819848 accepted=false lat=46.1702602 lon=6.0960719
+08-21 22:41:05.875 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:41:05.875 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:41:05.878 I/ReactNativeJS(30805): ATMR_POC1_R2 ELIGIBILITY result=PRESENCE mission_id=null source=ensure_manager_presence_fg
+08-21 22:41:06.010 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=null capture_id=cap_mt3ezh09_v8ufgg94yg session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:41:06.010 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=null capture_id=cap_mt3ezh09_v8ufgg94yg session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:41:06.010 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=null capture_id=cap_mt3ezh09_v8ufgg94yg session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY session_generation=1145
+08-21 22:41:06.010 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344866010_zf0eaq05 capture_id=cap_mt3ezh09_v8ufgg94yg session_id=trk_sess_1787344351701_agykuw51 seq=26 elapsed_ms=1
+08-21 22:41:06.011 D/SensorManager( 4389): unregisterListener
+08-21 22:41:06.011 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344866010_zf0eaq05 capture_id=cap_mt3ezh09_v8ufgg94yg session_id=trk_sess_1787344351701_agykuw51 seq=26 elapsed_ms=1
+08-21 22:41:06.034 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=presence_window
+08-21 22:41:06.034 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=ensure_manager_presence_fg prior_task_mode=presence_window
+08-21 22:41:06.034 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=ensure_manager_presence_fg
+08-21 22:41:06.035 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=app_resume_presence prior_task_mode=presence_window
+08-21 22:41:06.035 I/ReactNativeJS(30805): ATMR_POC1_R4 ENSURE_NATIVE requested_mode=availability_presence requested_interval=60000 mission_id=null reason=app_resume_presence prior_task_mode=presence_window
+08-21 22:41:06.036 I/ReactNativeJS(30805): ATMR_POC1_R5 FLP_SOFT_UPDATE_REQUEST skipped=true skip_reason=prior_already_presence_window from_interval=unknown to_interval=60000 requested_mode=availability_presence prior_task_mode=presence_window reason=app_resume_presence
+08-21 22:41:06.037 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344866010_zf0eaq05 capture_id=cap_mt3ezh09_v8ufgg94yg session_id=trk_sess_1787344351701_agykuw51 seq=26 elapsed_ms=27
+08-21 22:41:06.037 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344866010_zf0eaq05 capture_id=cap_mt3ezh09_v8ufgg94yg session_id=trk_sess_1787344351701_agykuw51 seq=26 elapsed_ms=28
+08-21 22:41:06.037 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344866010_zf0eaq05 capture_id=cap_mt3ezh09_v8ufgg94yg session_id=trk_sess_1787344351701_agykuw51 seq=26 elapsed_ms=28
+08-21 22:41:06.038 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344866010_zf0eaq05 capture_id=cap_mt3ezh09_v8ufgg94yg session_id=trk_sess_1787344351701_agykuw51 seq=26 elapsed_ms=28
+08-21 22:41:06.039 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344866010_zf0eaq05 capture_id=cap_mt3ezh09_v8ufgg94yg session_id=trk_sess_1787344351701_agykuw51 seq=26 elapsed_ms=30
+08-21 22:41:06.040 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344866010_zf0eaq05 capture_id=cap_mt3ezh09_v8ufgg94yg session_id=trk_sess_1787344351701_agykuw51 seq=26 elapsed_ms=31 outcome=inserted
+08-21 22:41:06.049 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume_presence discovered=0 peek=0 module=ready
+08-21 22:41:06.050 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:41:06.050 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=app_resume_presence discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:41:06.894 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:41:06.895 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:41:06.896 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:41:12.654 D/SensorManager( 4389): unregisterListener
+08-21 22:41:14.777 I/ATMR_LTC_P(30805): P2b onLocationResult size=1 time=1787344874735 ertNanos=85818469614083 lat=46.1702656 lon=6.0960688 sLastTimestamp=1787344819848 looper=atmr-flp-callback
+08-21 22:41:14.778 I/ATMR_LTC_P(30805): P9 persist event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 recorded_at=2026-08-21T20:41:14.735Z time=1787344874735 lat=46.1702656 lon=6.0960688
+08-21 22:41:14.778 I/ATMR_LTC_P(30805): P9 ingest persisted=1 incoming=1
+08-21 22:41:14.778 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=2 hostPaused=false shouldReport=true deferredDistance=0.64621502161026 sLastTimestamp=1787344819848
+08-21 22:41:14.778 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344819848 sLastTimestamp=1787344819848 accepted=false lat=46.1702602 lon=6.0960719
+08-21 22:41:14.778 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344874735 sLastTimestamp=1787344819848 accepted=true lat=46.1702656 lon=6.0960688
+08-21 22:41:14.778 I/ATMR_LTC_P(30805): P5 summary accepted=1 rejectedTs=1 bundles=1
+08-21 22:41:14.778 I/ATMR_LTC_P(30805): P6 directFGS execute bundles.size=1 (JS best-effort, capture already native)
+08-21 22:41:14.778 I/ATMR_LTC_P(30805): P8 executeTask JS=true bundles.size=1
+08-21 22:41:14.782 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:41:14.784 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=null missionStatus=null taskMode=presence_window lease_state=driver_active owner_gen=trk-mt3eto27-29lgiadvcs owner_mission=null
+08-21 22:41:14.785 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=1 time=1787344874735 lat=46.1702656 lon=6.0960688 armed=true
+08-21 22:41:14.785 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344874735:46.170266:6.096069 time=1787344874735
+08-21 22:41:14.786 I/ATMR_LTC_P(30805): P9 persist skip duplicate capture_id=os:1787344874735:46.170266:6.096069 time=1787344874735
+08-21 22:41:14.786 I/ATMR_LTC_P(30805): P9 ingest persisted=0 incoming=1
+08-21 22:41:14.786 I/ATMR_LTC_P(30805): P4 defer/report deferred.size=1 hostPaused=false shouldReport=true deferredDistance=0.0 sLastTimestamp=1787344874735
+08-21 22:41:14.786 I/ATMR_LTC_P(30805): P5 filter incoming.time=1787344874735 sLastTimestamp=1787344874735 accepted=false lat=46.1702656 lon=6.0960688
+08-21 22:41:14.786 I/ATMR_LTC_P(30805): P5 summary accepted=0 rejectedTs=1 bundles=0
+08-21 22:41:14.786 W/ATMR_LTC_P(30805): P6 skip ÔÇö no bundles after timestamp filter
+08-21 22:41:14.789 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:41:14.791 I/ATMR_LTC_P(30805): P9 peek count=1
+08-21 22:41:14.800 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:41:14.735Z lat=46.1702656 lon=6.0960688 age_ms=64 capture_id=os:1787344874735:46.170266:6.096069 event_id=trk_1787344874735_7f9b8010
+08-21 22:41:14.800 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:41:14.801 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:41:14.801 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:41:14.802 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 session_id=trk_sess_1787344351701_agykuw51 seq=null elapsed_ms=1 readiness=READY session_generation=1145
+08-21 22:41:14.802 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 session_id=trk_sess_1787344351701_agykuw51 seq=27 elapsed_ms=2
+08-21 22:41:14.803 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 session_id=trk_sess_1787344351701_agykuw51 seq=27 elapsed_ms=2
+08-21 22:41:14.807 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 session_id=trk_sess_1787344351701_agykuw51 seq=27 elapsed_ms=6
+08-21 22:41:14.808 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 session_id=trk_sess_1787344351701_agykuw51 seq=27 elapsed_ms=7
+08-21 22:41:14.808 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 session_id=trk_sess_1787344351701_agykuw51 seq=27 elapsed_ms=8
+08-21 22:41:14.809 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 session_id=trk_sess_1787344351701_agykuw51 seq=27 elapsed_ms=8
+08-21 22:41:14.810 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 session_id=trk_sess_1787344351701_agykuw51 seq=27 elapsed_ms=10
+08-21 22:41:14.812 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 session_id=trk_sess_1787344351701_agykuw51 seq=27 elapsed_ms=11 outcome=inserted
+08-21 22:41:14.812 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 seq=27 recorded_at=2026-08-21T20:41:14.735Z inserted=true
+08-21 22:41:14.813 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344874735_7f9b8010 reason=ok
+08-21 22:41:14.814 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344874735_7f9b8010 capture_id=os:1787344874735:46.170266:6.096069 recorded_at=2026-08-21T20:41:14.735Z enqueue_result=inserted
+08-21 22:41:14.814 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344874735:46.170266:6.096069
+08-21 22:41:14.815 I/ATMR_LTC_P(30805): P9 ack request count=1
+08-21 22:41:14.816 I/ATMR_LTC_P(30805): P9 ack removed=1 remaining=0
+08-21 22:41:14.840 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:41:14.841 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:41:14.842 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:41:14.985 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344874735_7f9b8010
+08-21 22:41:22.742 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=false deferred.size=1 hostPaused=false
+08-21 22:41:22.745 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:41:23.137 I/ATMR_LTC_P(30805): P2c onLocationAvailability isLocationAvailable=true deferred.size=1 hostPaused=false
+08-21 22:41:23.142 I/ATMR_LTC_P(30805): P1b FGS PendingIntent size=0 time=null lat=null lon=null armed=true
+08-21 22:41:23.406 D/SensorManager( 4389): unregisterListener
+08-21 22:41:26.903 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 module=ready
+08-21 22:41:26.904 I/ATMR_LTC_P(30805): P9 peek count=0
+08-21 22:41:26.905 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=js_alive_watchdog discovered=0 peek=0 imported=0 removed=0 skip=empty_store
+08-21 22:41:34.155 D/SensorManager( 4389): unregisterListener

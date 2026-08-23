@@ -411,8 +411,37 @@ OFF ↔ BLOCKED ↔ PRESENCE ↔ LIVE
 - Mobile : état `UNKNOWN | AVAILABLE | UNAVAILABLE` (pas de défaut `true` avant hydratation)
 - FSM `BLOCKED` + `capabilityReady` (permissions FG+BG **et** disclosure) ; mission ne contourne pas `BLOCKED`
 - Retrait gate présence 07–19 (fenêtre mission T−30 intacte)
-- Transition présence↔LIVE sans stop FGS (B2) + options natives durables (B3)
+- Transition présence↔LIVE sans stop FGS (B2) + options natives durables (B3-A FGS)
+- B3-B : delivery FLP native (persist `Location.time` avant JS ; PendingIntent → FGS). Soak 60 min 2026-08-19 : **P9 continu pendant Doze = PASS**. Ingest backend figé pendant Hermes gelé n’est plus un FAIL. **B3-D** : drain P9 → queue JS au réveil (peek puis ack après enqueue durable ; identités `event_id` / `capture_id` / `recorded_at` conservées). 0 persist native pendant Doze = FAIL produit.
+- Labels chauffeur + 5 situations carte (`off_duty` prioritaire sur `gps_offline` ; heartbeat frais obligatoire)
 - Labels chauffeur + 5 situations carte (`off_duty` prioritaire sur `gps_offline` ; heartbeat frais obligatoire)
 - Matrice canary : [`docs/ops/gps-product-contract-canary-matrix.md`](../ops/gps-product-contract-canary-matrix.md)
 
-**Gate release :** A1 mobile + A3 + C2 doivent être verts avant canary. B2+B3+canary batterie requis avant candidat prod.
+**Audit statique `78a1c73c` :** A1 mobile + A3 + C2 = PASS. Pas de v5.
+
+```text
+GO CANARY B2+B3+BATTERIE  = YES  ✅ CLOSED (2026-08-21)
+DEVICE GPS CERTIFICATION  = CLOSED ✅
+FLEET E2E                 = HOLD
+NEXT ★                    = certification états chauffeur C01→C10
+GO PROD                   = NO
+```
+
+```text
+STATIC v4 ✅
+  → B2/B3 DEVICE CANARY ✅ CLOSED
+  → CERTIF ÉTATS CHAUFFEUR FG/BG (C01→C10)  ★ NEXT
+  → MOBILE → TRANSPORT → BACKEND → FRONTEND/MAP (flotte)
+  → FLEET 10/10 → FLEET 20/20
+  → ANDROID + iOS
+  → FAILURE/RECOVERY
+  → GO PROD
+```
+
+**GO PROD** exige la flotte E2E — [`docs/ops/gps-fleet-e2e-certification.md`](../ops/gps-fleet-e2e-certification.md) (HOLD).  
+**Prochaine marche :** [`docs/ops/gps-driver-state-certification.md`](../ops/gps-driver-state-certification.md).  
+**19/20 chauffeurs éligibles correctement localisés = NO-GO PROD.**
+
+Canary device fermé : [`docs/ops/_release_exec_p0d_2026-08-16/b2_canary_78a1c73c/B3_STATUS.md`](../ops/_release_exec_p0d_2026-08-16/b2_canary_78a1c73c/B3_STATUS.md).
+
+**Check CI Google keys :** dumps `xmltree` / `dumpsys activity` untrackés (clés Maps d’apps tierces). Le scan reste obligatoire ; ce n’est pas un waiver GPS.
