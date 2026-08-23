@@ -58,10 +58,15 @@ export function mapDriverMission(input: DriverMission): DriverMission {
   };
 
   const milestone = statusUpperFromUnknown(raw.mission_milestone);
-  if (id != null && milestone === "ARRIVED") {
-    markDriverArrivedAtPickupMilestone(id);
+  // ARRIVED-SOT-2 : composition serveur (mission_milestone ou status=arrived)
+  if (milestone === "ARRIVED" || upper === "ARRIVED") {
+    if (id != null) {
+      markDriverArrivedAtPickupMilestone(id);
+    }
+    return { ...base, status: resolveDriverStatusForUx("ARRIVED") };
   }
 
+  // Optimistic UI uniquement : entre PUT réussi et prochain GET
   if (id != null && upper === "EN_ROUTE" && hasArrivedAtPickupMilestone(id)) {
     return { ...base, status: resolveDriverStatusForUx("ARRIVED") };
   }

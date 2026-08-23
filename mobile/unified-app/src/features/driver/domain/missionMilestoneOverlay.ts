@@ -1,7 +1,11 @@
 /**
- * Le backend laisse le booking en EN_ROUTE quand l'étape mission est « arrivé »
- * (réponse PUT: mission_milestone: ARRIVED, unchanged: true). Tant qu'on ne persiste
- * pas côté API, on mémorise côté client l'étape atteinte pour l'affichage / transitions.
+ * Overlay ARRIVED côté mobile = optimistic UI uniquement (ARRIVED-SOT-2).
+ *
+ * La vérité durable vient du GET serveur :
+ *   Booking EN_ROUTE + Assignment ARRIVED_PICKUP
+ *   → status=arrived + mission_milestone=ARRIVED
+ *
+ * Le Set ne doit plus servir à restaurer après cold start / refresh.
  */
 const arrivedPickupByMissionId = new Set<number>();
 
@@ -38,6 +42,10 @@ export function applyArrivedMilestoneFromStatusResponse(
   data: { mission_milestone?: unknown; status?: unknown } | null | undefined
 ): void {
   if (String(data?.mission_milestone ?? "").toUpperCase() === "ARRIVED") {
+    markDriverArrivedAtPickupMilestone(missionId);
+  }
+  // Composition serveur : status=arrived (sans milestone explicite)
+  if (String(data?.status ?? "").trim().toLowerCase() === "arrived") {
     markDriverArrivedAtPickupMilestone(missionId);
   }
 }

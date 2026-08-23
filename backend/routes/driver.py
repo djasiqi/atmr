@@ -243,6 +243,63 @@ def _enrich_driver_booking_list_payload(payload: dict[str, Any]) -> dict[str, An
     return out
 
 
+def _compose_driver_bookings_with_assignments(
+    payloads: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """ARRIVED-SOT-2 : compose ARRIVED depuis Assignment.ARRIVED_PICKUP (batch)."""
+    if not payloads:
+        return payloads
+    try:
+        from application.drivers.compose_driver_mission_surface import (
+            compose_driver_mission_payload,
+            is_booking_en_route,
+            latest_assignment_status_by_booking_id,
+        )
+        from repositories.assignment_repository import AssignmentRepository
+    except Exception:
+        return payloads
+
+    en_route_ids: list[int] = []
+    for p in payloads:
+        try:
+            bid = int(p.get("id"))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if is_booking_en_route(p.get("status")):
+            en_route_ids.append(bid)
+    if not en_route_ids:
+        return payloads
+
+    try:
+        assignments = AssignmentRepository().find_by_booking_ids(en_route_ids)
+        status_by_bid = latest_assignment_status_by_booking_id(assignments)
+    except Exception:
+        logger.exception(
+            "[Driver Bookings] composition ARRIVED impossible (assignments)"
+        )
+        return payloads
+
+    out: list[dict[str, Any]] = []
+    for p in payloads:
+        try:
+            bid = int(p.get("id"))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            out.append(p)
+            continue
+        out.append(
+            compose_driver_mission_payload(
+                p, assignment_status=status_by_bid.get(bid)
+            )
+        )
+    return out
+
+
+def _serialize_driver_bookings_list(bookings: list[Any]) -> list[dict[str, Any]]:
+    """Serialize + distance enrich + composition ARRIVED (SOT-2)."""
+    base = [_enrich_driver_booking_list_payload(b.serialize) for b in bookings]
+    return _compose_driver_bookings_with_assignments(base)
+
+
 def _resolve_tracking_ack_status(
     *,
     accept_status: str | None,
@@ -1156,7 +1213,7 @@ class DriverUpcomingBookings(Resource):
                     e,
                 )
 
-        return [_enrich_driver_booking_list_payload(b.serialize) for b in bookings], 200
+        return _serialize_driver_bookings_list(bookings), 200
 
 
 @driver_ns.route("/me/bookings/since")
@@ -1278,9 +1335,7 @@ class DriverBookingsSince(Resource):
                         b.scheduled_time,
                     )
 
-            return [
-                _enrich_driver_booking_list_payload(b.serialize) for b in bookings
-            ], 200
+            return _serialize_driver_bookings_list(bookings), 200
         finally:
             observe_driver_bookings_since_request(
                 trigger_reason=trigger,
@@ -1326,17 +1381,15 @@ class DriverMobileSnapshot(Resource):
             today_fn=lambda: now_local().date(),
         )
         bookings = uc_bookings.execute(driver_id=driver.id).bookings
-        today_bookings = [
-            _enrich_driver_booking_list_payload(b.serialize) for b in bookings
-        ]
+        today_bookings = _serialize_driver_bookings_list(bookings)
 
         active_booking = None
-        for b in bookings:
+        for payload, b in zip(today_bookings, bookings, strict=False):
             if b.status in (
                 BookingStatus.EN_ROUTE,
                 BookingStatus.IN_PROGRESS,
             ):
-                active_booking = _enrich_driver_booking_list_payload(b.serialize)
+                active_booking = payload
                 break
 
         counters = {
@@ -3911,7 +3964,7 @@ class DriverAllBookings(Resource):
         uc = GetDriverAllBookingsUseCase(booking_repo=BookingRepository())
         bookings = uc.execute(driver_id=driver.id).bookings
         # ✅ Retourner une liste vide au lieu d'une erreur 404
-        return [_enrich_driver_booking_list_payload(b.serialize) for b in bookings], 200
+        return _serialize_driver_bookings_list(bookings), 200
 
 
 @driver_ns.route("/me/company-bookings/today")
@@ -3947,7 +4000,7 @@ class DriverCompanyBookingsToday(Resource):
             .all()
         )
 
-        return [_enrich_driver_booking_list_payload(b.serialize) for b in bookings], 200
+        return _serialize_driver_bookings_list(bookings), 200
 
 
 @driver_ns.route("/me/bookings/<int:booking_id>/report")
