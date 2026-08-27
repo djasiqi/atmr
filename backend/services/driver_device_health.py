@@ -224,6 +224,19 @@ def _write_redis_snapshots(
         )
 
 
+def _parse_tracking_pipeline(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Extrait et borne `tracking_pipeline` (backward-compatible, optionnel)."""
+    raw = payload.get("tracking_pipeline")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    # Borne défensive : éviter payloads aberrants en prod.
+    if len(raw) > 64:
+        raw = dict(list(raw.items())[:64])
+    return raw
+
+
 def ingest_driver_device_health(
     driver_id: int,
     payload: dict[str, Any],
@@ -351,6 +364,8 @@ def ingest_driver_device_health(
     if ios_background_refresh_status:
         ios_background_refresh_status = ios_background_refresh_status[:16]
 
+    tracking_pipeline = _parse_tracking_pipeline(payload)
+
     event = DriverDeviceHealthEvent(
         driver_id=driver_id,
         recorded_at=now,
@@ -383,6 +398,7 @@ def ingest_driver_device_health(
         ota_update_id=ota_update_id,
         release_channel=release_channel,
         release_sha=release_sha,
+        tracking_pipeline=tracking_pipeline,
     )
 
     db.session.add(event)
@@ -452,6 +468,11 @@ def ingest_driver_device_health(
         "ios_background_refresh_status": ios_background_refresh_status or "",
         "last_heartbeat_at": str(int(now.timestamp() * 1000)),
     }
+    if tracking_pipeline is not None:
+        snapshot["tracking_pipeline"] = tracking_pipeline
+        snapshot["pipeline_snapshot_version"] = str(
+            tracking_pipeline.get("pipeline_snapshot_version") or ""
+        )
 
     legacy_payload = _build_legacy_payload(
         payload=payload,
@@ -489,7 +510,13 @@ def ingest_driver_device_health(
 
     db.session.commit()
 
-    return snapshot
+    result = dict(snapshot)
+    if tracking_pipeline is not None:
+        result["tracking_pipeline"] = tracking_pipeline
+        event_id = getattr(event, "id", None)
+        if event_id is not None:
+            result["device_health_event_id"] = event_id
+    return result
 
 
 def _parse_bool_redis(value: Any) -> bool | None:

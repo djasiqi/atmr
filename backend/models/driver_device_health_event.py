@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
+
+from sqlalchemy.dialects.postgresql import JSONB
 
 from ext import db
 
@@ -56,6 +59,8 @@ class DriverDeviceHealthEvent(db.Model):
     ota_update_id = db.Column(db.String(128), nullable=True)
     release_channel = db.Column(db.String(64), nullable=True)
     release_sha = db.Column(db.String(64), nullable=True)
+    # JZ-R1 : snapshot pipeline tracking (instrumentation remote-first, nullable).
+    tracking_pipeline = db.Column(JSONB, nullable=True)
 
     driver = db.relationship(
         "Driver", backref=db.backref("device_health_events", lazy="dynamic")
@@ -95,4 +100,5 @@ class DriverDeviceHealthEvent(db.Model):
             "ota_update_id": self.ota_update_id,
             "release_channel": self.release_channel,
             "release_sha": self.release_sha,
+            "tracking_pipeline": self.tracking_pipeline,
         }

@@ -5032,6 +5032,7 @@ device_health_model = driver_ns.model(
         "ota_update_id": fields.String,
         "release_channel": fields.String,
         "release_sha": fields.String,
+        "tracking_pipeline": fields.Raw(description="JZ-R1 snapshot pipeline (JSON, optionnel)"),
     },
 )
 
