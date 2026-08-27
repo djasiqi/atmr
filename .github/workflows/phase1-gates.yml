@@ -2,11 +2,15 @@ name: Phase 1 Gates
 
 permissions:
   contents: read
+  actions: write
 
 on:
   pull_request:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
+      - release/gps-pilot-5-drivers-20260823
   workflow_dispatch:
   workflow_call:
 
@@ -56,6 +60,10 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v7
+      - name: Prove tested ref/SHA
+        run: |
+          echo "tested_ref=${{ github.ref_name }}"
+          echo "tested_sha=${{ github.sha }}"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -194,3 +202,39 @@ jobs:
           test "${{ needs.mobile-tracking-critical.result }}" = "success"
           test "${{ needs.deployment-critical.result }}" = "success"
           echo "✅ Phase 1 gates OK"
+          echo "tested_ref=${{ github.ref_name }}"
+          echo "tested_sha=${{ github.sha }}"
+
+  trigger-backend-deploy:
+    name: trigger-backend-deploy
+    needs:
+      - booking-critical
+      - mobile-auth-critical
+      - mobile-tracking-critical
+      - deployment-critical
+    if: >-
+      ${{
+        success() &&
+        github.event_name != 'pull_request' &&
+        github.ref == 'refs/heads/release/gps-pilot-5-drivers-20260823'
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch Build & Deploy (backend prod)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Auto-deploy backend après Phase 1 Gates PASS"
+          echo "tested_ref=${{ github.ref_name }}"
+          echo "tested_sha=${{ github.sha }}"
+          gh workflow run deploy.yml \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref_name }}" \
+            -f skip_deploy=false \
+            -f no_cache=false \
+            -f additional_tag=""
+          echo "✅ Build & Deploy dispatché sur ref=${{ github.ref_name }} sha=${{ github.sha }}"

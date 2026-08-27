@@ -1,7 +1,7 @@
 # JZ-R1 — Gate préprod (instrumentation remote-first)
 
-**Statut :** EN COURS — backend prod **HOLD** jusqu'à PASS explicite  
-**Branche :** `release/gps-pilot-5-drivers-20260823`  
+**Statut :** CODE GATE CLOSED — backend prod **EN COURS** (B1 ✅, B2 en attente dispatch)  
+**Branche certifiée :** `release/gps-pilot-5-drivers-20260823` @ `35cbda91929dd6f93363ffd2e21948337b198bf8`  
 **Ordre figé :**
 
 ```text
@@ -136,13 +136,18 @@ LIMIT 10;
 
 | Étape | Statut |
 |-------|--------|
-| Commits backend + mobile | ✅ Prêt |
-| Tests unitaires backend/mobile | ✅ PASS local |
-| Gate canary SM-S911B | ☐ **EN ATTENTE** |
-| **GO backend prod** | ☐ **HOLD** |
-| **GO OTA Android prod** | ☐ **HOLD** (après backend prod + canary) |
+| Phase 1 Gates (run #83 @ `35cbda91`) | ✅ **PASS** — `booking-critical` + `mobile-tracking-critical` + agrégateur |
+| Correctif Alembic `down_revision` | ✅ `861b5acea642` → `14d1b170291f` |
+| Commits backend + mobile JZ-R1 | ✅ Remote HEAD gate = `35cbda91` |
+| B1 pre-deploy prod (2026-08-27) | ✅ Alembic `861b5acea642`, `/ready` 200, colonne `tracking_pipeline` absente (attendu) |
+| B2 deploy backend (`Build & Deploy`) | ☐ **AUTO** — dispatché par Phase 1 Gates PASS sur branche release (plus de dispatch manuel requis) |
+| B3 post-deploy gate | ☐ **EN ATTENTE** — après B2 |
+| Gate canary SM-S911B | ☐ **HOLD** (après B3 PASS) |
+| **GO OTA Android prod** | ☐ **HOLD** |
 
-**Prochain livrable attendu :** exécution gate SM-S911B + signature PASS/FAIL de ce document.
+✅ **Implémenté** : scripts ops `scripts/ops/jz-r1-pre-deploy-check.sh` et `scripts/ops/jz-r1-post-deploy-gate.sh` pour capture B1/B3 via SSH.
+
+**Prochain livrable attendu :** push du commit CI auto-deploy sur `release/gps-pilot-5-drivers-20260823` → Phase 1 Gates → Build & Deploy automatique → post-deploy gate B3.
 
 ---
 
