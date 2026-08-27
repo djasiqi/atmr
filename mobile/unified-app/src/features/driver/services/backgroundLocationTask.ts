@@ -59,7 +59,7 @@ function emitJ3LocationDecision(input: {
   reason: string;
   [key: string]: unknown;
 }): void {
-  emitJ3LocationDecision( input);
+  atmrJsDiag("J3_LOCATION_DECISION", input);
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require("./trackingPipelineObservability") as typeof import("./trackingPipelineObservability");
