@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 
 from ext import db
 from models import (
@@ -369,6 +370,7 @@ class ConversationService:
 
     @staticmethod
     def build_driver_inbox(driver: Driver) -> dict[str, Any]:
+        perf_started = time.perf_counter()
         company_id = int(driver.company_id)
         user_id = int(driver.user_id) if driver.user_id else None
         if not user_id:
@@ -399,18 +401,18 @@ class ConversationService:
         colleagues: list[dict] = []
         archives: list[dict] = []
 
-        read_ids = ConversationService._load_read_message_ids(user_id)
-        for conv in conversations:
-            if conv.archived_at:
-                continue
-            row = ConversationService._thread_row(conv, user_id, read_ids)
+        active_convs = [c for c in conversations if not c.archived_at]
+        preloaded_rows = ConversationService._batch_thread_row_data(
+            active_convs, user_id
+        )
+        for conv in active_convs:
+            preloaded = preloaded_rows.get(int(conv.id))
+            row = ConversationService._thread_row(conv, user_id, preloaded=preloaded)
             ctype = str(conv.conversation_type)
             if ctype == ConversationType.MISSION.value:
                 if not row.get("last_message_at"):
                     continue
-                booking = (
-                    Booking.query.get(conv.context_id) if conv.context_id else None
-                )
+                booking = preloaded.get("booking") if preloaded else None
                 status = str(getattr(booking, "status", "") or "").upper()
                 if status in _TERMINAL:
                     row["section"] = "archives"
@@ -463,6 +465,18 @@ class ConversationService:
             for r in mission_active + company_rows + groups + colleagues + archives
         )
 
+        threads = (
+            mission_active + urgent + company_rows + groups + colleagues + archives
+        )
+        logger.info(
+            "inbox_perf",
+            extra={
+                "scope": "driver_inbox",
+                "duration_ms": int((time.perf_counter() - perf_started) * 1000),
+                "conversations": len(active_convs),
+                "threads": len(threads),
+            },
+        )
         return {
             "sections": {
                 "mission_active": mission_active,
@@ -472,18 +486,14 @@ class ConversationService:
                 "colleagues": colleagues,
                 "archives": archives,
             },
-            "threads": mission_active
-            + urgent
-            + company_rows
-            + groups
-            + colleagues
-            + archives,
+            "threads": threads,
             "unread_total": unread_total,
         }
 
     @staticmethod
     def build_company_inbox(user: User) -> dict[str, Any]:
         """Inbox exploitation mobile : dispatch, chauffeurs (1-1), missions."""
+        perf_started = time.perf_counter()
         company = getattr(user, "company", None)
         if company is None:
             return _empty_company_inbox()
@@ -505,16 +515,17 @@ class ConversationService:
         driver_rows: list[dict] = []
         archives: list[dict] = []
 
-        read_ids = ConversationService._load_read_message_ids(user_id)
+        preloaded_rows = ConversationService._batch_thread_row_data(
+            conversations, user_id
+        )
         for conv in conversations:
-            row = ConversationService._thread_row(conv, user_id, read_ids)
+            preloaded = preloaded_rows.get(int(conv.id))
+            row = ConversationService._thread_row(conv, user_id, preloaded=preloaded)
             ctype = str(conv.conversation_type)
             if ctype == ConversationType.MISSION.value:
                 if not row.get("last_message_at"):
                     continue
-                booking = (
-                    Booking.query.get(conv.context_id) if conv.context_id else None
-                )
+                booking = preloaded.get("booking") if preloaded else None
                 status = str(getattr(booking, "status", "") or "").upper()
                 if status in _TERMINAL:
                     row["section"] = "archives"
@@ -538,7 +549,13 @@ class ConversationService:
 
         if not dispatch_rows:
             conv = ConversationService.ensure_company_dispatch_conversation(company_id)
-            row = ConversationService._thread_row(conv, user_id, read_ids)
+            row = ConversationService._thread_row(
+                conv,
+                user_id,
+                preloaded=ConversationService._batch_thread_row_data(
+                    [conv], user_id
+                ).get(int(conv.id)),
+            )
             row["section"] = "dispatch"
             dispatch_rows.append(row)
 
@@ -561,6 +578,16 @@ class ConversationService:
             for r in mission_active + dispatch_rows + driver_rows + archives
         )
 
+        threads = mission_active + urgent + dispatch_rows + driver_rows + archives
+        logger.info(
+            "inbox_perf",
+            extra={
+                "scope": "company_inbox",
+                "duration_ms": int((time.perf_counter() - perf_started) * 1000),
+                "conversations": len(conversations),
+                "threads": len(threads),
+            },
+        )
         return {
             "sections": {
                 "mission_active": mission_active,
@@ -569,7 +596,7 @@ class ConversationService:
                 "drivers": driver_rows,
                 "archives": archives,
             },
-            "threads": mission_active + urgent + dispatch_rows + driver_rows + archives,
+            "threads": threads,
             "unread_total": unread_total,
         }
 
@@ -635,19 +662,115 @@ class ConversationService:
         return threads
 
     @staticmethod
+    def _batch_thread_row_data(
+        conversations: list[Conversation], user_id: int
+    ) -> dict[int, dict[str, Any]]:
+        """Précharge en 3 requêtes les données par-conversation de `_thread_row`.
+
+        Dé-N+1 (P1-C1a) : remplace, pour un lot de N conversations,
+        2N requêtes (dernier message + count non-lus) + M bookings par :
+        - 1 SELECT dernier message / conversation (fenêtre ROW_NUMBER) ;
+        - 1 SELECT count non-lus / conversation (anti-jointure MessageRead,
+          mêmes prédicats que `unread_count_for_user`) ;
+        - 1 SELECT bookings des conversations mission (statuts).
+        Sémantique strictement identique aux requêtes unitaires historiques.
+        """
+        conv_ids = [int(c.id) for c in conversations]
+        result: dict[int, dict[str, Any]] = {
+            cid: {"last": None, "unread": 0, "booking_status": None, "booking": None}
+            for cid in conv_ids
+        }
+        if not conv_ids:
+            return result
+
+        # Tie-breaker id DESC : choix deterministe si timestamps identiques,
+        # aligne avec le chemin unitaire de _thread_row.
+        rn = (
+            func.row_number()
+            .over(
+                partition_by=Message.conversation_id,
+                order_by=(Message.timestamp.desc(), Message.id.desc()),
+            )
+            .label("rn")
+        )
+        last_sub = (
+            db.session.query(Message.id.label("mid"), rn)
+            .filter(Message.conversation_id.in_(conv_ids))
+            .subquery()
+        )
+        last_rows = (
+            Message.query.join(last_sub, Message.id == last_sub.c.mid)
+            .filter(last_sub.c.rn == 1)
+            .all()
+        )
+        for msg in last_rows:
+            if msg.conversation_id is not None:
+                result[int(msg.conversation_id)]["last"] = msg
+
+        read_exists = (
+            db.session.query(MessageRead.id)
+            .filter(
+                MessageRead.message_id == Message.id,
+                MessageRead.user_id == user_id,
+            )
+            .exists()
+        )
+        unread_rows = (
+            db.session.query(Message.conversation_id, func.count(Message.id))
+            .filter(
+                Message.conversation_id.in_(conv_ids),
+                Message.sender_id != user_id,
+                ~read_exists,
+            )
+            .group_by(Message.conversation_id)
+            .all()
+        )
+        for cid, n in unread_rows:
+            if cid is not None:
+                result[int(cid)]["unread"] = int(n)
+
+        mission_by_booking: dict[int, list[int]] = {}
+        for conv in conversations:
+            if (
+                conv.conversation_type == ConversationType.MISSION.value
+                and conv.context_id
+            ):
+                mission_by_booking.setdefault(int(conv.context_id), []).append(
+                    int(conv.id)
+                )
+        if mission_by_booking:
+            # Reference explicite conservee dans le resultat (pas de dependance
+            # a l'identity map, dont les references sont faibles).
+            bookings = Booking.query.filter(
+                Booking.id.in_(list(mission_by_booking.keys()))
+            ).all()
+            for booking in bookings:
+                status = str(getattr(booking, "status", ""))
+                for cid in mission_by_booking.get(int(booking.id), []):
+                    result[cid]["booking_status"] = status
+                    result[cid]["booking"] = booking
+        return result
+
+    @staticmethod
     def _thread_row(
         conv: Conversation,
         user_id: int,
         read_ids: set[int] | None = None,
+        *,
+        preloaded: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        last = (
-            Message.query.filter_by(conversation_id=conv.id)
-            .order_by(Message.timestamp.desc())
-            .first()
-        )
-        unread = ConversationService.unread_count_for_user(
-            conv.id, user_id, read_ids=read_ids
-        )
+        if preloaded is not None:
+            last = preloaded.get("last")
+            unread = int(preloaded.get("unread") or 0)
+        else:
+            last = (
+                Message.query.filter_by(conversation_id=conv.id)
+                .order_by(Message.timestamp.desc(), Message.id.desc())
+                .first()
+            )
+            unread = ConversationService.unread_count_for_user(
+                conv.id, user_id, read_ids=read_ids
+            )
         priority = "normal"
         if last and getattr(last, "priority", None) in ("urgent", "important"):
             priority = str(last.priority)
@@ -657,6 +780,11 @@ class ConversationService:
             if conv.conversation_type == ConversationType.MISSION.value
             else None
         )
+        booking_status = (
+            preloaded.get("booking_status")
+            if preloaded is not None
+            else _booking_status(booking_id)
+        )
         return {
             "conversation_id": conv.id,
             "thread_id": legacy or str(conv.id),
@@ -664,7 +792,7 @@ class ConversationService:
             "title": conv.title,
             "subtitle": _subtitle_for(conv),
             "booking_id": booking_id,
-            "status": _booking_status(booking_id),
+            "status": booking_status,
             "unread_count": unread,
             "priority": priority,
             "last_message_preview": _preview(last),
