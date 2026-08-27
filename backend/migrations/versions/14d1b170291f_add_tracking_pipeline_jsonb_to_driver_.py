@@ -1,7 +1,7 @@
 """add tracking_pipeline jsonb to driver_device_health_events
 
 Revision ID: 14d1b170291f
-Revises: ad0020bf5f62
+Revises: 861b5acea642
 Create Date: 2026-08-27 11:25:36.735195
 
 JZ-R1 : snapshot pipeline tracking (instrumentation remote-first, nullable).
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision = "14d1b170291f"
-down_revision = "ad0020bf5f62"
+down_revision = "861b5acea642"
 branch_labels = None
 depends_on = None
 
