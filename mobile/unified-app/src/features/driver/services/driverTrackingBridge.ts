@@ -538,6 +538,13 @@ async function handleAntiZombieIfNeeded(appState: AppStateStatus): Promise<void>
     return;
   }
   markAntiZombieTriggered();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pipelineObs = require("./trackingPipelineObservability") as typeof import("./trackingPipelineObservability");
+    pipelineObs.recordPipelineRecoveryReason("anti_zombie_fix_stale");
+  } catch {
+    /* instrumentation-only — ne doit jamais impacter la recovery */
+  }
   emitDriverTelemetry("tracking.anti_zombie.triggered", {
     source: "driver.tracking.bridge",
     mission_id: state.missionId,
@@ -1968,6 +1975,11 @@ export function refreshDriverTrackingBridgeState(): void {
 
 export function getDriverTrackingBridgeSnapshot() {
   return buildTrackingBridgeSnapshot();
+}
+
+/** JZ-R1 — âge session tracking (ms epoch) pour durable_ack jamais observé. */
+export function getDriverTrackingStartedAtMs(): number | null {
+  return state.trackingStartedAtMs;
 }
 
 export function getDriverLastKnownPosition(): DriverTrackingPosition | null {

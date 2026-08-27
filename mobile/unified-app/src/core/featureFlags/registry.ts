@@ -140,6 +140,14 @@ export const featureFlags = {
         : envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_WATCH),
     description: "Restart watch/FGS on stale_fallback breaker (Samsung zombie FGS).",
   } satisfies FeatureFlagDefinition,
+  tracking_pipeline_remote_observability_enabled: {
+    key: "tracking_pipeline_remote_observability_enabled",
+    source: "env",
+    /** Opt-in strict : OFF en prod jusqu'au canary SM-S911B (EXPO_PUBLIC=1 ou bootstrap). */
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_PIPELINE_REMOTE_OBS),
+    description:
+      "JZ-R1 : enrichit le heartbeat device-health avec tracking_pipeline (instrumentation remote-first, lecture seule).",
+  } satisfies FeatureFlagDefinition,
   tracking_self_heal_cold_start_enabled: {
     key: "tracking_self_heal_cold_start_enabled",
     source: "env",

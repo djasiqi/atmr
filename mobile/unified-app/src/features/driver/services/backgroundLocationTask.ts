@@ -53,6 +53,36 @@ import {
 } from "./nativeTrackingLifecycle";
 import { atmrJsDiag } from "./atmrJsTaskDiag";
 
+/** JZ-R1 — enregistre J3 sans modifier la décision métier. */
+function emitJ3LocationDecision(input: {
+  accepted: boolean;
+  reason: string;
+  [key: string]: unknown;
+}): void {
+  emitJ3LocationDecision( input);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("./trackingPipelineObservability") as typeof import("./trackingPipelineObservability");
+    mod.recordPipelineJ3Decision({
+      result: input.accepted ? "accepted" : "rejected",
+      reason: input.reason,
+    });
+  } catch {
+    /* instrumentation-only */
+  }
+}
+
+/** JZ-R1 — horodatage J1 handler (lecture seule). */
+function recordPipelineJ1Observed(): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("./trackingPipelineObservability") as typeof import("./trackingPipelineObservability");
+    mod.recordPipelineJ1Handler();
+  } catch {
+    /* instrumentation-only */
+  }
+}
+
 /**
  * Notifie le heartbeat de santé tracking en cas d'échec de démarrage natif —
  * lazy-required pour éviter le cycle deviceHealthHeartbeat <-> backgroundLocationTask.
@@ -734,8 +764,9 @@ function defineTaskIfNeeded() {
         locations_count: locationsEnter.length,
         task_error: error?.message ?? null,
       });
+      recordPipelineJ1Observed();
       if (error) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "task_error",
         });
@@ -747,14 +778,14 @@ function defineTaskIfNeeded() {
         return;
       }
       if (!isFeatureEnabled("tracking_background_enabled")) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "feature_disabled",
         });
         return;
       }
       if (await isKillSwitchEnabled()) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "kill_switch_enabled",
         });
@@ -773,7 +804,7 @@ function defineTaskIfNeeded() {
           lease?.state === "switching"
             ? "lease_switching_capture_blocked"
             : "context_not_driver";
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason,
           lease_state: lease?.state ?? "absent",
@@ -789,7 +820,7 @@ function defineTaskIfNeeded() {
 
       const context = await readTaskContext();
       if (!context) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "no_active_context",
         });
@@ -823,7 +854,7 @@ function defineTaskIfNeeded() {
       // Pendant switching : capture locale OK si owner présent et lease fromDriver ;
       // owner/lease génération ne matchent que sur driver_active.
       if (lease?.state === "driver_active" && !ownerCheck.ok) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: ownerCheck.reason,
         });
@@ -844,7 +875,7 @@ function defineTaskIfNeeded() {
           (typeof lease.missionContextVersion === "number" &&
             context.nativeOwner.missionContextVersion !== lease.missionContextVersion))
       ) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "mission_or_version_mismatch",
         });
@@ -863,7 +894,7 @@ function defineTaskIfNeeded() {
       }
       if (lease?.state === "switching") {
         if (!context.nativeOwner) {
-          atmrJsDiag("J3_LOCATION_DECISION", {
+          emitJ3LocationDecision( {
             accepted: false,
             reason: "missing_native_owner",
           });
@@ -875,7 +906,7 @@ function defineTaskIfNeeded() {
           return;
         }
         if (!authUsable) {
-          atmrJsDiag("J3_LOCATION_DECISION", {
+          emitJ3LocationDecision( {
             accepted: false,
             reason: "auth_not_usable",
           });
@@ -894,7 +925,7 @@ function defineTaskIfNeeded() {
         isTrackingActiveStatus(context.missionStatus);
       const isPresenceContext = context.taskMode === "presence_window";
       if (!isMissionContext && !isPresenceContext) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "context_ineligible",
           task_mode: context.taskMode,
@@ -916,7 +947,7 @@ function defineTaskIfNeeded() {
       // pas prêt doit bloquer net (jamais de fallback HTTP silencieux depuis le background task).
       const health = await trackingQueueStore.initAndHealthcheckHeadless();
       if (!health.durable || !health.schemaReady) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "sqlite_headless_not_ready",
           durable: health.durable,
@@ -961,7 +992,7 @@ function defineTaskIfNeeded() {
           age_ms: ageMs,
         });
         // J3 — acceptée pour enqueue (pas de dedupe JS ici)
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: true,
           reason: "pass_gates",
         });
