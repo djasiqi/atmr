@@ -20,9 +20,19 @@ type OfflineMutationQueueOptions<TAction extends OfflineMutationAction> = {
   backoffBaseMs: number;
   backoffMaxMs: number;
   execute: (action: TAction) => Promise<void>;
+  /**
+   * Classification des erreurs d'exécution : une erreur permanente (ex. 4xx
+   * métier `retryable: false`) ne sera JAMAIS résolue par un retry — l'action
+   * est retirée immédiatement et les suivantes continuent.
+   */
+  isPermanentError?: (error: unknown) => boolean;
+  /** L'action doit-elle être rejouée dans le contexte actif ? (multi-session) */
+  shouldReplay?: (action: TAction) => boolean;
   onExpired?: (action: TAction) => void;
   onRetry?: (action: TAction, retryCount: number) => void;
   onFailure?: (action: TAction, retryCount: number) => void;
+  onPermanentFailure?: (action: TAction, error: unknown) => void;
+  onSkipped?: (action: TAction) => void;
   onSuccess?: (action: TAction) => void;
 };
 
@@ -68,6 +78,10 @@ export class OfflineMutationQueue<TAction extends OfflineMutationAction> {
     await this.save();
   }
 
+  async removeById(actionId: string) {
+    await this.removeWhere((action) => action.id === actionId);
+  }
+
   async count() {
     await this.load();
     return this.actions.length;
@@ -99,12 +113,27 @@ export class OfflineMutationQueue<TAction extends OfflineMutationAction> {
           this.options.onExpired?.(action);
           continue;
         }
+        if (this.options.shouldReplay && !this.options.shouldReplay(action)) {
+          // Contexte différent (autre chauffeur / autre session) :
+          // conservée mais jamais rejouée hors de son contexte.
+          this.options.onSkipped?.(action);
+          nextActions.push(action);
+          continue;
+        }
 
         try {
           await this.options.execute(action);
           sent += 1;
           this.options.onSuccess?.(action);
-        } catch {
+        } catch (error) {
+          if (this.options.isPermanentError?.(error)) {
+            // Erreur définitive (ex. transition périmée 409) : retirer cette
+            // action et CONTINUER — les suivantes restent éligibles.
+            dropped += 1;
+            this.options.onPermanentFailure?.(action, error);
+            continue;
+          }
+
           const retryCount = action.retryCount + 1;
           this.options.onRetry?.(action, retryCount);
 

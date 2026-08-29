@@ -2632,13 +2632,32 @@ class AcceptReservation(Resource):
                     reservation_id,
                 )
                 # S'assurer que le statut de la réservation est PENDING avant l'acceptation
+                # P0-E : transition centralisée — une course démarrée/terminée ne
+                # peut plus être remise à PENDING par ce chemin (409).
                 if booking.status != BookingStatus.PENDING:
                     old_status = (
                         booking.status.value
                         if hasattr(booking.status, "value")
                         else str(booking.status)
                     )
-                    booking.status = BookingStatus.PENDING
+                    from services.booking.status_transitions import (
+                        BookingStatusTransitionError,
+                        transition_booking_status,
+                    )
+
+                    try:
+                        transition_booking_status(
+                            booking,
+                            BookingStatus.PENDING,
+                            source="company_accept_with_transfer",
+                            intent="deassign",
+                        )
+                    except BookingStatusTransitionError as transition_error:
+                        db.session.rollback()
+                        return (
+                            transition_error.to_payload(),
+                            transition_error.http_status,
+                        )
                     logger.info(
                         "Statut de la réservation %s remis à PENDING avant acceptation (était %s)",
                         reservation_id,
@@ -4464,20 +4483,41 @@ class TriggerReturnBooking(Resource):
             )
 
         # 3) Créer / mettre à jour le retour (toujours ACCEPTED ici)
+        # P0-E : transition centralisée — un retour déjà démarré/terminé/annulé
+        # ne peut plus être remis à ACCEPTED par trigger-return.
+        from services.booking.status_transitions import (
+            BookingStatusTransitionError,
+            transition_booking_status,
+        )
+
         if uc_result.decision.action == "modify_current":
+            try:
+                transition_booking_status(
+                    booking,
+                    BookingStatus.ACCEPTED,
+                    source="trigger_return_modify_current",
+                )
+            except BookingStatusTransitionError as transition_error:
+                return transition_error.to_payload(), transition_error.http_status
             booking.scheduled_time = return_time
             booking.time_confirmed = return_time_confirmed
-            booking.status = BookingStatus.ACCEPTED
             return_booking = booking
             action = "modifié"
         elif (
             uc_result.decision.action == "modify_existing_return"
             and existing is not None
         ):
+            try:
+                transition_booking_status(
+                    existing,
+                    BookingStatus.ACCEPTED,
+                    source="trigger_return_modify_existing",
+                )
+            except BookingStatusTransitionError as transition_error:
+                return transition_error.to_payload(), transition_error.http_status
             booking.is_round_trip = True
             existing.scheduled_time = return_time
             existing.time_confirmed = return_time_confirmed
-            existing.status = BookingStatus.ACCEPTED
             return_booking = existing
             action = "modifié"
         else:
@@ -6683,6 +6723,18 @@ class DispatchNowReservation(Resource):
                         "outbound_id": outbound.id,
                     }, 400
 
+        # P0-E : CANCELED est terminal — un dispatch-now ne réactive plus une
+        # course annulée (il faut la recréer).
+        if booking.status == BookingStatus.CANCELED:
+            return {
+                "error": (
+                    "Course annulée : impossible de la redispatcher "
+                    "(état terminal). Recréez la course."
+                ),
+                "error_code": "terminal_state",
+                "retryable": False,
+            }, 409
+
         # ✅ Pour dispatch-now, on fixe TOUJOURS l'heure à maintenant + offset
         # Cela permet de mettre à jour les retours avec heure à confirmer
         # (00:00)
@@ -6692,8 +6744,21 @@ class DispatchNowReservation(Resource):
         booking.time_confirmed = True
 
         # S'assure qu'elle soit éligible au moteur
-        if booking.status in [BookingStatus.PENDING, BookingStatus.CANCELED]:
-            booking.status = BookingStatus.ACCEPTED
+        if booking.status == BookingStatus.PENDING:
+            from services.booking.status_transitions import (
+                BookingStatusTransitionError,
+                transition_booking_status,
+            )
+
+            try:
+                transition_booking_status(
+                    booking,
+                    BookingStatus.ACCEPTED,
+                    source="dispatch_now",
+                )
+            except BookingStatusTransitionError as transition_error:
+                db.session.rollback()
+                return transition_error.to_payload(), transition_error.http_status
 
         db.session.commit()
         db.session.refresh(

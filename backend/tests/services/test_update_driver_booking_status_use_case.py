@@ -525,7 +525,117 @@ def test_arrived_syncs_assignment_when_present() -> None:
     assert db.commits == 1
 
 
-def test_arrived_idempotent_en_route() -> None:
+def test_arrived_idempotent_when_assignment_already_arrived() -> None:
+    """Rejeu d'un `arrived` déjà persisté → 200 unchanged (aucun double effet)."""
+    booking = _Booking(id=1, company_id=1, driver_id=10, status=BookingStatus.EN_ROUTE)
+    assignment = _Assignment(
+        id=5, booking_id=1, driver_id=10, status=AssignmentStatus.ARRIVED_PICKUP
+    )
+    db = _Db()
+    uc = UpdateDriverBookingStatusUseCase(
+        booking_repo=_BookingRepo(booking),
+        assignment_repo=_AssignmentRepo(assignment),
+        db_session=db,
+        notify_booking_update_fn=lambda _d, _b: None,
+        resolve_delays_fn=lambda _bid, _dt: None,
+        emit_assignment_cancelled_fn=lambda _c, _a, _b, _d: None,
+        maybe_trigger_dispatch_fn=None,
+        now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
+    )
+    res = uc.execute(
+        UpdateDriverBookingStatusCommand(
+            booking_id=1,
+            driver_id=10,
+            payload={"status": "ARRIVED"},
+        )
+    )
+    assert res.status_code == 200
+    assert res.response.get("unchanged") is True
+    assert res.response.get("mission_milestone") == "ARRIVED"
+    assert res.response.get("milestone_persisted") is True
+    assert res.response.get("assignment_id") == 5
+    assert booking.status == BookingStatus.EN_ROUTE
+    assert assignment.status == AssignmentStatus.ARRIVED_PICKUP
+
+
+def test_arrived_creates_missing_assignment_then_persists() -> None:
+    """P0-C + SOT-1B : assignment manquant → recréé via ensure puis persisté."""
+    booking = _Booking(id=1, company_id=1, driver_id=10, status=BookingStatus.EN_ROUTE)
+    assignment_repo = _AssignmentRepo(None)
+    db = _Db()
+
+    def _fake_ensure(*, company_id: int, booking: Any, driver_id: int) -> None:
+        _ = company_id
+        assignment_repo._assignment = _Assignment(
+            id=77, booking_id=booking.id, driver_id=driver_id
+        )
+
+    uc = UpdateDriverBookingStatusUseCase(
+        booking_repo=_BookingRepo(booking),
+        assignment_repo=assignment_repo,
+        db_session=db,
+        notify_booking_update_fn=lambda _d, _b: None,
+        resolve_delays_fn=lambda _bid, _dt: None,
+        emit_assignment_cancelled_fn=lambda _c, _a, _b, _d: None,
+        maybe_trigger_dispatch_fn=None,
+        now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
+    )
+    with patch(
+        "application.companies.assignment_binding.ensure_booking_assignment",
+        side_effect=_fake_ensure,
+    ):
+        res = uc.execute(
+            UpdateDriverBookingStatusCommand(
+                booking_id=1,
+                driver_id=10,
+                payload={"status": "ARRIVED"},
+            )
+        )
+    assert res.status_code == 200
+    assert res.response.get("milestone_persisted") is True
+    assert res.response.get("assignment_id") == 77
+    assert assignment_repo._assignment is not None
+    assert assignment_repo._assignment.status == AssignmentStatus.ARRIVED_PICKUP
+    assert db.commits == 1
+
+
+def test_arrived_never_returns_200_when_persistence_fails() -> None:
+    """P0-C : ensure échoue ⇒ jamais de « 200 ARRIVED » mensonger."""
+    booking = _Booking(id=1, company_id=1, driver_id=10, status=BookingStatus.EN_ROUTE)
+    db = _Db()
+    uc = UpdateDriverBookingStatusUseCase(
+        booking_repo=_BookingRepo(booking),
+        assignment_repo=_AssignmentRepo(None),
+        db_session=db,
+        notify_booking_update_fn=lambda _d, _b: None,
+        resolve_delays_fn=lambda _bid, _dt: None,
+        emit_assignment_cancelled_fn=lambda _c, _a, _b, _d: None,
+        maybe_trigger_dispatch_fn=None,
+        now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
+    )
+    with patch(
+        "application.companies.assignment_binding.ensure_booking_assignment",
+        side_effect=RuntimeError("db down"),
+    ):
+        res = uc.execute(
+            UpdateDriverBookingStatusCommand(
+                booking_id=1,
+                driver_id=10,
+                payload={"status": "ARRIVED"},
+            )
+        )
+    assert res.status_code == 500
+    assert res.response.get("error_code") == "driver_transition_persistence_failed"
+    assert res.response.get("retryable") is True
+    assert db.commits == 0
+
+
+def test_arrived_persistence_disabled_returns_503(
+    monkeypatch: Any,
+) -> None:
+    import services.dispatch.assignment_status_sync as sync_mod
+
+    monkeypatch.setattr(sync_mod, "ASSIGNMENT_STATUS_SYNC_ENABLED", False)
     booking = _Booking(id=1, company_id=1, driver_id=10, status=BookingStatus.EN_ROUTE)
     db = _Db()
     uc = UpdateDriverBookingStatusUseCase(
@@ -545,8 +655,129 @@ def test_arrived_idempotent_en_route() -> None:
             payload={"status": "ARRIVED"},
         )
     )
-    assert res.status_code == 200
-    assert res.response.get("unchanged") is True
-    assert res.response.get("mission_milestone") == "ARRIVED"
-    assert booking.status == BookingStatus.EN_ROUTE
+    assert res.status_code == 503
+    assert res.response.get("retryable") is True
     assert db.commits == 0
+
+
+# ── P0-A : stale writes → 409, jamais appliqués ─────────────────────────────
+
+
+def _make_uc(booking: _Booking, assignment: _Assignment | None = None) -> tuple[
+    UpdateDriverBookingStatusUseCase, _Db
+]:
+    db = _Db()
+    return (
+        UpdateDriverBookingStatusUseCase(
+            booking_repo=_BookingRepo(booking),
+            assignment_repo=_AssignmentRepo(assignment),
+            db_session=db,
+            notify_booking_update_fn=lambda _d, _b: None,
+            resolve_delays_fn=lambda _bid, _dt: None,
+            emit_assignment_cancelled_fn=lambda _c, _a, _b, _d: None,
+            maybe_trigger_dispatch_fn=None,
+            now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
+        ),
+        db,
+    )
+
+
+def test_stale_arrived_after_in_progress_is_409() -> None:
+    """C3 : vieux paquet `arrived` après IN_PROGRESS → 409, aucune régression."""
+    booking = _Booking(
+        id=1, company_id=1, driver_id=10, status=BookingStatus.IN_PROGRESS
+    )
+    assignment = _Assignment(
+        id=5, booking_id=1, driver_id=10, status=AssignmentStatus.ONBOARD
+    )
+    uc, db = _make_uc(booking, assignment)
+    res = uc.execute(
+        UpdateDriverBookingStatusCommand(
+            booking_id=1, driver_id=10, payload={"status": "ARRIVED"}
+        )
+    )
+    assert res.status_code == 409
+    assert res.response.get("error_code") == "driver_transition_stale"
+    assert res.response.get("retryable") is False
+    assert booking.status == BookingStatus.IN_PROGRESS
+    assert assignment.status == AssignmentStatus.ONBOARD
+    assert db.commits == 0
+
+
+def test_stale_en_route_after_completed_is_409() -> None:
+    """C3 : COMPLETED est terminal — un vieux `en_route` est rejeté en 409."""
+    booking = _Booking(id=1, company_id=1, driver_id=10, status=BookingStatus.COMPLETED)
+    uc, db = _make_uc(booking)
+    res = uc.execute(
+        UpdateDriverBookingStatusCommand(
+            booking_id=1, driver_id=10, payload={"status": "en_route"}
+        )
+    )
+    assert res.status_code == 409
+    assert res.response.get("error_code") == "driver_transition_stale"
+    assert booking.status == BookingStatus.COMPLETED
+    assert db.commits == 0
+
+
+def test_stale_in_progress_after_completed_is_409() -> None:
+    booking = _Booking(id=1, company_id=1, driver_id=10, status=BookingStatus.COMPLETED)
+    uc, db = _make_uc(booking)
+    res = uc.execute(
+        UpdateDriverBookingStatusCommand(
+            booking_id=1, driver_id=10, payload={"status": "in_progress"}
+        )
+    )
+    assert res.status_code == 409
+    assert booking.status == BookingStatus.COMPLETED
+    assert db.commits == 0
+
+
+def test_completed_after_canceled_is_409() -> None:
+    booking = _Booking(id=1, company_id=1, driver_id=10, status=BookingStatus.CANCELED)
+    uc, db = _make_uc(booking)
+    res = uc.execute(
+        UpdateDriverBookingStatusCommand(
+            booking_id=1, driver_id=10, payload={"status": "completed"}
+        )
+    )
+    assert res.status_code == 409
+    assert booking.status == BookingStatus.CANCELED
+    assert db.commits == 0
+
+
+def test_cancel_after_completed_is_409() -> None:
+    booking = _Booking(id=1, company_id=1, driver_id=10, status=BookingStatus.COMPLETED)
+    uc, db = _make_uc(booking)
+    res = uc.execute(
+        UpdateDriverBookingStatusCommand(
+            booking_id=1,
+            driver_id=10,
+            payload={"status": "canceled", "cancel_reason": "CANCEL"},
+        )
+    )
+    assert res.status_code == 409
+    assert res.response.get("error_code") == "driver_transition_stale"
+    assert booking.status == BookingStatus.COMPLETED
+    assert db.commits == 0
+
+
+def test_completed_success_returns_lifecycle_identity() -> None:
+    """P1 : la réponse porte assignment_id + mission_revision."""
+    booking = _Booking(
+        id=1, company_id=1, driver_id=10, status=BookingStatus.IN_PROGRESS
+    )
+    assignment = _Assignment(
+        id=5, booking_id=1, driver_id=10, status=AssignmentStatus.ONBOARD
+    )
+    uc, db = _make_uc(booking, assignment)
+    res = uc.execute(
+        UpdateDriverBookingStatusCommand(
+            booking_id=1, driver_id=10, payload={"status": "completed"}
+        )
+    )
+    assert res.status_code == 200
+    assert booking.status == BookingStatus.COMPLETED
+    assert res.response.get("assignment_id") == 5
+    assert res.response.get("mission_revision", 0) >= 1
+    assert assignment.status == AssignmentStatus.COMPLETED
+    assert db.commits == 1

@@ -43,6 +43,9 @@ export function mapDriverMission(input: DriverMission): DriverMission {
   const dropoffLng = firstFiniteNumber(input.dropoff_lng, raw.dropoff_lon);
   const pickupLat = firstFiniteNumber(input.pickup_lat);
   const dropoffLat = firstFiniteNumber(input.dropoff_lat);
+  // P1 MISSION-STATE : identité de lifecycle serveur (reconcile par revision).
+  const assignmentId = firstFiniteNumber(raw.assignment_id);
+  const missionRevision = firstFiniteNumber(raw.mission_revision);
 
   const base: DriverMission = {
     ...input,
@@ -55,6 +58,8 @@ export function mapDriverMission(input: DriverMission): DriverMission {
     ...(dropoffLng != null ? { dropoff_lng: dropoffLng } : {}),
     ...(pickupLat != null ? { pickup_lat: pickupLat } : {}),
     ...(dropoffLat != null ? { dropoff_lat: dropoffLat } : {}),
+    assignment_id: assignmentId ?? null,
+    mission_revision: missionRevision ?? null,
   };
 
   const milestone = statusUpperFromUnknown(raw.mission_milestone);

@@ -7,6 +7,7 @@ import { emitDriverTelemetry } from "../../core/observability/driverTelemetry";
 import { emitPerfKpi } from "../../core/observability/perfKpi";
 import { scheduleDriverMissionSync } from "./services/missionSyncOrchestrator";
 import { mapDriverMission } from "./domain/missionMappers";
+import { decideMissionMerge, replaceMissionsGuarded } from "./domain/missionRevisionGuard";
 import { resolveMissionReassignConvergence } from "./services/missionReassignConvergence";
 import { normalizeDriverEventType } from "../../core/realtime/eventContracts";
 import { realtimeManager } from "../../core/realtime/realtimeManager";
@@ -193,11 +194,24 @@ export function applyDriverSocketEvent(
 
     const payload = canonicalEvent.payload ?? {};
     if (localMission) {
-      missions[index] = mapDriverMission({
+      const candidate = mapDriverMission({
         ...localMission,
         ...payload,
         updated_at: canonicalEvent.updated_at ?? (localMission.updated_at as string | undefined) ?? null,
       });
+      // M2 : un événement socket porteur d'une revision plus ancienne que
+      // l'état local ne s'applique pas — resync serveur à la place.
+      if (decideMissionMerge(localMission, candidate) === "keep_local_stale_incoming") {
+        emitDriverTelemetry("realtime.stale_snapshot.ignored", {
+          source: "driver.realtime.socket",
+          context_id: contextId,
+          mission_id: canonicalEvent.mission_id,
+          stale_snapshot_ignored_count: 1,
+        });
+        scheduleMissionResync(queryClient, contextId, canonicalEvent.mission_id);
+        return missions;
+      }
+      missions[index] = candidate;
       missionRuntimeManager.registerSnapshot(
         canonicalEvent.mission_id,
         String(missions[index]?.updated_at ?? canonicalEvent.updated_at ?? null)
@@ -233,7 +247,9 @@ export function applyDriverSocketEvent(
   });
 
   const payload = canonicalEvent.payload ?? {};
-  if (typeof payload.status === "string" || canonicalType === "mission_status_changed") {
+  // `mission_status_changed` est normalisé en `mission_updated` : comparer le
+  // type BRUT de l'événement, sinon la clause est morte (types sans overlap).
+  if (typeof payload.status === "string" || event.event_type === "mission_status_changed") {
     const missions =
       (queryClient.getQueryData(driverQueryKeys.missions(contextId)) as DriverMission[] | undefined) ??
       [];
@@ -400,7 +416,25 @@ export function startDriverRealtimePollingWithOptions(
       missions.forEach((mission) =>
         missionRuntimeManager.registerSnapshot(mission.id, String(mission.updated_at ?? null))
       );
-      queryClient.setQueryData(driverQueryKeys.missions(contextId), missions);
+      // M2 : remplacement gardé — un poll parti avant un PUT ne peut pas
+      // écraser un état local plus récent (comparaison par mission_revision).
+      queryClient.setQueryData(
+        driverQueryKeys.missions(contextId),
+        (previous: unknown) => {
+          const { missions: merged, staleIgnoredCount } = replaceMissionsGuarded(
+            Array.isArray(previous) ? (previous as DriverMission[]) : undefined,
+            missions
+          );
+          if (staleIgnoredCount > 0) {
+            emitDriverTelemetry("realtime.stale_snapshot.ignored", {
+              source: "driver.realtime.polling",
+              context_id: contextId,
+              stale_snapshot_ignored_count: staleIgnoredCount,
+            });
+          }
+          return merged;
+        }
+      );
     } catch (error) {
       emitDriverTelemetry("realtime.polling.failure", {
         source: "driver.realtime",

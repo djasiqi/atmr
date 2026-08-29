@@ -2308,28 +2308,36 @@ class MobileDispatchReset(Resource):
             )
 
             assignments = query.all()
-            booking_ids = [assignment.booking_id for assignment in assignments]
 
-            assignments_deleted = len(assignments)
-            for assignment in assignments:
+            # P0-D : ne JAMAIS supprimer la preuve de progression chauffeur.
+            from services.dispatch.reset_guard import split_resettable_assignments
+
+            deletable, protected = split_resettable_assignments(assignments)
+            booking_ids = [assignment.booking_id for assignment in deletable]
+
+            assignments_deleted = len(deletable)
+            assignments_protected = len(protected)
+            for assignment in deletable:
                 db.session.delete(assignment)
 
             from repositories.booking_repository import BookingRepository
 
             booking_repo = BookingRepository()
-            bookings_query = booking_repo.find_models_by_company_with_filters_query(
-                company_id=company_id,
-                booking_ids=booking_ids if booking_ids else None,
-                start_datetime=start_datetime,
-                end_datetime=end_datetime,
-            )
-
             bookings_reset = 0
-            for booking in bookings_query.all():
-                if booking.status == BookingStatus.ASSIGNED:
-                    booking.status = BookingStatus.ACCEPTED
-                    booking.driver_id = None
-                    bookings_reset += 1
+            if booking_ids:
+                bookings_query = (
+                    booking_repo.find_models_by_company_with_filters_query(
+                        company_id=company_id,
+                        booking_ids=booking_ids,
+                        start_datetime=start_datetime,
+                        end_datetime=end_datetime,
+                    )
+                )
+                for booking in bookings_query.all():
+                    if booking.status == BookingStatus.ASSIGNED:
+                        booking.status = BookingStatus.ACCEPTED
+                        booking.driver_id = None
+                        bookings_reset += 1
 
             db.session.commit()
 
@@ -2340,6 +2348,7 @@ class MobileDispatchReset(Resource):
                 payload={
                     "date": date_str,
                     "assignments_deleted": assignments_deleted,
+                    "assignments_protected": assignments_protected,
                     "bookings_reset": bookings_reset,
                     "source": "mobile_enterprise",
                 },
@@ -2349,6 +2358,7 @@ class MobileDispatchReset(Resource):
             return {
                 "message": "Réinitialisation effectuée",
                 "assignments_deleted": assignments_deleted,
+                "assignments_protected": assignments_protected,
                 "bookings_reset": bookings_reset,
                 "date": date_str or "toutes les dates",
             }, 200
@@ -3148,14 +3158,38 @@ class MobileUpdateRide(Resource):
                     )
                     raise AssertionError("Invalid driver_id") from exc
 
-        # Mise à jour du statut
+        # Mise à jour du statut — P0-A : passe par la machine à états centralisée.
+        # Un payload d'édition périmé ne peut plus écraser la progression
+        # chauffeur (COMPLETED → ASSIGNED etc. ⇒ 409).
         if "status" in payload:
-            status_str = payload["status"].upper()
+            status_str = str(payload["status"]).upper()
             try:
-                booking.status = BookingStatus[status_str]
+                target_status = BookingStatus[status_str]
             except KeyError:
                 company_mobile_dispatch_ns.abort(400, f"Statut invalide: {status_str}")
                 raise AssertionError("Invalid status") from None
+
+            from services.booking.status_transitions import (
+                BookingStatusTransitionError,
+                transition_booking_status,
+            )
+
+            try:
+                transition_booking_status(
+                    booking,
+                    target_status,
+                    source="company_mobile_update_ride",
+                    intent=(
+                        "cancel"
+                        if target_status == BookingStatus.CANCELED
+                        else "progress"
+                    ),
+                )
+            except BookingStatusTransitionError as transition_error:
+                company_mobile_dispatch_ns.abort(
+                    transition_error.http_status, transition_error.message
+                )
+                raise AssertionError("Status transition rejected") from None
 
         try:
             db.session.add(booking)

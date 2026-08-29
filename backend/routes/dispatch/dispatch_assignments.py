@@ -31,6 +31,9 @@ from routes.dispatch.dispatch_schemas import (
     assignment_patch_model,
     reassign_model,
 )
+from services.dispatch.assignment_status_sync import (
+    AssignmentTransitionRejectedError,
+)
 from shared.error_handlers import APIErrorHandler
 from shared.time_utils import day_local_bounds, now_local
 
@@ -334,7 +337,15 @@ class AssignmentResource(Resource):
                         a.booking.driver_id = driver_id
             status = data.get("status")
             if status is not None:
-                a.status = status
+                # P0-A : transition monotone obligatoire — un PATCH dispatcher
+                # ne peut pas faire régresser la progression chauffeur.
+                from services.dispatch.assignment_status_sync import (
+                    apply_assignment_status_transition_strict,
+                )
+
+                apply_assignment_status_transition_strict(
+                    a, status, source="dispatch_assignments_patch"
+                )
 
             cast("Any", a).updated_at = datetime.now(UTC)
 
@@ -379,6 +390,12 @@ class AssignmentResource(Resource):
                 )
             return a
 
+        except AssignmentTransitionRejectedError as e:
+            db.session.rollback()
+            logger.warning(
+                "PATCH assignation refusé id=%s: %s", assignment_id, e.message
+            )
+            dispatch_ns.abort(e.http_status, e.message)
         except Exception as e:
             db.session.rollback()
             logger.exception("Erreur MAJ assignation id=%s: %s", assignment_id, e)

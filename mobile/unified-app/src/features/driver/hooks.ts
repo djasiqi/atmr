@@ -159,10 +159,26 @@ export function useDriverStatusTransition() {
         });
         throw new Error("Transition already in-flight for this mission");
       }
+      const cachedMissions = contextId
+        ? (queryClient.getQueryData<DriverMission[] | undefined>(
+            driverQueryKeys.missions(contextId)
+          ) ?? [])
+        : [];
+      const cachedMission = cachedMissions.find((m) => m.id === params.missionId);
       const queued = await driverOfflineQueue.enqueue(
         params.missionId,
         params.targetStatus,
-        params.reason ?? null
+        params.reason ?? null,
+        {
+          assignmentId:
+            typeof cachedMission?.assignment_id === "number"
+              ? cachedMission.assignment_id
+              : null,
+          missionRevision:
+            typeof cachedMission?.mission_revision === "number"
+              ? cachedMission.mission_revision
+              : null,
+        }
       );
       try {
         const res = await updateDriverMissionStatus({
@@ -172,10 +188,15 @@ export function useDriverStatusTransition() {
           reason: params.reason ?? null,
         });
         applyArrivedMilestoneFromStatusResponse(params.missionId, res);
+        // Persisté (ou déjà à jour) côté serveur : l'action sort de l'outbox,
+        // elle ne doit jamais être rejouée plus tard.
+        await driverOfflineQueue.removeAction(queued.id);
       } catch (error) {
         const apiError = error as { retryable?: boolean; code?: string; message?: string };
         if (apiError.retryable === false) {
-          await driverOfflineQueue.purgeMission(params.missionId);
+          // Refus définitif : on retire UNIQUEMENT cette action — les
+          // transitions antérieures légitimes en attente restent rejouables.
+          await driverOfflineQueue.removeAction(queued.id);
           emitDriverTelemetry("transition.queue.failure", {
             source: "driver.hooks.transition",
             mission_id: params.missionId,
@@ -227,17 +248,27 @@ export function useDriverStatusTransition() {
         return { contextId, previousDetail, previousMissions, missionId, targetStatus };
       }
       const nextStatus: DriverMissionStatus = targetStatus === "ARRIVED" ? "ARRIVED" : (targetStatus as DriverMissionStatus);
+      // M2 : bump optimiste de la revision — un poll/socket parti AVANT ce PUT
+      // (même revision serveur) ne peut pas écraser l'état optimiste.
+      const applyOptimistic = (m: DriverMission): DriverMission => ({
+        ...m,
+        status: nextStatus,
+        mission_revision:
+          (typeof m.mission_revision === "number" && Number.isFinite(m.mission_revision)
+            ? m.mission_revision
+            : 0) + 1,
+      });
       queryClient.setQueryData<DriverMission | undefined>(detailKey, (old) => {
         if (!old || old.id !== missionId) {
           return old;
         }
-        return { ...old, status: nextStatus };
+        return applyOptimistic(old);
       });
       queryClient.setQueryData<DriverMission[] | undefined>(listKey, (old) => {
         if (!Array.isArray(old)) {
           return old;
         }
-        return old.map((m) => (m.id === missionId ? { ...m, status: nextStatus } : m));
+        return old.map((m) => (m.id === missionId ? applyOptimistic(m) : m));
       });
       updateDriverTrackingStatus(nextStatus);
       return { contextId, previousDetail, previousMissions, missionId, targetStatus };
@@ -288,6 +319,12 @@ export function useDriverRealtimeSync() {
       missionCount: missions.length,
     };
   }, [contextId, queryClient]);
+
+  useEffect(() => {
+    // P1 file offline contextualisée : lie l'outbox au chauffeur actif ; les
+    // actions d'un autre contexte sont purgées et jamais rejouées ici.
+    void driverOfflineQueue.setActiveContext(contextId ?? null);
+  }, [contextId]);
 
   useEffect(() => {
     if (!contextId) return;

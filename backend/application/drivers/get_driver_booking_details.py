@@ -131,7 +131,7 @@ class GetDriverBookingDetailsUseCase:
         }
 
         # ARRIVED-SOT-2 : composer depuis Assignment si dispo
-        assignment_status = None
+        assignment = None
         repo = self._assignment_repo
         if repo is None:
             try:
@@ -143,13 +143,16 @@ class GetDriverBookingDetailsUseCase:
         if repo is not None:
             try:
                 assignment = repo.find_model_by_booking_id(int(booking.id))
-                assignment_status = (
-                    getattr(assignment, "status", None) if assignment else None
-                )
             except Exception:
-                assignment_status = None
+                assignment = None
 
         composed = compose_driver_mission_payload(
-            payload, assignment_status=assignment_status
+            payload, assignment_status=getattr(assignment, "status", None)
         )
+        # P1 MISSION-STATE : identité de lifecycle pour reconcile mobile.
+        from application.drivers.compose_driver_mission_surface import (
+            attach_assignment_identity,
+        )
+
+        composed = attach_assignment_identity(composed, assignment)
         return BookingDetailsResponse(payload=composed)

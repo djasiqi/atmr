@@ -16,6 +16,67 @@ BOOKING_STATUS_COMPLETED = "COMPLETED"
 BOOKING_STATUS_RETURN_COMPLETED = "RETURN_COMPLETED"
 BOOKING_STATUS_CANCELED = "CANCELED"
 
+#: États terminaux du lifecycle (P0-A) : plus aucune transition chauffeur.
+TERMINAL_BOOKING_STATUSES = frozenset(
+    {
+        BOOKING_STATUS_COMPLETED,
+        BOOKING_STATUS_RETURN_COMPLETED,
+        BOOKING_STATUS_CANCELED,
+    }
+)
+
+#: Rang de progression pour détecter une écriture périmée (stale write).
+_BOOKING_PROGRESS_RANK: dict[str, int] = {
+    BOOKING_STATUS_ASSIGNED: 0,
+    BOOKING_STATUS_EN_ROUTE: 1,
+    BOOKING_STATUS_IN_PROGRESS: 2,
+    BOOKING_STATUS_COMPLETED: 3,
+    BOOKING_STATUS_RETURN_COMPLETED: 3,
+}
+
+_REQUESTED_TRANSITION_RANK: dict[str, int] = {
+    "en_route": 1,
+    "arrived": 1,  # jalon pendant EN_ROUTE
+    "in_progress": 2,
+    "completed": 3,
+    "return_completed": 3,
+}
+
+
+def _stale_transition_response(
+    booking_id: int, current_status: str, requested: str
+) -> tuple[dict[str, Any], int]:
+    """409 stale_transition : un vieux PUT ne régresse JAMAIS l'état (P0-A)."""
+    logger.warning(
+        "stale_transition booking_id=%s current=%s requested=%s",
+        booking_id,
+        current_status,
+        requested,
+    )
+    return (
+        {
+            "error": (
+                f"Transition périmée : la course est déjà {current_status}, "
+                f"'{requested}' est ignoré."
+            ),
+            "error_code": "driver_transition_stale",
+            "retryable": False,
+            "current_status": current_status,
+        },
+        409,
+    )
+
+
+def _is_stale_driver_transition(current_status: str, requested: str) -> bool:
+    """True si `requested` est un retour en arrière vs l'état persisté."""
+    if current_status in TERMINAL_BOOKING_STATUSES:
+        return True
+    current_rank = _BOOKING_PROGRESS_RANK.get(current_status)
+    requested_rank = _REQUESTED_TRANSITION_RANK.get(requested)
+    if current_rank is None or requested_rank is None:
+        return False
+    return requested_rank < current_rank
+
 
 class _BookingLike(Protocol):
     id: int
@@ -171,6 +232,163 @@ class UpdateDriverBookingStatusUseCase:
                 timeline_err,
             )
 
+    def _persist_arrived_milestone(
+        self, *, booking: _BookingLike, driver_id: int
+    ) -> tuple[dict[str, Any], int]:
+        """Persiste le jalon ARRIVED sur l'Assignment courant (P0-C).
+
+        Contrat : HTTP 200 ⟺ l'état est réellement persisté (appliqué ou déjà
+        à jour). Tout autre cas renvoie une erreur explicite — jamais de
+        « 200 ARRIVED » avec une base restée EN_ROUTE.
+        """
+        from services.dispatch.assignment_status_sync import (
+            sync_assignment_from_driver_transition,
+        )
+
+        now = self._now_utc()
+
+        def _run_sync() -> str:
+            return sync_assignment_from_driver_transition(
+                booking_id=booking.id,
+                driver_id=driver_id,
+                transition="arrived",
+                assignment_repo=self._assignment_repo,
+                now_utc=now,
+            )
+
+        try:
+            outcome = _run_sync()
+            if outcome == "no_assignment":
+                # Invariant ARRIVED-SOT-1B : recréer l'Assignment manquant
+                # puis réappliquer le jalon.
+                from application.companies.assignment_binding import (
+                    ensure_booking_assignment,
+                )
+
+                company_id = int(
+                    getattr(booking, "executing_company_id", None)
+                    or booking.company_id
+                )
+                ensure_booking_assignment(
+                    company_id=company_id,
+                    booking=booking,
+                    driver_id=int(driver_id),
+                )
+                outcome = _run_sync()
+        except Exception:
+            logger.exception(
+                "[UpdateDriverBookingStatus] arrived persistence failed booking_id=%s",
+                booking.id,
+            )
+            return (
+                {
+                    "error": "Échec d'enregistrement de l'arrivée, réessayez.",
+                    "error_code": "driver_transition_persistence_failed",
+                    "retryable": True,
+                },
+                500,
+            )
+
+        if outcome in ("applied", "unchanged"):
+            try:
+                self._db.commit()
+            except Exception:
+                logger.exception(
+                    "[UpdateDriverBookingStatus] arrived commit failed booking_id=%s",
+                    booking.id,
+                )
+                return (
+                    {
+                        "error": "Échec d'enregistrement de l'arrivée, réessayez.",
+                        "error_code": "driver_transition_persistence_failed",
+                        "retryable": True,
+                    },
+                    500,
+                )
+            if outcome == "applied":
+                try:
+                    from services.messaging.system_message_emitter import (
+                        SystemMessageEmitter,
+                    )
+
+                    SystemMessageEmitter.emit_mission_event(
+                        int(booking.company_id),
+                        int(booking.id),
+                        "arrived",
+                    )
+                except Exception:
+                    logger.exception(
+                        "system message arrived failed booking_id=%s",
+                        booking.id,
+                    )
+            assignment = self._assignment_repo.find_model_by_booking_id(
+                booking.id
+            )
+            return (
+                {
+                    "booking_id": booking.id,
+                    "status": _status_value(booking),
+                    "server_time": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "unchanged": outcome == "unchanged",
+                    "mission_milestone": "ARRIVED",
+                    "milestone_persisted": True,
+                    "assignment_id": getattr(assignment, "id", None),
+                    "mission_revision": int(
+                        getattr(assignment, "revision", 0) or 0
+                    ),
+                },
+                200,
+            )
+
+        if outcome in ("stale", "terminal"):
+            logger.warning(
+                "stale_transition booking_id=%s assignment_outcome=%s requested=arrived",
+                booking.id,
+                outcome,
+            )
+            return (
+                {
+                    "error": (
+                        "Jalon 'arrived' périmé : la mission a déjà progressé."
+                    ),
+                    "error_code": "driver_transition_stale",
+                    "retryable": False,
+                },
+                409,
+            )
+
+        if outcome == "driver_mismatch":
+            return (
+                {
+                    "error": "Cette course est assignée à un autre chauffeur.",
+                    "error_code": "driver_transition_conflict",
+                    "retryable": False,
+                },
+                409,
+            )
+
+        if outcome == "disabled":
+            return (
+                {
+                    "error": (
+                        "Persistance du jalon d'arrivée momentanément "
+                        "indisponible (synchronisation désactivée)."
+                    ),
+                    "error_code": "driver_transition_persistence_unavailable",
+                    "retryable": True,
+                },
+                503,
+            )
+
+        return (
+            {
+                "error": "Échec d'enregistrement de l'arrivée, réessayez.",
+                "error_code": "driver_transition_persistence_failed",
+                "retryable": True,
+            },
+            500,
+        )
+
     def execute(
         self, cmd: UpdateDriverBookingStatusCommand
     ) -> UpdateDriverBookingStatusResult:
@@ -260,6 +478,10 @@ class UpdateDriverBookingStatusUseCase:
                             ),
                             "unchanged": True,
                         }
+                    elif _is_stale_driver_transition(status_val, "en_route"):
+                        response, status_code = _stale_transition_response(
+                            cmd.booking_id, status_val, "en_route"
+                        )
                     elif status_val != BOOKING_STATUS_ASSIGNED:
                         logger.info(
                             "invalid_transition booking_id=%s current=%s requested=%s",
@@ -276,55 +498,18 @@ class UpdateDriverBookingStatusUseCase:
                         should_commit = True
 
                 elif new_status_str == "arrived":
-                    # Étape intermédiaire (contrat `MISSION_STATUS_VALUES.ARRIVED`) : le
-                    # `Booking` reste EN_ROUTE ; pas d'autre statut de réservation.
+                    # Jalon opérationnel (ARRIVED-SOT-2) : le `Booking` reste
+                    # EN_ROUTE, la vérité durable est Assignment.ARRIVED_PICKUP.
+                    # P0-C : 200 UNIQUEMENT si le jalon est réellement persisté.
                     status_val = _status_value(booking)
-                    if status_val in (
-                        BOOKING_STATUS_IN_PROGRESS,
-                        BOOKING_STATUS_EN_ROUTE,
-                    ):
-                        response = {
-                            "booking_id": booking.id,
-                            "status": status_val,
-                            "server_time": self._now_utc().strftime(
-                                "%Y-%m-%dT%H:%M:%SZ"
-                            ),
-                            "unchanged": True,
-                            "mission_milestone": "ARRIVED",
-                        }
-                        try:
-                            from services.messaging.system_message_emitter import (
-                                SystemMessageEmitter,
-                            )
-
-                            SystemMessageEmitter.emit_mission_event(
-                                int(booking.company_id),
-                                int(booking.id),
-                                "arrived",
-                            )
-                        except Exception:
-                            logger.exception(
-                                "system message arrived failed booking_id=%s",
-                                booking.id,
-                            )
-                        try:
-                            from services.dispatch.assignment_status_sync import (
-                                sync_assignment_from_driver_transition,
-                            )
-
-                            if sync_assignment_from_driver_transition(
-                                booking_id=booking.id,
-                                driver_id=cmd.driver_id,
-                                transition="arrived",
-                                assignment_repo=self._assignment_repo,
-                                now_utc=self._now_utc(),
-                            ):
-                                self._db.commit()
-                        except Exception:
-                            logger.exception(
-                                "[UpdateDriverBookingStatus] assignment_status_sync arrived failed booking_id=%s",
-                                booking.id,
-                            )
+                    if status_val == BOOKING_STATUS_EN_ROUTE:
+                        response, status_code = self._persist_arrived_milestone(
+                            booking=booking, driver_id=cmd.driver_id
+                        )
+                    elif _is_stale_driver_transition(status_val, "arrived"):
+                        response, status_code = _stale_transition_response(
+                            cmd.booking_id, status_val, "arrived"
+                        )
                     else:
                         logger.info(
                             "invalid_transition arrived booking_id=%s current=%s",
@@ -347,6 +532,10 @@ class UpdateDriverBookingStatusUseCase:
                             ),
                             "unchanged": True,
                         }
+                    elif _is_stale_driver_transition(status_val, "in_progress"):
+                        response, status_code = _stale_transition_response(
+                            cmd.booking_id, status_val, "in_progress"
+                        )
                     elif status_val != BOOKING_STATUS_EN_ROUTE:
                         logger.info(
                             "invalid_transition booking_id=%s current=%s requested=%s",
@@ -373,6 +562,10 @@ class UpdateDriverBookingStatusUseCase:
                                 ),
                                 "unchanged": True,
                             }
+                        elif status_val in TERMINAL_BOOKING_STATUSES:
+                            response, status_code = _stale_transition_response(
+                                cmd.booking_id, status_val, "completed"
+                            )
                         elif status_val != BOOKING_STATUS_IN_PROGRESS:
                             logger.info(
                                 "invalid_transition booking_id=%s current=%s requested=%s",
@@ -404,6 +597,10 @@ class UpdateDriverBookingStatusUseCase:
                                 ),
                                 "unchanged": True,
                             }
+                        elif status_val in TERMINAL_BOOKING_STATUSES:
+                            response, status_code = _stale_transition_response(
+                                cmd.booking_id, status_val, "completed"
+                            )
                         elif status_val != BOOKING_STATUS_IN_PROGRESS:
                             logger.info(
                                 "invalid_transition booking_id=%s current=%s requested=%s",
@@ -433,6 +630,10 @@ class UpdateDriverBookingStatusUseCase:
                             ),
                             "unchanged": True,
                         }
+                    elif status_val in TERMINAL_BOOKING_STATUSES:
+                        response, status_code = _stale_transition_response(
+                            cmd.booking_id, status_val, "return_completed"
+                        )
                     elif status_val != BOOKING_STATUS_IN_PROGRESS:
                         logger.info(
                             "invalid_transition booking_id=%s current=%s requested=%s",
@@ -600,10 +801,16 @@ class UpdateDriverBookingStatusUseCase:
                             BOOKING_STATUS_COMPLETED,
                             BOOKING_STATUS_RETURN_COMPLETED,
                         }:
+                            # P0-A : état terminal — un vieux paquet "canceled"
+                            # ne doit jamais annuler une course terminée.
                             response = {
-                                "error": "Impossible d'annuler une course déjà terminée"
+                                "error": (
+                                    "Impossible d'annuler une course déjà terminée"
+                                ),
+                                "error_code": "driver_transition_stale",
+                                "retryable": False,
                             }
-                            status_code = 400
+                            status_code = 409
                         elif status_val == BOOKING_STATUS_IN_PROGRESS:
                             response = {
                                 "error": (
@@ -732,7 +939,9 @@ class UpdateDriverBookingStatusUseCase:
                                             setattr(booking, key, val)
                                     log_cancellation_persisted(booking, cancel_fields)
 
-                        should_commit = True
+                            # RELEASE et CANCEL : persister uniquement si mutation réelle
+                            # (pas sur 409/400 terminal ou invalide).
+                            should_commit = True
 
         if should_commit and booking is not None:
             now_ts = self._now_utc()
@@ -873,6 +1082,23 @@ class UpdateDriverBookingStatusUseCase:
                 "server_time": now_ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "unchanged": False,
             }
+            # P1 MISSION-STATE : identité de lifecycle pour reconcile mobile.
+            try:
+                assignment_after = self._assignment_repo.find_model_by_booking_id(
+                    booking.id
+                )
+                if assignment_after is not None:
+                    response["assignment_id"] = getattr(
+                        assignment_after, "id", None
+                    )
+                    response["mission_revision"] = int(
+                        getattr(assignment_after, "revision", 0) or 0
+                    )
+            except Exception:
+                logger.exception(
+                    "[UpdateDriverBookingStatus] lifecycle identity lookup failed booking_id=%s",
+                    booking.id,
+                )
             status_code = 200
         elif not response:
             response = {"error": "Internal error"}

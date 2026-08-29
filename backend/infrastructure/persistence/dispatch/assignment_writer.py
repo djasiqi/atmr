@@ -60,6 +60,22 @@ class SqlAlchemyAssignmentWriter:
             assignment.status = AssignmentStatus.SCHEDULED
             db.session.add(assignment)
         else:
-            assignment.driver_id = driver_id
+            try:
+                same_driver = assignment.driver_id is not None and int(
+                    cast("Any", assignment.driver_id)
+                ) == int(driver_id)
+            except (TypeError, ValueError):
+                same_driver = False
             assignment.dispatch_run_id = cast("Any", dispatch_run).id
-            assignment.status = AssignmentStatus.SCHEDULED
+            if not same_driver:
+                # Nouveau chauffeur = nouveau cycle opérationnel.
+                assignment.driver_id = driver_id
+                assignment.status = AssignmentStatus.SCHEDULED
+                try:
+                    assignment.revision = (
+                        int(getattr(assignment, "revision", 0) or 0) + 1
+                    )
+                except (TypeError, ValueError):
+                    assignment.revision = 1
+            # Même chauffeur : ne JAMAIS régresser la progression
+            # (EN_ROUTE_PICKUP/ARRIVED_PICKUP/ONBOARD/…) via un simple ensure.

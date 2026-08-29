@@ -65,29 +65,50 @@ def compose_driver_mission_payload(
     return out
 
 
-def latest_assignment_status_by_booking_id(
+def latest_assignment_by_booking_id(
     assignments: list[Any],
 ) -> dict[int, Any]:
-    """Une entrée par booking_id : assignment le plus récent (created_at / id)."""
-    by_booking: dict[int, Any] = {}
+    """Une entrée par booking_id : assignment courant (resolver unique P0-B)."""
+    from services.dispatch.assignment_resolver import pick_current_assignment
+
+    grouped: dict[int, list[Any]] = {}
     for a in assignments:
         bid = getattr(a, "booking_id", None)
         if bid is None:
             continue
-        bid_i = int(bid)
-        cur = by_booking.get(bid_i)
-        if cur is None:
-            by_booking[bid_i] = a
-            continue
-        cur_created = getattr(cur, "created_at", None)
-        new_created = getattr(a, "created_at", None)
-        if new_created is not None and (
-            cur_created is None or new_created > cur_created
-        ):
-            by_booking[bid_i] = a
-            continue
-        if getattr(a, "id", 0) > getattr(cur, "id", 0):
-            by_booking[bid_i] = a
+        grouped.setdefault(int(bid), []).append(a)
     return {
-        bid: getattr(a, "status", None) for bid, a in by_booking.items()
+        bid: pick_current_assignment(items) for bid, items in grouped.items()
     }
+
+
+def latest_assignment_status_by_booking_id(
+    assignments: list[Any],
+) -> dict[int, Any]:
+    """Une entrée par booking_id : statut de l'assignment courant."""
+    return {
+        bid: getattr(a, "status", None)
+        for bid, a in latest_assignment_by_booking_id(assignments).items()
+    }
+
+
+def attach_assignment_identity(
+    payload: dict[str, Any], assignment: Any | None
+) -> dict[str, Any]:
+    """Attache l'identité de lifecycle (P1) : assignment_id + mission_revision.
+
+    Le mobile s'en sert pour ignorer tout snapshot plus ancien que son état
+    local (anti-régression), et pour détecter un changement de lifecycle.
+    """
+    if assignment is None:
+        payload.setdefault("assignment_id", None)
+        payload.setdefault("mission_revision", None)
+        return payload
+    payload["assignment_id"] = getattr(assignment, "id", None)
+    try:
+        payload["mission_revision"] = int(
+            getattr(assignment, "revision", 0) or 0
+        )
+    except (TypeError, ValueError):
+        payload["mission_revision"] = 0
+    return payload

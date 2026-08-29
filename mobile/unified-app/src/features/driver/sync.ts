@@ -1,6 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
-import { getDriverMissionsSince } from "./api";
-import { getDriverMissions } from "./api/driverHttp";
+// M1 : le delta incrémental DOIT passer par la même normalisation que le full
+// fetch (mapDriverMission), sinon la composition ARRIVED est perdue au reconcile.
+import { getDriverMissions, getDriverMissionsSince } from "./api/driverHttp";
+import { mergeMissionsGuarded } from "./domain/missionRevisionGuard";
 import { driverOfflineQueue } from "./offlineQueue";
 import { driverQueryKeys } from "./queryKeys";
 import { DriverMission } from "./types";
@@ -37,6 +39,19 @@ export async function reconcileDriverMissions(
   queryClient: QueryClient,
   contextId: string
 ): Promise<{ missions: DriverMission[]; queue: { sent: number; dropped: number; failed: number } }> {
+  // P0 ordre : rejouer l'outbox AVANT de lire l'état serveur, sinon le GET
+  // ramène un état antérieur aux transitions en attente et l'UI régresse.
+  let queue: { sent: number; dropped: number; failed: number } = {
+    sent: 0,
+    dropped: 0,
+    failed: 0,
+  };
+  try {
+    queue = await driverOfflineQueue.flush();
+  } catch {
+    // Flush best-effort : la réconciliation continue même si le replay échoue.
+  }
+
   const lastSyncIso = await readLastSync();
   const since = lastSyncIso ?? new Date(Date.now() - 5 * 60_000).toISOString();
   const sinceMs = Date.parse(since);
@@ -81,15 +96,20 @@ export async function reconcileDriverMissions(
       });
     }
     if (missions.length === 0) return prev;
-    const byId = new Map<number, DriverMission>();
-    prev.forEach((mission) => {
-      byId.set(mission.id, mission);
-    });
+    // M2 : fusion gardée par (assignment_id, mission_revision) — un delta
+    // périmé ne remplace jamais un état local plus récent.
+    const { missions: merged, staleIgnoredCount } = mergeMissionsGuarded(prev, missions);
+    if (staleIgnoredCount > 0) {
+      emitDriverTelemetry("realtime.stale_snapshot.ignored", {
+        source: "driver.sync.reconcile",
+        context_id: contextId,
+        stale_snapshot_ignored_count: staleIgnoredCount,
+      });
+    }
     missions.forEach((mission) => {
-      byId.set(mission.id, mission);
       missionRuntimeManager.registerSnapshot(mission.id, String(mission.updated_at ?? null));
     });
-    return Array.from(byId.values());
+    return merged;
   });
   if (missions.length > 0) {
     const updatedAtMs = Date.parse(String(missions[0]?.updated_at ?? ""));
@@ -104,7 +124,6 @@ export async function reconcileDriverMissions(
   }
   await writeLastSync(new Date().toISOString());
   await setActiveMissionFromList(missions);
-  const queue = await driverOfflineQueue.flush();
   return { missions, queue };
 }
 

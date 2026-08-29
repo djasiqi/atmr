@@ -246,33 +246,35 @@ def _enrich_driver_booking_list_payload(payload: dict[str, Any]) -> dict[str, An
 def _compose_driver_bookings_with_assignments(
     payloads: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """ARRIVED-SOT-2 : compose ARRIVED depuis Assignment.ARRIVED_PICKUP (batch)."""
+    """ARRIVED-SOT-2 : compose ARRIVED depuis Assignment.ARRIVED_PICKUP (batch).
+
+    P1 MISSION-STATE : attache aussi assignment_id + mission_revision à chaque
+    payload pour le reconcile anti-régression côté mobile.
+    """
     if not payloads:
         return payloads
     try:
         from application.drivers.compose_driver_mission_surface import (
+            attach_assignment_identity,
             compose_driver_mission_payload,
-            is_booking_en_route,
-            latest_assignment_status_by_booking_id,
+            latest_assignment_by_booking_id,
         )
         from repositories.assignment_repository import AssignmentRepository
     except Exception:
         return payloads
 
-    en_route_ids: list[int] = []
+    booking_ids: list[int] = []
     for p in payloads:
         try:
-            bid = int(p.get("id"))  # type: ignore[arg-type]
+            booking_ids.append(int(p.get("id")))  # type: ignore[arg-type]
         except (TypeError, ValueError):
             continue
-        if is_booking_en_route(p.get("status")):
-            en_route_ids.append(bid)
-    if not en_route_ids:
+    if not booking_ids:
         return payloads
 
     try:
-        assignments = AssignmentRepository().find_by_booking_ids(en_route_ids)
-        status_by_bid = latest_assignment_status_by_booking_id(assignments)
+        assignments = AssignmentRepository().find_by_booking_ids(booking_ids)
+        assignment_by_bid = latest_assignment_by_booking_id(assignments)
     except Exception:
         logger.exception(
             "[Driver Bookings] composition ARRIVED impossible (assignments)"
@@ -286,11 +288,11 @@ def _compose_driver_bookings_with_assignments(
         except (TypeError, ValueError):
             out.append(p)
             continue
-        out.append(
-            compose_driver_mission_payload(
-                p, assignment_status=status_by_bid.get(bid)
-            )
+        assignment = assignment_by_bid.get(bid)
+        composed = compose_driver_mission_payload(
+            p, assignment_status=getattr(assignment, "status", None)
         )
+        out.append(attach_assignment_identity(composed, assignment))
     return out
 
 

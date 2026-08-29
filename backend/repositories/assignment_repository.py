@@ -42,6 +42,7 @@ class AssignmentRepository:
                 if assignment.decision_explanation
                 else None
             ),
+            revision=int(getattr(assignment, "revision", 0) or 0),
             created_at=assignment.created_at,  # type: ignore[reportGeneralTypeIssues]
             updated_at=assignment.updated_at,  # type: ignore[reportGeneralTypeIssues]
         )
@@ -138,7 +139,12 @@ class AssignmentRepository:
         return Assignment.query.filter(Assignment.status.in_(statuses)).count()
 
     def find_model_by_booking_id(self, booking_id: int) -> Assignment | None:
-        """Trouve un assignment par booking_id (retourne le modèle SQLAlchemy).
+        """Trouve l'assignment COURANT d'un booking (modèle SQLAlchemy).
+
+        P0-B : lecture et écriture doivent cibler la même ligne. Le « courant »
+        est résolu par `services.dispatch.assignment_resolver` (le plus récent,
+        tie-break created_at puis id) — ne pas réintroduire de `.first()` non
+        ordonné ici.
 
         Args:
             booking_id: ID du booking
@@ -146,7 +152,11 @@ class AssignmentRepository:
         Returns:
             Assignment ou None si non trouvé
         """
-        return Assignment.query.filter_by(booking_id=booking_id).first()
+        from services.dispatch.assignment_resolver import (
+            resolve_current_assignment_for_booking,
+        )
+
+        return resolve_current_assignment_for_booking(booking_id)
 
     def delete_dependent_records_for_assignment_id(self, assignment_id: int) -> None:
         """Supprime les enregistrements qui bloquent la suppression d'un assignment.
