@@ -238,4 +238,105 @@ describe("refreshAuthTokenNow", () => {
     expect(await refreshAuthTokenNow()).toBe(true);
     expect(mockPost).toHaveBeenCalledTimes(2);
   });
+
+  it("AUTH-01: 20 concurrent refresh callers produce a single POST", async () => {
+    mockGetItemAsync.mockResolvedValue("refresh-token-shared");
+    mockPost.mockResolvedValue({
+      data: {
+        access_token: "access-token-shared",
+        refresh_token: "refresh-token-shared-next",
+      },
+    });
+    mockGetItemAsync.mockImplementation(async () => "refresh-token-shared-next");
+     
+    const { refreshAuthTokenNow } = require("./client");
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () => refreshAuthTokenNow({ force: true }))
+    );
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(results.every((ok) => ok === true)).toBe(true);
+  });
+
+  it("AUTH-02: after refresh 200, no spontaneous second refresh", async () => {
+    mockGetItemAsync.mockResolvedValue("refresh-token-ok");
+    mockPost.mockResolvedValue({
+      data: {
+        access_token: "access-token-ok",
+        refresh_token: "refresh-token-ok-2",
+      },
+    });
+    mockGetItemAsync.mockImplementation(async () => "refresh-token-ok-2");
+     
+    const { refreshAuthTokenNow } = require("./client");
+    expect(await refreshAuthTokenNow({ force: true })).toBe(true);
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    // Appels proactifs (socket / recovery) : cooldown post-succès.
+    expect(await refreshAuthTokenNow()).toBe(true);
+    expect(await refreshAuthTokenNow()).toBe(true);
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+
+  it("AUTH-02b: post-bootstrap skip blocks proactive refresh", async () => {
+    mockGetItemAsync.mockImplementation(async () => "refresh-token-boot");
+    mockPost.mockResolvedValue({
+      data: {
+        access_token: "access-after-login",
+        refresh_token: "refresh-token-boot-2",
+      },
+    });
+     
+    const { markBootstrapAuthFresh, refreshAuthTokenNow, setAuthToken } = require("./client");
+    setAuthToken("access-fresh-from-login");
+    markBootstrapAuthFresh();
+    expect(await refreshAuthTokenNow()).toBe(true);
+    expect(mockPost).not.toHaveBeenCalled();
+    // force (401) reste autorisé.
+    mockGetItemAsync.mockImplementation(async () => "refresh-token-boot-2");
+    expect(await refreshAuthTokenNow({ force: true })).toBe(true);
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+
+  it("AUTH-03: 429 does not immediately retry refresh", async () => {
+    mockGetItemAsync.mockImplementation(async () => "refresh-token-rl");
+    const rejection = new MockAxiosError("Request failed with status code 429");
+    rejection.response = {
+      status: 429,
+      data: { error: "rate_limited" },
+      headers: { "retry-after": "30" },
+    } as { status?: number; data?: unknown; headers?: Record<string, string> };
+    mockPost.mockRejectedValue(rejection);
+     
+    const { refreshAuthTokenNow } = require("./client");
+    expect(await refreshAuthTokenNow({ force: true })).toBe(false);
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(await refreshAuthTokenNow({ force: true })).toBe(false);
+    expect(await refreshAuthTokenNow()).toBe(false);
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+
+  it("AUTH-04: response interceptor does not refresh on refresh-token 401", async () => {
+    mockGetItemAsync.mockImplementation(async () => "refresh-token-x");
+     
+    require("./client");
+    expect(mockResponseUse).toHaveBeenCalled();
+    const onRejected = mockResponseUse.mock.calls[0]?.[1] as
+      | ((error: MockAxiosError) => Promise<unknown>)
+      | undefined;
+    expect(typeof onRejected).toBe("function");
+
+    const err = new MockAxiosError("Request failed with status code 401");
+    err.response = { status: 401, data: { error: "invalid" } };
+    err.config = { url: "/auth/refresh-token", headers: {} };
+
+    await expect(onRejected!(err)).rejects.toBe(err);
+    expect(mockPost).not.toHaveBeenCalled();
+
+    mockPost.mockResolvedValue({
+      data: { access_token: "a", refresh_token: "b" },
+    });
+    mockGetItemAsync.mockImplementation(async () => "b");
+    const { refreshAuthTokenNow } = require("./client");
+    expect(await refreshAuthTokenNow({ force: true })).toBe(true);
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
 });

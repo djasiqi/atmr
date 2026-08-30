@@ -24,6 +24,10 @@ import {
   clearPushRegistrationFailed,
   setPushRegistrationFailed,
 } from "./pushRegistrationState";
+import {
+  clearFcmRegistrationSuccessIfOwnerChanged,
+  runFcmRegistrationOnce,
+} from "./fcmRegistrationGuard";
 import { reportPushRegistrationTelemetry } from "./pushRegistrationTelemetry";
 import { requestNotificationOsPermissionsAsync } from "./requestNotificationOsPermissions";
 
@@ -48,6 +52,8 @@ export type RegisterPushTokenOptions = {
   fcmEnabled: boolean;
   callbacks: PushRegisterCallbacks;
   telemetrySource: string;
+  /** Clé owner stable (ex. driverId) — scope d'idempotence FCM. */
+  ownerKey?: string | null;
   onPermissionDenied?: () => void;
 };
 
@@ -109,11 +115,13 @@ async function hasAcceptedNotificationDisclosure(telemetrySource: string): Promi
  * Enregistre Expo + FCM avec device_id stable et listeners de rotation.
  */
 export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): void {
-  const { enabled, fcmEnabled, callbacks, telemetrySource, onPermissionDenied } = options;
-  const Notifications = getExpoNotificationsModule();
+  const { enabled, fcmEnabled, callbacks, telemetrySource, ownerKey, onPermissionDenied } = options;
   const androidNativeFcmMode = fcmEnabled && Platform.OS === "android";
+  const resolvedOwnerKey =
+    typeof ownerKey === "string" && ownerKey.trim().length > 0 ? ownerKey.trim() : "anonymous";
 
   useEffect(() => {
+    const Notifications = getExpoNotificationsModule();
     if (!enabled || !Notifications || Platform.OS === "web") return;
     if (androidNativeFcmMode) return;
 
@@ -190,16 +198,21 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       unsubscribeDisclosure();
       expoSubscription?.remove();
     };
-  }, [Notifications, androidNativeFcmMode, callbacks, enabled, onPermissionDenied, telemetrySource]);
+    // callbacks / onPermissionDenied : identité volatile — volontairement exclus ;
+    // relance via enabled / owner / mode FCM uniquement.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- MOB-STARTUP-STORM-FIX-01
+  }, [androidNativeFcmMode, enabled, resolvedOwnerKey, telemetrySource]);
 
   useEffect(() => {
     if (!enabled || !fcmEnabled || Platform.OS === "web") return;
 
     let cancelled = false;
-    let fcmRegistrationInFlight = false;
+    clearFcmRegistrationSuccessIfOwnerChanged(resolvedOwnerKey);
 
     const registerExpoFallback = async (): Promise<void> => {
-      if (!Notifications || cancelled) return;
+      if (cancelled) return;
+      const Notifications = getExpoNotificationsModule();
+      if (!Notifications) return;
       if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return;
       emitDriverTelemetry("push.token.expo_fallback_unreliable", {
         source: telemetrySource,
@@ -229,22 +242,51 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
     };
 
     const registerFcm = async (token: string) => {
-      if (!token || cancelled || fcmRegistrationInFlight) return;
+      if (!token || cancelled) return;
       if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return;
-      fcmRegistrationInFlight = true;
-      try {
-        const deviceId = await getStableDeviceId();
-        const platform = Platform.OS === "ios" ? "ios" : "android";
-        const payload = { token, deviceId, platform };
-        await registerPushTokenWithPersistence(
-          "fcm",
-          payload,
-          () => callbacks.registerFcm(payload),
-          telemetrySource
-        );
-      } finally {
-        fcmRegistrationInFlight = false;
-      }
+      const deviceId = await getStableDeviceId();
+      const platform = Platform.OS === "ios" ? "ios" : "android";
+      const payload = { token, deviceId, platform };
+      const outcome = await runFcmRegistrationOnce(
+        { ownerKey: resolvedOwnerKey, token },
+        async () => {
+          // Propager l'échec au guard (backoff) — ne pas avaler comme registerPushTokenWithPersistence.
+          try {
+            await registerWithRetry(() => callbacks.registerFcm(payload));
+            await clearPendingPushTokenRegistration("fcm");
+            clearPushRegistrationFailed();
+            emitDriverTelemetry("push.token.registered", {
+              source: telemetrySource,
+              provider: "fcm",
+            });
+            reportPushRegistrationTelemetry("driver_push.register_success", {
+              source: telemetrySource,
+              provider: "fcm",
+            });
+          } catch (error) {
+            await persistPendingPushTokenRegistration({
+              provider: "fcm",
+              token: payload.token,
+              deviceId: payload.deviceId,
+              platform: payload.platform,
+            });
+            setPushRegistrationFailed(true);
+            emitDriverTelemetry("push.token.register_failed", {
+              source: telemetrySource,
+              provider: "fcm",
+              reason: error instanceof Error ? error.message : "unknown",
+              persisted: true,
+            });
+            throw error;
+          }
+        }
+      );
+      console.info("[FCM-GATE] registration outcome", {
+        source: telemetrySource,
+        outcome,
+        ownerKey: resolvedOwnerKey,
+        tokenLength: token.length,
+      });
     };
 
     const attemptFcmRegistration = async (stage: string): Promise<boolean> => {
@@ -254,6 +296,7 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
         stage,
         enabled,
         fcmEnabled,
+        ownerKey: resolvedOwnerKey,
       });
       if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return false;
       const NotificationsModule = getExpoNotificationsModule();
@@ -327,7 +370,8 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       unsubscribeDisclosure();
       appStateSubscription.remove();
     };
-  }, [Notifications, androidNativeFcmMode, callbacks, enabled, fcmEnabled, telemetrySource]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- MOB-STARTUP-STORM-FIX-01
+  }, [androidNativeFcmMode, enabled, fcmEnabled, resolvedOwnerKey, telemetrySource]);
 
   useEffect(() => {
     if (!enabled || Platform.OS === "web") return;
@@ -341,5 +385,6 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
     return () => {
       subscription.remove();
     };
-  }, [androidNativeFcmMode, callbacks, enabled]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- MOB-STARTUP-STORM-FIX-01
+  }, [androidNativeFcmMode, enabled]);
 }

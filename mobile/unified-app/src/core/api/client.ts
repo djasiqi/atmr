@@ -147,6 +147,10 @@ let lastRefreshFailureAtMs = 0;
 let lastRefreshFailureSignature: string | null = null;
 /** Dernier error_code renvoyé par un refresh/refresh-token échoué (coordinateur de récupération, PR C). */
 let lastRefreshErrorCode: string | null = null;
+/** MOB-STARTUP-STORM-FIX-01 : cooldown après refresh 200 (coupe les refresh proactifs séquentiels). */
+let lastRefreshSuccessAtMs = 0;
+/** MOB-STARTUP-STORM-FIX-01 : pas de POST refresh tant que le backoff 429 n'est pas écoulé. */
+let refreshRateLimitedUntilMs = 0;
 
 /**
  * P1-C2 : porte terminale refresh. Un refresh token rejeté 401/403 par le
@@ -223,7 +227,13 @@ const REFRESH_TOKEN_STORAGE_KEY = "auth_refresh_token";
 const REFRESH_TOKEN_WRITE_RETRIES = 3;
 const REFRESH_TOKEN_WRITE_BACKOFF_MS = [100, 300] as const;
 const REFRESH_FAILURE_TELEMETRY_COOLDOWN_MS = 10000;
-const POST_BOOTSTRAP_REFRESH_SKIP_MS = 5000;
+/** Fenêtre post-login/bootstrap : refresh proactif interdit (tokens déjà frais). */
+const POST_BOOTSTRAP_REFRESH_SKIP_MS = 60_000;
+/** Après un refresh 200 : aucun second refresh spontané pendant cette fenêtre. */
+const REFRESH_SUCCESS_COOLDOWN_MS = 60_000;
+/** Backoff 429 par défaut si Retry-After absent. */
+const REFRESH_429_DEFAULT_BACKOFF_MS = 30_000;
+const REFRESH_429_MAX_BACKOFF_MS = 120_000;
 let lastBootstrapAuthSuccessAtMs = 0;
 
 /** Évite un refresh token concurrent juste après login/bootstrap. */
@@ -233,6 +243,41 @@ export function markBootstrapAuthFresh(): void {
 
 function shouldSkipPostBootstrapRefresh(): boolean {
   return Date.now() - lastBootstrapAuthSuccessAtMs < POST_BOOTSTRAP_REFRESH_SKIP_MS;
+}
+
+function shouldSkipRecentRefreshSuccess(): boolean {
+  return (
+    lastRefreshSuccessAtMs > 0 &&
+    Date.now() - lastRefreshSuccessAtMs < REFRESH_SUCCESS_COOLDOWN_MS
+  );
+}
+
+function parseRetryAfterMs(err: AxiosError): number {
+  const raw = err.response?.headers?.["retry-after"] ?? err.response?.headers?.["Retry-After"];
+  const header = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof header === "string" && header.trim().length > 0) {
+    const asSeconds = Number(header);
+    if (Number.isFinite(asSeconds) && asSeconds >= 0) {
+      return Math.min(asSeconds * 1000, REFRESH_429_MAX_BACKOFF_MS);
+    }
+    const asDate = Date.parse(header);
+    if (!Number.isNaN(asDate)) {
+      return Math.min(Math.max(0, asDate - Date.now()), REFRESH_429_MAX_BACKOFF_MS);
+    }
+  }
+  return REFRESH_429_DEFAULT_BACKOFF_MS;
+}
+
+function markRefreshRateLimited(err: AxiosError): void {
+  refreshRateLimitedUntilMs = Date.now() + parseRetryAfterMs(err);
+  emitDriverTelemetry("auth.refresh.rate_limited", {
+    source: "core.api.client",
+    retry_after_ms: Math.max(0, refreshRateLimitedUntilMs - Date.now()),
+  });
+}
+
+function isRefreshRateLimited(): boolean {
+  return Date.now() < refreshRateLimitedUntilMs;
 }
 
 function shouldEmitRefreshFailure(status: number | null, reason: string): boolean {
@@ -589,6 +634,9 @@ async function refreshAuthToken(): Promise<string | null> {
     data = response.data;
   } catch (error) {
     const err = error as AxiosError;
+    if (err.response?.status === 429) {
+      markRefreshRateLimited(err);
+    }
     const shouldFallback = err.response?.status === 404 || err.response?.status === 405;
     if (!shouldFallback) {
       markRefreshTerminalIfNeeded(err, refreshToken);
@@ -603,7 +651,11 @@ async function refreshAuthToken(): Promise<string | null> {
       }>("/auth/refresh", payload, { headers: authHeaders });
       data = fallbackResponse.data;
     } catch (fallbackError) {
-      markRefreshTerminalIfNeeded(fallbackError as AxiosError, refreshToken);
+      const fb = fallbackError as AxiosError;
+      if (fb.response?.status === 429) {
+        markRefreshRateLimited(fb);
+      }
+      markRefreshTerminalIfNeeded(fb, refreshToken);
       throw fallbackError;
     }
   }
@@ -666,6 +718,11 @@ async function refreshAuthToken(): Promise<string | null> {
     if (applyResult.status === "stale") {
       return null;
     }
+    if (applyResult.value) {
+      lastRefreshSuccessAtMs = Date.now();
+      // Un refresh 200 lève le rate-limit 429 éventuel (token frais).
+      refreshRateLimitedUntilMs = 0;
+    }
     return applyResult.value;
   } finally {
     setTrackingAuthTemporarilyUnavailable(null);
@@ -674,7 +731,47 @@ async function refreshAuthToken(): Promise<string | null> {
   }
 }
 
-async function ensureRefreshToken(): Promise<string | null> {
+export type EnsureRefreshTokenOptions = {
+  /**
+   * true = retry après 401 HTTP (réactif).
+   * false/absent = appel proactif (socket, recovery, switch-context…) — soumis aux cooldowns.
+   */
+  force?: boolean;
+};
+
+async function ensureRefreshToken(options?: EnsureRefreshTokenOptions): Promise<string | null> {
+  const force = options?.force === true;
+  const existingAccess = getAuthAccessToken();
+
+  // 429 : jamais de boucle immédiate — réutiliser l'access token s'il existe.
+  if (isRefreshRateLimited()) {
+    if (existingAccess) {
+      return existingAccess;
+    }
+    emitDriverTelemetry("auth.refresh.skipped_rate_limited", {
+      source: "core.api.client",
+      force,
+      retry_after_ms: Math.max(0, refreshRateLimitedUntilMs - Date.now()),
+    });
+    return null;
+  }
+
+  // Proactif : skip post-bootstrap et cooldown post-succès (coupe le storm séquentiel).
+  if (!force && existingAccess) {
+    if (shouldSkipPostBootstrapRefresh()) {
+      emitDriverTelemetry("auth.refresh.skipped_post_bootstrap", {
+        source: "core.api.client",
+      });
+      return existingAccess;
+    }
+    if (shouldSkipRecentRefreshSuccess()) {
+      emitDriverTelemetry("auth.refresh.skipped_success_cooldown", {
+        source: "core.api.client",
+      });
+      return existingAccess;
+    }
+  }
+
   if (!refreshTokenInFlight) {
     refreshTokenInFlight = refreshAuthToken()
       .then((token) => {
@@ -716,9 +813,9 @@ async function ensureRefreshToken(): Promise<string | null> {
   return refreshTokenInFlight;
 }
 
-export async function refreshAuthTokenNow(): Promise<boolean> {
+export async function refreshAuthTokenNow(options?: EnsureRefreshTokenOptions): Promise<boolean> {
   try {
-    const token = await ensureRefreshToken();
+    const token = await ensureRefreshToken(options);
     return Boolean(token);
   } catch {
     return false;
@@ -844,7 +941,7 @@ apiClient.interceptors.response.use(
       !isAuthEndpoint
     ) {
       try {
-        const refreshedToken = await ensureRefreshToken();
+        const refreshedToken = await ensureRefreshToken({ force: true });
         if (!refreshedToken) {
           return Promise.reject(error);
         }
@@ -1140,6 +1237,9 @@ export function setAuthToken(token: string | null) {
 export async function clearLocalAuth(): Promise<void> {
   // P1-C2 : plus de token -> plus de porte terminale a maintenir.
   refreshTerminalState = null;
+  lastRefreshSuccessAtMs = 0;
+  refreshRateLimitedUntilMs = 0;
+  lastBootstrapAuthSuccessAtMs = 0;
   try {
     const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
     const { withCredentialStoreLock } = require("../auth/sessionCredentialMutex") as typeof import("../auth/sessionCredentialMutex");
