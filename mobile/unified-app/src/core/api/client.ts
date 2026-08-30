@@ -727,7 +727,6 @@ export async function refreshAuthTokenNow(): Promise<boolean> {
 
 type AtmrAxiosRequestConfig = InternalAxiosRequestConfig & {
   _skipBearerAuth?: boolean;
-  _p1HarnessStartedAt?: number;
 };
 
 apiClient.interceptors.request.use(async (config) => {
@@ -741,26 +740,6 @@ apiClient.interceptors.request.use(async (config) => {
     // optional perf instrumentation
   }
   const atmrConfig = config as AtmrAxiosRequestConfig;
-  atmrConfig._p1HarnessStartedAt = Date.now();
-  try {
-    const { emitP1HarnessLog } = require("../observability/p1HarnessLog") as {
-      emitP1HarnessLog: (event: string, payload: Record<string, unknown>) => void;
-    };
-    const url = String(config.url ?? "");
-    if (
-      url.includes("/auth/") ||
-      url.includes("/company_mobile/") ||
-      url.includes("/driver/")
-    ) {
-      emitP1HarnessLog("p1.api.start", {
-        source: "api.client",
-        method: String(config.method ?? "get").toUpperCase(),
-        endpoint: url,
-      });
-    }
-  } catch {
-    // optional p1 harness
-  }
   if (atmrConfig._skipBearerAuth) {
     // JWT expiré + jwt_required(optional=True) → 401 serveur ; bootstrap doit pouvoir
     // retomber en mode non authentifié sans écran « session expirée ».
@@ -847,33 +826,7 @@ apiClient.interceptors.request.use(async (config) => {
 });
 
 apiClient.interceptors.response.use(
-  (response) => {
-    try {
-      const cfg = response.config as AtmrAxiosRequestConfig;
-      const started = cfg._p1HarnessStartedAt;
-      const url = String(cfg.url ?? "");
-      if (
-        started &&
-        (url.includes("/auth/") ||
-          url.includes("/company_mobile/") ||
-          url.includes("/driver/"))
-      ) {
-        const { emitP1HarnessLog } = require("../observability/p1HarnessLog") as {
-          emitP1HarnessLog: (event: string, payload: Record<string, unknown>) => void;
-        };
-        emitP1HarnessLog("p1.api.end", {
-          source: "api.client",
-          method: String(cfg.method ?? "get").toUpperCase(),
-          endpoint: url,
-          status: response.status,
-          duration_ms: Date.now() - started,
-        });
-      }
-    } catch {
-      // optional p1 harness
-    }
-    return response;
-  },
+  (response) => response,
   async (error: AxiosError<{ error?: string; error_message?: string }>) => {
     const originalForAuthRetry = error.config as
       | (InternalAxiosRequestConfig & { _authRetried?: boolean })
