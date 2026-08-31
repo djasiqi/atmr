@@ -1430,6 +1430,11 @@ class AssignmentPatchResource(Resource):
 
         a = cast("Assignment", a_opt)
 
+        from services.dispatch.assignment_status_sync import (
+            AssignmentTransitionRejectedError,
+            apply_assignment_status_transition_strict,
+        )
+
         try:
             data = request.get_json() or {}
             # ✅ P1: Protéger accès dictionnaires pour éviter KeyError
@@ -1438,7 +1443,10 @@ class AssignmentPatchResource(Resource):
                 a.driver_id = driver_id
             status = data.get("status")
             if status is not None:
-                a.status = status
+                # P0-A : transition monotone obligatoire (jamais de régression).
+                apply_assignment_status_transition_strict(
+                    a, status, source="dispatch_routes_patch"
+                )
 
             cast("Any", a).updated_at = datetime.now(UTC)
 
@@ -1466,6 +1474,14 @@ class AssignmentPatchResource(Resource):
                     return a_dict, 200
 
             return a
+        except AssignmentTransitionRejectedError as reject:
+            db.session.rollback()
+            logger.warning(
+                "[Dispatch] patch assignment refusé id=%s: %s",
+                assignment_id,
+                reject.message,
+            )
+            dispatch_ns.abort(reject.http_status, reject.message)
         except Exception as e:
             db.session.rollback()  # 👈 IMPORTANT
             trace_id = get_trace_id()

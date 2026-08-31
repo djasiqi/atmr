@@ -1,0 +1,29 @@
+[
+ {
+  "label": "after",
+  "scope": "company_inbox",
+  "query_count": 23,
+  "sql_ms": 962.0,
+  "handler_ms": 1324.5,
+  "threads": 51,
+  "unread_total": 875
+ },
+ {
+  "label": "after",
+  "scope": "company_hub_threads",
+  "query_count": 23,
+  "sql_ms": 91.7,
+  "handler_ms": 471.8,
+  "threads": 51,
+  "unread_total": null
+ },
+ {
+  "label": "after",
+  "scope": "driver_inbox",
+  "query_count": 29,
+  "sql_ms": 85.6,
+  "handler_ms": 185.4,
+  "threads": 37,
+  "unread_total": 875
+ }
+]

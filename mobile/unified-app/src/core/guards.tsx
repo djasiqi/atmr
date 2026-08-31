@@ -9,6 +9,8 @@ import {
   resolveOnboardingGuardRedirect,
   resolvePermissionGuardRedirect,
   resolveVersionGuardRedirect,
+  shouldUnmountCompanySurface,
+  shouldUnmountDriverSurface,
 } from "./guardDecisions";
 import { isFeatureEnabled } from "./featureFlags/registry";
 import { emitDriverTelemetry } from "./observability/driverTelemetry";
@@ -33,8 +35,11 @@ export function PermissionGuard({
   permission,
   children,
 }: PropsWithChildren<{ permission: string }>) {
-  const { can } = useSession();
-  const redirectTo = resolvePermissionGuardRedirect(can(permission));
+  const { can, contextSwitchInFlight } = useSession();
+  const redirectTo = resolvePermissionGuardRedirect(
+    can(permission),
+    contextSwitchInFlight
+  );
   if (redirectTo) return <Redirect href={redirectTo as any} />;
   return <>{children}</>;
 }
@@ -44,8 +49,12 @@ export function DriverContextGuard({ children }: PropsWithChildren) {
   if (!activeContext) {
     return <Redirect href={"/(app)/context-selector" as any} />;
   }
-  // Pendant la bascule, ne pas rediriger (évite le rebond chauffeur ↔ entreprise).
+  // Pendant la bascule : garder l'écran chauffeur seulement tant que le contexte
+  // est encore driver. Dès que COMPANY est appliqué, démonter (plus de mission:read).
   if (contextSwitchInFlight) {
+    if (shouldUnmountDriverSurface(true, activeContext.context_type)) {
+      return null;
+    }
     return <>{children}</>;
   }
   if (activeContext.context_type === "company") {
@@ -60,6 +69,9 @@ export function DriverContextGuard({ children }: PropsWithChildren) {
 export function CompanyContextGuard({ children }: PropsWithChildren) {
   const { activeContext, contextSwitchInFlight } = useSession();
   if (contextSwitchInFlight) {
+    if (shouldUnmountCompanySurface(true, activeContext?.context_type)) {
+      return null;
+    }
     return <>{children}</>;
   }
   const redirectTo = resolveCompanyContextGuardRedirect(activeContext);

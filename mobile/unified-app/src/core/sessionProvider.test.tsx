@@ -32,6 +32,7 @@ const mockRestoreContextCache = jest.fn().mockReturnValue(false) as jest.MockedF
 >;
 const mockClearAllContextCache = jest.fn() as jest.MockedFunction<(queryClient: QueryClient) => void>;
 const mockPurgeDriverProfileCache = jest.fn() as jest.Mock<any>;
+const mockSetDriverAvailabilityActive = jest.fn() as jest.Mock<any>;
 const mockAttemptRestRecovery = jest.fn(async () => "no_action");
 const mockPerformExplicitLogout = jest.fn(async (params: {
   onLogoutClaimed?: (gen: number) => void;
@@ -84,12 +85,25 @@ jest.mock("../features/driver/services/trackingRuntimeRegistry", () => ({
       trackingGenerationId: "trk-test",
       trackingIdentityId: "driver:42:company:1",
     },
+    missionContext: {
+      missionId: null,
+      missionContextVersion: 0,
+    },
   })),
   resolveTrackingIdentityId: (driverId: number) => `driver:${driverId}:company:unknown`,
 }));
 
 jest.mock("../features/driver/services/driverTrackingBridge", () => ({
   hardStopDriverContextRuntime: jest.fn(async () => undefined),
+}));
+
+const mockPublishTrackingAuthSessionAvailable = jest.fn(async () => undefined);
+const mockClearTrackingAuthSession = jest.fn(async () => undefined);
+
+jest.mock("./auth/trackingAuthPresence", () => ({
+  publishTrackingAuthSessionAvailable: (...args: unknown[]) =>
+    mockPublishTrackingAuthSessionAvailable(...args),
+  clearTrackingAuthSession: (...args: unknown[]) => mockClearTrackingAuthSession(...args),
 }));
 
 jest.mock("./auth/authRecoveryCoordinator", () => ({
@@ -142,6 +156,10 @@ jest.mock("./cache/prefetchContextTarget", () => ({
 
 jest.mock("../features/driver/services/driverProfileCache", () => ({
   purgeDriverProfileCache: () => mockPurgeDriverProfileCache(),
+}));
+
+jest.mock("../features/driver/services/driverAvailabilityBridge", () => ({
+  setDriverAvailabilityActive: (active: boolean | null) => mockSetDriverAvailabilityActive(active),
 }));
 
 function buildBootstrap(activeContextId: string | null = "driver:42") {
@@ -224,6 +242,7 @@ describe("session provider gates", () => {
     mockRestoreContextCache.mockReturnValue(false);
     mockClearAllContextCache.mockReset();
     mockPurgeDriverProfileCache.mockReset();
+    mockSetDriverAvailabilityActive.mockReset();
     mockAttemptRestRecovery.mockReset();
     mockAttemptRestRecovery.mockResolvedValue("no_action");
     mockPerformExplicitLogout.mockClear();
@@ -231,6 +250,24 @@ describe("session provider gates", () => {
     mockHasAuthToken.mockReturnValue(false);
     mockHasStoredRefreshToken.mockResolvedValue(false);
     mockRefreshAuthTokenNow.mockResolvedValue(false);
+    mockPublishTrackingAuthSessionAvailable.mockClear();
+    mockClearTrackingAuthSession.mockClear();
+    const leaseMod = jest.requireMock(
+      "../features/driver/services/trackingContextLease"
+    ) as {
+      reconcileTrackingContextLeaseFromBootstrap: jest.Mock;
+      setTrackingContextLeaseDriverActive: jest.Mock;
+    };
+    leaseMod.reconcileTrackingContextLeaseFromBootstrap.mockReset();
+    leaseMod.reconcileTrackingContextLeaseFromBootstrap.mockResolvedValue({
+      state: "inactive",
+      updatedAt: 0,
+    });
+    leaseMod.setTrackingContextLeaseDriverActive.mockClear();
+    const runtimeMod = jest.requireMock(
+      "../features/driver/services/trackingRuntimeRegistry"
+    ) as { startOrJoinTrackingRuntime: jest.Mock };
+    runtimeMod.startOrJoinTrackingRuntime.mockClear();
   });
 
   it("handles cold start bootstrap and resolves active context", async () => {
@@ -462,6 +499,7 @@ describe("session provider gates", () => {
     expect(mockLogin).toHaveBeenCalledWith("driver@lirie.ch", "secret");
     expect(mockPerformExplicitLogout).toHaveBeenCalled();
     expect(mockPurgeDriverProfileCache).toHaveBeenCalled();
+    expect(mockSetDriverAvailabilityActive).toHaveBeenCalledWith(null);
     expect(mockDisconnect).toHaveBeenCalled();
     expect(mockClearAllContextCache).toHaveBeenCalled();
     expect(mockFetchBootstrap).toHaveBeenCalledWith(null);

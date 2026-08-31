@@ -133,6 +133,8 @@ export type DeviceHealthPayload = {
 
 export type DeviceHealthRequestPayload = DeviceHealthPayload & {
   trigger_reason?: string;
+  /** JZ-R1 — snapshot pipeline (instrumentation remote-first, optionnel). */
+  tracking_pipeline?: Record<string, unknown>;
 };
 
 export type StartDeviceHealthHeartbeatOptions = {
@@ -677,6 +679,9 @@ export async function sendDeviceHealth(payload: DeviceHealthRequestPayload): Pro
     (triggerReason !== null &&
       triggerReason !== "health_monitor_ok" &&
       !triggerReason.startsWith("health_monitor_ok"));
+  const pipelineAnomalySend =
+    triggerReason === "tracking.pipeline.anomaly_snapshot" ||
+    triggerReason === "tracking.pipeline.recovered";
   const constraintChanged = payload.constraint_reason !== lastSentConstraintReason;
   const throttleMs =
     payload.tracking_state === "healthy" || payload.tracking_state === "starting" || payload.tracking_state === "capture_failed"
@@ -685,7 +690,7 @@ export async function sendDeviceHealth(payload: DeviceHealthRequestPayload): Pro
   // Mission active (fix NULL / capture_failed inclus) → throttle 60s.
   const intervalElapsed = now - lastSentAtMs >= throttleMs;
 
-  if (!(intervalElapsed || constraintChanged || (criticalSignal && lastSentAtMs === 0))) {
+  if (!(intervalElapsed || constraintChanged || pipelineAnomalySend || (criticalSignal && lastSentAtMs === 0))) {
     emitDriverTelemetry("tracking.device_health.send_skipped", {
       source: "driver.device_health",
       reason: "throttled",
@@ -748,8 +753,25 @@ async function tickHeartbeat(triggerReason?: string): Promise<void> {
     const base = await collectDeviceHealth();
     const payload: DeviceHealthRequestPayload = triggerReason
       ? { ...base, trigger_reason: triggerReason }
-      : base;
+      : { ...base };
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pipelineObs = require("./trackingPipelineObservability") as typeof import("./trackingPipelineObservability");
+      const pipeline = await pipelineObs.collectTrackingPipelineSnapshot();
+      if (pipeline) {
+        payload.tracking_pipeline = pipeline;
+      }
+    } catch {
+      /* instrumentation-only */
+    }
     await sendDeviceHealth(payload);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const anomaly = require("./trackingPipelineAnomaly") as typeof import("./trackingPipelineAnomaly");
+      await anomaly.maybeEmitPipelineAnomalySnapshot(base);
+    } catch {
+      /* instrumentation-only */
+    }
   } catch {
     /* Defensive : collectDeviceHealth ne devrait pas throw, mais on ne veut
      * surtout pas laisser un tick faire crasher le ticker. */

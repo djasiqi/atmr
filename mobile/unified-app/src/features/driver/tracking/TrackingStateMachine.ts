@@ -1,5 +1,6 @@
 export type TrackingFsmState =
   | "IDLE"
+  | "BLOCKED"
   | "PRESENCE"
   | "MISSION_PREPARE"
   | "MISSION_ACTIVE"
@@ -10,13 +11,20 @@ export type TrackingFsmState =
 
 export type TrackingFsmInput = {
   hasMission: boolean;
-  /** Présence FG ou BG éligible (pas seulement la fenêtre horaire). */
+  /** Présence FG ou BG éligible (permissionsReady + en_service). */
   presenceEligible: boolean;
+  /**
+   * En service mais permissions insuffisantes pour garantir le contrat.
+   * Distinct de IDLE / hors service.
+   */
+  blocked?: boolean;
   appForeground: boolean;
   missionLive: boolean;
   fixStale: boolean;
   circuitOpen: boolean;
   missionTerminal: boolean;
+  /** En service (Driver.is_available). Requis pour fin mission → PRESENCE. */
+  enService?: boolean;
   /**
    * @deprecated Utiliser `presenceEligible`. Conservé pour compat tests/anciens appels.
    */
@@ -25,15 +33,34 @@ export type TrackingFsmInput = {
 
 export function resolveTrackingFsmState(input: TrackingFsmInput): TrackingFsmState {
   const presenceEligible = input.presenceEligible ?? Boolean(input.presenceWindow);
-  if (input.missionTerminal || (!input.hasMission && !presenceEligible)) {
+  const enService = input.enService ?? (presenceEligible || Boolean(input.blocked));
+  const blocked = Boolean(input.blocked);
+
+  // Fin de mission seule ≠ OFF : si encore en service → PRESENCE (ou BLOCKED)
+  if (input.missionTerminal) {
+    if (!enService) {
+      return "IDLE";
+    }
+    if (blocked || !presenceEligible) {
+      return "BLOCKED";
+    }
+    return "PRESENCE";
+  }
+
+  if (!input.hasMission && !presenceEligible && !blocked) {
     return "IDLE";
   }
+
   if (input.circuitOpen || input.fixStale) {
     if (input.missionLive || input.hasMission) {
       return "MISSION_RECOVERING";
     }
+    if (blocked) {
+      return "BLOCKED";
+    }
     return "DEGRADED";
   }
+
   if (input.missionLive && input.hasMission) {
     return input.appForeground ? "MISSION_ACTIVE" : "MISSION_BACKGROUND";
   }
@@ -42,6 +69,9 @@ export function resolveTrackingFsmState(input: TrackingFsmInput): TrackingFsmSta
   }
   if (presenceEligible) {
     return "PRESENCE";
+  }
+  if (blocked) {
+    return "BLOCKED";
   }
   return "IDLE";
 }

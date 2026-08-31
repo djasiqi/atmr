@@ -147,6 +147,75 @@ let lastRefreshFailureAtMs = 0;
 let lastRefreshFailureSignature: string | null = null;
 /** Dernier error_code renvoyé par un refresh/refresh-token échoué (coordinateur de récupération, PR C). */
 let lastRefreshErrorCode: string | null = null;
+/** MOB-STARTUP-STORM-FIX-01 : cooldown après refresh 200 (coupe les refresh proactifs séquentiels). */
+let lastRefreshSuccessAtMs = 0;
+/** MOB-STARTUP-STORM-FIX-01 : pas de POST refresh tant que le backoff 429 n'est pas écoulé. */
+let refreshRateLimitedUntilMs = 0;
+
+/**
+ * P1-C2 : porte terminale refresh. Un refresh token rejeté 401/403 par le
+ * backend (révoqué/invalide/replay) ne doit JAMAIS être rejoué sur le réseau.
+ * La porte est levée uniquement quand le token stocké change (login/rotation).
+ */
+type RefreshTerminalState = {
+  code: string;
+  status: number | null;
+  tokenFingerprint: string;
+  atMs: number;
+};
+let refreshTerminalState: RefreshTerminalState | null = null;
+
+/** Empreinte non réversible (djb2 + longueur) — jamais le token en clair. */
+function fingerprintRefreshToken(token: string): string {
+  let h = 5381;
+  for (let i = 0; i < token.length; i += 1) {
+    h = ((h << 5) + h + token.charCodeAt(i)) | 0;
+  }
+  return `${token.length}:${(h >>> 0).toString(36)}`;
+}
+
+/**
+ * 403 n'est PAS terminal par défaut (ex. incident CSRF ponctuel sur un token
+ * valide). Seuls ces error_code explicites (contrat backend futur) terminalisent
+ * un 403. Le storm observé passe par le 401 générique de _validate_refresh_token.
+ */
+const TERMINAL_REFRESH_403_ERROR_CODES = new Set([
+  "refresh_token_revoked",
+  "refresh_token_invalid",
+  "refresh_token_expired",
+]);
+
+function markRefreshTerminalIfNeeded(err: AxiosError, refreshToken: string): void {
+  const status = err.response?.status ?? null;
+  const data = err.response?.data as
+    | { error_code?: string; error?: string }
+    | undefined;
+  const errorCode =
+    typeof data?.error_code === "string" && data.error_code ? data.error_code : null;
+  const isTerminal =
+    status === 401 ||
+    (status === 403 &&
+      errorCode !== null &&
+      TERMINAL_REFRESH_403_ERROR_CODES.has(errorCode));
+  if (!isTerminal) {
+    return;
+  }
+  const code =
+    errorCode ||
+    (typeof data?.error === "string" && data.error) ||
+    "refresh_rejected";
+  refreshTerminalState = {
+    code,
+    status,
+    tokenFingerprint: fingerprintRefreshToken(refreshToken),
+    atMs: Date.now(),
+  };
+  emitDriverTelemetry("auth.refresh.terminal", {
+    source: "core.api.client",
+    status,
+    error_code: code,
+  });
+}
 
 export function getLastRefreshErrorCode(): string | null {
   return lastRefreshErrorCode;
@@ -158,7 +227,13 @@ const REFRESH_TOKEN_STORAGE_KEY = "auth_refresh_token";
 const REFRESH_TOKEN_WRITE_RETRIES = 3;
 const REFRESH_TOKEN_WRITE_BACKOFF_MS = [100, 300] as const;
 const REFRESH_FAILURE_TELEMETRY_COOLDOWN_MS = 10000;
-const POST_BOOTSTRAP_REFRESH_SKIP_MS = 5000;
+/** Fenêtre post-login/bootstrap : refresh proactif interdit (tokens déjà frais). */
+const POST_BOOTSTRAP_REFRESH_SKIP_MS = 60_000;
+/** Après un refresh 200 : aucun second refresh spontané pendant cette fenêtre. */
+const REFRESH_SUCCESS_COOLDOWN_MS = 60_000;
+/** Backoff 429 par défaut si Retry-After absent. */
+const REFRESH_429_DEFAULT_BACKOFF_MS = 30_000;
+const REFRESH_429_MAX_BACKOFF_MS = 120_000;
 let lastBootstrapAuthSuccessAtMs = 0;
 
 /** Évite un refresh token concurrent juste après login/bootstrap. */
@@ -168,6 +243,41 @@ export function markBootstrapAuthFresh(): void {
 
 function shouldSkipPostBootstrapRefresh(): boolean {
   return Date.now() - lastBootstrapAuthSuccessAtMs < POST_BOOTSTRAP_REFRESH_SKIP_MS;
+}
+
+function shouldSkipRecentRefreshSuccess(): boolean {
+  return (
+    lastRefreshSuccessAtMs > 0 &&
+    Date.now() - lastRefreshSuccessAtMs < REFRESH_SUCCESS_COOLDOWN_MS
+  );
+}
+
+function parseRetryAfterMs(err: AxiosError): number {
+  const raw = err.response?.headers?.["retry-after"] ?? err.response?.headers?.["Retry-After"];
+  const header = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof header === "string" && header.trim().length > 0) {
+    const asSeconds = Number(header);
+    if (Number.isFinite(asSeconds) && asSeconds >= 0) {
+      return Math.min(asSeconds * 1000, REFRESH_429_MAX_BACKOFF_MS);
+    }
+    const asDate = Date.parse(header);
+    if (!Number.isNaN(asDate)) {
+      return Math.min(Math.max(0, asDate - Date.now()), REFRESH_429_MAX_BACKOFF_MS);
+    }
+  }
+  return REFRESH_429_DEFAULT_BACKOFF_MS;
+}
+
+function markRefreshRateLimited(err: AxiosError): void {
+  refreshRateLimitedUntilMs = Date.now() + parseRetryAfterMs(err);
+  emitDriverTelemetry("auth.refresh.rate_limited", {
+    source: "core.api.client",
+    retry_after_ms: Math.max(0, refreshRateLimitedUntilMs - Date.now()),
+  });
+}
+
+function isRefreshRateLimited(): boolean {
+  return Date.now() < refreshRateLimitedUntilMs;
 }
 
 function shouldEmitRefreshFailure(status: number | null, reason: string): boolean {
@@ -342,6 +452,8 @@ async function writeRefreshToken(value: string | null): Promise<void> {
         } catch {
           /* ignore */
         }
+        // P1-C2 : nouveau token persisté -> la porte terminale est levée.
+        refreshTerminalState = null;
       }
       void appendSessionJournalEvent("auth.refresh_token.persist_success", { attempt });
       return;
@@ -463,6 +575,23 @@ async function refreshAuthToken(): Promise<string | null> {
   if (!refreshToken) {
     return null;
   }
+  // P1-C2 : token déjà rejeté comme révoqué/invalide -> pas de rejeu réseau.
+  if (refreshTerminalState) {
+    if (refreshTerminalState.tokenFingerprint === fingerprintRefreshToken(refreshToken)) {
+      if (shouldEmitRefreshFailure(refreshTerminalState.status, "terminal_short_circuit")) {
+        emitDriverTelemetry("auth.refresh.terminal_short_circuit", {
+          source: "core.api.client",
+          error_code: refreshTerminalState.code,
+        });
+      }
+      throw new AuthContractError(
+        "AUTH_REFRESH_TERMINAL",
+        "Refresh token révoqué : rejeu bloqué, reconnexion requise."
+      );
+    }
+    // Nouveau token stocké (login / rotation) -> porte levée.
+    refreshTerminalState = null;
+  }
   if (!isCurrentAuthEpoch(epochAtStart)) return null;
 
   const envelope = await readSessionEnvelope();
@@ -505,17 +634,30 @@ async function refreshAuthToken(): Promise<string | null> {
     data = response.data;
   } catch (error) {
     const err = error as AxiosError;
+    if (err.response?.status === 429) {
+      markRefreshRateLimited(err);
+    }
     const shouldFallback = err.response?.status === 404 || err.response?.status === 405;
     if (!shouldFallback) {
+      markRefreshTerminalIfNeeded(err, refreshToken);
       throw error;
     }
     endpointUsed = "refresh";
-    const fallbackResponse = await apiClient.post<{
-      access_token?: string;
-      token?: string;
-      refresh_token?: string;
-    }>("/auth/refresh", payload, { headers: authHeaders });
-    data = fallbackResponse.data;
+    try {
+      const fallbackResponse = await apiClient.post<{
+        access_token?: string;
+        token?: string;
+        refresh_token?: string;
+      }>("/auth/refresh", payload, { headers: authHeaders });
+      data = fallbackResponse.data;
+    } catch (fallbackError) {
+      const fb = fallbackError as AxiosError;
+      if (fb.response?.status === 429) {
+        markRefreshRateLimited(fb);
+      }
+      markRefreshTerminalIfNeeded(fb, refreshToken);
+      throw fallbackError;
+    }
   }
 
   emitDriverTelemetry("auth.refresh.endpoint_used", {
@@ -576,6 +718,11 @@ async function refreshAuthToken(): Promise<string | null> {
     if (applyResult.status === "stale") {
       return null;
     }
+    if (applyResult.value) {
+      lastRefreshSuccessAtMs = Date.now();
+      // Un refresh 200 lève le rate-limit 429 éventuel (token frais).
+      refreshRateLimitedUntilMs = 0;
+    }
     return applyResult.value;
   } finally {
     setTrackingAuthTemporarilyUnavailable(null);
@@ -584,7 +731,47 @@ async function refreshAuthToken(): Promise<string | null> {
   }
 }
 
-async function ensureRefreshToken(): Promise<string | null> {
+export type EnsureRefreshTokenOptions = {
+  /**
+   * true = retry après 401 HTTP (réactif).
+   * false/absent = appel proactif (socket, recovery, switch-context…) — soumis aux cooldowns.
+   */
+  force?: boolean;
+};
+
+async function ensureRefreshToken(options?: EnsureRefreshTokenOptions): Promise<string | null> {
+  const force = options?.force === true;
+  const existingAccess = getAuthAccessToken();
+
+  // 429 : jamais de boucle immédiate — réutiliser l'access token s'il existe.
+  if (isRefreshRateLimited()) {
+    if (existingAccess) {
+      return existingAccess;
+    }
+    emitDriverTelemetry("auth.refresh.skipped_rate_limited", {
+      source: "core.api.client",
+      force,
+      retry_after_ms: Math.max(0, refreshRateLimitedUntilMs - Date.now()),
+    });
+    return null;
+  }
+
+  // Proactif : skip post-bootstrap et cooldown post-succès (coupe le storm séquentiel).
+  if (!force && existingAccess) {
+    if (shouldSkipPostBootstrapRefresh()) {
+      emitDriverTelemetry("auth.refresh.skipped_post_bootstrap", {
+        source: "core.api.client",
+      });
+      return existingAccess;
+    }
+    if (shouldSkipRecentRefreshSuccess()) {
+      emitDriverTelemetry("auth.refresh.skipped_success_cooldown", {
+        source: "core.api.client",
+      });
+      return existingAccess;
+    }
+  }
+
   if (!refreshTokenInFlight) {
     refreshTokenInFlight = refreshAuthToken()
       .then((token) => {
@@ -592,6 +779,15 @@ async function ensureRefreshToken(): Promise<string | null> {
         return token;
       })
       .catch((error) => {
+        if (
+          error instanceof AuthContractError &&
+          error.code === "AUTH_REFRESH_TERMINAL"
+        ) {
+          // Court-circuit terminal : conserver le code d'origine pour la policy.
+          lastRefreshErrorCode =
+            refreshTerminalState?.code ?? lastRefreshErrorCode ?? "session_revoked";
+          throw error;
+        }
         const err = error as AxiosError;
         const status = err.response?.status ?? null;
         const reason = err.message;
@@ -617,14 +813,18 @@ async function ensureRefreshToken(): Promise<string | null> {
   return refreshTokenInFlight;
 }
 
-export async function refreshAuthTokenNow(): Promise<boolean> {
+export async function refreshAuthTokenNow(options?: EnsureRefreshTokenOptions): Promise<boolean> {
   try {
-    const token = await ensureRefreshToken();
+    const token = await ensureRefreshToken(options);
     return Boolean(token);
   } catch {
     return false;
   }
 }
+
+type AtmrAxiosRequestConfig = InternalAxiosRequestConfig & {
+  _skipBearerAuth?: boolean;
+};
 
 apiClient.interceptors.request.use(async (config) => {
   try {
@@ -635,6 +835,15 @@ apiClient.interceptors.request.use(async (config) => {
     recordHttpRequest(String(config.url ?? ""));
   } catch {
     // optional perf instrumentation
+  }
+  const atmrConfig = config as AtmrAxiosRequestConfig;
+  if (atmrConfig._skipBearerAuth) {
+    // JWT expiré + jwt_required(optional=True) → 401 serveur ; bootstrap doit pouvoir
+    // retomber en mode non authentifié sans écran « session expirée ».
+    if (atmrConfig.headers) {
+      delete atmrConfig.headers.Authorization;
+      delete atmrConfig.headers.authorization;
+    }
   }
   const requestUrl = String(config.url ?? "");
   if (
@@ -732,7 +941,7 @@ apiClient.interceptors.response.use(
       !isAuthEndpoint
     ) {
       try {
-        const refreshedToken = await ensureRefreshToken();
+        const refreshedToken = await ensureRefreshToken({ force: true });
         if (!refreshedToken) {
           return Promise.reject(error);
         }
@@ -1026,6 +1235,11 @@ export function setAuthToken(token: string | null) {
 
 /** Purge locale awaitée (access + refresh + recovery + envelope). Incrémente authEpoch. */
 export async function clearLocalAuth(): Promise<void> {
+  // P1-C2 : plus de token -> plus de porte terminale a maintenir.
+  refreshTerminalState = null;
+  lastRefreshSuccessAtMs = 0;
+  refreshRateLimitedUntilMs = 0;
+  lastBootstrapAuthSuccessAtMs = 0;
   try {
     const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
     const { withCredentialStoreLock } = require("../auth/sessionCredentialMutex") as typeof import("../auth/sessionCredentialMutex");
@@ -1071,17 +1285,26 @@ export function getAuthAccessToken(): string | null {
   return t && t.length > 0 ? t : null;
 }
 
+async function fetchBootstrapOnce(
+  activeContextId?: string | null,
+  skipBearerAuth = false
+): Promise<BootstrapResponse> {
+  const headers: Record<string, string> = {};
+  if (activeContextId) {
+    headers["X-Active-Context-Id"] = activeContextId;
+  }
+  const { data } = await apiClient.get("/auth/bootstrap", {
+    headers,
+    _skipBearerAuth: skipBearerAuth,
+  } as AtmrAxiosRequestConfig);
+  return bootstrapResponseSchema.parse(data);
+}
+
 export async function fetchBootstrap(activeContextId?: string | null): Promise<BootstrapResponse> {
   if (useMockBootstrap) {
     return bootstrapResponseSchema.parse(buildMockBootstrap());
   }
-  try {
-    const headers = activeContextId ? { "X-Active-Context-Id": activeContextId } : undefined;
-    const { data } = await apiClient.get("/auth/bootstrap", { headers });
-    const parsed = bootstrapResponseSchema.parse(data);
-    markBootstrapAuthFresh();
-    return parsed;
-  } catch (error) {
+  const emitBootstrapFailure = (error: unknown, phase: string) => {
     const err = error as AxiosError;
     emitDriverTelemetry("auth.bootstrap.failure", {
       source: "core.api.client",
@@ -1089,7 +1312,32 @@ export async function fetchBootstrap(activeContextId?: string | null): Promise<B
       reason: err.message,
       status: err.response?.status ?? null,
       axios_code: err.code ?? null,
+      phase,
     });
+  };
+  try {
+    const parsed = await fetchBootstrapOnce(activeContextId, false);
+    markBootstrapAuthFresh();
+    return parsed;
+  } catch (error) {
+    const status = isAxiosError(error) ? error.response?.status ?? null : null;
+    if (status === 401 || status === 403) {
+      setAuthToken(null);
+      try {
+        const parsed = await fetchBootstrapOnce(activeContextId, true);
+        markBootstrapAuthFresh();
+        emitDriverTelemetry("auth.bootstrap.recovered_without_bearer", {
+          source: "core.api.client",
+          context_id: activeContextId ?? null,
+          is_authenticated: parsed.is_authenticated,
+        });
+        return parsed;
+      } catch (retryError) {
+        emitBootstrapFailure(retryError, "retry_without_bearer");
+        throw toApiError(retryError);
+      }
+    }
+    emitBootstrapFailure(error, "initial");
     throw toApiError(error);
   }
 }

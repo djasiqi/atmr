@@ -1,0 +1,2 @@
+log=c:\Users\jasiq\atmr\docs\ops\_driver_state_cert_2026-08-21\logcat_C03_FG_SOFT_20260821_145358.txt
+mission=46 soft=True

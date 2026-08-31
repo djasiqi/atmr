@@ -1,20 +1,33 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "kind": "previous-release",
-  "created_at_utc": "2026-08-15T23:00:00Z",
+  "created_at_utc": "2026-08-23T19:50:00Z",
   "source_of_truth": [
     "docs/ops/gps-p0-prod-snapshot-2026-08-15.md",
     "docs/ops/_release_prod_snapshot_2026-08-15/snapshot.json",
-    "docs/ops/gps-p0-deploy-skew-audit-2026-08-15.md"
+    "docs/ops/gps-p0-deploy-skew-audit-2026-08-15.md",
+    "docs/ops/gps-production-pilot-closed.md"
   ],
-  "note": "Rollback cible = topologie PROD actuelle SKEWÉE, pas un pin uniforme sur 927640a0.",
-  "release_tip_before_deploy": "286737a2362eb1e38013c72d04be23fcd608210e",
+  "note": "Rollback cible = topologie PROD actuelle SKEWÉE (snapshot 2026-08-15). Pilote fermé 5 chauffeurs — institution P0 EXCLUDED.",
+  "release_type": "PILOTE_PROD_FERME_5_CHAUFFEURS",
+  "release_branch": "release/gps-pilot-5-drivers-20260823",
+  "deploy_candidate_sha": "ced2e53ef5eb90efe9356c99219862dbb13d0189",
+  "deploy_candidate_tag": "sha-ced2e53ef5eb",
+  "release_parent_sha": "a4d5afb74320581f5d58a9d9c25a47b1ec046df8",
+  "release_tip_before_deploy": "927640a0995a7025edfae3d31802998948a866d5",
+  "excluded_from_pilot": [
+    "03ae1364 feat(institution): P0-C atomic audit",
+    "2fec3fa4 test(institution): T01-T07",
+    "ae3caa25 test(institution): F01-F05",
+    "CNY-01 institution session canary (FAIL — hors périmètre pilote)"
+  ],
   "migration_head": "9b6638784019",
   "alembic": {
     "current": "9b6638784019",
     "heads_on_prod_image": "9b6638784019",
     "capture_id_migration_25ce766952e2": "absent",
-    "downgrade_required_on_rollback": false
+    "downgrade_required_on_rollback": false,
+    "migrations_in_pilot_delta": false
   },
   "backend": {
     "role": "api",
@@ -104,12 +117,20 @@
   ],
   "g3": {
     "backend_only_rollback_safe": true,
-    "mobile_p0_vs_old_backend": "DEGRADED-SAFE",
+    "mobile_pilot_vs_old_backend": "DEGRADED-SAFE",
     "ref": "docs/ops/gps-p0-g3-nn1-2026-08-15.md"
   },
   "rollback_procedure": {
     "api_celery_ws": "deploy-production.sh --release-manifest previous-release.json (backend+ws refs)",
     "consumer_outbox": "ops-tracking-p0-recreate-ingest.sh with SOURCE_SHA=390076ef… / tag sha-390076efc61c + p0-hold.yml",
     "fanout_dlq": "leave Created/stopped; ENABLED=false via p0-hold; do not compose up fanout"
+  },
+  "pilot_gates": {
+    "driver_state_c01_c11": "PASS",
+    "gps_v4_static": "PASS",
+    "institution_p0": "EXCLUDED",
+    "cny01": "NOT_REQUIRED_FOR_PILOT",
+    "fleet_20_20": "NOT_REQUIRED_FOR_PILOT",
+    "build_deploy": "PENDING"
   }
 }

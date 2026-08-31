@@ -2,9 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Linking, Platform, Pressable, StyleSheet, View } from "react-native";
 import * as Location from "expo-location";
 
-import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { AppText } from "../../../design/ui/AppText";
-import { useTrackingWindowState } from "../services/trackingWindow";
 import {
   getDriverAvailabilityActive,
   subscribeDriverAvailability,
@@ -28,15 +26,14 @@ import {
   markPresenceDisclosureAccepted,
   markPresenceDisclosureDeclined,
 } from "../services/liveTrackingDisclosureSession";
+import { setTrackingPermissionsReady } from "../services/trackingPermissionsReady";
 import { PresenceAvailabilityDisclosureModal } from "./PresenceAvailabilityDisclosureModal";
 
 /**
  * Affiche la disclosure « disponibilité flotte » avant le tracking présence.
- * Permission FG obligatoire ; permission BG optionnelle (présence FG sans BG).
+ * Contrat v4 : permissionsReady = FG + BG (HOME/lock). FG seul → BLOCKED, pas PRESENCE conforme.
  */
 export function DriverPresenceDisclosureHost() {
-  const window = useTrackingWindowState();
-  const workWindowEnabled = isFeatureEnabled("driver_tracking_work_window_enabled");
   const [driverAvailable, setDriverAvailable] = useState(() => getDriverAvailabilityActive());
   const [bridgeSnapshot, setBridgeSnapshot] = useState(getDriverTrackingBridgeSnapshot());
   const [disclosureVisible, setDisclosureVisible] = useState(false);
@@ -58,10 +55,9 @@ export function DriverPresenceDisclosureHost() {
     });
   }, []);
 
+  // A2 : en service commande la présence (plus la fenêtre horaire).
   const presenceTrackingWanted =
-    driverAvailable && workWindowEnabled && bridgeSnapshot.missionId == null;
-
-  const windowOpen = workWindowEnabled && window.isOpen;
+    driverAvailable === true && bridgeSnapshot.missionId == null;
 
   const orchestrationAllowsPresence =
     !orchestration.blocksPresenceDisclosure && !orchestration.missionDisclosureVisible;
@@ -101,7 +97,6 @@ export function DriverPresenceDisclosureHost() {
 
   const handleDisclosureContinue = useCallback(async () => {
     setDisclosurePending(true);
-    markPresenceDisclosureAccepted();
     try {
       const fgGranted = await (async () => {
         const current = await Location.getForegroundPermissionsAsync().catch(() => null);
@@ -110,12 +105,12 @@ export function DriverPresenceDisclosureHost() {
         return Boolean(requested?.granted);
       })();
       if (!fgGranted) {
+        setTrackingPermissionsReady(false);
         setDisclosurePending(false);
         setShowOpenSettings(true);
         return;
       }
 
-      // BG optionnel : refus ≠ disclosure refusée ; présence FG reste possible.
       const bgGranted = await (async () => {
         const current = await Location.getBackgroundPermissionsAsync().catch(() => null);
         if (current?.granted) return true;
@@ -123,6 +118,23 @@ export function DriverPresenceDisclosureHost() {
         return Boolean(requested?.granted);
       })();
 
+      // A3 : FG+BG requis pour permissionsReady / PRESENCE conforme.
+      setTrackingPermissionsReady(fgGranted && bgGranted);
+      if (!bgGranted) {
+        // Disclosure consentement UI OK, mais contrat non garanti → BLOCKED.
+        markPresenceDisclosureAccepted();
+        setDisclosurePending(false);
+        setDisclosureVisible(false);
+        setShowOpenSettings(true);
+        setDriverPresenceContext({
+          available: driverAvailable,
+          windowOpen: true,
+        });
+        refreshDriverTrackingBridgeState();
+        return;
+      }
+
+      markPresenceDisclosureAccepted();
       setDisclosurePending(false);
       setDisclosureVisible(false);
       setShowOpenSettings(false);
@@ -130,23 +142,22 @@ export function DriverPresenceDisclosureHost() {
       if (presenceTrackingWanted) {
         setDriverPresenceContext({
           available: driverAvailable,
-          windowOpen,
+          windowOpen: true,
         });
-        if (windowOpen && bgGranted) {
-          await ensureNativeTrackingWhileForeground(
-            null,
-            null,
-            { presenceWindow: true },
-            "presence_disclosure_accept"
-          );
-        }
+        await ensureNativeTrackingWhileForeground(
+          null,
+          null,
+          { presenceWindow: true },
+          "presence_disclosure_accept"
+        );
       }
       refreshDriverTrackingBridgeState();
     } catch {
+      setTrackingPermissionsReady(false);
       setDisclosurePending(false);
       setShowOpenSettings(true);
     }
-  }, [presenceTrackingWanted, driverAvailable, windowOpen]);
+  }, [presenceTrackingWanted, driverAvailable]);
 
   const handleDisclosureCancel = useCallback(() => {
     markPresenceDisclosureDeclined();

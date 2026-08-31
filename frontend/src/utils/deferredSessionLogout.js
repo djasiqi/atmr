@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import SessionIdleWarningToast, {
   sessionIdleWarningToastStyles,
 } from '../components/auth/SessionIdleWarningToast';
-import { hasActiveSession } from './webAuthSession';
+import { hasActiveSession, isInstitutionWebSession } from './webAuthSession';
 import {
   getMsSinceLastUserActivity,
   onUserActivity,
@@ -18,11 +18,28 @@ import {
   SESSION_WORKING_LOOKBACK_MS,
 } from './userActivityTracker';
 
-/** Seuil d'inactivité avant préavis (= lookback keep-alive). */
+/** Idle institution : 15 min (backend 900 s). Clic / scroll / frappe réarment. */
+export const INSTITUTION_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+
+/** Seuil d'inactivité avant préavis (company / défaut = lookback 8 h). */
 export const SESSION_IDLE_TIMEOUT_MS = SESSION_WORKING_LOOKBACK_MS;
 
 /** Durée du compte à rebours avant déconnexion. */
 export const SESSION_IDLE_WARNING_MS = 2 * 60 * 1000;
+
+/** Durée idle totale avant logout (institution 15 min, sinon 8 h + préavis). */
+export const getSessionIdleTimeoutMs = () =>
+  isInstitutionWebSession() ? INSTITUTION_IDLE_TIMEOUT_MS : SESSION_IDLE_TIMEOUT_MS;
+
+/**
+ * Seuil d'affichage du warning.
+ * Institution : T−2 min (13 min) puis logout à T15.
+ * Autres rôles : inchangé (warning après 8 h, logout +2 min).
+ */
+export const getSessionIdleWarningAtMs = () =>
+  isInstitutionWebSession()
+    ? Math.max(0, INSTITUTION_IDLE_TIMEOUT_MS - SESSION_IDLE_WARNING_MS)
+    : SESSION_IDLE_TIMEOUT_MS;
 
 /** @deprecated Utiliser SESSION_IDLE_WARNING_MS */
 export const SESSION_LOGOUT_COUNTDOWN_MS = SESSION_IDLE_WARNING_MS;
@@ -118,6 +135,18 @@ const handleIdleTimeout = () => {
   });
 };
 
+const restoreStayWarning = () => {
+  if (phase === 'RENEWING') {
+    phase = 'IDLE_WARNING';
+  }
+  toast.error('Impossible de prolonger la session.', {
+    id: TRANSIENT_TOAST_ID,
+    duration: 4000,
+  });
+  const secondsLeft = Math.max(1, Math.ceil(((warningEndsAt || 0) - Date.now()) / 1000));
+  showIdleWarningToast(secondsLeft, { renewing: false });
+};
+
 const handleStayConnected = async () => {
   if (phase !== 'IDLE_WARNING') {
     return;
@@ -133,12 +162,6 @@ const handleStayConnected = async () => {
       reason: 'idle_stay_connected',
     });
 
-    if (result?.status === 'refreshed') {
-      recordUserActivity();
-      resolveIdleWarning();
-      return;
-    }
-
     if (result?.status === 'terminal_failure') {
       executeLogout({
         immediate: true,
@@ -148,26 +171,34 @@ const handleStayConnected = async () => {
       return;
     }
 
-    // transient / skipped
-    if (phase === 'RENEWING') {
-      phase = 'IDLE_WARNING';
+    if (result?.status !== 'refreshed' && result?.status !== 'skipped') {
+      restoreStayWarning();
+      return;
     }
-    toast.error('Impossible de prolonger la session.', {
-      id: TRANSIENT_TOAST_ID,
-      duration: 4000,
-    });
-    const secondsLeft = Math.max(1, Math.ceil(((warningEndsAt || 0) - Date.now()) / 1000));
-    showIdleWarningToast(secondsLeft, { renewing: false });
+
+    const { postInteractiveSessionActivity } = await import(
+      './sessionActivityHeartbeat'
+    );
+    const activity = await postInteractiveSessionActivity();
+
+    if (activity?.status === 'ok') {
+      recordUserActivity();
+      resolveIdleWarning();
+      return;
+    }
+
+    if (activity?.status === 'terminal_failure') {
+      executeLogout({
+        immediate: true,
+        reason: 'session_expired',
+        preserveNext: true,
+      });
+      return;
+    }
+
+    restoreStayWarning();
   } catch (_) {
-    if (phase === 'RENEWING') {
-      phase = 'IDLE_WARNING';
-    }
-    toast.error('Impossible de prolonger la session.', {
-      id: TRANSIENT_TOAST_ID,
-      duration: 4000,
-    });
-    const secondsLeft = Math.max(1, Math.ceil(((warningEndsAt || 0) - Date.now()) / 1000));
-    showIdleWarningToast(secondsLeft, { renewing: false });
+    restoreStayWarning();
   }
 };
 
@@ -217,7 +248,7 @@ export const ensureIdleGuardEvaluated = () => {
   if (phase !== 'ACTIVE') {
     return;
   }
-  if (getMsSinceLastUserActivity() >= SESSION_IDLE_TIMEOUT_MS) {
+  if (getMsSinceLastUserActivity() >= getSessionIdleWarningAtMs()) {
     enterIdleWarning();
   }
 };
@@ -230,7 +261,7 @@ const ensurePollLoop = () => {
     if (phase !== 'ACTIVE') {
       return;
     }
-    if (getMsSinceLastUserActivity() >= SESSION_IDLE_TIMEOUT_MS) {
+    if (getMsSinceLastUserActivity() >= getSessionIdleWarningAtMs()) {
       enterIdleWarning();
     }
   }, POLL_MS);
@@ -267,7 +298,7 @@ export const startSessionIdleGuard = () => {
 
   ensurePollLoop();
 
-  if (phase === 'ACTIVE' && getMsSinceLastUserActivity() >= SESSION_IDLE_TIMEOUT_MS) {
+  if (phase === 'ACTIVE' && getMsSinceLastUserActivity() >= getSessionIdleWarningAtMs()) {
     enterIdleWarning();
   }
 };

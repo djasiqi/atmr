@@ -55,8 +55,16 @@ class _Repo:
 
 
 def test_returns_none_when_not_found() -> None:
-    uc = GetDriverBookingDetailsUseCase(booking_repo=_Repo(None))
+    uc = GetDriverBookingDetailsUseCase(
+        booking_repo=_Repo(None), assignment_repo=_NoAssignment()
+    )
     assert uc.execute(booking_id=1, driver_id=2) is None
+
+
+class _NoAssignment:
+    def find_model_by_booking_id(self, booking_id: int):  # type: ignore[no-untyped-def]
+        _ = booking_id
+        return None
 
 
 def test_returns_payload_when_found() -> None:
@@ -75,7 +83,9 @@ def test_returns_payload_when_found() -> None:
         wheelchair_client_has=True,
         wheelchair_need=False,
     )
-    uc = GetDriverBookingDetailsUseCase(booking_repo=_Repo(booking))
+    uc = GetDriverBookingDetailsUseCase(
+        booking_repo=_Repo(booking), assignment_repo=_NoAssignment()
+    )
     res = uc.execute(booking_id=1, driver_id=99)
     assert res is not None
     assert res.payload["id"] == 1
@@ -93,7 +103,10 @@ def test_returns_company_peer_when_not_assigned_but_same_company() -> None:
         amount=20.0,
         status=_Status("en_route"),
     )
-    uc = GetDriverBookingDetailsUseCase(booking_repo=_Repo(None, company_peer=peer))
+    uc = GetDriverBookingDetailsUseCase(
+        booking_repo=_Repo(None, company_peer=peer),
+        assignment_repo=_NoAssignment(),
+    )
     res = uc.execute(booking_id=42, driver_id=9, driver_company_id=100)
     assert res is not None
     assert res.payload["id"] == 42

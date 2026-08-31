@@ -1,0 +1,233 @@
+﻿08-21 22:27:56.129 I/ReactNativeJS(30805): ATMR_POC1_M2 ELIGIBILITY result=MISSION mission_id=54 status=IN_PROGRESS
+08-21 22:27:56.137 I/ReactNativeJS(30805): ATMR_JS_J TASKDEF_PROBE task_name=background-location-task taskDefined_local=true taskDefined_registry=true task_registered=true task_started=true js_runtime_id=js_mt3d9j66_4xlm8t app_state=background source=T4_app_state_background exit_reason=background timestamp=1787344076136
+08-21 22:27:56.148 I/ReactNativeJS(30805): ATMR_POC1_M4 ENSURE_NATIVE requested_mode=mission_live requested_interval=20000 mission_id=54 reason=ensure_manager_state prior_task_mode=mission
+08-21 22:28:15.349 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:28:15.360 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:28:15.379 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:28:15.403 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:28:15.291Z lat=46.1702667 lon=6.0960701 age_ms=110 capture_id=os:1787344095291:46.170267:6.096070 event_id=trk_1787344095291_b8e76fc0
+08-21 22:28:15.405 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:28:15.408 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:28:15.410 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=3 readiness=READY item_count=0 load_in_flight=false
+08-21 22:28:15.412 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=5 readiness=READY session_generation=1144
+08-21 22:28:15.414 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 session_id=trk_sess_1787342540967_gxu10lsm seq=116 elapsed_ms=7
+08-21 22:28:15.417 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 session_id=trk_sess_1787342540967_gxu10lsm seq=116 elapsed_ms=9
+08-21 22:28:15.479 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 session_id=trk_sess_1787342540967_gxu10lsm seq=116 elapsed_ms=72
+08-21 22:28:15.480 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 session_id=trk_sess_1787342540967_gxu10lsm seq=116 elapsed_ms=74
+08-21 22:28:15.483 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 session_id=trk_sess_1787342540967_gxu10lsm seq=116 elapsed_ms=76
+08-21 22:28:15.484 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 session_id=trk_sess_1787342540967_gxu10lsm seq=116 elapsed_ms=78
+08-21 22:28:15.490 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 session_id=trk_sess_1787342540967_gxu10lsm seq=116 elapsed_ms=83
+08-21 22:28:15.494 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 session_id=trk_sess_1787342540967_gxu10lsm seq=116 elapsed_ms=88 outcome=inserted
+08-21 22:28:15.496 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 seq=116 recorded_at=2026-08-21T20:28:15.291Z inserted=true
+08-21 22:28:15.497 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344095291_b8e76fc0 reason=ok
+08-21 22:28:15.502 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344095291_b8e76fc0 capture_id=os:1787344095291:46.170267:6.096070 recorded_at=2026-08-21T20:28:15.291Z enqueue_result=inserted
+08-21 22:28:15.504 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344095291:46.170267:6.096070
+08-21 22:28:15.548 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:28:15.553 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:28:23.803 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344095291_b8e76fc0
+08-21 22:28:36.843 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:28:36.857 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:28:36.873 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:28:36.896 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:28:36.696Z lat=46.1702626 lon=6.0960706 age_ms=198 capture_id=os:1787344116696:46.170263:6.096071 event_id=trk_1787344116696_9cf4b0e4
+08-21 22:28:36.897 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:28:36.899 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:28:36.900 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=2 readiness=READY item_count=0 load_in_flight=false
+08-21 22:28:36.901 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=3 readiness=READY session_generation=1144
+08-21 22:28:36.903 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 session_id=trk_sess_1787342540967_gxu10lsm seq=117 elapsed_ms=5
+08-21 22:28:36.904 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 session_id=trk_sess_1787342540967_gxu10lsm seq=117 elapsed_ms=6
+08-21 22:28:36.962 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 session_id=trk_sess_1787342540967_gxu10lsm seq=117 elapsed_ms=63
+08-21 22:28:36.964 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 session_id=trk_sess_1787342540967_gxu10lsm seq=117 elapsed_ms=65
+08-21 22:28:36.965 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 session_id=trk_sess_1787342540967_gxu10lsm seq=117 elapsed_ms=67
+08-21 22:28:36.967 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 session_id=trk_sess_1787342540967_gxu10lsm seq=117 elapsed_ms=68
+08-21 22:28:36.975 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 session_id=trk_sess_1787342540967_gxu10lsm seq=117 elapsed_ms=77
+08-21 22:28:36.979 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 session_id=trk_sess_1787342540967_gxu10lsm seq=117 elapsed_ms=81 outcome=inserted
+08-21 22:28:36.980 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 seq=117 recorded_at=2026-08-21T20:28:36.696Z inserted=true
+08-21 22:28:36.982 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344116696_9cf4b0e4 reason=ok
+08-21 22:28:36.986 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344116696_9cf4b0e4 capture_id=os:1787344116696:46.170263:6.096071 recorded_at=2026-08-21T20:28:36.696Z enqueue_result=inserted
+08-21 22:28:36.987 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344116696:46.170263:6.096071
+08-21 22:28:37.050 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:28:37.055 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:28:37.344 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344116696_9cf4b0e4
+08-21 22:28:54.926 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:28:54.936 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:28:54.954 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:28:54.976 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:28:54.852Z lat=46.1702597 lon=6.0960742 age_ms=122 capture_id=os:1787344134852:46.170260:6.096074 event_id=trk_1787344134852_4855057b
+08-21 22:28:54.977 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:28:54.980 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:28:54.983 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=3 readiness=READY item_count=0 load_in_flight=false
+08-21 22:28:54.984 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=6 readiness=READY session_generation=1144
+08-21 22:28:54.986 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 session_id=trk_sess_1787342540967_gxu10lsm seq=118 elapsed_ms=7
+08-21 22:28:54.988 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 session_id=trk_sess_1787342540967_gxu10lsm seq=118 elapsed_ms=9
+08-21 22:28:55.050 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 session_id=trk_sess_1787342540967_gxu10lsm seq=118 elapsed_ms=71
+08-21 22:28:55.052 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 session_id=trk_sess_1787342540967_gxu10lsm seq=118 elapsed_ms=74
+08-21 22:28:55.054 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 session_id=trk_sess_1787342540967_gxu10lsm seq=118 elapsed_ms=75
+08-21 22:28:55.055 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 session_id=trk_sess_1787342540967_gxu10lsm seq=118 elapsed_ms=77
+08-21 22:28:55.061 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 session_id=trk_sess_1787342540967_gxu10lsm seq=118 elapsed_ms=82
+08-21 22:28:55.064 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 session_id=trk_sess_1787342540967_gxu10lsm seq=118 elapsed_ms=86 outcome=inserted
+08-21 22:28:55.065 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 seq=118 recorded_at=2026-08-21T20:28:54.852Z inserted=true
+08-21 22:28:55.067 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344134852_4855057b reason=ok
+08-21 22:28:55.070 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344134852_4855057b capture_id=os:1787344134852:46.170260:6.096074 recorded_at=2026-08-21T20:28:54.852Z enqueue_result=inserted
+08-21 22:28:55.072 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344134852:46.170260:6.096074
+08-21 22:28:55.132 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:28:55.137 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:28:55.366 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344134852_4855057b
+08-21 22:29:19.792 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:29:19.801 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:29:19.818 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:29:19.841 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:29:19.738Z lat=46.1702593 lon=6.0960771 age_ms=101 capture_id=os:1787344159738:46.170259:6.096077 event_id=trk_1787344159738_489b4fd4
+08-21 22:29:19.843 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:29:19.844 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:29:19.846 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:29:19.847 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=3 readiness=READY session_generation=1144
+08-21 22:29:19.848 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=119 elapsed_ms=4
+08-21 22:29:19.850 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=119 elapsed_ms=5
+08-21 22:29:19.901 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=119 elapsed_ms=56
+08-21 22:29:19.902 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=119 elapsed_ms=58
+08-21 22:29:19.904 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=119 elapsed_ms=60
+08-21 22:29:19.906 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=119 elapsed_ms=61
+08-21 22:29:19.915 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=119 elapsed_ms=70
+08-21 22:29:19.919 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=119 elapsed_ms=75 outcome=inserted
+08-21 22:29:19.920 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 seq=119 recorded_at=2026-08-21T20:29:19.738Z inserted=true
+08-21 22:29:19.933 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344159738_489b4fd4 reason=ok
+08-21 22:29:19.937 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344159738_489b4fd4 capture_id=os:1787344159738:46.170259:6.096077 recorded_at=2026-08-21T20:29:19.738Z enqueue_result=inserted
+08-21 22:29:19.939 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344159738:46.170259:6.096077
+08-21 22:29:19.945 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:29:19.950 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:29:20.227 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344159738_489b4fd4
+08-21 22:29:41.220 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:29:41.226 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:29:41.251 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:29:41.270 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:29:41.137Z lat=46.1702598 lon=6.0960755 age_ms=131 capture_id=os:1787344181137:46.170260:6.096076 event_id=trk_1787344181137_227701
+08-21 22:29:41.271 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:29:41.273 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:29:41.274 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=2 readiness=READY item_count=0 load_in_flight=false
+08-21 22:29:41.275 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=3 readiness=READY session_generation=1144
+08-21 22:29:41.276 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 session_id=trk_sess_1787342540967_gxu10lsm seq=120 elapsed_ms=4
+08-21 22:29:41.278 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 session_id=trk_sess_1787342540967_gxu10lsm seq=120 elapsed_ms=6
+08-21 22:29:41.337 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 session_id=trk_sess_1787342540967_gxu10lsm seq=120 elapsed_ms=64
+08-21 22:29:41.339 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 session_id=trk_sess_1787342540967_gxu10lsm seq=120 elapsed_ms=66
+08-21 22:29:41.340 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 session_id=trk_sess_1787342540967_gxu10lsm seq=120 elapsed_ms=68
+08-21 22:29:41.343 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 session_id=trk_sess_1787342540967_gxu10lsm seq=120 elapsed_ms=70
+08-21 22:29:41.349 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 session_id=trk_sess_1787342540967_gxu10lsm seq=120 elapsed_ms=76
+08-21 22:29:41.355 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 session_id=trk_sess_1787342540967_gxu10lsm seq=120 elapsed_ms=82 outcome=inserted
+08-21 22:29:41.357 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 seq=120 recorded_at=2026-08-21T20:29:41.137Z inserted=true
+08-21 22:29:41.358 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344181137_227701 reason=ok
+08-21 22:29:41.364 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344181137_227701 capture_id=os:1787344181137:46.170260:6.096076 recorded_at=2026-08-21T20:29:41.137Z enqueue_result=inserted
+08-21 22:29:41.366 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344181137:46.170260:6.096076
+08-21 22:29:41.415 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:29:41.424 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:29:49.594 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344181137_227701
+08-21 22:30:02.506 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:30:02.517 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:30:02.534 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:30:02.556 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:30:02.431Z lat=46.1702585 lon=6.0960745 age_ms=124 capture_id=os:1787344202431:46.170259:6.096075 event_id=trk_1787344202431_bcca0d1f
+08-21 22:30:02.557 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:30:02.559 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:30:02.561 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:30:02.562 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=3 readiness=READY session_generation=1144
+08-21 22:30:02.563 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 session_id=trk_sess_1787342540967_gxu10lsm seq=121 elapsed_ms=4
+08-21 22:30:02.564 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 session_id=trk_sess_1787342540967_gxu10lsm seq=121 elapsed_ms=5
+08-21 22:30:02.633 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 session_id=trk_sess_1787342540967_gxu10lsm seq=121 elapsed_ms=72
+08-21 22:30:02.635 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 session_id=trk_sess_1787342540967_gxu10lsm seq=121 elapsed_ms=76
+08-21 22:30:02.638 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 session_id=trk_sess_1787342540967_gxu10lsm seq=121 elapsed_ms=78
+08-21 22:30:02.640 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 session_id=trk_sess_1787342540967_gxu10lsm seq=121 elapsed_ms=80
+08-21 22:30:02.647 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 session_id=trk_sess_1787342540967_gxu10lsm seq=121 elapsed_ms=87
+08-21 22:30:02.652 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 session_id=trk_sess_1787342540967_gxu10lsm seq=121 elapsed_ms=93 outcome=inserted
+08-21 22:30:02.654 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 seq=121 recorded_at=2026-08-21T20:30:02.431Z inserted=true
+08-21 22:30:02.655 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344202431_bcca0d1f reason=ok
+08-21 22:30:02.661 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344202431_bcca0d1f capture_id=os:1787344202431:46.170259:6.096075 recorded_at=2026-08-21T20:30:02.431Z enqueue_result=inserted
+08-21 22:30:02.663 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344202431:46.170259:6.096075
+08-21 22:30:02.672 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:30:02.679 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:30:03.048 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344202431_bcca0d1f
+08-21 22:30:22.944 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:30:22.952 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:30:22.974 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:30:23.017 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:30:22.828Z lat=46.1702553 lon=6.0960767 age_ms=187 capture_id=os:1787344222828:46.170255:6.096077 event_id=trk_1787344222828_230ea1eb
+08-21 22:30:23.019 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:30:23.022 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:30:23.024 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=3 readiness=READY item_count=0 load_in_flight=false
+08-21 22:30:23.025 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=5 readiness=READY session_generation=1144
+08-21 22:30:23.027 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=122 elapsed_ms=7
+08-21 22:30:23.029 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=122 elapsed_ms=8
+08-21 22:30:23.091 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=122 elapsed_ms=70
+08-21 22:30:23.093 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=122 elapsed_ms=72
+08-21 22:30:23.094 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=122 elapsed_ms=74
+08-21 22:30:23.096 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=122 elapsed_ms=75
+08-21 22:30:23.101 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=122 elapsed_ms=81
+08-21 22:30:23.105 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 session_id=trk_sess_1787342540967_gxu10lsm seq=122 elapsed_ms=84 outcome=inserted
+08-21 22:30:23.106 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 seq=122 recorded_at=2026-08-21T20:30:22.828Z inserted=true
+08-21 22:30:23.107 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344222828_230ea1eb reason=ok
+08-21 22:30:23.110 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344222828_230ea1eb capture_id=os:1787344222828:46.170255:6.096077 recorded_at=2026-08-21T20:30:22.828Z enqueue_result=inserted
+08-21 22:30:23.111 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344222828:46.170255:6.096077
+08-21 22:30:23.117 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:30:23.122 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:30:23.432 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344222828_230ea1eb
+08-21 22:30:45.265 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:30:45.276 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:30:45.293 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:30:45.331 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:30:45.129Z lat=46.1702558 lon=6.0960733 age_ms=199 capture_id=os:1787344245129:46.170256:6.096073 event_id=trk_1787344245129_349fc9b
+08-21 22:30:45.332 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:30:45.333 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:30:45.335 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:30:45.336 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=3 readiness=READY session_generation=1144
+08-21 22:30:45.337 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=123 elapsed_ms=4
+08-21 22:30:45.338 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=123 elapsed_ms=5
+08-21 22:30:45.388 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=123 elapsed_ms=55
+08-21 22:30:45.389 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=123 elapsed_ms=56
+08-21 22:30:45.391 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=123 elapsed_ms=58
+08-21 22:30:45.392 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=123 elapsed_ms=59
+08-21 22:30:45.397 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=123 elapsed_ms=64
+08-21 22:30:45.401 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=123 elapsed_ms=68 outcome=inserted
+08-21 22:30:45.402 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 seq=123 recorded_at=2026-08-21T20:30:45.129Z inserted=true
+08-21 22:30:45.403 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344245129_349fc9b reason=ok
+08-21 22:30:45.407 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344245129_349fc9b capture_id=os:1787344245129:46.170256:6.096073 recorded_at=2026-08-21T20:30:45.129Z enqueue_result=inserted
+08-21 22:30:45.408 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344245129:46.170256:6.096073
+08-21 22:30:45.454 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:30:45.459 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:30:45.706 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344245129_349fc9b
+08-21 22:31:06.578 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:31:06.589 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:31:06.615 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:31:06.633 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:31:06.424Z lat=46.170258 lon=6.0960721 age_ms=207 capture_id=os:1787344266424:46.170258:6.096072 event_id=trk_1787344266424_cdc1ac46
+08-21 22:31:06.634 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:31:06.636 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:31:06.637 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=2 readiness=READY item_count=0 load_in_flight=false
+08-21 22:31:06.638 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=3 readiness=READY session_generation=1144
+08-21 22:31:06.640 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 session_id=trk_sess_1787342540967_gxu10lsm seq=124 elapsed_ms=5
+08-21 22:31:06.641 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 session_id=trk_sess_1787342540967_gxu10lsm seq=124 elapsed_ms=6
+08-21 22:31:06.693 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 session_id=trk_sess_1787342540967_gxu10lsm seq=124 elapsed_ms=57
+08-21 22:31:06.694 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 session_id=trk_sess_1787342540967_gxu10lsm seq=124 elapsed_ms=59
+08-21 22:31:06.696 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 session_id=trk_sess_1787342540967_gxu10lsm seq=124 elapsed_ms=61
+08-21 22:31:06.698 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 session_id=trk_sess_1787342540967_gxu10lsm seq=124 elapsed_ms=62
+08-21 22:31:06.708 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 session_id=trk_sess_1787342540967_gxu10lsm seq=124 elapsed_ms=73
+08-21 22:31:06.711 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 session_id=trk_sess_1787342540967_gxu10lsm seq=124 elapsed_ms=76 outcome=inserted
+08-21 22:31:06.712 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 seq=124 recorded_at=2026-08-21T20:31:06.424Z inserted=true
+08-21 22:31:06.713 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344266424_cdc1ac46 reason=ok
+08-21 22:31:06.719 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344266424_cdc1ac46 capture_id=os:1787344266424:46.170258:6.096072 recorded_at=2026-08-21T20:31:06.424Z enqueue_result=inserted
+08-21 22:31:06.720 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344266424:46.170258:6.096072
+08-21 22:31:06.758 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:31:06.762 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:31:15.006 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344266424_cdc1ac46
+08-21 22:31:27.775 I/ReactNativeJS(30805): ATMR_JS_J J1_TASK_ENTER locations_count=1 task_error=null
+08-21 22:31:27.780 I/ReactNativeJS(30805): ATMR_JS_J J4_TRACKING_CONTEXT missionId=54 missionStatus=IN_PROGRESS taskMode=mission lease_state=driver_active owner_gen=trk-mt3d9nyu-k7zs1fws2f owner_mission=54
+08-21 22:31:27.794 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute discovered=1 peek=1 module=ready
+08-21 22:31:27.809 I/ReactNativeJS(30805): ATMR_JS_J J2_LOCATION_SELECTED recorded_at=2026-08-21T20:31:27.738Z lat=46.1702541 lon=6.0960726 age_ms=69 capture_id=os:1787344287738:46.170254:6.096073 event_id=trk_1787344287738_e42624cf
+08-21 22:31:27.810 I/ReactNativeJS(30805): ATMR_JS_J J3_LOCATION_DECISION accepted=true reason=pass_gates
+08-21 22:31:27.811 I/ReactNativeJS(30805): ATMR_JS_J E0_ENQUEUE_ENTER event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=0 readiness=READY load_in_flight=false rotate_in_flight=false is_flushing=false loaded=true
+08-21 22:31:27.812 I/ReactNativeJS(30805): ATMR_JS_J E1_QUEUE_LOADED event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=1 readiness=READY item_count=0 load_in_flight=false
+08-21 22:31:27.813 I/ReactNativeJS(30805): ATMR_JS_J E2_SESSION_READY event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=null elapsed_ms=2 readiness=READY session_generation=1144
+08-21 22:31:27.814 I/ReactNativeJS(30805): ATMR_JS_J E3_PAYLOAD_FROZEN event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=125 elapsed_ms=3
+08-21 22:31:27.815 I/ReactNativeJS(30805): ATMR_JS_J E4_SQLITE_INSERT_ENTER event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=125 elapsed_ms=4
+08-21 22:31:27.853 I/ReactNativeJS(30805): ATMR_JS_J E5_SQLITE_INSERT_EXIT event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=125 elapsed_ms=41
+08-21 22:31:27.854 I/ReactNativeJS(30805): ATMR_JS_J E5A_COMPACT_EXIT event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=125 elapsed_ms=43
+08-21 22:31:27.856 I/ReactNativeJS(30805): ATMR_JS_J E5B_TRIM_EXIT event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=125 elapsed_ms=44
+08-21 22:31:27.857 I/ReactNativeJS(30805): ATMR_JS_J E5C_PERSIST_EXIT event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=125 elapsed_ms=46
+08-21 22:31:27.861 I/ReactNativeJS(30805): ATMR_JS_J E5D_PERSIST_SESSION_EXIT event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=125 elapsed_ms=50
+08-21 22:31:27.865 I/ReactNativeJS(30805): ATMR_JS_J E6_ENQUEUE_RETURN event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 session_id=trk_sess_1787342540967_gxu10lsm seq=125 elapsed_ms=54 outcome=inserted
+08-21 22:31:27.866 I/ReactNativeJS(30805): ATMR_JS_J J5_PAYLOAD_FROZEN event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 seq=125 recorded_at=2026-08-21T20:31:27.738Z inserted=true
+08-21 22:31:27.867 I/ReactNativeJS(30805): ATMR_JS_J J6_ENQUEUE_RESULT inserted=true event_id=trk_1787344287738_e42624cf reason=ok
+08-21 22:31:27.869 I/ReactNativeJS(30805): ATMR_JS_J P9_IMPORT event_id=trk_1787344287738_e42624cf capture_id=os:1787344287738:46.170254:6.096073 recorded_at=2026-08-21T20:31:27.738Z enqueue_result=inserted
+08-21 22:31:27.870 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_REQUEST count=1 ids=os:1787344287738:46.170254:6.096073
+08-21 22:31:27.917 I/ReactNativeJS(30805): ATMR_JS_J P9_ACK_RESULT requested=1 removed=1
+08-21 22:31:27.921 I/ReactNativeJS(30805): ATMR_JS_J J8_NATIVE_DRAIN invoked=true reason=task_execute peek=1 peek_total=1 imported=1 removed=1
+08-21 22:31:28.121 I/ReactNativeJS(30805): ATMR_JS_J J7_FLUSH_RESULT sent=1 queue_depth=0 backend_acked=1 dropped=0 last_event_id=trk_1787344287738_e42624cf

@@ -42,6 +42,10 @@ from schemas.institution_schemas import (
 from security.api_key_auth import api_key_or_jwt_required
 from security.audit_log import AuditLogger
 from security.authorization import AuthorizationService, get_user_team_ids
+from services.institutions.request_actor import (
+    ActorRequiredError,
+    apply_created_by_snapshot,
+)
 from shared.error_handlers import APIErrorHandler
 from shared.time_utils import normalize_mission_wall_clock
 
@@ -741,7 +745,13 @@ class TransportRequestList(Resource):
 
             transport_req = TransportRequest()
             transport_req.institution_id = institution_id
-            transport_req.created_by_user_id = user_id
+            try:
+                apply_created_by_snapshot(transport_req, user_id=user_id)
+            except ActorRequiredError as actor_err:
+                return {
+                    "error": str(actor_err),
+                    "code": "actor_required",
+                }, 400
             transport_req.external_reference = ext_ref
             transport_req.patient_id = patient_id
             transport_req.mission_type = validated.get(

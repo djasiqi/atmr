@@ -53,6 +53,7 @@ import {
   clearTrackingAuthSession,
   publishTrackingAuthSessionAvailable,
 } from "./auth/trackingAuthPresence";
+import { planTrackingAuthPublishOnBootstrap } from "./auth/trackingAuthBootstrapPlan";
 import {
   newLifecycleOperationId,
   shouldAcceptBootstrapTrigger,
@@ -71,6 +72,7 @@ import { driverQueryKeys } from "../features/driver/queryKeys";
 import { emitDriverTelemetry } from "./observability/driverTelemetry";
 import { appendSessionJournalEvent, clearSessionJournal, hydrateSessionJournal } from "./observability/sessionJournal";
 import { purgeDriverProfileCache } from "../features/driver/services/driverProfileCache";
+import { setDriverAvailabilityActive } from "../features/driver/services/driverAvailabilityBridge";
 import {
   companyDriverSwitchBlockedMessage,
   isCompanyDriverCrossContextSwitch,
@@ -573,37 +575,50 @@ export function SessionProvider({ children }: PropsWithChildren) {
             activeContextType: resolved?.context_type ?? null,
             isAuthenticated: Boolean(data.is_authenticated),
           });
-          if (
-            resolved?.context_type === "driver" &&
-            data.is_authenticated &&
-            lease.state !== "driver_active"
-          ) {
-            const driverIdRaw = getDriverIdFromContext(resolved);
-            const driverId = driverIdRaw != null ? Number(driverIdRaw) : NaN;
-            if (Number.isFinite(driverId)) {
-              const { startOrJoinTrackingRuntime } = loadTrackingRuntimeRegistry();
-              const runtime = await startOrJoinTrackingRuntime({
-                driverId,
-                companyId: getCompanyIdFromContext(resolved),
-                missionId: null,
-                missionStatus: null,
-              });
-              await setTrackingContextLeaseDriverActive({
-                contextId: resolved.context_id,
-                driverId,
-                sessionGenerationId: runtime.identity.sessionGenerationId,
-                trackingGenerationId: runtime.identity.trackingGenerationId,
-                trackingIdentityId: runtime.identity.trackingIdentityId,
-                missionId: runtime.missionContext.missionId,
-                missionContextVersion: runtime.missionContext.missionContextVersion,
-              });
-              // P0-B : presence persistée + cache SESSION_AVAILABLE (login / restore)
-              await publishTrackingAuthSessionAvailable({
-                driverId,
-                trackingIdentityId: runtime.identity.trackingIdentityId,
-                sessionGenerationId: runtime.identity.sessionGenerationId,
-              });
-            }
+          // Tracking auth mémoire ≠ lease durable.
+          // Cold start : lease déjà driver_active ne doit PAS court-circuiter
+          // publishTrackingAuthSessionAvailable (BOOTSTRAP_IDEMPOTENCY_GAP).
+          const driverIdRaw =
+            resolved != null ? getDriverIdFromContext(resolved) : null;
+          const contextDriverId =
+            driverIdRaw != null ? Number(driverIdRaw) : null;
+          const plan = planTrackingAuthPublishOnBootstrap({
+            isAuthenticated: Boolean(data.is_authenticated),
+            contextType: resolved?.context_type ?? null,
+            contextDriverId:
+              contextDriverId != null && Number.isFinite(contextDriverId)
+                ? contextDriverId
+                : null,
+            lease,
+          });
+          if (plan.action === "republish_from_lease") {
+            await publishTrackingAuthSessionAvailable({
+              driverId: plan.driverId,
+              trackingIdentityId: plan.trackingIdentityId,
+              sessionGenerationId: plan.sessionGenerationId,
+            });
+          } else if (plan.action === "acquire_and_publish" && resolved) {
+            const { startOrJoinTrackingRuntime } = loadTrackingRuntimeRegistry();
+            const runtime = await startOrJoinTrackingRuntime({
+              driverId: plan.driverId,
+              companyId: getCompanyIdFromContext(resolved),
+              missionId: null,
+              missionStatus: null,
+            });
+            await setTrackingContextLeaseDriverActive({
+              contextId: resolved.context_id,
+              driverId: plan.driverId,
+              sessionGenerationId: runtime.identity.sessionGenerationId,
+              trackingGenerationId: runtime.identity.trackingGenerationId,
+              trackingIdentityId: runtime.identity.trackingIdentityId,
+              missionId: runtime.missionContext.missionId,
+              missionContextVersion: runtime.missionContext.missionContextVersion,
+            });
+            await publishTrackingAuthSessionAvailable({
+              driverId: plan.driverId,
+              trackingIdentityId: runtime.identity.trackingIdentityId,
+              sessionGenerationId: runtime.identity.sessionGenerationId,
+            });
           }
         })
         .catch(() => undefined);
@@ -999,6 +1014,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         // P0-B : effacer presence persistée + snapshot mémoire immédiatement
         void clearTrackingAuthSession({ reason: "logout" });
         setTrackingAuthAvailability({ kind: "TRACKING_IDENTITY_UNAVAILABLE" });
+        setDriverAvailabilityActive(null);
         try {
           void loadTrackingContextLease().setTrackingContextLeaseInactive();
         } catch {

@@ -1,0 +1,15 @@
+﻿mission=49
+P9_count=5
+P9_deltas=21,7,18,6,24,22,5
+P9_median=21.7
+LAST_event_id=trk_1787327522371_2c959b0
+LAST_capture_id=os:1787327522371:46.170284:6.096068
+unreg=0
+fgs_restart=0
+remove_nz=0
+presence_payloads=0
+mission_live_payloads=26
+app_resume_60=0
+sessions=trk_sess_1787325176665_17zayolz,trk_sess_1787327417823_5mv8dqlg
+fgs_end=True
+log=c:\Users\jasiq\atmr\docs\ops\_driver_state_cert_2026-08-21\logcat_C04_BG_20260821_175013.txt

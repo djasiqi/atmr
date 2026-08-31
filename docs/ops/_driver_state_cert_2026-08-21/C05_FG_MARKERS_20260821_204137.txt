@@ -1,0 +1,16 @@
+ID=C05
+STATE=S2_EN_ROUTE / app_state=FG (MainActivity)
+driver_id=20 mission_id=51 mission_status=EN_ROUTE
+tracking_mode=mission_live task_mode=mission intervalMs=20000
+P8=5 J1=5 J7=5 P9=5 median_delta≈20.8s
+last_event_ids=
+  trk_1787337734769_1584df9
+  trk_1787337753769_3e7ba06e
+  trk_1787337778770_b4d3c23e
+  trk_1787337801407_ad2503e
+  trk_1787337819766_d296bc9b
+PG_MATCH=5/5 mission_live
+Unregister=0 FLP_REMOVE=0
+status_change_neq_STOP=OK
+VERDICT=PASS
+logcat=logcat_C05_FG_20260821_204137.txt

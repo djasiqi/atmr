@@ -1,0 +1,15 @@
+﻿T0=2026-08-21T12:39:23.0321685Z
+P9_count=4
+P9_deltas=56,56,56
+P9_median=56
+LAST_event_id=trk_1787316135839_7d365fdb
+LAST_capture_id=os:1787316135839:46.193462:6.119979
+LAST_recorded_at=2026-08-21T12:42:15.839Z
+unreg=0
+remove=0
+fgs_restart=0
+zombie=0
+fgs_end=True
+sessions=trk_sess_1787315194201_rzxh3pol
+gens=1135
+log=c:\Users\jasiq\atmr\docs\ops\_driver_state_cert_2026-08-21\logcat_C02_BG_20260821_143920.txt

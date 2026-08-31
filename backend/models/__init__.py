@@ -275,6 +275,7 @@ from .tracking_session import (
 from .trip_tracking import TripTracking
 from .trip_tracking_archive import TripTrackingArchive
 from .user import User
+from .web_session import WebSession
 from .vehicle import Vehicle
 
 # ========== EXPORTS ==========
@@ -503,6 +504,7 @@ __all__ = [
     "UnavailabilityReason",
     "User",
     "UserRole",
+    "WebSession",
     "VacationType",
     "Vehicle",
     "_as_bool",

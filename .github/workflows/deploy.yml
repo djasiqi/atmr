@@ -1,9 +1,13 @@
 # yaml-language-server: disable
 name: Build & Deploy
 
-# ⚠️ Workflow automatique DÉSACTIVÉ - Déclenchement manuel uniquement
+# Build & Deploy production (backend + ws-service).
+# Déclenchement :
+#   - manuel : workflow_dispatch
+#   - automatique : Phase 1 Gates PASS sur release/gps-pilot-5-drivers-20260823
+#     (job trigger-backend-deploy dans phase1-gates.yml)
 on:
-  workflow_dispatch: # Déclenchement manuel uniquement
+  workflow_dispatch:
     inputs:
       additional_tag:
         description: "Alias Docker optionnel (ex: latest, v1.2.0). Jamais la source de vérité — le tag canonique est toujours sha-<12>"

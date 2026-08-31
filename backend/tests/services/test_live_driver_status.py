@@ -99,6 +99,7 @@ def test_resolve_driver_status_available_constrained() -> None:
             mission_status="NONE",
             is_active=True,
             presence_status="degraded_constrained",
+            is_available=True,
         )
         == "available_constrained"
     )
@@ -110,6 +111,7 @@ def test_resolve_driver_status_assigned_constrained() -> None:
             mission_status=BookingStatus.ASSIGNED.value,
             is_active=True,
             presence_status="degraded_constrained",
+            is_available=True,
         )
         == "assigned_constrained"
     )
@@ -121,6 +123,7 @@ def test_resolve_driver_status_busy_overrides_constrained() -> None:
             mission_status=BookingStatus.IN_PROGRESS.value,
             is_active=True,
             presence_status="degraded_constrained",
+            is_available=True,
         )
         == "busy"
     )
@@ -132,6 +135,31 @@ def test_resolve_driver_status_offline_when_inactive() -> None:
             mission_status=BookingStatus.ASSIGNED.value,
             is_active=False,
             presence_status="degraded_constrained",
+            is_available=True,
         )
         == "offline"
+    )
+
+
+def test_resolve_driver_status_off_duty_when_unavailable() -> None:
+    assert (
+        resolve_driver_status_for_fanout(
+            mission_status="NONE",
+            is_active=True,
+            presence_status="online",
+            is_available=False,
+        )
+        == "off_duty"
+    )
+
+
+def test_resolve_driver_status_unavailable_never_available() -> None:
+    assert (
+        resolve_driver_status_for_fanout(
+            mission_status="NONE",
+            is_active=True,
+            presence_status="online",
+            is_available=False,
+        )
+        != "available"
     )

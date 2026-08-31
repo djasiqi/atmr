@@ -573,6 +573,10 @@ export function useMessageHubThreads(companyId: number | null) {
 
 export function useHubUnreadCount(companyId: number | null) {
   const queryClient = useQueryClient();
+  // P1-C3 : hub driver — jamais de polling hors contexte chauffeur actif
+  // (sinon poll 15 s permanent en contexte company, invisible pour la garde
+  // /driver/me/* car l'endpoint est /messages/<cid>/hub/unread-count).
+  const driverContextId = useActiveDriverContextId();
   const { bootstrap } = useSession();
   const myUserId = useMemo(() => {
     const id = bootstrap?.user?.id;
@@ -605,7 +609,7 @@ export function useHubUnreadCount(companyId: number | null) {
       }
       return server;
     },
-    enabled: Boolean(companyId),
+    enabled: Boolean(companyId && driverContextId),
     refetchInterval: () =>
       realtimeManager.isDriverSocketReady() ? false : 15_000,
     staleTime: QUERY_STALE_TIME_MS.default,
@@ -1004,10 +1008,12 @@ export function useSyncPresenceStatus(httpReachable?: boolean): SyncPresenceStat
 }
 
 export function useMissionEtaMinutes(bookingId: number | null | undefined, status?: string | null) {
+  // P1-C3 : /driver/me/bookings/eta ne doit jamais poller hors contexte chauffeur.
+  const driverContextId = useActiveDriverContextId();
   return useQuery({
     queryKey: [...HUB_KEY, "eta", bookingId ?? "none"],
     queryFn: () => getDriverMissionEta(bookingId as number, { missionStatus: status }),
-    enabled: Boolean(bookingId),
+    enabled: Boolean(bookingId && driverContextId),
     refetchInterval: () =>
       realtimeManager.isDriverSocketReady() ? false : 20_000,
     staleTime: QUERY_STALE_TIME_MS.default,

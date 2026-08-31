@@ -27,6 +27,11 @@ import { trackingQueueStore } from "./trackingQueueStore";
 import { createCaptureId } from "./captureId";
 import { fetchTrackingWatermark, registerTrackingSession } from "./trackingSessionsApi";
 import { freezeTrackingLocationPayload } from "./freezeTrackingLocationPayload";
+import { atmrJsDiag } from "./atmrJsTaskDiag";
+import {
+  BACKEND_TOO_OLD_FOR_MODE_REASON,
+  classifySoftAckForQueue,
+} from "./driverTrackingQueueAckClassification";
 
 function allowMemoryFallback(): boolean {
   return (
@@ -103,6 +108,20 @@ export type DriverTrackingQueueItem = {
     | "tombstone";
 };
 
+/**
+ * Raisons d'arrêt du flush (JZ-R1-FLUSH-OBS-11) — branches réelles du code uniquement.
+ * Observabilité pure : n'altère pas enqueue / send / retry.
+ */
+export type FlushExitReason =
+  | "FLUSH_ALREADY_RUNNING"
+  | "LEASE_NOT_DRIVER_ACTIVE"
+  | "QUEUE_SUSPEND_ACTIVE"
+  | "DRAIN_BUDGET_EXHAUSTED"
+  | "QUEUE_EMPTY"
+  | "NO_HTTP_CANDIDATE"
+  | "HTTP_DISPATCHED"
+  | "HTTP_ATTEMPTED_SENT_ZERO";
+
 export type DriverTrackingFlushResult = {
   sent: number;
   backendAcked: number;
@@ -124,6 +143,19 @@ export type DriverTrackingFlushResult = {
   ingestedEventIds: string[];
   persistedEventIds: string[];
   retryEventIds: string[];
+  /** JZ-R1-FLUSH-OBS-11 — raison de sortie (toujours renseignée). */
+  exitReason: FlushExitReason;
+  httpDispatchStarted: boolean;
+  flushLockState: "free" | "held";
+  suspended: boolean;
+  suspendReason: string | null;
+  backoffRemainingMs: number | null;
+  headPresent: boolean;
+  headAgeMs: number | null;
+  headRetryCount: number | null;
+  headDeliveryState: TrackingDeliveryState | null;
+  headIdHash: string | null;
+  selectedItem: boolean;
 };
 
 type DriverTrackingQueueSnapshot = {
@@ -150,10 +182,18 @@ const COMPACTION_HIGH_SPACING_MS = 45_000;
 const SPEED_DELTA_PIVOT_MS = 4;
 const HEADING_DELTA_PIVOT_DEG = 30;
 const SOCKET_BATCH_MAX_POINTS = Number(process.env.EXPO_PUBLIC_DRIVER_SOCKET_BATCH_MAX_POINTS ?? "20");
-const DRAIN_BATCH_SIZE = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_BATCH_SIZE ?? "3");
-const DRAIN_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_INTERVAL_MS ?? "3000");
+/** Lecture indirecte : évite l'inlining babel EXPO_PUBLIC au transform Jest (p03 force batch=50). */
+function readTrackingEnv(name: string, fallback: string): string {
+  return process.env[name] ?? fallback;
+}
+const DRAIN_BATCH_SIZE = Number(
+  readTrackingEnv("EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_BATCH_SIZE", "3")
+);
+const DRAIN_INTERVAL_MS = Number(
+  readTrackingEnv("EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_INTERVAL_MS", "3000")
+);
 const MAX_DRAIN_POSITIONS_PER_MINUTE = Number(
-  process.env.EXPO_PUBLIC_DRIVER_TRACKING_MAX_DRAIN_POSITIONS_PER_MINUTE ?? "60"
+  readTrackingEnv("EXPO_PUBLIC_DRIVER_TRACKING_MAX_DRAIN_POSITIONS_PER_MINUTE", "60")
 );
 /** Rétention des lignes terminales SQLite (persisted/tombstone/rejected). */
 const TERMINAL_ROW_RETENTION_MS = Number(
@@ -659,6 +699,140 @@ class DriverTrackingQueue {
       persistedEventIds: [] as string[],
       retryEventIds: [] as string[],
     };
+  }
+
+  /** Hash court non sensible (pas de GPS) pour corréler un head/item en logcat. */
+  private hashQueueItemId(id: string | null | undefined): string | null {
+    if (!id) return null;
+    let h = 0;
+    for (let i = 0; i < id.length; i += 1) {
+      h = (h * 31 + id.charCodeAt(i)) | 0;
+    }
+    return `h${(h >>> 0).toString(16)}`;
+  }
+
+  private buildFlushObsFields(args: {
+    httpDispatchStarted: boolean;
+    selectedItem: boolean;
+    flushLockState: "free" | "held";
+    head?: DriverTrackingQueueItem | null;
+  }): Pick<
+    DriverTrackingFlushResult,
+    | "httpDispatchStarted"
+    | "flushLockState"
+    | "suspended"
+    | "suspendReason"
+    | "backoffRemainingMs"
+    | "headPresent"
+    | "headAgeMs"
+    | "headRetryCount"
+    | "headDeliveryState"
+    | "headIdHash"
+    | "selectedItem"
+  > {
+    const head = args.head === undefined ? this.items[0] ?? null : args.head;
+    const now = nowMs();
+    let backoffRemainingMs: number | null = null;
+    if (this.queueSuspend) {
+      if (this.queueSuspend.untilMs == null) {
+        backoffRemainingMs = null;
+      } else {
+        backoffRemainingMs = Math.max(0, this.queueSuspend.untilMs - now);
+      }
+    }
+    return {
+      httpDispatchStarted: args.httpDispatchStarted,
+      flushLockState: args.flushLockState,
+      suspended: this.suspendActive(),
+      suspendReason: this.queueSuspend?.reason ?? null,
+      backoffRemainingMs,
+      headPresent: head != null,
+      headAgeMs: head ? Math.max(0, now - head.queuedAt) : null,
+      headRetryCount: head?.retryCount ?? null,
+      headDeliveryState: head?.deliveryState ?? null,
+      headIdHash: this.hashQueueItemId(head?.id),
+      selectedItem: args.selectedItem,
+    };
+  }
+
+  private emitFlushExitDiag(
+    reason: FlushExitReason,
+    result: DriverTrackingFlushResult
+  ): void {
+    atmrJsDiag("FLUSH_EXIT", {
+      reason,
+      queue_total: result.queueDepth,
+      http_dispatch_started: result.httpDispatchStarted,
+      flush_lock: result.flushLockState,
+      suspended: result.suspended,
+      suspend_reason: result.suspendReason,
+      backoff_remaining_ms: result.backoffRemainingMs,
+      head_present: result.headPresent,
+      head_age_ms: result.headAgeMs,
+      head_retry_count: result.headRetryCount,
+      head_state: result.headDeliveryState,
+      head_id_hash: result.headIdHash,
+      selected_item: result.selectedItem,
+      sent: result.sent,
+    });
+  }
+
+  private finishFlushResult(
+    partial: Omit<
+      DriverTrackingFlushResult,
+      | "exitReason"
+      | "httpDispatchStarted"
+      | "flushLockState"
+      | "suspended"
+      | "suspendReason"
+      | "backoffRemainingMs"
+      | "headPresent"
+      | "headAgeMs"
+      | "headRetryCount"
+      | "headDeliveryState"
+      | "headIdHash"
+      | "selectedItem"
+    > &
+      Partial<
+        Pick<
+          DriverTrackingFlushResult,
+          | "httpDispatchStarted"
+          | "flushLockState"
+          | "selectedItem"
+          | "headPresent"
+          | "headAgeMs"
+          | "headRetryCount"
+          | "headDeliveryState"
+          | "headIdHash"
+          | "suspended"
+          | "suspendReason"
+          | "backoffRemainingMs"
+        >
+      >,
+    reason: FlushExitReason,
+    opts?: {
+      httpDispatchStarted?: boolean;
+      selectedItem?: boolean;
+      flushLockState?: "free" | "held";
+      head?: DriverTrackingQueueItem | null;
+      emitDiag?: boolean;
+    }
+  ): DriverTrackingFlushResult {
+    const obs = this.buildFlushObsFields({
+      httpDispatchStarted: opts?.httpDispatchStarted ?? partial.httpDispatchStarted ?? false,
+      selectedItem: opts?.selectedItem ?? partial.selectedItem ?? false,
+      flushLockState: opts?.flushLockState ?? partial.flushLockState ?? "free",
+      head: opts?.head,
+    });
+    const result: DriverTrackingFlushResult = {
+      ...partial,
+      ...obs,
+      exitReason: reason,
+    };
+    if (opts?.emitDiag !== false) {
+      this.emitFlushExitDiag(reason, result);
+    }
+    return result;
   }
 
   private async persistSession() {
@@ -1343,12 +1517,143 @@ class DriverTrackingQueue {
   }
 
   private isExpired(item: DriverTrackingQueueItem): boolean {
-    // ingested_non_persisted : jamais expiré automatiquement (Annexe A.4)
-    if (item.persistState === "ingested_non_persisted") {
-      return false;
-    }
+    // DOC_EXISTING anti-starvation : âge max y compris ingested_non_persisted
+    // (gps-hol-ack-retirement-rca-closed-2026-08-25.md). Ne marque pas persisted.
     const maxAge = Math.min(REPLAY_WINDOW_MS, MAX_QUEUE_AGE_MS);
     return nowMs() - item.queuedAt > maxAge;
+  }
+
+  private absoluteQueueMaxAgeMs(): number {
+    return Math.min(REPLAY_WINDOW_MS, MAX_QUEUE_AGE_MS);
+  }
+
+  private softAckRetireReason(
+    item: DriverTrackingQueueItem
+  ): "ingested_non_persisted_expired" | "soft_ack_retry_exhausted" | null {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- pas d'import top-level
+    const mod = require("./driverTrackingQueueSoftAckRetirement");
+    // Garde mécanique (RECONCILE-14) : après teardown Jest / require partiel,
+    // ne pas throw — même comportement « pas de retraite » qu'une raison null.
+    const fn = mod?.softAckRetirementReason as
+      | ((
+          item: DriverTrackingQueueItem,
+          now: number,
+          maxAge: number
+        ) => "ingested_non_persisted_expired" | "soft_ack_retry_exhausted" | null)
+      | undefined;
+    if (typeof fn !== "function") {
+      return null;
+    }
+    return fn(item, nowMs(), this.absoluteQueueMaxAgeMs());
+  }
+
+  /**
+   * Retire les soft-ACK sticky hors borne AVANT le gate budget minute.
+   * Progression FIFO future sans reset de drainedInCurrentMinute.
+   */
+  private async retireBoundedSoftAckHeads(source: string): Promise<number> {
+    const candidates = this.items.filter((item) => this.softAckRetireReason(item) != null);
+    if (candidates.length === 0) return 0;
+    let retired = 0;
+    for (const item of candidates) {
+      const reason = this.softAckRetireReason(item);
+      if (reason == null) continue;
+      await this.finalizeTerminal([item.id], "tombstone", {
+        deliveryState: "expired",
+        ackedAt: nowMs(),
+        removeFromMemory: true,
+        gaps: [
+          {
+            trackingSessionId: item.trackingSessionId,
+            sequenceFrom: item.sequenceId,
+            sequenceTo: item.sequenceId,
+            reason,
+          },
+        ],
+      });
+      retired += 1;
+      emitDriverTelemetry("tracking.queue.head_retired", {
+        source: "driver.tracking.queue",
+        retire_source: source,
+        reason,
+        location_event_id: item.id,
+        head_id_hash: this.hashQueueItemId(item.id),
+        queued_at: item.queuedAt,
+        retry_count: item.retryCount,
+        persist_state: item.persistState ?? null,
+        last_error: item.lastError,
+        delivery_state: item.deliveryState,
+        retired_at: nowMs(),
+        queue_depth: this.items.length,
+      });
+      atmrJsDiag("HEAD_RETIRED", {
+        reason,
+        retire_source: source,
+        head_id_hash: this.hashQueueItemId(item.id),
+        retry_count: item.retryCount,
+        head_age_ms: Math.max(0, nowMs() - item.queuedAt),
+        queue_total: this.items.length,
+      });
+    }
+    return retired;
+  }
+
+  /** Conserve un soft-ACK : incrémente retryCount ; retire si borne atteinte. */
+  private async retainOrRetireAfterSoftAck(
+    item: DriverTrackingQueueItem,
+    lastError: string,
+    remaining: DriverTrackingQueueItem[]
+  ): Promise<"retained" | "retired"> {
+    item.deliveryState = "retry_pending";
+    item.lastError = lastError;
+    item.retryCount += 1;
+    const reason = this.softAckRetireReason(item);
+    if (reason != null) {
+      await this.finalizeTerminal([item.id], "tombstone", {
+        deliveryState: "expired",
+        ackedAt: nowMs(),
+        removeFromMemory: false,
+        gaps: [
+          {
+            trackingSessionId: item.trackingSessionId,
+            sequenceFrom: item.sequenceId,
+            sequenceTo: item.sequenceId,
+            reason,
+          },
+        ],
+      });
+      emitDriverTelemetry("tracking.queue.head_retired", {
+        source: "driver.tracking.queue",
+        retire_source: "soft_ack_retain",
+        reason,
+        location_event_id: item.id,
+        head_id_hash: this.hashQueueItemId(item.id),
+        queued_at: item.queuedAt,
+        retry_count: item.retryCount,
+        persist_state: item.persistState ?? null,
+        last_error: item.lastError,
+        delivery_state: item.deliveryState,
+        retired_at: nowMs(),
+        queue_depth: this.items.length,
+      });
+      atmrJsDiag("HEAD_RETIRED", {
+        reason,
+        retire_source: "soft_ack_retain",
+        head_id_hash: this.hashQueueItemId(item.id),
+        retry_count: item.retryCount,
+        head_age_ms: Math.max(0, nowMs() - item.queuedAt),
+        queue_total: this.items.length,
+      });
+      return "retired";
+    }
+    await this.syncDelivery([item.id], {
+      deliveryState: "retry_pending",
+      lastError: item.lastError,
+      retryCount: item.retryCount,
+      lastAttemptAt: item.lastAttemptAt,
+    });
+    remaining.push(item);
+    return "retained";
   }
 
   private headingDeltaDegrees(previous?: number, next?: number): number {
@@ -1637,23 +1942,28 @@ class DriverTrackingQueue {
         source: "driver.tracking.queue",
         queue_depth: this.items.length,
         force_http_fallback: this.pendingFlushOptions?.forceHttpFallback === true,
+        flush_exit_reason: "FLUSH_ALREADY_RUNNING",
       });
-      return {
-        sent: 0,
-        backendAcked: 0,
-        socketEmitted: 0,
-        dropped: 0,
-        retried: 0,
-        queueDepth: this.items.length,
-        flushPathUsed: "http_fallback",
-        lastBackendAckAt: null,
-        lastBackendAckStatus: null,
-        lastBackendAckRequestEventId: null,
-        lastBackendAckServerEventId: null,
-        oldestItemAgeMs: this.items[0] ? Math.max(0, nowMs() - this.items[0].queuedAt) : null,
-        networkProfile,
-        ...this.emptyFlushIdLists(),
-      };
+      return this.finishFlushResult(
+        {
+          sent: 0,
+          backendAcked: 0,
+          socketEmitted: 0,
+          dropped: 0,
+          retried: 0,
+          queueDepth: this.items.length,
+          flushPathUsed: "http_fallback",
+          lastBackendAckAt: null,
+          lastBackendAckStatus: null,
+          lastBackendAckRequestEventId: null,
+          lastBackendAckServerEventId: null,
+          oldestItemAgeMs: this.items[0] ? Math.max(0, nowMs() - this.items[0].queuedAt) : null,
+          networkProfile,
+          ...this.emptyFlushIdLists(),
+        },
+        "FLUSH_ALREADY_RUNNING",
+        { flushLockState: "held", httpDispatchStarted: false, selectedItem: false }
+      );
     }
     this.isFlushing = true;
     let sent = 0;
@@ -1666,6 +1976,8 @@ class DriverTrackingQueue {
     let lastBackendAckRequestEventId: string | null = null;
     let lastBackendAckServerEventId: string | null = null;
     let flushPathUsed: DriverTrackingFlushResult["flushPathUsed"] = "http_fallback";
+    let httpDispatchStarted = false;
+    let selectedItem = false;
     const socketEmittedEventIds: string[] = [];
     const ingestedEventIds: string[] = [];
     const persistedEventIds: string[] = [];
@@ -1680,25 +1992,30 @@ class DriverTrackingQueue {
           reason: "lease_not_driver_active",
           lease_state: lease?.state ?? "absent",
           queue_depth: this.items.length,
+          flush_exit_reason: "LEASE_NOT_DRIVER_ACTIVE",
         });
-        return {
-          sent: 0,
-          backendAcked: 0,
-          socketEmitted: 0,
-          dropped: 0,
-          retried: 0,
-          queueDepth: this.items.length,
-          flushPathUsed,
-          lastBackendAckAt: null,
-          lastBackendAckStatus: null,
-          lastBackendAckRequestEventId: null,
-          lastBackendAckServerEventId: null,
-          oldestItemAgeMs: this.items[0]
-            ? Math.max(0, nowMs() - this.items[0].queuedAt)
-            : null,
-          networkProfile,
-          ...this.emptyFlushIdLists(),
-        };
+        return this.finishFlushResult(
+          {
+            sent: 0,
+            backendAcked: 0,
+            socketEmitted: 0,
+            dropped: 0,
+            retried: 0,
+            queueDepth: this.items.length,
+            flushPathUsed,
+            lastBackendAckAt: null,
+            lastBackendAckStatus: null,
+            lastBackendAckRequestEventId: null,
+            lastBackendAckServerEventId: null,
+            oldestItemAgeMs: this.items[0]
+              ? Math.max(0, nowMs() - this.items[0].queuedAt)
+              : null,
+            networkProfile,
+            ...this.emptyFlushIdLists(),
+          },
+          "LEASE_NOT_DRIVER_ACTIVE",
+          { flushLockState: "held", httpDispatchStarted: false, selectedItem: false }
+        );
       }
       const transport = await this.prepareFlushTransport();
       const effectiveForceHttp =
@@ -1716,6 +2033,7 @@ class DriverTrackingQueue {
           reason: this.queueSuspend.reason,
           wait_ms: waitMs,
           queue_depth: this.items.length,
+          flush_exit_reason: "QUEUE_SUSPEND_ACTIVE",
         });
         // context_inactive : pas de retry timer — reprise uniquement via clearContextInactiveGate
         if (
@@ -1727,24 +2045,28 @@ class DriverTrackingQueue {
             void this.flush(options);
           }, waitMs);
         }
-        return {
-          sent: 0,
-          backendAcked: 0,
-          socketEmitted: 0,
-          dropped: 0,
-          retried: 0,
-          queueDepth: this.items.length,
-          flushPathUsed,
-          lastBackendAckAt: null,
-          lastBackendAckStatus: null,
-          lastBackendAckRequestEventId: null,
-          lastBackendAckServerEventId: null,
-          oldestItemAgeMs: this.items[0]
-            ? Math.max(0, nowMs() - this.items[0].queuedAt)
-            : null,
-          networkProfile,
-          ...this.emptyFlushIdLists(),
-        };
+        return this.finishFlushResult(
+          {
+            sent: 0,
+            backendAcked: 0,
+            socketEmitted: 0,
+            dropped: 0,
+            retried: 0,
+            queueDepth: this.items.length,
+            flushPathUsed,
+            lastBackendAckAt: null,
+            lastBackendAckStatus: null,
+            lastBackendAckRequestEventId: null,
+            lastBackendAckServerEventId: null,
+            oldestItemAgeMs: this.items[0]
+              ? Math.max(0, nowMs() - this.items[0].queuedAt)
+              : null,
+            networkProfile,
+            ...this.emptyFlushIdLists(),
+          },
+          "QUEUE_SUSPEND_ACTIVE",
+          { flushLockState: "held", httpDispatchStarted: false, selectedItem: false }
+        );
       }
 
       const enableRealAck = isFeatureEnabled("tracking_real_ack_semantics_enabled");
@@ -1763,6 +2085,52 @@ class DriverTrackingQueue {
         return (a.sequenceId ?? 0) - (b.sequenceId ?? 0);
       });
       const oldestQueuedAt = this.items[0]?.queuedAt ?? null;
+      if (this.items.length === 0) {
+        return this.finishFlushResult(
+          {
+            sent: 0,
+            backendAcked: 0,
+            socketEmitted: 0,
+            dropped: 0,
+            retried: 0,
+            queueDepth: 0,
+            flushPathUsed,
+            lastBackendAckAt: null,
+            lastBackendAckStatus: null,
+            lastBackendAckRequestEventId: null,
+            lastBackendAckServerEventId: null,
+            oldestItemAgeMs: null,
+            networkProfile,
+            ...this.emptyFlushIdLists(),
+          },
+          "QUEUE_EMPTY",
+          { flushLockState: "held", httpDispatchStarted: false, selectedItem: false, head: null }
+        );
+      }
+      // Anti-starvation : retraite soft-ACK sticky AVANT le gate budget (sans reset budget).
+      await this.retireBoundedSoftAckHeads("flush_pre_budget");
+      if (this.items.length === 0) {
+        return this.finishFlushResult(
+          {
+            sent: 0,
+            backendAcked: 0,
+            socketEmitted: 0,
+            dropped: 0,
+            retried: 0,
+            queueDepth: 0,
+            flushPathUsed,
+            lastBackendAckAt: null,
+            lastBackendAckStatus: null,
+            lastBackendAckRequestEventId: null,
+            lastBackendAckServerEventId: null,
+            oldestItemAgeMs: null,
+            networkProfile,
+            ...this.emptyFlushIdLists(),
+          },
+          "QUEUE_EMPTY",
+          { flushLockState: "held", httpDispatchStarted: false, selectedItem: false, head: null }
+        );
+      }
       const minuteBucket = Math.floor(nowMs() / 60_000);
       if (this.drainMinuteBucket !== minuteBucket) {
         this.drainMinuteBucket = minuteBucket;
@@ -1776,25 +2144,37 @@ class DriverTrackingQueue {
           queue_depth: this.items.length,
           max_drain_positions_per_minute: MAX_DRAIN_POSITIONS_PER_MINUTE,
           drain_interval_ms: DRAIN_INTERVAL_MS,
+          flush_exit_reason: "DRAIN_BUDGET_EXHAUSTED",
         });
         await this.persist();
-        return {
-          sent: 0,
-          backendAcked: 0,
-          socketEmitted: 0,
-          dropped: 0,
-          retried: 0,
-          queueDepth: this.items.length,
-          flushPathUsed,
-          lastBackendAckAt,
-          lastBackendAckStatus,
-          lastBackendAckRequestEventId: null,
-          lastBackendAckServerEventId: null,
-          oldestItemAgeMs: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
-          networkProfile,
-          ...this.emptyFlushIdLists(),
-        };
+        return this.finishFlushResult(
+          {
+            sent: 0,
+            backendAcked: 0,
+            socketEmitted: 0,
+            dropped: 0,
+            retried: 0,
+            queueDepth: this.items.length,
+            flushPathUsed,
+            lastBackendAckAt,
+            lastBackendAckStatus,
+            lastBackendAckRequestEventId: null,
+            lastBackendAckServerEventId: null,
+            oldestItemAgeMs: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
+            networkProfile,
+            ...this.emptyFlushIdLists(),
+          },
+          "DRAIN_BUDGET_EXHAUSTED",
+          {
+            flushLockState: "held",
+            httpDispatchStarted: false,
+            selectedItem: false,
+            head: this.items[0] ?? null,
+          }
+        );
       }
+
+      // (QUEUE_EMPTY déjà traité avant le budget drain)
 
       // Envoi batch socket réel — un batch = une seule session (Phase 0A)
       if (!effectiveForceHttp && transport.socketReady) {
@@ -1949,6 +2329,8 @@ class DriverTrackingQueue {
           // Compte chaque tentative HTTP dans le budget batch + minute (y compris 429)
           drainedThisFlush += 1;
           this.drainedInCurrentMinute += 1;
+          selectedItem = true;
+          httpDispatchStarted = true;
           const ack = await sendDriverLocation({
             // Payload figé à l'enqueue — overlays uniquement si absents (rehydratation legacy).
             ...item.payload,
@@ -1974,16 +2356,18 @@ class DriverTrackingQueue {
             ack.tracking_event_id != null &&
             ack.tracking_event_id !== item.id
           ) {
-            item.deliveryState = "retry_pending";
-            item.lastError = "ack_event_id_mismatch";
             retried += 1;
-            remaining.push(item);
             emitDriverTelemetry("tracking.queue.ack_event_id_mismatch", {
               source: "driver.tracking.queue",
               mission_id: item.missionId,
               queue_item_id: item.id,
               server_event_id: ack.tracking_event_id,
             });
+            await this.retainOrRetireAfterSoftAck(
+              item,
+              "ack_event_id_mismatch",
+              remaining
+            );
             continue;
           }
 
@@ -1991,10 +2375,12 @@ class DriverTrackingQueue {
             const ingestedIds = ack.ingested_event_ids ?? null;
             const retryIds = ack.retry_event_ids ?? null;
             if (ingestedIds == null && retryIds == null) {
-              item.deliveryState = "retry_pending";
-              item.lastError = "partially_ingested_lists_missing";
               retried += 1;
-              remaining.push(item);
+              await this.retainOrRetireAfterSoftAck(
+                item,
+                "partially_ingested_lists_missing",
+                remaining
+              );
               continue;
             }
             const ingestedSet = new Set(ingestedIds ?? []);
@@ -2007,14 +2393,16 @@ class DriverTrackingQueue {
               }
             }
             if (conflict) {
-              item.deliveryState = "retry_pending";
-              item.lastError = "partially_ingested_list_conflict";
               retried += 1;
-              remaining.push(item);
               emitDriverTelemetry("tracking.queue.partial_ack_conflict", {
                 source: "driver.tracking.queue",
                 queue_item_id: item.id,
               });
+              await this.retainOrRetireAfterSoftAck(
+                item,
+                "partially_ingested_list_conflict",
+                remaining
+              );
               continue;
             }
             if (ingestedSet.size > 0) {
@@ -2051,18 +2439,15 @@ class DriverTrackingQueue {
               });
               continue;
             }
-            item.deliveryState = "retry_pending";
-            item.lastError = currentRetry
-              ? "partially_ingested_retry"
-              : "partially_ingested_current_missing";
             retried += 1;
             retryEventIds.push(item.id);
-            await this.syncDelivery([item.id], {
-              deliveryState: "retry_pending",
-              lastError: item.lastError,
-              retryCount: item.retryCount,
-            });
-            remaining.push(item);
+            await this.retainOrRetireAfterSoftAck(
+              item,
+              currentRetry
+                ? "partially_ingested_retry"
+                : "partially_ingested_current_missing",
+              remaining
+            );
             continue;
           }
 
@@ -2139,6 +2524,66 @@ class DriverTrackingQueue {
             continue;
           }
 
+          // JZ-R1-STALE-SOFT-ACK-FIX-31 : too_old_for_mode irréversible → expired
+          // (pas persisted ; pas de retry). Soft-ACK transitoires inchangés ci-dessous.
+          if (classifySoftAckForQueue(ack).kind === "terminal_backend_too_old") {
+            try {
+              await this.finalizeTerminal([item.id], "tombstone", {
+                deliveryState: "expired",
+                ackedAt: nowMs(),
+                removeFromMemory: false,
+                gaps: [
+                  {
+                    trackingSessionId: item.trackingSessionId,
+                    sequenceFrom: item.sequenceId,
+                    sequenceTo: item.sequenceId,
+                    reason: BACKEND_TOO_OLD_FOR_MODE_REASON,
+                  },
+                ],
+              });
+              dropped += 1;
+              emitDriverTelemetry("tracking.queue.head_retired", {
+                source: "driver.tracking.queue",
+                retire_source: "backend_too_old_for_mode",
+                reason: BACKEND_TOO_OLD_FOR_MODE_REASON,
+                location_event_id: item.id,
+                head_id_hash: this.hashQueueItemId(item.id),
+                queued_at: item.queuedAt,
+                retry_count: item.retryCount,
+                persist_state: item.persistState ?? null,
+                last_error: item.lastError,
+                delivery_state: "expired",
+                retired_at: nowMs(),
+                queue_depth: remaining.length,
+                accept_reason: ack.accept_reason ?? null,
+                ack_status: ack.ack_status,
+              });
+              atmrJsDiag("HEAD_RETIRED", {
+                reason: BACKEND_TOO_OLD_FOR_MODE_REASON,
+                retire_source: "backend_too_old_for_mode",
+                head_id_hash: this.hashQueueItemId(item.id),
+                retry_count: item.retryCount,
+                head_age_ms: Math.max(0, nowMs() - item.queuedAt),
+                queue_total: remaining.length,
+              });
+              emitDriverTelemetry("tracking.ingest.ack", {
+                source: "driver.tracking.queue",
+                mission_id: item.missionId,
+                flush_path: "http_fallback",
+                queue_item_id: item.id,
+                ack_status: ack.ack_status,
+                durability: ack.durability ?? null,
+                accept_reason: ack.accept_reason ?? null,
+                trace_id: ack.trace_id ?? null,
+                terminal: BACKEND_TOO_OLD_FOR_MODE_REASON,
+              });
+            } catch {
+              this.scheduleDurableWriteRetry();
+              remaining.push(item);
+            }
+            continue;
+          }
+
           // Tout le reste (202, persisted sans durability, mauvais id, accepted…) → conserver
           if (
             ack.ack_status === "queued" ||
@@ -2164,18 +2609,14 @@ class DriverTrackingQueue {
               remaining.push(item);
               continue;
             }
-            item.deliveryState = "retry_pending";
-            item.lastError =
+            const softErr =
               ack.ack_status === "persisted" && ack.durability !== "persisted_sync"
                 ? "persisted_without_durability"
                 : ack.location_event_id && ack.location_event_id !== item.id
                   ? "location_event_id_mismatch"
                   : "awaiting_durable_ack";
-            await this.syncDelivery([item.id], {
-              deliveryState: "retry_pending",
-              lastError: item.lastError,
-            });
-            remaining.push(item);
+            retried += 1;
+            await this.retainOrRetireAfterSoftAck(item, softErr, remaining);
             emitDriverTelemetry("tracking.ingest.ack", {
               source: "driver.tracking.queue",
               mission_id: item.missionId,
@@ -2246,16 +2687,8 @@ class DriverTrackingQueue {
           }
 
           // ACK inattendu : conserver pour retry (pas de drop mémoire-only).
-          item.deliveryState = "retry_pending";
-          item.lastError = `unexpected_ack_${String(ack.ack_status)}`;
           retried += 1;
           retryEventIds.push(item.id);
-          await this.syncDelivery([item.id], {
-            deliveryState: "retry_pending",
-            lastError: item.lastError,
-            retryCount: item.retryCount,
-          });
-          remaining.push(item);
           emitDriverTelemetry("tracking.queue.unexpected_ack", {
             source: "driver.tracking.queue",
             mission_id: item.missionId,
@@ -2264,6 +2697,11 @@ class DriverTrackingQueue {
             accept_reason: ack.accept_reason ?? null,
             trace_id: ack.trace_id ?? null,
           });
+          await this.retainOrRetireAfterSoftAck(
+            item,
+            `unexpected_ack_${String(ack.ack_status)}`,
+            remaining
+          );
         } catch (error) {
           const meta = formatTrackingSendError(error);
           emitDriverTelemetry("tracking.queue.http_send_failure", {
@@ -2349,6 +2787,14 @@ class DriverTrackingQueue {
         tracking_queue_oldest_age_ms: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
         network_profile_active: networkProfile,
         flush_path: flushPathUsed,
+        flush_exit_reason:
+          sent > 0
+            ? "HTTP_DISPATCHED"
+            : httpDispatchStarted
+              ? "HTTP_ATTEMPTED_SENT_ZERO"
+              : "NO_HTTP_CANDIDATE",
+        http_dispatch_started: httpDispatchStarted,
+        selected_item: selectedItem,
       });
       emitDriverTelemetry("tracking.flush.transport", {
         source: "driver.tracking.queue",
@@ -2357,25 +2803,40 @@ class DriverTrackingQueue {
         socket_emitted: socketEmitted,
         backend_acked: backendAcked,
       });
-      return {
-        sent,
-        backendAcked,
-        socketEmitted,
-        dropped,
-        retried,
-        queueDepth: this.items.length,
-        flushPathUsed,
-        lastBackendAckAt,
-        lastBackendAckStatus,
-        lastBackendAckRequestEventId,
-        lastBackendAckServerEventId,
-        oldestItemAgeMs: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
-        networkProfile,
-        socketEmittedEventIds,
-        ingestedEventIds,
-        persistedEventIds,
-        retryEventIds,
-      };
+      const exitReason: FlushExitReason =
+        sent > 0
+          ? "HTTP_DISPATCHED"
+          : httpDispatchStarted
+            ? "HTTP_ATTEMPTED_SENT_ZERO"
+            : "NO_HTTP_CANDIDATE";
+      return this.finishFlushResult(
+        {
+          sent,
+          backendAcked,
+          socketEmitted,
+          dropped,
+          retried,
+          queueDepth: this.items.length,
+          flushPathUsed,
+          lastBackendAckAt,
+          lastBackendAckStatus,
+          lastBackendAckRequestEventId,
+          lastBackendAckServerEventId,
+          oldestItemAgeMs: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
+          networkProfile,
+          socketEmittedEventIds,
+          ingestedEventIds,
+          persistedEventIds,
+          retryEventIds,
+        },
+        exitReason,
+        {
+          httpDispatchStarted,
+          selectedItem,
+          flushLockState: "held",
+          head: this.items[0] ?? null,
+        }
+      );
     } finally {
       this.isFlushing = false;
       const pendingFlush = this.pendingFlushOptions;
@@ -2632,6 +3093,95 @@ class DriverTrackingQueue {
   async retryRegisterForTests(): Promise<boolean> {
     this.lastRegisterAttemptAt = 0;
     return this.registerSessionWithBackend();
+  }
+
+  /** Test-only : injecte un item actif (âge / soft-ACK sticky). */
+  async seedActiveItemForTests(args: {
+    id?: string;
+    sequenceId: number;
+    queuedAt: number;
+    retryCount?: number;
+    persistState?: DriverTrackingQueueItem["persistState"];
+    deliveryState?: TrackingDeliveryState;
+    lastError?: string | null;
+    lastAttemptAt?: number | null;
+    missionId?: number | null;
+    locationMode?: DriverTrackingMode;
+  }): Promise<DriverTrackingQueueItem> {
+    await this.ensureLoaded();
+    if (!this.trackingSessionId || this.sessionGeneration == null) {
+      await this.beginNewTrackingSession();
+    }
+    const id = args.id ?? `trk_seed_${args.sequenceId}_${nowMs()}`;
+    const item: DriverTrackingQueueItem = {
+      id,
+      sequenceId: args.sequenceId,
+      trackingSessionId: this.trackingSessionId,
+      sessionGeneration: this.sessionGeneration,
+      batchId: `seed_batch_${args.sequenceId}`,
+      positionId: `seed_pos_${args.sequenceId}`,
+      missionId: args.missionId ?? null,
+      appState: "active",
+      locationMode: args.locationMode ?? "mission_live",
+      payload: {
+        latitude: 46.2,
+        longitude: 6.1,
+        missionId: args.missionId ?? null,
+        locationMode: args.locationMode ?? "mission_live",
+        trackingEventId: id,
+        trackingSessionId: this.trackingSessionId,
+        sessionGeneration: this.sessionGeneration,
+        sequenceId: args.sequenceId,
+      },
+      queuedAt: args.queuedAt,
+      retryCount: args.retryCount ?? 0,
+      deliveryState: args.deliveryState ?? "retry_pending",
+      lastAttemptAt: args.lastAttemptAt ?? args.queuedAt,
+      ackedAt: null,
+      lastError: args.lastError ?? "awaiting_durable_ack",
+      persistState: args.persistState ?? "ingested_non_persisted",
+    };
+    await trackingQueueStore.upsert({
+      locationEventId: item.id,
+      trackingSessionId: item.trackingSessionId,
+      sessionGeneration: item.sessionGeneration,
+      sequenceId: item.sequenceId,
+      payloadJson: JSON.stringify(item.payload),
+      state: item.persistState ?? "non_ingested",
+      queuedAt: item.queuedAt,
+      lastAttemptAt: item.lastAttemptAt,
+      retryCount: item.retryCount,
+      deliveryState: item.deliveryState,
+      missionId: item.missionId,
+      locationMode: item.locationMode,
+      batchId: item.batchId,
+      positionId: item.positionId,
+      appState: String(item.appState),
+      lastError: item.lastError,
+      ackedAt: item.ackedAt,
+    });
+    this.items.push(item);
+    this.items.sort((a, b) => {
+      const ga = a.sessionGeneration ?? 0;
+      const gb = b.sessionGeneration ?? 0;
+      if (ga !== gb) return ga - gb;
+      if (a.trackingSessionId !== b.trackingSessionId) {
+        return a.trackingSessionId.localeCompare(b.trackingSessionId);
+      }
+      return (a.sequenceId ?? 0) - (b.sequenceId ?? 0);
+    });
+    this.sequenceCounter = Math.max(this.sequenceCounter, item.sequenceId);
+    return item;
+  }
+
+  /** Test-only : budget minute consommé. */
+  setDrainedInCurrentMinuteForTests(n: number): void {
+    this.drainMinuteBucket = Math.floor(nowMs() / 60_000);
+    this.drainedInCurrentMinute = n;
+  }
+
+  getDrainedInCurrentMinuteForTests(): number {
+    return this.drainedInCurrentMinute;
   }
 }
 

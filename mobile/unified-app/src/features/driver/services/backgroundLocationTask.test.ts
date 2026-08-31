@@ -111,28 +111,13 @@ jest.mock("../../../core/auth/trackingAuthPresence", () => ({
   }),
 }));
 
-jest.mock("./trackingRuntimeRegistry", () => ({
-  validateNativeOwnerForHeadless: ({
-    owner,
-    lease,
-    authUsable,
-  }: {
-    owner: { trackingGenerationId?: string } | null;
-    lease: { state?: string; trackingGenerationId?: string } | null;
-    authUsable: boolean;
-  }) => {
-    if (!lease || lease.state !== "driver_active") {
-      return { ok: false, reason: "lease_not_driver_active" };
-    }
-    if (!owner) return { ok: false, reason: "missing_native_owner" };
-    if (!authUsable) return { ok: false, reason: "auth_not_usable" };
-    if (owner.trackingGenerationId !== lease.trackingGenerationId) {
-      return { ok: false, reason: "tracking_generation_mismatch" };
-    }
-    return { ok: true };
-  },
-  isNativeOwnerCurrent: () => true,
-}));
+jest.mock("./trackingRuntimeRegistry", () => {
+  const actual = jest.requireActual("./trackingRuntimeRegistry") as typeof import("./trackingRuntimeRegistry");
+  return {
+    ...actual,
+    isNativeOwnerCurrent: () => true,
+  };
+});
 
 const mockDefineTask = jest.fn();
 
@@ -246,6 +231,9 @@ function sampleLocation(i: number) {
 describe("backgroundLocationTask", () => {
   beforeEach(() => {
     trackingRuntime.__resetTrackingRuntimeForTests();
+    const registry =
+      require("./trackingRuntimeRegistry") as typeof import("./trackingRuntimeRegistry");
+    registry.__resetTrackingRuntimeRegistryForTests();
     mockHasStarted.mockReset();
     mockStart.mockReset();
     mockStop.mockReset();
@@ -507,6 +495,88 @@ describe("backgroundLocationTask", () => {
     expect(driverTrackingQueue.flush).not.toHaveBeenCalled();
   });
 
+  it("owner persisté absent → reconstruit depuis lease et enqueue", async () => {
+    await seedEligibleMissionContext({ includeOwner: false });
+    const handler = getDefinedTaskHandler();
+    await handler({ data: { locations: [sampleLocation(0)] } });
+    expect(driverTrackingQueue.enqueue).toHaveBeenCalledTimes(1);
+    expect(mockEmit).toHaveBeenCalledWith(
+      "tracking.background.native_owner.resolved",
+      expect.objectContaining({ resolve_source: "lease_reconstructed" })
+    );
+  });
+
+  it("presence_window + driver_active + owner null → lease_reconstructed + enqueue", async () => {
+    mockReadLease.mockResolvedValue({
+      state: "driver_active",
+      contextId: "driver:42",
+      driverId: 42,
+      sessionGenerationId: 1,
+      trackingGenerationId: "trk-1",
+      trackingIdentityId: "driver:42:company:1",
+      missionId: null,
+      missionContextVersion: 1,
+      updatedAt: Date.now(),
+    });
+    const asyncStorage = require("@react-native-async-storage/async-storage") as {
+      getItem: jest.Mock;
+    };
+    asyncStorage.getItem.mockImplementation(async (key: string) => {
+      if (key === "@driver:bg_tracking_context_v1") {
+        return JSON.stringify({
+          missionId: null,
+          missionStatus: null,
+          taskMode: "presence_window",
+          updatedAt: new Date().toISOString(),
+          nativeOwner: null,
+        });
+      }
+      return null;
+    });
+    const handler = getDefinedTaskHandler();
+    await handler({ data: { locations: [sampleLocation(0)] } });
+    expect(driverTrackingQueue.enqueue).toHaveBeenCalledTimes(1);
+    expect(mockEmit).toHaveBeenCalledWith(
+      "tracking.background.native_owner.resolved",
+      expect.objectContaining({
+        resolve_source: "lease_reconstructed",
+        task_mode: "presence_window",
+      })
+    );
+  });
+
+  it("owner null + lease incomplet → missing_native_owner, 0 enqueue", async () => {
+    mockReadLease.mockResolvedValue({
+      state: "driver_active",
+      contextId: "driver:42",
+      driverId: 42,
+      // trackingGenerationId / identity absents → pas de reconstruction
+      updatedAt: Date.now(),
+    });
+    const asyncStorage = require("@react-native-async-storage/async-storage") as {
+      getItem: jest.Mock;
+    };
+    asyncStorage.getItem.mockImplementation(async (key: string) => {
+      if (key === "@driver:bg_tracking_context_v1") {
+        return JSON.stringify({
+          missionId: null,
+          missionStatus: null,
+          taskMode: "presence_window",
+          updatedAt: new Date().toISOString(),
+          nativeOwner: null,
+        });
+      }
+      return null;
+    });
+    const handler = getDefinedTaskHandler();
+    await handler({ data: { locations: [sampleLocation(0)] } });
+    expect(driverTrackingQueue.enqueue).not.toHaveBeenCalled();
+    expect(mockEmit).toHaveBeenCalledWith(
+      "tracking.background.task.skipped",
+      expect.objectContaining({ reason: "missing_native_owner" })
+    );
+  });
+
   it("nativeOwner undefined conserve l'owner existant", async () => {
     const asyncStorage = require("@react-native-async-storage/async-storage") as {
       getItem: jest.Mock;
@@ -650,7 +720,7 @@ describe("resolveBackgroundGpsQuality (P0-F)", () => {
     expect(q.timeIntervalMs).toBe(20_000);
   });
 
-  it("availability_presence batterie faible : Low + cadence allongée", () => {
+  it("availability_presence batterie faible : High + cadence mission (B3 natif durable)", () => {
     const q = bgTask.resolveBackgroundGpsQuality({
       trackingMode: "availability_presence",
       isLowBattery: true,
@@ -658,20 +728,20 @@ describe("resolveBackgroundGpsQuality (P0-F)", () => {
       presenceMinIntervalMs: 90_000,
       lowBatteryIntervalMs: 60_000,
     });
-    expect(q.accuracy).toBe("low");
-    expect(q.timeIntervalMs).toBe(90_000);
-    expect(q.batteryDegradesGps).toBe(true);
+    expect(q.accuracy).toBe("high");
+    expect(q.timeIntervalMs).toBe(20_000);
+    expect(q.batteryDegradesGps).toBe(false);
   });
 
-  it("availability_presence batterie normale : Balanced + ≥90s", () => {
+  it("availability_presence batterie normale : High + cadence mission (B3 natif durable)", () => {
     const q = bgTask.resolveBackgroundGpsQuality({
       trackingMode: "availability_presence",
       isLowBattery: false,
       missionIntervalMs: 20_000,
       presenceMinIntervalMs: 90_000,
     });
-    expect(q.accuracy).toBe("balanced");
-    expect(q.timeIntervalMs).toBe(90_000);
+    expect(q.accuracy).toBe("high");
+    expect(q.timeIntervalMs).toBe(20_000);
     expect(q.batteryDegradesGps).toBe(false);
   });
 

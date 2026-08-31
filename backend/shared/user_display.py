@@ -76,3 +76,29 @@ def format_user_actor_display_name(
     if resolved_id is not None:
         return f"User #{resolved_id}"
     return None
+
+
+def resolve_actor_display_name(
+    current_user: Any | None = None,
+    *,
+    user_id: int | None = None,
+    fallback: str | None = None,
+) -> str | None:
+    """Nom acteur canonique institution (création, historique, audit).
+
+    Délègue à ``format_user_actor_display_name`` : une seule règle d'affichage.
+    """
+    resolved_id = user_id
+    if resolved_id is None and current_user is not None:
+        raw_id = getattr(current_user, "id", None)
+        if raw_id is not None:
+            try:
+                resolved_id = int(raw_id)
+            except (TypeError, ValueError):
+                resolved_id = None
+    return format_user_actor_display_name(
+        user=current_user,
+        user_id=resolved_id,
+        fallback=fallback,
+        allow_db_lookup=current_user is None,
+    )

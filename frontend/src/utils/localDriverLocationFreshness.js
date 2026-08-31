@@ -1,10 +1,20 @@
 /**
- * Vieillissement local des positions flotte (parité mobile).
- * Dégrade location_status sans promotion ; ne touche pas tracking_display_status.
+ * Vieillissement local des positions flotte.
+ * Seuils mode-aware (PRESENCE vs mission_live) — voir gpsFreshnessContract.js.
  */
 
-export const LOCAL_LIVE_MAX_SECONDS = 30;
-export const LOCAL_RECENT_MAX_SECONDS = 120;
+import {
+  ageToGpsFreshness,
+  getGpsFreshnessThresholds,
+  normalizeGpsFreshnessMode,
+  resolveDriverLocationMode,
+} from './gpsFreshnessContract';
+
+/** @deprecated Préférer getGpsFreshnessThresholds('presence').live */
+export const LOCAL_LIVE_MAX_SECONDS = getGpsFreshnessThresholds('presence').live;
+
+/** @deprecated Préférer getGpsFreshnessThresholds('presence').recent */
+export const LOCAL_RECENT_MAX_SECONDS = getGpsFreshnessThresholds('presence').recent;
 
 export function recordedAtEpochMs(recordedAt) {
   if (!recordedAt) return null;
@@ -18,12 +28,19 @@ export function localAgeSecondsFromRecordedAt(recordedAt, nowMs = Date.now()) {
   return Math.max(0, Math.floor((nowMs - epoch) / 1000));
 }
 
-export function resolveLocalLocationFreshnessStatus(recordedAt, nowMs = Date.now()) {
+/**
+ * @param {string|null|undefined} recordedAt
+ * @param {number} [nowMs]
+ * @param {string|null|undefined} [locationMode]
+ */
+export function resolveLocalLocationFreshnessStatus(
+  recordedAt,
+  nowMs = Date.now(),
+  locationMode = null
+) {
   const age = localAgeSecondsFromRecordedAt(recordedAt, nowMs);
   if (age == null) return 'offline_unknown';
-  if (age <= LOCAL_LIVE_MAX_SECONDS) return 'live';
-  if (age <= LOCAL_RECENT_MAX_SECONDS) return 'recent';
-  return 'stale';
+  return ageToGpsFreshness(age, locationMode);
 }
 
 function normalizeStatus(value) {
@@ -32,11 +49,11 @@ function normalizeStatus(value) {
     .toLowerCase();
 }
 
-function ageToFreshStatus(age) {
-  if (age <= LOCAL_LIVE_MAX_SECONDS) return 'live';
-  if (age <= LOCAL_RECENT_MAX_SECONDS) return 'recent';
-  return 'stale';
+function ageToFreshStatus(age, locationMode) {
+  return ageToGpsFreshness(age, locationMode);
 }
+
+const FRESHNESS_RANK = { live: 0, recent: 1, stale: 2, verify: 3 };
 
 /**
  * Recalcule last_seen_seconds ; peut dégrader location_status live/recent.
@@ -46,6 +63,7 @@ function ageToFreshStatus(age) {
 export function applyLocalLocationFreshness(driver, nowMs = Date.now()) {
   if (!driver || typeof driver !== 'object') return driver;
   const recordedAt = driver.recorded_at ?? driver.timestamp ?? null;
+  const locationMode = resolveDriverLocationMode(driver);
   const ageFromTs = localAgeSecondsFromRecordedAt(recordedAt, nowMs);
   const age =
     ageFromTs != null
@@ -65,15 +83,17 @@ export function applyLocalLocationFreshness(driver, nowMs = Date.now()) {
     nextLocationStatus = 'last_known';
   } else if (current === 'live' || current === 'recent') {
     if (age != null) {
-      const fromAge = ageToFreshStatus(age);
-      if (current === 'recent' && fromAge === 'live') {
-        nextLocationStatus = 'recent';
-      } else {
-        nextLocationStatus = fromAge;
+      const fromAge = ageToFreshStatus(age, locationMode);
+      const currentKey = current === 'live' ? 'live' : 'recent';
+      if (
+        FRESHNESS_RANK[fromAge] > FRESHNESS_RANK[currentKey]
+        || (current === 'recent' && fromAge === 'live')
+      ) {
+        nextLocationStatus = fromAge === 'live' && current === 'recent' ? 'recent' : fromAge;
       }
     }
   } else if (!current && age != null) {
-    nextLocationStatus = ageToFreshStatus(age);
+    nextLocationStatus = ageToFreshStatus(age, locationMode);
   }
 
   return {
@@ -82,3 +102,5 @@ export function applyLocalLocationFreshness(driver, nowMs = Date.now()) {
     location_status: nextLocationStatus,
   };
 }
+
+export { normalizeGpsFreshnessMode, getGpsFreshnessThresholds, ageToGpsFreshness };

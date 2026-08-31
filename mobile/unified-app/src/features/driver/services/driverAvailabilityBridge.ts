@@ -1,13 +1,14 @@
 type Listener = () => void;
 
-let availabilityActive = true;
+/** null = UNKNOWN (pas encore hydraté depuis DB/cache). */
+let availabilityActive: boolean | null = null;
 const listeners = new Set<Listener>();
 
-export function getDriverAvailabilityActive(): boolean {
+export function getDriverAvailabilityActive(): boolean | null {
   return availabilityActive;
 }
 
-export function setDriverAvailabilityActive(active: boolean): void {
+export function setDriverAvailabilityActive(active: boolean | null): void {
   if (availabilityActive === active) return;
   availabilityActive = active;
   listeners.forEach((listener) => listener());
@@ -22,6 +23,6 @@ export function subscribeDriverAvailability(listener: Listener): () => void {
 }
 
 export function resetDriverAvailabilityBridgeForTests(): void {
-  availabilityActive = true;
+  availabilityActive = null;
   listeners.clear();
 }

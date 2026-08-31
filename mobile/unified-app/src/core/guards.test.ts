@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
+import { hasPermission } from "./contracts/auth";
 import {
   resolveAuthGuardRedirect,
   resolveCompanyContextGuardRedirect,
@@ -7,7 +8,10 @@ import {
   resolveInstitutionUnifiedGate,
   resolveOnboardingGuardRedirect,
   resolvePermissionGuardRedirect,
+  resolveUnauthorizedRecoveryRedirect,
   resolveVersionGuardRedirect,
+  shouldUnmountCompanySurface,
+  shouldUnmountDriverSurface,
 } from "./guardDecisions";
 
 const bootstrapBase = {
@@ -50,6 +54,77 @@ describe("guard decision helpers", () => {
   it("permission guard redirects when denied", () => {
     expect(resolvePermissionGuardRedirect(false)).toBe("/(app)/unauthorized");
     expect(resolvePermissionGuardRedirect(true)).toBeNull();
+  });
+
+  const companyCtx = {
+    context_id: "company:1",
+    context_type: "company" as const,
+    label: "Entreprise",
+    permissions: ["company:dashboard:read"],
+    is_default: true,
+  };
+  const driverCtx = {
+    context_id: "driver:1",
+    context_type: "driver" as const,
+    label: "Chauffeur",
+    permissions: ["mission:read"],
+    is_default: true,
+  };
+
+  it("1 DRIVER->COMPANY: ancien écran DRIVER + transition => pas de permission denied", () => {
+    expect(hasPermission(companyCtx as any, "mission:read")).toBe(false);
+    expect(resolvePermissionGuardRedirect(false, true)).toBeNull();
+  });
+
+  it("2 DRIVER->COMPANY: activeContext COMPANY => surface DRIVER démontée", () => {
+    expect(shouldUnmountDriverSurface(true, "company")).toBe(true);
+    expect(shouldUnmountDriverSurface(true, "driver")).toBe(false);
+    expect(shouldUnmountDriverSurface(false, "company")).toBe(false);
+  });
+
+  it("3 company context valide => company home", () => {
+    expect(resolveUnauthorizedRecoveryRedirect(companyCtx as any)).toBe(
+      "/(app)/(company)/dashboard"
+    );
+    expect(resolveCompanyContextGuardRedirect(companyCtx as any)).toBeNull();
+  });
+
+  it("4 nouvel écran COMPANY n'exige pas mission:read", () => {
+    expect(hasPermission(companyCtx as any, "mission:read")).toBe(false);
+    expect(hasPermission(companyCtx as any, "company:dashboard:read")).toBe(true);
+    expect(resolvePermissionGuardRedirect(hasPermission(companyCtx as any, "company:dashboard:read"))).toBeNull();
+  });
+
+  it("5 AccessDenied transitoire + COMPANY => redirect company home", () => {
+    expect(resolveUnauthorizedRecoveryRedirect(companyCtx as any)).toBe(
+      "/(app)/(company)/dashboard"
+    );
+  });
+
+  it("6 AccessDenied transitoire + DRIVER => redirect driver home", () => {
+    expect(resolveUnauthorizedRecoveryRedirect(driverCtx as any)).toBe("/(app)/(driver)");
+  });
+
+  it("7 vrai utilisateur sans permission hors transition => AccessDenied", () => {
+    expect(resolvePermissionGuardRedirect(false, false)).toBe("/(app)/unauthorized");
+    expect(resolvePermissionGuardRedirect(hasPermission(companyCtx as any, "mission:read"), false)).toBe(
+      "/(app)/unauthorized"
+    );
+    const clientSansDroit = {
+      context_id: "client:self",
+      context_type: "client" as const,
+      label: "Client",
+      permissions: [],
+      is_default: true,
+    };
+    expect(resolveUnauthorizedRecoveryRedirect(clientSansDroit as any)).toBeNull();
+  });
+
+  it("TRANSITION_BYPASS != GLOBAL_PERMISSION_BYPASS", () => {
+    expect(resolvePermissionGuardRedirect(false, true)).toBeNull();
+    expect(resolvePermissionGuardRedirect(false, false)).toBe("/(app)/unauthorized");
+    expect(shouldUnmountCompanySurface(true, "driver")).toBe(true);
+    expect(shouldUnmountCompanySurface(false, "driver")).toBe(false);
   });
 
   it("company context guard rejects non-company contexts", () => {

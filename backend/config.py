@@ -263,6 +263,10 @@ class Config:
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(
         seconds=int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES_SECONDS", str(90 * 24 * 3600)))
     )
+    # Inactivité humaine max avant invalidation session institution (poste partagé).
+    INSTITUTION_IDLE_TIMEOUT_SECONDS = int(
+        os.getenv("INSTITUTION_IDLE_TIMEOUT_SECONDS", "900")
+    )
     # Validation de l'audience JWT (prévention token replay)
     # Désactivé pour permettre plusieurs audiences :
     # - "atmr-api" pour web/chauffeur mobile

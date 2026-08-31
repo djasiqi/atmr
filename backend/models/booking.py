@@ -1552,6 +1552,13 @@ class Booking(db.Model):
         )
 
     def assign_driver(self, driver_id: int):
+        """Pose driver_id + ASSIGNED sur le Booking uniquement.
+
+        ARRIVED-SOT-1B : ne crée **pas** d'Assignment. Les callers produit
+        doivent utiliser `AssignDriverToReservationUseCase` (ou au minimum
+        `ensure_booking_assignment` juste après) pour respecter l'invariant
+        ``driver_id + statut actif ⇒ Assignment``.
+        """
         if not self.is_assignable():
             msg = "La réservation ne peut pas être attribuée actuellement."
             raise ValueError(msg)

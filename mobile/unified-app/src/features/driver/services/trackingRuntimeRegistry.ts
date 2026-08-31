@@ -324,6 +324,115 @@ export function validateNativeOwnerForHeadless(params: {
   return { ok: true };
 }
 
+export type NativeOwnerResolveSource =
+  | "task_context_persisted"
+  | "active_runtime"
+  | "lease_reconstructed";
+
+export function buildNativeOwnerFromDriverActiveLease(lease: {
+  driverId: number;
+  sessionGenerationId: number;
+  trackingGenerationId: string;
+  trackingIdentityId: string;
+  missionId: number | null;
+  missionContextVersion: number;
+}): NativeTrackingOwner {
+  return {
+    driverId: lease.driverId,
+    sessionGenerationId: lease.sessionGenerationId,
+    trackingGenerationId: lease.trackingGenerationId,
+    trackingIdentityId: lease.trackingIdentityId,
+    missionId: lease.missionId,
+    missionContextVersion: lease.missionContextVersion,
+  };
+}
+
+/**
+ * Résout l'ownership headless sans dépendre d'un objet JS volatile seul.
+ * Ordre : owner persisté → runtime mémoire → reconstruction depuis lease durable.
+ */
+export function resolveNativeOwnerForHeadlessCapture(params: {
+  persistedOwner: NativeTrackingOwner | null | undefined;
+  lease: {
+    state: string;
+    contextId?: string;
+    driverId?: number;
+    sessionGenerationId?: number;
+    trackingGenerationId?: string;
+    trackingIdentityId?: string;
+    missionId?: number | null;
+    missionContextVersion?: number;
+  } | null;
+  authUsable: boolean;
+}): { ok: true; owner: NativeTrackingOwner; source: NativeOwnerResolveSource } | { ok: false; reason: string } {
+  const { persistedOwner, lease, authUsable } = params;
+  if (!lease || lease.state !== "driver_active") {
+    return { ok: false, reason: "lease_not_driver_active" };
+  }
+  if (!authUsable) {
+    return { ok: false, reason: "auth_not_usable" };
+  }
+
+  const runtimeOwner = activeRuntime ? toNativeTrackingOwner(activeRuntime) : null;
+
+  // Owner persisté présent : valider ou rejeter — pas de reconstruction (anti-bypass stale).
+  if (persistedOwner) {
+    const persistedCheck = validateNativeOwnerForHeadless({
+      owner: persistedOwner,
+      lease,
+      authUsable,
+    });
+    if (persistedCheck.ok) {
+      return { ok: true, owner: persistedOwner, source: "task_context_persisted" };
+    }
+    return { ok: false, reason: persistedCheck.reason };
+  }
+
+  if (runtimeOwner) {
+    const runtimeCheck = validateNativeOwnerForHeadless({
+      owner: runtimeOwner,
+      lease,
+      authUsable,
+    });
+    if (runtimeCheck.ok) {
+      return { ok: true, owner: runtimeOwner, source: "active_runtime" };
+    }
+  }
+
+  if (
+    typeof lease.driverId === "number" &&
+    typeof lease.sessionGenerationId === "number" &&
+    typeof lease.trackingGenerationId === "string" &&
+    typeof lease.trackingIdentityId === "string" &&
+    typeof lease.missionContextVersion === "number"
+  ) {
+    const reconstructed = buildNativeOwnerFromDriverActiveLease({
+      driverId: lease.driverId,
+      sessionGenerationId: lease.sessionGenerationId,
+      trackingGenerationId: lease.trackingGenerationId,
+      trackingIdentityId: lease.trackingIdentityId,
+      missionId: lease.missionId === undefined ? null : lease.missionId,
+      missionContextVersion: lease.missionContextVersion,
+    });
+    const reconstructedCheck = validateNativeOwnerForHeadless({
+      owner: reconstructed,
+      lease,
+      authUsable,
+    });
+    if (reconstructedCheck.ok) {
+      if (
+        runtimeOwner &&
+        runtimeOwner.trackingGenerationId !== reconstructed.trackingGenerationId
+      ) {
+        return { ok: false, reason: "missing_native_owner" };
+      }
+      return { ok: true, owner: reconstructed, source: "lease_reconstructed" };
+    }
+  }
+
+  return { ok: false, reason: "missing_native_owner" };
+}
+
 /**
  * Flush durable : génération de capture non requise ; identité + non-quarantaine oui.
  */

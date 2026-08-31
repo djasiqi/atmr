@@ -1,0 +1,17 @@
+﻿T0=2026-08-21T12:51:04.8183605Z
+mission_id=45
+soft_seen=True
+P9_count=5
+P9_deltas=20,7,22,18,5,18,6
+P9_median=18.6
+LAST_event_id=trk_1787316751379_58f0db8e
+LAST_capture_id=os:1787316751379:46.193447:6.119970
+LAST_recorded_at=2026-08-21T12:52:31.379Z
+unreg=0
+remove=0
+fgs_restart=0
+zombie=0
+sessions=trk_sess_1787315194201_rzxh3pol
+gens=1135
+fgs_end=True
+log=c:\Users\jasiq\atmr\docs\ops\_driver_state_cert_2026-08-21\logcat_C03_FG_20260821_145101.txt

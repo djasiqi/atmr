@@ -243,6 +243,65 @@ def _enrich_driver_booking_list_payload(payload: dict[str, Any]) -> dict[str, An
     return out
 
 
+def _compose_driver_bookings_with_assignments(
+    payloads: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """ARRIVED-SOT-2 : compose ARRIVED depuis Assignment.ARRIVED_PICKUP (batch).
+
+    P1 MISSION-STATE : attache aussi assignment_id + mission_revision à chaque
+    payload pour le reconcile anti-régression côté mobile.
+    """
+    if not payloads:
+        return payloads
+    try:
+        from application.drivers.compose_driver_mission_surface import (
+            attach_assignment_identity,
+            compose_driver_mission_payload,
+            latest_assignment_by_booking_id,
+        )
+        from repositories.assignment_repository import AssignmentRepository
+    except Exception:
+        return payloads
+
+    booking_ids: list[int] = []
+    for p in payloads:
+        try:
+            booking_ids.append(int(p.get("id")))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+    if not booking_ids:
+        return payloads
+
+    try:
+        assignments = AssignmentRepository().find_by_booking_ids(booking_ids)
+        assignment_by_bid = latest_assignment_by_booking_id(assignments)
+    except Exception:
+        logger.exception(
+            "[Driver Bookings] composition ARRIVED impossible (assignments)"
+        )
+        return payloads
+
+    out: list[dict[str, Any]] = []
+    for p in payloads:
+        try:
+            bid = int(p.get("id"))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            out.append(p)
+            continue
+        assignment = assignment_by_bid.get(bid)
+        composed = compose_driver_mission_payload(
+            p, assignment_status=getattr(assignment, "status", None)
+        )
+        out.append(attach_assignment_identity(composed, assignment))
+    return out
+
+
+def _serialize_driver_bookings_list(bookings: list[Any]) -> list[dict[str, Any]]:
+    """Serialize + distance enrich + composition ARRIVED (SOT-2)."""
+    base = [_enrich_driver_booking_list_payload(b.serialize) for b in bookings]
+    return _compose_driver_bookings_with_assignments(base)
+
+
 def _resolve_tracking_ack_status(
     *,
     accept_status: str | None,
@@ -1156,7 +1215,7 @@ class DriverUpcomingBookings(Resource):
                     e,
                 )
 
-        return [_enrich_driver_booking_list_payload(b.serialize) for b in bookings], 200
+        return _serialize_driver_bookings_list(bookings), 200
 
 
 @driver_ns.route("/me/bookings/since")
@@ -1278,9 +1337,7 @@ class DriverBookingsSince(Resource):
                         b.scheduled_time,
                     )
 
-            return [
-                _enrich_driver_booking_list_payload(b.serialize) for b in bookings
-            ], 200
+            return _serialize_driver_bookings_list(bookings), 200
         finally:
             observe_driver_bookings_since_request(
                 trigger_reason=trigger,
@@ -1326,17 +1383,15 @@ class DriverMobileSnapshot(Resource):
             today_fn=lambda: now_local().date(),
         )
         bookings = uc_bookings.execute(driver_id=driver.id).bookings
-        today_bookings = [
-            _enrich_driver_booking_list_payload(b.serialize) for b in bookings
-        ]
+        today_bookings = _serialize_driver_bookings_list(bookings)
 
         active_booking = None
-        for b in bookings:
+        for payload, b in zip(today_bookings, bookings, strict=False):
             if b.status in (
                 BookingStatus.EN_ROUTE,
                 BookingStatus.IN_PROGRESS,
             ):
-                active_booking = _enrich_driver_booking_list_payload(b.serialize)
+                active_booking = payload
                 break
 
         counters = {
@@ -2364,6 +2419,9 @@ class DriverLocation(Resource):
                                                 getattr(driver, "is_active", True)
                                             ),
                                             presence_status=presence_status,
+                                            is_available=bool(
+                                                getattr(driver, "is_available", True)
+                                            ),
                                         )
                                     )
                                     fanout_mission_id = sanitize_fanout_mission_id(
@@ -3908,7 +3966,7 @@ class DriverAllBookings(Resource):
         uc = GetDriverAllBookingsUseCase(booking_repo=BookingRepository())
         bookings = uc.execute(driver_id=driver.id).bookings
         # ✅ Retourner une liste vide au lieu d'une erreur 404
-        return [_enrich_driver_booking_list_payload(b.serialize) for b in bookings], 200
+        return _serialize_driver_bookings_list(bookings), 200
 
 
 @driver_ns.route("/me/company-bookings/today")
@@ -3944,7 +4002,7 @@ class DriverCompanyBookingsToday(Resource):
             .all()
         )
 
-        return [_enrich_driver_booking_list_payload(b.serialize) for b in bookings], 200
+        return _serialize_driver_bookings_list(bookings), 200
 
 
 @driver_ns.route("/me/bookings/<int:booking_id>/report")
@@ -4976,6 +5034,7 @@ device_health_model = driver_ns.model(
         "ota_update_id": fields.String,
         "release_channel": fields.String,
         "release_sha": fields.String,
+        "tracking_pipeline": fields.Raw(description="JZ-R1 snapshot pipeline (JSON, optionnel)"),
     },
 )
 

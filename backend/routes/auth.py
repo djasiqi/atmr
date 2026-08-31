@@ -154,6 +154,26 @@ except Exception as _mobile_session_reg_exc:  # pragma: no cover
         _mobile_session_reg_exc,
     )
 
+try:
+    from routes.auth_handoff import register_web_handoff_routes
+
+    register_web_handoff_routes(auth_ns)
+except Exception as _web_handoff_reg_exc:  # pragma: no cover
+    logging.getLogger(__name__).warning(
+        "Impossible d'enregistrer les routes handoff web: %s",
+        _web_handoff_reg_exc,
+    )
+
+try:
+    from routes.auth_web_session import register_web_session_routes
+
+    register_web_session_routes(auth_ns)
+except Exception as _web_session_reg_exc:  # pragma: no cover
+    logging.getLogger(__name__).warning(
+        "Impossible d'enregistrer les routes session web: %s",
+        _web_session_reg_exc,
+    )
+
 # ✅ S1: Modèle Swagger pour la réponse CSRF token
 csrf_token_response_model = auth_ns.model(
     "CSRFTokenResponse",
@@ -182,30 +202,14 @@ csrf_token_response_model = auth_ns.model(
 
 # Constante pour la longueur du hash de version du mot de passe
 PASSWORD_HASH_VERSION_LENGTH = 16
-_MOBILE_UA_MARKERS = (
-    "okhttp",
-    "cfnetwork",
-    "darwin",
-    "iphone",
-    "ipad",
-    "android",
-    "mobile",
-    "lirioprations",
-    "lirioperations",
-)
 _PUBLIC_PRE_REQUEST_CACHE: dict[str, str] = {}
 
 
 def _is_mobile_request() -> bool:
     """Détecte une requête mobile (app native iOS/Android)."""
-    if request.headers.get("X-Requested-With") == "Expo":
-        return True
-    # Header envoyé par l'app unifiée (Expo) — fiable même sans UA « mobile ».
-    client_platform = (request.headers.get("X-Client-Platform") or "").strip().lower()
-    if client_platform in {"ios", "android"}:
-        return True
-    user_agent = (request.headers.get("User-Agent") or "").lower()
-    return any(marker in user_agent for marker in _MOBILE_UA_MARKERS)
+    from shared.client_request import is_mobile_request_client
+
+    return is_mobile_request_client()
 
 
 def _resolve_client_platform() -> str | None:
@@ -1326,16 +1330,20 @@ def _login_post_body():
             db.session.rollback()
             active_sessions = list(limit_exc.sessions)
             role_value = user.role.value if user.role else None
-            from security.mobile_device_session_service import (
-                get_device_session_limit,
-                issue_device_session_resolution_token,
-            )
+            from security.mobile_device_session_service import get_device_session_limit
 
             limit = get_device_session_limit(role_value)
-            resolution_token = issue_device_session_resolution_token(
+            from security.web_handoff_service import (
+                build_device_management_redirect_path,
+                build_web_handoff_url,
+                issue_web_handoff_token,
+            )
+
+            redirect_path = build_device_management_redirect_path(user)
+            web_handoff_token = issue_web_handoff_token(
                 user_id=user.id,
-                requested_device_installation_id=str(device_installation_id),
-                allowed_sessions=active_sessions,
+                role=role_value,
+                redirect_path=redirect_path,
             )
             payload = {
                 "error": "device_session_limit_reached",
@@ -1346,12 +1354,13 @@ def _login_post_body():
                 ),
                 "limit": limit,
                 "active_count": len(active_sessions),
-                "sessions": [s.serialize() for s in active_sessions],
+                "redirect_path": redirect_path,
                 "trace_id": get_trace_id(),
                 **auth_capabilities(),
             }
-            if resolution_token:
-                payload["resolution_token"] = resolution_token
+            if web_handoff_token:
+                payload["web_handoff_token"] = web_handoff_token
+                payload["web_handoff_url"] = build_web_handoff_url(token=web_handoff_token)
             return payload, 409
         except Exception as mds_exc:
             # F1b : login mobile v1 fail-closed — pas de session orpheline
@@ -1393,6 +1402,29 @@ def _login_post_body():
             "trace_id": get_trace_id(),
         }, 503
 
+    refresh_expires_delta = _resolve_refresh_token_expires(
+        is_mobile_request=is_mobile_request,
+        remember_me=remember_me,
+    )
+
+    web_session = None
+    if not is_mobile_request:
+        from security.web_session_service import (
+            create_web_session,
+            is_institution_user,
+            resolve_web_session_expires,
+        )
+
+        if is_institution_user(user):
+            web_session = create_web_session(
+                user,
+                expires_at=resolve_web_session_expires(
+                    remember_me=remember_me,
+                    refresh_expires_delta=refresh_expires_delta,
+                ),
+                remember_me=remember_me,
+            )
+
     # Création du token avec le rôle dans additional_claims
     # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
     claims = {
@@ -1409,6 +1441,8 @@ def _login_post_body():
         claims["session_epoch"] = int(getattr(mobile_session, "session_epoch", 1) or 1)
         # Compat clients legacy
         claims["session_generation"] = claims["session_epoch"]
+    if web_session is not None:
+        claims["sid"] = str(web_session.id)
     access_expires_delta = _resolve_access_token_expires(is_mobile_request)
     access_token = create_access_token(
         identity=str(user.public_id),
@@ -1422,10 +1456,6 @@ def _login_post_body():
     # (durée configurée dans JWT_REFRESH_TOKEN_EXPIRES)
     # ✅ SECURITY: Ajouter la claim 'aud' et 'pwd_hash' pour invalidation après changement de mot de passe
     pwd_hash_version = _get_password_hash_version(user)
-    refresh_expires_delta = _resolve_refresh_token_expires(
-        is_mobile_request=is_mobile_request,
-        remember_me=remember_me,
-    )
     refresh_claims: dict[str, object] = {
         "aud": "atmr-api",
         "pwd_hash": pwd_hash_version,
@@ -1442,6 +1472,8 @@ def _login_post_body():
             getattr(mobile_session, "refresh_generation", 1) or 1
         )
         refresh_claims["session_generation"] = refresh_claims["session_epoch"]
+    if web_session is not None:
+        refresh_claims["sid"] = str(web_session.id)
     refresh_token = create_refresh_token(
         identity=str(user.public_id),
         additional_claims=refresh_claims,
@@ -1469,6 +1501,7 @@ def _login_post_body():
             expires_at=refresh_expires_at,
             device_id=device_id,
             device_name=device_name,
+            web_session_id=str(web_session.id) if web_session is not None else None,
             commit=False,
         )
         if mobile_session is not None and hasattr(
@@ -2687,10 +2720,11 @@ class RefreshToken(Resource):
             }
             # Propager session durable si présente sur le refresh
             try:
-                old_claims = get_jwt() or {}
+                old_claims = decode_token(refresh_token, allow_expired=False)
             except Exception:
                 old_claims = {}
             old_session_id = old_claims.get("session_id")
+            old_web_sid = old_claims.get("sid")
             old_session_epoch = old_claims.get("session_epoch")
             if old_session_epoch is None:
                 old_session_epoch = old_claims.get("session_generation")
@@ -2828,6 +2862,55 @@ class RefreshToken(Resource):
                 claims["session_epoch"] = epoch_val
                 claims["session_generation"] = epoch_val
 
+            # P0-A.1 : institution web sans sid → refus explicite (pas de session silencieuse)
+            if not is_mobile_request and mobile_session_for_rotation is None:
+                from security.web_session_service import (
+                    SESSION_UPGRADE_REQUIRED,
+                    is_institution_user,
+                )
+
+                if is_institution_user(user) and not old_web_sid:
+                    trace_id = get_trace_id()
+                    logger.info(
+                        "auth_refresh_failure",
+                        extra={
+                            "event": "auth_refresh_failure",
+                            "cause": SESSION_UPGRADE_REQUIRED,
+                            "user_public_id": user_public_id,
+                            "trace_id": trace_id,
+                        },
+                    )
+                    return {
+                        "error": SESSION_UPGRADE_REQUIRED,
+                        "error_code": SESSION_UPGRADE_REQUIRED,
+                        "message": (
+                            "Reconnexion requise pour activer la session sécurisée."
+                        ),
+                        "retryable": False,
+                        "trace_id": trace_id,
+                    }, 401
+
+            if old_web_sid and mobile_session_for_rotation is None:
+                from security.web_session_service import (
+                    is_institution_user,
+                    validate_web_session_for_request,
+                )
+
+                if is_institution_user(user):
+                    sid_error = validate_web_session_for_request(
+                        str(old_web_sid),
+                        user_id=user.id,
+                        revoke_on_idle=True,
+                    )
+                    if sid_error:
+                        db.session.commit()
+                        return {
+                            "error": sid_error,
+                            "error_code": sid_error,
+                            "retryable": False,
+                        }, 401
+                    claims["sid"] = str(old_web_sid)
+
             # 6. Générer nouveau access_token
             access_expires_delta = _resolve_access_token_expires(is_mobile_request)
             new_access_token = create_access_token(
@@ -2878,6 +2961,8 @@ class RefreshToken(Resource):
                 new_refresh_claims["session_generation"] = new_refresh_claims[
                     "session_epoch"
                 ]
+            if old_web_sid and mobile_session_for_rotation is None:
+                new_refresh_claims["sid"] = str(old_web_sid)
             new_refresh_token = create_refresh_token(
                 identity=str(user.public_id),
                 additional_claims=new_refresh_claims,
@@ -2911,6 +2996,11 @@ class RefreshToken(Resource):
                     expires_at=refresh_expires_at,
                     device_id=device_id,
                     device_name=device_name,
+                    web_session_id=(
+                        str(old_web_sid)
+                        if old_web_sid and mobile_session_for_rotation is None
+                        else None
+                    ),
                     commit=False,
                 )
                 if mobile_session_for_rotation is not None and hasattr(
@@ -3363,6 +3453,18 @@ class Logout(Resource):
                 )
 
             try:
+                web_sid = jwt_claims.get("sid")
+                if web_sid and not is_mobile_request:
+                    from security.web_session_service import revoke_web_session
+
+                    revoke_web_session(
+                        str(web_sid),
+                        reason=str(
+                            logout_body.get("reason") or "Logout utilisateur"
+                        )[:255],
+                        commit=False,
+                    )
+
                 if session_id:
                     if not _has_logout_session_proof(str(session_id)):
                         # Ne pas révéler l'existence du session_id

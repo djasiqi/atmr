@@ -85,6 +85,14 @@ class RefreshToken(db.Model):
     )
     session_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Session web institution (claim JWT sid) — stable sur rotations refresh
+    web_session_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("web_session.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Relation avec User
     user = relationship("User", backref="refresh_tokens")
 

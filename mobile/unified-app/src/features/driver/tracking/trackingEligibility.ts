@@ -1,21 +1,33 @@
 /**
- * Résolveur unique d’éligibilité GPS chauffeur.
+ * Résolveur unique d’éligibilité GPS chauffeur (contrat produit v4).
  *
  * Signaux séparés (ne pas fusionner) :
- * - driverAvailable / presenceWindowOpen / appForeground /
- *   presenceDisclosureAccepted / hasActiveMission
+ * - driverAvailable (SoT Driver.is_available ; null = UNKNOWN, pas encore hydraté)
+ * - appForeground
+ * - presenceDisclosureAccepted / permissionsReady
+ * - hasActiveMission
+ *
+ * La fenêtre horaire 07–19 n’est plus une gate produit.
  */
 
 export type TrackingEligibilityInput = {
-  driverAvailable: boolean;
-  presenceWindowOpen: boolean;
+  /** true = en service ; false = hors service ; null/undefined = UNKNOWN (pas encore hydraté). */
+  driverAvailable: boolean | null;
+  /** @deprecated Ignoré pour l’éligibilité produit (conservé pour call sites hérités). */
+  presenceWindowOpen?: boolean;
   appForeground: boolean;
   presenceDisclosureAccepted: boolean;
   hasActiveMission: boolean;
+  /**
+   * Capacité de garantir le contrat (FG+BG).
+   * Si omis : dérivé de presenceDisclosureAccepted (rétrocompat).
+   */
+  permissionsReady?: boolean;
 };
 
 export type TrackingEligibilityMode =
   | "OFF"
+  | "BLOCKED"
   | "PRESENCE_FG"
   | "PRESENCE_BG"
   | "MISSION";
@@ -25,24 +37,57 @@ export type TrackingEligibilityResult = {
   foregroundPresenceEligible: boolean;
   backgroundPresenceEligible: boolean;
   trackingEligible: boolean;
+  /** En service mais contrat non garanti (permissions / disclosure). */
+  blocked: boolean;
+  /** SoT pas encore hydratée : pas PRESENCE/LIVE, pas hors service. */
+  availabilityPending: boolean;
   mode: TrackingEligibilityMode;
 };
 
 export function resolveTrackingEligibility(
   input: TrackingEligibilityInput
 ): TrackingEligibilityResult {
-  const missionEligible = Boolean(input.hasActiveMission);
-  const disclosure = Boolean(input.presenceDisclosureAccepted);
-  const available = Boolean(input.driverAvailable);
+  const availabilityPending = input.driverAvailable == null;
+  const available = input.driverAvailable === true;
   const foreground = Boolean(input.appForeground);
-  const windowOpen = Boolean(input.presenceWindowOpen);
+  const disclosure = Boolean(input.presenceDisclosureAccepted);
+  const permissionsReady =
+    input.permissionsReady !== undefined
+      ? Boolean(input.permissionsReady)
+      : disclosure;
+  const capabilityReady = permissionsReady && disclosure;
+  const hasMission = Boolean(input.hasActiveMission);
 
-  // P0-F TIME : présence FG aussi bornée par la fenêtre 07–19 Europe/Zurich
-  const foregroundPresenceEligible =
-    available && foreground && disclosure && windowOpen;
-  const backgroundPresenceEligible =
-    available && !foreground && windowOpen && disclosure;
+  const empty = {
+    missionEligible: false,
+    foregroundPresenceEligible: false,
+    backgroundPresenceEligible: false,
+    trackingEligible: false,
+    blocked: false,
+    availabilityPending,
+    mode: "OFF" as TrackingEligibilityMode,
+  };
 
+  if (availabilityPending) {
+    return empty;
+  }
+
+  if (!available) {
+    return empty;
+  }
+
+  // En service sans capacité de garantir le contrat → BLOCKED (≠ OFF), mission comprise.
+  if (!capabilityReady) {
+    return {
+      ...empty,
+      blocked: true,
+      mode: "BLOCKED",
+    };
+  }
+
+  const missionEligible = hasMission;
+  const foregroundPresenceEligible = !hasMission && foreground;
+  const backgroundPresenceEligible = !hasMission && !foreground;
   const trackingEligible =
     missionEligible || foregroundPresenceEligible || backgroundPresenceEligible;
 
@@ -60,6 +105,8 @@ export function resolveTrackingEligibility(
     foregroundPresenceEligible,
     backgroundPresenceEligible,
     trackingEligible,
+    blocked: false,
+    availabilityPending: false,
     mode,
   };
 }

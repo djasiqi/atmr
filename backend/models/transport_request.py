@@ -177,6 +177,10 @@ class TransportRequest(db.Model):
         ForeignKey("user.id", ondelete="SET NULL"),
         nullable=True,
     )
+    created_by_display_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
 
     # Référence externe DPI (optionnelle, UNIQUE par institution si renseignée)
     external_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -588,6 +592,10 @@ class TransportRequest(db.Model):
             "is_cancellable": self.is_cancellable,
             "created_at": _iso(self.created_at),
             "created_by_name": self._get_creator_name(),
+            "created_by_display_name": (
+                (getattr(self, "created_by_display_name", None) or "").strip() or None
+            ),
+            "created_by_user_id": self.created_by_user_id,
             "updated_at": _iso(self.updated_at),
             "revision": int(getattr(self, "revision", None) or 1),
             "sent_at": _iso(self.sent_at),
@@ -606,7 +614,10 @@ class TransportRequest(db.Model):
         return self.serialize
 
     def _get_creator_name(self) -> str | None:
-        """Nom du créateur de la demande."""
+        """Nom du créateur : snapshot persisté, sinon résolution live."""
+        snapshot = (getattr(self, "created_by_display_name", None) or "").strip()
+        if snapshot:
+            return snapshot
         creator = getattr(self, "created_by", None)
         if not creator:
             return None

@@ -56,6 +56,10 @@ export function resolveBridgeAckFields(
 export function formatBridgeSyncLabel(input: {
   gpsEnabled: boolean;
   isTracking: boolean;
+  /** FSM BLOCKED / permissions */
+  trackingBlocked?: boolean;
+  /** Aucune position encore, acquisition en cours */
+  acquiring?: boolean;
   lastUpdate: number | undefined;
   lastAckAt: number | undefined;
   lastAckIsQueued: boolean;
@@ -68,6 +72,10 @@ export function formatBridgeSyncLabel(input: {
   formatSyncTime: (ms: number) => string;
 }): string {
   if (!input.gpsEnabled) return "GPS indisponible";
+  if (input.trackingBlocked) {
+    return "EN SERVICE · GPS BLOQUÉ — AUTORISATION REQUISE";
+  }
+  if (input.acquiring) return "Localisation en cours…";
   if (!input.isTracking) return "GPS prêt";
 
   const seqMatch =
@@ -81,7 +89,7 @@ export function formatBridgeSyncLabel(input: {
   const status = input.lastAckStatus ?? null;
 
   if (seqMatch && eventMatch && noError && status === "queued" && input.lastAckAt != null) {
-    return `GPS connecté • Mis en file ${input.formatSyncTime(input.lastAckAt)}`;
+    return `GPS actif · Synchronisation… ${input.formatSyncTime(input.lastAckAt)}`;
   }
   if (
     seqMatch &&
@@ -91,10 +99,10 @@ export function formatBridgeSyncLabel(input: {
     BRIDGE_CONFIRMED_ACK_STATUSES.has(status) &&
     input.lastAckAt != null
   ) {
-    return `GPS connecté • Confirmé ${input.formatSyncTime(input.lastAckAt)}`;
+    return `GPS actif · Position confirmée ${input.formatSyncTime(input.lastAckAt)}`;
   }
   if (seqMatch && eventMatch && status === "partially_ingested") {
-    return "GPS connecté • Partiellement reçu";
+    return "GPS actif · Synchronisation…";
   }
   if (
     (input.lastAckError && seqMatch && eventMatch) ||
@@ -105,10 +113,10 @@ export function formatBridgeSyncLabel(input: {
         status === "ignored" ||
         status === "rejected"))
   ) {
-    return "GPS connecté • Non confirmé";
+    return "GPS actif · Synchronisation…";
   }
   if (input.lastUpdate != null) {
-    return `GPS connecté • Envoyé ${input.formatSyncTime(input.lastUpdate)}`;
+    return `GPS actif · Synchronisation… ${input.formatSyncTime(input.lastUpdate)}`;
   }
-  return "GPS connecté";
+  return "GPS actif · Synchronisation…";
 }

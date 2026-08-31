@@ -4,8 +4,8 @@
 
 | Workflow | Rôle |
 |---|---|
-| [`.github/workflows/phase1-gates.yml`](../../.github/workflows/phase1-gates.yml) | Suites `booking-critical`, `mobile-auth-critical`, `mobile-tracking-critical`, `deployment-critical` + agrégateur (PR / push — **pas** rappelé par Build & Deploy) |
-| [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) | Build → Trivy CRITICAL → manifeste → deploy (sans re-run phase1-gates) |
+| [`.github/workflows/phase1-gates.yml`](../../.github/workflows/phase1-gates.yml) | Suites critiques + agrégateur ; push / PR / dispatch ; **sur `release/gps-pilot-5-drivers-20260823` : dispatch automatique de Build & Deploy après PASS** |
+| [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) | Build → Trivy CRITICAL → manifeste → deploy (dispatch manuel ou auto post-gates release) |
 
 ### `booking-critical`
 

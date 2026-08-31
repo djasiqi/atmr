@@ -136,6 +136,7 @@ jest.mock("./sync", () => ({
 jest.mock("./offlineQueue", () => ({
   driverOfflineQueue: {
     flush: () => mockOfflineFlush(),
+    setActiveContext: () => undefined,
   },
 }));
 

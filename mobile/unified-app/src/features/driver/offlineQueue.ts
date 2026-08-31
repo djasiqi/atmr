@@ -15,23 +15,34 @@ type QueuedDriverAction = OfflineMutationAction & {
   targetStatus: DriverTransitionStatus;
   reason?: string | null;
   eventSequence?: number;
+  /** Contexte chauffeur au moment de l'enqueue (anti-replay cross-session). */
+  contextId?: string | null;
+  /** Identité de lifecycle au moment de l'enqueue (diagnostic). */
+  assignmentId?: number | null;
+  missionRevision?: number | null;
 };
 
 const STORAGE_KEY = "driver_pending_actions_v1";
-const MAX_RETRIES = 8;
+// MISSION-STATE P1 : une transition n'est JAMAIS perdue silencieusement sur
+// erreur transitoire — la borne vient de la fenêtre de replay (24 h), pas d'un
+// petit compteur de retries. Les erreurs permanentes (4xx retryable=false)
+// sont retirées immédiatement.
+const MAX_RETRIES = Number(
+  process.env.EXPO_PUBLIC_DRIVER_TRANSITION_MAX_RETRIES ?? "1000"
+);
 const BACKOFF_BASE_MS = 1500;
 const BACKOFF_MAX_MS = 30_000;
 
-const DEFAULT_QUEUE_REPLAY_WINDOW_SECONDS = 600;
+const DEFAULT_QUEUE_REPLAY_WINDOW_SECONDS = 86_400;
 const TUNED_QUEUE_REPLAY_WINDOW_SECONDS = Number(
-  process.env.EXPO_PUBLIC_DRIVER_TRANSITION_REPLAY_WINDOW_SECONDS ?? "1800"
+  process.env.EXPO_PUBLIC_DRIVER_TRANSITION_REPLAY_WINDOW_SECONDS ?? "86400"
 );
 export const QUEUE_REPLAY_WINDOW_SECONDS = isFeatureEnabled("driver_transition_window_tuning_enabled")
   ? TUNED_QUEUE_REPLAY_WINDOW_SECONDS
   : DEFAULT_QUEUE_REPLAY_WINDOW_SECONDS;
 const QUEUE_REPLAY_WINDOW_MS = Math.max(60_000, QUEUE_REPLAY_WINDOW_SECONDS * 1000);
 const MAX_REPLAY_ATTEMPTS_PER_TRANSITION = Number(
-  process.env.EXPO_PUBLIC_DRIVER_TRANSITION_MAX_REPLAY_ATTEMPTS ?? "5"
+  process.env.EXPO_PUBLIC_DRIVER_TRANSITION_MAX_REPLAY_ATTEMPTS ?? "1000"
 );
 const LONG_PENDING_THRESHOLD_MS = Number(
   process.env.EXPO_PUBLIC_DRIVER_TRANSITION_LONG_PENDING_THRESHOLD_MS ?? "300000"
@@ -41,7 +52,13 @@ function createActionId() {
   return `drv_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function isPermanentTransitionError(error: unknown): boolean {
+  return (error as { retryable?: boolean } | null)?.retryable === false;
+}
+
 class DriverOfflineQueue {
+  private activeContextId: string | null = null;
+
   private readonly queue = new OfflineMutationQueue<QueuedDriverAction>({
     storageKey: STORAGE_KEY,
     maxRetries: MAX_RETRIES,
@@ -58,6 +75,13 @@ class DriverOfflineQueue {
       });
       applyArrivedMilestoneFromStatusResponse(action.missionId, res);
     },
+    isPermanentError: isPermanentTransitionError,
+    shouldReplay: (action) => {
+      // Actions legacy sans contexte : rejouables (compat ascendante).
+      if (!action.contextId) return true;
+      if (!this.activeContextId) return false;
+      return action.contextId === this.activeContextId;
+    },
     onExpired: (action) => {
       console.warn("[offline_action_expired]", {
         mission_id: action.missionId,
@@ -70,6 +94,24 @@ class DriverOfflineQueue {
         retry_count: action.retryCount,
         reason: "expired_replay_window",
         mission_transition_queue_expired_total: 1,
+      });
+    },
+    onPermanentFailure: (action, error) => {
+      // Transition définitivement refusée par le serveur (stale/terminal…) :
+      // l'état serveur est autoritatif, l'action est retirée, un resync suit.
+      emitDriverTelemetry("transition.queue.failure", {
+        source: "driver.offline.queue",
+        mission_id: action.missionId,
+        retry_count: action.retryCount,
+        reason: `permanent_${String((error as { code?: string } | null)?.code ?? "rejected")}`,
+        mission_transition_queue_permanent_total: 1,
+      });
+    },
+    onSkipped: (action) => {
+      emitDriverTelemetry("transition.queue.skipped", {
+        source: "driver.offline.queue",
+        mission_id: action.missionId,
+        reason: "context_mismatch",
       });
     },
     onSuccess: (action) => {
@@ -96,10 +138,31 @@ class DriverOfflineQueue {
     },
   });
 
+  /** Fixe le contexte chauffeur actif ; purge les actions d'autres contextes. */
+  async setActiveContext(contextId: string | null) {
+    const previous = this.activeContextId;
+    this.activeContextId = contextId;
+    if (!contextId || contextId === previous) return;
+    let purgedCount = 0;
+    await this.queue.removeWhere((action) => {
+      const foreign = Boolean(action.contextId) && action.contextId !== contextId;
+      if (foreign) purgedCount += 1;
+      return foreign;
+    });
+    if (purgedCount > 0) {
+      emitDriverTelemetry("transition.queue.failure", {
+        source: "driver.offline.queue",
+        reason: "purged_foreign_context",
+        mission_transition_queue_purged_total: purgedCount,
+      });
+    }
+  }
+
   async enqueue(
     missionId: number,
     targetStatus: DriverTransitionStatus,
-    reason?: string | null
+    reason?: string | null,
+    lifecycle?: { assignmentId?: number | null; missionRevision?: number | null }
   ) {
     const action: QueuedDriverAction = {
       id: createActionId(),
@@ -108,6 +171,9 @@ class DriverOfflineQueue {
       reason: reason ?? null,
       queuedAt: Date.now(),
       retryCount: 0,
+      contextId: this.activeContextId,
+      assignmentId: lifecycle?.assignmentId ?? null,
+      missionRevision: lifecycle?.missionRevision ?? null,
     };
     const queued = await this.queue.enqueue(action);
     emitDriverTelemetry("transition.queue.retry", {
@@ -118,6 +184,11 @@ class DriverOfflineQueue {
       max_replay_attempts_per_transition: MAX_REPLAY_ATTEMPTS_PER_TRANSITION,
     });
     return queued;
+  }
+
+  /** Retire UNE action précise (succès direct ou refus définitif ciblé). */
+  async removeAction(actionId: string) {
+    await this.queue.removeById(actionId);
   }
 
   async purgeMission(missionId: number) {
@@ -170,4 +241,3 @@ class DriverOfflineQueue {
 }
 
 export const driverOfflineQueue = new DriverOfflineQueue();
-

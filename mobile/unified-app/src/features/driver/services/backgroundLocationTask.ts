@@ -31,9 +31,13 @@ import {
   leaseAllowsTransport,
   readTrackingContextLease,
 } from "./trackingContextLease";
-import { validateNativeOwnerForHeadless } from "./trackingRuntimeRegistry";
+import {
+  captureActiveRuntime,
+  resolveNativeOwnerForHeadlessCapture,
+  toNativeTrackingOwner,
+  validateNativeOwnerForHeadless,
+} from "./trackingRuntimeRegistry";
 import { getTrackingAuthAvailability } from "../../../core/auth/sessionAuthDecision";
-import { isWithinTrackingWindow } from "./trackingWindow";
 import {
   markNativeStartEntry,
   markNativeStartExit,
@@ -53,6 +57,39 @@ import {
   type NativeStopRunResult,
 } from "./nativeTrackingLifecycle";
 import { atmrJsDiag } from "./atmrJsTaskDiag";
+
+/** JZ-R1 — enregistre J3 sans modifier la décision métier. */
+function emitJ3LocationDecision(input: {
+  accepted: boolean;
+  reason: string;
+  [key: string]: unknown;
+}): void {
+  atmrJsDiag("J3_LOCATION_DECISION", {
+    accepted: input.accepted,
+    reason: input.reason,
+  });
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("./trackingPipelineObservability") as typeof import("./trackingPipelineObservability");
+    mod.recordPipelineJ3Decision({
+      result: input.accepted ? "accepted" : "rejected",
+      reason: input.reason,
+    });
+  } catch {
+    /* instrumentation-only */
+  }
+}
+
+/** JZ-R1 — horodatage J1 handler (lecture seule). */
+function recordPipelineJ1Observed(): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("./trackingPipelineObservability") as typeof import("./trackingPipelineObservability");
+    mod.recordPipelineJ1Handler();
+  } catch {
+    /* instrumentation-only */
+  }
+}
 
 /**
  * Notifie le heartbeat de santé tracking en cas d'échec de démarrage natif —
@@ -147,41 +184,39 @@ const KILL_SWITCH_KEY = "driver_background_tracking_enabled";
 const BACKGROUND_INTERVAL_MS = Number(
   process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_INTERVAL_MS ?? "20000"
 );
-const BACKGROUND_DISTANCE_METERS = Number(
+/** @deprecated Conservé pour rétrocompat env ; B3 utilise distance 0 durable. */
+const _BACKGROUND_DISTANCE_METERS = Number(
   process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_DISTANCE_METERS ?? "10"
 );
-/** Mission active : intervalle temporel seul (0 = pas de filtre distance, fix immobile). */
+void _BACKGROUND_DISTANCE_METERS;
+/** Mission / présence durable : intervalle temporel seul (0 = pas de filtre distance). */
 const BACKGROUND_MISSION_DISTANCE_METERS = Number(
   process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_MISSION_DISTANCE_METERS ?? "0"
 );
 const FOREGROUND_SERVICE_TITLE =
   process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_TITLE ?? PRODUCTION_LOCALE.fgsNotificationTitle;
-const FOREGROUND_SERVICE_BODY_MISSION =
+const _FOREGROUND_SERVICE_BODY_MISSION =
   process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_BODY ??
   PRODUCTION_LOCALE.fgsNotificationBodyMission;
-const FOREGROUND_SERVICE_BODY_PRESENCE =
+const _FOREGROUND_SERVICE_BODY_PRESENCE =
   process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_BODY_PRESENCE ??
   PRODUCTION_LOCALE.fgsNotificationBodyPresence;
+void _FOREGROUND_SERVICE_BODY_MISSION;
+void _FOREGROUND_SERVICE_BODY_PRESENCE;
 
-function resolveBackgroundDistanceMeters(taskMode: BackgroundTrackingTaskMode): number {
-  if (taskMode === "presence_window") {
-    return BACKGROUND_DISTANCE_METERS;
-  }
+function resolveBackgroundDistanceMeters(_taskMode: BackgroundTrackingTaskMode): number {
+  // B3/B4 : abonnement natif durable LIVE-compatible — distance seule interdite
+  // comme preuve de vie ; heartbeat temporel (timeInterval) pour présence et mission.
   return BACKGROUND_MISSION_DISTANCE_METERS;
 }
 
 function resolveForegroundServiceNotification(
-  taskMode: BackgroundTrackingTaskMode
+  _taskMode: BackgroundTrackingTaskMode
 ): { title: string; body: string } {
-  if (taskMode === "presence_window") {
-    return {
-      title: FOREGROUND_SERVICE_TITLE,
-      body: FOREGROUND_SERVICE_BODY_PRESENCE,
-    };
-  }
+  // B2/B3 : notification stable — évite de muter le FGS à chaque transition de mode.
   return {
     title: FOREGROUND_SERVICE_TITLE,
-    body: FOREGROUND_SERVICE_BODY_MISSION,
+    body: PRODUCTION_LOCALE.fgsNotificationBodyStable,
   };
 }
 const FOREGROUND_SERVICE_COLOR =
@@ -203,13 +238,14 @@ export function resolveBackgroundGpsQuality(input: {
   lowBatteryIntervalMs?: number;
 }): { accuracy: Location.Accuracy; timeIntervalMs: number; batteryDegradesGps: boolean } {
   const missionIntervalMs = input.missionIntervalMs ?? BACKGROUND_INTERVAL_MS;
-  const presenceMinIntervalMs = input.presenceMinIntervalMs ?? 90_000;
   const lowBatteryIntervalMs =
     input.lowBatteryIntervalMs ?? BACKGROUND_INTERVAL_LOW_BATTERY_MS;
   const isMissionLive = input.trackingMode === "mission_live";
   const isPresence = input.trackingMode === "availability_presence";
 
-  if (isMissionLive) {
+  // B3 : abonnement natif durable — options LIVE-compatibles (High + cadence mission).
+  // Filtrage présence (enqueue/transmit) côté JS ; coût batterie mesuré en canary D11.
+  if (isMissionLive || isPresence) {
     return {
       accuracy: Location.Accuracy.High,
       timeIntervalMs: missionIntervalMs,
@@ -217,9 +253,7 @@ export function resolveBackgroundGpsQuality(input: {
     };
   }
 
-  const intervalBase = isPresence
-    ? Math.max(missionIntervalMs, presenceMinIntervalMs)
-    : missionIntervalMs;
+  const intervalBase = missionIntervalMs;
   const batteryDegradesGps = input.isLowBattery;
   const timeIntervalMs = batteryDegradesGps
     ? Math.max(intervalBase, lowBatteryIntervalMs)
@@ -738,8 +772,9 @@ function defineTaskIfNeeded() {
         locations_count: locationsEnter.length,
         task_error: error?.message ?? null,
       });
+      recordPipelineJ1Observed();
       if (error) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "task_error",
         });
@@ -751,14 +786,14 @@ function defineTaskIfNeeded() {
         return;
       }
       if (!isFeatureEnabled("tracking_background_enabled")) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "feature_disabled",
         });
         return;
       }
       if (await isKillSwitchEnabled()) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "kill_switch_enabled",
         });
@@ -777,7 +812,7 @@ function defineTaskIfNeeded() {
           lease?.state === "switching"
             ? "lease_switching_capture_blocked"
             : "context_not_driver";
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason,
           lease_state: lease?.state ?? "absent",
@@ -793,7 +828,7 @@ function defineTaskIfNeeded() {
 
       const context = await readTaskContext();
       if (!context) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision({
           accepted: false,
           reason: "no_active_context",
         });
@@ -805,7 +840,60 @@ function defineTaskIfNeeded() {
         return;
       }
 
-      // J4 — contexte tracking résolu
+      const auth = getTrackingAuthAvailability();
+      const authUsable =
+        auth.kind === "SESSION_AVAILABLE" ||
+        auth.kind === "AUTH_TEMPORARILY_UNAVAILABLE";
+      // Restaure/init owner depuis lease|runtime si absent du taskContext (cold start
+      // présence) — ne bypass jamais un owner persisté stale.
+      const ownerResolve = resolveNativeOwnerForHeadlessCapture({
+        persistedOwner: context.nativeOwner ?? null,
+        lease,
+        authUsable,
+      });
+      // Pendant switching : capture locale OK si owner présent et lease fromDriver ;
+      // owner/lease génération ne matchent que sur driver_active.
+      if (lease?.state === "driver_active" && !ownerResolve.ok) {
+        atmrJsDiag("J4_TRACKING_CONTEXT", {
+          missionId: context.missionId,
+          missionStatus: context.missionStatus,
+          taskMode: context.taskMode,
+          lease_state: lease?.state ?? "absent",
+          owner_gen: context.nativeOwner?.trackingGenerationId ?? null,
+          owner_mission: context.nativeOwner?.missionId ?? null,
+        });
+        emitJ3LocationDecision({
+          accepted: false,
+          reason: ownerResolve.reason,
+        });
+        emitDriverTelemetry("tracking.background.task.skipped", {
+          source: "driver.services.backgroundLocationTask",
+          reason: ownerResolve.reason,
+          task_name: BACKGROUND_LOCATION_TASK_NAME,
+        });
+        return;
+      }
+      if (lease?.state === "driver_active" && ownerResolve.ok) {
+        if (ownerResolve.source !== "task_context_persisted") {
+          await setBackgroundTrackingMissionContext(
+            context.missionId,
+            context.missionStatus,
+            context.taskMode,
+            context.missionScheduling,
+            ownerResolve.owner
+          );
+          context.nativeOwner = ownerResolve.owner;
+          emitDriverTelemetry("tracking.background.native_owner.resolved", {
+            source: "driver.services.backgroundLocationTask",
+            resolve_source: ownerResolve.source,
+            tracking_generation_id: ownerResolve.owner.trackingGenerationId,
+            task_mode: context.taskMode,
+            task_name: BACKGROUND_LOCATION_TASK_NAME,
+          });
+        }
+      }
+
+      // J4 — contexte tracking résolu (après restore owner si besoin)
       atmrJsDiag("J4_TRACKING_CONTEXT", {
         missionId: context.missionId,
         missionStatus: context.missionStatus,
@@ -815,29 +903,6 @@ function defineTaskIfNeeded() {
         owner_mission: context.nativeOwner?.missionId ?? null,
       });
 
-      const auth = getTrackingAuthAvailability();
-      const authUsable =
-        auth.kind === "SESSION_AVAILABLE" ||
-        auth.kind === "AUTH_TEMPORARILY_UNAVAILABLE";
-      const ownerCheck = validateNativeOwnerForHeadless({
-        owner: context.nativeOwner ?? null,
-        lease,
-        authUsable,
-      });
-      // Pendant switching : capture locale OK si owner présent et lease fromDriver ;
-      // owner/lease génération ne matchent que sur driver_active.
-      if (lease?.state === "driver_active" && !ownerCheck.ok) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
-          accepted: false,
-          reason: ownerCheck.reason,
-        });
-        emitDriverTelemetry("tracking.background.task.skipped", {
-          source: "driver.services.backgroundLocationTask",
-          reason: ownerCheck.reason,
-          task_name: BACKGROUND_LOCATION_TASK_NAME,
-        });
-        return;
-      }
       // Gate capture : contexte task vs owner (mission / version).
       if (
         lease?.state === "driver_active" &&
@@ -848,7 +913,7 @@ function defineTaskIfNeeded() {
           (typeof lease.missionContextVersion === "number" &&
             context.nativeOwner.missionContextVersion !== lease.missionContextVersion))
       ) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision({
           accepted: false,
           reason: "mission_or_version_mismatch",
         });
@@ -867,7 +932,7 @@ function defineTaskIfNeeded() {
       }
       if (lease?.state === "switching") {
         if (!context.nativeOwner) {
-          atmrJsDiag("J3_LOCATION_DECISION", {
+          emitJ3LocationDecision({
             accepted: false,
             reason: "missing_native_owner",
           });
@@ -879,7 +944,7 @@ function defineTaskIfNeeded() {
           return;
         }
         if (!authUsable) {
-          atmrJsDiag("J3_LOCATION_DECISION", {
+          emitJ3LocationDecision( {
             accepted: false,
             reason: "auth_not_usable",
           });
@@ -898,7 +963,7 @@ function defineTaskIfNeeded() {
         isTrackingActiveStatus(context.missionStatus);
       const isPresenceContext = context.taskMode === "presence_window";
       if (!isMissionContext && !isPresenceContext) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "context_ineligible",
           task_mode: context.taskMode,
@@ -913,34 +978,14 @@ function defineTaskIfNeeded() {
         return;
       }
 
-      // TIME-3D : présence hors fenêtre Zurich → aucune capture + arrêt conditionnel (génération)
-      if (isPresenceContext && !isWithinTrackingWindow(new Date())) {
-        const expectedGenerationId =
-          context.nativeOwner?.trackingGenerationId ?? null;
-        const expectedMissionContextVersion =
-          context.nativeOwner?.missionContextVersion ?? null;
-        atmrJsDiag("J3_LOCATION_DECISION", {
-          accepted: false,
-          reason: "presence_window_closed",
-        });
-        emitDriverTelemetry("tracking.background.task.skipped", {
-          source: "driver.services.backgroundLocationTask",
-          reason: "presence_window_closed",
-          task_name: BACKGROUND_LOCATION_TASK_NAME,
-        });
-        await stopPresenceWindowIfStillCurrent({
-          expectedGenerationId,
-          expectedMissionContextVersion,
-          reason: "presence_window_closed",
-        });
-        return;
-      }
+      // A2 : présence commandée par en_service, plus par l'horloge 07–19.
+      // (Ancien TIME-3D presence_window_closed retiré.)
 
       // Sondage headless AVANT tout enfilage/flush : un handle SQLite non durable ou un schéma
       // pas prêt doit bloquer net (jamais de fallback HTTP silencieux depuis le background task).
       const health = await trackingQueueStore.initAndHealthcheckHeadless();
       if (!health.durable || !health.schemaReady) {
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: false,
           reason: "sqlite_headless_not_ready",
           durable: health.durable,
@@ -985,7 +1030,7 @@ function defineTaskIfNeeded() {
           age_ms: ageMs,
         });
         // J3 — acceptée pour enqueue (pas de dedupe JS ici)
-        atmrJsDiag("J3_LOCATION_DECISION", {
+        emitJ3LocationDecision( {
           accepted: true,
           reason: "pass_gates",
         });
@@ -1086,6 +1131,18 @@ function defineTaskIfNeeded() {
         backend_acked: flushResult.backendAcked,
         dropped: flushResult.dropped,
         last_event_id: flushResult.lastBackendAckRequestEventId ?? null,
+        reason: flushResult.exitReason,
+        http_dispatch_started: flushResult.httpDispatchStarted,
+        flush_lock: flushResult.flushLockState,
+        suspended: flushResult.suspended,
+        suspend_reason: flushResult.suspendReason,
+        backoff_remaining_ms: flushResult.backoffRemainingMs,
+        head_present: flushResult.headPresent,
+        head_age_ms: flushResult.headAgeMs,
+        head_retry_count: flushResult.headRetryCount,
+        head_state: flushResult.headDeliveryState,
+        head_id_hash: flushResult.headIdHash,
+        selected_item: flushResult.selectedItem,
       });
       emitDriverTelemetry("tracking.background.task.flush", {
         source: "driver.services.backgroundLocationTask",
@@ -1098,6 +1155,8 @@ function defineTaskIfNeeded() {
         socket_emitted: flushResult.socketEmitted,
         network_profile_active: cadence.networkProfile,
         dropped: flushResult.dropped,
+        flush_exit_reason: flushResult.exitReason,
+        http_dispatch_started: flushResult.httpDispatchStarted,
       });
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1186,19 +1245,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
   if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) {
     return { ok: false, nativeStarted: false };
   }
-  // TIME-3C : refuser tout start/reprise présence hors fenêtre Europe/Zurich
-  if (isPresenceWindow && !isWithinTrackingWindow(new Date())) {
-    emitDriverTelemetry("tracking.background.task.skipped", {
-      source: "driver.services.backgroundLocationTask",
-      reason: "presence_window_closed",
-      runtime: describeBackgroundRuntime(),
-      mission_id: missionId,
-      task_mode: taskMode,
-      task_name: BACKGROUND_LOCATION_TASK_NAME,
-      start_reason: startReason,
-    });
-    return { ok: false, nativeStarted: false };
-  }
+  // A2 : plus de refus start présence hors fenêtre 07–19
   if (!canUseBackgroundLocation()) {
     emitDriverTelemetry("tracking.background.task.skipped", {
       source: "driver.services.backgroundLocationTask",
@@ -1263,7 +1310,8 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     missionId,
     missionStatus,
     taskMode,
-    options.scheduling ?? null
+    options.scheduling ?? null,
+    options.nativeOwner
   );
 
   const startAttemptId = createNativeLifecycleOpId("start");
@@ -1581,17 +1629,7 @@ async function runWatchdogTick(): Promise<void> {
   if (!watchdogActive) return;
   if (bgStartInProgress) return;
 
-  // TIME-3C : ne pas relancer une présence hors fenêtre
-  if (watchdogPresenceWindow && !isWithinTrackingWindow(new Date())) {
-    stopNativeTrackingWatchdog();
-    clearPendingFgsStart();
-    emitDriverTelemetry("tracking.background.task.skipped", {
-      source: "driver.services.backgroundLocationTask",
-      reason: "presence_window_closed_watchdog",
-      mission_id: watchdogMissionId,
-    });
-    return;
-  }
+  // A2 : plus de skip watchdog présence hors fenêtre 07–19
 
   const lifecycle = await getNativeTaskLifecycleStatus();
   if (lifecycle.taskStarted) {
@@ -1733,23 +1771,18 @@ export async function ensureNativeTrackingWhileForeground(
   if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) {
     return;
   }
-  // TIME-3C : ne pas écrire/reprendre un contexte présence hors fenêtre
-  if (isPresenceWindow && !isWithinTrackingWindow(new Date())) {
-    emitDriverTelemetry("tracking.background.task.skipped", {
-      source: "driver.services.backgroundLocationTask",
-      reason: "presence_window_closed",
-      mission_id: missionId,
-      task_mode: "presence_window",
-      start_reason: reason,
-    });
-    return;
-  }
+  // A2 : plus de refus contexte présence hors fenêtre 07–19
 
   const lifecycle = await getNativeTaskLifecycleStatus();
   const taskMode: BackgroundTrackingTaskMode = isPresenceWindow ? "presence_window" : "mission";
   const priorContext = await readTaskContext();
+  const runtimeFallback = captureActiveRuntime();
   const desiredOwner =
-    options.nativeOwner === undefined ? undefined : options.nativeOwner;
+    options.nativeOwner !== undefined
+      ? options.nativeOwner
+      : runtimeFallback
+        ? toNativeTrackingOwner(runtimeFallback)
+        : undefined;
 
   // Android : FGS déjà démarré avec owner mission/version obsolète.
   const ownerVersionMismatch =
@@ -1870,9 +1903,20 @@ export async function ensureNativeTrackingWhileForeground(
     taskMode === "mission" &&
     missionId != null;
 
-  if (lifecycle.taskStarted && !contextUpgradedToMission) {
+  // B2 : FGS déjà démarré → conserver l'abonnement (y compris upgrade présence→mission).
+  // Pas de stop/unregister ; le contexte a déjà été mis à jour ci-dessus.
+  if (lifecycle.taskStarted) {
     stopNativeTrackingWatchdog();
     clearPendingFgsStart();
+    if (contextUpgradedToMission) {
+      emitDriverTelemetry("tracking.background.mode_transition", {
+        source: "driver.services.backgroundLocationTask",
+        reason: `${reason}:context_upgrade_to_mission_no_restart`,
+        mission_id: missionId,
+        task_mode: taskMode,
+        prior_task_mode: priorContext?.taskMode ?? null,
+      });
+    }
     const stillRunning = await Location.hasStartedLocationUpdatesAsync(
       BACKGROUND_LOCATION_TASK_NAME
     ).catch(() => false);
@@ -1891,10 +1935,6 @@ export async function ensureNativeTrackingWhileForeground(
       );
     }
     return;
-  }
-
-  if (contextUpgradedToMission && AppState.currentState === "active") {
-    await stopNativeBackgroundLocationUpdatesSafely(`${reason}:context_upgrade_to_mission`);
   }
 
   if (AppState.currentState !== "active") {
@@ -1942,15 +1982,15 @@ export async function restartNativeTrackingFromWake(reason = "silent_push_wake")
     await resumePendingNativeTrackingIfNeeded();
     const ctx = await readTaskContext();
     if (ctx?.taskMode === "presence_window") {
-      if (!isWithinTrackingWindow(new Date())) {
-        await stopPresenceWindowIfStillCurrent({
-          expectedGenerationId: ctx.nativeOwner?.trackingGenerationId ?? null,
-          expectedMissionContextVersion: ctx.nativeOwner?.missionContextVersion ?? null,
-          reason: "presence_window_closed_wake",
-        });
-        return;
-      }
-      await ensureNativeTrackingWhileForeground(null, null, { presenceWindow: true }, reason);
+      await ensureNativeTrackingWhileForeground(
+        null,
+        null,
+        {
+          presenceWindow: true,
+          nativeOwner: ctx.nativeOwner ?? undefined,
+        },
+        reason
+      );
       return;
     }
     if (ctx?.missionId != null) {
@@ -2058,15 +2098,15 @@ export async function resumePendingNativeTrackingIfNeeded(): Promise<void> {
     return;
   }
   if (ctx?.taskMode === "presence_window") {
-    if (!isWithinTrackingWindow(new Date())) {
-      await stopPresenceWindowIfStillCurrent({
-        expectedGenerationId: ctx.nativeOwner?.trackingGenerationId ?? null,
-        expectedMissionContextVersion: ctx.nativeOwner?.missionContextVersion ?? null,
-        reason: "presence_window_closed_resume",
-      });
-      return;
-    }
-    await ensureNativeTrackingWhileForeground(null, null, { presenceWindow: true }, "app_resume");
+    await ensureNativeTrackingWhileForeground(
+      null,
+      null,
+      {
+        presenceWindow: true,
+        nativeOwner: ctx.nativeOwner ?? undefined,
+      },
+      "app_resume"
+    );
     return;
   }
   if (ctx?.missionId != null) {

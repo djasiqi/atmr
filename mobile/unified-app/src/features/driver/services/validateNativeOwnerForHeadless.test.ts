@@ -30,6 +30,7 @@ import {
   startOrJoinTrackingRuntime,
   isNativeOwnerCurrent,
   captureActiveRuntime,
+  resolveNativeOwnerForHeadlessCapture,
 } from "./trackingRuntimeRegistry";
 
 describe("validateNativeOwnerForHeadless", () => {
@@ -170,6 +171,55 @@ describe("validateNativeOwnerForHeadless", () => {
     expect(check.ok).toBe(false);
     if (!check.ok) {
       expect(check.reason).toBe("missing_native_owner");
+    }
+  });
+});
+
+describe("resolveNativeOwnerForHeadlessCapture", () => {
+  const baseLease = {
+    state: "driver_active" as const,
+    contextId: "driver:42",
+    driverId: 42,
+    sessionGenerationId: 1,
+    trackingGenerationId: "trk-live",
+    trackingIdentityId: "driver:42:company:1",
+    missionId: null,
+    missionContextVersion: 1,
+  };
+
+  it("reconstruit depuis lease si owner persisté absent", () => {
+    __resetTrackingRuntimeRegistryForTests();
+
+    const resolved = resolveNativeOwnerForHeadlessCapture({
+      persistedOwner: null,
+      lease: baseLease,
+      authUsable: true,
+    });
+    expect(resolved.ok).toBe(true);
+    if (resolved.ok) {
+      expect(resolved.source).toBe("lease_reconstructed");
+      expect(resolved.owner.trackingGenerationId).toBe("trk-live");
+      expect(resolved.owner.driverId).toBe(42);
+    }
+  });
+
+  it("refuse lease_reconstructed si runtime live a une autre génération", async () => {
+    __resetTrackingRuntimeRegistryForTests();
+    await startOrJoinTrackingRuntime({
+      driverId: 42,
+      companyId: 1,
+      missionId: null,
+      missionStatus: null,
+    });
+
+    const resolved = resolveNativeOwnerForHeadlessCapture({
+      persistedOwner: null,
+      lease: { ...baseLease, trackingGenerationId: "trk-stale" },
+      authUsable: true,
+    });
+    expect(resolved.ok).toBe(false);
+    if (!resolved.ok) {
+      expect(resolved.reason).toBe("missing_native_owner");
     }
   });
 });

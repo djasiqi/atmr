@@ -489,58 +489,64 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
                     BookingStatus.COMPLETED,
                     BookingStatus.RETURN_COMPLETED,
                 ):
+                    # P0-E : progression/terminal protégés — la cascade
+                    # n'écrase plus un retour démarré ou terminé. À traiter
+                    # manuellement par le dispatch.
                     logger.critical(
-                        "[R5-CASCADE] Retour id=%s status=%s annulé par cascade (aller id=%s annulé) - situation anormale",
+                        "[R5-CASCADE] Retour id=%s status=%s NON annulé par cascade "
+                        "(aller id=%s annulé) — progression protégée, traiter manuellement",
                         ret.id,
                         ret.status,
                         booking.id,
                     )
-
-                from application.bookings.cancellation_rules import (
-                    compute_cancellation_fields,
-                    log_cancellation_persisted,
-                )
-
-                status_at_cancel_ret = ret.status
-                if hasattr(status_at_cancel_ret, "value"):
-                    status_at_cancel_ret = status_at_cancel_ret.value
-
-                ret.status = BookingStatus.CANCELED
-
-                fields = compute_cancellation_fields(
-                    reason_code="OUTBOUND_CANCELLED",
-                    reason_text="Retour annulé automatiquement (aller annulé)",
-                    cancelled_by_role="system",
-                    booking=ret,
-                    cancel_source="cascade_from_outbound",
-                    status_at_cancel=status_at_cancel_ret,
-                )
-                for key, val in fields.items():
-                    if hasattr(ret, key):
-                        setattr(ret, key, val)
-                db.session.flush()
-                log_cancellation_persisted(ret, fields)
-
-                from domain.events.events import BookingCancelledEvent as _BCE
-                from shared.events.event_bus import publish_event
-
-                publish_event(
-                    _BCE(
-                        booking_id=ret.id,
-                        driver_id=ret.driver_id,
-                        company_id=ret.company_id,
-                        actor_role="system",
-                        actor_id=None,
-                        cancel_reason="Retour annulé automatiquement (aller annulé)",
-                        cancel_source="cascade_from_outbound",
+                else:
+                    from application.bookings.cancellation_rules import (
+                        compute_cancellation_fields,
+                        log_cancellation_persisted,
                     )
-                )
 
-                logger.info(
-                    "[R5-CASCADE] Retour id=%s annulé par cascade (aller id=%s)",
-                    ret.id,
-                    booking.id,
-                )
+                    status_at_cancel_ret = ret.status
+                    if hasattr(status_at_cancel_ret, "value"):
+                        status_at_cancel_ret = status_at_cancel_ret.value
+
+                    ret.status = BookingStatus.CANCELED
+
+                    fields = compute_cancellation_fields(
+                        reason_code="OUTBOUND_CANCELLED",
+                        reason_text="Retour annulé automatiquement (aller annulé)",
+                        cancelled_by_role="system",
+                        booking=ret,
+                        cancel_source="cascade_from_outbound",
+                        status_at_cancel=status_at_cancel_ret,
+                    )
+                    for key, val in fields.items():
+                        if hasattr(ret, key):
+                            setattr(ret, key, val)
+                    db.session.flush()
+                    log_cancellation_persisted(ret, fields)
+
+                    from domain.events.events import BookingCancelledEvent as _BCE
+                    from shared.events.event_bus import publish_event
+
+                    publish_event(
+                        _BCE(
+                            booking_id=ret.id,
+                            driver_id=ret.driver_id,
+                            company_id=ret.company_id,
+                            actor_role="system",
+                            actor_id=None,
+                            cancel_reason=(
+                                "Retour annulé automatiquement (aller annulé)"
+                            ),
+                            cancel_source="cascade_from_outbound",
+                        )
+                    )
+
+                    logger.info(
+                        "[R5-CASCADE] Retour id=%s annulé par cascade (aller id=%s)",
+                        ret.id,
+                        booking.id,
+                    )
 
         ctx = resolve_booking_notification_context(int(booking_id))
         if ctx is None:

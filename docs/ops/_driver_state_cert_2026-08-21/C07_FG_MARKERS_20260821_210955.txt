@@ -1,0 +1,11 @@
+ID=C07
+STATE=S3_ARRIVED / app_state=FG
+driver_id=20 mission_id=51
+mobile_status=ARRIVED booking_db=EN_ROUTE milestone=ARRIVED
+tracking_mode=mission_live
+P8=6 J1=6 J7=6 P9=6 median_delta≈20.9s
+PG_MATCH=6/6 mission_live
+Unregister=0 FLP_REMOVE=0 HMR=0
+NOTE=company_id fix 1→4 required for PUT; early J7 queue then acked
+VERDICT=PASS
+logcat=logcat_C07_FG_20260821_210955.txt

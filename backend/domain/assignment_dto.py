@@ -46,6 +46,9 @@ class AssignmentDTO:
     # Explicabilité
     decision_explanation: dict[str, Any] | None = None
 
+    # Révision monotone du lifecycle (P1 MISSION-STATE)
+    revision: int = 0
+
     # Métadonnées
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -80,6 +83,7 @@ class AssignmentDTO:
             ),
             "delay_seconds": self.delay_seconds,
             "decision_explanation": self.decision_explanation,
+            "revision": self.revision,
             "created_at": (self.created_at.isoformat() if self.created_at else None),
             "updated_at": (self.updated_at.isoformat() if self.updated_at else None),
         }

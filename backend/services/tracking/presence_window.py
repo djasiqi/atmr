@@ -1,6 +1,9 @@
-"""Fenêtre de présence GPS entreprise — Europe/Zurich (P0-F TIME).
+"""Statut de service chauffeur pour annotations flotte.
 
-Bornes figées 07–19, alignées sur le mobile. Ne pas diverger via env.
+Historiquement : fenêtre 07–19 Europe/Zurich (P0-F TIME).
+Produit SoT (contrat GPS v4) : ``in_window`` reflète ``Driver.is_available``
+(en service), plus l'heure. La fenêtre mission ASSIGNED (T−lead / T+grace)
+reste dans ``assigned_in_tracking_window`` — ne pas confondre.
 """
 
 from __future__ import annotations
@@ -19,7 +22,11 @@ _ZURICH = ZoneInfo(BUSINESS_TIME_ZONE)
 
 
 def is_within_presence_window(now_utc: datetime | None = None) -> bool:
-    """True si l'instant est dans ``[07:00 ; 19:00[`` Europe/Zurich."""
+    """Legacy : True si l'instant est dans ``[07:00 ; 19:00[`` Europe/Zurich.
+
+    Ne plus utiliser comme gate produit pour start/stop GPS.
+    Conservé pour telemetry / tests de rétrocompatibilité.
+    """
     now = now_utc or datetime.now(UTC)
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
@@ -32,11 +39,14 @@ def resolve_service_window_status(
     in_window: bool,
     has_active_mission: bool,
 ) -> ServiceWindowStatus:
-    """Statut temporel séparé du statut métier chauffeur.
+    """Statut de service séparé du statut GPS.
 
-    - ``in_window`` : horloge dans 07–19
-    - ``mission_override`` : hors fenêtre mais mission active (contrat backend)
-    - ``off_duty`` : hors fenêtre sans mission
+    Depuis le contrat GPS v4, ``in_window`` doit être alimenté par
+    ``Driver.is_available`` (en service), pas par l'horloge 07–19.
+
+    - ``in_window`` : chauffeur en service
+    - ``mission_override`` : hors service mais mission encore active
+    - ``off_duty`` : hors service sans mission
     """
     if in_window:
         return "in_window"

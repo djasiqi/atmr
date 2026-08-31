@@ -182,8 +182,29 @@ def assign_driver_to_booking(booking_id: int):
         best_driver = find_best_driver(booking.pickup_location, booking.company_id)
         if not best_driver:
             return None
-        booking.driver_id = best_driver.id
-        booking.status = BookingStatus.ASSIGNED
+        # ARRIVED-SOT-1B : passer par le use-case canonique (Assignment garanti)
+        from application.companies.assign_driver_to_reservation import (
+            AssignDriverToReservationUseCase,
+        )
+        from application.companies.assignment_binding import (
+            build_sqlalchemy_assignment_writer,
+        )
+
+        uc = AssignDriverToReservationUseCase(
+            assignment_writer=build_sqlalchemy_assignment_writer()
+        )
+        result = uc.execute(
+            booking=booking,
+            driver=best_driver,
+            company_id=int(booking.company_id),
+        )
+        if not result.ok:
+            logger.error(
+                "assign_driver_to_booking UC failed booking_id=%s: %s",
+                booking_id,
+                result.error,
+            )
+            return None
         db.session.commit()
         return booking
     except Exception as e:

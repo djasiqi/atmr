@@ -1,8 +1,17 @@
+import { Redirect } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import { brandSurfaceSoft, ResponsiveContainer, Screen } from "../../src/design/responsive";
 import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
+import { resolveUnauthorizedRecoveryRedirect } from "../../src/core/guardDecisions";
+import { useSession } from "../../src/core/sessionProvider";
 
 export default function UnauthorizedScreen() {
+  const { activeContext } = useSession();
+  const recovery = resolveUnauthorizedRecoveryRedirect(activeContext);
+  if (recovery) {
+    return <Redirect href={recovery as any} />;
+  }
+
   return (
     <Screen scroll backgroundColor={brandSurfaceSoft} contentContainerStyle={styles.scroll}>
       <ResponsiveContainer>

@@ -23,9 +23,9 @@ from tests.e2e.helpers.e2e_helpers import (
 def _login_driver_mobile(e2e_client, user: User, password: str) -> dict[str, str]:
     """Connecte un chauffeur et retourne les headers Bearer.
 
-    Les routes ``/api/v1/driver/*`` sont traitées comme mobiles par
-    ``_lot1_jwt_locations_web_mobile_split`` : seul le header Authorization
-    est accepté, les cookies web posés par /auth/login sont ignorés.
+    Les routes ``/api/v1/driver/*`` acceptent les cookies httpOnly pour le web
+    navigateur ; seuls les clients mobile (Expo / UA mobile) exigent Bearer.
+    Ce helper utilise Expo + Bearer pour les tests E2E mobile.
     """
     login_response = e2e_client.post(
         "/api/v1/auth/login",

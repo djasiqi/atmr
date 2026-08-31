@@ -104,8 +104,8 @@ describe('découplage métier / GPS', () => {
     expect(projection.gpsFreshness).toBe('last_known');
     expect(projection.positionSource).toBe('db_fallback');
     expect(projection.visualTreatment).toBe('gps_stale');
-    expect(projection.visualStatus).toBe('offline');
-    expect(resolveDriverMapVisualStatus(driver)).toBe('offline');
+    expect(projection.visualStatus).toBe('busy');
+    expect(resolveDriverMapVisualStatus(driver)).toBe('busy');
     expect(isNonLiveGpsPosition(driver)).toBe(true);
   });
 
@@ -121,7 +121,7 @@ describe('découplage métier / GPS', () => {
     expect(projection.visualStatus).toBe('offline');
   });
 
-  it('assigned + stale → signal ancien', () => {
+  it('assigned + stale → signal ancien (pas offline)', () => {
     const driver = {
       status: 'assigned',
       location_status: 'stale',
@@ -132,7 +132,7 @@ describe('découplage métier / GPS', () => {
     const projection = resolveDriverMapProjection(driver);
     expect(projection.businessStatus).toBe('assigned');
     expect(projection.visualTreatment).toBe('gps_stale');
-    expect(projection.visualStatus).toBe('offline');
+    expect(projection.visualStatus).toBe('assigned');
   });
 
   it('constrained + last_known → non-live dominant (pas orange actif)', () => {
@@ -144,7 +144,7 @@ describe('découplage métier / GPS', () => {
       longitude: 6.1,
       recorded_at: new Date(Date.now() - 600_000).toISOString(),
     };
-    expect(resolveDriverMapVisualStatus(driver)).toBe('offline');
+    expect(resolveDriverMapVisualStatus(driver)).toBe('assigned');
     expect(resolveDriverMapProjection(driver).visualTreatment).toBe('gps_stale_constrained');
   });
 
@@ -211,5 +211,69 @@ describe('degraded_constrained / batterie restreinte', () => {
     expect(resolveDriverMapMarkerColor('constrained', colors)).toBe('#f97316');
     expect(resolveDriverMapMarkerColor('assigned', colors)).toBe(STATUS_COLORS.assigned);
     expect(resolveDriverMapMarkerColor('offline', colors)).toBe(STATUS_COLORS.offline);
+    expect(resolveDriverMapMarkerColor('off_duty', colors)).toBe(STATUS_COLORS.off_duty);
+  });
+});
+
+describe('C2 preuve de vie / hors service', () => {
+  it('heartbeat périmé + tracking_active=true → pas pipeline vivant, GPS hors ligne', () => {
+    const driver = {
+      status: 'available',
+      is_available: true,
+      location_status: 'offline',
+      tracking_display_status: 'offline_unknown',
+      device_health: {
+        tracking_active: true,
+        last_heartbeat_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+      },
+    };
+    const projection = resolveDriverMapProjection(driver);
+    expect(projection.visualTreatment).toBe('gps_offline');
+    expect(projection.visualStatus).toBe('offline');
+  });
+
+  it('heartbeat frais + tracking_active=true → pipeline vivant, pas GPS hors ligne', () => {
+    const driver = {
+      status: 'available',
+      is_available: true,
+      location_status: 'offline',
+      tracking_display_status: 'offline_unknown',
+      device_health: {
+        tracking_active: true,
+        last_heartbeat_at: new Date(Date.now() - 30_000).toISOString(),
+      },
+    };
+    const projection = resolveDriverMapProjection(driver);
+    expect(projection.visualTreatment).toBe('gps_stale');
+    expect(projection.visualStatus).toBe('available');
+  });
+
+  it('is_available=false → HORS SERVICE, jamais GPS hors ligne', () => {
+    const driver = {
+      status: 'off_duty',
+      is_available: false,
+      location_status: 'offline',
+      tracking_display_status: 'offline_unknown',
+      device_health: {
+        tracking_active: true,
+        last_heartbeat_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+      },
+    };
+    const projection = resolveDriverMapProjection(driver);
+    expect(projection.visualTreatment).toBe('business');
+    expect(projection.visualStatus).toBe('off_duty');
+    expect(resolveDriverMapVisualStatus(driver)).toBe('off_duty');
+  });
+
+  it('is_available=false même si status métier=available → jamais gps_offline', () => {
+    const driver = {
+      status: 'available',
+      is_available: false,
+      location_status: 'offline',
+      tracking_display_status: 'offline_unknown',
+    };
+    const projection = resolveDriverMapProjection(driver);
+    expect(projection.visualTreatment).toBe('business');
+    expect(projection.visualStatus).toBe('off_duty');
   });
 });

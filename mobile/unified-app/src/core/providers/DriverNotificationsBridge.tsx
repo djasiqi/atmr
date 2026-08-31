@@ -75,6 +75,7 @@ export function DriverNotificationsBridge() {
     enabled,
     fcmEnabled: isFeatureEnabled("driver_fcm_native_enabled"),
     callbacks,
+    ownerKey: driverId != null ? `driver:${driverId}` : null,
     telemetrySource: "driver.notifications.bridge",
     onPermissionDenied: () => setPushPermissionDenied(true),
   });

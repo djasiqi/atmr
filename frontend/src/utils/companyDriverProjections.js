@@ -3,7 +3,7 @@
  * l'objet driver complet à la carte quand seuls lat/lng changent côté métier.
  */
 
-import { getDriverStatus } from './mapUtils';
+import { getDriverStatus, isDevicePipelineAlive, isDriverOffDuty } from './mapUtils';
 import { resolveDriverLocationPresence } from './fleetDriverLocationPresence';
 
 /** Couleur marqueur carte pour chauffeur en mode batterie restreinte (Tailwind orange-500). */
@@ -93,23 +93,34 @@ export function resolveDriverMapProjection(driver, { isFallback = false } = {}) 
   let visualTreatment = 'business';
   let visualStatus = businessStatus;
 
-  if (isFallback || positionSource === 'company_fallback' || gpsFreshness === 'company_fallback') {
+  if (isDriverOffDuty(driver)) {
+    visualTreatment = 'business';
+    visualStatus = 'off_duty';
+  } else if (isFallback || positionSource === 'company_fallback' || gpsFreshness === 'company_fallback') {
     visualTreatment = 'company_fallback';
     visualStatus = 'offline';
   } else if (
     gpsFreshness === 'offline'
     || gpsFreshness === 'offline_unknown'
   ) {
-    visualTreatment = 'gps_offline';
-    visualStatus = 'offline';
+    const pipelineAlive = isDevicePipelineAlive(driver);
+
+    if (pipelineAlive) {
+      visualTreatment = 'gps_stale';
+      visualStatus = businessStatus === 'offline' ? 'available' : businessStatus;
+    } else {
+      visualTreatment = 'gps_offline';
+      visualStatus = 'offline';
+    }
   } else if (
     gpsFreshness === 'stale'
+    || gpsFreshness === 'verify'
     || gpsFreshness === 'last_known'
     || positionSource === 'db_fallback'
   ) {
-    // Contrainte + last_known : traitement non-live dominant (pas d'orange « actif »).
+    // C2 situation 4 : stale/last_known ≠ offline
     visualTreatment = constrained ? 'gps_stale_constrained' : 'gps_stale';
-    visualStatus = 'offline';
+    visualStatus = businessStatus === 'offline' ? 'available' : businessStatus;
   } else if (constrained && FRESH_GPS.has(gpsFreshness)) {
     visualTreatment = 'constrained';
     visualStatus = 'constrained';
@@ -148,6 +159,7 @@ export function resolveDriverMapVisualStatus(driver, { isFallback = false } = {}
  */
 export function resolveDriverMapMarkerColor(visualStatus, statusColors = {}) {
   if (visualStatus === 'constrained') return CONSTRAINED_MARKER_COLOR;
+  if (visualStatus === 'off_duty' && statusColors.off_duty) return statusColors.off_duty;
   if (visualStatus === 'offline' && statusColors.offline) return statusColors.offline;
   if (visualStatus === 'available' && statusColors.available) return statusColors.available;
   return statusColors[visualStatus] ?? statusColors.available ?? CONSTRAINED_MARKER_COLOR;

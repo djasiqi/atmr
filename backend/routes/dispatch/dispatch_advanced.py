@@ -863,41 +863,53 @@ class ResetAssignmentsResource(Resource):
             from sqlalchemy.orm import joinedload
 
             assignments = query.options(joinedload(Assignment.booking)).all()
-            booking_ids = [a.booking_id for a in assignments]
 
-            # Supprimer toutes les assignations
-            assignments_count = len(assignments)
-            for assignment in assignments:
+            # P0-D : ne JAMAIS supprimer la preuve de progression chauffeur
+            # (parti / arrivé / à bord / terminé). Seules les assignations
+            # purement planifiées sont réinitialisables.
+            from services.dispatch.reset_guard import split_resettable_assignments
+
+            deletable, protected = split_resettable_assignments(assignments)
+            booking_ids = [a.booking_id for a in deletable]
+
+            assignments_count = len(deletable)
+            assignments_protected = len(protected)
+            for assignment in deletable:
                 db.session.delete(assignment)
 
             # Remettre les bookings au statut ACCEPTED et nettoyer driver_id
-            bookings_query = booking_repo.find_models_by_company_with_filters_query(
-                company_id=company_id,
-                booking_ids=booking_ids if booking_ids else None,
-                start_datetime=start_datetime if date_str else None,
-                end_datetime=end_datetime if date_str else None,
-            )
-            bookings = bookings_query.all()
+            # (uniquement ceux dont l'assignation vient d'être supprimée).
             bookings_count = 0
-            for booking in bookings:
-                # Remettre au statut ACCEPTED si actuellement ASSIGNED
-                if booking.status == BookingStatus.ASSIGNED:
-                    booking.status = BookingStatus.ACCEPTED
-                    booking.driver_id = None
-                    bookings_count += 1
+            if booking_ids:
+                bookings_query = (
+                    booking_repo.find_models_by_company_with_filters_query(
+                        company_id=company_id,
+                        booking_ids=booking_ids,
+                        start_datetime=start_datetime if date_str else None,
+                        end_datetime=end_datetime if date_str else None,
+                    )
+                )
+                for booking in bookings_query.all():
+                    # Remettre au statut ACCEPTED si actuellement ASSIGNED
+                    if booking.status == BookingStatus.ASSIGNED:
+                        booking.status = BookingStatus.ACCEPTED
+                        booking.driver_id = None
+                        bookings_count += 1
 
             db.session.commit()
 
             logger.info(
-                "[RESET] ✅ Réinitialisation effectuée pour company_id=%s: %d assignations supprimées, %d bookings réinitialisés",
+                "[RESET] ✅ Réinitialisation effectuée pour company_id=%s: %d assignations supprimées, %d protégées, %d bookings réinitialisés",
                 company_id,
                 assignments_count,
+                assignments_protected,
                 bookings_count,
             )
 
             return {
                 "message": "Réinitialisation effectuée avec succès",
                 "assignments_deleted": assignments_count,
+                "assignments_protected": assignments_protected,
                 "bookings_reset": bookings_count,
                 "date": date_str or "toutes les dates",
             }, HTTPStatus.OK

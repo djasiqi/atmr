@@ -9,9 +9,12 @@ import {
   isAccessExpired,
   isAccessNearExpiry,
 } from './accessExpiry';
-import { isSessionIdleWarningActive } from './deferredSessionLogout';
+import {
+  INSTITUTION_IDLE_TIMEOUT_MS,
+  isSessionIdleWarningActive,
+} from './deferredSessionLogout';
 import { isExplicitLogoutInProgress, isLoginSessionInProgress } from './sessionLogoutState';
-import { hasActiveSession } from './webAuthSession';
+import { hasActiveSession, isInstitutionWebSession } from './webAuthSession';
 import {
   getMsSinceLastUserActivity,
   onSessionResume,
@@ -164,15 +167,19 @@ export async function tryRefreshSessionIfNeeded({
     return { status: 'skipped' };
   }
 
-  if (!force && !isUserRecentlyActive(SESSION_WORKING_LOOKBACK_MS)) {
+  const idleLookbackMs = isInstitutionWebSession()
+    ? INSTITUTION_IDLE_TIMEOUT_MS
+    : SESSION_WORKING_LOOKBACK_MS;
+
+  if (!force && !isUserRecentlyActive(idleLookbackMs)) {
     return { status: 'skipped' };
   }
 
-  // Même en force « expiry », respecter l'idle 8 h (sauf stay_connected explicite).
+  // Même en force « expiry », respecter l'idle souverain (sauf stay_connected).
   if (
     force &&
     reason !== 'idle_stay_connected' &&
-    getMsSinceLastUserActivity() >= SESSION_WORKING_LOOKBACK_MS
+    getMsSinceLastUserActivity() >= idleLookbackMs
   ) {
     return { status: 'skipped' };
   }
@@ -236,7 +243,10 @@ async function handleSessionResume() {
   }
   resumeRefreshInFlight = true;
   try {
-    if (getMsSinceLastUserActivity() >= SESSION_WORKING_LOOKBACK_MS) {
+    const idleLookbackMs = isInstitutionWebSession()
+      ? INSTITUTION_IDLE_TIMEOUT_MS
+      : SESSION_WORKING_LOOKBACK_MS;
+    if (getMsSinceLastUserActivity() >= idleLookbackMs) {
       // Idle souverain : laisser deferredSessionLogout gérer warning/logout.
       try {
         const { ensureIdleGuardEvaluated } = await import('./deferredSessionLogout');

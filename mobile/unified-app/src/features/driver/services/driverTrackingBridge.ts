@@ -60,6 +60,11 @@ import {
   type TrackingFsmState,
 } from "../tracking/TrackingStateMachine";
 import {
+  getDriverAvailabilityActive,
+  setDriverAvailabilityActive,
+} from "./driverAvailabilityBridge";
+import { getTrackingPermissionsReady } from "./trackingPermissionsReady";
+import {
   resolvePresenceGpsAccuracy,
   resolveTrackingEligibility,
   type TrackingEligibilityResult,
@@ -186,12 +191,7 @@ function ensureNativeTrackingAppStateListener(): void {
         state.presenceWindowOpen &&
         isPresenceDisclosureAccepted()
       ) {
-        void ensureNativeTrackingWhileForeground(
-          null,
-          null,
-          { presenceWindow: true },
-          "app_resume_presence"
-        );
+        void ensurePresenceNativeOwnerInitialized();
       }
     }
   });
@@ -285,6 +285,7 @@ export type DriverTrackingBridgeSnapshot = {
   lastAttemptAt: string | null;
   consecutiveFailures: number;
   backoffUntilMs: number;
+  fsmState: TrackingFsmState;
 };
 
 type DriverTrackingBridgeListener = (snapshot: DriverTrackingBridgeSnapshot) => void;
@@ -377,6 +378,7 @@ function buildTrackingBridgeSnapshot(): DriverTrackingBridgeSnapshot {
     lastAttemptAt: state.bridgeLastAttemptAt ?? managerSnapshot.lastAttemptAt,
     consecutiveFailures: managerSnapshot.consecutiveFailures,
     backoffUntilMs: managerSnapshot.backoffUntilMs,
+    fsmState: state.fsmState,
   };
 }
 
@@ -531,6 +533,13 @@ async function handleAntiZombieIfNeeded(appState: AppStateStatus): Promise<void>
     return;
   }
   markAntiZombieTriggered();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pipelineObs = require("./trackingPipelineObservability") as typeof import("./trackingPipelineObservability");
+    pipelineObs.recordPipelineRecoveryReason("anti_zombie_fix_stale");
+  } catch {
+    /* instrumentation-only — ne doit jamais impacter la recovery */
+  }
   emitDriverTelemetry("tracking.anti_zombie.triggered", {
     source: "driver.tracking.bridge",
     mission_id: state.missionId,
@@ -605,6 +614,8 @@ function refreshFsmState(appState: AppStateStatus, fixStale: boolean) {
     presenceEligible:
       eligibility.foregroundPresenceEligible ||
       eligibility.backgroundPresenceEligible,
+    blocked: eligibility.blocked,
+    enService: getDriverAvailabilityActive() === true,
     appForeground: appState === "active",
     missionLive: resolveTrackingMode(appState) === "mission_live",
     fixStale,
@@ -620,11 +631,18 @@ function hasActiveMission(): boolean {
 function resolveBridgeEligibility(
   appState: AppStateStatus = trackingManager.getSnapshot().appState
 ): TrackingEligibilityResult {
+  // SoT en-service : driverAvailabilityBridge (hydraté depuis Driver.is_available)
+  const driverAvailable = getDriverAvailabilityActive();
+  const knownAvailable = driverAvailable === true;
+  if (state.driverAvailable !== knownAvailable) {
+    state.driverAvailable = knownAvailable;
+  }
   return resolveTrackingEligibility({
-    driverAvailable: state.driverAvailable,
-    presenceWindowOpen: state.presenceWindowOpen,
+    driverAvailable,
+    presenceWindowOpen: true,
     appForeground: appState === "active",
     presenceDisclosureAccepted: isPresenceDisclosureAccepted(),
+    permissionsReady: getTrackingPermissionsReady(),
     hasActiveMission: hasActiveMission(),
   });
 }
@@ -1335,8 +1353,62 @@ async function stopMissionTrackingBridge(expectedGeneration?: number): Promise<v
 
 async function ensurePresenceTrackingState(): Promise<void> {
   await syncBridgeQueueDepthFromPersistence();
+  await ensurePresenceNativeOwnerInitialized();
   ensureManagerState();
   notifyTrackingBridgeListeners();
+}
+
+/**
+ * Présence DRIVER : runtime + lease + nativeOwner taskContext avant FGS/callbacks.
+ * Corrige le trou cold-start où lease=driver_active mais owner_gen=null.
+ */
+async function ensurePresenceNativeOwnerInitialized(): Promise<void> {
+  if (Platform.OS === "web") return;
+  if (!isFeatureEnabled("tracking_background_enabled")) return;
+  const eligibility = resolveBridgeEligibility();
+  if (!eligibility.backgroundPresenceEligible && !eligibility.foregroundPresenceEligible) {
+    return;
+  }
+  if (eligibility.missionEligible && state.missionId != null) {
+    return;
+  }
+  const driverId = resolveBridgeDriverId();
+  if (!driverId) return;
+
+  try {
+    const runtime = await startOrJoinTrackingRuntime({
+      driverId,
+      missionId: null,
+      missionStatus: null,
+    });
+    const nativeOwner = toNativeTrackingOwner(runtime);
+    await setTrackingContextLeaseDriverActive({
+      contextId: `driver:${driverId}`,
+      driverId,
+      sessionGenerationId: runtime.identity.sessionGenerationId,
+      trackingGenerationId: runtime.identity.trackingGenerationId,
+      trackingIdentityId: runtime.identity.trackingIdentityId,
+      missionId: runtime.missionContext.missionId,
+      missionContextVersion: runtime.missionContext.missionContextVersion,
+    });
+    await setBackgroundTrackingMissionContext(
+      null,
+      null,
+      "presence_window",
+      null,
+      nativeOwner
+    );
+    if (isFeatureEnabled("tracking_background_enabled")) {
+      await ensureNativeTrackingWhileForeground(
+        null,
+        null,
+        { presenceWindow: true, nativeOwner },
+        "presence_owner_init"
+      );
+    }
+  } catch {
+    /* best-effort : ensureManagerState / headless resolve reprendront */
+  }
 }
 
 async function stopTrackingRuntime(): Promise<void> {
@@ -1607,38 +1679,17 @@ function ensureManagerState(appStateOverride?: AppStateStatus) {
       );
     }
   } else if (eligibility.backgroundPresenceEligible) {
-    const runtime = captureActiveRuntime();
-    const nativeOwner = runtime ? toNativeTrackingOwner(runtime) : undefined;
-    void setBackgroundTrackingMissionContext(null, null, "presence_window", null, nativeOwner);
-    if (isFeatureEnabled("tracking_background_enabled")) {
-      void ensureNativeTrackingWhileForeground(
-        null,
-        null,
-        { presenceWindow: true, nativeOwner },
-        "ensure_manager_presence"
-      );
-    }
+    void ensurePresenceNativeOwnerInitialized();
   } else if (eligibility.foregroundPresenceEligible) {
-    // Présence FG : watch High ; FGS uniquement si fenêtre ouverte (prépare le BG).
-    if (state.presenceWindowOpen && isFeatureEnabled("tracking_background_enabled")) {
-      const runtime = captureActiveRuntime();
-      const nativeOwner = runtime ? toNativeTrackingOwner(runtime) : undefined;
-      void setBackgroundTrackingMissionContext(null, null, "presence_window", null, nativeOwner);
-      void ensureNativeTrackingWhileForeground(
-        null,
-        null,
-        { presenceWindow: true, nativeOwner },
-        "ensure_manager_presence_fg"
-      );
-    } else {
-      void requestTrackingStop({
-        reason: "presence_fg_outside_window",
-        expectedGeneration: lifecycleGeneration,
-        expectedMissionId: state.missionId,
-        authority: "explicit",
-      });
-      void setBackgroundTrackingMissionContext(null, null);
-    }
+    // Présence FG : watch + FGS si background tracking activé (contrat HOME/lock).
+    void ensurePresenceNativeOwnerInitialized();
+  } else if (eligibility.blocked) {
+    // BLOCKED : en service sans permissionsReady — ne pas STOP comme hors service.
+    emitDriverTelemetry("tracking.presence.blocked", {
+      source: "driver.tracking.bridge",
+      reason: "permissions_not_ready",
+      driver_available: getDriverAvailabilityActive(),
+    });
   }
 
   const desiredAccuracy = resolveExpoLocationAccuracy(appState);
@@ -1886,31 +1937,42 @@ export async function stopDriverTrackingBridge(opts?: {
 }
 
 export type DriverPresenceContext = {
-  available: boolean;
+  available: boolean | null;
   windowOpen: boolean;
 };
 
 /**
- * Met à jour les signaux présence (disponibilité + fenêtre horaire), puis
- * réconcilie via le resolver central. Jamais de stop direct sur window=false.
+ * Met à jour les signaux présence (disponibilité), puis
+ * réconcilie via le resolver central. SoT = driverAvailabilityBridge.
+ * `available=null` = UNKNOWN : ne pas forcer hors service.
  */
 export function setDriverTrackingPresenceContext(ctx: DriverPresenceContext) {
-  const available = Boolean(ctx.available);
-  const windowOpen = Boolean(ctx.windowOpen);
+  const available = ctx.available;
+  setDriverAvailabilityActive(available);
+  const knownAvailable = available === true;
+  const windowOpen = true;
   if (
-    state.driverAvailable === available &&
+    state.driverAvailable === knownAvailable &&
     state.presenceWindowOpen === windowOpen
   ) {
     return;
   }
-  state.driverAvailable = available;
+  state.driverAvailable = knownAvailable;
   state.presenceWindowOpen = windowOpen;
   emitDriverTelemetry("tracking.presence_context.updated", {
     source: "driver.tracking.bridge",
-    driver_available: available,
+    driver_available: knownAvailable,
+    availability_pending: available == null,
     presence_window_open: windowOpen,
     mission_id: state.missionId,
   });
+  if (knownAvailable) {
+    void ensurePresenceNativeOwnerInitialized().finally(() => {
+      ensureManagerState();
+      notifyTrackingBridgeListeners();
+    });
+    return;
+  }
   ensureManagerState();
   notifyTrackingBridgeListeners();
 }
@@ -1932,19 +1994,28 @@ export function getDriverTrackingPresenceWindowActive(): boolean {
 
 export function getDriverTrackingPresenceContext(): DriverPresenceContext {
   return {
-    available: state.driverAvailable,
+    available: getDriverAvailabilityActive(),
     windowOpen: state.presenceWindowOpen,
   };
 }
 
 /** Re-applique le pipeline natif après acceptation disclosure présence. */
 export function refreshDriverTrackingBridgeState(): void {
-  ensureManagerState();
-  notifyTrackingBridgeListeners();
+  void import("./hydrateTrackingPermissionsReady").then((m) =>
+    m.hydrateTrackingPermissionsReady().finally(() => {
+      ensureManagerState();
+      notifyTrackingBridgeListeners();
+    })
+  );
 }
 
 export function getDriverTrackingBridgeSnapshot() {
   return buildTrackingBridgeSnapshot();
+}
+
+/** JZ-R1 — âge session tracking (ms epoch) pour durable_ack jamais observé. */
+export function getDriverTrackingStartedAtMs(): number | null {
+  return state.trackingStartedAtMs;
 }
 
 export function getDriverLastKnownPosition(): DriverTrackingPosition | null {

@@ -31,8 +31,8 @@ const IDLE_TIPS = [
 
 const TIP_ROTATE_INTERVAL_MS = 30_000;
 type Props = {
-  /** Disponibilité chauffeur (driver `is_available`). */
-  isAvailable: boolean;
+  /** Disponibilité chauffeur (`Driver.is_available`). null = pas encore hydratée. */
+  isAvailable: boolean | null;
   /** Bookings du jour utilisés pour dériver les stats — facultatif. */
   todayMissions?: DriverMission[];
 };
@@ -67,24 +67,34 @@ export const DriverIdleState = memo(function DriverIdleState({
     () => deriveTodayStats(todayMissions ?? []),
     [todayMissions]
   );
-  const idleTitle = isAvailable
-    ? "Prêt à recevoir une mission"
-    : "Vous êtes indisponible";
-  const idleSubtitle = isAvailable
-    ? realtimeConnected || gpsConnected
-      ? "Vous êtes disponible et connecté. Les nouvelles missions apparaîtront automatiquement."
-      : "Connexion en cours. Les missions apparaîtront dès que le lien est établi."
-    : "Passez disponible pour recevoir de nouvelles missions.";
+  const idleTitle =
+    isAvailable == null
+      ? "Chargement de votre disponibilité…"
+      : isAvailable
+        ? "Prêt à recevoir une mission"
+        : "Vous êtes indisponible";
+  const idleSubtitle =
+    isAvailable == null
+      ? "Récupération de votre statut de service."
+      : isAvailable
+        ? realtimeConnected || gpsConnected
+          ? "Vous êtes disponible et connecté. Les nouvelles missions apparaîtront automatiquement."
+          : "Connexion en cours. Les missions apparaîtront dès que le lien est établi."
+        : "Passez disponible pour recevoir de nouvelles missions.";
 
   return (
     <View
       style={styles.root}
       accessibilityLabel={
-        isAvailable ? "État chauffeur disponible" : "État chauffeur indisponible"
+        isAvailable == null
+          ? "État chauffeur en cours de chargement"
+          : isAvailable
+            ? "État chauffeur disponible"
+            : "État chauffeur indisponible"
       }
     >
       <View style={styles.mainCard}>
-        <RadarPulse active={isAvailable && (realtimeConnected || gpsConnected)} />
+        <RadarPulse active={isAvailable === true && (realtimeConnected || gpsConnected)} />
         <View style={styles.headerTextBlock}>
           <AppText variant="sectionTitle" style={styles.title} scaleRole="content">
             {idleTitle}

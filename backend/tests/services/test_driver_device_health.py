@@ -299,6 +299,75 @@ def test_read_driver_device_health_snapshot_present():
     assert snap["platform"] == "ios"
 
 
+def test_ingest_driver_device_health_persists_tracking_pipeline(db, sample_driver):
+    """JZ-R1 : tracking_pipeline JSONB optionnel, backward-compatible."""
+    mock_redis = MagicMock()
+    pipeline = {
+        "pipeline_snapshot_version": 1,
+        "bridge_last_fix_age_s": 5,
+        "durable_ack_age_s": 1900,
+        "first_suspect": "FLUSH",
+    }
+    with (
+        patch("services.driver_device_health.redis_client", mock_redis),
+        patch(
+            "services.geolocation.device_health.write_device_health", return_value=True
+        ),
+        patch(
+            "services.monitoring.driver_device_health_metrics.record_device_health_report"
+        ),
+        patch("services.driver_device_health.DriverDeviceHealthEvent") as mock_event_cls,
+        patch("services.driver_device_health.db.session") as mock_session,
+    ):
+        mock_event = MagicMock()
+        mock_event.id = 4242
+        mock_event_cls.return_value = mock_event
+        snapshot = ingest_driver_device_health(
+            sample_driver.id,
+            {
+                "platform": "android",
+                "tracking_active": True,
+                "tracking_pipeline": pipeline,
+            },
+        )
+
+    assert snapshot["tracking_pipeline"] == pipeline
+    assert snapshot["device_health_event_id"] == 4242
+    assert snapshot["pipeline_snapshot_version"] == "1"
+    mock_event_cls.assert_called_once()
+    assert mock_event_cls.call_args.kwargs["tracking_pipeline"] == pipeline
+    mock_session.add.assert_called_once_with(mock_event)
+    mock_session.commit.assert_called_once()
+
+
+def test_ingest_driver_device_health_legacy_without_tracking_pipeline(
+    db, sample_driver
+):
+    """Ancien client sans tracking_pipeline → 2xx path inchangé."""
+    mock_redis = MagicMock()
+    with (
+        patch("services.driver_device_health.redis_client", mock_redis),
+        patch(
+            "services.geolocation.device_health.write_device_health", return_value=True
+        ),
+        patch(
+            "services.monitoring.driver_device_health_metrics.record_device_health_report"
+        ),
+        patch("services.driver_device_health.DriverDeviceHealthEvent") as mock_event_cls,
+        patch("services.driver_device_health.db.session"),
+    ):
+        mock_event = MagicMock()
+        mock_event.id = None
+        mock_event_cls.return_value = mock_event
+        snapshot = ingest_driver_device_health(
+            sample_driver.id,
+            {"platform": "android", "last_fix_age_seconds": 9},
+        )
+
+    assert "tracking_pipeline" not in snapshot
+    assert mock_event_cls.call_args.kwargs["tracking_pipeline"] is None
+
+
 def test_purge_old_device_health_events():
     with (
         patch("services.driver_device_health.db.session") as mock_session,

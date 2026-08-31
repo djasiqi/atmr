@@ -289,3 +289,26 @@ export const hasCompanyScopedAccessToken = (env = getAuthEnv()) => {
 export const hasActiveSession = (env = getAuthEnv()) =>
   Boolean(getEnvAccessToken(env, { allowLegacy: true }) || getEnvUser(env));
 
+/**
+ * Session web institution (rôle, storage dédié, ou route dashboard).
+ * Utilisé pour la politique idle 15 min (institution) sans toucher company/driver.
+ */
+export const isInstitutionWebSession = (env = getAuthEnv()) => {
+  const users = [getEnvUser(env), getActiveUser(env)];
+  if (users.some((user) => normalizeAuthRole(user?.role) === 'institution')) {
+    return true;
+  }
+  if (safeGet('institution_user')) {
+    return true;
+  }
+  try {
+    const path = typeof window !== 'undefined' ? window.location?.pathname || '' : '';
+    if (path.startsWith('/dashboard/institution/')) {
+      return true;
+    }
+  } catch (_) {
+    // ignore
+  }
+  return false;
+};
+

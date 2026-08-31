@@ -231,6 +231,13 @@ class Assignment(db.Model):
         default=AssignmentStatus.SCHEDULED,
     )
 
+    #: Révision monotone du lifecycle mission (P1 MISSION-STATE).
+    #: Incrémentée à chaque transition de statut ; permet au mobile d'ignorer
+    #: tout snapshot plus ancien que l'état local (anti-régression UI).
+    revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+
     planned_pickup_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

@@ -43,6 +43,10 @@ export type DriverMission = {
   } | null;
   updated_at?: string | null;
   client_name?: string | null;
+  /** Identité de lifecycle (P1 MISSION-STATE) : ligne Assignment serveur. */
+  assignment_id?: number | null;
+  /** Révision monotone serveur — un snapshot plus ancien ne s'applique pas. */
+  mission_revision?: number | null;
   [key: string]: unknown;
 };
 

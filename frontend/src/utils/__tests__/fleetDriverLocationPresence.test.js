@@ -15,31 +15,74 @@ function recordedAt(ageSeconds, nowMs) {
 describe('fleetDriverLocationPresence', () => {
   const now = Date.parse('2026-08-11T12:00:00.000Z');
 
-  it('matrice live / recent / stale / non-promotion', () => {
+  it('PRESENCE : 150 s reste recent (cycle ~2–3 min)', () => {
+    const view = resolveDriverLocationPresence(
+      {
+        latitude: 46,
+        longitude: 6,
+        location_mode: 'availability_presence',
+        location_status: 'live',
+        recorded_at: recordedAt(150, now),
+        device_health: {
+          tracking_active: true,
+          last_heartbeat_at: new Date(now - 30_000).toISOString(),
+        },
+      },
+      now
+    );
+    expect(view.presence).toBe('recent');
+    expect(view.countedAsLocated).toBe(true);
+  });
+
+  it('matrice live / recent / stale / non-promotion (mission_live)', () => {
     expect(
       resolveDriverLocationPresence(
-        { latitude: 46, longitude: 6, location_status: 'live', recorded_at: recordedAt(10, now) },
+        {
+          latitude: 46,
+          longitude: 6,
+          location_mode: 'mission_live',
+          location_status: 'live',
+          recorded_at: recordedAt(10, now),
+        },
         now
       )
     ).toMatchObject({ presence: 'live', countedAsLocated: true });
 
     expect(
       resolveDriverLocationPresence(
-        { latitude: 46, longitude: 6, location_status: 'live', recorded_at: recordedAt(70, now) },
+        {
+          latitude: 46,
+          longitude: 6,
+          location_mode: 'mission_live',
+          location_status: 'live',
+          recorded_at: recordedAt(70, now),
+        },
         now
       ).presence
     ).toBe('recent');
 
     expect(
       resolveDriverLocationPresence(
-        { latitude: 46, longitude: 6, location_status: 'live', recorded_at: recordedAt(180, now) },
+        {
+          latitude: 46,
+          longitude: 6,
+          location_mode: 'mission_live',
+          location_status: 'live',
+          recorded_at: recordedAt(400, now),
+        },
         now
       ).countedAsLocated
     ).toBe(false);
 
     expect(
       resolveDriverLocationPresence(
-        { latitude: 46, longitude: 6, location_status: 'stale', recorded_at: recordedAt(10, now) },
+        {
+          latitude: 46,
+          longitude: 6,
+          location_mode: 'mission_live',
+          location_status: 'stale',
+          recorded_at: recordedAt(10, now),
+        },
         now
       ).presence
     ).toBe('stale');
@@ -62,18 +105,26 @@ describe('fleetDriverLocationPresence', () => {
     const live = {
       latitude: 46,
       longitude: 6,
+      location_mode: 'availability_presence',
       location_status: 'live',
       recorded_at: recordedAt(LOCAL_LIVE_MAX_SECONDS - 1, nowMs),
     };
     expect(isNonLiveGpsPosition(live)).toBe(false);
-    expect(isNonLiveGpsPosition({ ...live, location_status: 'stale' })).toBe(true);
+    expect(
+      isNonLiveGpsPosition({
+        ...live,
+        location_status: 'stale',
+        recorded_at: recordedAt(400, nowMs),
+      })
+    ).toBe(true);
     expect(isNonLiveGpsPosition(live, { isFallback: true })).toBe(true);
   });
 
   it('applyLocalLocationFreshness préserve tracking_display', () => {
     const aged = applyLocalLocationFreshness(
       {
-        recorded_at: recordedAt(45, now),
+        recorded_at: recordedAt(90, now),
+        location_mode: 'availability_presence',
         location_status: 'live',
         tracking_display_status: 'degraded_constrained',
         position_source: 'db_fallback',
@@ -88,6 +139,9 @@ describe('fleetDriverLocationPresence', () => {
   it('formatDriverLocationPresenceLabel', () => {
     expect(formatDriverLocationPresenceLabel({ presence: 'live', ageSeconds: 8 })).toContain(
       'En direct'
+    );
+    expect(formatDriverLocationPresenceLabel({ presence: 'recent', ageSeconds: 120 })).toContain(
+      'Position mise à jour'
     );
   });
 });

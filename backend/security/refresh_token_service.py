@@ -62,6 +62,7 @@ def store_refresh_token(
     device_id: str | None = None,
     device_name: str | None = None,
     *,
+    web_session_id: str | None = None,
     commit: bool = True,
 ) -> RefreshToken:
     """Stocke un refresh token dans la base de données.
@@ -86,6 +87,8 @@ def store_refresh_token(
         refresh_token.device_id = device_id
     if device_name:
         refresh_token.device_name = device_name
+    if web_session_id:
+        refresh_token.web_session_id = str(web_session_id)
     if request:
         refresh_token.user_agent = request.headers.get("User-Agent")
         refresh_token.ip_address = request.remote_addr
@@ -537,3 +540,27 @@ def update_token_last_used(token: str) -> None:
             _supersede_old_token(old, commit=False)
 
         db.session.commit()
+
+
+def revoke_refresh_tokens_for_web_session(
+    web_session_id: str | None,
+    *,
+    reason: str = "logout",
+    commit: bool = True,
+) -> int:
+    """Révoque tous les refresh tokens liés à une session web institution."""
+    if not web_session_id:
+        return 0
+    now = datetime.now(UTC)
+    revoked_reason = reason or "logout"
+    tokens = RefreshToken.query.filter(
+        RefreshToken.web_session_id == str(web_session_id),
+        ~RefreshToken.is_revoked,
+    ).all()
+    for token in tokens:
+        token.is_revoked = True
+        token.revoked_at = now
+        token.revoked_reason = revoked_reason
+    if commit and tokens:
+        db.session.commit()
+    return len(tokens)

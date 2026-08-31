@@ -1,8 +1,10 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
+
+from application.drivers.compose_driver_mission_surface import (
+    compose_driver_mission_payload,
+)
 
 
 class _BookingLike(Protocol):
@@ -41,6 +43,10 @@ class _BookingRepo(Protocol):
     ) -> _BookingLike | None: ...
 
 
+class _AssignmentRepo(Protocol):
+    def find_model_by_booking_id(self, booking_id: int) -> Any | None: ...
+
+
 @dataclass(frozen=True, slots=True)
 class BookingDetailsResponse:
     payload: dict[str, object]
@@ -49,9 +55,15 @@ class BookingDetailsResponse:
 class GetDriverBookingDetailsUseCase:
     """Use-case Application: récupérer les détails d'un booking pour un chauffeur."""
 
-    def __init__(self, *, booking_repo: _BookingRepo) -> None:
+    def __init__(
+        self,
+        *,
+        booking_repo: _BookingRepo,
+        assignment_repo: _AssignmentRepo | None = None,
+    ) -> None:
         super().__init__()
         self._booking_repo = booking_repo
+        self._assignment_repo = assignment_repo
 
     def execute(
         self,
@@ -88,31 +100,59 @@ class GetDriverBookingDetailsUseCase:
 
         customer_name = booking.customer_name or customer_full_name
 
-        return BookingDetailsResponse(
-            payload={
-                "id": booking.id,
-                "customer_name": customer_name,
-                "client_name": customer_name,
-                "pickup_location": booking.pickup_location,
-                "dropoff_location": booking.dropoff_location,
-                "scheduled_time": booking.scheduled_time.isoformat()
-                if booking.scheduled_time
-                else None,
-                "amount": booking.amount,
-                "status": status_str,
-                # 🏥 Informations médicales
-                "medical_facility": booking.medical_facility,
-                "doctor_name": booking.doctor_name,
-                "hospital_service": booking.hospital_service,
-                "notes_medical": booking.notes_medical,
-                "pickup_access_notes": getattr(booking, "pickup_access_notes", None),
-                "dropoff_access_notes": getattr(booking, "dropoff_access_notes", None),
-                "pickup_floor": getattr(booking, "pickup_floor", None),
-                "pickup_door_code": getattr(booking, "pickup_door_code", None),
-                "dropoff_floor": getattr(booking, "dropoff_floor", None),
-                "dropoff_door_code": getattr(booking, "dropoff_door_code", None),
-                "is_return": getattr(booking, "is_return", None),
-                "wheelchair_client_has": booking.wheelchair_client_has,
-                "wheelchair_need": booking.wheelchair_need,
-            }
+        # Aligné listes driver : status lowercase pour resolveDriverStatusForUx
+        status_for_payload = status_str.lower() if status_str else status_str
+
+        payload: dict[str, object] = {
+            "id": booking.id,
+            "customer_name": customer_name,
+            "client_name": customer_name,
+            "pickup_location": booking.pickup_location,
+            "dropoff_location": booking.dropoff_location,
+            "scheduled_time": booking.scheduled_time.isoformat()
+            if booking.scheduled_time
+            else None,
+            "amount": booking.amount,
+            "status": status_for_payload,
+            # 🏥 Informations médicales
+            "medical_facility": booking.medical_facility,
+            "doctor_name": booking.doctor_name,
+            "hospital_service": booking.hospital_service,
+            "notes_medical": booking.notes_medical,
+            "pickup_access_notes": getattr(booking, "pickup_access_notes", None),
+            "dropoff_access_notes": getattr(booking, "dropoff_access_notes", None),
+            "pickup_floor": getattr(booking, "pickup_floor", None),
+            "pickup_door_code": getattr(booking, "pickup_door_code", None),
+            "dropoff_floor": getattr(booking, "dropoff_floor", None),
+            "dropoff_door_code": getattr(booking, "dropoff_door_code", None),
+            "is_return": getattr(booking, "is_return", None),
+            "wheelchair_client_has": booking.wheelchair_client_has,
+            "wheelchair_need": booking.wheelchair_need,
+        }
+
+        # ARRIVED-SOT-2 : composer depuis Assignment si dispo
+        assignment = None
+        repo = self._assignment_repo
+        if repo is None:
+            try:
+                from repositories.assignment_repository import AssignmentRepository
+
+                repo = AssignmentRepository()
+            except Exception:
+                repo = None
+        if repo is not None:
+            try:
+                assignment = repo.find_model_by_booking_id(int(booking.id))
+            except Exception:
+                assignment = None
+
+        composed = compose_driver_mission_payload(
+            payload, assignment_status=getattr(assignment, "status", None)
         )
+        # P1 MISSION-STATE : identité de lifecycle pour reconcile mobile.
+        from application.drivers.compose_driver_mission_surface import (
+            attach_assignment_identity,
+        )
+
+        composed = attach_assignment_identity(composed, assignment)
+        return BookingDetailsResponse(payload=composed)
