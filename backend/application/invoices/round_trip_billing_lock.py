@@ -1,12 +1,12 @@
-"""Verrouillage éligibilité facturation : une unité A/R logique = un bloc métier.
+"""Verrouillage éligibilité facturation (FK propre + utilitaires A/R).
 
-Si un segment du groupe est déjà lié à une ligne sur une facture bloquante
-(brouillon / envoyée / payée / ...), aucun autre segment du même groupe ne doit
-réapparaître comme facturable.
+L'éligibilité finale « non déjà facturé » repose sur la claim active
+(``active_invoice_claim`` / ``covered_booking_ids``), pas sur un blocage
+heuristique de pairs DSU.
 
-Les groupes sont construits comme pour la fusion : paires détectées, lien
-parent->retour, et liaisons par extremites normalisees le meme jour (ex. plusieurs
-segments vers un meme pole d'activite).
+``filter_bookings_open_for_new_invoice_line`` délègue à ce filet claim.
+Les helpers DSU / ``peer_blocked_booking_ids`` restent disponibles pour
+d'autres usages, mais ne définissent plus l'ouverture preview/génération.
 """
 
 from __future__ import annotations
@@ -18,23 +18,17 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from application.invoices.active_invoice_claim import (
+    BLOCKING_INVOICE_STATUSES_FOR_CLAIM,
+)
 from application.invoices.round_trip_booking_pairs import (
     find_round_trip_merge_booking_pairs,
     normalize_address_for_round_trip_comparison,
 )
 from models import Invoice, InvoiceLine
-from models.enums import InvoiceStatus
 
-# Factures annulées ne bloquent pas ; tout autre statut officialise une ligne déjà facturée.
-_BLOCKING_INVOICE_STATUSES: frozenset[InvoiceStatus] = frozenset(
-    {
-        InvoiceStatus.DRAFT,
-        InvoiceStatus.SENT,
-        InvoiceStatus.PARTIALLY_PAID,
-        InvoiceStatus.PAID,
-        InvoiceStatus.OVERDUE,
-    }
-)
+# Aligné sur active_invoice_claim (CANCELLED non bloquant).
+_BLOCKING_INVOICE_STATUSES = BLOCKING_INVOICE_STATUSES_FOR_CLAIM
 
 _MAX_HOURS_SAME_DAY_CLUSTER = 12
 _MIN_ROUND_TRIP_GROUP_SIZE = 2
@@ -249,19 +243,20 @@ def filter_bookings_open_for_new_invoice_line(
     *,
     amount_ht_fn: Callable[[Any], Decimal] | None = None,
 ) -> list[Any]:
-    """Garde les réservations encore facturables (lien absent / annulé, pas bloquées par un pair)."""
+    """Garde les réservations encore facturables.
+
+    - propre ``invoice_line_id`` non bloquant (ou facture source annulée) ;
+    - non revendiquées explicitement par une InvoiceLine active
+      (``covered_booking_ids``), même si la FK Booking est NULL.
+
+    ``amount_ht_fn`` est conservé pour compatibilité d'appel ; le DSU pair
+    n'est plus utilisé ici (évite faux blocage après single-leg volontaire).
+    """
+    _ = amount_ht_fn  # compat signature ; non utilisé pour la décision claim
     if not bookings:
         return []
-    blocked_peer = peer_blocked_booking_ids(bookings, amount_ht_fn=amount_ht_fn)
-    out: list[Any] = []
-    for b in bookings:
-        try:
-            bid = int(b.id)
-        except Exception:
-            continue
-        if bid in blocked_peer:
-            continue
-        if not booking_open_for_new_invoice_line(b):
-            continue
-        out.append(b)
-    return out
+    from application.invoices.active_invoice_claim import (
+        filter_bookings_open_and_unclaimed,
+    )
+
+    return filter_bookings_open_and_unclaimed(bookings)

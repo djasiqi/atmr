@@ -327,8 +327,11 @@ _ROUND_TRIP_SINGLE_MERGED_META_KEYS = frozenset(
         "transport_type",
         "billing_unit",
         "booking_ids",
+        "primary_booking_id",
         "round_trip_secondary_reservation_ids",
         "round_trip_secondary_reservation_id",
+        "round_trip_merge_partner_reservation_id",
+        "round_trip_merge_primary_reservation_id",
         "secondary_segment_descriptions",
         "secondary_segment_description",
         "merged_segment_count",
@@ -521,6 +524,14 @@ def _split_single_merged_round_trip_line(
     if service_iso:
         new_meta["service_date"] = service_iso
         new_meta["service_date_iso"] = service_iso
+    # Après exclusion volontaire : la ligne ne revendique plus que la jambe conservée.
+    released_ids = [int(b.id) for b in drop_bookings]
+    new_meta["intentional_single_leg"] = True
+    new_meta["intentional_single_leg_kept"] = keep_leg
+    new_meta["released_round_trip_booking_ids"] = released_ids
+    new_meta["booking_ids"] = [int(keep_booking.id)]
+    new_meta["primary_booking_id"] = int(keep_booking.id)
+    new_meta["billing_unit"] = "single"
     line.line_meta = new_meta or None
 
     keep_booking.invoice_line_id = line.id
