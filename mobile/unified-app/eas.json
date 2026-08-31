@@ -230,6 +230,20 @@
         "simulator": false
       }
     },
+    "production-closed": {
+      "extends": "production",
+      "distribution": "store",
+      "environment": "production",
+      "channel": "production-closed-1.0.13",
+      "android": {
+        "buildType": "app-bundle",
+        "autoIncrement": true
+      },
+      "ios": {
+        "simulator": false,
+        "autoIncrement": true
+      }
+    },
     "production-gps-phase2": {
       "extends": "production",
       "channel": "production-gps-phase2",
@@ -266,6 +280,18 @@
         "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
         "track": "internal",
         "releaseStatus": "completed"
+      }
+    },
+    "production-closed": {
+      "android": {
+        "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "completed"
+      },
+      "ios": {
+        "appleId": "jasiqi.drin@gmail.com",
+        "ascAppId": "6756059634",
+        "appleTeamId": "6WULBZ4X7W"
       }
     },
     "alpha": {
