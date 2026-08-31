@@ -709,9 +709,13 @@ def list_billing_opportunities(
     if ignored_missing_billing_party_count:
         _inc_ignored_missing_billing_party_metric(ignored_missing_billing_party_count)
 
-    # Persister les guérisons BP patient←établissement (sinon rollback fin de requête).
-    if db.session.new or db.session.dirty:
-        db.session.commit()
+    # Persister les guérisons BP / institution_patient.
+    # Important : après autoflush (requêtes suivantes dans cette fonction),
+    # ``session.dirty`` / ``session.new`` sont vides alors que la transaction
+    # contient encore les UPDATEs. Un ``if dirty/new`` sautait le commit →
+    # ``teardown_appcontext`` rollback → opportunités avec billing_party_id
+    # fantôme et period-preview à 0 transports.
+    db.session.commit()
 
     return BillingOpportunitiesResult(
         period_year=period_year,

@@ -320,6 +320,14 @@ def build_period_invoice_preview(
                 == int(institution_patient_id)
             ]
         elif billing_party_id is not None:
+            # Filet : courses encore sans BP (guérison opportunités non persistée).
+            from services.billing.billing_party_linker import (
+                ensure_patient_destination_billing_party,
+            )
+
+            for b in bookings:
+                if getattr(b, "billing_party_id", None) is None:
+                    ensure_patient_destination_billing_party(b)
             bookings = [
                 b
                 for b in bookings
