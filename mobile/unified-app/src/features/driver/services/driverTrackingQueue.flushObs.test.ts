@@ -120,7 +120,9 @@ describe("driverTrackingQueue flush observability (JZ-R1-FLUSH-OBS-11)", () => {
         locationMode: "availability_presence",
       },
     });
-    await driverTrackingQueue.activateContextInactiveGate("test_suspend");
+    // FIX-29 : context_inactive + driver_active est réconcilié (HTTP).
+    // QUEUE_SUSPEND_ACTIVE doit être prouvé avec un suspend réellement bloquant.
+    await driverTrackingQueue.activateSuspensionForTests(60_000, "auth");
 
     const flush = await driverTrackingQueue.flush({
       forceHttpFallback: true,

@@ -913,7 +913,10 @@ class DriverTrackingQueue {
     await this.clearSuspension(source);
   }
 
-  /** Gate sans timer — libérée uniquement par clearContextInactiveGate / resumeAfterDriverContext. */
+  /**
+   * Gate sans timer — libérée par clearContextInactiveGate
+   * (session/context restore OU réconciliation flush quand lease=driver_active).
+   */
   async activateContextInactiveGate(source = "context_inactive"): Promise<void> {
     this.queueSuspend = { untilMs: null, reason: "context_inactive" };
     await this.persistSuspendState();
@@ -924,13 +927,41 @@ class DriverTrackingQueue {
     });
   }
 
-  async clearContextInactiveGate(source = "driver_context_restored"): Promise<void> {
+  async clearContextInactiveGate(
+    source = "driver_context_restored",
+    extras?: { lease_state?: string | null }
+  ): Promise<void> {
     if (this.queueSuspend?.reason !== "context_inactive") return;
+    const previousSuspendReason = this.queueSuspend.reason;
     await this.clearSuspension(source);
     emitDriverTelemetry("tracking.queue.transport_unblock", {
       source: "driver.tracking.queue",
       reason: source,
+      previous_suspend_reason: previousSuspendReason,
+      ...(extras?.lease_state !== undefined
+        ? { lease_state: extras.lease_state }
+        : {}),
     });
+  }
+
+  /**
+   * Réconcilie un gate context_inactive obsolète avec le lease autoritaire.
+   * Ne touche jamais auth / rate_limit / autres suspensions temporisées.
+   */
+  private async reconcileContextInactiveGateWithLease(
+    lease: Awaited<ReturnType<typeof readTrackingContextLease>>,
+    source: string
+  ): Promise<boolean> {
+    if (!leaseAllowsTransport(lease)) {
+      return false;
+    }
+    if (this.queueSuspend?.reason !== "context_inactive") {
+      return false;
+    }
+    await this.clearContextInactiveGate(source, {
+      lease_state: lease?.state ?? "absent",
+    });
+    return true;
   }
 
   private async activateSuspension(
@@ -2017,6 +2048,12 @@ class DriverTrackingQueue {
           { flushLockState: "held", httpDispatchStarted: false, selectedItem: false }
         );
       }
+      // FIX-29 : driver_active rend un context_inactive persistant obsolète.
+      // Clear + même flush continue vers le transport (pas de return anticipé).
+      await this.reconcileContextInactiveGateWithLease(
+        lease,
+        "flush_driver_active_reconcile"
+      );
       const transport = await this.prepareFlushTransport();
       const effectiveForceHttp =
         options?.forceHttpFallback === true ||
