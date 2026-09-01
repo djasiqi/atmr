@@ -182,7 +182,7 @@ const InstitutionBillingControl = () => {
   const reopenMutation = useReopenBillingControlBooking();
   const payerMutation = useChangeBillingControlPayer();
 
-  const items = data?.items || [];
+  const items = useMemo(() => data?.items ?? [], [data?.items]);
   const summary = data?.summary || {};
   const pagination = data?.pagination || {};
   const groups = useMemo(() => groupBookingsForDisplay(items), [items]);
