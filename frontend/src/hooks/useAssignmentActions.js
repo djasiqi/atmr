@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { assignDriver, deleteReservation } from '../services/companyService';
 import { LIRIE_QK_PREFIX } from '../queryKeys/lirie';
 import { useOptimisticMutation } from './useOptimisticMutation';
+import { getApiErrorMessage } from '../utils/apiErrorMessage';
 
 /** Préfixe TanStack pour toutes les queries `assigned-reservations` entreprise (voir `lirieKeys.assignedReservations(day)`). */
 const ASSIGNED_RESERVATIONS_QUERY_PREFIX = [LIRIE_QK_PREFIX, 'assigned-reservations'];
@@ -209,7 +210,12 @@ export const useAssignmentActions = (onOptimisticUpdateOrOptions = null, onRollb
 
   return {
     loading: assignMutation.isLoading || deleteMutation.isLoading,
-    error: assignMutation.error || deleteMutation.error,
+    error: assignMutation.error || deleteMutation.error
+      ? getApiErrorMessage(
+          assignMutation.error || deleteMutation.error,
+          'Erreur lors de l’assignation'
+        )
+      : null,
     success: null, // Géré par les toasts maintenant
     handleAssignDriver,
     handleDeleteReservation,

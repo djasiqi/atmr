@@ -10,6 +10,7 @@ import {
   getOptimizerStatus,
   resetAssignments,
 } from '../../../../services/dispatchMonitoringService';
+import { toSafeErrorText } from '../../../../utils/apiErrorMessage';
 
 /**
  * Composant ULTRA PERFORMANT pour le mode automatique de dispatch
@@ -384,7 +385,7 @@ const FullyAutoPanel = ({
   }
 
   if (error) {
-    return <div className={styles.error}>Erreur: {error}</div>;
+    return <div className={styles.error}>Erreur: {toSafeErrorText(error)}</div>;
   }
 
   return (

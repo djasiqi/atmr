@@ -4,8 +4,10 @@ import {
   hasScheduledPickupTime,
   isAppointmentTimeDefined,
   isPickupSentinel,
+  isReturnLeg,
   isReturnLegNeedingTime,
   needsTimeBeforeDriverAssign,
+  resolveTriggerReturnBookingId,
 } from '../bookingScheduling';
 
 describe('bookingScheduling', () => {
@@ -89,12 +91,33 @@ describe('bookingScheduling', () => {
 
   it('isReturnLegNeedingTime distingue retour et leg multi-étapes', () => {
     const retour = { is_return: true, time_confirmed: false };
-    const legInstitution = {
+    const legInstitutionReturn = {
       route_group_id: 'grp-1',
+      is_return: false,
+      trip_flags: { return_leg: true },
+      time_confirmed: false,
+      status: 'accepted',
+    };
+    const legInstitutionOutbound = {
+      route_group_id: 'grp-1',
+      is_return: false,
+      trip_flags: { return_leg: false },
       time_confirmed: false,
       status: 'accepted',
     };
     expect(isReturnLegNeedingTime(retour)).toBe(true);
-    expect(isReturnLegNeedingTime(legInstitution)).toBe(false);
+    expect(isReturnLegNeedingTime(legInstitutionReturn)).toBe(true);
+    expect(isReturnLegNeedingTime(legInstitutionOutbound)).toBe(false);
+    expect(isReturnLeg(retour)).toBe(true);
+    expect(isReturnLeg(legInstitutionReturn)).toBe(true);
+    expect(isReturnLeg(legInstitutionOutbound)).toBe(false);
+  });
+
+  it('resolveTriggerReturnBookingId cible le return leg du route_group', () => {
+    const outbound = { id: 38906, route_group_id: 'grp-x', trip_flags: { return_leg: false } };
+    const returnLeg = { id: 38907, route_group_id: 'grp-x', trip_flags: { return_leg: true } };
+    const all = [outbound, returnLeg];
+    expect(resolveTriggerReturnBookingId(outbound, all)).toBe(38907);
+    expect(resolveTriggerReturnBookingId(returnLeg, all)).toBe(38907);
   });
 });

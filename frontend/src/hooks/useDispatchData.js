@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { fetchAssignedReservations, fetchCompanyReservations } from '../services/companyService';
+import { isReturnLeg } from '../utils/bookingScheduling';
 
 /**
  * Hook personnalisé pour gérer le chargement des données de dispatch
@@ -34,7 +35,7 @@ export const useDispatchData = (date, dispatchMode) => {
 
         // Vérifier les retours avec heure à confirmer
         const returnsToConfirm = dispatches.filter(
-          (d) => d.is_return && (d.time_confirmed === false || !d.scheduled_time)
+          (d) => isReturnLeg(d) && (d.time_confirmed === false || !d.scheduled_time)
         );
 
         if (returnsToConfirm.length > 0) {

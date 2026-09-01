@@ -61,16 +61,58 @@ export function isAppointmentTimeDefined(booking) {
   return hasConfirmedPickupTime(booking);
 }
 
-/** Retour ou leg multi-étapes institution sans horaire opérationnel — pas d'assignation chauffeur. */
-export function needsTimeBeforeDriverAssign(booking) {
-  if (isAppointmentTimeDefined(booking)) return false;
-  const status = String(booking?.status ?? '').toLowerCase();
-  const isReturn = !!(
+/** Retour canonique : trip_flags.return_leg (topologie institution) ou legacy is_return. */
+export function isReturnLeg(booking) {
+  if (booking?.trip_flags?.return_leg != null) {
+    return Boolean(booking.trip_flags.return_leg);
+  }
+  return Boolean(
     booking?.is_return ||
     booking?.booking_type === 'return' ||
     booking?.type === 'return'
   );
-  if (isReturn) return true;
+}
+
+/**
+ * Retour institution dans le même route_group_id (trip_flags.return_leg).
+ * Pas de heuristique MAX(route_sequence_number).
+ */
+export function findReturnLegBookingInRouteGroup(booking, allBookings = []) {
+  const gid = booking?.route_group_id;
+  if (!gid || !Array.isArray(allBookings)) return null;
+  return (
+    allBookings.find(
+      (candidate) =>
+        candidate?.route_group_id === gid &&
+        candidate?.id !== booking?.id &&
+        isReturnLeg(candidate)
+    ) ??
+    allBookings.find(
+      (candidate) => candidate?.route_group_id === gid && isReturnLeg(candidate)
+    ) ??
+    null
+  );
+}
+
+/** ID cible pour trigger-return : return leg explicite ou réservation courante. */
+export function resolveTriggerReturnBookingId(reservation, allReservations = []) {
+  if (!reservation) return null;
+  const reservationObj =
+    typeof reservation === 'object' ? reservation : { id: reservation };
+  if (isReturnLeg(reservationObj)) return reservationObj.id;
+  const returnLeg = findReturnLegBookingInRouteGroup(
+    reservationObj,
+    allReservations
+  );
+  if (returnLeg?.id != null) return returnLeg.id;
+  return reservationObj.id ?? reservation;
+}
+
+/** Retour ou leg multi-étapes institution sans horaire opérationnel — pas d'assignation chauffeur. */
+export function needsTimeBeforeDriverAssign(booking) {
+  if (isAppointmentTimeDefined(booking)) return false;
+  const status = String(booking?.status ?? '').toLowerCase();
+  if (isReturnLeg(booking)) return true;
   if (booking?.route_group_id && ['accepted', 'assigned'].includes(status)) {
     return true;
   }
@@ -78,10 +120,5 @@ export function needsTimeBeforeDriverAssign(booking) {
 }
 
 export function isReturnLegNeedingTime(booking) {
-  const isReturn = !!(
-    booking?.is_return ||
-    booking?.booking_type === 'return' ||
-    booking?.type === 'return'
-  );
-  return isReturn && !isAppointmentTimeDefined(booking);
+  return isReturnLeg(booking) && !isAppointmentTimeDefined(booking);
 }

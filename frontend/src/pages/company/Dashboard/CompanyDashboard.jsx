@@ -71,6 +71,7 @@ import Modal from '../../../components/common/Modal';
 import { CompanyDashboardFreshnessBadge } from './components/CompanyDashboardFreshnessBadge';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { toast } from 'sonner';
+import { resolveTriggerReturnBookingId } from '../../../utils/bookingScheduling';
 import { logoutUser } from '../../../utils/apiClient';
 import { lirieKeys, LIRIE_QK_PREFIX, lirieInvalidateCompanyReservationLists, listScopeHash } from '../../../queryKeys/lirie';
 import {
@@ -1033,7 +1034,10 @@ const CompanyDashboard = () => {
     setScheduleModalOpen(false);
     if (!scheduleModalReservation) return;
 
-    const reservationId = scheduleModalReservation?.id ?? scheduleModalReservation;
+    const reservationId = resolveTriggerReturnBookingId(
+      scheduleModalReservation,
+      reservations || []
+    );
     try {
       let payload = {};
       if (data?.urgent) {

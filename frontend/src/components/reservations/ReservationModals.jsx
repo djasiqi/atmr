@@ -7,7 +7,7 @@ import CancellationModal from './CancellationModal';
 import EditReservationModal from './EditReservationModal';
 import InlineDatePicker from '../ui/InlineDatePicker';
 import InlineTimePicker from '../ui/InlineTimePicker';
-import { hasScheduledPickupTime } from '../../utils/bookingScheduling';
+import { hasScheduledPickupTime, isReturnLeg } from '../../utils/bookingScheduling';
 import styles from './ReservationModals.module.css';
 
 const DEMO_FIRST_NAMES = [
@@ -93,11 +93,7 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
     }
   }, [isOpen, reservation]);
 
-  const isReturn = !!(
-    reservation?.is_return ||
-    reservation?.booking_type === 'return' ||
-    reservation?.type === 'return'
-  );
+  const isReturn = isReturnLeg(reservation);
 
   const handleConfirm = async () => {
     if (!selectedDate || !selectedTime) return;

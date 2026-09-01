@@ -201,3 +201,21 @@ export function getApiErrorMessage(error, fallback = 'Une erreur est survenue.')
 
   return fallback;
 }
+
+/**
+ * Normalise n'importe quelle valeur d'erreur en texte sûr pour le JSX.
+ * Évite React #31 (Objects are not valid as a React child) quand on affiche
+ * un objet `Error` ou une payload API brute.
+ * @param {unknown} error
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+export function toSafeErrorText(error, fallback = 'Une erreur est survenue.') {
+  if (error == null || error === false) {
+    return '';
+  }
+  if (typeof error === 'string') {
+    return error.trim() || fallback;
+  }
+  return getApiErrorMessage(error, fallback);
+}

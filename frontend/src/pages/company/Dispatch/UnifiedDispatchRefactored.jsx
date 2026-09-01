@@ -42,7 +42,9 @@ import {
   applySuggestion,
 } from '../../../services/dispatchMonitoringService';
 import { showSuccess, showError } from '../../../utils/toast';
+import { resolveTriggerReturnBookingId } from '../../../utils/bookingScheduling';
 import { toast } from 'sonner';
+import { toSafeErrorText } from '../../../utils/apiErrorMessage';
 
 // Composants
 import DispatchHeader from './components/DispatchHeader';
@@ -383,7 +385,10 @@ const UnifiedDispatchRefactored = () => {
     setScheduleModalOpen(false);
     if (!scheduleModalReservation) return;
 
-    const reservationId = scheduleModalReservation?.id ?? scheduleModalReservation;
+    const reservationId = resolveTriggerReturnBookingId(
+      scheduleModalReservation,
+      dispatches
+    );
     // data string ⇒ simple définition d'heure (aller / leg multi-étapes) ;
     // data.return_time / data.urgent ⇒ planification de retour.
     const isGenericSchedule = typeof data === 'string';
@@ -1375,7 +1380,9 @@ const UnifiedDispatchRefactored = () => {
           <Suspense fallback={<DispatchTableSkeleton rows={8} />}>{renderModePanel()}</Suspense>
 
           {/* Messages d'erreur/succès des actions */}
-          {actionsError && <div className={styles.errorMessage}>{actionsError}</div>}
+          {actionsError && (
+            <div className={styles.errorMessage}>{toSafeErrorText(actionsError)}</div>
+          )}
           {actionsSuccess && <div className={styles.successMessage}>{actionsSuccess}</div>}
         </div>
 

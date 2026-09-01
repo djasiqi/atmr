@@ -15,6 +15,7 @@ import DispatchTable from '../../Dashboard/components/DispatchTable';
 import DispatchTableSkeleton from '../../../../components/SkeletonLoaders/DispatchTableSkeleton';
 import EmptyState from '../../../../components/EmptyState';
 import { getDispatchRowDelayInfo } from '../../../../utils/dispatchDelayMapKey';
+import { toSafeErrorText } from '../../../../utils/apiErrorMessage';
 
 function ChipDropdown({ icon, value, options, onChange, styles }) {
   const [open, setOpen] = useState(false);
@@ -195,7 +196,7 @@ const ManualModePanel = ({
   }
 
   if (error) {
-    return <div className={styles.error}>Erreur: {error}</div>;
+    return <div className={styles.error}>Erreur: {toSafeErrorText(error)}</div>;
   }
 
   return (

@@ -1,4 +1,4 @@
-import { getApiErrorMessage, isServiceUnavailableError } from './apiErrorMessage';
+import { getApiErrorMessage, isServiceUnavailableError, toSafeErrorText } from './apiErrorMessage';
 
 describe('getApiErrorMessage', () => {
   it('utilise le fallback si pas de réponse', () => {
@@ -112,5 +112,42 @@ describe('getApiErrorMessage', () => {
     expect(msg).toMatch(/022 512 02 03/);
     expect(msg).toMatch(/info@lirie\.ch/);
     expect(msg).not.toMatch(/CREATE_OWN_PORTFOLIO/i);
+  });
+});
+
+describe('toSafeErrorText', () => {
+  it('ne renvoie jamais un objet (évite React #31)', () => {
+    expect(toSafeErrorText(null)).toBe('');
+    expect(toSafeErrorText(undefined)).toBe('');
+    expect(toSafeErrorText('déjà texte')).toBe('déjà texte');
+    expect(toSafeErrorText(new Error('boom'))).toBe('boom');
+    const axiosLike = {
+      message: 'Request failed with status code 400',
+      response: {
+        status: 400,
+        data: {
+          error: 'validation_error',
+          message: 'Facturation incomplète',
+        },
+      },
+    };
+    expect(toSafeErrorText(axiosLike)).toBe('Facturation incomplète');
+  });
+
+  it('affiche le message métier sur une 422 facturation (pas React #31)', () => {
+    const err422 = {
+      message: 'Request failed with status code 422',
+      response: {
+        status: 422,
+        data: {
+          error: 'billing_validation_error',
+          message: 'billing_party_id est obligatoire pour billed_to_type=clinic',
+        },
+      },
+    };
+    expect(toSafeErrorText(err422)).toBe(
+      'billing_party_id est obligatoire pour billed_to_type=clinic'
+    );
+    expect(typeof toSafeErrorText(err422)).toBe('string');
   });
 });

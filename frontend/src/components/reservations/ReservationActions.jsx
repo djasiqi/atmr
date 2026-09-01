@@ -1,7 +1,7 @@
 // src/components/reservations/ReservationActions.jsx
 import React from 'react';
 import { FiClock, FiZap, FiUserPlus, FiShare2 } from 'react-icons/fi';
-import { hasConfirmedPickupTime, hasScheduledPickupTime } from '../../utils/bookingScheduling';
+import { hasConfirmedPickupTime, hasScheduledPickupTime, isReturnLeg } from '../../utils/bookingScheduling';
 import styles from './ReservationActions.module.css';
 
 /** Statuts où ce bloc n’affiche pas d’actions secondaires (normal en dispatch). */
@@ -43,13 +43,7 @@ const ReservationActions = ({
   className = '',
   needsTimeConfirmationOverride,
 }) => {
-  // Vérifier si c'est un retour sans heure définie (à confirmer)
-  // Support plusieurs façons d'identifier un retour
-  const isReturn = !!(
-    reservation?.is_return ||
-    reservation?.booking_type === 'return' ||
-    reservation?.type === 'return'
-  );
+  const isReturn = isReturnLeg(reservation);
 
   const computedNeedsTimeConfirmation = isReturn && !hasConfirmedPickupTime(reservation);
   const needsTimeConfirmation =
