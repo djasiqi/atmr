@@ -23,6 +23,7 @@ import {
   HiOutlineCog,
   HiOutlinePlus,
   HiOutlineMenu,
+  HiOutlineClipboardCheck,
 } from 'react-icons/hi';
 import { useInstitutionMe, useInstitutionRequests } from '../../../hooks/useInstitutionData';
 import useInstitutionSocket from '../../../hooks/useInstitutionSocket';
@@ -30,6 +31,7 @@ import {
   getRoleLabel,
   canViewSettings,
   canManageRequests,
+  canAccessBillingControl,
 } from '../../../utils/institutionPermissions';
 import { logoutUser } from '../../../services/authService';
 import NotificationBell from './NotificationBell';
@@ -45,6 +47,7 @@ const PAGE_META = {
   requests: { title: 'Transports', breadcrumb: 'Transports' },
   'requests/new': { title: 'Nouveau transport', breadcrumb: 'Nouveau transport', parent: 'requests' },
   patients: { title: 'Gestion des patients', breadcrumb: 'Patients' },
+  'billing-control': { title: 'Contrôle facturation', breadcrumb: 'Contrôle facturation' },
   settings: { title: 'Paramètres', breadcrumb: 'Paramètres' },
 };
 
@@ -216,6 +219,13 @@ const InstitutionLayout = () => {
       label: 'Patients',
       icon: <HiOutlineUserGroup />,
     },
+    ...(canAccessBillingControl(institutionRole)
+      ? [{
+          path: `${basePath}/billing-control`,
+          label: 'Contrôle facturation',
+          icon: <HiOutlineClipboardCheck />,
+        }]
+      : []),
   ];
 
   // Navigation secondaire

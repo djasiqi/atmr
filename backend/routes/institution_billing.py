@@ -14,7 +14,7 @@ from typing import Any, cast
 
 import sentry_sdk
 from flask import request
-from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
+from flask_jwt_extended import jwt_required
 from flask_jwt_extended.exceptions import JWTExtendedException
 from flask_restx import Namespace, Resource, fields
 from jwt.exceptions import PyJWTError
@@ -108,11 +108,15 @@ class BillingUpdateSchema(Schema):
 
 billing_update_schema = BillingUpdateSchema()
 
-# Rôles autorisés pour modifier la facturation
-BILLING_ALLOWED_ROLES = {
-    InstitutionRole.ADMIN.value,
-    InstitutionRole.BILLING.value,
-}
+
+def _int_arg(name: str) -> int | None:
+    raw = request.args.get(name)
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 def _reraise_auth_errors(exc: Exception) -> None:
@@ -125,47 +129,20 @@ def _reraise_auth_errors(exc: Exception) -> None:
     if "signature has expired" in lowered or "token has expired" in lowered:
         raise exc
 
+# Rôles autorisés pour modifier la facturation
+BILLING_ALLOWED_ROLES = {
+    InstitutionRole.ADMIN.value,
+    InstitutionRole.BILLING.value,
+}
+
 
 def get_billing_context() -> tuple[int, int | None, str | None]:
-    """Récupère le contexte institution avec vérification rôle billing.
+    """Délègue à l'ACL canonique contrôle facturation institution."""
+    from security.institution_billing_control_acl import (
+        require_institution_billing_control_context,
+    )
 
-    Returns:
-        Tuple (institution_id, user_id, institution_role)
-
-    Raises:
-        Werkzeug Abort si non authentifié, pas institution, ou pas billing/admin
-    """
-    from flask import abort
-
-    claims = get_jwt()
-    institution_id = claims.get("institution_id")
-    institution_role = claims.get("institution_role")
-
-    if not institution_id:
-        abort(403, description="Accès réservé aux utilisateurs institution")
-
-    # Vérifier que l'utilisateur a le rôle billing ou admin
-    if institution_role not in BILLING_ALLOWED_ROLES:
-        msg = ROLE_REQUIRED_MSG % (", ".join(BILLING_ALLOWED_ROLES), institution_role)
-        abort(403, description=msg)
-
-    raw_identity = get_jwt_identity()
-    user_id: int | None = None
-    if raw_identity is not None:
-        raw = str(raw_identity).strip()
-        if raw:
-            if raw.isdigit():
-                user_id = int(raw)
-            else:
-                try:
-                    from models import User
-
-                    u = User.query.filter_by(public_id=raw).first()
-                    if u:
-                        user_id = int(u.id)
-                except Exception:
-                    user_id = None
-    return institution_id, user_id, institution_role
+    return require_institution_billing_control_context()
 
 
 @institution_billing_ns.route("/requests/<int:request_id>")
@@ -367,12 +344,12 @@ class BookingBillingUpdate(Resource):
 
             validated = cast(dict[str, Any], billing_update_schema.load(data))
 
+            from application.institutions.change_booking_payer import (
+                change_booking_payer,
+            )
             from services.institutions.booking_change_service import (
                 BILLING_CHANGE_REASON_CODES,
-                _billing_snapshot,
-                bump_edit_version,
                 check_version,
-                record_change_event,
             )
 
             code = (validated.get("billing_change_reason_code") or "").upper()
@@ -388,55 +365,30 @@ class BookingBillingUpdate(Resource):
                 if conflict:
                     return conflict, 409
 
-            # Garder anciennes valeurs pour audit
-            old_billed_to = booking.billed_to_type
-            before = _billing_snapshot(booking)
-
-            # Mettre à jour le booking
-            # Mapping billing_intent → billed_to_type (institution → clinic)
-            intent_to_billed = {
-                "institution": "clinic",
-                "patient": "patient",
-                "insurance": "insurance",
-                "curator": "clinic",
-                "spc": "clinic",
-                "other": "clinic",
-            }
             new_intent = validated.get("billing_intent")
-            if new_intent:
-                new_billed_to = intent_to_billed.get(new_intent, "patient")
-                booking.billed_to_type = new_billed_to
-                # billed_to_company_id obligatoire si non-patient
-                if new_billed_to != "patient":
-                    booking.billed_to_company_id = booking.company_id
-                else:
-                    booking.billed_to_company_id = None
+            if not new_intent:
+                return {"error": "billing_intent requis pour modifier le payeur."}, 400
 
-            booking.billing_override_reason = validated.get("override_reason")
-            bump_edit_version(booking)
-            after = _billing_snapshot(booking)
             financial_role = (
                 "billing" if role == InstitutionRole.BILLING.value else "admin"
             )
-            record_change_event(
-                booking=booking,
+            payer_result = change_booking_payer(
+                booking,
+                target_payer=new_intent,
                 transport_request=transport_req,
                 institution_id=institution_id,
                 actor_user_id=user_id,
                 actor_role=role,
-                actor_type="institution_user",
                 actor_display_name=None,
-                action_type="billing_changed",
-                change_scope="billing",
-                source="institution_portal",
-                before_snapshot=before,
-                after_snapshot=after,
-                reason=validated.get("override_reason"),
-                change_class="major",
-                severity="WARNING",
-                financial_actor_role=financial_role,
+                override_reason=validated.get("override_reason") or "",
                 billing_change_reason_code=code,
+                financial_actor_role=financial_role,
             )
+            if not payer_result.ok:
+                status = int(payer_result.status_code or 422)
+                return {
+                    "error": payer_result.error or "Modification payeur refusée."
+                }, status
 
             db.session.commit()
 
@@ -453,8 +405,14 @@ class BookingBillingUpdate(Resource):
                     action_details={
                         "booking_id": booking_id,
                         "transport_request_id": transport_req.id,
-                        "old_billed_to_type": old_billed_to,
+                        "old_billed_to_type": (payer_result.before or {}).get(
+                            "billed_to_type"
+                        ),
                         "new_billed_to_type": booking.billed_to_type,
+                        "old_billing_party_id": (payer_result.before or {}).get(
+                            "billing_party_id"
+                        ),
+                        "new_billing_party_id": booking.billing_party_id,
                         "billing_details": validated.get("billing_details"),
                         "role": role,
                     },
@@ -482,4 +440,238 @@ class BookingBillingUpdate(Resource):
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
             logger.error("[InstitutionBilling] PUT booking/%s error: %s", booking_id, e)
+            return {"error": f"Erreur serveur: {e!s}"}, 500
+
+
+# ── Contrôle facturation institution (INSTITUTION-07) ─────────────────────
+
+
+control_list_model = institution_billing_ns.model(
+    "BillingControlList",
+    {
+        "items": fields.List(fields.Raw),
+        "count": fields.Integer(description="Nombre d'éléments page courante"),
+        "pagination": fields.Raw,
+        "summary": fields.Raw,
+    },
+)
+
+control_detail_model = institution_billing_ns.model(
+    "BillingControlDetail",
+    {
+        "booking_id": fields.Integer,
+        "control": fields.Raw,
+        "payer": fields.Raw,
+        "billing": fields.Raw,
+        "relationship": fields.Raw,
+    },
+)
+
+anomaly_model = institution_billing_ns.model(
+    "BillingControlAnomaly",
+    {
+        "anomaly_reason_code": fields.String(required=True),
+        "comment": fields.String,
+    },
+)
+
+
+@institution_billing_ns.route("/control/bookings")
+class BillingControlList(Resource):
+    """Liste des bookings en contrôle facturation."""
+
+    @institution_billing_ns.doc(
+        description="Liste contrôle facturation (Admin/Billing)",
+        security="BearerAuth",
+    )
+    @institution_billing_ns.response(200, "Succès", control_list_model)
+    @institution_billing_ns.response(403, "Accès refusé", permission_error_model)
+    @jwt_required()
+    def get(self):
+        try:
+            institution_id, _user_id, _role = get_billing_context()
+            from application.institutions.billing_control.query import (
+                parse_billing_control_query,
+                query_billing_control_bookings,
+            )
+
+            parsed = parse_billing_control_query(
+                period=request.args.get("period"),
+                period_year=_int_arg("period_year"),
+                period_month=_int_arg("period_month"),
+                control_status=request.args.get("control_status"),
+                payer_type=request.args.get("payer_type"),
+                transport_company=_int_arg("transport_company"),
+                patient=_int_arg("patient"),
+                page=_int_arg("page"),
+                page_size=_int_arg("page_size"),
+            )
+            if isinstance(parsed, tuple):
+                return {"error": parsed[0]}, parsed[1]
+
+            result = query_billing_control_bookings(institution_id, parsed)
+            return {
+                "items": result.items,
+                "count": len(result.items),
+                "pagination": {
+                    "page": result.page,
+                    "page_size": result.page_size,
+                    "total": result.total,
+                    "total_pages": result.total_pages,
+                },
+                "summary": result.summary.to_dict(),
+            }
+        except Exception as e:
+            _reraise_auth_errors(e)
+            sentry_sdk.capture_exception(e)
+            return {"error": f"Erreur serveur: {e!s}"}, 500
+
+
+@institution_billing_ns.route("/control/bookings/<int:booking_id>")
+@institution_billing_ns.param("booking_id", "ID du booking")
+class BillingControlDetail(Resource):
+    """Détail contrôle facturation d'un booking."""
+
+    @jwt_required()
+    def get(self, booking_id: int):
+        try:
+            institution_id, _user_id, _role = get_billing_context()
+            from application.institutions.billing_control.list_bookings import (
+                booking_control_detail,
+            )
+            from application.institutions.billing_control.resolve import (
+                resolve_institution_billing_control_booking,
+            )
+
+            ctx = resolve_institution_billing_control_booking(
+                booking_id, institution_id
+            )
+            if ctx is None:
+                return {"error": "Booking non trouvé"}, 404
+            return booking_control_detail(ctx.booking, institution_id=institution_id)
+        except Exception as e:
+            _reraise_auth_errors(e)
+            sentry_sdk.capture_exception(e)
+            return {"error": f"Erreur serveur: {e!s}"}, 500
+
+
+@institution_billing_ns.route("/control/bookings/<int:booking_id>/validate")
+class BillingControlValidate(Resource):
+    @jwt_required()
+    def post(self, booking_id: int):
+        try:
+            institution_id, user_id, role = get_billing_context()
+            from application.institutions.billing_control.mutations import (
+                validate_booking_control,
+            )
+            from application.institutions.billing_control.resolve import (
+                resolve_institution_billing_control_booking,
+            )
+
+            ctx = resolve_institution_billing_control_booking(
+                booking_id, institution_id
+            )
+            if ctx is None:
+                return {"error": "Booking non trouvé"}, 404
+
+            body = request.get_json(silent=True) or {}
+            display_name = body.get("actor_display_name")
+            result = validate_booking_control(
+                ctx.booking,
+                transport_request=ctx.transport_request,
+                institution_id=institution_id,
+                actor_user_id=user_id,
+                actor_role=role,
+                actor_display_name=display_name,
+            )
+            if not result.ok:
+                return {"error": result.error}, int(result.status_code or 422)
+            db.session.commit()
+            return {"success": True, "control": result.after}
+        except Exception as e:
+            db.session.rollback()
+            _reraise_auth_errors(e)
+            sentry_sdk.capture_exception(e)
+            return {"error": f"Erreur serveur: {e!s}"}, 500
+
+
+@institution_billing_ns.route("/control/bookings/<int:booking_id>/anomaly")
+class BillingControlAnomaly(Resource):
+    @jwt_required()
+    def post(self, booking_id: int):
+        try:
+            institution_id, user_id, role = get_billing_context()
+            from application.institutions.billing_control.mutations import (
+                mark_booking_control_anomaly,
+            )
+            from application.institutions.billing_control.resolve import (
+                resolve_institution_billing_control_booking,
+            )
+
+            ctx = resolve_institution_billing_control_booking(
+                booking_id, institution_id
+            )
+            if ctx is None:
+                return {"error": "Booking non trouvé"}, 404
+
+            body = request.get_json() or {}
+            code = body.get("anomaly_reason_code") or ""
+            result = mark_booking_control_anomaly(
+                ctx.booking,
+                transport_request=ctx.transport_request,
+                institution_id=institution_id,
+                actor_user_id=user_id,
+                actor_role=role,
+                actor_display_name=body.get("actor_display_name"),
+                anomaly_reason_code=code,
+                anomaly_comment=body.get("comment"),
+            )
+            if not result.ok:
+                return {"error": result.error}, int(result.status_code or 422)
+            db.session.commit()
+            return {"success": True, "control": result.after}
+        except Exception as e:
+            db.session.rollback()
+            _reraise_auth_errors(e)
+            sentry_sdk.capture_exception(e)
+            return {"error": f"Erreur serveur: {e!s}"}, 500
+
+
+@institution_billing_ns.route("/control/bookings/<int:booking_id>/reopen")
+class BillingControlReopen(Resource):
+    @jwt_required()
+    def post(self, booking_id: int):
+        try:
+            institution_id, user_id, role = get_billing_context()
+            from application.institutions.billing_control.mutations import (
+                reopen_booking_control,
+            )
+            from application.institutions.billing_control.resolve import (
+                resolve_institution_billing_control_booking,
+            )
+
+            ctx = resolve_institution_billing_control_booking(
+                booking_id, institution_id
+            )
+            if ctx is None:
+                return {"error": "Booking non trouvé"}, 404
+
+            body = request.get_json(silent=True) or {}
+            result = reopen_booking_control(
+                ctx.booking,
+                transport_request=ctx.transport_request,
+                institution_id=institution_id,
+                actor_user_id=user_id,
+                actor_role=role,
+                actor_display_name=body.get("actor_display_name"),
+                reason=body.get("reason"),
+            )
+            if not result.ok:
+                return {"error": result.error}, int(result.status_code or 422)
+            db.session.commit()
+            return {"success": True, "control": result.after}
+        except Exception as e:
+            db.session.rollback()
+            _reraise_auth_errors(e)
+            sentry_sdk.capture_exception(e)
             return {"error": f"Erreur serveur: {e!s}"}, 500

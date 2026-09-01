@@ -36,6 +36,8 @@ export const INSTITUTION_ACTIONS = {
   // Billing
   EDIT_BILLING: 'edit_billing',
   EDIT_REQUEST_BILLING: 'edit_request_billing', // Changer facturation institution/patient sur une demande
+  /** Contrôle facturation pré-facturation (INSTITUTION-07) */
+  VIEW_BILLING_CONTROL: 'view_billing_control',
   /** Destinataire + overrides par trajet, uniquement à la création de la demande */
   SET_REQUEST_BILLING_ON_CREATE: 'set_request_billing_on_create',
 
@@ -70,6 +72,7 @@ const ROLE_PERMISSIONS = {
     INSTITUTION_ACTIONS.MANAGE_API_KEYS,
     INSTITUTION_ACTIONS.EDIT_BILLING,
     INSTITUTION_ACTIONS.EDIT_REQUEST_BILLING,
+    INSTITUTION_ACTIONS.VIEW_BILLING_CONTROL,
     INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE,
     INSTITUTION_ACTIONS.VIEW_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_ADMIN_DATA,
@@ -111,6 +114,7 @@ const ROLE_PERMISSIONS = {
     INSTITUTION_ACTIONS.VIEW_SETTINGS,
     INSTITUTION_ACTIONS.EDIT_BILLING,
     INSTITUTION_ACTIONS.EDIT_REQUEST_BILLING,
+    INSTITUTION_ACTIONS.VIEW_BILLING_CONTROL,
     INSTITUTION_ACTIONS.SET_REQUEST_BILLING_ON_CREATE,
     INSTITUTION_ACTIONS.VIEW_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_ADMIN_DATA,
@@ -211,6 +215,11 @@ export function canManageRequests(institutionRole) {
  */
 export function canEditBilling(institutionRole) {
   return can(institutionRole, INSTITUTION_ACTIONS.EDIT_BILLING);
+}
+
+/** Contrôle facturation institution (admin + billing uniquement, aligné backend ACL). */
+export function canAccessBillingControl(institutionRole) {
+  return can(institutionRole, INSTITUTION_ACTIONS.VIEW_BILLING_CONTROL);
 }
 
 /** Montants visibles : admin, billing, curator uniquement */
@@ -334,6 +343,7 @@ const institutionPermissions = {
   isCurator,
   canManageRequests,
   canEditBilling,
+  canAccessBillingControl,
   canViewFinancialAmounts,
   canViewBillingSection,
   canEditRequestBilling,

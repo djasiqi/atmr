@@ -46,6 +46,7 @@ from .enums import (
     BillingSource,
     BookingCreatedVia,
     BookingStatus,
+    InstitutionBillingControlStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -314,6 +315,22 @@ class Booking(db.Model):
         Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
     )
     billing_override_reason = Column(Text, nullable=True)
+
+    # Contrôle institution pré-facturation (INSTITUTION-07 — distinct billing_review_status)
+    institution_control_status: Mapped[InstitutionBillingControlStatus | None] = mapped_column(
+        SAEnum(
+            InstitutionBillingControlStatus,
+            name="institution_billing_control_status",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=True,
+    )
+    institution_control_validated_at = Column(DateTime(timezone=True), nullable=True)
+    institution_control_validated_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    institution_control_validated_by_display_name = Column(String(200), nullable=True)
+    institution_control_anomaly_reason = Column(Text, nullable=True)
 
     # Nouveau lien vers un tiers payeur “unifié” (optionnel en V1).
     billing_party_id: Mapped[int | None] = mapped_column(

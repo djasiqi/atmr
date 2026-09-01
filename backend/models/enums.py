@@ -303,6 +303,22 @@ class BillingReviewStatus(str, PyEnum):
         return [e.value for e in cls]
 
 
+class InstitutionBillingControlStatus(str, PyEnum):
+    """Contrôle institution pré-facturation (distinct de BillingReviewStatus entreprise).
+
+    NULL en base = legacy / pas encore intégré ; l'API expose ``pending_review`` comme
+    statut effectif sans write automatique.
+    """
+
+    PENDING_REVIEW = "pending_review"
+    VALIDATED = "validated"
+    ANOMALY = "anomaly"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
 class InvoiceBillingStrategy(str, PyEnum):
     """Stratégie de facturation (niveau facture).
 

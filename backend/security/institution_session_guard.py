@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
@@ -18,10 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 def _mark_jwt_revocation_reason(reason: str) -> None:
-    try:
+    with contextlib.suppress(RuntimeError):
         g.jwt_revocation_reason = reason
-    except RuntimeError:
-        pass
 
 
 def resolve_user_id_from_jwt_payload(jwt_payload: dict[str, Any]) -> int | None:
