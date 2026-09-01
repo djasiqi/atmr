@@ -2817,6 +2817,8 @@ class SendInvoice(Resource):
                 result = send_use_case.execute(input_data)
 
                 if not result.success:
+                    if result.error_payload:
+                        return result.error_payload, result.status_code
                     return {
                         "success": False,
                         "error": result.error,
@@ -2873,6 +2875,10 @@ class SendInvoice(Resource):
                     logger,
                 )
 
+            from application.invoices.invoice_line_booking_integrity import (
+                InvoiceBookingLinkIncompleteError,
+                assert_invoice_booking_link_integrity,
+            )
             from application.invoices.invoice_pdf_state import (
                 ensure_draft_pdf_ready_for_send,
             )
@@ -2885,6 +2891,11 @@ class SendInvoice(Resource):
                         err_pdf or "PDF indisponible.",
                         logger_instance=logger,
                     )
+
+            try:
+                assert_invoice_booking_link_integrity(invoice)
+            except InvoiceBookingLinkIncompleteError as link_err:
+                return link_err.to_error_payload(), 409
 
             invoice.status = InvoiceStatus.SENT
             invoice.sent_at = datetime.now(UTC)
@@ -6071,12 +6082,16 @@ class BulkSendInvoices(Resource):
                         SendInvoiceByEmailInput(invoice_id=inv_row.id)
                     )
                     if not er.success:
-                        failed_pdf.append(
-                            {
-                                "invoice_id": inv_row.id,
-                                "error": er.error or "Échec envoi email",
-                            }
-                        )
+                        fail_entry: dict[str, Any] = {
+                            "invoice_id": inv_row.id,
+                            "error": er.error or "Échec envoi email",
+                        }
+                        if er.error_payload:
+                            fail_entry["error_code"] = er.error_payload.get(
+                                "error_code"
+                            )
+                            fail_entry["details"] = er.error_payload.get("details")
+                        failed_pdf.append(fail_entry)
                         continue
                     sent.append(inv_row.id)
                     updated.append(
@@ -6093,6 +6108,24 @@ class BulkSendInvoices(Resource):
                         {
                             "invoice_id": inv_row.id,
                             "error": err_pdf or "PDF indisponible",
+                        }
+                    )
+                    continue
+                from application.invoices.invoice_line_booking_integrity import (
+                    InvoiceBookingLinkIncompleteError,
+                    assert_invoice_booking_link_integrity,
+                )
+
+                try:
+                    assert_invoice_booking_link_integrity(inv_row)
+                except InvoiceBookingLinkIncompleteError as link_err:
+                    payload = link_err.to_error_payload()
+                    failed_pdf.append(
+                        {
+                            "invoice_id": inv_row.id,
+                            "error": payload.get("error"),
+                            "error_code": payload.get("error_code"),
+                            "details": payload.get("details"),
                         }
                     )
                     continue

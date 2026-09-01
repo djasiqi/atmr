@@ -1427,8 +1427,10 @@ class AcceptOfferUseCase:
     @staticmethod
     def _is_institution_billing_intent(transport_request: TransportRequest) -> bool:
         intent = (
-            getattr(transport_request, "billing_intent", None) or "patient"
-        ).strip().lower()
+            (getattr(transport_request, "billing_intent", None) or "patient")
+            .strip()
+            .lower()
+        )
         return intent == "institution"
 
     def _apply_effective_billing_for_leg(
@@ -1476,7 +1478,9 @@ class AcceptOfferUseCase:
         from services.billing.booking_billing_guard import (
             assert_non_patient_billing_complete,
         )
-        from services.billing.destination_billing_resolver import billed_to_type_from_intent
+        from services.billing.destination_billing_resolver import (
+            billed_to_type_from_intent,
+        )
 
         requires_non_patient = billed_to_type_from_intent(effective_intent) != "patient"
         if booking.billing_party_id is None:

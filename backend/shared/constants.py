@@ -159,6 +159,9 @@ class ErrorCodes:
     MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED = "MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED"
     MATERIAL_DELIVERY_DESCRIPTION_REQUIRED = "MATERIAL_DELIVERY_DESCRIPTION_REQUIRED"
 
+    # Intégrité facturation A/R (InvoiceLine ↔ Booking)
+    BILLING_INVOICE_LINE_LINK_INCOMPLETE = "BILLING_INVOICE_LINE_LINK_INCOMPLETE"
+
 
 # ============================================================================
 # CODES D'ERREUR AUTH (authentification / inscription / mot de passe)

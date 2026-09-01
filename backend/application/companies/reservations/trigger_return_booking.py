@@ -56,7 +56,7 @@ class TriggerReturnBookingUseCase:
 
     def execute(
         self,
-        outbound: _BookingLike,
+        _outbound: _BookingLike,
         *,
         return_time_raw: str | None,
         urgent: bool,

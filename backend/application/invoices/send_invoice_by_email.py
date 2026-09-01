@@ -16,6 +16,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from application.invoices.invoice_line_booking_integrity import (
+    InvoiceBookingLinkIncompleteError,
+    assert_invoice_booking_link_integrity,
+)
 from application.invoices.invoice_pdf_state import (
     ensure_draft_pdf_ready_for_send,
     get_pdf_state,
@@ -53,6 +57,7 @@ class SendInvoiceByEmailResult:
     sent_at: datetime | None = None
     error: str | None = None
     status_code: int = 200
+    error_payload: dict[str, Any] | None = None
 
 
 class SendInvoiceByEmailUseCase:
@@ -576,6 +581,26 @@ class SendInvoiceByEmailUseCase:
                 from_email,
                 len(attachments),
             )
+
+            # 10. Invariant A/R avant envoi effectif (fail-closed, pas de correction).
+            try:
+                assert_invoice_booking_link_integrity(invoice)
+            except InvoiceBookingLinkIncompleteError as link_err:
+                payload = link_err.to_error_payload()
+                logger.error(
+                    "BILLING_INVOICE_LINE_LINK_INCOMPLETE avant envoi email "
+                    "invoice_id=%s details=%s",
+                    invoice.id,
+                    payload.get("details"),
+                )
+                return SendInvoiceByEmailResult(
+                    success=False,
+                    invoice_id=input_data.invoice_id,
+                    recipient=recipient_email,
+                    error=str(payload.get("error") or link_err),
+                    status_code=409,
+                    error_payload=payload,
+                )
 
             email_result = self.brevo_provider.send_invoice_email(
                 from_email=from_email,

@@ -275,6 +275,45 @@ def test_opportunity_counts_ignored_missing_bp(db, company, portfolio_client):
     assert result.patient_items[0].billing_party_id is not None
 
 
+def test_opportunity_persists_healed_bp_on_booking_after_list(
+    db, company, portfolio_client
+):
+    """Régression : guérison BP persistée même après autoflush (dirty/new vides).
+
+    Avant, ``if session.dirty or session.new`` sautait le commit → rollback requête
+    HTTP → period-preview à 0 alors que la liste affiche encore les transports.
+    """
+    booking = _make_booking(
+        db,
+        company=company,
+        client=portfolio_client,
+        scheduled=datetime(2026, 8, 5, 11, 30),
+        billing_party_id=None,
+    )
+    db.session.commit()
+
+    result = list_billing_opportunities(
+        company_id=company.id, period_year=2026, period_month=8
+    )
+    assert len(result.patient_items) == 1
+    healed_bp_id = result.patient_items[0].billing_party_id
+    assert healed_bp_id is not None
+
+    db.session.expire(booking)
+    assert booking.billing_party_id == healed_bp_id
+
+    from application.invoices.period_invoice_preview import build_period_invoice_preview
+
+    prev = build_period_invoice_preview(
+        company_id=company.id,
+        period_year=2026,
+        period_month=8,
+        client_id=portfolio_client.id,
+        billing_party_id=healed_bp_id,
+    )
+    assert prev.transports_count == 1
+
+
 def test_backfill_assigns_patient_bp_idempotent(db, company, portfolio_client):
     booking = _make_booking(
         db,

@@ -5,6 +5,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import institutionService from '../services/institutionService';
+import institutionBillingControlService from '../services/institutionBillingControlService';
 
 // ============================================================================
 // Query Keys (centralisés pour invalidation cohérente)
@@ -35,6 +36,8 @@ export const institutionQueryKeys = {
   notifications: () => [...institutionQueryKeys.all, 'notifications'],
   permissionRequests: () => [...institutionQueryKeys.all, 'permission-requests'],
   teams: () => [...institutionQueryKeys.all, 'teams'],
+  billingControl: () => [...institutionQueryKeys.all, 'billing-control'],
+  billingControlList: (filters) => [...institutionQueryKeys.billingControl(), 'list', filters],
 };
 
 // ============================================================================
@@ -766,5 +769,62 @@ export function useRejectPatientSuggestion() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: institutionQueryKeys.patientSuggestions(variables.patientId) });
     },
+  });
+}
+
+// ============================================================================
+// Billing Control (INSTITUTION-07)
+// ============================================================================
+
+export function useBillingControlBookings(filters = {}, enabled = true) {
+  return useQuery({
+    queryKey: institutionQueryKeys.billingControlList(filters),
+    queryFn: () => institutionBillingControlService.listBillingControlBookings(filters),
+    enabled,
+    staleTime: 15 * 1000,
+    retry: (failureCount, error) => {
+      if (error?.response?.status === 403) return false;
+      return failureCount < 2;
+    },
+  });
+}
+
+function invalidateBillingControlQueries(queryClient) {
+  queryClient.invalidateQueries({ queryKey: institutionQueryKeys.billingControl() });
+}
+
+export function useValidateBillingControlBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, data }) =>
+      institutionBillingControlService.validateBillingControlBooking(bookingId, data),
+    onSuccess: () => invalidateBillingControlQueries(queryClient),
+  });
+}
+
+export function useMarkBillingControlAnomaly() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, data }) =>
+      institutionBillingControlService.markBillingControlAnomaly(bookingId, data),
+    onSuccess: () => invalidateBillingControlQueries(queryClient),
+  });
+}
+
+export function useReopenBillingControlBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, data }) =>
+      institutionBillingControlService.reopenBillingControlBooking(bookingId, data),
+    onSuccess: () => invalidateBillingControlQueries(queryClient),
+  });
+}
+
+export function useChangeBillingControlPayer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, data }) =>
+      institutionBillingControlService.changeBillingControlPayer(bookingId, data),
+    onSuccess: () => invalidateBillingControlQueries(queryClient),
   });
 }

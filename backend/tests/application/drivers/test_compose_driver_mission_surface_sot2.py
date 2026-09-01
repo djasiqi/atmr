@@ -11,7 +11,9 @@ from application.drivers.compose_driver_mission_surface import (
     latest_assignment_status_by_booking_id,
     should_compose_arrived,
 )
-from application.drivers.get_driver_booking_details import GetDriverBookingDetailsUseCase
+from application.drivers.get_driver_booking_details import (
+    GetDriverBookingDetailsUseCase,
+)
 from models.enums import AssignmentStatus, BookingStatus
 
 

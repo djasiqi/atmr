@@ -923,7 +923,33 @@ apiClient.interceptors.request.use(async (config) => {
 });
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    try {
+      const cfg = response.config as AtmrAxiosRequestConfig;
+      const started = cfg._p1HarnessStartedAt;
+      const url = String(cfg.url ?? "");
+      if (
+        started &&
+        (url.includes("/auth/") ||
+          url.includes("/company_mobile/") ||
+          url.includes("/driver/"))
+      ) {
+        const { emitP1HarnessLog } = require("../observability/p1HarnessLog") as {
+          emitP1HarnessLog: (event: string, payload: Record<string, unknown>) => void;
+        };
+        emitP1HarnessLog("p1.api.end", {
+          source: "api.client",
+          method: String(cfg.method ?? "get").toUpperCase(),
+          endpoint: url,
+          status: response.status,
+          duration_ms: Date.now() - started,
+        });
+      }
+    } catch {
+      // optional p1 harness
+    }
+    return response;
+  },
   async (error: AxiosError<{ error?: string; error_message?: string }>) => {
     const originalForAuthRetry = error.config as
       | (InternalAxiosRequestConfig & { _authRetried?: boolean })

@@ -203,6 +203,7 @@ def _billing_snapshot(booking: Booking) -> dict[str, Any]:
     return {
         "billed_to_type": booking.billed_to_type,
         "billed_to_company_id": booking.billed_to_company_id,
+        "billing_party_id": getattr(booking, "billing_party_id", None),
         "billed_to_contact": booking.billed_to_contact,
         "billing_override_reason": booking.billing_override_reason,
         "amount": float(booking.amount) if booking.amount is not None else None,

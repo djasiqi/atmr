@@ -16,7 +16,7 @@ from application.companies.reservations.resolve_return_target import (
 from models import Booking, Institution, TransportRequest, TransportRequestLeg
 from models.enums import BookingStatus, RequestStatus
 from repositories.booking_repository import BookingRepository
-from tests.routes.test_companies import _auth_headers, companies_world
+from tests.routes.test_companies import _auth_headers
 
 
 def _future_return_time(hours: int = 8) -> str:

@@ -212,6 +212,15 @@ const InstitutionRequests = lazy(() => import('./pages/institution/Requests/Inst
 const InstitutionRequestCreate = lazy(() => import('./pages/institution/Requests/InstitutionRequestCreate'));
 const InstitutionPatients = lazy(() => import('./pages/institution/Patients/InstitutionPatients'));
 const InstitutionSettings = lazy(() => import('./pages/institution/Settings/InstitutionSettings'));
+const InstitutionBillingControl = lazy(() =>
+  import('./pages/institution/BillingControl/InstitutionBillingControl').then((mod) => ({
+    default: () => (
+      <mod.BillingControlRouteGuard>
+        <mod.default />
+      </mod.BillingControlRouteGuard>
+    ),
+  }))
+);
 
 // ──────────────────────────────────────────────────────────
 // Query Client (déclaré hors composant pour éviter recréation)
@@ -877,6 +886,7 @@ const App = () => {
               <Route path="requests/new" element={<InstitutionRequestCreate />} />
               <Route path="requests/:requestId" element={<InstitutionRequests />} />
               <Route path="patients" element={<InstitutionPatients />} />
+              <Route path="billing-control" element={<InstitutionBillingControl />} />
               <Route path="settings" element={<InstitutionSettings />} />
             </Route>
             <Route
@@ -892,6 +902,7 @@ const App = () => {
               <Route path="requests/new" element={<InstitutionRequestCreate />} />
               <Route path="requests/:requestId" element={<InstitutionRequests />} />
               <Route path="patients" element={<InstitutionPatients />} />
+              <Route path="billing-control" element={<InstitutionBillingControl />} />
               <Route path="settings" element={<InstitutionSettings />} />
             </Route>
 

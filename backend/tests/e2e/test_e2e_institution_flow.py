@@ -48,6 +48,39 @@ from tests.e2e.helpers.e2e_helpers import create_test_booking
 pytestmark = pytest.mark.e2e
 
 
+def _institution_auth_headers(
+    db,
+    user: User,
+    institution: Institution,
+    institution_role: str,
+) -> dict[str, str]:
+    """JWT institution avec sid + WebSession (garde session P0-A)."""
+    from models.web_session import WebSession
+
+    now = datetime.now(UTC)
+    session = WebSession()
+    session.id = str(uuid.uuid4())
+    session.user_id = int(user.id)
+    session.institution_id = institution.id
+    session.created_at = now
+    session.expires_at = now + timedelta(hours=8)
+    session.last_interactive_activity_at = now
+    db.session.add(session)
+    db.session.flush()
+
+    token = create_access_token(
+        identity=str(user.public_id),
+        additional_claims={
+            "role": UserRole.INSTITUTION.value,
+            "institution_id": institution.id,
+            "institution_role": institution_role,
+            "sid": session.id,
+            "aud": "atmr-api",
+        },
+    )
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
 class TestE2EInstitutionFlow:
     """Test E2E du flux institution -> company."""
 
@@ -84,18 +117,14 @@ class TestE2EInstitutionFlow:
         return user
 
     @pytest.fixture
-    def e2e_institution_headers(self, e2e_institution_admin, e2e_institution):
+    def e2e_institution_headers(self, db, e2e_institution_admin, e2e_institution):
         """Headers JWT pour l'utilisateur institution."""
-        token = create_access_token(
-            identity=str(e2e_institution_admin.public_id),
-            additional_claims={
-                "role": UserRole.INSTITUTION.value,
-                "institution_id": e2e_institution.id,
-                "institution_role": "institution_admin",
-                "aud": "atmr-api",
-            },
+        return _institution_auth_headers(
+            db,
+            e2e_institution_admin,
+            e2e_institution,
+            "institution_admin",
         )
-        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     @pytest.fixture
     def e2e_company(self, db):
@@ -225,7 +254,10 @@ class TestE2EInstitutionFlow:
         # =====================================================================
         # STEP 2: Institution crée une demande de transport (DRAFT)
         # =====================================================================
-        scheduled_time = datetime.now(UTC) + timedelta(days=2)
+        # Heure murale Genève : éviter les créations proches de minuit UTC (décalage jour).
+        scheduled_time = (datetime.now(UTC) + timedelta(days=2)).replace(
+            hour=10, minute=0, second=0, microsecond=0
+        )
         request_data = {
             "external_reference": external_ref,
             "patient_id": patient_id,
@@ -480,18 +512,14 @@ class TestE2EInstitutionFlowEdgeCases:
         return user
 
     @pytest.fixture
-    def e2e_institution_headers(self, e2e_institution_admin, e2e_institution):
+    def e2e_institution_headers(self, db, e2e_institution_admin, e2e_institution):
         """Headers JWT pour l'utilisateur institution."""
-        token = create_access_token(
-            identity=str(e2e_institution_admin.public_id),
-            additional_claims={
-                "role": UserRole.INSTITUTION.value,
-                "institution_id": e2e_institution.id,
-                "institution_role": "institution_admin",
-                "aud": "atmr-api",
-            },
+        return _institution_auth_headers(
+            db,
+            e2e_institution_admin,
+            e2e_institution,
+            "institution_admin",
         )
-        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     def test_e2e_cancel_converted_request_returns_409(
         self,

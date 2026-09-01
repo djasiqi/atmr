@@ -320,6 +320,14 @@ def build_period_invoice_preview(
                 == int(institution_patient_id)
             ]
         elif billing_party_id is not None:
+            # Filet : courses encore sans BP (guérison opportunités non persistée).
+            from services.billing.billing_party_linker import (
+                ensure_patient_destination_billing_party,
+            )
+
+            for b in bookings:
+                if getattr(b, "billing_party_id", None) is None:
+                    ensure_patient_destination_billing_party(b)
             bookings = [
                 b
                 for b in bookings
@@ -488,6 +496,12 @@ def build_period_invoice_preview(
         )
     )
     eligible_bookings = eligible_query.order_by(Booking.scheduled_time.asc()).all()
+    from application.invoices.active_invoice_claim import (
+        filter_bookings_without_active_invoice_claim,
+    )
+
+    # BUG B : IL NULL ne suffit pas — exclure les claims actives (merge_partner, etc.).
+    eligible_bookings = filter_bookings_without_active_invoice_claim(eligible_bookings)
     rt_map_s2 = _round_trip_leg_by_booking_id(eligible_bookings)
     crepo = ClientRepository()
     # Batch : une requête client (+ user) pour toute la période clinique (Sentry N+1).

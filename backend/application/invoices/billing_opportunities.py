@@ -458,6 +458,12 @@ def load_eligible_bookings_for_opportunity(
         ):
             continue
         out.append(b)
+
+    from application.invoices.active_invoice_claim import (
+        filter_bookings_without_active_invoice_claim,
+    )
+
+    out = filter_bookings_without_active_invoice_claim(out)
     return sorted(
         out,
         key=lambda b: (
@@ -501,6 +507,13 @@ def list_billing_opportunities(
     # Rattrapage : sans institution_patient_id, chaque transport formerait sa
     # propre opportunité (clé legacy-institution-booking).
     resolve_missing_institution_patient_ids(patient_bookings)
+
+    from application.invoices.active_invoice_claim import (
+        filter_bookings_without_active_invoice_claim,
+    )
+
+    # BUG B : exclure les bookings revendiqués par une InvoiceLine active.
+    patient_bookings = filter_bookings_without_active_invoice_claim(patient_bookings)
 
     # Grouper par sujet facturable : un patient = une facture pour la période.
     groups: dict[str, list[Booking]] = defaultdict(list)
@@ -609,7 +622,10 @@ def list_billing_opportunities(
                     if resolve_subject_identity(extra).key != subject_key:
                         continue
                     scope_by_id[int(extra.id)] = extra
-        scope_bookings = list(scope_by_id.values())
+        # BUG B : les extras IL NULL peuvent encore être revendiqués (merge_partner).
+        scope_bookings = filter_bookings_without_active_invoice_claim(
+            list(scope_by_id.values())
+        )
 
         units = resolve_invoice_booking_units(
             selected_ids={int(b.id) for b in bookings},
@@ -709,9 +725,13 @@ def list_billing_opportunities(
     if ignored_missing_billing_party_count:
         _inc_ignored_missing_billing_party_metric(ignored_missing_billing_party_count)
 
-    # Persister les guérisons BP patient←établissement (sinon rollback fin de requête).
-    if db.session.new or db.session.dirty:
-        db.session.commit()
+    # Persister les guérisons BP / institution_patient.
+    # Important : après autoflush (requêtes suivantes dans cette fonction),
+    # ``session.dirty`` / ``session.new`` sont vides alors que la transaction
+    # contient encore les UPDATEs. Un ``if dirty/new`` sautait le commit →
+    # ``teardown_appcontext`` rollback → opportunités avec billing_party_id
+    # fantôme et period-preview à 0 transports.
+    db.session.commit()
 
     return BillingOpportunitiesResult(
         period_year=period_year,

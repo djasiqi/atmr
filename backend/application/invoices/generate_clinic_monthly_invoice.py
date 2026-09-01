@@ -33,6 +33,10 @@ from application.invoices.invoice_line_description import (
     build_merged_round_trip_invoice_line_description_from_segments,
 )
 from application.invoices.invoice_pdf_state import mark_pdf_failed, mark_pdf_ready
+from application.invoices.invoice_line_booking_integrity import (
+    InvoiceBookingLinkIncompleteError,
+    assert_invoice_booking_link_integrity,
+)
 from application.invoices.subject_identity import resolve_subject_identity
 from infrastructure.invoices.invoice_description_builder import (
     InvoiceDescriptionBuilder,
@@ -453,45 +457,21 @@ class GenerateClinicMonthlyInvoiceUseCase:
             for extra in list(child_peers) + list(missing_parents):
                 by_id[int(extra.id)] = extra
 
-            # Filet orphelin : si le pair explicite est déjà lié à une facture active,
-            # ne pas proposer le segment ouvert comme nouvelle ligne.
-            from application.invoices.round_trip_billing_lock import (
-                booking_has_blocking_invoice_line,
+            # Filet orphelin : claim active (covered_booking_ids), pas pair heuristique.
+            from application.invoices.active_invoice_claim import (
+                filter_bookings_without_active_invoice_claim,
             )
 
             open_candidates: list[Booking] = []
             for b in by_id.values():
-                if b.invoice_line_id is not None and booking_has_blocking_invoice_line(
-                    b
-                ):
-                    continue
                 if b.invoice_line_id is not None:
-                    continue
-                pid = getattr(b, "parent_booking_id", None)
-                if pid is not None and int(pid) in by_id:
-                    parent = by_id[int(pid)]
-                    if (
-                        parent.invoice_line_id is not None
-                        and booking_has_blocking_invoice_line(parent)
-                    ):
-                        continue
-                # enfants déjà facturés bloquent le parent ouvert
-                blocked_by_child = False
-                for other in by_id.values():
-                    if (
-                        getattr(other, "parent_booking_id", None) == b.id
-                        and other.invoice_line_id is not None
-                        and booking_has_blocking_invoice_line(other)
-                    ):
-                        blocked_by_child = True
-                        break
-                if blocked_by_child:
                     continue
                 # période : ancre = principal (non-retour ou parent) dans le mois
                 st = getattr(b, "scheduled_time", None)
                 is_return = bool(getattr(b, "is_return", False)) or (
                     getattr(b, "parent_booking_id", None) is not None
                 )
+                pid = getattr(b, "parent_booking_id", None)
                 if is_return and pid is not None and int(pid) in by_id:
                     anchor = by_id[int(pid)]
                     ast = getattr(anchor, "scheduled_time", None)
@@ -511,6 +491,9 @@ class GenerateClinicMonthlyInvoiceUseCase:
                         pass
                 open_candidates.append(b)
 
+            open_candidates = filter_bookings_without_active_invoice_claim(
+                open_candidates
+            )
             # Reconstruire la liste ancrée période : bookings dont l'ancre est dans le mois
             period_anchor_ids: set[int] = set()
             for b in open_candidates:
@@ -545,14 +528,9 @@ class GenerateClinicMonthlyInvoiceUseCase:
                         period_anchor_ids.add(wid)
 
             scope_bookings = [by_id[i] for i in sorted(period_anchor_ids) if i in by_id]
-            # n'émettre que les bookings encore ouverts
-            scope_bookings = [
-                b
-                for b in scope_bookings
-                if b.invoice_line_id is None or not booking_has_blocking_invoice_line(b)
-            ]
+            # n'émettre que les bookings encore ouverts et non revendiqués
             scope_bookings = [b for b in scope_bookings if b.invoice_line_id is None]
-
+            scope_bookings = filter_bookings_without_active_invoice_claim(scope_bookings)
             def _amount_ht(b: Booking) -> Decimal:
                 return calculate_billable_booking_amount(
                     b, billing_settings=billing_settings_dto
@@ -578,13 +556,16 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     .all()
                 )
                 by_id.update({int(b.id): b for b in locked})
-                # Revalider ouverture
+                # Revalider ouverture (FK + claim active)
                 still_open_units = []
                 for u in units:
                     segs = [by_id[i] for i in u.booking_ids if i in by_id]
                     if len(segs) != len(u.booking_ids):
                         continue
                     if any(s.invoice_line_id is not None for s in segs):
+                        continue
+                    unclaimed = filter_bookings_without_active_invoice_claim(segs)
+                    if len(unclaimed) != len(segs):
                         continue
                     still_open_units.append(u)
                 units = still_open_units
@@ -1102,10 +1083,31 @@ class GenerateClinicMonthlyInvoiceUseCase:
             }
             invoice.meta = cast(Any, current_meta)
 
-            # 11. Commit métier (facture + lignes + réservations), puis PDF dans une 2e transaction
+            # 11. Invariant A/R : chaque booking revendiqué par une ligne doit être lié.
+            # Fail-closed avant commit (pas de réparation silencieuse).
+            db.session.flush()
+            try:
+                assert_invoice_booking_link_integrity(invoice)
+            except InvoiceBookingLinkIncompleteError as link_err:
+                logger.error(
+                    "BILLING_INVOICE_LINE_LINK_INCOMPLETE avant commit S2 "
+                    "clinic_company_id=%s period=%s-%02d details=%s",
+                    input_data.clinic_company_id,
+                    input_data.period_year,
+                    input_data.period_month,
+                    link_err.to_error_payload().get("details"),
+                )
+                db.session.rollback()
+                return GenerateClinicMonthlyInvoiceOutput(
+                    success=False,
+                    error=link_err.to_error_payload(),
+                    status_code=409,
+                )
+
+            # 12. Commit métier (facture + lignes + réservations), puis PDF dans une 2e transaction
             db.session.commit()
 
-            # 12. PDF + meta.pdf (le service recharge la facture après expire_all)
+            # 13. PDF + meta.pdf (le service recharge la facture après expire_all)
             try:
                 pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
                 if pdf_url:

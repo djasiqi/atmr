@@ -8,6 +8,7 @@ import {
   isAdmin,
   canManageRequests,
   canEditBilling,
+  canAccessBillingControl,
   canEditRequestBilling,
   canSetRequestBillingOnCreate,
   canViewFinancialAmounts,
@@ -139,6 +140,24 @@ describe('Institution Permissions', () => {
     it('billing role can edit request billing and view amounts', () => {
       expect(canEditRequestBilling('institution_billing')).toBe(true);
       expect(canViewFinancialAmounts('institution_billing')).toBe(true);
+    });
+  });
+
+  describe('canAccessBillingControl() — U01–U04', () => {
+    it('U01 admin voit le contrôle facturation', () => {
+      expect(canAccessBillingControl('institution_admin')).toBe(true);
+    });
+
+    it('U02 billing voit le contrôle facturation', () => {
+      expect(canAccessBillingControl('institution_billing')).toBe(true);
+    });
+
+    it('U03 requester ne voit pas le contrôle facturation', () => {
+      expect(canAccessBillingControl('institution_requester')).toBe(false);
+    });
+
+    it('U04 reader ne voit pas le contrôle facturation', () => {
+      expect(canAccessBillingControl('institution_reader')).toBe(false);
     });
   });
 
