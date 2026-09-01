@@ -217,6 +217,71 @@ function markRefreshTerminalIfNeeded(err: AxiosError, refreshToken: string): voi
   });
 }
 
+/**
+ * P1-C2 : porte terminale refresh. Un refresh token rejeté 401/403 par le
+ * backend (révoqué/invalide/replay) ne doit JAMAIS être rejoué sur le réseau.
+ * La porte est levée uniquement quand le token stocké change (login/rotation).
+ */
+type RefreshTerminalState = {
+  code: string;
+  status: number | null;
+  tokenFingerprint: string;
+  atMs: number;
+};
+let refreshTerminalState: RefreshTerminalState | null = null;
+
+/** Empreinte non réversible (djb2 + longueur) — jamais le token en clair. */
+function fingerprintRefreshToken(token: string): string {
+  let h = 5381;
+  for (let i = 0; i < token.length; i += 1) {
+    h = ((h << 5) + h + token.charCodeAt(i)) | 0;
+  }
+  return `${token.length}:${(h >>> 0).toString(36)}`;
+}
+
+/**
+ * 403 n'est PAS terminal par défaut (ex. incident CSRF ponctuel sur un token
+ * valide). Seuls ces error_code explicites (contrat backend futur) terminalisent
+ * un 403. Le storm observé passe par le 401 générique de _validate_refresh_token.
+ */
+const TERMINAL_REFRESH_403_ERROR_CODES = new Set([
+  "refresh_token_revoked",
+  "refresh_token_invalid",
+  "refresh_token_expired",
+]);
+
+function markRefreshTerminalIfNeeded(err: AxiosError, refreshToken: string): void {
+  const status = err.response?.status ?? null;
+  const data = err.response?.data as
+    | { error_code?: string; error?: string }
+    | undefined;
+  const errorCode =
+    typeof data?.error_code === "string" && data.error_code ? data.error_code : null;
+  const isTerminal =
+    status === 401 ||
+    (status === 403 &&
+      errorCode !== null &&
+      TERMINAL_REFRESH_403_ERROR_CODES.has(errorCode));
+  if (!isTerminal) {
+    return;
+  }
+  const code =
+    errorCode ||
+    (typeof data?.error === "string" && data.error) ||
+    "refresh_rejected";
+  refreshTerminalState = {
+    code,
+    status,
+    tokenFingerprint: fingerprintRefreshToken(refreshToken),
+    atMs: Date.now(),
+  };
+  emitDriverTelemetry("auth.refresh.terminal", {
+    source: "core.api.client",
+    status,
+    error_code: code,
+  });
+}
+
 export function getLastRefreshErrorCode(): string | null {
   return lastRefreshErrorCode;
 }
@@ -923,7 +988,33 @@ apiClient.interceptors.request.use(async (config) => {
 });
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    try {
+      const cfg = response.config as AtmrAxiosRequestConfig;
+      const started = cfg._p1HarnessStartedAt;
+      const url = String(cfg.url ?? "");
+      if (
+        started &&
+        (url.includes("/auth/") ||
+          url.includes("/company_mobile/") ||
+          url.includes("/driver/"))
+      ) {
+        const { emitP1HarnessLog } = require("../observability/p1HarnessLog") as {
+          emitP1HarnessLog: (event: string, payload: Record<string, unknown>) => void;
+        };
+        emitP1HarnessLog("p1.api.end", {
+          source: "api.client",
+          method: String(cfg.method ?? "get").toUpperCase(),
+          endpoint: url,
+          status: response.status,
+          duration_ms: Date.now() - started,
+        });
+      }
+    } catch {
+      // optional p1 harness
+    }
+    return response;
+  },
   async (error: AxiosError<{ error?: string; error_message?: string }>) => {
     const originalForAuthRetry = error.config as
       | (InternalAxiosRequestConfig & { _authRetried?: boolean })

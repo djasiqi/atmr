@@ -34,6 +34,10 @@ from application.invoices.round_trip_billing_lock import (
     round_trip_component_id_sets,
 )
 from application.invoices.invoice_pdf_state import mark_pdf_failed, mark_pdf_ready
+from application.invoices.invoice_line_booking_integrity import (
+    InvoiceBookingLinkIncompleteError,
+    assert_invoice_booking_link_integrity,
+)
 from infrastructure.invoices.invoice_description_builder import (
     InvoiceDescriptionBuilder,
 )
@@ -1402,10 +1406,28 @@ class GenerateInvoiceUseCase:
                         qr_ref,
                     )
 
-            # 12. Commit métier (facture + lignes + réservations). PDF fichier dans une 2e transaction.
+            # 12. Invariant A/R : chaque booking revendiqué par une ligne doit être lié.
+            db.session.flush()
+            try:
+                assert_invoice_booking_link_integrity(invoice)
+            except InvoiceBookingLinkIncompleteError as link_err:
+                logger.error(
+                    "BILLING_INVOICE_LINE_LINK_INCOMPLETE avant commit patient "
+                    "invoice_number=%s details=%s",
+                    getattr(invoice, "invoice_number", None),
+                    link_err.to_error_payload().get("details"),
+                )
+                db.session.rollback()
+                return GenerateInvoiceOutput(
+                    success=False,
+                    error=link_err.to_error_payload(),
+                    status_code=409,
+                )
+
+            # 13. Commit métier (facture + lignes + réservations). PDF fichier dans une 2e transaction.
             db.session.commit()
 
-            # 13. PDF + meta.pdf (``generate_invoice_pdf`` recharge la facture après ``expire_all``).
+            # 14. PDF + meta.pdf (``generate_invoice_pdf`` recharge la facture après ``expire_all``).
             generated_pdf_url = None
             try:
                 pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
