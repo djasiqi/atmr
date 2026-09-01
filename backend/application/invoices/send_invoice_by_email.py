@@ -16,16 +16,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from application.invoices.invoice_line_booking_integrity import (
+    InvoiceBookingLinkIncompleteError,
+    assert_invoice_booking_link_integrity,
+)
 from application.invoices.invoice_pdf_state import (
     ensure_draft_pdf_ready_for_send,
     get_pdf_state,
     is_pdf_sendable,
     mark_pdf_failed,
     mark_pdf_ready,
-)
-from application.invoices.invoice_line_booking_integrity import (
-    InvoiceBookingLinkIncompleteError,
-    assert_invoice_booking_link_integrity,
 )
 from ext import db
 from models import Client, Company, CompanyBillingSettings, Invoice

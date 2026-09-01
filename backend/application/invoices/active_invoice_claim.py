@@ -10,6 +10,7 @@ Aucune heuristique d'adresse / DSU / subject_identity ici.
 
 from __future__ import annotations
 
+import contextlib
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -62,10 +63,7 @@ def _meta_contains_id(raw: Any, booking_id: int) -> bool:
     if raw is None:
         return False
     if isinstance(raw, (list, tuple, set, frozenset)):
-        for item in raw:
-            if _meta_contains_id(item, booking_id):
-                return True
-        return False
+        return any(_meta_contains_id(item, booking_id) for item in raw)
     try:
         return int(raw) == int(booking_id)
     except (TypeError, ValueError):
@@ -263,10 +261,12 @@ def _invoice_company_id(invoice: Any) -> int | None:
         return None
 
 
-def _claim_from_pair(line: Any, invoice: Any, booking_id: int) -> BlockingInvoiceClaim | None:
+def _claim_from_pair(
+    line: Any, invoice: Any, booking_id: int
+) -> BlockingInvoiceClaim | None:
     try:
-        lid = int(getattr(line, "id"))
-        iid = int(getattr(invoice, "id"))
+        lid = int(line.id)
+        iid = int(invoice.id)
     except (TypeError, ValueError):
         return None
     return BlockingInvoiceClaim(
@@ -312,10 +312,8 @@ def find_all_blocking_invoice_claims(
                     continue
                 pid = getattr(b, "parent_booking_id", None)
                 if pid is not None:
-                    try:
+                    with contextlib.suppress(TypeError, ValueError):
                         context_ids.add(int(pid))
-                    except (TypeError, ValueError):
-                        pass
         context_ids |= expand_explicit_claim_context_ids(
             context_ids, company_ids=company_ids or None
         )
@@ -327,9 +325,8 @@ def find_all_blocking_invoice_claims(
         if not _is_blocking_status(status):
             continue
         inv_cid = _invoice_company_id(invoice)
-        if company_ids:
-            if inv_cid is None or inv_cid not in company_ids:
-                continue
+        if company_ids and (inv_cid is None or inv_cid not in company_ids):
+            continue
         covered = covered_booking_ids(line)
         for bid in covered & candidates:
             claim = _claim_from_pair(line, invoice, bid)

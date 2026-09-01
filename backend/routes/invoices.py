@@ -2875,12 +2875,12 @@ class SendInvoice(Resource):
                     logger,
                 )
 
-            from application.invoices.invoice_pdf_state import (
-                ensure_draft_pdf_ready_for_send,
-            )
             from application.invoices.invoice_line_booking_integrity import (
                 InvoiceBookingLinkIncompleteError,
                 assert_invoice_booking_link_integrity,
+            )
+            from application.invoices.invoice_pdf_state import (
+                ensure_draft_pdf_ready_for_send,
             )
 
             if invoice.status == InvoiceStatus.DRAFT:
