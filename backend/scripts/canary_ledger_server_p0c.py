@@ -50,9 +50,10 @@ def _claim_key(driver_id: int, event_id: str) -> str:
 
 
 def _boot():
-    from app import create_app
     from flask_jwt_extended import create_access_token
     from sqlalchemy import text
+
+    from app import create_app
 
     app = create_app()
     ctx = app.app_context()
@@ -573,7 +574,7 @@ def main() -> int:
 
     # ------------------------------------------------------------------ S6
     eid6_poison = _eid("s6_poison")
-    st6a, ack6a = _put(
+    st6a, _ack6a = _put(
         token,
         _point(
             event_id=eid6_poison,

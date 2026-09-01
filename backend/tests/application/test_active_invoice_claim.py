@@ -176,11 +176,11 @@ def test_t11_route_group_alone_does_not_block():
 
 
 def test_filter_open_and_unclaimed_via_round_trip_lock():
-    from application.invoices.round_trip_billing_lock import (
-        filter_bookings_open_for_new_invoice_line,
-    )
     from application.invoices.active_invoice_claim import (
         filter_bookings_open_and_unclaimed,
+    )
+    from application.invoices.round_trip_billing_lock import (
+        filter_bookings_open_for_new_invoice_line,
     )
 
     line = _line(
@@ -418,10 +418,10 @@ def test_r8_multiple_active_claims_still_block():
 
 
 def test_r3_blocking_statuses_aligned_with_round_trip_lock():
+    from application.invoices import round_trip_billing_lock as rtl
     from application.invoices.active_invoice_claim import (
         BLOCKING_INVOICE_STATUSES_FOR_CLAIM,
     )
-    from application.invoices import round_trip_billing_lock as rtl
 
     assert rtl._BLOCKING_INVOICE_STATUSES is BLOCKING_INVOICE_STATUSES_FOR_CLAIM
     assert InvoiceStatus.CANCELLED not in BLOCKING_INVOICE_STATUSES_FOR_CLAIM

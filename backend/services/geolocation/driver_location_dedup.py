@@ -176,9 +176,7 @@ def is_structural_ledger_ids_missing(
         return True
     if session_generation is None:
         return True
-    if sequence_id is None:
-        return True
-    return False
+    return sequence_id is None
 
 
 def release_after_pre_persistence_failure(

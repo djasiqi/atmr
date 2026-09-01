@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from geopy.distance import geodesic
 
 from ext import db
-from models import Booking, BookingStatus, Company, Driver
+from models import Booking, Company, Driver
 
 load_dotenv()
 logger = logging.getLogger(__name__)

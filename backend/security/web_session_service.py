@@ -222,7 +222,7 @@ def revoke_all_user_web_sessions(
 
 def resolve_web_session_expires(
     *,
-    remember_me: bool,
+    remember_me: bool,  # noqa: ARG001 — conservé pour contrat login institution
     refresh_expires_delta: timedelta,
 ) -> datetime:
     return datetime.now(UTC) + refresh_expires_delta
