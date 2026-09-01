@@ -134,6 +134,90 @@ class TestCompaniesCriticalCoverage:
         assert booking is not None
         assert booking.status == BookingStatus.COMPLETED
 
+    def test_assign_rejects_incomplete_clinic_billing_no_auto_repair(
+        self, client, companies_world, company_headers, db
+    ):
+        """Assign : 422 si clinic incomplet, sans réparation depuis client.default."""
+        from sqlalchemy import text
+
+        from models.billing_party import BillingParty
+
+        world = companies_world
+        booking = world["booking"]
+        driver_id = world["driver"].id
+
+        booking.status = BookingStatus.ACCEPTED
+        booking.driver_id = None
+        db.session.commit()
+
+        db.session.execute(
+            text(
+                "UPDATE booking SET billed_to_type = 'clinic', "
+                "billed_to_company_id = NULL, billing_party_id = NULL WHERE id = :id"
+            ),
+            {"id": int(booking.id)},
+        )
+        db.session.commit()
+        db.session.expire(booking)
+
+        world["client"].default_billed_to_company_id = world["company"].id
+        db.session.commit()
+
+        resp = client.post(
+            f"/api/v1/companies/me/reservations/{booking.id}/assign",
+            headers=company_headers,
+            json={"driver_id": driver_id},
+        )
+        assert resp.status_code == 422, resp.get_json()
+        body = resp.get_json() or {}
+        assert body.get("error_code") == "billing_validation_error"
+        db.session.refresh(booking)
+        assert booking.billed_to_company_id is None
+        assert booking.driver_id is None
+
+        db.session.execute(
+            text(
+                "UPDATE booking SET billed_to_company_id = :cid WHERE id = :id"
+            ),
+            {"id": int(booking.id), "cid": int(world["company"].id)},
+        )
+        db.session.commit()
+        db.session.expire(booking)
+
+        resp2 = client.post(
+            f"/api/v1/companies/me/reservations/{booking.id}/assign",
+            headers=company_headers,
+            json={"driver_id": driver_id},
+        )
+        assert resp2.status_code == 422, resp2.get_json()
+        db.session.refresh(booking)
+        assert booking.driver_id is None
+
+        bp = BillingParty()
+        bp.company_id = world["company"].id
+        bp.type = "clinic"
+        bp.display_name = "Clinique test"
+        bp.is_active = True
+        db.session.add(bp)
+        db.session.flush()
+        booking.billed_to_type = "clinic"
+        booking.billed_to_company_id = world["company"].id
+        booking.billing_party_id = bp.id
+        booking.status = BookingStatus.ACCEPTED
+        booking.driver_id = None
+        db.session.commit()
+
+        ok = client.post(
+            f"/api/v1/companies/me/reservations/{booking.id}/assign",
+            headers=company_headers,
+            json={"driver_id": driver_id},
+        )
+        assert ok.status_code == 200, ok.get_json()
+        db.session.refresh(booking)
+        assert booking.driver_id == driver_id
+        assert booking.billing_party_id == bp.id
+        assert booking.billed_to_company_id == world["company"].id
+
     def test_billing_adjustment_on_completed(
         self, client, companies_world, company_headers, db
     ):

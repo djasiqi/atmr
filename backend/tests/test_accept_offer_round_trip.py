@@ -70,6 +70,7 @@ class _Leg:
     dropoff_lat: float | None = None
     dropoff_lng: float | None = None
     is_return_stop: bool = False
+    destination_billing_override: str | None = None
     booking_id: int | None = None
 
 
@@ -407,17 +408,31 @@ class TestAcceptOfferRoundTrip:
         assert return_booking is None
 
     @patch("application.institutions.accept_offer.db")
-    def test_round_trip_same_billing(self, mock_db: MagicMock):
-        """A/R: amount, billed_to_type, billed_to_company_id identiques."""
+    def test_round_trip_same_billing_when_no_override(self, mock_db: MagicMock):
+        """A/R sans override retour : même payeur effectif (intent global)."""
         uc = self._make_uc()
         client = _Client(
             preferential_rate=Decimal("75.00"), default_billed_to_type="clinic"
         )
         uc._get_or_create_institution_client = MagicMock(return_value=client)  # type: ignore[assignment]
-        uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
+
+        def _resolve_bp(booking, *args, **kwargs):
+            if getattr(booking, "billed_to_type", "") == "clinic":
+                booking.billing_party_id = 11
+
+        uc._resolve_billing_party = MagicMock(side_effect=_resolve_bp)  # type: ignore[assignment]
+        uc._resolve_billed_to_company_id_before_flush = MagicMock(return_value=42)  # type: ignore[method-assign]
 
         return_dt = datetime.now(UTC) + timedelta(hours=6)
-        tr = _TransportRequest(is_round_trip=True, return_time=return_dt)
+        tr = _TransportRequest(
+            is_round_trip=True,
+            billing_intent="institution",
+            return_time=return_dt,
+            legs=[
+                _Leg(sequence_index=0),
+                _Leg(sequence_index=1, is_return_stop=True),
+            ],
+        )
 
         _next_id = iter(range(1, 100))
 
@@ -437,21 +452,80 @@ class TestAcceptOfferRoundTrip:
 
         assert return_booking is not None
         assert return_booking.amount == outbound.amount
-        assert return_booking.billed_to_type == outbound.billed_to_type
+        assert outbound.billed_to_type == "clinic"
+        assert return_booking.billed_to_type == "clinic"
         assert return_booking.billed_to_company_id == outbound.billed_to_company_id
 
     @patch("application.institutions.accept_offer.db")
-    def test_billing_intent_institution_sets_clinic_and_company(
+    def test_round_trip_return_patient_override_differs_from_outbound(
         self, mock_db: MagicMock
     ):
-        """billing_intent=institution -> billed_to_type=clinic, company_id accepté."""
+        """Retour avec override patient : payeur différent de l'aller institution."""
         uc = self._make_uc()
         client = _Client(
             preferential_rate=Decimal("75.00"), default_billed_to_type="clinic"
         )
         uc._get_or_create_institution_client = MagicMock(return_value=client)  # type: ignore[assignment]
-        uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
-        uc._resolve_billed_to_company_id_before_flush = MagicMock(return_value=None)  # type: ignore[method-assign]
+
+        def _resolve_bp(booking, *args, **kwargs):
+            if getattr(booking, "billed_to_type", "") == "clinic":
+                booking.billing_party_id = 11
+
+        uc._resolve_billing_party = MagicMock(side_effect=_resolve_bp)  # type: ignore[assignment]
+        uc._resolve_billed_to_company_id_before_flush = MagicMock(return_value=42)  # type: ignore[method-assign]
+
+        return_dt = datetime.now(UTC) + timedelta(hours=6)
+        tr = _TransportRequest(
+            is_round_trip=True,
+            billing_intent="institution",
+            return_time=return_dt,
+            legs=[
+                _Leg(sequence_index=0),
+                _Leg(
+                    sequence_index=1,
+                    is_return_stop=True,
+                    destination_billing_override="patient",
+                ),
+            ],
+        )
+
+        _next_id = iter(range(1, 100))
+
+        def _flush_side_effect():
+            for call_args in mock_db.session.add.call_args_list:
+                b = call_args[0][0]
+                if b.id == 0:
+                    b.id = next(_next_id)
+
+        mock_db.session.flush.side_effect = _flush_side_effect
+
+        outbound, return_booking = uc._create_booking_from_request(
+            transport_request=tr,  # type: ignore[arg-type]
+            company_id=5,
+            user_id=1,
+        )
+
+        assert return_booking is not None
+        assert outbound.billed_to_type == "clinic"
+        assert return_booking.billed_to_type == "patient"
+        assert return_booking.billed_to_company_id is None
+
+    @patch("application.institutions.accept_offer.db")
+    def test_billing_intent_institution_sets_clinic_and_company(
+        self, mock_db: MagicMock
+    ):
+        """billing_intent=institution -> billed_to_type=clinic avec company_id et BP résolus."""
+        uc = self._make_uc()
+        client = _Client(
+            preferential_rate=Decimal("75.00"), default_billed_to_type="clinic"
+        )
+        uc._get_or_create_institution_client = MagicMock(return_value=client)  # type: ignore[assignment]
+
+        def _resolve_bp(booking, *_args, **_kwargs):
+            booking.billing_party_id = 11
+
+        uc._resolve_billing_party = MagicMock(side_effect=_resolve_bp)  # type: ignore[assignment]
+        uc._resolve_billed_to_company_id_before_flush = MagicMock(return_value=42)  # type: ignore[method-assign]
 
         tr = _TransportRequest(
             is_round_trip=False,
@@ -476,7 +550,8 @@ class TestAcceptOfferRoundTrip:
         )
 
         assert outbound.billed_to_type == "clinic"
-        assert outbound.billed_to_company_id is None
+        assert outbound.billed_to_company_id == 42
+        assert outbound.billing_party_id == 11
 
     @patch("application.institutions.accept_offer.db")
     def test_billing_intent_patient_keeps_patient_billing(self, mock_db: MagicMock):

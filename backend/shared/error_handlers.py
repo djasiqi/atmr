@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.exceptions import HTTPException
 
 from routes.api_error_utils import (
+    create_billing_validation_error,
     create_conflict_error,
     create_error_response,
     create_internal_error,
@@ -207,6 +208,17 @@ class APIErrorHandler:
             provided_value=provided_value,
             expected_format=expected_format,
         )
+
+    @staticmethod
+    def handle_billing_validation_error(
+        message: str,
+        field: str | None = None,
+        logger_instance: logging.Logger | None = None,
+    ) -> tuple[dict[str, Any], int]:
+        """Erreur métier facturation incomplète (422)."""
+        log = logger_instance or logger
+        log.warning("Facturation invalide: %s (champ: %s)", message, field)
+        return create_billing_validation_error(message, field=field)
 
     @staticmethod
     def handle_permission_error(

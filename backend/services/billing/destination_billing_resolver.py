@@ -1,10 +1,23 @@
 """Résolution facturation par destination (multi-payeurs sur une mission).
 
-Source de vérité :
-- TransportRequest.billing_intent (payeur principal)
-- TransportRequestLeg.destination_billing_override (exception par destination)
+Règle métier LIRIE (autoritaire) — payeur effectif d'un segment :
 
-Le payeur effectif est calculé à la volée, jamais persisté sur le leg.
+    effective_billing_intent =
+        destination_billing_override   si défini (use_custom_billing=true)
+        sinon billing_intent           (payeur principal « Facturé à »)
+
+Chaque segment (aller principal, étape intermédiaire, retour) est évalué
+**indépendamment**. Un override Patient sur une étape ne se propage pas à
+l'étape suivante ni au retour : celles-ci héritent du payeur principal
+tant qu'elles n'ont pas leur propre mention spécifique.
+
+Le booking parent n'est **pas** une source de vérité pour la facturation
+d'un retour ou d'une étape enfant.
+
+Sources persistées :
+- ``TransportRequest.billing_intent`` — payeur principal
+- ``TransportRequestLeg.destination_billing_override`` — exception par segment
+  (NULL = pas d'exception, héritage du principal)
 """
 
 from __future__ import annotations

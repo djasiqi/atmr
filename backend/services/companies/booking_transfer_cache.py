@@ -122,9 +122,45 @@ def attach_route_group_leg_counts_to_bookings(bookings: list[Booking]) -> None:
             booking._route_group_leg_count = counts.get(str(gid), 1)
 
 
+def attach_return_leg_topology_to_bookings(bookings: list[Booking]) -> None:
+    """Précharge is_return_stop par booking_id (badges retour institution)."""
+    if not bookings:
+        return
+    booking_ids = [
+        int(b.id) for b in bookings if getattr(b, "id", None) is not None
+    ]
+    if not booking_ids:
+        return
+
+    from models.transport_request_leg import TransportRequestLeg
+
+    legs = TransportRequestLeg.query.filter(
+        TransportRequestLeg.booking_id.in_(booking_ids)
+    ).all()
+
+    topology_by_booking: dict[int, bool] = {}
+    for leg in legs:
+        bid = getattr(leg, "booking_id", None)
+        if bid is None:
+            continue
+        bid_int = int(bid)
+        if bool(getattr(leg, "is_return_stop", False)):
+            topology_by_booking[bid_int] = True
+        elif bid_int not in topology_by_booking:
+            topology_by_booking[bid_int] = False
+
+    for booking in bookings:
+        bid = getattr(booking, "id", None)
+        if bid is None:
+            continue
+        if int(bid) in topology_by_booking:
+            booking._is_return_leg_from_topology = topology_by_booking[int(bid)]
+
+
 def attach_serialize_context_to_bookings(
     bookings: list[Booking],
     viewer_company_id: int | None,
 ) -> None:
+    attach_return_leg_topology_to_bookings(bookings)
     for booking in bookings:
         booking._serialize_viewer_company_id = viewer_company_id

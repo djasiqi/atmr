@@ -873,7 +873,22 @@ class AcceptOfferUseCase:
         )
 
         # ── Résolution BillingParty (P0.5: résolution complète intent→BP) ──
-        self._resolve_billing_party(booking, transport_request, company_id)
+        self._resolve_billing_party(
+            booking,
+            transport_request,
+            company_id,
+            strict=self._is_institution_billing_intent(transport_request),
+        )
+        if self._is_institution_billing_intent(transport_request):
+            from services.billing.booking_billing_guard import (
+                assert_non_patient_billing_complete,
+            )
+
+            assert_non_patient_billing_complete(
+                booking,
+                context="acceptation aller institution",
+                require_billing_party_for_clinic=True,
+            )
 
         # ── A/R: créer le booking retour si round-trip ──
         return_booking: Booking | None = None
@@ -942,7 +957,7 @@ class AcceptOfferUseCase:
                 wheelchair_client_has=booking.wheelchair_client_has,
                 wheelchair_need=booking.wheelchair_need,
                 notes_medical=booking.notes_medical,
-                billed_to_type=booking.billed_to_type,
+                billed_to_type="patient",
                 status=BookingStatus.ACCEPTED.value,
                 amount=booking.amount,
                 created_via=BookingCreatedVia.INSTITUTION_PORTAL,
@@ -956,8 +971,15 @@ class AcceptOfferUseCase:
                 created_via=BookingCreatedVia.INSTITUTION_PORTAL,
                 is_institution_flow=True,
             )
-            if booking.billed_to_company_id is not None:
-                return_booking.billed_to_company_id = booking.billed_to_company_id
+            legs = _load_transport_request_legs(transport_request)
+            return_leg = _find_return_leg(transport_request, legs)
+            return_effective_intent = self._apply_effective_billing_for_leg(
+                return_booking,
+                return_leg,
+                transport_request,
+                company_id,
+                institution_client,
+            )
 
             # Le retour reprend le même gel tarifaire que l'aller
             return_booking.pricing_profile_id = booking.pricing_profile_id
@@ -970,7 +992,13 @@ class AcceptOfferUseCase:
             db.session.add(return_booking)
             db.session.flush()
 
-            self._resolve_billing_party(return_booking, transport_request, company_id)
+            self._finalize_booking_billing_resolution(
+                return_booking,
+                transport_request,
+                company_id,
+                return_effective_intent,
+                context="retour A/R legacy",
+            )
 
             logger.info(
                 "[AcceptOffer] Return booking %s created (parent=%s, time_confirmed=%s) for request %s",
@@ -1026,6 +1054,10 @@ class AcceptOfferUseCase:
                 transport_request.id,
             )
             return None
+
+        institution_client = self._get_or_create_institution_client(
+            transport_request, company_id
+        )
 
         leg_confirmed = (
             bool(getattr(return_leg, "time_confirmed", False)) if return_leg else False
@@ -1096,7 +1128,7 @@ class AcceptOfferUseCase:
             wheelchair_client_has=outbound_booking.wheelchair_client_has,
             wheelchair_need=outbound_booking.wheelchair_need,
             notes_medical=outbound_booking.notes_medical,
-            billed_to_type=outbound_booking.billed_to_type,
+            billed_to_type="patient",
             status=BookingStatus.ACCEPTED.value,
             amount=outbound_booking.amount,
             created_via=BookingCreatedVia.INSTITUTION_PORTAL,
@@ -1110,8 +1142,13 @@ class AcceptOfferUseCase:
             created_via=BookingCreatedVia.INSTITUTION_PORTAL,
             is_institution_flow=True,
         )
-        if outbound_booking.billed_to_company_id is not None:
-            return_booking.billed_to_company_id = outbound_booking.billed_to_company_id
+        return_effective_intent = self._apply_effective_billing_for_leg(
+            return_booking,
+            return_leg,
+            transport_request,
+            company_id,
+            institution_client,
+        )
 
         return_booking.pricing_profile_id = outbound_booking.pricing_profile_id
         return_booking.pricing_profile_version_id = (
@@ -1126,7 +1163,13 @@ class AcceptOfferUseCase:
         db.session.add(return_booking)
         db.session.flush()
 
-        self._resolve_billing_party(return_booking, transport_request, company_id)
+        self._finalize_booking_billing_resolution(
+            return_booking,
+            transport_request,
+            company_id,
+            return_effective_intent,
+            context="retour institution multi-étapes",
+        )
 
         if legs:
             outbound_leg = next(
@@ -1139,9 +1182,11 @@ class AcceptOfferUseCase:
                 return_leg.booking_id = return_booking.id
 
         logger.info(
-            "[AcceptOffer] Institution return booking %s created (parent=%s, time_confirmed=%s, from_leg=%s) for request %s",
+            "[AcceptOffer] Institution return booking %s created (parent=%s, bp_id=%s, billed_to_company_id=%s, time_confirmed=%s, from_leg=%s) for request %s",
             return_booking.id,
             outbound_booking.id,
+            return_booking.billing_party_id,
+            return_booking.billed_to_company_id,
             ret_time_confirmed,
             return_leg is not None,
             transport_request.id,
@@ -1379,14 +1424,89 @@ class AcceptOfferUseCase:
             raise ValueError(msg)
         return clinic_company_id
 
+    @staticmethod
+    def _is_institution_billing_intent(transport_request: TransportRequest) -> bool:
+        intent = (
+            getattr(transport_request, "billing_intent", None) or "patient"
+        ).strip().lower()
+        return intent == "institution"
+
+    def _apply_effective_billing_for_leg(
+        self,
+        booking: Booking,
+        leg: TransportRequestLeg | None,
+        transport_request: TransportRequest,
+        company_id: int,
+        institution_client: Client | None,
+    ) -> str:
+        """Applique billed_to_* depuis le payeur effectif du leg (ou intent global)."""
+        from services.billing.destination_billing_resolver import (
+            billed_to_type_from_intent,
+            effective_billing_for_leg,
+            resolve_effective_billing_intent,
+        )
+
+        if leg is not None:
+            effective_intent = effective_billing_for_leg(leg, transport_request)
+        else:
+            effective_intent = resolve_effective_billing_intent(
+                transport_request.billing_intent,
+                None,
+            )
+        billed_to_type = billed_to_type_from_intent(effective_intent)
+        booking.billed_to_type = billed_to_type
+        booking.billed_to_company_id = self._resolve_billed_to_company_id_before_flush(
+            billed_to_type=billed_to_type,
+            institution_client=institution_client,
+            transport_request=transport_request,
+            company_id=company_id,
+        )
+        return effective_intent
+
+    def _finalize_booking_billing_resolution(
+        self,
+        booking: Booking,
+        transport_request: TransportRequest,
+        company_id: int,
+        effective_intent: str,
+        *,
+        context: str,
+    ) -> None:
+        """Résout BillingParty et valide la complétude selon le payeur effectif."""
+        from services.billing.booking_billing_guard import (
+            assert_non_patient_billing_complete,
+        )
+        from services.billing.destination_billing_resolver import billed_to_type_from_intent
+
+        requires_non_patient = billed_to_type_from_intent(effective_intent) != "patient"
+        if booking.billing_party_id is None:
+            self._resolve_billing_party(
+                booking,
+                transport_request,
+                company_id,
+                billing_intent_override=effective_intent,
+                strict=requires_non_patient,
+            )
+        if requires_non_patient:
+            assert_non_patient_billing_complete(
+                booking,
+                context=context,
+                require_billing_party_for_clinic=True,
+            )
+
     def _resolve_billing_party(
         self,
         booking: Booking,
         transport_request: TransportRequest,
         company_id: int,
         billing_intent_override: str | None = None,
+        *,
+        strict: bool = False,
     ) -> None:
         """Résout et attache le billing_party au booking."""
+        from domain.billing.errors import BillingValidationError
+        from services.billing.booking_billing_guard import billing_type_normalized
+
         try:
             from services.billing.institution_billing_resolver import (
                 resolve_billing_party_for_institution_booking,
@@ -1415,7 +1535,27 @@ class AcceptOfferUseCase:
                     res_status,
                     billing_result.get("billing_intent", ""),
                 )
+            if strict:
+                btype = billing_type_normalized(booking)
+                if btype != "patient" and (
+                    res_status.startswith("failed")
+                    or not billing_result.get("billing_party_id")
+                ):
+                    raise BillingValidationError(
+                        (
+                            "Résolution BillingParty institution impossible "
+                            f"(booking={booking.id}, status={res_status})."
+                        ),
+                        field="billing_party_id",
+                    )
+        except BillingValidationError:
+            raise
         except Exception as billing_err:
+            if strict:
+                raise BillingValidationError(
+                    f"Résolution BillingParty institution en échec: {billing_err}",
+                    field="billing_party_id",
+                ) from billing_err
             logger.warning(
                 "[AcceptOffer] BillingParty resolution error (non-blocking): %s",
                 billing_err,

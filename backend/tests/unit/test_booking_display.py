@@ -354,3 +354,36 @@ def test_trip_flags_multi_stop():
     assert flags["multi_stop"] is True
     assert flags["leg_number"] == 2
     assert flags["leg_count"] == 3
+
+
+def test_trip_flags_return_leg_from_institution_topology():
+    outbound = _booking(
+        id=38906,
+        route_group_id="grp-4464",
+        route_sequence_number=1,
+        is_return=False,
+    )
+    outbound._is_return_leg_from_topology = False
+    return_booking = _booking(
+        id=38907,
+        route_group_id="grp-4464",
+        route_sequence_number=2,
+        is_return=False,
+    )
+    return_booking._is_return_leg_from_topology = True
+
+    outbound_flags = build_booking_display_blocks(outbound, viewer_company_id=10)[
+        "trip_flags"
+    ]
+    return_flags = build_booking_display_blocks(return_booking, viewer_company_id=10)[
+        "trip_flags"
+    ]
+
+    assert outbound_flags["return_leg"] is False
+    assert return_flags["return_leg"] is True
+
+
+def test_trip_flags_classic_return_without_topology():
+    classic = _booking(is_return=True)
+    flags = build_booking_display_blocks(classic, viewer_company_id=10)["trip_flags"]
+    assert flags["return_leg"] is True

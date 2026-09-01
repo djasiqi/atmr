@@ -2253,6 +2253,17 @@ def create_app(config_name: str | None = None):
                 app.logger.warning("Token JWT invalide intercepté: %s", str(e))
                 return jsonify({"error": "invalid_token", "message": str(e)}), 422
 
+            from domain.billing.errors import BillingValidationError
+
+            if isinstance(e, BillingValidationError):
+                app.logger.warning("BillingValidationError interceptée: %s", str(e))
+                from shared.error_handlers import APIErrorHandler
+
+                payload, status = APIErrorHandler.handle_billing_validation_error(
+                    str(e), field=e.field
+                )
+                return jsonify(payload), status
+
             # ✅ S1: Réduire les détails dans les stack traces en production
             # En production, ne jamais exposer les détails de l'exception
             is_production = config_name == "production"

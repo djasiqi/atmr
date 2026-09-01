@@ -538,10 +538,16 @@ def build_booking_trip_flags(
     booking: Any,
     _viewer_company_id: int | None = None,
 ) -> dict[str, Any]:
-    is_return = bool(getattr(booking, "is_return", False))
+    is_return_classic = bool(getattr(booking, "is_return", False))
+    topology_return = getattr(booking, "_is_return_leg_from_topology", None)
+    if topology_return is not None:
+        is_return_leg = is_return_classic or bool(topology_return)
+    else:
+        is_return_leg = is_return_classic
+
     is_round_trip = bool(getattr(booking, "is_round_trip", False))
     has_return = getattr(booking, "return_trip", None) is not None
-    round_trip = (not is_return) and (is_round_trip or has_return)
+    round_trip = (not is_return_leg) and (is_round_trip or has_return)
 
     leg_count = _route_group_leg_count(booking)
     route_group_id = getattr(booking, "route_group_id", None)
@@ -566,7 +572,7 @@ def build_booking_trip_flags(
 
     return {
         "round_trip": round_trip,
-        "return_leg": is_return,
+        "return_leg": is_return_leg,
         "multi_stop": multi_stop,
         "leg_number": int(leg_number) if leg_number is not None else None,
         "leg_count": leg_count if multi_stop else (1 if route_group_id else None),

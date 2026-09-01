@@ -212,6 +212,22 @@ def create_validation_error(
     )
 
 
+def create_billing_validation_error(
+    message: str,
+    field: str | None = None,
+) -> Tuple[Dict[str, Any], int]:
+    """Erreur métier facturation incomplète (422 — assign / accept_offer)."""
+    details: Dict[str, Any] = {}
+    if field:
+        details["field"] = field
+    return create_error_response(
+        message,
+        status_code=422,
+        error_code="billing_validation_error",
+        details=details if details else None,
+    )
+
+
 def create_not_found_error(
     resource_type: str,
     resource_id: Any | None = None,

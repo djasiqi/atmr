@@ -7,6 +7,7 @@ from typing import Any, Protocol
 from shared.time_utils import now_utc, to_utc
 
 from ._status import set_status
+from .resolve_return_target import ReturnTargetAction, ReturnTargetResolution
 
 
 class _BookingLike(Protocol):
@@ -28,10 +29,11 @@ class _BookingLike(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class TriggerReturnBookingDecision:
-    action: str  # "modify_current" | "modify_existing_return" | "create_new"
+    action: ReturnTargetAction
     return_time: datetime
     should_trigger_dispatch: bool
     trigger_reason: str
+    source: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +49,7 @@ class TriggerReturnBookingUseCase:
 
     La route est responsable de:
     - charger l'outbound booking
-    - charger un return booking existant (si présent)
+    - résoudre la cible retour (resolve_existing_return_target)
     - créer l'instance Booking() si nécessaire
     - commit + dispatch trigger
     """
@@ -60,7 +62,7 @@ class TriggerReturnBookingUseCase:
         urgent: bool,
         minutes_offset: int,
         now: datetime | None = None,
-        has_existing_return: bool,
+        resolution: ReturnTargetResolution,
     ) -> TriggerReturnBookingResult:
         current_now = now or now_utc()
 
@@ -90,23 +92,15 @@ class TriggerReturnBookingUseCase:
                 status_code=400,
             )
 
-        if bool(getattr(outbound, "is_return", False)):
-            action = "modify_current"
-        elif has_existing_return:
-            action = "modify_existing_return"
-        else:
-            action = "create_new"
-
-        # On marque toujours le retour en ACCEPTED pour entrer dans le moteur
-        # (la route appliquera le statut sur la booking concernée)
         _ = set_status  # silence unused import in case of future edits
 
         return TriggerReturnBookingResult(
             ok=True,
             decision=TriggerReturnBookingDecision(
-                action=action,
+                action=resolution.action,
                 return_time=return_time,
                 should_trigger_dispatch=True,
                 trigger_reason="return_request",
+                source=resolution.source,
             ),
         )

@@ -102,6 +102,7 @@ api_v2 = Api(
 @api_v1.errorhandler(Exception)
 def handle_jwt_errors_v1(error):
     """Intercepte les erreurs JWT pour retourner 401 au lieu de 500."""
+    from domain.billing.errors import BillingValidationError
     from jwt.exceptions import (
         ExpiredSignatureError,
         InvalidTokenError,
@@ -111,6 +112,12 @@ def handle_jwt_errors_v1(error):
         return {"error": "token_expired", "message": "Signature has expired"}, 401
     if isinstance(error, InvalidTokenError):
         return {"error": "invalid_token", "message": str(error)}, 422
+    if isinstance(error, BillingValidationError):
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_billing_validation_error(
+            str(error), field=error.field
+        )
     # Laisser les autres exceptions être gérées par le handler par défaut
     raise error
 
@@ -118,6 +125,7 @@ def handle_jwt_errors_v1(error):
 @api_v2.errorhandler(Exception)
 def handle_jwt_errors_v2(error):
     """Intercepte les erreurs JWT pour retourner 401 au lieu de 500."""
+    from domain.billing.errors import BillingValidationError
     from jwt.exceptions import (
         ExpiredSignatureError,
         InvalidTokenError,
@@ -127,6 +135,12 @@ def handle_jwt_errors_v2(error):
         return {"error": "token_expired", "message": "Signature has expired"}, 401
     if isinstance(error, InvalidTokenError):
         return {"error": "invalid_token", "message": str(error)}, 422
+    if isinstance(error, BillingValidationError):
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_billing_validation_error(
+            str(error), field=error.field
+        )
     # Laisser les autres exceptions être gérées par le handler par défaut
     raise error
 

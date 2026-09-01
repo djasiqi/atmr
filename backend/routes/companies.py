@@ -3138,6 +3138,22 @@ class AssignDriver(Resource):
         except Exception:
             old_driver_id = None
 
+        # Garde facturation : validation seule (pas de décision/réparation du payeur)
+        from domain.billing.errors import BillingValidationError
+        from services.billing.booking_billing_guard import (
+            validate_booking_billing_ready_for_write,
+        )
+
+        try:
+            validate_booking_billing_ready_for_write(booking)
+        except BillingValidationError as billing_err:
+            db.session.rollback()
+            return APIErrorHandler.handle_billing_validation_error(
+                str(billing_err),
+                field=billing_err.field,
+                logger_instance=logger,
+            )
+
         uc_result = uc.execute(booking=booking, driver=driver, company_id=company_id)
         if not uc_result.ok:
             return APIErrorHandler.handle_validation_error(
@@ -3147,7 +3163,21 @@ class AssignDriver(Resource):
                 logger_instance=logger,
             )
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except ValueError as commit_err:
+            # Hook ORM _enforce_billing_exclusive (ou autre invariant métier)
+            db.session.rollback()
+            logger.warning(
+                "[AssignDriver] commit refusé (ValueError) booking=%s: %s",
+                reservation_id,
+                commit_err,
+            )
+            return APIErrorHandler.handle_validation_error(
+                str(commit_err),
+                field="billed_to_company_id",
+                logger_instance=logger,
+            )
         # ✅ Clean Architecture: Publier événement au lieu d'appel direct
         try:
             from application.events.event_bus import publish_event
@@ -4436,8 +4466,9 @@ class TriggerReturnBooking(Resource):
         from repositories.booking_repository import BookingRepository
 
         booking_repo = BookingRepository()
-        # ✅ Utiliser find_model_by_id_with_visibility pour supporter les transferts partenaires
-        booking = booking_repo.find_model_by_id_with_visibility(booking_id, cid)
+        booking = booking_repo.find_model_by_id_with_visibility_for_update(
+            booking_id, cid
+        )
         if not booking:
             return APIErrorHandler.handle_not_found(
                 "Réservation",
@@ -4445,16 +4476,39 @@ class TriggerReturnBooking(Resource):
                 logger,
             )
 
+        from application.companies.reservations.resolve_return_target import (
+            ReturnTopologyError,
+            resolve_existing_return_target,
+        )
         from application.companies.reservations.trigger_return_booking import (
             TriggerReturnBookingUseCase,
         )
 
-        # check existing return
-        existing = None
-        if not bool(booking.is_return):
-            existing = booking_repo.find_model_by_parent_booking_id_and_company(
-                booking.id, cid, is_return=True
+        try:
+            resolution = resolve_existing_return_target(
+                booking,
+                company_id=cid,
+                booking_repo=booking_repo,
             )
+        except ReturnTopologyError as topology_error:
+            return topology_error.to_payload()
+
+        target_booking = resolution.target_booking
+        if (
+            target_booking is not None
+            and target_booking.id is not None
+            and target_booking.id != booking.id
+        ):
+            locked_target = booking_repo.find_model_by_id_with_visibility_for_update(
+                target_booking.id, cid
+            )
+            if locked_target is None:
+                err = ReturnTopologyError(
+                    "La réservation retour cible est inaccessible pour cette entreprise.",
+                    details={"target_booking_id": target_booking.id},
+                )
+                return err.to_payload()
+            target_booking = locked_target
 
         uc = TriggerReturnBookingUseCase()
         uc_result = uc.execute(
@@ -4462,7 +4516,7 @@ class TriggerReturnBooking(Resource):
             return_time_raw=rt,
             urgent=urgent,
             minutes_offset=minutes_offset,
-            has_existing_return=bool(existing),
+            resolution=resolution,
         )
         if not uc_result.ok or not uc_result.decision:
             return APIErrorHandler.handle_validation_error(
@@ -4503,22 +4557,29 @@ class TriggerReturnBooking(Resource):
             booking.time_confirmed = return_time_confirmed
             return_booking = booking
             action = "modifié"
-        elif (
-            uc_result.decision.action == "modify_existing_return"
-            and existing is not None
+        elif uc_result.decision.action in (
+            "modify_leg_return",
+            "modify_existing_classic_return",
         ):
+            assert target_booking is not None
+            transition_source = (
+                "trigger_return_modify_leg_return"
+                if uc_result.decision.action == "modify_leg_return"
+                else "trigger_return_modify_existing"
+            )
             try:
                 transition_booking_status(
-                    existing,
+                    target_booking,
                     BookingStatus.ACCEPTED,
-                    source="trigger_return_modify_existing",
+                    source=transition_source,
                 )
             except BookingStatusTransitionError as transition_error:
                 return transition_error.to_payload(), transition_error.http_status
-            booking.is_round_trip = True
-            existing.scheduled_time = return_time
-            existing.time_confirmed = return_time_confirmed
-            return_booking = existing
+            if uc_result.decision.action == "modify_existing_classic_return":
+                booking.is_round_trip = True
+            target_booking.scheduled_time = return_time
+            target_booking.time_confirmed = return_time_confirmed
+            return_booking = target_booking
             action = "modifié"
         else:
             booking.is_round_trip = True
@@ -4552,9 +4613,17 @@ class TriggerReturnBooking(Resource):
         db.session.add(booking)
         db.session.commit()
         _maybe_trigger_dispatch(cid, "return_request")
+        from services.companies.booking_transfer_cache import (
+            attach_return_leg_topology_to_bookings,
+            attach_serialize_context_to_bookings,
+        )
         from services.reservations_summary_cache import (
             invalidate_summary_cache_for_booking,
         )
+
+        attach_return_leg_topology_to_bookings([return_booking])
+        attach_serialize_context_to_bookings([return_booking], cid)
+        attach_serialize_context_to_bookings([booking], cid)
 
         invalidate_summary_cache_for_booking(cid, booking)
         invalidate_summary_cache_for_booking(cid, return_booking)
