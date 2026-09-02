@@ -171,7 +171,7 @@
     "uuid": "14.0.0",
     "postcss": "8.5.23",
     "@tootallnate/once": "3.0.1",
-    "fast-uri": ">=4.1.2",
+    "fast-uri": ">=4.1.4",
     "js-yaml": "4.3.1",
     "nanoid": "3.3.18",
     "image-size": "1.2.1",
