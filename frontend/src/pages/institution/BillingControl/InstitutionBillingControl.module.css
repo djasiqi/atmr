@@ -2,7 +2,10 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  max-width: 1200px;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .summaryCard {
@@ -10,6 +13,9 @@
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 1.25rem 1.5rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .periodTitle {
@@ -39,6 +45,9 @@
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 1rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .filterField label {
@@ -54,23 +63,31 @@
 .filterField input,
 .filterField select {
   width: 100%;
+  max-width: 100%;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 0.5rem 0.65rem;
   font-size: 0.9rem;
   background: #fff;
+  box-sizing: border-box;
 }
 
 .tableWrap {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  overflow: hidden;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table {
   width: 100%;
+  min-width: 720px;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .table th {
@@ -91,6 +108,31 @@
   font-size: 0.92rem;
 }
 
+.colDate {
+  width: 5.5rem;
+  white-space: nowrap;
+}
+
+.colPatient {
+  width: 12rem;
+}
+
+.colRoute {
+  width: auto;
+}
+
+.colCarrier {
+  width: 9.5rem;
+}
+
+.colPayer {
+  width: 8.5rem;
+}
+
+.colControl {
+  width: 11rem;
+}
+
 .groupRow td {
   background: #f8fafc;
   font-weight: 600;
@@ -108,14 +150,25 @@
   font-size: 0.8rem;
   color: #64748b;
   margin-top: 0.15rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.patientCell {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .payerSelect {
-  min-width: 130px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 0.35rem 0.5rem;
   font-size: 0.85rem;
+  box-sizing: border-box;
 }
 
 .payerReadonly {
@@ -198,6 +251,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 0;
+  flex-wrap: wrap;
 }
 
 .empty,
@@ -242,6 +296,7 @@
   border-radius: 8px;
   padding: 0.65rem;
   font-family: inherit;
+  box-sizing: border-box;
 }
 
 .modalActions {
@@ -249,22 +304,106 @@
   justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Tablette : scroll horizontal plutôt qu'écrasement */
+@media (max-width: 1199px) and (min-width: 769px) {
+  .table {
+    min-width: 860px;
+  }
 }
 
 @media (max-width: 768px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .table {
+    min-width: 0;
+    table-layout: auto;
+  }
+
   .table thead {
     display: none;
   }
 
-  .table tr:not(.groupRow) {
-    display: block;
-    border-bottom: 1px solid #e2e8f0;
-    padding: 0.5rem 0;
+  .table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
   }
 
-  .table td {
+  .groupRow {
+    display: block;
+    background: transparent;
+    border: none;
+  }
+
+  .groupRow td {
+    display: block;
+    background: transparent;
+    border: none;
+    padding: 0.35rem 0.15rem;
+    font-size: 0.95rem;
+    color: #0f172a;
+  }
+
+  .bookingRow {
+    display: block;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #fff;
+    padding: 0.85rem 0.9rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  .bookingRow td {
     display: block;
     border: none;
-    padding: 0.35rem 1rem;
+    padding: 0.45rem 0;
+    width: 100% !important;
+  }
+
+  .bookingRow td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 0.2rem;
+  }
+
+  /* Date + Patient déjà dans l'en-tête de groupe */
+  .bookingRow td.colDate,
+  .bookingRow td.colPatient {
+    display: none;
+  }
+
+  .routeHint {
+    font-size: 0.88rem;
+    color: #334155;
+  }
+
+  .actions {
+    margin-top: 0.55rem;
+  }
+
+  .actions .btn {
+    flex: 1 1 auto;
+    min-width: calc(50% - 0.25rem);
+    text-align: center;
+  }
+
+  .pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pagination .btn {
+    width: 100%;
   }
 }
