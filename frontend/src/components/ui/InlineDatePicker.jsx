@@ -16,6 +16,7 @@ const pad = (n) => String(n).padStart(2, '0');
 function parseDate(str) {
   if (!str) return null;
   const [y, m, d] = str.split('-').map(Number);
+  if (!y || !m || !d) return null;
   return new Date(y, m - 1, d);
 }
 
@@ -67,7 +68,14 @@ function displayToISO(display) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function smartComplete(digits) {
+function compareIso(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+/** Autocomplétion réservations (dates futures) — comportement historique. */
+function smartCompleteFuture(digits) {
   const now = new Date();
   const todayMonth = now.getMonth();
   const todayYear = now.getFullYear();
@@ -75,7 +83,7 @@ function smartComplete(digits) {
   if (digits.length >= 1 && digits.length <= 2) {
     const day = digits.length === 1 ? parseInt(digits, 10) * 10 || parseInt(digits, 10) : parseInt(digits, 10);
     if (day < 1 || day > 31) return null;
-    let m = todayMonth, y = todayYear;
+    let m = todayMonth; let y = todayYear;
     for (let t = 0; t < 13; t++) {
       const maxD = new Date(y, m + 1, 0).getDate();
       if (day <= maxD && new Date(y, m, day, 23, 59) > now) {
@@ -109,6 +117,65 @@ function smartComplete(digits) {
   return null;
 }
 
+/** Autocomplétion DOB / historique (dates passées). */
+function smartCompletePast(digits, maxDateIso) {
+  const now = new Date();
+  const todayMonth = now.getMonth();
+  const todayYear = now.getFullYear();
+  const maxBound = maxDateIso || formatISO(now);
+
+  if (digits.length >= 1 && digits.length <= 2) {
+    const day = digits.length === 1 ? parseInt(digits, 10) * 10 || parseInt(digits, 10) : parseInt(digits, 10);
+    if (day < 1 || day > 31) return null;
+    let m = todayMonth; let y = todayYear;
+    for (let t = 0; t < 24; t++) {
+      const maxD = new Date(y, m + 1, 0).getDate();
+      if (day <= maxD) {
+        const candidate = `${y}-${pad(m + 1)}-${pad(day)}`;
+        if (compareIso(candidate, maxBound) <= 0 && new Date(y, m, day, 23, 59) <= now) {
+          return `${pad(day)}.${pad(m + 1)}.${y}`;
+        }
+      }
+      m--; if (m < 0) { m = 11; y--; }
+    }
+    return null;
+  }
+  if (digits.length >= 3 && digits.length <= 4) {
+    const dd = parseInt(digits.slice(0, 2), 10);
+    const mmPart = digits.slice(2);
+    const month = mmPart.length === 1 ? parseInt(mmPart, 10) * 10 : parseInt(mmPart, 10);
+    if (dd < 1 || dd > 31 || month < 1 || month > 12) return null;
+    let y = todayYear;
+    for (let t = 0; t < 120; t++) {
+      const maxD = new Date(y, month, 0).getDate();
+      if (dd <= maxD) {
+        const candidate = `${y}-${pad(month)}-${pad(dd)}`;
+        if (compareIso(candidate, maxBound) <= 0 && new Date(y, month - 1, dd, 23, 59) <= now) {
+          return `${pad(dd)}.${pad(month)}.${y}`;
+        }
+      }
+      y--;
+    }
+    return null;
+  }
+  if (digits.length >= 5 && digits.length <= 7) {
+    const dd = parseInt(digits.slice(0, 2), 10);
+    const mm = parseInt(digits.slice(2, 4), 10);
+    const yyyyStr = digits.slice(4).padEnd(4, '0');
+    const yyyy = parseInt(yyyyStr, 10);
+    if (dd < 1 || dd > 31 || mm < 1 || mm > 12 || yyyy < 1900) return null;
+    const maxD = new Date(yyyy, mm, 0).getDate();
+    if (dd > maxD) return null;
+    return `${pad(dd)}.${pad(mm)}.${yyyy}`;
+  }
+  return null;
+}
+
+function smartComplete(digits, mode, maxDateIso) {
+  if (mode === 'past') return smartCompletePast(digits, maxDateIso);
+  return smartCompleteFuture(digits);
+}
+
 const InlineDatePicker = forwardRef(function InlineDatePicker({
   value,
   onChange,
@@ -119,6 +186,12 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
   inputId,
   ariaLabel,
   title,
+  /** 'future' (défaut réservations) | 'past' (DOB) */
+  smartCompleteMode = 'future',
+  /** ISO YYYY-MM-DD inclusive — jours postérieurs désactivés */
+  maxDate = null,
+  /** ISO YYYY-MM-DD inclusive — jours antérieurs désactivés */
+  minDate = null,
 }, ref) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
@@ -131,10 +204,34 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
   const isDeleting = useRef(false);
 
   const selected = parseDate(value);
-  const initYear = selected ? selected.getFullYear() : new Date().getFullYear();
-  const initMonth = selected ? selected.getMonth() : new Date().getMonth();
+  const maxParsed = parseDate(maxDate);
+  const minParsed = parseDate(minDate);
+  const fallbackView = maxParsed || selected || new Date();
+  const initYear = selected ? selected.getFullYear() : fallbackView.getFullYear();
+  const initMonth = selected ? selected.getMonth() : fallbackView.getMonth();
   const [viewYear, setViewYear] = useState(initYear);
   const [viewMonth, setViewMonth] = useState(initMonth);
+
+  const isIsoAllowed = useCallback((iso) => {
+    if (!iso) return false;
+    if (maxDate && compareIso(iso, maxDate) > 0) return false;
+    if (minDate && compareIso(iso, minDate) < 0) return false;
+    return true;
+  }, [maxDate, minDate]);
+
+  const commitIso = useCallback((iso) => {
+    if (!iso) {
+      onChange('');
+      setInputError(false);
+      return;
+    }
+    if (!isIsoAllowed(iso)) {
+      setInputError(true);
+      return;
+    }
+    onChange(iso);
+    setInputError(false);
+  }, [isIsoAllowed, onChange]);
 
   useEffect(() => {
     setMasked(isoToDisplay(value));
@@ -145,6 +242,9 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
     if (open && selected) {
       setViewYear(selected.getFullYear());
       setViewMonth(selected.getMonth());
+    } else if (open && !selected && maxParsed) {
+      setViewYear(maxParsed.getFullYear());
+      setViewMonth(maxParsed.getMonth());
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -155,18 +255,18 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
     if (digits.length === 0) return value || '';
     if (digits.length === 8) {
       const iso = displayToISO(masked);
-      return iso || value || '';
+      if (iso && isIsoAllowed(iso)) return iso;
+      return value || '';
     }
-    const suggestion = smartComplete(digits);
+    const suggestion = smartComplete(digits, smartCompleteMode, maxDate);
     if (suggestion) {
       const iso = displayToISO(suggestion);
-      return iso || value || '';
+      if (iso && isIsoAllowed(iso)) return iso;
     }
     return value || '';
-  }, [masked, value]);
+  }, [masked, value, smartCompleteMode, maxDate, isIsoAllowed]);
 
   useImperativeHandle(ref, () => ({
-    /** Commit synchrone de la saisie en cours (ex. avant submit sans blur). */
     flushPending: () => {
       const resolved = resolvePendingIso();
       if (resolved !== (value || '')) {
@@ -188,14 +288,18 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
 
     if (digits.length === 8) {
       const iso = displayToISO(newMasked);
-      if (iso) { onChange(iso); setInputError(false); }
-      else setInputError(true);
-      setMasked(newMasked);
+      if (iso && isIsoAllowed(iso)) {
+        commitIso(iso);
+        setMasked(newMasked);
+      } else {
+        setInputError(true);
+        setMasked(newMasked);
+      }
       return;
     }
 
     if (!deleting && digits.length >= 1 && digits.length <= 7) {
-      const suggestion = smartComplete(digits);
+      const suggestion = smartComplete(digits, smartCompleteMode, maxDate);
       if (suggestion) {
         setMasked(suggestion);
         pendingSel.current = { start: newMasked.length, end: suggestion.length };
@@ -214,10 +318,10 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
   const handleInputBlur = () => {
     pendingSel.current = null;
     const digits = (masked || '').replace(/\D/g, '');
-    if (digits.length === 0) { onChange(''); setInputError(false); return; }
+    if (digits.length === 0) { commitIso(''); return; }
     if (digits.length === 8) {
       const iso = displayToISO(masked);
-      if (iso) { onChange(iso); setInputError(false); }
+      if (iso && isIsoAllowed(iso)) commitIso(iso);
       else setInputError(true);
       return;
     }
@@ -234,7 +338,7 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
       const digits = (masked || '').replace(/\D/g, '');
       if (digits.length === 8) {
         const iso = displayToISO(masked);
-        if (iso) { onChange(iso); setInputError(false); }
+        if (iso && isIsoAllowed(iso)) commitIso(iso);
       }
       pendingSel.current = null;
       if (inputRef.current) {
@@ -292,21 +396,47 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
     return () => document.removeEventListener('mousedown', handler);
   }, [open, close]);
 
-  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); } else setViewMonth((m) => m - 1); };
-  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); } else setViewMonth((m) => m + 1); };
+  const canGoPrev = () => {
+    if (!minParsed) return true;
+    const prev = viewMonth === 0
+      ? new Date(viewYear - 1, 11, 1)
+      : new Date(viewYear, viewMonth - 1, 1);
+    return prev >= new Date(minParsed.getFullYear(), minParsed.getMonth(), 1);
+  };
+
+  const canGoNext = () => {
+    if (!maxParsed) return true;
+    const next = viewMonth === 11
+      ? new Date(viewYear + 1, 0, 1)
+      : new Date(viewYear, viewMonth + 1, 1);
+    return next <= new Date(maxParsed.getFullYear(), maxParsed.getMonth(), 1);
+  };
+
+  const prevMonth = () => {
+    if (!canGoPrev()) return;
+    if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); }
+    else setViewMonth((m) => m - 1);
+  };
+  const nextMonth = () => {
+    if (!canGoNext()) return;
+    if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); }
+    else setViewMonth((m) => m + 1);
+  };
 
   const selectDay = (day) => {
-    const d = new Date(viewYear, viewMonth, day);
-    onChange(formatISO(d));
+    const iso = formatISO(new Date(viewYear, viewMonth, day));
+    if (!isIsoAllowed(iso)) return;
+    commitIso(iso);
     close();
   };
 
-  const clearDate = (e) => { e.stopPropagation(); onChange(''); close(); };
+  const clearDate = (e) => { e.stopPropagation(); commitIso(''); close(); };
 
   const totalDays = daysInMonth(viewYear, viewMonth);
   const offset = startDayOfWeek(viewYear, viewMonth);
   const today = new Date();
   const todayStr = formatISO(today);
+  const showTodayBtn = smartCompleteMode !== 'past' && isIsoAllowed(todayStr);
   const cells = [];
   for (let i = 0; i < offset; i++) cells.push(null);
   for (let d = 1; d <= totalDays; d++) cells.push(d);
@@ -353,11 +483,11 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
           style={{ top: pos.top, left: pos.left }}
         >
           <div className={dp.header}>
-            <button type="button" className={dp.navBtn} onClick={prevMonth} aria-label="Mois précédent">
+            <button type="button" className={dp.navBtn} onClick={prevMonth} disabled={!canGoPrev()} aria-label="Mois précédent">
               <FiChevronLeft size={14} />
             </button>
             <span className={dp.headerTitle}>{MONTHS[viewMonth]} {viewYear}</span>
-            <button type="button" className={dp.navBtn} onClick={nextMonth} aria-label="Mois suivant">
+            <button type="button" className={dp.navBtn} onClick={nextMonth} disabled={!canGoNext()} aria-label="Mois suivant">
               <FiChevronRight size={14} />
             </button>
           </div>
@@ -370,11 +500,13 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
               const iso = formatISO(new Date(viewYear, viewMonth, day));
               const isSelected = value === iso;
               const isToday = iso === todayStr;
+              const disabled = !isIsoAllowed(iso);
               return (
                 <button
                   key={day}
                   type="button"
-                  className={`${dp.dayCell} ${isSelected ? dp.dayCellSelected : ''} ${isToday && !isSelected ? dp.dayCellToday : ''}`}
+                  disabled={disabled}
+                  className={`${dp.dayCell} ${isSelected ? dp.dayCellSelected : ''} ${isToday && !isSelected ? dp.dayCellToday : ''} ${disabled ? dp.dayCellDisabled : ''}`}
                   onClick={() => selectDay(day)}
                 >
                   {day}
@@ -383,16 +515,18 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
             })}
           </div>
           <div className={dp.footer}>
-            <button
-              type="button"
-              className={dp.footerBtn}
-              onClick={() => {
-                onChange(formatISO(today));
-                close();
-              }}
-            >
-              Aujourd&apos;hui
-            </button>
+            {showTodayBtn && (
+              <button
+                type="button"
+                className={dp.footerBtn}
+                onClick={() => {
+                  commitIso(todayStr);
+                  close();
+                }}
+              >
+                Aujourd&apos;hui
+              </button>
+            )}
             {value && <button type="button" className={dp.footerBtnClear} onClick={clearDate}>Effacer</button>}
           </div>
         </div>,

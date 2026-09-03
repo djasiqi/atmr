@@ -156,6 +156,14 @@
   color: var(--brand-primary, #00796b);
 }
 
+.dayCellDisabled,
+.dayCell:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+  pointer-events: none;
+  color: var(--text-muted, #9ca3af);
+}
+
 /* ── Footer ── */
 .footer {
   display: flex;

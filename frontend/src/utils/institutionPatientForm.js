@@ -1,12 +1,16 @@
 /**
  * Normalisation / validation formulaire patient institution.
- * Aligné sur InstitutionPatientCreateSchema (backend).
+ * Aligné sur InstitutionPatientCreateSchema — PATIENT-IDENTITY-01.
+ *
+ * Mineur autorisé avec confirmation explicite (minor_dob_confirmed).
  */
 
 import { getPhoneValidationError, normalizePhone } from './phone';
 
 export const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 export const VALID_PATIENT_GENDERS = ['HOMME', 'FEMME', 'AUTRE'];
+export const MIN_ADULT_AGE_YEARS = 18;
+export const MINOR_DOB_CONFIRMATION_CODE = 'MINOR_DOB_CONFIRMATION_REQUIRED';
 
 const FIELD_LABELS = {
   first_name: 'Prénom',
@@ -24,6 +28,64 @@ const FIELD_LABELS = {
   guardian_email: 'Email curateur',
   guardianship_type: 'Type de curatelle',
 };
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function startOfLocalDay(d = new Date()) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Aujourd'hui en YYYY-MM-DD (local) — maxDate DOB. */
+export function todayIso(today = new Date()) {
+  const d = startOfLocalDay(today);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** DOB d'un patient ayant exactement 18 ans aujourd'hui. */
+export function adultDobCutoff(today = new Date()) {
+  const d = new Date(
+    today.getFullYear() - MIN_ADULT_AGE_YEARS,
+    today.getMonth(),
+    today.getDate(),
+  );
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+export function parseLocalIsoDate(iso) {
+  if (!ISO_DATE_REGEX.test(iso)) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  if (
+    dt.getFullYear() !== y
+    || dt.getMonth() !== m - 1
+    || dt.getDate() !== d
+  ) {
+    return null;
+  }
+  return dt;
+}
+
+export function patientAgeYears(isoDob, today = new Date()) {
+  const dob = parseLocalIsoDate(isoDob);
+  if (!dob) return null;
+  const ref = startOfLocalDay(today);
+  let years = ref.getFullYear() - dob.getFullYear();
+  if (
+    ref.getMonth() < dob.getMonth()
+    || (ref.getMonth() === dob.getMonth() && ref.getDate() < dob.getDate())
+  ) {
+    years -= 1;
+  }
+  return years;
+}
+
+export function isMinorDob(isoDob, today = new Date()) {
+  const age = patientAgeYears(isoDob, today);
+  if (age === null) return false;
+  return age < MIN_ADULT_AGE_YEARS;
+}
 
 /** Téléphone : chiffres et + initial uniquement. */
 export function sanitizePhoneInput(raw) {
@@ -60,16 +122,63 @@ export function normalizeText(value, maxLen) {
   return maxLen ? text.slice(0, maxLen) : text;
 }
 
-export function normalizeDob(raw) {
+/**
+ * Valide une DOB : présente, calendrier réel, pas future.
+ * Les mineurs sont ACCEPTÉS (confirmation séparée).
+ */
+export function normalizeDob(raw, { required = true } = {}) {
   const value = String(raw ?? '').trim();
-  if (!value) return { value: null, error: null };
-  if (ISO_DATE_REGEX.test(value)) return { value, error: null };
-  return { value: null, error: 'Date de naissance invalide (format attendu : AAAA-MM-JJ)' };
+  if (!value) {
+    return {
+      value: null,
+      error: required ? 'Date de naissance requise' : null,
+      isMinor: false,
+      age: null,
+    };
+  }
+  if (!ISO_DATE_REGEX.test(value)) {
+    return {
+      value: null,
+      error: 'Date de naissance invalide (format attendu : AAAA-MM-JJ)',
+      isMinor: false,
+      age: null,
+    };
+  }
+  const dob = parseLocalIsoDate(value);
+  if (!dob) {
+    return {
+      value: null,
+      error: 'Date de naissance invalide.',
+      isMinor: false,
+      age: null,
+    };
+  }
+  const today = startOfLocalDay();
+  if (dob > today) {
+    return {
+      value: null,
+      error: 'La date de naissance ne peut pas être dans le futur',
+      isMinor: false,
+      age: null,
+    };
+  }
+  const age = patientAgeYears(value, today);
+  return {
+    value,
+    error: null,
+    isMinor: age !== null && age < MIN_ADULT_AGE_YEARS,
+    age,
+  };
 }
 
-export function normalizeGender(raw) {
+export function normalizeGender(raw, { required = true } = {}) {
   const value = String(raw ?? '').trim().toUpperCase();
-  if (!value) return { value: null, error: null };
+  if (!value) {
+    return {
+      value: null,
+      error: required ? 'Civilité requise' : null,
+    };
+  }
   if (VALID_PATIENT_GENDERS.includes(value)) return { value, error: null };
   return { value: null, error: 'Civilité invalide' };
 }
@@ -84,9 +193,21 @@ export function normalizeEmail(raw) {
 }
 
 /**
- * Prépare le payload API et collecte les erreurs bloquantes côté client.
+ * Prépare le payload API.
+ * @param {object} options
+ * @param {boolean} [options.forceCreate]
+ * @param {boolean} [options.minorDobConfirmed] — confirmation UI mineur
+ * @param {string|null} [options.previousDob] — DOB actuelle (édition) pour éviter
+ *   de reconfirmer si inchangée
  */
-export function buildInstitutionPatientPayload(formData, { forceCreate = false } = {}) {
+export function buildInstitutionPatientPayload(
+  formData,
+  {
+    forceCreate = false,
+    minorDobConfirmed = false,
+    previousDob = null,
+  } = {},
+) {
   const errors = [];
 
   const first_name = normalizeText(formData.first_name, 100);
@@ -99,11 +220,17 @@ export function buildInstitutionPatientPayload(formData, { forceCreate = false }
   const phoneError = getPhoneValidationError(phone);
   if (phoneError) errors.push(phoneError);
 
-  const dobResult = normalizeDob(formData.dob);
+  const genderResult = normalizeGender(formData.gender, { required: true });
+  if (genderResult.error) errors.push(genderResult.error);
+
+  const dobResult = normalizeDob(formData.dob, { required: true });
   if (dobResult.error) errors.push(dobResult.error);
 
-  const genderResult = normalizeGender(formData.gender);
-  if (genderResult.error) errors.push(genderResult.error);
+  const prevIso = previousDob ? String(previousDob).split('T')[0] : null;
+  const dobChanged = !prevIso || prevIso !== dobResult.value;
+  const needsMinorConfirmation = Boolean(
+    dobResult.value && dobResult.isMinor && dobChanged,
+  );
 
   const hasGuardianship = Boolean(formData.has_guardianship);
 
@@ -120,6 +247,11 @@ export function buildInstitutionPatientPayload(formData, { forceCreate = false }
   }
 
   const postalDigits = sanitizePostalCodeInput(formData.postal_code);
+  const address = normalizeText(formData.address, 255);
+  const city = normalizeText(formData.city, 100);
+  if (!address) errors.push('Adresse requise');
+  if (!postalDigits) errors.push('NPA requis');
+  if (!city) errors.push('Ville requise');
 
   const payload = {
     first_name,
@@ -127,8 +259,8 @@ export function buildInstitutionPatientPayload(formData, { forceCreate = false }
     dob: dobResult.value,
     gender: genderResult.value,
     phone,
-    address: normalizeText(formData.address, 255),
-    city: normalizeText(formData.city, 100),
+    address,
+    city,
     postal_code: postalDigits || null,
     door_code: normalizeText(formData.door_code, 50),
     floor: normalizeText(formData.floor, 20),
@@ -159,13 +291,26 @@ export function buildInstitutionPatientPayload(formData, { forceCreate = false }
   }
 
   if (forceCreate) payload.force_create = true;
+  if (needsMinorConfirmation && minorDobConfirmed) {
+    payload.minor_dob_confirmed = true;
+  }
 
-  return { payload, errors };
+  return {
+    payload,
+    errors,
+    needsMinorConfirmation,
+    minorAge: dobResult.age,
+    isMinor: Boolean(dobResult.isMinor),
+  };
 }
 
-/** Message lisible à partir d'une réponse API 400. */
+/** Message lisible à partir d'une réponse API 400/422. */
 export function formatInstitutionPatientApiError(data) {
   if (!data || typeof data !== 'object') return 'Erreur';
+
+  if (data.code === MINOR_DOB_CONFIRMATION_CODE) {
+    return data.error || 'Confirmation de la date de naissance mineure requise.';
+  }
 
   const details = data.details;
   if (details && typeof details === 'object') {
@@ -180,6 +325,12 @@ export function formatInstitutionPatientApiError(data) {
   if (typeof data.message === 'string' && data.message.trim()) return data.message;
   if (typeof data.error === 'string' && data.error.trim()) return data.error;
   return 'Erreur';
+}
+
+export function formatDobDisplay(iso) {
+  const d = parseLocalIsoDate(iso);
+  if (!d) return iso || '—';
+  return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}`;
 }
 
 /** Normalise un objet formulaire chargé depuis l'API (édition). */

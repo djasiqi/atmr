@@ -227,12 +227,13 @@ class TestE2EInstitutionFlow:
         patient_data = {
             "first_name": "Jean",
             "last_name": "Dupont",
-            "birth_date": "1950-05-15",
+            "dob": "1950-05-15",
+            "gender": "HOMME",
             "external_reference": f"PAT-{uuid.uuid4().hex[:8]}",
             "phone": "+41791234567",
-            "address": "789 Rue Patient, 1000 Lausanne",
-            "mobility_reduced": True,
-            "wheelchair_required": False,
+            "address": "789 Rue Patient",
+            "postal_code": "1000",
+            "city": "Lausanne",
             "notes": "Patient test E2E",
         }
 

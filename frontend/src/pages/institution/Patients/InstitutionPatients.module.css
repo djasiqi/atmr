@@ -771,6 +771,87 @@
   cursor: not-allowed;
 }
 
+.chipBtnInvalid {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+.fieldInvalid input,
+.fieldInvalid :global(.form-input) {
+  border-color: var(--danger) !important;
+}
+
+.minorAlert {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #FEF3C7;
+  border: 1px solid #F59E0B;
+  color: #92400E;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.minorConfirmOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.45);
+  padding: 16px;
+}
+
+.minorConfirmDialog {
+  width: min(440px, 100%);
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+}
+
+.minorConfirmDialog h4 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  color: #92400E;
+}
+
+.minorConfirmName {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.minorConfirmMeta {
+  margin: 0 0 14px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.minorConfirmCheck {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.minorConfirmCheck input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.minorConfirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .chipText {
   max-width: 180px;
   overflow: hidden;
@@ -853,6 +934,10 @@
 .addressInput:hover { border-color: var(--border-hover); background: var(--bg-surface); }
 .addressInput:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.08); background: var(--bg-surface); }
 .addressInput::placeholder { color: #B0B8C4; font-size: 0.78rem; }
+.inputInvalid,
+.addressInput.inputInvalid {
+  border-color: #dc2626 !important;
+}
 
 /* Checkbox */
 .checkboxField {
