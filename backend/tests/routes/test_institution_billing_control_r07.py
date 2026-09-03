@@ -250,7 +250,9 @@ def billing_headers(db, billing_user, control_institution):
 
 @pytest.fixture
 def requester_headers(db, requester_user, control_institution):
-    return _auth_headers(db, requester_user, control_institution, "institution_requester")
+    return _auth_headers(
+        db, requester_user, control_institution, "institution_requester"
+    )
 
 
 @pytest.fixture
@@ -357,6 +359,65 @@ class TestBillingControlACL:
         assert booking.billed_to_type == "clinic"
         assert effective_control_status(booking) == "pending_review"
 
+    @pytest.mark.parametrize("topology", ["route_group", "parent"])
+    def test_payer_change_resolves_return_without_direct_transport_request(
+        self,
+        client,
+        db,
+        billing_headers,
+        control_institution,
+        topology,
+    ):
+        """P0 : retour sans TR directe (route_group / parent) — plus de 404 PUT payeur."""
+        outbound, tr = _converted_booking(db, control_institution)
+
+        return_booking = Booking()
+        return_booking.company_id = outbound.company_id
+        return_booking.client_id = outbound.client_id
+        return_booking.customer_name = outbound.customer_name
+        return_booking.pickup_location = outbound.dropoff_location
+        return_booking.dropoff_location = outbound.pickup_location
+        return_booking.scheduled_time = outbound.scheduled_time + timedelta(hours=2)
+        return_booking.completed_at = return_booking.scheduled_time
+        return_booking.status = BookingStatus.COMPLETED.value
+        return_booking.amount = outbound.amount
+        return_booking.billed_to_type = "patient"
+        return_booking.billing_party_id = outbound.billing_party_id
+        return_booking.institution_patient_id = outbound.institution_patient_id
+
+        if topology == "route_group":
+            route_group_id = str(uuid.uuid4())
+            outbound.route_group_id = route_group_id
+            outbound.route_sequence_number = 1
+            return_booking.route_group_id = route_group_id
+            return_booking.route_sequence_number = 2
+            tr.route_group_id = route_group_id
+        else:
+            return_booking.parent_booking_id = outbound.id
+
+        db.session.add(return_booking)
+        db.session.commit()
+
+        assert (
+            TransportRequest.query.filter_by(
+                booking_id=return_booking.id,
+                institution_id=control_institution.id,
+            ).first()
+            is None
+        )
+
+        r = client.put(
+            f"/api/v1/institutions/billing/bookings/{return_booking.id}",
+            headers=billing_headers,
+            json={
+                "billing_intent": "patient",
+                "billing_change_reason_code": "ADMIN_CORRECTION",
+                "override_reason": "Correction payeur retour sans TR directe",
+            },
+        )
+
+        assert r.status_code == 200, r.get_json()
+
     def test_c07_admin_validate(self, client, admin_headers, control_booking):
         bid = control_booking["booking"].id
         r = client.post(
@@ -430,7 +491,9 @@ class TestBillingControlWorkflow:
             == InstitutionBillingControlStatus.VALIDATED
         )
 
-    def test_c12_audit_validated_by_exact(self, db, control_institution, control_booking):
+    def test_c12_audit_validated_by_exact(
+        self, db, control_institution, control_booking
+    ):
         booking = control_booking["booking"]
         tr = control_booking["transport_request"]
         actor = _institution_user(
@@ -474,10 +537,13 @@ class TestBillingControlWorkflow:
         assert result.ok is True
         db.session.commit()
         assert (
-            booking.institution_control_status == InstitutionBillingControlStatus.ANOMALY
+            booking.institution_control_status
+            == InstitutionBillingControlStatus.ANOMALY
         )
 
-    def test_c14_anomaly_reason_preserved(self, db, control_institution, control_booking):
+    def test_c14_anomaly_reason_preserved(
+        self, db, control_institution, control_booking
+    ):
         booking = control_booking["booking"]
         tr = control_booking["transport_request"]
         mark_booking_control_anomaly(
@@ -491,7 +557,9 @@ class TestBillingControlWorkflow:
             anomaly_comment="Adresse manquante",
         )
         db.session.commit()
-        assert "MISSING_BLOCKING_DATA" in (booking.institution_control_anomaly_reason or "")
+        assert "MISSING_BLOCKING_DATA" in (
+            booking.institution_control_anomaly_reason or ""
+        )
         event = BookingChangeEvent.query.filter_by(
             booking_id=booking.id, action_type="billing_control_anomaly"
         ).first()
@@ -620,7 +688,9 @@ class TestBillingControlWorkflow:
         assert effective_control_status(b1) == "anomaly"
         assert effective_control_status(b2) == "validated"
 
-    def test_c18_locked_readonly_control_mutations(self, db, control_institution, control_booking):
+    def test_c18_locked_readonly_control_mutations(
+        self, db, control_institution, control_booking
+    ):
         booking = control_booking["booking"]
         tr = control_booking["transport_request"]
         booking.billing_locked_at = datetime.now(UTC)
@@ -684,6 +754,85 @@ class TestBillingControlWorkflow:
         assert effective_control_status(booking) == "pending_review"
         assert booking.institution_control_anomaly_reason is None
 
+    def test_reopen_validated_to_pending(self, db, control_institution, control_booking):
+        """REOPEN-VALIDATED : Validé → À vérifier (annuler une validation trop rapide)."""
+        booking = control_booking["booking"]
+        tr = control_booking["transport_request"]
+        validate_booking_control(
+            booking,
+            transport_request=tr,
+            institution_id=control_institution.id,
+            actor_user_id=1,
+            actor_role="institution_admin",
+            actor_display_name="Marc Validate",
+        )
+        db.session.commit()
+        assert effective_control_status(booking) == "validated"
+        assert booking.institution_control_validated_at is not None
+
+        result = reopen_booking_control(
+            booking,
+            transport_request=tr,
+            institution_id=control_institution.id,
+            actor_user_id=1,
+            actor_role="institution_billing",
+            actor_display_name="Marc Reopen",
+            reason="Validation trop rapide",
+        )
+        assert result.ok is True
+        db.session.commit()
+        assert effective_control_status(booking) == "pending_review"
+        assert booking.institution_control_validated_at is None
+        assert booking.institution_control_validated_by_user_id is None
+        assert booking.institution_control_validated_by_display_name is None
+
+    def test_reopen_pending_rejected(self, db, control_institution, control_booking):
+        booking = control_booking["booking"]
+        tr = control_booking["transport_request"]
+        assert effective_control_status(booking) == "pending_review"
+        result = reopen_booking_control(
+            booking,
+            transport_request=tr,
+            institution_id=control_institution.id,
+            actor_user_id=1,
+            actor_role="institution_admin",
+            actor_display_name=None,
+        )
+        assert result.ok is False
+        assert result.status_code == 409
+
+    def test_reopen_validated_locked_rejected(
+        self, db, control_institution, control_booking
+    ):
+        """REOPEN-VALIDATED : Validé + verrouillé → 409 (readonly avant statut)."""
+        booking = control_booking["booking"]
+        tr = control_booking["transport_request"]
+        validate_booking_control(
+            booking,
+            transport_request=tr,
+            institution_id=control_institution.id,
+            actor_user_id=1,
+            actor_role="institution_admin",
+            actor_display_name="Marc",
+        )
+        booking.billing_locked_at = datetime.now(UTC)
+        db.session.commit()
+        assert effective_control_status(booking) == "validated"
+
+        result = reopen_booking_control(
+            booking,
+            transport_request=tr,
+            institution_id=control_institution.id,
+            actor_user_id=1,
+            actor_role="institution_billing",
+            actor_display_name=None,
+            reason="Ne doit pas passer",
+        )
+        assert result.ok is False
+        assert result.status_code == 409
+        assert effective_control_status(booking) == "validated"
+        assert booking.institution_control_validated_at is not None
+
 
 class TestBillingControlAPID01D12:
     """Gate API BILLING CONTROL — contrat liste/détail (D01–D12)."""
@@ -722,7 +871,9 @@ class TestBillingControlAPID01D12:
         ids2 = {i["booking_id"] for i in r2.get_json()["items"]}
         assert booking.id not in ids2
 
-    def test_d04_control_status_filter(self, client, db, admin_headers, control_booking):
+    def test_d04_control_status_filter(
+        self, client, db, admin_headers, control_booking
+    ):
         booking = control_booking["booking"]
         tr = control_booking["transport_request"]
         validate_booking_control(
@@ -759,11 +910,13 @@ class TestBillingControlAPID01D12:
         assert r.status_code == 200
         data = r.get_json()
         assert data["summary"]["total"] >= 1
-        assert all(i["booking_id"] == booking.id for i in data["items"]) or booking.id in {
-            i["booking_id"] for i in data["items"]
-        }
+        assert all(
+            i["booking_id"] == booking.id for i in data["items"]
+        ) or booking.id in {i["booking_id"] for i in data["items"]}
 
-    def test_d06_pagination_total_coherent(self, client, db, admin_headers, control_institution):
+    def test_d06_pagination_total_coherent(
+        self, client, db, admin_headers, control_institution
+    ):
         _converted_booking(db, control_institution)
         _converted_booking(db, control_institution)
         r = client.get(f"{LIST_URL}?page=1&page_size=1", headers=admin_headers)
@@ -774,14 +927,18 @@ class TestBillingControlAPID01D12:
         assert len(data["items"]) == 1
         assert data["summary"]["total"] == data["pagination"]["total"]
 
-    def test_d07_summary_matches_population(self, client, admin_headers, control_booking):
+    def test_d07_summary_matches_population(
+        self, client, admin_headers, control_booking
+    ):
         r = client.get(LIST_URL, headers=admin_headers)
         data = r.get_json()
         s = data["summary"]
         assert s["total"] == data["pagination"]["total"]
         assert s["pending_review"] + s["validated"] + s["anomaly"] == s["total"]
 
-    def test_d08_round_trip_distinct_linked(self, client, db, admin_headers, control_institution):
+    def test_d08_round_trip_distinct_linked(
+        self, client, db, admin_headers, control_institution
+    ):
         outbound, _tr = _converted_booking(db, control_institution)
         scheduled = outbound.scheduled_time
         ret = Booking()
@@ -808,10 +965,14 @@ class TestBillingControlAPID01D12:
         assert ret.id in items
         assert items[outbound.id]["segment_type"] == "outbound"
         assert items[ret.id]["segment_type"] == "return"
-        sib_ids = {s["booking_id"] for s in items[outbound.id]["relationship"]["siblings"]}
+        sib_ids = {
+            s["booking_id"] for s in items[outbound.id]["relationship"]["siblings"]
+        }
         assert ret.id in sib_ids
 
-    def test_d09_detail_payer_control_billing(self, client, admin_headers, control_booking):
+    def test_d09_detail_payer_control_billing(
+        self, client, admin_headers, control_booking
+    ):
         bid = control_booking["booking"].id
         r = client.get(
             f"/api/v1/institutions/billing/control/bookings/{bid}",

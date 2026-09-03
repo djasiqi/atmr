@@ -99,7 +99,7 @@ function BookingActions({
   const status = item?.control?.effective_status;
   const busy = pendingId === item.booking_id;
 
-  if (status === 'anomaly') {
+  if (status === 'anomaly' || status === 'validated') {
     return (
       <div className={s.actions}>
         <button
@@ -113,7 +113,6 @@ function BookingActions({
       </div>
     );
   }
-  if (status === 'validated') return null;
 
   return (
     <div className={s.actions}>

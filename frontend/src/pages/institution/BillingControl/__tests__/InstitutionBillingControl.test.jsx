@@ -211,21 +211,30 @@ describe('InstitutionBillingControl — U05–U16', () => {
     renderPage();
     expect(screen.getByText(/Facturé/)).toBeInTheDocument();
     expect(screen.queryByTestId('payer-select-999')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Réouvrir/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Valider/i })).not.toBeInTheDocument();
   });
 
-  it('U13 — Réouvrir déclenche mutation', async () => {
+  it.each([
+    ['anomaly', 201],
+    ['validated', 202],
+  ])('U13 — Réouvrir visible sur %s et déclenche mutation', async (status, bookingId) => {
     hooks.useBillingControlBookings.mockReturnValue({
       data: {
         items: [{
-          booking_id: 201,
+          booking_id: bookingId,
           scheduled_time: '2026-09-02T10:00:00',
-          patient: { display_name: 'Ano' },
+          patient: { display_name: status === 'anomaly' ? 'Ano' : 'Val' },
           segment_type: 'outbound',
           payer: { type: 'patient' },
-          control: { effective_status: 'anomaly', anomaly_reason: 'OTHER: test' },
+          control: {
+            effective_status: status,
+            anomaly_reason: status === 'anomaly' ? 'OTHER: test' : undefined,
+            validated_by_display_name: status === 'validated' ? 'Marc' : undefined,
+          },
           billing: { editable: true, locked: false, invoiced: false },
         }],
-        summary: { total: 1, anomaly: 1 },
+        summary: { total: 1, anomaly: status === 'anomaly' ? 1 : 0, validated: status === 'validated' ? 1 : 0 },
         pagination: { page: 1, total_pages: 1, total: 1 },
       },
       isLoading: false,
@@ -240,7 +249,7 @@ describe('InstitutionBillingControl — U05–U16', () => {
     await user.click(screen.getByRole('button', { name: /Réouvrir/i }));
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ bookingId: 201 }),
+        expect.objectContaining({ bookingId }),
       );
     });
   });
