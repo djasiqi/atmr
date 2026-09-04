@@ -105,7 +105,8 @@ const ChipDropdown = ({ value, options, onChange, disabled, clearable = true, in
         className={`${s.chipBtn} ${invalid ? s.chipBtnInvalid : ''}`.trim()}
         onClick={() => !disabled && setOpen((p) => !p)}
         disabled={disabled}
-        aria-invalid={invalid || undefined}
+        aria-expanded={open}
+        aria-haspopup="listbox"
       >
         <span className={s.chipText}>{selected?.label || '—'}</span>
         <FiChevronDown size={11} className={`${s.chipArrow} ${open ? s.chipArrowOpen : ''}`} />
@@ -447,7 +448,7 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                       placeholder="1247"
                       inputMode="numeric"
                       maxLength={20}
-                      aria-invalid={attempted && !formData.postal_code?.trim() || undefined}
+                      aria-invalid={attempted && !formData.postal_code?.trim() ? true : undefined}
                     />
                   </div>
                   <div className={`${s.field} ${attempted && !formData.city?.trim() ? s.fieldInvalid : ''}`.trim()}>
@@ -457,7 +458,7 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                       value={formData.city}
                       onChange={(e) => handleChange('city', e.target.value)}
                       placeholder="Anières"
-                      aria-invalid={attempted && !formData.city?.trim() || undefined}
+                      aria-invalid={attempted && !formData.city?.trim() ? true : undefined}
                     />
                   </div>
                 </div>
