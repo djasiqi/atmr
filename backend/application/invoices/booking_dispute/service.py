@@ -26,9 +26,7 @@ from services.institutions.booking_change_service import (
 
 from .freeze import OPEN_DISPUTE_STATUSES, get_open_dispute_for_booking
 
-CARRIER_STANCES = frozenset(
-    {"institution_right", "mission_done", "needs_correction"}
-)
+CARRIER_STANCES = frozenset({"institution_right", "mission_done", "needs_correction"})
 EXCLUSION_REASONS = frozenset(
     {"created_by_error", "mission_cancelled", "duplicate", "other"}
 )
@@ -195,7 +193,11 @@ def present_dispute(dispute: BookingDispute, booking: Booking) -> dict[str, Any]
     patient = getattr(booking, "customer_name", None) or ""
     ip = getattr(booking, "institution_patient", None)
     if ip is not None:
-        parts = [p for p in (getattr(ip, "first_name", None), getattr(ip, "last_name", None)) if p]
+        parts = [
+            p
+            for p in (getattr(ip, "first_name", None), getattr(ip, "last_name", None))
+            if p
+        ]
         if parts:
             patient = " ".join(parts)
     scheduled = getattr(booking, "scheduled_time", None)
@@ -367,7 +369,9 @@ def carrier_respond(
             Decimal(str(proposed_amount_ht)) if proposed_amount_ht is not None else None
         )
         dispute.proposed_payer_type = (proposed_payer_type or "").strip() or None
-        dispute.proposed_correction_note = (proposed_correction_note or note or "").strip() or None
+        dispute.proposed_correction_note = (
+            proposed_correction_note or note or ""
+        ).strip() or None
     else:
         dispute.status = BookingDisputeStatus.AWAITING_CARRIER_RESPONSE.value
         _ensure_system_snapshot(dispute, booking, actor_user_id)
@@ -469,7 +473,9 @@ def submit_dispute_for_validation(
 ) -> DisputeResult:
     dispute = get_open_dispute(int(booking.id))
     if dispute is None:
-        return DisputeResult(ok=False, error="Aucune contestation ouverte.", status_code=404)
+        return DisputeResult(
+            ok=False, error="Aucune contestation ouverte.", status_code=404
+        )
     if dispute.carrier_stance not in ("mission_done", "needs_correction"):
         return DisputeResult(
             ok=False,
@@ -477,11 +483,7 @@ def submit_dispute_for_validation(
             status_code=400,
             dispute=dispute,
         )
-    human_proofs = [
-        row
-        for row in (dispute.evidence or [])
-        if row.source == "uploaded"
-    ]
+    human_proofs = [row for row in (dispute.evidence or []) if row.source == "uploaded"]
     if not human_proofs:
         return DisputeResult(
             ok=False,
@@ -535,7 +537,9 @@ def decide_dispute(
         )
     dispute = get_open_dispute(int(booking.id))
     if dispute is None:
-        return DisputeResult(ok=False, error="Aucune contestation ouverte.", status_code=404)
+        return DisputeResult(
+            ok=False, error="Aucune contestation ouverte.", status_code=404
+        )
     if dispute.status != BookingDisputeStatus.EVIDENCE_SUBMITTED.value:
         return DisputeResult(
             ok=False,
@@ -617,13 +621,17 @@ def _record_billing_event(
         institution_id=getattr(req, "institution_id", None),
         actor_user_id=actor_user_id,
         actor_role=actor_role,
-        actor_type="company_user" if (actor_role or "").upper() in {"COMPANY", "ADMIN"} else "institution_user",
+        actor_type="company_user"
+        if (actor_role or "").upper() in {"COMPANY", "ADMIN"}
+        else "institution_user",
         actor_display_name=actor_display_name,
         action_type=action_type,
         change_scope="billing_control",
         source="dispute_resolution",
         before_snapshot=None,
-        after_snapshot={"invoice_billing_status": getattr(booking, "invoice_billing_status", None)},
+        after_snapshot={
+            "invoice_billing_status": getattr(booking, "invoice_billing_status", None)
+        },
         reason=reason,
         change_class="major",
         severity="INFO",

@@ -20,8 +20,8 @@ from application.invoices.booking_dispute.service import (
 from ext import db, role_required
 from models import Booking, BookingDispute, User
 from models.enums import InstitutionBillingControlStatus
-from routes.invoices import invoices_ns
 from routes.institution_billing import get_billing_context, institution_billing_ns
+from routes.invoices import invoices_ns
 from shared.error_handlers import APIErrorHandler
 from shared.response_helpers import success_response
 
@@ -88,9 +88,7 @@ def _has_open_or_legacy_dispute(booking: Booking) -> bool:
     return persisted_v == InstitutionBillingControlStatus.ANOMALY.value
 
 
-@invoices_ns.route(
-    "/companies/<int:company_id>/bookings/<int:booking_id>/dispute"
-)
+@invoices_ns.route("/companies/<int:company_id>/bookings/<int:booking_id>/dispute")
 class CompanyBookingDispute(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
@@ -296,4 +294,7 @@ class InstitutionBookingDisputeDecide(Resource):
             return {"error": result.error}, int(result.status_code or 400)
         db.session.commit()
         _emit_updated(ctx.booking, "dispute_decided")
-        return {"success": True, "dispute": present_dispute(result.dispute, ctx.booking)}
+        return {
+            "success": True,
+            "dispute": present_dispute(result.dispute, ctx.booking),
+        }

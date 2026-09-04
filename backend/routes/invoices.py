@@ -33,6 +33,7 @@ from application.invoices import (
     SendReminderByEmailInput,
     SendReminderByEmailUseCase,
 )
+from application.invoices.booking_dispute.service import latest_dispute_summaries
 from application.invoices.duplicate_invoice import DuplicateInvoiceInput
 from application.invoices.generate_invoice_reminder import (
     GenerateInvoiceReminderInput,
@@ -1713,8 +1714,6 @@ def _attach_plan_display_context(plan_dict: dict[str, Any]) -> dict[str, Any]:
             dropoff = str(getattr(booking, "dropoff_location", "") or "").strip()
             if dropoff:
                 row["dropoff_location"] = dropoff
-        from application.invoices.booking_dispute.service import latest_dispute_summaries
-
         summaries = latest_dispute_summaries(booking_ids)
         for row in bookings:
             try:

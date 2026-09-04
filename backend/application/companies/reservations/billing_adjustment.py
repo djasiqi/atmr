@@ -239,7 +239,9 @@ class CompanyBookingBillingAdjustmentUseCase:
         if frozen:
             return BookingBillingAdjustmentResult(
                 ok=False,
-                error={"error": freeze_msg or "Contestation en cours : facturation gelée."},
+                error={
+                    "error": freeze_msg or "Contestation en cours : facturation gelée."
+                },
                 status_code=409,
             )
 

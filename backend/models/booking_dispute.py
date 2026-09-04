@@ -53,7 +53,9 @@ class BookingDispute(db.Model):
     opened_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
-    institution_reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    institution_reason_code: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
     institution_reason_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     frozen_amount_ht: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=True)
@@ -61,7 +63,9 @@ class BookingDispute(db.Model):
     frozen_billing_party_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     carrier_stance: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    carrier_exclusion_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    carrier_exclusion_reason: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
     carrier_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     carrier_responded_at: Mapped[Any] = mapped_column(
         DateTime(timezone=True), nullable=True

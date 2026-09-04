@@ -11,6 +11,7 @@ from application.institutions.billing_control.status import (
     control_status_snapshot,
     effective_control_status,
 )
+from application.invoices.booking_dispute.service import latest_dispute_summaries
 from application.invoices.institution_invoice_eligibility import (
     invoice_gate_status,
     resolve_commercial_origin,
@@ -139,8 +140,6 @@ def _dispute_control_fields(
 ) -> dict[str, Any]:
     extra = dispute_summary
     if extra is None:
-        from application.invoices.booking_dispute.service import latest_dispute_summaries
-
         extra = latest_dispute_summaries([int(booking.id)]).get(int(booking.id), {})
     return {
         "dispute_id": extra.get("dispute_id"),

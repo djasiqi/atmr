@@ -6,7 +6,9 @@ from types import SimpleNamespace
 
 from application.invoices.booking_dispute import freeze as freeze_mod
 from application.invoices.booking_dispute import service as svc
-from application.invoices.institution_invoice_reconciliation import classify_booking_bucket
+from application.invoices.institution_invoice_reconciliation import (
+    classify_booking_bucket,
+)
 from models.enums import InstitutionBillingControlStatus
 
 
@@ -107,7 +109,9 @@ def test_submit_requires_uploaded_evidence(monkeypatch):
         evidence=[SimpleNamespace(source="system", kind="system_snapshot")],
     )
     monkeypatch.setattr(svc, "get_open_dispute", lambda *_a, **_k: dispute)
-    result = svc.submit_dispute_for_validation(booking, actor_user_id=2, actor_role="COMPANY")
+    result = svc.submit_dispute_for_validation(
+        booking, actor_user_id=2, actor_role="COMPANY"
+    )
     assert result.ok is False
     assert "justificatif" in (result.error or "").lower()
 
@@ -134,14 +138,19 @@ def test_accept_carrier_returns_billable(monkeypatch):
     assert result.ok is True
     assert dispute.status == "resolved_carrier"
     assert booking.invoice_billing_status == "billable"
-    assert booking.institution_control_status == InstitutionBillingControlStatus.VALIDATED
+    assert (
+        booking.institution_control_status == InstitutionBillingControlStatus.VALIDATED
+    )
 
 
 def test_financial_freeze_blocks_silent_change(monkeypatch):
-    monkeypatch.setattr(freeze_mod, "get_open_dispute_for_booking", lambda *_a, **_k: object())
+    monkeypatch.setattr(
+        freeze_mod, "get_open_dispute_for_booking", lambda *_a, **_k: object()
+    )
     blocked, msg = freeze_mod.financial_change_blocked_by_dispute(_booking())
     assert blocked is True
-    assert msg and "gelés" in msg
+    assert msg is not None
+    assert "gelés" in msg
 
 
 def test_disputed_stays_blocked_until_resolution():

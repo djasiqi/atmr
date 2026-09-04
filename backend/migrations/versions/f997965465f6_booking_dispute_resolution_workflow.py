@@ -5,6 +5,7 @@ Revises: 453111f754df
 Create Date: 2026-09-04 16:15:38.728232
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -41,7 +42,9 @@ def upgrade():
         sa.Column("carrier_note", sa.Text(), nullable=True),
         sa.Column("carrier_responded_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("carrier_responded_by_user_id", sa.Integer(), nullable=True),
-        sa.Column("proposed_amount_ht", sa.Numeric(precision=12, scale=2), nullable=True),
+        sa.Column(
+            "proposed_amount_ht", sa.Numeric(precision=12, scale=2), nullable=True
+        ),
         sa.Column("proposed_payer_type", sa.String(length=32), nullable=True),
         sa.Column("proposed_correction_note", sa.Text(), nullable=True),
         sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=True),
@@ -121,9 +124,7 @@ def upgrade():
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["actor_user_id"], ["user.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["actor_user_id"], ["user.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
             ["dispute_id"], ["booking_disputes.id"], ondelete="CASCADE"
         ),
@@ -185,8 +186,12 @@ def downgrade():
     )
     op.drop_table("booking_dispute_events")
     op.drop_index(op.f("ix_booking_disputes_status"), table_name="booking_disputes")
-    op.drop_index("ix_booking_disputes_institution_status", table_name="booking_disputes")
-    op.drop_index(op.f("ix_booking_disputes_institution_id"), table_name="booking_disputes")
+    op.drop_index(
+        "ix_booking_disputes_institution_status", table_name="booking_disputes"
+    )
+    op.drop_index(
+        op.f("ix_booking_disputes_institution_id"), table_name="booking_disputes"
+    )
     op.drop_index("ix_booking_disputes_company_status", table_name="booking_disputes")
     op.drop_index(op.f("ix_booking_disputes_company_id"), table_name="booking_disputes")
     op.drop_index("ix_booking_disputes_booking_status", table_name="booking_disputes")

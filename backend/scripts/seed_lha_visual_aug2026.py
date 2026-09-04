@@ -184,7 +184,9 @@ def seed() -> dict[str, int]:
     client = db.session.get(Client, 318)
     admin = User.query.filter_by(email="admin@lha.ch", institution_id=1).first()
     if company is None or institution is None or client is None:
-        raise RuntimeError("Monde LHA local introuvable (company 1 / institution 1 / client 318).")
+        raise RuntimeError(
+            "Monde LHA local introuvable (company 1 / institution 1 / client 318)."
+        )
 
     if client.default_billed_to_company_id is None:
         client.default_billed_to_company_id = company.id
@@ -427,7 +429,11 @@ def seed() -> dict[str, int]:
     total = Booking.query.filter_by(
         company_id=company.id, billing_source_ref=MARKER
     ).count()
-    return {"created": created, "total_visual": total, "admin_id": int(admin.id) if admin else 0}
+    return {
+        "created": created,
+        "total_visual": total,
+        "admin_id": int(admin.id) if admin else 0,
+    }
 
 
 def main() -> int:

@@ -97,7 +97,9 @@ def _assert_conservation(ledger: dict, expected_ids: set[int]) -> None:
         seen.extend(int(i) for i in bucket["booking_ids"])
     assert set(seen) == expected_ids
     assert len(seen) == len(expected_ids)
-    bucket_sum = round(sum(float(b["amount_ht"]) for b in ledger["buckets"].values()), 2)
+    bucket_sum = round(
+        sum(float(b["amount_ht"]) for b in ledger["buckets"].values()), 2
+    )
     assert bucket_sum == float(ledger["considered_amount_ht"])
 
 
@@ -293,8 +295,7 @@ class TestE2EInstitutionInvoicePlanLhaAug2026:
         patient_bucket = next(
             p
             for p in plan.patients
-            if p.institution_patient_id
-            == lha_world["patients"]["cavadini"].id
+            if p.institution_patient_id == lha_world["patients"]["cavadini"].id
         )
         patient_preview = build_period_invoice_preview(
             company_id=lha_world["transport"].id,
@@ -318,9 +319,7 @@ class TestE2EInstitutionInvoicePlanLhaAug2026:
                 period_year=PERIOD_YEAR,
                 period_month=PERIOD_MONTH,
                 billing_party_id=lha_world["patient_bps"]["cavadini"].id,
-                reservation_ids=[
-                    lha_world["bookings"]["market_validated_patient"].id
-                ],
+                reservation_ids=[lha_world["bookings"]["market_validated_patient"].id],
             ),
             now=SEP_1,
         )
