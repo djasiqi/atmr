@@ -14,8 +14,6 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
-from flask_jwt_extended import create_access_token
-
 from application.bookings.cancellation_rules import (
     compute_cancellation_fields_with_status,
     get_cancellation_billing_info,
@@ -33,6 +31,7 @@ from models import (
     User,
     UserRole,
 )
+from tests.helpers.institution_auth import institution_bearer_headers
 
 
 class TestCancellationRulesEnRoute:
@@ -145,18 +144,9 @@ class TestCancelConvertedRequest:
         return user
 
     @pytest.fixture
-    def auth_headers(self, sample_user, sample_institution):
-        """Headers JWT pour l'utilisateur institution."""
-        token = create_access_token(
-            identity=str(sample_user.public_id),
-            additional_claims={
-                "role": UserRole.INSTITUTION.value,
-                "institution_id": sample_institution.id,
-                "institution_role": "institution_admin",
-                "aud": "atmr-api",
-            },
-        )
-        return {"Authorization": f"Bearer {token}"}
+    def auth_headers(self, db, sample_user, sample_institution):
+        """Headers JWT institution valides (sid + WebSession)."""
+        return institution_bearer_headers(db, sample_user, sample_institution)
 
     @pytest.fixture
     def converted_request(self, db, sample_institution):
@@ -272,32 +262,24 @@ class TestBillingPermissions:
         return user
 
     @pytest.fixture
-    def billing_auth_headers(self, billing_user, sample_institution):
-        """Headers JWT pour l'utilisateur billing."""
-        token = create_access_token(
-            identity=str(billing_user.public_id),
-            additional_claims={
-                "role": UserRole.INSTITUTION.value,
-                "institution_id": sample_institution.id,
-                "institution_role": "institution_billing",
-                "aud": "atmr-api",
-            },
+    def billing_auth_headers(self, db, billing_user, sample_institution):
+        """Headers JWT billing (sid + WebSession)."""
+        return institution_bearer_headers(
+            db,
+            billing_user,
+            sample_institution,
+            institution_role="institution_billing",
         )
-        return {"Authorization": f"Bearer {token}"}
 
     @pytest.fixture
-    def reader_auth_headers(self, reader_user, sample_institution):
-        """Headers JWT pour l'utilisateur reader."""
-        token = create_access_token(
-            identity=str(reader_user.public_id),
-            additional_claims={
-                "role": UserRole.INSTITUTION.value,
-                "institution_id": sample_institution.id,
-                "institution_role": "institution_reader",
-                "aud": "atmr-api",
-            },
+    def reader_auth_headers(self, db, reader_user, sample_institution):
+        """Headers JWT reader (sid + WebSession) — ACL 403 attendu."""
+        return institution_bearer_headers(
+            db,
+            reader_user,
+            sample_institution,
+            institution_role="institution_reader",
         )
-        return {"Authorization": f"Bearer {token}"}
 
     @pytest.fixture
     def sample_request(self, db, sample_institution):

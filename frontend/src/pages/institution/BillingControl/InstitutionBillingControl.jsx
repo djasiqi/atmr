@@ -99,7 +99,7 @@ function BookingActions({
   const status = item?.control?.effective_status;
   const busy = pendingId === item.booking_id;
 
-  if (status === 'anomaly') {
+  if (status === 'anomaly' || status === 'validated') {
     return (
       <div className={s.actions}>
         <button
@@ -113,7 +113,6 @@ function BookingActions({
       </div>
     );
   }
-  if (status === 'validated') return null;
 
   return (
     <div className={s.actions}>
@@ -390,12 +389,12 @@ const InstitutionBillingControl = () => {
             <table className={s.table} data-testid="billing-control-table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Patient</th>
-                  <th>Trajet</th>
-                  <th>Transporteur</th>
-                  <th>Payeur</th>
-                  <th>Contrôle</th>
+                  <th className={s.colDate}>Date</th>
+                  <th className={s.colPatient}>Patient</th>
+                  <th className={s.colRoute}>Trajet</th>
+                  <th className={s.colCarrier}>Transporteur</th>
+                  <th className={s.colPayer}>Payeur</th>
+                  <th className={s.colControl}>Contrôle</th>
                 </tr>
               </thead>
               <tbody>
@@ -407,10 +406,18 @@ const InstitutionBillingControl = () => {
                       </td>
                     </tr>
                     {group.items.map((item) => (
-                      <tr key={item.booking_id} data-booking-id={item.booking_id}>
-                        <td>{formatBookingDate(item.scheduled_time)}</td>
-                        <td>{item.patient?.display_name || '—'}</td>
-                        <td>
+                      <tr
+                        key={item.booking_id}
+                        className={s.bookingRow}
+                        data-booking-id={item.booking_id}
+                      >
+                        <td className={s.colDate} data-label="Date">
+                          {formatBookingDate(item.scheduled_time)}
+                        </td>
+                        <td className={`${s.colPatient} ${s.patientCell}`} data-label="Patient">
+                          {item.patient?.display_name || '—'}
+                        </td>
+                        <td className={s.colRoute} data-label="Trajet">
                           <span className={s.segmentLabel}>
                             {segmentTypeLabel(item.segment_type)}
                           </span>
@@ -418,8 +425,10 @@ const InstitutionBillingControl = () => {
                             {item.pickup || '—'} → {item.dropoff || '—'}
                           </span>
                         </td>
-                        <td>{item.transport_company?.display_name || '—'}</td>
-                        <td>
+                        <td className={s.colCarrier} data-label="Transporteur">
+                          {item.transport_company?.display_name || '—'}
+                        </td>
+                        <td className={s.colPayer} data-label="Payeur">
                           {isBookingEditable(item) ? (
                             <select
                               className={s.payerSelect}
@@ -438,7 +447,7 @@ const InstitutionBillingControl = () => {
                             </span>
                           )}
                         </td>
-                        <td>
+                        <td className={s.colControl} data-label="Contrôle">
                           <ControlStatusCell item={item} />
                           <BookingActions
                             item={item}

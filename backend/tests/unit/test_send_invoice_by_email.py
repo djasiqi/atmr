@@ -58,6 +58,9 @@ def mock_invoice():
     invoice.billed_to_company = None
     invoice.billed_to_type = None
     invoice.bill_to_client = None
+    # Collection réelle : sinon Mock.lines est truthy mais non itérable
+    # (assert_invoice_booking_link_integrity fait list(invoice.lines)).
+    invoice.lines = []
     invoice.mark_as_sent = Mock()
     return invoice
 

@@ -881,13 +881,11 @@ class ResetAssignmentsResource(Resource):
             # (uniquement ceux dont l'assignation vient d'être supprimée).
             bookings_count = 0
             if booking_ids:
-                bookings_query = (
-                    booking_repo.find_models_by_company_with_filters_query(
-                        company_id=company_id,
-                        booking_ids=booking_ids,
-                        start_datetime=start_datetime if date_str else None,
-                        end_datetime=end_datetime if date_str else None,
-                    )
+                bookings_query = booking_repo.find_models_by_company_with_filters_query(
+                    company_id=company_id,
+                    booking_ids=booking_ids,
+                    start_datetime=start_datetime if date_str else None,
+                    end_datetime=end_datetime if date_str else None,
                 )
                 for booking in bookings_query.all():
                     # Remettre au statut ACCEPTED si actuellement ASSIGNED

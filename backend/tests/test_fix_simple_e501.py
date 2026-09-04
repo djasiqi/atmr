@@ -58,7 +58,9 @@ def test_fix_file_e501_branches(tmp_path: Path, monkeypatch):
     fake.return_value = _ruff_json([{"location": {"row": 99}}])
     assert fix_file_e501(str(sample)) == (False, "No simple fix available")
 
-    sample.write_text("x = 1  # trop long mais pas un commentaire de ligne\n", encoding="utf-8")
+    sample.write_text(
+        "x = 1  # trop long mais pas un commentaire de ligne\n", encoding="utf-8"
+    )
     fake.return_value = _ruff_json([{"location": {"row": 1}}])
     assert fix_file_e501(str(sample)) == (False, "No simple fix available")
 

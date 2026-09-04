@@ -237,7 +237,9 @@ class TestSafetyLimits:
         db.session.flush()  # ✅ FIX: Utiliser flush au lieu de commit pour savepoints
 
         manager = AutonomousDispatchManager(company_fully_auto.id)
-        can_proceed, reason = manager.check_safety_limits("notify_customer")
+        # Ne pas dépendre de l'heure CI (sinon la limite horaire 5/h masque le journalier)
+        with patch.object(AutonomousAction, "count_actions_last_hour", return_value=0):
+            can_proceed, reason = manager.check_safety_limits("notify_customer")
 
         assert can_proceed is False
         assert "Limite journalière globale atteinte" in reason

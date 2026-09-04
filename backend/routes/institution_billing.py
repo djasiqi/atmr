@@ -22,7 +22,7 @@ from marshmallow import Schema, validate
 from marshmallow import fields as ma_fields
 
 from ext import db
-from models import Booking, RequestStatus, TransportRequest
+from models import RequestStatus, TransportRequest
 from models.enums import BillingIntent, InstitutionRole
 from routes.api_error_models import (
     create_api_error_model,
@@ -128,6 +128,7 @@ def _reraise_auth_errors(exc: Exception) -> None:
     lowered = str(exc).lower()
     if "signature has expired" in lowered or "token has expired" in lowered:
         raise exc
+
 
 # Rôles autorisés pour modifier la facturation
 BILLING_ALLOWED_ROLES = {
@@ -298,21 +299,22 @@ class BookingBillingUpdate(Resource):
         try:
             institution_id, user_id, role = get_billing_context()
 
-            # Trouver le booking via la TransportRequest
-            # Le booking doit avoir une source_request liée à cette institution
-            transport_req = TransportRequest.query.filter_by(
-                booking_id=booking_id,
-                institution_id=institution_id,
-            ).first()
+            from application.institutions.billing_control.resolve import (
+                resolve_institution_billing_control_booking,
+            )
 
-            if not transport_req:
+            ctx = resolve_institution_billing_control_booking(
+                booking_id,
+                institution_id,
+            )
+
+            if ctx is None:
                 return {
                     "error": "Booking non trouvé ou non associé à votre institution",
                 }, 404
 
-            booking = Booking.query.get(booking_id)
-            if not booking:
-                return {"error": "Booking non trouvé"}, 404
+            booking = ctx.booking
+            transport_req = ctx.transport_request
 
             # Vérifier si déjà facturé (via InvoiceLine ou invoice générée)
             # Le champ dans InvoiceLine s'appelle reservation_id (référence booking.id)

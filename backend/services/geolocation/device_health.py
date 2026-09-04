@@ -80,9 +80,7 @@ def write_device_health(
         "fix_success_rate_last_5min": _to_redis_value(
             payload.get("fix_success_rate_last_5min")
         ),
-        "last_fix_age_seconds": _to_redis_value(
-            payload.get("last_fix_age_seconds")
-        ),
+        "last_fix_age_seconds": _to_redis_value(payload.get("last_fix_age_seconds")),
         "location_fix_age_seconds": _to_redis_value(
             payload.get("location_fix_age_seconds")
             if payload.get("location_fix_age_seconds") is not None
@@ -194,9 +192,7 @@ def parse_device_health(raw: dict[Any, Any] | None) -> dict[str, Any] | None:
             decoded.get("fix_success_rate_last_5min")
         ),
         "last_fix_age_seconds": _parse_int(decoded.get("last_fix_age_seconds")),
-        "location_fix_age_seconds": _parse_int(
-            decoded.get("location_fix_age_seconds")
-        ),
+        "location_fix_age_seconds": _parse_int(decoded.get("location_fix_age_seconds")),
         "task_invoke_age_seconds": _parse_int(decoded.get("task_invoke_age_seconds")),
         "native_last_fix_age_seconds": _parse_int(
             decoded.get("native_last_fix_age_seconds")

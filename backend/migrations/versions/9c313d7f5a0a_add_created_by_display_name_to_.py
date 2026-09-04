@@ -20,6 +20,7 @@ Après inspection manuelle :
 - seul le changement CNY acteur est conservé
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 

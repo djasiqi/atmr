@@ -68,7 +68,9 @@ def _reject_non_finite(value: float, *, code: str) -> float:
 
 
 def _scale_e6(value: float) -> int:
-    return round(_reject_non_finite(float(value), code="non_finite_coordinate") * 1_000_000)
+    return round(
+        _reject_non_finite(float(value), code="non_finite_coordinate") * 1_000_000
+    )
 
 
 def _metric_dm(value: Any) -> int | None:
@@ -148,9 +150,7 @@ def canonical_location_identity(payload: Mapping[str, Any]) -> LocationIdentity:
         raise ValueError("missing_tracking_session_id")
 
     recorded_raw = (
-        payload.get("recorded_at")
-        or payload.get("timestamp")
-        or payload.get("ts")
+        payload.get("recorded_at") or payload.get("timestamp") or payload.get("ts")
     )
     canon_ts = normalize_recorded_at_utc_canonical(recorded_raw)
     if canon_ts is None:
@@ -218,7 +218,9 @@ def compare_persisted_event(
         return DuplicateDecision.DUPLICATE_EXACT_HASH
 
     try:
-        existing_id = canonical_location_identity(_row_to_identity_payload(existing_row))
+        existing_id = canonical_location_identity(
+            _row_to_identity_payload(existing_row)
+        )
         incoming_id = canonical_location_identity(incoming_payload)
     except (ValueError, TypeError):
         return DuplicateDecision.EVENT_ID_PAYLOAD_CONFLICT

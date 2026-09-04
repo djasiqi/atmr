@@ -29,9 +29,16 @@ import { canManageRequests, canViewAdminData, canEditPatientBillingData, canExpo
 import { exportPatientTransportsPdf } from '../../../services/institutionService';
 import AddressAutocomplete from '../../../components/common/AddressAutocomplete';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
+import {
+  buildInstitutionPatientPayload,
+  formatDobDisplay,
+  normalizeDob,
+  todayIso,
+} from '../../../utils/institutionPatientForm';
 import s from './PatientDetailPanel.module.css';
 
 const GENDER_LABELS = { HOMME: 'Monsieur', FEMME: 'Madame', AUTRE: 'Autre' };
+const GENDER_SHORT = { HOMME: 'M.', FEMME: 'Mme', AUTRE: '' };
 const GENDER_OPTIONS = [
   { value: '', label: '— Genre —' },
   { value: 'HOMME', label: 'M.' },
@@ -528,7 +535,7 @@ const LinkSuggestions = ({ patientId }) => {
 };
 
 // ─── ChipDropdown (compact) ─────────────────────────────────────
-const ChipDropdown = ({ value, options, onChange, className }) => {
+const ChipDropdown = ({ value, options, onChange, className, clearable = true }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -556,7 +563,11 @@ const ChipDropdown = ({ value, options, onChange, className }) => {
               key={o.value}
               type="button"
               className={`${s.chipOption} ${String(o.value) === String(value) ? s.chipOptionActive : ''}`}
-              onClick={() => { onChange(o.value === value ? '' : o.value); setOpen(false); }}
+              onClick={() => {
+                if (clearable && o.value === value) onChange('');
+                else onChange(o.value);
+                setOpen(false);
+              }}
             >
               {o.label}
             </button>
@@ -583,8 +594,13 @@ const PatientDetailPanel = ({ patient, onClose }) => {
   const [form, setForm] = useState(() => buildFormData(patient));
   const [avsRevealed, setAvsRevealed] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [minorConfirmOpen, setMinorConfirmOpen] = useState(false);
+  const [minorConfirmChecked, setMinorConfirmChecked] = useState(false);
   const { data: transportHistory, isLoading: transportHistoryLoading } =
     usePatientTransportHistory(patient?.id, Boolean(patient?.id) && !editing);
+
+  const dobPreview = normalizeDob(form.dob, { required: false });
+  const previousDob = patient?.dob ? String(patient.dob).split('T')[0] : null;
 
   const handleExportPdf = useCallback(async () => {
     if (!patient?.id) return;
@@ -618,35 +634,74 @@ const PatientDetailPanel = ({ patient, onClose }) => {
   const setCheck = useCallback((field) => (e) => setForm(p => ({ ...p, [field]: e.target.checked })), []);
 
   const handleStartEdit = () => { setForm(buildFormData(patient)); setEditing(true); };
-  const handleCancel = () => { setForm(buildFormData(patient)); setEditing(false); };
-  const handleSave = async () => {
-    try {
-      // Nettoyer : convertir les chaînes vides en null pour éviter les erreurs de validation backend (regex phone, email)
+  const handleCancel = () => {
+    setForm(buildFormData(patient));
+    setEditing(false);
+    setMinorConfirmOpen(false);
+  };
+
+  const persistUpdate = async (minorDobConfirmed) => {
+    let dataToSend;
+
+    if (identityEditable) {
+      const { payload, errors } = buildInstitutionPatientPayload(form, {
+        minorDobConfirmed,
+        previousDob,
+      });
+      if (errors.length > 0) {
+        toast.error(errors[0]);
+        return;
+      }
+      dataToSend = payload;
+    } else {
       const cleaned = {};
       for (const [key, val] of Object.entries(form)) {
         cleaned[key] = (typeof val === 'string' && val.trim() === '') ? null : val;
       }
+      delete cleaned.first_name;
+      delete cleaned.last_name;
+      delete cleaned.gender;
+      delete cleaned.dob;
+      delete cleaned.external_reference;
+      dataToSend = cleaned;
+    }
 
-      // Si rôle billing (pas admin/requester), retirer les champs d'identité
-      // Le backend filtre aussi côté serveur, mais on évite d'envoyer des champs inutiles
-      if (!identityEditable) {
-        delete cleaned.first_name;
-        delete cleaned.last_name;
-        delete cleaned.gender;
-        delete cleaned.dob;
-        delete cleaned.external_reference;
-      }
-
-      await updateMutation.mutateAsync({ patientId: patient.id, data: cleaned });
+    try {
+      await updateMutation.mutateAsync({ patientId: patient.id, data: dataToSend });
       toast.success('Patient mis à jour');
+      setMinorConfirmOpen(false);
       setEditing(false);
     } catch (err) {
-      const details = err?.response?.data?.details;
+      const data = err?.response?.data;
+      if (data?.code === 'MINOR_DOB_CONFIRMATION_REQUIRED') {
+        setMinorConfirmOpen(true);
+        setMinorConfirmChecked(false);
+        return;
+      }
+      const details = data?.details;
       const msg = details
         ? Object.values(details).flat().join(', ')
-        : err?.response?.data?.error || 'Erreur lors de la mise à jour';
+        : data?.error || 'Erreur lors de la mise à jour';
       toast.error(msg);
     }
+  };
+
+  const handleSave = async () => {
+    if (identityEditable) {
+      const { errors, needsMinorConfirmation } = buildInstitutionPatientPayload(form, {
+        previousDob,
+      });
+      if (errors.length > 0) {
+        toast.error(errors[0]);
+        return;
+      }
+      if (needsMinorConfirmation) {
+        setMinorConfirmChecked(false);
+        setMinorConfirmOpen(true);
+        return;
+      }
+    }
+    await persistUpdate(false);
   };
 
   if (!patient) return null;
@@ -675,13 +730,23 @@ const PatientDetailPanel = ({ patient, onClose }) => {
                     value={form.gender}
                     options={GENDER_OPTIONS}
                     onChange={(v) => setForm(p => ({ ...p, gender: v }))}
+                    clearable={false}
                   />
                   <InlineDatePicker
                     value={form.dob}
                     onChange={(iso) => setForm(p => ({ ...p, dob: iso }))}
                     placeholder="Naissance"
+                    smartCompleteMode="past"
+                    maxDate={todayIso()}
                   />
                 </div>
+                {dobPreview.isMinor && !dobPreview.error && (
+                  <div className={s.minorAlert} role="alert">
+                    <strong>⚠ Patient mineur — {dobPreview.age} an{dobPreview.age > 1 ? 's' : ''}</strong>
+                    <br />
+                    Vérifiez la date de naissance avant l&apos;enregistrement.
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -799,7 +864,7 @@ const PatientDetailPanel = ({ patient, onClose }) => {
             {editing ? (
               <>
                 <ERow label="Tél."><input className={s.eInput} type="tel" value={form.phone} onChange={set('phone')} placeholder="+41 79..." /></ERow>
-                <ERow label="Adresse">
+                <ERow label="Adresse *">
                   <AddressAutocomplete
                     value={form.address}
                     onChange={(e) => setForm(p => ({ ...p, address: e.target.value }))}
@@ -814,8 +879,8 @@ const PatientDetailPanel = ({ patient, onClose }) => {
                   />
                 </ERow>
                 <div className={s.eRowSplit}>
-                  <ERow label="NPA"><input className={s.eInput} value={form.postal_code} onChange={set('postal_code')} placeholder="1200" /></ERow>
-                  <ERow label="Ville"><input className={s.eInput} value={form.city} onChange={set('city')} placeholder="Genève" /></ERow>
+                  <ERow label="NPA *"><input className={s.eInput} value={form.postal_code} onChange={set('postal_code')} placeholder="1200" /></ERow>
+                  <ERow label="Ville *"><input className={s.eInput} value={form.city} onChange={set('city')} placeholder="Genève" /></ERow>
                 </div>
                 <ERow label="Résidence"><input className={s.eInput} value={form.residence_name} onChange={set('residence_name')} placeholder="Nom EMS / résidence" /></ERow>
               </>
@@ -995,6 +1060,50 @@ const PatientDetailPanel = ({ patient, onClose }) => {
           <button className={s.saveBtn} onClick={handleSave} disabled={updateMutation.isPending} type="button">
             <FaCheck size={10} /> {updateMutation.isPending ? 'Sauvegarde...' : 'Enregistrer'}
           </button>
+        </div>
+      )}
+
+      {minorConfirmOpen && (
+        <div className={s.minorConfirmOverlay} role="presentation">
+          <div className={s.minorConfirmDialog} role="dialog" aria-modal="true">
+            <h4>Patient mineur — confirmation requise</h4>
+            <p className={s.minorConfirmName}>
+              {[
+                GENDER_SHORT[form.gender] || '',
+                form.first_name || '',
+                (form.last_name || '').toUpperCase(),
+              ].filter(Boolean).join(' ')}
+            </p>
+            <p className={s.minorConfirmMeta}>
+              Date de naissance : <strong>{formatDobDisplay(form.dob)}</strong>
+              <br />
+              Âge : <strong>{dobPreview.age} an{dobPreview.age > 1 ? 's' : ''}</strong>
+            </p>
+            <label className={s.minorConfirmCheck}>
+              <input
+                type="checkbox"
+                checked={minorConfirmChecked}
+                onChange={(e) => setMinorConfirmChecked(e.target.checked)}
+              />
+              <span>
+                J&apos;ai vérifié la date de naissance et je confirme
+                qu&apos;il s&apos;agit bien d&apos;un patient mineur.
+              </span>
+            </label>
+            <div className={s.minorConfirmActions}>
+              <button type="button" className={s.cancelBtn} onClick={() => setMinorConfirmOpen(false)}>
+                Annuler
+              </button>
+              <button
+                type="button"
+                className={s.saveBtn}
+                disabled={!minorConfirmChecked || updateMutation.isPending}
+                onClick={() => persistUpdate(true)}
+              >
+                Confirmer et enregistrer
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -118,7 +118,9 @@ def resolve_existing_return_target(
         key=lambda leg: getattr(leg, "sequence_index", 0),
     )
     if transport_request is not None and legs:
-        return_stops = [leg for leg in legs if bool(getattr(leg, "is_return_stop", False))]
+        return_stops = [
+            leg for leg in legs if bool(getattr(leg, "is_return_stop", False))
+        ]
         if len(return_stops) > 1:
             raise ReturnTopologyError(
                 "Topologie retour institution ambiguë : plusieurs legs is_return_stop.",
@@ -135,7 +137,9 @@ def resolve_existing_return_target(
                         "return_leg_id": return_leg.id,
                     },
                 )
-            target = repo.find_model_by_id_with_visibility(return_booking_id, company_id)
+            target = repo.find_model_by_id_with_visibility(
+                return_booking_id, company_id
+            )
             if target is None:
                 raise ReturnTopologyError(
                     "La réservation du leg retour est inaccessible pour cette entreprise.",

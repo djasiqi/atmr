@@ -40,7 +40,9 @@ def list_billing_control_bookings(
     return query_billing_control_bookings(institution_id, params)
 
 
-def booking_control_detail(booking: Booking, *, institution_id: int | None = None) -> dict[str, Any]:
+def booking_control_detail(
+    booking: Booking, *, institution_id: int | None = None
+) -> dict[str, Any]:
     if institution_id is not None:
         from application.institutions.billing_control.query import (
             booking_control_detail_payload,

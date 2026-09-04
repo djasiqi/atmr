@@ -8,12 +8,15 @@ Ce module teste:
 """
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from flask_jwt_extended import create_access_token
 
 from models import Institution, User, UserRole
 from models.enums import InstitutionRole
+from models.web_session import WebSession
+from tests.helpers.institution_auth import institution_bearer_headers
 
 
 class TestInstitutionMe:
@@ -51,22 +54,14 @@ class TestInstitutionMe:
         return user
 
     @pytest.fixture
-    def institution_auth_headers(
-        self, client, sample_institution_user, sample_institution
-    ):
+    def institution_auth_headers(self, db, sample_institution_user, sample_institution):
         """Génère un token JWT valide pour un utilisateur institution."""
-        claims = {
-            "role": sample_institution_user.role.value,
-            "institution_id": sample_institution.id,
-            "institution_role": sample_institution_user.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(sample_institution_user.public_id),
-                additional_claims=claims,
-            )
-        return {"Authorization": f"Bearer {token}"}
+        return institution_bearer_headers(
+            db,
+            sample_institution_user,
+            sample_institution,
+            institution_role=sample_institution_user.institution_role,
+        )
 
     def test_institution_me_success(
         self,
@@ -122,10 +117,22 @@ class TestInstitutionMe:
         db.session.add(user)
         db.session.flush()
 
-        # Créer un token SANS institution_id claim
+        # Session web requise (garde sid) mais JWT volontairement sans institution_id
+        now = datetime.now(UTC)
+        session = WebSession()
+        session.id = str(uuid.uuid4())
+        session.user_id = int(user.id)
+        session.institution_id = None
+        session.created_at = now
+        session.expires_at = now + timedelta(hours=8)
+        session.last_interactive_activity_at = now
+        db.session.add(session)
+        db.session.flush()
+
         claims = {
             "role": UserRole.INSTITUTION.value,
             # PAS de institution_id
+            "sid": session.id,
             "aud": "atmr-api",
         }
         with client.application.app_context():
@@ -342,19 +349,13 @@ class TestInstitutionSettingsTimezone:
         return user
 
     @pytest.fixture
-    def headers(self, client, admin_user, institution):
-        claims = {
-            "role": admin_user.role.value,
-            "institution_id": institution.id,
-            "institution_role": admin_user.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(admin_user.public_id),
-                additional_claims=claims,
-            )
-        return {"Authorization": f"Bearer {token}"}
+    def headers(self, db, admin_user, institution):
+        return institution_bearer_headers(
+            db,
+            admin_user,
+            institution,
+            institution_role=admin_user.institution_role,
+        )
 
     def test_put_settings_invalid_timezone_returns_400(
         self, client, db, institution, admin_user, headers

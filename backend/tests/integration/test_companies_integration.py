@@ -244,24 +244,27 @@ class TestCompaniesIntegration:
         if not test_company:
             pytest.skip("test_company required")
 
+        # Jeton unique : évite d'être évincé du .limit(20) par des résidus DB
+        # (ex. anciennes « Emmenez Moi ») et garantit la visibilité après commit.
         suffix = str(uuid.uuid4())[:8]
+        unique_name = f"Emmenez-moi-{suffix}"
         other = Company(
-            name="Emmenez-moi",
+            name=unique_name,
             contact_email=f"contact_{suffix}@emmenez-moi.ch",
             user_id=test_company.user_id,
         )
         db.session.add(other)
-        db.session.flush()
+        db.session.commit()
 
         response = authenticated_client.get(
-            "/api/v1/companies/search", query_string={"q": "emmenez"}
+            "/api/v1/companies/search", query_string={"q": suffix}
         )
         assert response.status_code == 200
         data = response.get_json()
         assert data is not None
         assert "data" in data
         names = [c["name"] for c in data["data"]]
-        assert "Emmenez-moi" in names
+        assert unique_name in names
 
 
 @pytest.mark.integration

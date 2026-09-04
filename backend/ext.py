@@ -696,9 +696,7 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
         if is_institution_jwt_revoked_by_session(jwt_payload):
             return True
     except Exception:
-        app_logger.exception(
-            "[JWT Security] institution session guard failed"
-        )
+        app_logger.exception("[JWT Security] institution session guard failed")
 
     # Vérifier si le token est dans la blacklist
     # ✅ SECURITY: Flask-JWT-Extended génère automatiquement un jti

@@ -59,12 +59,26 @@ def test_refresh_token_contract_shape(client, sample_user):
 
 
 def test_driver_location_ack_contract(client, db):
+    from services.tracking.session_registry import register_tracking_session
+
     company = create_test_company(db)
     driver = create_test_driver(db, company=company)
     headers = {
         **_driver_auth_headers(client, driver),
         "X-Location-Event-Id": "evt-contract-001",
     }
+
+    # Contrat mission_live après accept_canonical : IDs ledger obligatoires.
+    tracking_session_id = f"trk_sess_contract_{driver.id}"
+    auth = register_tracking_session(
+        db.session,
+        driver_id=driver.id,
+        company_id=company.id,
+        tracking_session_id=tracking_session_id,
+        tracking_session_started_at=None,
+    )
+    db.session.commit()
+    session_generation = int(auth["session_generation"])
 
     response = client.put(
         "/api/v1/driver/me/location",
@@ -73,24 +87,22 @@ def test_driver_location_ack_contract(client, db):
             "longitude": 6.1432,
             "location_mode": "mission_live",
             "recorded_at": datetime.now(UTC).isoformat(),
+            "tracking_session_id": tracking_session_id,
+            "session_generation": session_generation,
+            "sequence_id": 1,
         },
         headers=headers,
     )
     assert response.status_code == 200
     data = response.get_json()
-    # P0-E : sans session/seq ledger → ingested_non_persisted (pas de tombstone mobile)
     assert data.get("ack_status") in {
         "accepted",
         "duplicate",
         "persisted",
-        "stale",
-        "ignored",
-        "rejected",
-        "ingested_non_persisted",
     }
     assert data.get("tracking_event_id") == "evt-contract-001"
-    assert data.get("ledger_persisted") is False
-    assert data.get("durability") in (None, "ingested_non_persisted")
+    assert data.get("ledger_persisted") is True
+    assert data.get("durability") in ("persisted_sync", "queued_async")
     assert isinstance(data.get("trace_id"), str)
     assert data["trace_id"]
 
@@ -149,8 +161,8 @@ def test_driver_status_transition_errors_are_structured(client, db):
         json={"status": "en_route"},
         headers=_driver_auth_headers(client, driver),
     )
-    assert response.status_code == 400
+    # P0-A : transition périmée depuis COMPLETED → 409 stale (pas 400 générique).
+    assert response.status_code == 409
     data = response.get_json()
-    assert isinstance(data.get("error_code"), str)
-    assert data["error_code"]
-    assert isinstance(data.get("retryable"), bool)
+    assert data.get("error_code") == "driver_transition_stale"
+    assert data.get("retryable") is False

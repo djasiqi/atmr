@@ -4,7 +4,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from flask_jwt_extended import create_access_token
 
 from models import Institution, User, UserRole
 from models.enums import InstitutionRole
@@ -25,19 +24,15 @@ class TestAuthOnboardingBootstrap:
         db.session.refresh(inst)
         return inst
 
-    def _auth_headers(self, client, user, institution):
-        claims = {
-            "role": user.role.value,
-            "institution_id": institution.id,
-            "institution_role": user.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(user.public_id),
-                additional_claims=claims,
-            )
-        return {"Authorization": f"Bearer {token}"}
+    def _auth_headers(self, db, user, institution):
+        from tests.helpers.institution_auth import institution_bearer_headers
+
+        return institution_bearer_headers(
+            db,
+            user,
+            institution,
+            institution_role=user.institution_role,
+        )
 
     def test_bootstrap_active_user_no_onboarding(self, client, db, institution):
         uid = str(uuid.uuid4())[:8]
@@ -55,7 +50,7 @@ class TestAuthOnboardingBootstrap:
 
         response = client.get(
             "/api/v1/auth/bootstrap",
-            headers=self._auth_headers(client, user, institution),
+            headers=self._auth_headers(db, user, institution),
         )
         assert response.status_code == 200
         data = response.get_json()
@@ -82,7 +77,7 @@ class TestAuthOnboardingBootstrap:
 
         response = client.get(
             "/api/v1/auth/bootstrap",
-            headers=self._auth_headers(client, user, institution),
+            headers=self._auth_headers(db, user, institution),
         )
         assert response.status_code == 200
         data = response.get_json()
@@ -111,7 +106,7 @@ class TestAuthOnboardingBootstrap:
 
         response = client.get(
             "/api/v1/auth/bootstrap",
-            headers=self._auth_headers(client, user, institution),
+            headers=self._auth_headers(db, user, institution),
         )
         assert response.status_code == 200
         data = response.get_json()
@@ -163,7 +158,7 @@ class TestAuthOnboardingBootstrap:
 
         response = client.get(
             "/api/v1/auth/bootstrap",
-            headers=self._auth_headers(client, user, institution),
+            headers=self._auth_headers(db, user, institution),
         )
         assert response.status_code == 200
         data = response.get_json()

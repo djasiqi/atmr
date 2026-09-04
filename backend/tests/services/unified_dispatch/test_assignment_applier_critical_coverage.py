@@ -63,9 +63,7 @@ class TestHelpers:
             def create_scoped_session(self):
                 raise AttributeError("gone")
 
-        monkeypatch.setattr(
-            applier, "sessionmaker", lambda **_k: MagicMock()
-        )
+        monkeypatch.setattr(applier, "sessionmaker", lambda **_k: MagicMock())
         monkeypatch.setattr(applier, "scoped_session", lambda _f: "from-engine")
         assert applier._get_scoped_session(BoomCreate()) == "from-engine"
 
@@ -283,11 +281,11 @@ class TestEmitNotifications:
         applier._emit_notifications_after_commit([(999999, driver.id)], company.id)
 
         monkeypatch.setattr(
-            applier, "publish_event", lambda *_a, **_k: (_ for _ in ()).throw(ValueError("pub"))
+            applier,
+            "publish_event",
+            lambda *_a, **_k: (_ for _ in ()).throw(ValueError("pub")),
         )
-        applier._emit_notifications_after_commit(
-            [(booking.id, driver.id)], company.id
-        )
+        applier._emit_notifications_after_commit([(booking.id, driver.id)], company.id)
         assert failed.labels.called
 
         monkeypatch.setattr(
@@ -295,9 +293,7 @@ class TestEmitNotifications:
             "publish_event",
             lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("pub")),
         )
-        applier._emit_notifications_after_commit(
-            [(booking.id, driver.id)], company.id
-        )
+        applier._emit_notifications_after_commit([(booking.id, driver.id)], company.id)
 
         monkeypatch.setattr(
             applier,

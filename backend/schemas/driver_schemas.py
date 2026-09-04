@@ -63,9 +63,7 @@ class DeviceHealthStatusSchema(Schema):
     location_fix_age_seconds = fields.Int(
         required=False,
         allow_none=True,
-        validate=validate.Range(
-            min=0, error="location_fix_age_seconds doit être >= 0"
-        ),
+        validate=validate.Range(min=0, error="location_fix_age_seconds doit être >= 0"),
     )
     task_invoke_age_seconds = fields.Int(
         required=False,
@@ -81,8 +79,7 @@ class DeviceHealthStatusSchema(Schema):
         ),
         metadata={
             "description": (
-                "Compat : alias de task_invoke_age_seconds "
-                "(≠ fraîcheur GNSS)."
+                "Compat : alias de task_invoke_age_seconds (≠ fraîcheur GNSS)."
             )
         },
     )

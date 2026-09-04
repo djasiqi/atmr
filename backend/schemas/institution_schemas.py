@@ -17,9 +17,14 @@ from marshmallow import (
     fields,
     pre_load,
     validate,
+    validates,
     validates_schema,
 )
 
+from application.institutions.patient_identity_rules import (
+    validate_domicile_triplet,
+    validate_patient_dob,
+)
 from models.enums import (
     BillingIntent,
     CarrierSource,
@@ -305,32 +310,36 @@ class InstitutionPatientCreateSchema(Schema):
         metadata={"description": "Nom du patient"},
     )
     dob = fields.Str(
-        validate=validate.Regexp(
-            ISO8601_DATE_REGEX,
-            error="dob doit être au format YYYY-MM-DD",
-        ),
-        allow_none=True,
-        metadata={"description": "Date de naissance (YYYY-MM-DD)"},
+        required=True,
+        allow_none=False,
+        metadata={"description": "Date de naissance (YYYY-MM-DD), patient >= 18 ans"},
     )
     gender = fields.Str(
+        required=True,
+        allow_none=False,
         validate=validate.OneOf(
             VALID_GENDERS,
             error=f"gender doit être: {', '.join(VALID_GENDERS)}",
         ),
-        allow_none=True,
-        metadata={"description": "Genre (HOMME, FEMME, AUTRE)"},
+        metadata={"description": "Civilité (HOMME, FEMME, AUTRE)"},
     )
     address = fields.Str(
+        required=True,
+        allow_none=False,
         validate=validate.Length(max=255),
-        allow_none=True,
+        metadata={"description": "Adresse du domicile (obligatoire)"},
     )
     city = fields.Str(
+        required=True,
+        allow_none=False,
         validate=validate.Length(max=100),
-        allow_none=True,
+        metadata={"description": "Ville du domicile (obligatoire)"},
     )
     postal_code = fields.Str(
+        required=True,
+        allow_none=False,
         validate=validate.Length(max=20),
-        allow_none=True,
+        metadata={"description": "NPA du domicile (obligatoire)"},
     )
     phone = fields.Str(
         validate=validate.Regexp(
@@ -421,12 +430,46 @@ class InstitutionPatientCreateSchema(Schema):
         validate=validate.Length(max=2000),
         allow_none=True,
     )
+    # Champ technique — non persisté. Confirmation DOB mineure.
+    minor_dob_confirmed = fields.Bool(
+        load_default=False,
+        metadata={
+            "description": (
+                "Confirmation explicite si DOB mineure (< 18 ans). "
+                "Non stocké sur le patient."
+            )
+        },
+    )
+
+    @validates("dob")
+    def validate_create_dob(self, value: str, **_kwargs) -> None:
+        if value is None or not str(value).strip():
+            raise ValidationError("Date de naissance requise.")
+        validate_patient_dob(str(value).strip())
+
+    @validates("gender")
+    def validate_create_gender(self, value: str, **_kwargs) -> None:
+        if value is None or not str(value).strip():
+            raise ValidationError("Civilité requise.")
+
+    @validates_schema
+    def validate_create_domicile(self, data, **_kwargs) -> None:
+        """Triplet domicile obligatoire à la création."""
+        cleaned = validate_domicile_triplet(
+            address=data.get("address"),
+            postal_code=data.get("postal_code"),
+            city=data.get("city"),
+        )
+        data["address"] = cleaned["address"]
+        data["postal_code"] = cleaned["postal_code"]
+        data["city"] = cleaned["city"]
 
 
 class InstitutionPatientUpdateSchema(Schema):
     """Schema pour mise à jour d'un patient institution.
 
     Tous les champs sont optionnels (update partiel).
+    Si dob/gender sont présents : jamais vides, DOB adulte obligatoire.
     """
 
     class Meta:
@@ -443,18 +486,16 @@ class InstitutionPatientUpdateSchema(Schema):
         validate=validate.Length(min=1, max=100),
     )
     dob = fields.Str(
-        validate=validate.Regexp(
-            ISO8601_DATE_REGEX,
-            error="dob doit être au format YYYY-MM-DD",
-        ),
-        allow_none=True,
+        allow_none=False,
+        metadata={"description": "Date de naissance (YYYY-MM-DD), patient >= 18 ans"},
     )
     gender = fields.Str(
+        allow_none=False,
         validate=validate.OneOf(
             VALID_GENDERS,
             error=f"gender doit être: {', '.join(VALID_GENDERS)}",
         ),
-        allow_none=True,
+        metadata={"description": "Civilité (HOMME, FEMME, AUTRE)"},
     )
     address = fields.Str(
         validate=validate.Length(max=255),
@@ -541,6 +582,26 @@ class InstitutionPatientUpdateSchema(Schema):
         validate=validate.Length(max=2000),
         allow_none=True,
     )
+    minor_dob_confirmed = fields.Bool(
+        load_default=False,
+        metadata={
+            "description": (
+                "Confirmation explicite si DOB mineure modifiée. "
+                "Non stocké sur le patient."
+            )
+        },
+    )
+
+    @validates("dob")
+    def validate_update_dob(self, value: str, **_kwargs) -> None:
+        if value is None or not str(value).strip():
+            raise ValidationError("Date de naissance requise.")
+        validate_patient_dob(str(value).strip())
+
+    @validates("gender")
+    def validate_update_gender(self, value: str, **_kwargs) -> None:
+        if value is None or not str(value).strip():
+            raise ValidationError("Civilité requise.")
 
 
 class InstitutionPatientQuerySchema(Schema):

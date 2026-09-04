@@ -46,12 +46,8 @@ TERMINAL_STATUSES: frozenset[BookingStatus] = frozenset(
 #: Désassignations autorisées : (statut courant) → statuts cibles possibles.
 #: Jamais depuis IN_PROGRESS (patient à bord) ni depuis un statut terminal.
 _DEASSIGN_ALLOWED: dict[BookingStatus, frozenset[BookingStatus]] = {
-    BookingStatus.ASSIGNED: frozenset(
-        {BookingStatus.ACCEPTED, BookingStatus.PENDING}
-    ),
-    BookingStatus.EN_ROUTE: frozenset(
-        {BookingStatus.ACCEPTED, BookingStatus.PENDING}
-    ),
+    BookingStatus.ASSIGNED: frozenset({BookingStatus.ACCEPTED, BookingStatus.PENDING}),
+    BookingStatus.EN_ROUTE: frozenset({BookingStatus.ACCEPTED, BookingStatus.PENDING}),
     BookingStatus.ACCEPTED: frozenset({BookingStatus.PENDING}),
 }
 

@@ -15,7 +15,6 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
-from flask_jwt_extended import create_access_token
 
 from models import Institution, User, UserRole
 from models.enums import InstitutionRole
@@ -199,38 +198,28 @@ class TestApiKeyEndpoints:
         return user
 
     @pytest.fixture
-    def admin_auth_headers(self, client, sample_institution_admin, sample_institution):
-        """Génère un token JWT pour admin institution."""
-        claims = {
-            "role": sample_institution_admin.role.value,
-            "institution_id": sample_institution.id,
-            "institution_role": sample_institution_admin.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(sample_institution_admin.public_id),
-                additional_claims=claims,
-            )
-        return {"Authorization": f"Bearer {token}"}
+    def admin_auth_headers(self, db, sample_institution_admin, sample_institution):
+        """Génère un token JWT pour admin institution (sid + WebSession)."""
+        from tests.helpers.institution_auth import institution_bearer_headers
+
+        return institution_bearer_headers(
+            db,
+            sample_institution_admin,
+            sample_institution,
+            institution_role=sample_institution_admin.institution_role,
+        )
 
     @pytest.fixture
-    def reader_auth_headers(
-        self, client, sample_institution_reader, sample_institution
-    ):
-        """Génère un token JWT pour reader institution."""
-        claims = {
-            "role": sample_institution_reader.role.value,
-            "institution_id": sample_institution.id,
-            "institution_role": sample_institution_reader.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(sample_institution_reader.public_id),
-                additional_claims=claims,
-            )
-        return {"Authorization": f"Bearer {token}"}
+    def reader_auth_headers(self, db, sample_institution_reader, sample_institution):
+        """Génère un token JWT pour reader institution (sid + WebSession)."""
+        from tests.helpers.institution_auth import institution_bearer_headers
+
+        return institution_bearer_headers(
+            db,
+            sample_institution_reader,
+            sample_institution,
+            institution_role=sample_institution_reader.institution_role,
+        )
 
     def test_create_api_key_success(
         self,

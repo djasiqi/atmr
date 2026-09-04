@@ -63,9 +63,7 @@ def test_run_ruff_json_et_main(monkeypatch, capsys):
     fake.assert_called_once()
     assert fake.call_args.kwargs["check"] is False
 
-    fake.return_value = SimpleNamespace(
-        stdout='[{"filename": "z.py", "code": "E501"}]'
-    )
+    fake.return_value = SimpleNamespace(stdout='[{"filename": "z.py", "code": "E501"}]')
     main()
     out = capsys.readouterr().out
     assert "z.py" in out

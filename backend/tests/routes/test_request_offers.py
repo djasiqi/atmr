@@ -33,6 +33,7 @@ from models import (
     UserRole,
 )
 from models.institution_api_key import InstitutionApiKey, generate_api_key
+from tests.helpers.institution_auth import institution_bearer_headers
 
 
 class TestSendWithOffers:
@@ -63,19 +64,15 @@ class TestSendWithOffers:
         return user
 
     @pytest.fixture
-    def auth_headers(self, sample_user, sample_institution):
+    def auth_headers(self, db, sample_user, sample_institution):
         """Headers JWT pour l'utilisateur institution."""
-        token = create_access_token(
-            identity=str(sample_user.public_id),
-            additional_claims={
-                "role": UserRole.INSTITUTION.value,
-                "aud": "atmr-api",
-                "user_id": sample_user.id,
-                "institution_id": sample_institution.id,
-                "institution_role": "institution_admin",
-            },
+        return institution_bearer_headers(
+            db,
+            sample_user,
+            sample_institution,
+            institution_role="institution_admin",
+            extra_claims={"user_id": sample_user.id},
         )
-        return {"Authorization": f"Bearer {token}"}
 
     @pytest.fixture
     def sample_company(self, db):
@@ -1167,19 +1164,15 @@ class TestTransportPreferences:
         return user
 
     @pytest.fixture
-    def auth_headers(self, sample_user, sample_institution):
+    def auth_headers(self, db, sample_user, sample_institution):
         """Headers JWT pour l'utilisateur institution."""
-        token = create_access_token(
-            identity=str(sample_user.public_id),
-            additional_claims={
-                "role": UserRole.INSTITUTION.value,
-                "aud": "atmr-api",
-                "user_id": sample_user.id,
-                "institution_id": sample_institution.id,
-                "institution_role": "institution_admin",
-            },
+        return institution_bearer_headers(
+            db,
+            sample_user,
+            sample_institution,
+            institution_role="institution_admin",
+            extra_claims={"user_id": sample_user.id},
         )
-        return {"Authorization": f"Bearer {token}"}
 
     @pytest.fixture
     def sample_companies(self, db):

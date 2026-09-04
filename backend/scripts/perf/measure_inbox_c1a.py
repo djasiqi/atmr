@@ -66,7 +66,9 @@ def seed() -> None:
             if company
             else 0
         )
-        print(f"seed: deja present (company_id={getattr(company, 'id', None)}, convs={n_conv})")
+        print(
+            f"seed: deja present (company_id={getattr(company, 'id', None)}, convs={n_conv})"
+        )
         return
 
     owner = User(
@@ -95,8 +97,14 @@ def seed() -> None:
 
     convs: list[Conversation] = []
 
-    def add_conv(ctype: str, title: str, *, context_id: int | None = None,
-                 context_type: str | None = None, legacy: str | None = None) -> Conversation:
+    def add_conv(
+        ctype: str,
+        title: str,
+        *,
+        context_id: int | None = None,
+        context_type: str | None = None,
+        legacy: str | None = None,
+    ) -> Conversation:
         conv = Conversation(
             company_id=company.id,
             conversation_type=ctype,
@@ -154,8 +162,10 @@ def seed() -> None:
 
     # Participants driver (inbox driver) sur missions + groupes + 5 company
     participant_convs = [
-        c for c in convs
-        if c.conversation_type in (ConversationType.MISSION.value, ConversationType.GROUP.value)
+        c
+        for c in convs
+        if c.conversation_type
+        in (ConversationType.MISSION.value, ConversationType.GROUP.value)
     ] + convs[:5]
     for conv in participant_convs:
         db.session.add(
@@ -228,9 +238,7 @@ def measure(label: str) -> None:
 
     owner = User.query.filter_by(email=SEED_EMAIL_COMPANY).first()
     company = Company.query.filter_by(name=SEED_COMPANY_NAME).first()
-    driver = (
-        Driver.query.filter_by(company_id=company.id).first() if company else None
-    )
+    driver = Driver.query.filter_by(company_id=company.id).first() if company else None
     if not owner or not company or not driver:
         raise SystemExit("seed manquant - lancer --seed d'abord")
 
@@ -240,7 +248,10 @@ def measure(label: str) -> None:
 
     scopes = [
         ("company_inbox", lambda: ConversationService.build_company_inbox(owner)),
-        ("company_hub_threads", lambda: ConversationService.hub_threads_for_company(owner)),
+        (
+            "company_hub_threads",
+            lambda: ConversationService.hub_threads_for_company(owner),
+        ),
         ("driver_inbox", lambda: ConversationService.build_driver_inbox(driver)),
     ]
     for scope, fn in scopes:

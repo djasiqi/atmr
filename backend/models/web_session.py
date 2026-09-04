@@ -92,4 +92,6 @@ class WebSession(db.Model):
 
     @override
     def __repr__(self) -> str:
-        return f"<WebSession {self.id} user_id={self.user_id} revoked={self.is_revoked()}>"
+        return (
+            f"<WebSession {self.id} user_id={self.user_id} revoked={self.is_revoked()}>"
+        )

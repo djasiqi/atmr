@@ -176,9 +176,7 @@ class TestCompaniesCriticalCoverage:
         assert booking.driver_id is None
 
         db.session.execute(
-            text(
-                "UPDATE booking SET billed_to_company_id = :cid WHERE id = :id"
-            ),
+            text("UPDATE booking SET billed_to_company_id = :cid WHERE id = :id"),
             {"id": int(booking.id), "cid": int(world["company"].id)},
         )
         db.session.commit()

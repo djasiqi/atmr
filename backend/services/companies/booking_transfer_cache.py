@@ -126,9 +126,7 @@ def attach_return_leg_topology_to_bookings(bookings: list[Booking]) -> None:
     """Précharge is_return_stop par booking_id (badges retour institution)."""
     if not bookings:
         return
-    booking_ids = [
-        int(b.id) for b in bookings if getattr(b, "id", None) is not None
-    ]
+    booking_ids = [int(b.id) for b in bookings if getattr(b, "id", None) is not None]
     if not booking_ids:
         return
 

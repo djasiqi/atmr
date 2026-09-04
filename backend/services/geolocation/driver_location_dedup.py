@@ -269,8 +269,6 @@ def should_skip_location_ingest(
     ):
         # Claim acquis puis skip proximité = échec pré-persistence → release
         if claimed:
-            release_location_event_id(
-                driver_id, ev, reason="duplicate_proximity"
-            )
+            release_location_event_id(driver_id, ev, reason="duplicate_proximity")
         return True, "duplicate_proximity"
     return False, None

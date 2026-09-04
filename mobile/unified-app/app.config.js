@@ -108,7 +108,7 @@ module.exports = ({ config }) => {
     );
   }
 
-  if (shouldEnforceProdEnv) {
+  if (shouldEnforceProdEnv && process.env.EAS_BUILD === "true") {
     assertAndroidMapsApiKeyForEasProdBuild(androidMapsApiKey);
   }
 

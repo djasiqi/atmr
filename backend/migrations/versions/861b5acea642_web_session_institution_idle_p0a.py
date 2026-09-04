@@ -30,12 +30,16 @@ def upgrade():
             nullable=False,
         ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("last_interactive_activity_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "last_interactive_activity_at", sa.DateTime(timezone=True), nullable=True
+        ),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("revoked_reason", sa.String(length=255), nullable=True),
         sa.Column("ip_address", sa.String(length=45), nullable=True),
         sa.Column("user_agent", sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(["institution_id"], ["institutions.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["institution_id"], ["institutions.id"], ondelete="SET NULL"
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -44,7 +48,9 @@ def upgrade():
     op.create_index("ix_web_session_user_id", "web_session", ["user_id"])
 
     with op.batch_alter_table("refresh_token", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("web_session_id", sa.String(length=36), nullable=True))
+        batch_op.add_column(
+            sa.Column("web_session_id", sa.String(length=36), nullable=True)
+        )
         batch_op.create_index(
             batch_op.f("ix_refresh_token_web_session_id"),
             ["web_session_id"],

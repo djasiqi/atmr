@@ -53,8 +53,12 @@ services:
       SOCKETIO_ASYNC_MODE: threading
       SKIP_SOCKETIO: "true"
       RUN_E2E_TESTS: "1"
+      # Racine monorepo pour scripts/architecture (check_tracking_contract, etc.)
+      ATMR_REPO_ROOT: /repo
     volumes:
       - ./backend:/app
+      # Checkout complet en lecture seule : le linter tracking vit hors backend/
+      - .:/repo:ro
     command: sh -c "flask db upgrade heads && python -m pytest tests/e2e/test_mobile_dispatch_urgent_sentinel_e2e.py -v --tb=short"
 
 volumes:

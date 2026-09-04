@@ -14,11 +14,11 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from flask_jwt_extended import create_access_token
 
 from models import Institution, InstitutionPatient, TransportRequest, User, UserRole
 from models.enums import InstitutionRole, RequestStatus
 from models.institution_api_key import InstitutionApiKey, generate_api_key
+from tests.helpers.institution_auth import institution_bearer_headers
 
 
 class TestTransportRequestsCRUD:
@@ -55,20 +55,14 @@ class TestTransportRequestsCRUD:
         return user
 
     @pytest.fixture
-    def admin_auth_headers(self, client, sample_institution_admin, sample_institution):
+    def admin_auth_headers(self, db, sample_institution_admin, sample_institution):
         """Génère un token JWT pour admin institution."""
-        claims = {
-            "role": sample_institution_admin.role.value,
-            "institution_id": sample_institution.id,
-            "institution_role": sample_institution_admin.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(sample_institution_admin.public_id),
-                additional_claims=claims,
-            )
-        return {"Authorization": f"Bearer {token}"}
+        return institution_bearer_headers(
+            db,
+            sample_institution_admin,
+            sample_institution,
+            institution_role=sample_institution_admin.institution_role,
+        )
 
     @pytest.fixture
     def sample_api_key(self, db, sample_institution):
@@ -605,18 +599,12 @@ class TestTransportRequestsForcePasswordChange:
         db.session.add(user)
         db.session.commit()
 
-        claims = {
-            "role": user.role.value,
-            "institution_id": sample_institution.id,
-            "institution_role": user.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(user.public_id),
-                additional_claims=claims,
-            )
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = institution_bearer_headers(
+            db,
+            user,
+            sample_institution,
+            institution_role=user.institution_role,
+        )
 
         response = client.post(
             "/api/v1/institutions/requests",
@@ -665,19 +653,13 @@ class TestRequesterBillingOnCreateAndUpdate:
         return user
 
     @pytest.fixture
-    def requester_auth_headers(self, client, sample_requester, sample_institution):
-        claims = {
-            "role": sample_requester.role.value,
-            "institution_id": sample_institution.id,
-            "institution_role": sample_requester.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(sample_requester.public_id),
-                additional_claims=claims,
-            )
-        return {"Authorization": f"Bearer {token}"}
+    def requester_auth_headers(self, db, sample_requester, sample_institution):
+        return institution_bearer_headers(
+            db,
+            sample_requester,
+            sample_institution,
+            institution_role=sample_requester.institution_role,
+        )
 
     def _future_iso(self) -> str:
         return (datetime.now(UTC) + timedelta(hours=24)).isoformat()

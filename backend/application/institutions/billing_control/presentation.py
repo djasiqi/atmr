@@ -144,7 +144,9 @@ def serialize_billing_control_booking(
 
     return {
         "booking_id": int(booking.id),
-        "request_id": int(transport_request.id) if transport_request is not None else None,
+        "request_id": int(transport_request.id)
+        if transport_request is not None
+        else None,
         "parent_booking_id": getattr(booking, "parent_booking_id", None),
         "route_group_id": getattr(booking, "route_group_id", None),
         "date": st_iso,

@@ -412,50 +412,47 @@ class TestActionMaskingIntegration:
             assert valid_count >= 0
 
     def test_mask_with_different_scenarios(self):
-        """Test les masques avec différents scénarios."""
-        scenarios = [
-            "rush_hour",  # Heure de pointe
-            "night_time",  # Nuit
-            "weekend",  # Week-end
-            "holiday",  # Jour férié
-            "emergency",  # Urgence
-        ]
+        """Test les masques avec différents scénarios (comptages déterministes).
+
+        Sémantique des seuils (espace d'actions = 32) :
+        - « peu » (rush/emergency) : valid_count < 15
+        - « beaucoup » (night/holiday) : valid_count > 20
+        - « moyen » (weekend) : 8 <= valid_count <= 28
+
+        Les masques sont construits explicitement (pas ``np.random.choice``) :
+        ce test vérifie la classification de scénarios sur un Mock, pas
+        ``DispatchEnv._get_valid_actions_mask`` de production. Un tirage
+        Binomial(32, 0.8) échouait ~1.7 % du temps sur ``valid_count > 20``
+        (frontière exacte ``np.int64(20) > 20``).
+        """
+        # (scénario, nombre d'actions True) — valeurs stables dans chaque bande.
+        scenario_valid_counts = {
+            "rush_hour": 6,
+            "night_time": 26,
+            "weekend": 19,
+            "holiday": 29,
+            "emergency": 3,
+        }
+        action_space_size = 32
 
         env = Mock()
         env.num_drivers = 4
         env.num_bookings = 8
 
-        for scenario in scenarios:
-            # Mock de la génération de masque selon le scénario
-            if scenario == "rush_hour":
-                mask_probability = 0.2  # Peu d'actions valides
-            elif scenario == "night_time":
-                mask_probability = 0.8  # Beaucoup d'actions valides
-            elif scenario == "weekend":
-                mask_probability = 0.6  # Actions moyennement valides
-            elif scenario == "holiday":
-                mask_probability = 0.9  # Presque toutes les actions valides
-            else:  # emergency
-                mask_probability = 0.1  # Très peu d'actions valides
+        for scenario, n_valid in scenario_valid_counts.items():
+            mask = np.zeros(action_space_size, dtype=bool)
+            mask[:n_valid] = True
+            env._get_valid_actions_mask.return_value = mask
 
-            env._get_valid_actions_mask.return_value = np.random.choice(
-                [True, False], size=32, p=[mask_probability, 1 - mask_probability]
-            )
+            state = np.zeros(16)
+            got = env._get_valid_actions_mask(state)
+            valid_count = int(np.sum(got))
 
-            state = np.random.rand(16)
-            mask = env._get_valid_actions_mask(state)
-            valid_count = np.sum(mask)
-
-            # Vérifier que le nombre d'actions valides correspond au scénario
-            # ✅ FIX: Ajuster les assertions pour tenir compte de la variabilité
-            # de np.random.choice (size=32, donc max 32 actions valides)
             if scenario in {"rush_hour", "emergency"}:
-                assert valid_count < 15  # Peu d'actions valides
+                assert valid_count < 15  # peu d'actions valides
             elif scenario in {"night_time", "holiday"}:
-                assert valid_count > 20  # Beaucoup d'actions valides
+                assert valid_count > 20  # beaucoup d'actions valides
             else:
-                # Pour weekend: probabilité 0.6 → environ 19 actions valides
-                # Accepter une plage plus large pour la variabilité aléatoire
                 assert 8 <= valid_count <= 28
 
 

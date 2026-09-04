@@ -35,9 +35,7 @@ class _FakeBooking:
 def test_forward_progress_applies() -> None:
     booking = _FakeBooking(status=BookingStatus.PENDING)
     assert (
-        transition_booking_status(
-            booking, BookingStatus.ACCEPTED, source="test"
-        )
+        transition_booking_status(booking, BookingStatus.ACCEPTED, source="test")
         is True
     )
     assert booking.status == BookingStatus.ACCEPTED
@@ -46,9 +44,7 @@ def test_forward_progress_applies() -> None:
 def test_same_status_is_noop() -> None:
     booking = _FakeBooking(status=BookingStatus.ACCEPTED)
     assert (
-        transition_booking_status(
-            booking, BookingStatus.ACCEPTED, source="test"
-        )
+        transition_booking_status(booking, BookingStatus.ACCEPTED, source="test")
         is False
     )
 

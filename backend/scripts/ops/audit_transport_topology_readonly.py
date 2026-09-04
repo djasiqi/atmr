@@ -45,9 +45,7 @@ def run_audit(*, sample: int, production_scope: bool) -> dict[str, Any]:
         "sections": {},
     }
     tr_status_filter = (
-        "AND tr.status IN ('CONVERTED', 'SENT', 'ACCEPTED')"
-        if production_scope
-        else ""
+        "AND tr.status IN ('CONVERTED', 'SENT', 'ACCEPTED')" if production_scope else ""
     )
     blocking_total = 0
 
@@ -321,8 +319,12 @@ def run_audit(*, sample: int, production_scope: bool) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Audit topologie transport (read-only)")
-    parser.add_argument("--sample", type=int, default=15, help="Nombre d'exemples par section")
+    parser = argparse.ArgumentParser(
+        description="Audit topologie transport (read-only)"
+    )
+    parser.add_argument(
+        "--sample", type=int, default=15, help="Nombre d'exemples par section"
+    )
     parser.add_argument(
         "--production-scope",
         action="store_true",
@@ -333,7 +335,9 @@ def main() -> int:
 
     app = create_app()
     with app.app_context():
-        report = run_audit(sample=max(1, args.sample), production_scope=args.production_scope)
+        report = run_audit(
+            sample=max(1, args.sample), production_scope=args.production_scope
+        )
 
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, default=str))

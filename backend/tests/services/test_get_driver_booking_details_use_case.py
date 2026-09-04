@@ -64,7 +64,6 @@ def test_returns_none_when_not_found() -> None:
 class _NoAssignment:
     def find_model_by_booking_id(self, booking_id: int):  # type: ignore[no-untyped-def]
         _ = booking_id
-        return None
 
 
 def test_returns_payload_when_found() -> None:
