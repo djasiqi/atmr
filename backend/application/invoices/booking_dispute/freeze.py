@@ -27,8 +27,12 @@ def is_open_dispute_status(status: str | None) -> bool:
 
 
 def get_open_dispute_for_booking(booking_id: int) -> BookingDispute | None:
+    from flask import has_app_context
+
     from ext import db
 
+    if not has_app_context():
+        return None
     return (
         db.session.query(BookingDispute)
         .filter(
