@@ -110,6 +110,10 @@ def validate_domicile_triplet(
         errors["city"] = ["Ville requise"]
     if errors:
         raise ValidationError(errors)
+    # Après ValidationError, les trois champs sont des str non vides.
+    assert cleaned_address is not None
+    assert cleaned_postal is not None
+    assert cleaned_city is not None
     return {
         "address": cleaned_address,
         "postal_code": cleaned_postal,
