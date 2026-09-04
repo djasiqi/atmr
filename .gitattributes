@@ -5,4 +5,6 @@
 *.apks filter=lfs diff=lfs merge=lfs -text
 *.aab filter=lfs diff=lfs merge=lfs -text
 *.apk filter=lfs diff=lfs merge=lfs -text
+# PDF canoniques : ne jamais convertir CRLF (sinon SHA ≠ manifeste)
+*.pdf binary
 scripts/*.sh text eol=lf

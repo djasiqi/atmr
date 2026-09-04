@@ -427,6 +427,27 @@ class InstitutionPatientList(Resource):
             except ValidationError as err:
                 return {"error": "Données invalides", "details": err.messages}, 400
 
+            from application.institutions.patient_identity_rules import (
+                MINOR_DOB_CONFIRMATION_CODE,
+                MINOR_DOB_CONFIRMATION_MESSAGE,
+                is_minor,
+                requires_minor_dob_confirmation,
+                validate_patient_dob,
+            )
+
+            dob_parsed = validate_patient_dob(validated["dob"])
+            minor_confirmed = bool(validated.pop("minor_dob_confirmed", False))
+            # force_create ne bypass JAMAIS la confirmation mineur (vérifiée avant doublons).
+            if (
+                requires_minor_dob_confirmation(new_dob=dob_parsed)
+                and not minor_confirmed
+            ):
+                return {
+                    "error": MINOR_DOB_CONFIRMATION_MESSAGE,
+                    "code": MINOR_DOB_CONFIRMATION_CODE,
+                    "dob": dob_parsed.isoformat(),
+                }, 422
+            minor_at_save = is_minor(dob_parsed)
             # Vérifier unicité external_reference
             ext_ref = validated.get("external_reference")
             if ext_ref:
@@ -482,11 +503,7 @@ class InstitutionPatientList(Resource):
             patient.external_reference = ext_ref
             patient.first_name = validated["first_name"]
             patient.last_name = validated["last_name"]
-            patient.dob = (
-                datetime.strptime(validated["dob"], "%Y-%m-%d").date()
-                if validated.get("dob")
-                else None
-            )
+            patient.dob = dob_parsed
             patient.gender = validated.get("gender")
             patient.address = validated.get("address")
             patient.city = validated.get("city")
@@ -542,6 +559,9 @@ class InstitutionPatientList(Resource):
             db.session.commit()
 
             try:
+                from datetime import UTC
+                from datetime import datetime as dt_mod
+
                 AuditLogger.log_action(
                     action_type="patient_created",
                     action_category="institution",
@@ -554,6 +574,18 @@ class InstitutionPatientList(Resource):
                         "external_reference": ext_ref,
                         "curator_team_id": assigned_team_id,
                         "sync_status": sync_result["status"],
+                        "minor_at_save": minor_at_save,
+                        "minor_dob_confirmed": bool(minor_confirmed)
+                        if minor_at_save
+                        else False,
+                        "confirmed_by_user_id": user_id
+                        if minor_at_save and minor_confirmed
+                        else None,
+                        "confirmed_at": (
+                            dt_mod.now(UTC).isoformat()
+                            if minor_at_save and minor_confirmed
+                            else None
+                        ),
                     },
                     ip_address=request.remote_addr,
                     user_agent=request.headers.get("User-Agent"),
@@ -669,6 +701,61 @@ class InstitutionPatientDetail(Resource):
             except ValidationError as err:
                 return {"error": "Données invalides", "details": err.messages}, 400
 
+            from application.institutions.patient_identity_rules import (
+                MINOR_DOB_CONFIRMATION_CODE,
+                MINOR_DOB_CONFIRMATION_MESSAGE,
+                is_minor,
+                requires_minor_dob_confirmation,
+                validate_patient_dob,
+            )
+
+            minor_confirmed = bool(validated.pop("minor_dob_confirmed", False))
+            minor_dob_confirmation_audited = False
+            if "dob" in validated:
+                new_dob = validate_patient_dob(validated["dob"])
+                if (
+                    requires_minor_dob_confirmation(
+                        new_dob=new_dob,
+                        previous_dob=patient.dob,
+                    )
+                    and not minor_confirmed
+                ):
+                    return {
+                        "error": MINOR_DOB_CONFIRMATION_MESSAGE,
+                        "code": MINOR_DOB_CONFIRMATION_CODE,
+                        "dob": new_dob.isoformat(),
+                    }, 422
+                minor_dob_confirmation_audited = (
+                    requires_minor_dob_confirmation(
+                        new_dob=new_dob,
+                        previous_dob=patient.dob,
+                    )
+                    and minor_confirmed
+                )
+                validated["dob"] = new_dob.isoformat()
+
+            from application.institutions.patient_identity_rules import (
+                domicile_fields_touched,
+                validate_domicile_triplet,
+            )
+
+            # PUT qui touche l'adresse → état final domicile cohérent (triplet).
+            if domicile_fields_touched(validated):
+                try:
+                    cleaned = validate_domicile_triplet(
+                        address=validated.get("address", patient.address),
+                        postal_code=validated.get("postal_code", patient.postal_code),
+                        city=validated.get("city", patient.city),
+                    )
+                except ValidationError as domicile_err:
+                    return {
+                        "error": "Domicile incomplet",
+                        "details": domicile_err.messages,
+                    }, 400
+                validated["address"] = cleaned["address"]
+                validated["postal_code"] = cleaned["postal_code"]
+                validated["city"] = cleaned["city"]
+
             # Vérifier unicité external_reference si changé
             new_ext_ref = validated.get("external_reference")
             if new_ext_ref and new_ext_ref != patient.external_reference:
@@ -772,6 +859,21 @@ class InstitutionPatientDetail(Resource):
             try:
                 # Audit standard (champs non-sensibles)
                 if normal_updated:
+                    from datetime import UTC
+                    from datetime import datetime as dt_mod
+
+                    details = {
+                        "patient_id": patient.id,
+                        "updated_fields": normal_updated,
+                    }
+                    if "dob" in validated:
+                        details["minor_at_save"] = is_minor(
+                            datetime.strptime(validated["dob"], "%Y-%m-%d").date()
+                        )
+                    if minor_dob_confirmation_audited:
+                        details["minor_dob_confirmed"] = True
+                        details["confirmed_by_user_id"] = user_id
+                        details["confirmed_at"] = dt_mod.now(UTC).isoformat()
                     AuditLogger.log_action(
                         action_type="patient_updated",
                         action_category="institution",
@@ -779,10 +881,7 @@ class InstitutionPatientDetail(Resource):
                         user_type="institution" if user_id else "api_key",
                         institution_id=institution_id,
                         result_status="success",
-                        action_details={
-                            "patient_id": patient.id,
-                            "updated_fields": normal_updated,
-                        },
+                        action_details=details,
                         ip_address=request.remote_addr,
                         user_agent=request.headers.get("User-Agent"),
                     )

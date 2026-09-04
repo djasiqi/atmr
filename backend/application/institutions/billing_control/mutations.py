@@ -82,8 +82,8 @@ def validate_booking_control(
     booking.institution_control_validated_at = now
     booking.institution_control_validated_by_user_id = actor_user_id
     booking.institution_control_validated_by_display_name = (
-        (actor_display_name or "").strip() or None
-    )
+        actor_display_name or ""
+    ).strip() or None
     booking.institution_control_anomaly_reason = None
     bump_edit_version(booking)
     after = control_status_snapshot(booking)
@@ -189,18 +189,19 @@ def reopen_booking_control(
     actor_display_name: str | None,
     reason: str | None = None,
 ) -> ControlMutationResult:
-    """Anomalie → pending_review (clear anomaly)."""
+    """Validé ou anomalie → pending_review (clear validation / anomaly)."""
     readonly, msg = control_state_is_readonly(booking)
     if readonly:
         return ControlMutationResult(ok=False, error=msg, status_code=409)
 
-    if (
-        effective_control_status(booking)
-        != InstitutionBillingControlStatus.ANOMALY.value
+    current = effective_control_status(booking)
+    if current not in (
+        InstitutionBillingControlStatus.ANOMALY.value,
+        InstitutionBillingControlStatus.VALIDATED.value,
     ):
         return ControlMutationResult(
             ok=False,
-            error="Seul un booking en anomalie peut être réouvert.",
+            error="Seul un booking validé ou en anomalie peut être réouvert.",
             status_code=409,
         )
 

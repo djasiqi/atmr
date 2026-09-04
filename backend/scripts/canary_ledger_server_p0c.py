@@ -19,10 +19,20 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.parse import urlparse
 
-API = os.getenv("CANARY_API_URL", "http://127.0.0.1:5000").rstrip("/")
+import requests
+
+
+def _canary_api_base() -> str:
+    raw = os.getenv("CANARY_API_URL", "http://127.0.0.1:5000").strip().rstrip("/")
+    parsed = urlparse(raw)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise SystemExit(f"CANARY_API_URL invalide (http/https requis): {raw}")
+    return raw
+
+
+API = _canary_api_base()
 OUT_DIR = Path(
     os.getenv(
         "CANARY_OUT_DIR",
@@ -84,9 +94,7 @@ def _boot():
         raise SystemExit(f"User manquant pour driver {driver.id}")
 
     claims = {
-        "role": (
-            user.role.value if hasattr(user.role, "value") else str(user.role)
-        ),
+        "role": (user.role.value if hasattr(user.role, "value") else str(user.role)),
         "roles": ["driver"],
         "driver_id": driver.id,
         "company_id": driver.company_id,
@@ -106,36 +114,28 @@ def _boot():
 
 
 def _put(token: str, payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
-    body = json.dumps(payload).encode("utf-8")
-    req = Request(
-        f"{API}/api/v1/driver/me/location",
-        data=body,
-        method="PUT",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "X-Requested-With": "canary-ledger-server-p0c",
-            "X-Forwarded-Proto": "https",
-            "X-Idempotency-Key": str(payload.get("location_event_id") or uuid.uuid4()),
-        },
-    )
+    url = f"{API}/api/v1/driver/me/location"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "X-Requested-With": "canary-ledger-server-p0c",
+        "X-Forwarded-Proto": "https",
+        "X-Idempotency-Key": str(payload.get("location_event_id") or uuid.uuid4()),
+    }
     try:
-        with urlopen(req, timeout=25) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-            try:
-                parsed = json.loads(raw) if raw else {}
-            except json.JSONDecodeError:
-                parsed = {"raw": raw[:500]}
-            return int(resp.status), parsed
-    except HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
+        resp = requests.put(url, json=payload, headers=headers, timeout=25)
+    except requests.RequestException as exc:
+        return 0, {"error": str(exc)}
+
+    raw = resp.text
+    try:
+        parsed = resp.json()
+    except ValueError:
         try:
             parsed = json.loads(raw) if raw else {}
         except json.JSONDecodeError:
             parsed = {"raw": raw[:500]}
-        return int(exc.code), parsed
-    except (URLError, TimeoutError, OSError) as exc:
-        return 0, {"error": str(exc)}
+    return resp.status_code, parsed
 
 
 def _point(
@@ -190,7 +190,9 @@ def _claim_ttl(redis, driver_id: int, event_id: str) -> int | None:
     return int(ttl)
 
 
-def _inject_orphan_claim(redis, driver_id: int, event_id: str, *, ttl: int = 600) -> str:
+def _inject_orphan_claim(
+    redis, driver_id: int, event_id: str, *, ttl: int = 600
+) -> str:
     key = _claim_key(driver_id, event_id)
     redis.set(key, "1", nx=False, ex=ttl)
     return key
@@ -396,10 +398,18 @@ def main() -> int:
             "event_id": eid2,
             "generation": None,
             "sequence": 2,
-            "ack": {k: ack2.get(k) for k in (
-                "ack_status", "accept_reason", "error", "error_code", "retryable",
-                "durability", "ledger_persisted",
-            )},
+            "ack": {
+                k: ack2.get(k)
+                for k in (
+                    "ack_status",
+                    "accept_reason",
+                    "error",
+                    "error_code",
+                    "retryable",
+                    "durability",
+                    "ledger_persisted",
+                )
+            },
         },
     )
 
@@ -420,10 +430,14 @@ def main() -> int:
     claim3 = _claim_present(redis, driver_id, eid2)
     reason3 = str(ack3.get("accept_reason") or ack3.get("error_code") or "")
     # Pas de cycle duplicate_unproven ↔ ledger_ids_missing
-    cycle_poison = reason3 in (
-        "duplicate_event_id_unproven",
-        "ledger_ids_missing",
-    ) and str(ack3.get("ack_status") or "") == "duplicate"
+    cycle_poison = (
+        reason3
+        in (
+            "duplicate_event_id_unproven",
+            "ledger_ids_missing",
+        )
+        and str(ack3.get("ack_status") or "") == "duplicate"
+    )
     s3_ok = (
         st3 == 422
         and ack3.get("retryable") is False
@@ -469,11 +483,15 @@ def main() -> int:
     as4 = str(ack4.get("ack_status") or "")
     dur4 = ack4.get("durability")
     no_double = after4 <= max(before4, 1) and after4 == before4
-    s4_ok = no_double and before4 >= 1 and (
-        ar4 == "duplicate_persisted"
-        or (as4 == "duplicate" and dur4 == "persisted_sync")
-        # same_event durable_ok (idempotence PG) si claim déjà expiré/libéré
-        or (as4 == "persisted" and dur4 == "persisted_sync" and after4 == 1)
+    s4_ok = (
+        no_double
+        and before4 >= 1
+        and (
+            ar4 == "duplicate_persisted"
+            or (as4 == "duplicate" and dur4 == "persisted_sync")
+            # same_event durable_ok (idempotence PG) si claim déjà expiré/libéré
+            or (as4 == "persisted" and dur4 == "persisted_sync" and after4 == 1)
+        )
     )
     _record(
         results,

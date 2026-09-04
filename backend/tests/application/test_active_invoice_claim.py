@@ -94,7 +94,9 @@ def test_t1_rca_historical_merge_partner_paid_blocks_orphan():
 
 
 def test_t2_sent_blocks():
-    line = _line(1, reservation_id=10, meta={"round_trip_merge_partner_reservation_id": 11})
+    line = _line(
+        1, reservation_id=10, meta={"round_trip_merge_partner_reservation_id": 11}
+    )
     inv = _inv(2, InvoiceStatus.SENT)
     assert 11 in find_blocking_invoice_claims(
         {11}, invoice_lines_with_invoices=_pairs((line, inv))
@@ -102,7 +104,9 @@ def test_t2_sent_blocks():
 
 
 def test_t3_draft_blocks():
-    line = _line(1, reservation_id=10, meta={"round_trip_merge_partner_reservation_id": 11})
+    line = _line(
+        1, reservation_id=10, meta={"round_trip_merge_partner_reservation_id": 11}
+    )
     inv = _inv(2, InvoiceStatus.DRAFT)
     assert 11 in find_blocking_invoice_claims(
         {11}, invoice_lines_with_invoices=_pairs((line, inv))
@@ -110,7 +114,9 @@ def test_t3_draft_blocks():
 
 
 def test_t4_cancelled_does_not_block():
-    line = _line(1, reservation_id=10, meta={"round_trip_merge_partner_reservation_id": 11})
+    line = _line(
+        1, reservation_id=10, meta={"round_trip_merge_partner_reservation_id": 11}
+    )
     inv = _inv(2, InvoiceStatus.CANCELLED)
     claims = find_blocking_invoice_claims(
         {10, 11}, invoice_lines_with_invoices=_pairs((line, inv))
@@ -211,9 +217,10 @@ def test_b12_rca_fixture_then_intentional_release():
     )
     inv = _inv(1773, InvoiceStatus.PAID)
     pairs = _pairs((line, inv))
-    assert booking_has_active_invoice_claim(
-        37128, invoice_lines_with_invoices=pairs
-    ) is True
+    assert (
+        booking_has_active_invoice_claim(37128, invoice_lines_with_invoices=pairs)
+        is True
+    )
 
     released = _line(
         4648,
@@ -225,9 +232,10 @@ def test_b12_rca_fixture_then_intentional_release():
         },
     )
     pairs2 = _pairs((released, inv))
-    assert booking_has_active_invoice_claim(
-        37128, invoice_lines_with_invoices=pairs2
-    ) is False
+    assert (
+        booking_has_active_invoice_claim(37128, invoice_lines_with_invoices=pairs2)
+        is False
+    )
 
 
 def test_t7_patient_preview_path_uses_open_filter_claim():

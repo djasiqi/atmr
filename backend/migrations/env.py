@@ -31,9 +31,11 @@ if not has_app_context():
 config = context.config
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# disable_existing_loggers=False : fileConfig (défaut True) marque sinon
+# logger.disabled=True sur tous les loggers déjà créés (ex. pipelines push
+# importés avant une migration E2E) — les tests caplog INFO deviennent vides.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 logger = logging.getLogger("alembic.env")
 
 

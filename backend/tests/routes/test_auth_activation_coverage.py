@@ -342,14 +342,20 @@ def _patch_mobile_refresh(monkeypatch, sample_user, mobile_session):
         auth, "_validate_refresh_token", lambda _token: ("user-1", None)
     )
     monkeypatch.setattr(auth, "_check_user_profile_active", lambda _user: (True, None))
+    # Le refresh lit session_id / refresh_generation via decode_token(refresh),
+    # pas via get_jwt (access). Sans ce patch, les gardes mobile sont court-circuitées.
+    session_claims = {
+        "session_id": mobile_session.session_id,
+        "session_epoch": 1,
+        "refresh_generation": 1,
+        "sub": sample_user.public_id,
+        "aud": "atmr-api",
+    }
+    monkeypatch.setattr(auth, "get_jwt", lambda: session_claims)
     monkeypatch.setattr(
         auth,
-        "get_jwt",
-        lambda: {
-            "session_id": mobile_session.session_id,
-            "session_epoch": 1,
-            "refresh_generation": 1,
-        },
+        "decode_token",
+        lambda *_args, **_kwargs: session_claims,
     )
     monkeypatch.setattr(
         auth, "get_session_by_id", lambda *_args, **_kwargs: mobile_session
@@ -1274,8 +1280,16 @@ def test_login_mobile_limite_appareils(app, monkeypatch):
         lambda _role: 1,
     )
     monkeypatch.setattr(
-        "security.mobile_device_session_service.issue_device_session_resolution_token",
-        lambda **_kwargs: "resolution-token",
+        "security.web_handoff_service.issue_web_handoff_token",
+        lambda **_kwargs: "handoff-token",
+    )
+    monkeypatch.setattr(
+        "security.web_handoff_service.build_web_handoff_url",
+        lambda **_kwargs: "https://www.lirie.ch/auth/web-handoff?token=handoff-token",
+    )
+    monkeypatch.setattr(
+        "security.web_handoff_service.build_device_management_redirect_path",
+        lambda _user: "/dashboard/driver/mobile-user/settings#security",
     )
 
     with app.test_request_context(
@@ -1291,8 +1305,12 @@ def test_login_mobile_limite_appareils(app, monkeypatch):
         body, status = auth._login_post_body()
 
     assert status == 409
-    assert body["resolution_token"] == "resolution-token"
-    assert body["sessions"] == [{"session_id": "ancienne"}]
+    assert body["error_code"] == "device_session_limit_reached"
+    assert body["web_handoff_token"] == "handoff-token"
+    assert "web_handoff_url" in body
+    assert body["redirect_path"].endswith("/settings#security")
+    assert body["limit"] == 1
+    assert body["active_count"] == 1
 
 
 def test_forgot_password_fournisseur_indisponible(client, sample_user, monkeypatch):

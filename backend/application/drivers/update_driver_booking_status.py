@@ -266,8 +266,7 @@ class UpdateDriverBookingStatusUseCase:
                 )
 
                 company_id = int(
-                    getattr(booking, "executing_company_id", None)
-                    or booking.company_id
+                    getattr(booking, "executing_company_id", None) or booking.company_id
                 )
                 ensure_booking_assignment(
                     company_id=company_id,
@@ -321,9 +320,7 @@ class UpdateDriverBookingStatusUseCase:
                         "system message arrived failed booking_id=%s",
                         booking.id,
                     )
-            assignment = self._assignment_repo.find_model_by_booking_id(
-                booking.id
-            )
+            assignment = self._assignment_repo.find_model_by_booking_id(booking.id)
             return (
                 {
                     "booking_id": booking.id,
@@ -333,9 +330,7 @@ class UpdateDriverBookingStatusUseCase:
                     "mission_milestone": "ARRIVED",
                     "milestone_persisted": True,
                     "assignment_id": getattr(assignment, "id", None),
-                    "mission_revision": int(
-                        getattr(assignment, "revision", 0) or 0
-                    ),
+                    "mission_revision": int(getattr(assignment, "revision", 0) or 0),
                 },
                 200,
             )
@@ -348,9 +343,7 @@ class UpdateDriverBookingStatusUseCase:
             )
             return (
                 {
-                    "error": (
-                        "Jalon 'arrived' périmé : la mission a déjà progressé."
-                    ),
+                    "error": ("Jalon 'arrived' périmé : la mission a déjà progressé."),
                     "error_code": "driver_transition_stale",
                     "retryable": False,
                 },
@@ -1088,9 +1081,7 @@ class UpdateDriverBookingStatusUseCase:
                     booking.id
                 )
                 if assignment_after is not None:
-                    response["assignment_id"] = getattr(
-                        assignment_after, "id", None
-                    )
+                    response["assignment_id"] = getattr(assignment_after, "id", None)
                     response["mission_revision"] = int(
                         getattr(assignment_after, "revision", 0) or 0
                     )

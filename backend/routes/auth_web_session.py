@@ -49,7 +49,9 @@ def register_web_session_routes(auth_ns: Namespace) -> None:
                 return err_resp, status
 
             identity = get_jwt_identity()
-            user = user_repo.find_model_by_public_id(str(identity)) if identity else None
+            user = (
+                user_repo.find_model_by_public_id(str(identity)) if identity else None
+            )
             if user is None or not is_institution_user(user):
                 err_resp, status = APIErrorHandler.handle_permission_error(
                     "Compte institution requis",

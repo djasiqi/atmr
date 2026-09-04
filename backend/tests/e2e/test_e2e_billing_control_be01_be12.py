@@ -75,7 +75,9 @@ def bc_reader(db, bc_institution):
 
 @pytest.fixture
 def bc_eligible(db, bc_institution, bc_company):
-    scheduled = datetime.now(UTC).replace(day=5, hour=10, minute=0, second=0, microsecond=0)
+    scheduled = datetime.now(UTC).replace(
+        day=5, hour=10, minute=0, second=0, microsecond=0
+    )
     if scheduled < datetime.now(UTC):
         scheduled = scheduled + timedelta(days=30)
     booking, tr, patient = make_eligible_control_booking(
@@ -97,7 +99,9 @@ class TestE2EBillingControlBE01BE12:
     def test_be01_admin_list_summary_and_eligible(
         self, client, db, bc_institution, bc_admin, bc_eligible
     ):
-        headers = institution_auth_headers(bc_admin, bc_institution, "institution_admin")
+        headers = institution_auth_headers(
+            bc_admin, bc_institution, "institution_admin"
+        )
         period = bc_eligible["period"]
         r = client.get(f"{LIST_URL}?period={period}", headers=headers)
         assert r.status_code == 200
@@ -107,8 +111,12 @@ class TestE2EBillingControlBE01BE12:
         ids = {i["booking_id"] for i in data["items"]}
         assert bc_eligible["booking"].id in ids
 
-    def test_be02_billing_list_access(self, client, db, bc_institution, bc_billing, bc_eligible):
-        headers = institution_auth_headers(bc_billing, bc_institution, "institution_billing")
+    def test_be02_billing_list_access(
+        self, client, db, bc_institution, bc_billing, bc_eligible
+    ):
+        headers = institution_auth_headers(
+            bc_billing, bc_institution, "institution_billing"
+        )
         r = client.get(
             f"{LIST_URL}?period={bc_eligible['period']}",
             headers=headers,
@@ -125,9 +133,7 @@ class TestE2EBillingControlBE01BE12:
         ):
             headers = institution_auth_headers(user, bc_institution, role)
             assert client.get(LIST_URL, headers=headers).status_code == 403
-            assert (
-                client.get(f"{LIST_URL}/{bid}", headers=headers).status_code == 403
-            )
+            assert client.get(f"{LIST_URL}/{bid}", headers=headers).status_code == 403
             assert (
                 client.post(
                     f"/api/v1/institutions/billing/control/bookings/{bid}/validate",
@@ -153,7 +159,9 @@ class TestE2EBillingControlBE01BE12:
         booking.client.default_billed_to_company_id = clinic_co.id
         db.session.commit()
 
-        headers = institution_auth_headers(bc_billing, institution, "institution_billing")
+        headers = institution_auth_headers(
+            bc_billing, institution, "institution_billing"
+        )
         period = bc_eligible["period"]
         y, m = map(int, period.split("-"))
 
@@ -197,7 +205,9 @@ class TestE2EBillingControlBE01BE12:
         self, client, db, bc_institution, bc_admin, bc_eligible
     ):
         booking = bc_eligible["booking"]
-        headers = institution_auth_headers(bc_admin, bc_institution, "institution_admin")
+        headers = institution_auth_headers(
+            bc_admin, bc_institution, "institution_admin"
+        )
         r = client.post(
             f"/api/v1/institutions/billing/control/bookings/{booking.id}/validate",
             headers=headers,
@@ -205,7 +215,10 @@ class TestE2EBillingControlBE01BE12:
         )
         assert r.status_code == 200
         db.session.refresh(booking)
-        assert booking.institution_control_status == InstitutionBillingControlStatus.VALIDATED
+        assert (
+            booking.institution_control_status
+            == InstitutionBillingControlStatus.VALIDATED
+        )
         detail = client.get(
             f"/api/v1/institutions/billing/control/bookings/{booking.id}",
             headers=headers,
@@ -218,7 +231,9 @@ class TestE2EBillingControlBE01BE12:
         self, client, db, bc_institution, bc_billing, bc_eligible
     ):
         booking = bc_eligible["booking"]
-        headers = institution_auth_headers(bc_billing, bc_institution, "institution_billing")
+        headers = institution_auth_headers(
+            bc_billing, bc_institution, "institution_billing"
+        )
         r_an = client.post(
             f"/api/v1/institutions/billing/control/bookings/{booking.id}/anomaly",
             headers=headers,
@@ -229,7 +244,10 @@ class TestE2EBillingControlBE01BE12:
         )
         assert r_an.status_code == 200
         db.session.refresh(booking)
-        assert booking.institution_control_status == InstitutionBillingControlStatus.ANOMALY
+        assert (
+            booking.institution_control_status
+            == InstitutionBillingControlStatus.ANOMALY
+        )
 
         r_re = client.post(
             f"/api/v1/institutions/billing/control/bookings/{booking.id}/reopen",
@@ -243,7 +261,9 @@ class TestE2EBillingControlBE01BE12:
     def test_be09_round_trip_independent_validation(
         self, client, db, bc_institution, bc_admin, bc_company
     ):
-        scheduled = datetime.now(UTC).replace(day=8, hour=9, minute=0, second=0, microsecond=0)
+        scheduled = datetime.now(UTC).replace(
+            day=8, hour=9, minute=0, second=0, microsecond=0
+        )
         if scheduled < datetime.now(UTC):
             scheduled += timedelta(days=30)
         outbound, _tr, _patient = make_eligible_control_booking(
@@ -267,7 +287,9 @@ class TestE2EBillingControlBE01BE12:
         db.session.add(ret)
         db.session.commit()
 
-        headers = institution_auth_headers(bc_admin, bc_institution, "institution_admin")
+        headers = institution_auth_headers(
+            bc_admin, bc_institution, "institution_admin"
+        )
         assert (
             client.post(
                 f"/api/v1/institutions/billing/control/bookings/{outbound.id}/validate",
@@ -291,7 +313,9 @@ class TestE2EBillingControlBE01BE12:
         booking = bc_eligible["booking"]
         booking.billing_locked_at = datetime.now(UTC)
         db.session.commit()
-        headers = institution_auth_headers(bc_billing, bc_institution, "institution_billing")
+        headers = institution_auth_headers(
+            bc_billing, bc_institution, "institution_billing"
+        )
         detail = client.get(
             f"/api/v1/institutions/billing/control/bookings/{booking.id}",
             headers=headers,
@@ -310,7 +334,9 @@ class TestE2EBillingControlBE01BE12:
     def test_be11_ineligible_absent_from_period_list(
         self, client, db, bc_institution, bc_admin, bc_company
     ):
-        scheduled = datetime.now(UTC).replace(day=12, hour=10, minute=0, second=0, microsecond=0)
+        scheduled = datetime.now(UTC).replace(
+            day=12, hour=10, minute=0, second=0, microsecond=0
+        )
         if scheduled < datetime.now(UTC):
             scheduled += timedelta(days=30)
         pending, _tr, _p = make_eligible_control_booking(
@@ -320,7 +346,9 @@ class TestE2EBillingControlBE01BE12:
             scheduled=scheduled,
             status=BookingStatus.PENDING.value,
         )
-        headers = institution_auth_headers(bc_admin, bc_institution, "institution_admin")
+        headers = institution_auth_headers(
+            bc_admin, bc_institution, "institution_admin"
+        )
         period = period_param(scheduled)
         data = client.get(f"{LIST_URL}?period={period}", headers=headers).get_json()
         assert pending.id not in {i["booking_id"] for i in data["items"]}
@@ -336,7 +364,9 @@ class TestE2EBillingControlBE01BE12:
         booking = bc_eligible["booking"]
         period = bc_eligible["period"]
         y, m = map(int, period.split("-"))
-        headers = institution_auth_headers(bc_admin, bc_institution, "institution_admin")
+        headers = institution_auth_headers(
+            bc_admin, bc_institution, "institution_admin"
+        )
         data = client.get(
             f"{LIST_URL}?period={period}&page_size=200",
             headers=headers,

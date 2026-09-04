@@ -23,9 +23,7 @@ def _sort_key(assignment: Any) -> tuple[datetime, int]:
         created_dt = _EPOCH
     elif isinstance(created, datetime):
         created_dt = (
-            created
-            if created.tzinfo is not None
-            else created.replace(tzinfo=UTC)
+            created if created.tzinfo is not None else created.replace(tzinfo=UTC)
         )
     else:
         # Tests / stubs : entier ou ISO — on ne plante pas, on classe en dernier.

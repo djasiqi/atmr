@@ -23,9 +23,7 @@ SESSION_UPGRADE_REQUIRED = "session_upgrade_required"
 
 
 def institution_idle_timeout_seconds() -> int:
-    return int(
-        current_app.config.get("INSTITUTION_IDLE_TIMEOUT_SECONDS", 900)
-    )
+    return int(current_app.config.get("INSTITUTION_IDLE_TIMEOUT_SECONDS", 900))
 
 
 def is_institution_user(user: User | None) -> bool:

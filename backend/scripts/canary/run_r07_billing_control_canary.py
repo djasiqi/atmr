@@ -26,38 +26,61 @@ import json
 import os
 import sys
 from typing import Any
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.parse import urlparse
 
-API = os.getenv("CANARY_API_URL", "http://127.0.0.1:5000").rstrip("/")
+import requests
+
+
+def _canary_api_base() -> str:
+    raw = os.getenv("CANARY_API_URL", "http://127.0.0.1:5000").strip().rstrip("/")
+    parsed = urlparse(raw)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise SystemExit(f"CANARY_API_URL invalide (http/https requis): {raw}")
+    return raw
+
+
+API = _canary_api_base()
 BEARER = os.getenv("CANARY_INSTITUTION_BEARER", "").strip()
 PERIOD = os.getenv("CANARY_PERIOD", "").strip()
 WRITE_BOOKING_ID = os.getenv("CANARY_WRITE_BOOKING_ID", "").strip()
 
 
+def _parse_json_body(resp: requests.Response) -> Any:
+    raw = resp.text
+    if not raw:
+        return {}
+    try:
+        return resp.json()
+    except ValueError:
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return {"error": raw}
+
+
 def _http(method: str, path: str, *, body: dict | None = None) -> tuple[int, Any]:
     if not BEARER:
-        raise SystemExit("CANARY_INSTITUTION_BEARER requis (JWT institution admin/billing).")
+        raise SystemExit(
+            "CANARY_INSTITUTION_BEARER requis (JWT institution admin/billing)."
+        )
     url = f"{API}{path}"
-    data = None
     headers = {
         "Authorization": BEARER if BEARER.startswith("Bearer ") else f"Bearer {BEARER}",
-        "Content-Type": "application/json",
+        "Accept": "application/json",
     }
     if body is not None:
-        data = json.dumps(body).encode("utf-8")
-    req = Request(url, data=data, headers=headers, method=method)
+        headers["Content-Type"] = "application/json"
     try:
-        with urlopen(req, timeout=60) as resp:
-            raw = resp.read().decode("utf-8")
-            return resp.status, json.loads(raw) if raw else {}
-    except HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
-        try:
-            payload = json.loads(raw) if raw else {"error": exc.reason}
-        except json.JSONDecodeError:
-            payload = {"error": raw or exc.reason}
-        return exc.code, payload
+        resp = requests.request(
+            method,
+            url,
+            headers=headers,
+            json=body,
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        return 0, {"error": str(exc)}
+    return resp.status_code, _parse_json_body(resp)
 
 
 def _period_query() -> str:
@@ -67,7 +90,9 @@ def _period_query() -> str:
 
 
 def run_readonly_checks() -> dict[str, Any]:
-    status, data = _http("GET", f"/api/v1/institutions/billing/control/bookings?{_period_query()}")
+    status, data = _http(
+        "GET", f"/api/v1/institutions/billing/control/bookings?{_period_query()}"
+    )
     if status != 200:
         raise SystemExit(f"Liste contrôle échouée HTTP {status}: {data}")
 

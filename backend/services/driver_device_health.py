@@ -420,9 +420,7 @@ def ingest_driver_device_health(
         "location_fix_age_seconds": str(
             location_fix_age_seconds
             if location_fix_age_seconds is not None
-            else (
-                last_fix_age_seconds if last_fix_age_seconds is not None else ""
-            )
+            else (last_fix_age_seconds if last_fix_age_seconds is not None else "")
         ),
         "constraint_reason": constraint_reason or "",
         "fgs_running": _bool_to_redis(fgs_running),
@@ -450,9 +448,7 @@ def ingest_driver_device_health(
         ),
         "observability_class": observability_class or "",
         "watch_callback_age_seconds": str(
-            watch_callback_age_seconds
-            if watch_callback_age_seconds is not None
-            else ""
+            watch_callback_age_seconds if watch_callback_age_seconds is not None else ""
         ),
         "oldest_queue_item_age_seconds": str(
             oldest_queue_item_age_seconds

@@ -42,9 +42,7 @@ class _FakeRepo:
 
 def test_protocol_stubs_ellipsis():
     assert _RepositoryPort.find_by_id(None, 1) is None  # type: ignore[arg-type]
-    assert (
-        _RepositoryPort.create_and_commit(None, field1="a", field2=1) is None
-    )  # type: ignore[arg-type]
+    assert _RepositoryPort.create_and_commit(None, field1="a", field2=1) is None  # type: ignore[arg-type]
 
 
 def test_create_entity_validation_et_succes():

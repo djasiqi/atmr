@@ -316,7 +316,9 @@ def test_ingest_driver_device_health_persists_tracking_pipeline(db, sample_drive
         patch(
             "services.monitoring.driver_device_health_metrics.record_device_health_report"
         ),
-        patch("services.driver_device_health.DriverDeviceHealthEvent") as mock_event_cls,
+        patch(
+            "services.driver_device_health.DriverDeviceHealthEvent"
+        ) as mock_event_cls,
         patch("services.driver_device_health.db.session") as mock_session,
     ):
         mock_event = MagicMock()
@@ -353,7 +355,9 @@ def test_ingest_driver_device_health_legacy_without_tracking_pipeline(
         patch(
             "services.monitoring.driver_device_health_metrics.record_device_health_report"
         ),
-        patch("services.driver_device_health.DriverDeviceHealthEvent") as mock_event_cls,
+        patch(
+            "services.driver_device_health.DriverDeviceHealthEvent"
+        ) as mock_event_cls,
         patch("services.driver_device_health.db.session"),
     ):
         mock_event = MagicMock()

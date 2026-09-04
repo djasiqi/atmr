@@ -537,7 +537,7 @@ class DispatchEnv(gym.Env):
             Masque booléen de dimension action_space.n
 
         """
-        mask = np.zeros(self.action_space.n, dtype=bool)
+        mask = np.zeros(self.action_space.n, dtype=np.bool_)
 
         # Action 0 (wait) toujours valide
         mask[0] = True

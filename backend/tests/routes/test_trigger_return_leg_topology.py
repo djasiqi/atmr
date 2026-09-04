@@ -18,6 +18,8 @@ from models.enums import BookingStatus, RequestStatus
 from repositories.booking_repository import BookingRepository
 from tests.routes.test_companies import _auth_headers
 
+pytest_plugins = ["tests.routes.test_companies"]
+
 
 def _future_return_time(hours: int = 8) -> str:
     return (datetime.now(UTC) + timedelta(days=3, hours=hours)).isoformat()
@@ -261,11 +263,15 @@ class TestTriggerReturnLegTopology:
         assert topo["return_booking"].status == BookingStatus.ACCEPTED
         assert topo["return_booking"].is_return is False
         assert (
-            Booking.query.filter_by(parent_booking_id=outbound_id, is_return=True).count()
+            Booking.query.filter_by(
+                parent_booking_id=outbound_id, is_return=True
+            ).count()
             == 0
         )
 
-    def test_return_leg_without_schedule(self, client, db, companies_world, company_headers):
+    def test_return_leg_without_schedule(
+        self, client, db, companies_world, company_headers
+    ):
         world = companies_world
         topo = _build_leg_topology(
             db,
@@ -284,7 +290,9 @@ class TestTriggerReturnLegTopology:
         db.session.refresh(topo["return_booking"])
         assert topo["return_booking"].scheduled_time is not None
 
-    def test_return_leg_reschedule_idempotent(self, client, db, companies_world, company_headers):
+    def test_return_leg_reschedule_idempotent(
+        self, client, db, companies_world, company_headers
+    ):
         world = companies_world
         first_time = datetime.now(UTC) + timedelta(days=4, hours=10)
         topo = _build_leg_topology(
@@ -336,7 +344,9 @@ class TestTriggerReturnLegTopology:
         assert topo["return_booking"].billed_to_type == "clinic"
         assert topo["return_booking"].billed_to_company_id == world["company"].id
 
-    def test_classic_round_trip_existing_child(self, client, db, companies_world, company_headers):
+    def test_classic_round_trip_existing_child(
+        self, client, db, companies_world, company_headers
+    ):
         world = companies_world
         outbound = world["booking"]
         child = Booking()
@@ -438,7 +448,9 @@ class TestTriggerReturnLegTopology:
 
         assert Booking.query.count() == before_count
         assert (
-            Booking.query.filter_by(parent_booking_id=outbound_id, is_return=True).count()
+            Booking.query.filter_by(
+                parent_booking_id=outbound_id, is_return=True
+            ).count()
             == 0
         )
 

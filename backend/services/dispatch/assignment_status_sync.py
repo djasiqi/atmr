@@ -52,9 +52,7 @@ ASSIGNMENT_TERMINAL_STATUSES: frozenset[AssignmentStatus] = frozenset(
     }
 )
 
-AssignmentTransitionOutcome = Literal[
-    "applied", "unchanged", "stale", "terminal"
-]
+AssignmentTransitionOutcome = Literal["applied", "unchanged", "stale", "terminal"]
 
 SyncOutcome = Literal[
     "applied",

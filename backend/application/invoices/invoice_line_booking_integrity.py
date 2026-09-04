@@ -256,7 +256,9 @@ def check_invoice_booking_link_integrity(
         if covered_all:
             from models.booking import Booking
 
-            for booking in Booking.query.filter(Booking.id.in_(sorted(covered_all))).all():
+            for booking in Booking.query.filter(
+                Booking.id.in_(sorted(covered_all))
+            ).all():
                 bookings_by_id[int(booking.id)] = booking
 
     return check_invoice_lines_booking_link_integrity(

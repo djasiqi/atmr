@@ -26,7 +26,9 @@ def test_aucune_solution_et_main(capsys):
     nearby = format_nearby_combinations(drivers_values=(3,), bookings_values=(19,))
     assert "drivers=3, bookings=19" in nearby
 
-    missing = solve_dimensions(state_target=1, action_target=1, max_drivers=3, max_bookings=3)
+    missing = solve_dimensions(
+        state_target=1, action_target=1, max_drivers=3, max_bookings=3
+    )
     assert missing is None
     out = capsys.readouterr().out
     assert "Aucune solution entière" in out

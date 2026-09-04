@@ -2325,13 +2325,11 @@ class MobileDispatchReset(Resource):
             booking_repo = BookingRepository()
             bookings_reset = 0
             if booking_ids:
-                bookings_query = (
-                    booking_repo.find_models_by_company_with_filters_query(
-                        company_id=company_id,
-                        booking_ids=booking_ids,
-                        start_datetime=start_datetime,
-                        end_datetime=end_datetime,
-                    )
+                bookings_query = booking_repo.find_models_by_company_with_filters_query(
+                    company_id=company_id,
+                    booking_ids=booking_ids,
+                    start_datetime=start_datetime,
+                    end_datetime=end_datetime,
                 )
                 for booking in bookings_query.all():
                     if booking.status == BookingStatus.ASSIGNED:

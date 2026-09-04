@@ -1838,9 +1838,7 @@ class DriverLocation(Resource):
                 elif "recorded_at" not in p or not p.get("recorded_at"):
                     p = dict(p)
                     p["recorded_at"] = _resolved_recorded
-                    logger.debug(
-                        "📍 recorded_at dérivé de timestamp/ts client (P0-D)"
-                    )
+                    logger.debug("📍 recorded_at dérivé de timestamp/ts client (P0-D)")
                 # Validation et conversion
                 try:
                     lat_val = p.get("lat") or p.get("latitude")
@@ -2189,10 +2187,8 @@ class DriverLocation(Resource):
                                                 release_location_event_id,
                                             )
 
-                                            dup_class = (
-                                                classify_duplicate_event_without_persisted_proof(
-                                                    driver.id, location_event_id
-                                                )
+                                            dup_class = classify_duplicate_event_without_persisted_proof(
+                                                driver.id, location_event_id
                                             )
                                             logger.info(
                                                 "location_event_claim "
@@ -5034,7 +5030,9 @@ device_health_model = driver_ns.model(
         "ota_update_id": fields.String,
         "release_channel": fields.String,
         "release_sha": fields.String,
-        "tracking_pipeline": fields.Raw(description="JZ-R1 snapshot pipeline (JSON, optionnel)"),
+        "tracking_pipeline": fields.Raw(
+            description="JZ-R1 snapshot pipeline (JSON, optionnel)"
+        ),
     },
 )
 

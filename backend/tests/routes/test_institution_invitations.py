@@ -17,10 +17,10 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
-from flask_jwt_extended import create_access_token
 
 from models import Institution, User, UserRole
 from models.enums import InstitutionRole
+from tests.helpers.institution_auth import institution_bearer_headers
 
 
 class TestInstitutionInvitation:
@@ -58,20 +58,14 @@ class TestInstitutionInvitation:
         return user
 
     @pytest.fixture
-    def admin_headers(self, client, admin_user, institution):
-        """Headers JWT pour un admin institution."""
-        claims = {
-            "role": admin_user.role.value,
-            "institution_id": institution.id,
-            "institution_role": admin_user.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(admin_user.public_id),
-                additional_claims=claims,
-            )
-        return {"Authorization": f"Bearer {token}"}
+    def admin_headers(self, db, admin_user, institution):
+        """Headers JWT pour un admin institution (sid + WebSession)."""
+        return institution_bearer_headers(
+            db,
+            admin_user,
+            institution,
+            institution_role=admin_user.institution_role,
+        )
 
     # ================================================================
     # POST /institutions/users - Invite
@@ -743,18 +737,12 @@ class TestInstitutionInvitation:
         db.session.add(user)
         db.session.commit()
 
-        claims = {
-            "role": user.role.value,
-            "institution_id": institution.id,
-            "institution_role": user.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(user.public_id),
-                additional_claims=claims,
-            )
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = institution_bearer_headers(
+            db,
+            user,
+            institution,
+            institution_role=user.institution_role,
+        )
 
         bootstrap = client.get("/api/v1/auth/bootstrap", headers=headers)
         assert bootstrap.status_code == 200
@@ -795,7 +783,6 @@ class TestInstitutionInvitation:
             db.func.lower(User.username) == local_username
         ).first()
         assert created_user.account_status == "active"
-        public_id = created_user.public_id
 
         # 2. Login avec MDP temporaire -> flag exposé
         login = client.post(
@@ -833,20 +820,18 @@ class TestInstitutionInvitation:
         assert relogin.get_json()["user"]["force_password_change"] is False
 
         # 5. Endpoint métier désormais accessible
-        claims = {
-            "role": created_user.role.value,
-            "institution_id": institution.id,
-            "institution_role": created_user.institution_role,
-            "aud": "atmr-api",
-            "token_version": int(getattr(created_user, "token_version", 0) or 0),
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(public_id), additional_claims=claims
-            )
+        headers = institution_bearer_headers(
+            db,
+            created_user,
+            institution,
+            institution_role=created_user.institution_role,
+            extra_claims={
+                "token_version": int(getattr(created_user, "token_version", 0) or 0),
+            },
+        )
         protected = client.get(
             "/api/v1/institutions/me",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
         )
         assert protected.status_code == 200
 
@@ -893,19 +878,14 @@ class TestInstitutionUsersPendingActivation:
         return user
 
     @pytest.fixture
-    def admin_headers(self, client, admin_user, institution):
-        claims = {
-            "role": admin_user.role.value,
-            "institution_id": institution.id,
-            "institution_role": admin_user.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(admin_user.public_id),
-                additional_claims=claims,
-            )
-        return {"Authorization": f"Bearer {token}"}
+    def admin_headers(self, db, admin_user, institution):
+        """Headers JWT pour un admin institution (sid + WebSession)."""
+        return institution_bearer_headers(
+            db,
+            admin_user,
+            institution,
+            institution_role=admin_user.institution_role,
+        )
 
     def test_activated_username_user_not_listed_as_never_connected(
         self, client, db, institution, admin_headers
@@ -1006,19 +986,14 @@ class TestInstitutionUserJobTitle:
         return user
 
     @pytest.fixture
-    def admin_headers(self, client, admin_user, institution):
-        claims = {
-            "role": admin_user.role.value,
-            "institution_id": institution.id,
-            "institution_role": admin_user.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(admin_user.public_id),
-                additional_claims=claims,
-            )
-        return {"Authorization": f"Bearer {token}"}
+    def admin_headers(self, db, admin_user, institution):
+        """Headers JWT pour un admin institution (sid + WebSession)."""
+        return institution_bearer_headers(
+            db,
+            admin_user,
+            institution,
+            institution_role=admin_user.institution_role,
+        )
 
     def _make_target(
         self, db, institution, *, status="active", job_title=None, role=None
@@ -1287,19 +1262,14 @@ class TestInstitutionUserProfile:
         return user
 
     @pytest.fixture
-    def admin_headers(self, client, admin_user, institution):
-        claims = {
-            "role": admin_user.role.value,
-            "institution_id": institution.id,
-            "institution_role": admin_user.institution_role,
-            "aud": "atmr-api",
-        }
-        with client.application.app_context():
-            token = create_access_token(
-                identity=str(admin_user.public_id),
-                additional_claims=claims,
-            )
-        return {"Authorization": f"Bearer {token}"}
+    def admin_headers(self, db, admin_user, institution):
+        """Headers JWT pour un admin institution (sid + WebSession)."""
+        return institution_bearer_headers(
+            db,
+            admin_user,
+            institution,
+            institution_role=admin_user.institution_role,
+        )
 
     def _count_profile_audits(self, target_user_id):
         from models.institution_user_audit_event import InstitutionUserAuditEvent

@@ -663,9 +663,9 @@ def test_arrived_persistence_disabled_returns_503(
 # ── P0-A : stale writes → 409, jamais appliqués ─────────────────────────────
 
 
-def _make_uc(booking: _Booking, assignment: _Assignment | None = None) -> tuple[
-    UpdateDriverBookingStatusUseCase, _Db
-]:
+def _make_uc(
+    booking: _Booking, assignment: _Assignment | None = None
+) -> tuple[UpdateDriverBookingStatusUseCase, _Db]:
     db = _Db()
     return (
         UpdateDriverBookingStatusUseCase(

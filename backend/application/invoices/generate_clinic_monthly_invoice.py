@@ -530,7 +530,10 @@ class GenerateClinicMonthlyInvoiceUseCase:
             scope_bookings = [by_id[i] for i in sorted(period_anchor_ids) if i in by_id]
             # n'émettre que les bookings encore ouverts et non revendiqués
             scope_bookings = [b for b in scope_bookings if b.invoice_line_id is None]
-            scope_bookings = filter_bookings_without_active_invoice_claim(scope_bookings)
+            scope_bookings = filter_bookings_without_active_invoice_claim(
+                scope_bookings
+            )
+
             def _amount_ht(b: Booking) -> Decimal:
                 return calculate_billable_booking_amount(
                     b, billing_settings=billing_settings_dto

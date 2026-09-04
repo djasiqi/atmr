@@ -126,7 +126,9 @@ def parse_billing_control_query(
     )
 
 
-def _load_institution_bookings(institution_id: int) -> tuple[list[Booking], dict[int, TransportRequest]]:
+def _load_institution_bookings(
+    institution_id: int,
+) -> tuple[list[Booking], dict[int, TransportRequest]]:
     booking_ids = list_institution_control_booking_ids(institution_id)
     if not booking_ids:
         return [], {}
@@ -228,11 +230,9 @@ def _apply_filters(
         if params.payer_type and billed != params.payer_type:
             continue
 
-        if (
-            params.transport_company_id is not None
-            and int(getattr(booking, "company_id", 0) or 0)
-            != int(params.transport_company_id)
-        ):
+        if params.transport_company_id is not None and int(
+            getattr(booking, "company_id", 0) or 0
+        ) != int(params.transport_company_id):
             continue
 
         if params.patient_id is not None:

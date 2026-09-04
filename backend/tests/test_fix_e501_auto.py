@@ -21,10 +21,7 @@ from fix_e501_auto import (
 def test_get_e501_errors_json_et_fallback(monkeypatch):
     fake = MagicMock(
         return_value=SimpleNamespace(
-            stdout=(
-                '[{"filename": "a.py", "location": {"row": 3}},'
-                '{"code": "E501"}]'
-            )
+            stdout=('[{"filename": "a.py", "location": {"row": 3}},{"code": "E501"}]')
         )
     )
     monkeypatch.setattr("fix_e501_auto.subprocess.run", fake)

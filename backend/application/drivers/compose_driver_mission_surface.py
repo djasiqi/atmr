@@ -77,9 +77,7 @@ def latest_assignment_by_booking_id(
         if bid is None:
             continue
         grouped.setdefault(int(bid), []).append(a)
-    return {
-        bid: pick_current_assignment(items) for bid, items in grouped.items()
-    }
+    return {bid: pick_current_assignment(items) for bid, items in grouped.items()}
 
 
 def latest_assignment_status_by_booking_id(
@@ -106,9 +104,7 @@ def attach_assignment_identity(
         return payload
     payload["assignment_id"] = getattr(assignment, "id", None)
     try:
-        payload["mission_revision"] = int(
-            getattr(assignment, "revision", 0) or 0
-        )
+        payload["mission_revision"] = int(getattr(assignment, "revision", 0) or 0)
     except (TypeError, ValueError):
         payload["mission_revision"] = 0
     return payload

@@ -317,13 +317,15 @@ class Booking(db.Model):
     billing_override_reason = Column(Text, nullable=True)
 
     # Contrôle institution pré-facturation (INSTITUTION-07 — distinct billing_review_status)
-    institution_control_status: Mapped[InstitutionBillingControlStatus | None] = mapped_column(
-        SAEnum(
-            InstitutionBillingControlStatus,
-            name="institution_billing_control_status",
-            values_callable=lambda enum_cls: [e.value for e in enum_cls],
-        ),
-        nullable=True,
+    institution_control_status: Mapped[InstitutionBillingControlStatus | None] = (
+        mapped_column(
+            SAEnum(
+                InstitutionBillingControlStatus,
+                name="institution_billing_control_status",
+                values_callable=lambda enum_cls: [e.value for e in enum_cls],
+            ),
+            nullable=True,
+        )
     )
     institution_control_validated_at = Column(DateTime(timezone=True), nullable=True)
     institution_control_validated_by_user_id: Mapped[int | None] = mapped_column(

@@ -8,12 +8,15 @@ import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { PHONE_VALIDATION_MESSAGE } from '../../../utils/phone';
 import {
   buildInstitutionPatientPayload,
+  formatDobDisplay,
   formatInstitutionPatientApiError,
+  normalizeDob,
   normalizePatientFormState,
   sanitizeAvsInput,
   sanitizeEmailInput,
   sanitizePhoneInput,
   sanitizePostalCodeInput,
+  todayIso,
 } from '../../../utils/institutionPatientForm';
 import { toast } from 'sonner';
 import s from './InstitutionPatients.module.css';
@@ -80,7 +83,7 @@ const getInitials = (first, last) => {
   return f + l || '?';
 };
 
-const ChipDropdown = ({ value, options, onChange, disabled }) => {
+const ChipDropdown = ({ value, options, onChange, disabled, clearable = true, invalid = false }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -97,7 +100,13 @@ const ChipDropdown = ({ value, options, onChange, disabled }) => {
 
   return (
     <div className={s.chipDrop} ref={ref}>
-      <button type="button" className={s.chipBtn} onClick={() => !disabled && setOpen((p) => !p)} disabled={disabled}>
+      <button
+        type="button"
+        className={`${s.chipBtn} ${invalid ? s.chipBtnInvalid : ''}`.trim()}
+        onClick={() => !disabled && setOpen((p) => !p)}
+        disabled={disabled}
+        aria-invalid={invalid || undefined}
+      >
         <span className={s.chipText}>{selected?.label || '—'}</span>
         <FiChevronDown size={11} className={`${s.chipArrow} ${open ? s.chipArrowOpen : ''}`} />
       </button>
@@ -108,7 +117,11 @@ const ChipDropdown = ({ value, options, onChange, disabled }) => {
               key={o.value}
               type="button"
               className={`${s.chipOption} ${String(o.value) === String(value) ? s.chipOptionActive : ''}`}
-              onClick={() => { onChange(o.value === value ? '' : o.value); setOpen(false); }}
+              onClick={() => {
+                if (clearable && o.value === value) onChange('');
+                else onChange(o.value);
+                setOpen(false);
+              }}
             >
               {o.label}
             </button>
@@ -161,8 +174,29 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
   const [formData, setFormData] = useState(buildInitialForm);
   const [avsRevealed, setAvsRevealed] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState(null);
+  const [attempted, setAttempted] = useState(false);
+  const [minorConfirmOpen, setMinorConfirmOpen] = useState(false);
+  const [minorConfirmChecked, setMinorConfirmChecked] = useState(false);
+  const [pendingForceCreate, setPendingForceCreate] = useState(false);
+  /** DOB ISO pour laquelle la confirmation mineur a déjà été donnée dans cette session. */
+  const [sessionConfirmedMinorDob, setSessionConfirmedMinorDob] = useState(null);
+  const dobMax = todayIso();
+  const dobPreview = normalizeDob(formData.dob, { required: false });
+  const previousDob = editingPatient?.dob
+    ? String(editingPatient.dob).split('T')[0]
+    : null;
+  const displayName = [
+    GENDER_SHORT[formData.gender] || '',
+    formData.first_name || '',
+    (formData.last_name || '').toUpperCase(),
+  ].filter(Boolean).join(' ').trim();
 
-  const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+  const handleChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (field === 'dob') {
+      setSessionConfirmedMinorDob(null);
+    }
+  };
 
   const handlePhoneChange = (field, raw) => {
     handleChange(field, sanitizePhoneInput(raw));
@@ -186,10 +220,12 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
     return avs.substring(0, 4) + avs.substring(4).replace(/[0-9]/g, '*');
   }, []);
 
-  const handleSubmit = async (e, forceCreate = false) => {
-    e?.preventDefault?.();
-
-    const { payload, errors } = buildInstitutionPatientPayload(formData, { forceCreate });
+  const persistPatient = async (forceCreate, minorDobConfirmed) => {
+    const { payload, errors } = buildInstitutionPatientPayload(formData, {
+      forceCreate,
+      minorDobConfirmed,
+      previousDob,
+    });
     if (errors.length > 0) {
       toast.error(errors[0]);
       return;
@@ -214,15 +250,63 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
         }
         onSaved?.(result?.patient || result);
       }
+      setMinorConfirmOpen(false);
       onClose();
     } catch (err) {
       const data = err?.response?.data;
       if (data?.code === 'DUPLICATE_PATIENT' && data?.duplicates) {
+        // Conserver la confirmation mineur de session pour « Créer quand même »
+        if (minorDobConfirmed && formData.dob) {
+          setSessionConfirmedMinorDob(formData.dob);
+        }
+        setMinorConfirmOpen(false);
         setDuplicateWarning(data.duplicates);
+      } else if (data?.code === 'MINOR_DOB_CONFIRMATION_REQUIRED') {
+        setMinorConfirmOpen(true);
+        setMinorConfirmChecked(false);
       } else {
         toast.error(formatInstitutionPatientApiError(data));
       }
     }
+  };
+
+  const handleSubmit = async (e, forceCreate = false) => {
+    e?.preventDefault?.();
+    setAttempted(true);
+    setDuplicateWarning(null);
+
+    const { errors, needsMinorConfirmation } = buildInstitutionPatientPayload(formData, {
+      forceCreate,
+      previousDob,
+    });
+    if (errors.length > 0) {
+      toast.error(errors[0]);
+      return;
+    }
+
+    const alreadyConfirmedThisDob = (
+      needsMinorConfirmation
+      && sessionConfirmedMinorDob
+      && sessionConfirmedMinorDob === formData.dob
+    );
+
+    if (needsMinorConfirmation && !alreadyConfirmedThisDob) {
+      setPendingForceCreate(forceCreate);
+      setMinorConfirmChecked(false);
+      setMinorConfirmOpen(true);
+      return;
+    }
+
+    await persistPatient(
+      forceCreate,
+      Boolean(needsMinorConfirmation && alreadyConfirmedThisDob),
+    );
+  };
+
+  const handleConfirmMinorAndSave = async () => {
+    if (!minorConfirmChecked) return;
+    setSessionConfirmedMinorDob(formData.dob);
+    await persistPatient(pendingForceCreate, true);
   };
 
   const filled = [formData.first_name, formData.last_name, formData.dob, formData.phone, formData.address, formData.city].filter(Boolean).length;
@@ -271,9 +355,15 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
               </div>
               <div className={s.sectionBody}>
                 <div className={s.row3}>
-                  <div className={s.field}>
-                    <label>Civilité</label>
-                    <ChipDropdown value={formData.gender} options={GENDER_OPTIONS} onChange={(v) => handleChange('gender', v)} />
+                  <div className={`${s.field} ${attempted && !formData.gender ? s.fieldInvalid : ''}`.trim()}>
+                    <label>Civilité <span className={s.req}>*</span></label>
+                    <ChipDropdown
+                      value={formData.gender}
+                      options={GENDER_OPTIONS}
+                      onChange={(v) => handleChange('gender', v)}
+                      clearable={false}
+                      invalid={attempted && !formData.gender}
+                    />
                   </div>
                   <div className={s.field}>
                     <label htmlFor="patient-first-name">Prénom <span className={s.req}>*</span></label>
@@ -285,9 +375,25 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                   </div>
                 </div>
                 <div className={s.row}>
-                  <div className={s.field}>
-                    <label>Date de naissance</label>
-                    <InlineDatePicker value={formData.dob} onChange={(iso) => handleChange('dob', iso)} placeholder="Naissance" />
+                  <div className={`${s.field} ${attempted && !formData.dob ? s.fieldInvalid : ''}`.trim()}>
+                    <label htmlFor="patient-dob">Date de naissance <span className={s.req}>*</span></label>
+                    <InlineDatePicker
+                      inputId="patient-dob"
+                      value={formData.dob}
+                      onChange={(iso) => handleChange('dob', iso)}
+                      placeholder="Naissance"
+                      smartCompleteMode="past"
+                      maxDate={dobMax}
+                      invalid={attempted && !formData.dob}
+                      ariaLabel="Date de naissance"
+                    />
+                    {dobPreview.isMinor && !dobPreview.error && (
+                      <div className={s.minorAlert} role="alert">
+                        <strong>⚠ Patient mineur — {dobPreview.age} an{dobPreview.age > 1 ? 's' : ''}</strong>
+                        <br />
+                        Vérifiez la date de naissance avant l&apos;enregistrement.
+                      </div>
+                    )}
                   </div>
                   <div className={s.field}>
                     <label>Téléphone</label>
@@ -313,7 +419,7 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
               </div>
               <div className={s.sectionBody}>
                 <div className={s.field}>
-                  <label>Adresse</label>
+                  <label>Adresse <span className={s.req}>*</span></label>
                   <AddressAutocomplete
                     name="patient_address"
                     inputId="patient_address"
@@ -328,12 +434,12 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                       }));
                     }}
                     placeholder="Tapez pour rechercher une adresse..."
-                    inputClassName={s.addressInput}
+                    inputClassName={`${s.addressInput} ${attempted && !formData.address?.trim() ? s.inputInvalid : ''}`.trim()}
                   />
                 </div>
                 <div className={s.row}>
-                  <div className={s.field}>
-                    <label>NPA</label>
+                  <div className={`${s.field} ${attempted && !formData.postal_code?.trim() ? s.fieldInvalid : ''}`.trim()}>
+                    <label>NPA <span className={s.req}>*</span></label>
                     <input
                       type="text"
                       value={formData.postal_code}
@@ -341,11 +447,18 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                       placeholder="1247"
                       inputMode="numeric"
                       maxLength={20}
+                      aria-invalid={attempted && !formData.postal_code?.trim() || undefined}
                     />
                   </div>
-                  <div className={s.field}>
-                    <label>Ville</label>
-                    <input type="text" value={formData.city} onChange={(e) => handleChange('city', e.target.value)} placeholder="Anières" />
+                  <div className={`${s.field} ${attempted && !formData.city?.trim() ? s.fieldInvalid : ''}`.trim()}>
+                    <label>Ville <span className={s.req}>*</span></label>
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) => handleChange('city', e.target.value)}
+                      placeholder="Anières"
+                      aria-invalid={attempted && !formData.city?.trim() || undefined}
+                    />
                   </div>
                 </div>
               </div>
@@ -668,6 +781,59 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
           </div>
         </form>
       </div>
+
+      {minorConfirmOpen && (
+        <div
+          className={s.minorConfirmOverlay}
+          onClick={(e) => e.stopPropagation()}
+          role="presentation"
+        >
+          <div
+            className={s.minorConfirmDialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="minor-confirm-title"
+          >
+            <h4 id="minor-confirm-title">Patient mineur — confirmation requise</h4>
+            {displayName && (
+              <p className={s.minorConfirmName}>{displayName}</p>
+            )}
+            <p className={s.minorConfirmMeta}>
+              Date de naissance : <strong>{formatDobDisplay(formData.dob)}</strong>
+              <br />
+              Âge : <strong>{dobPreview.age} an{dobPreview.age > 1 ? 's' : ''}</strong>
+            </p>
+            <label className={s.minorConfirmCheck}>
+              <input
+                type="checkbox"
+                checked={minorConfirmChecked}
+                onChange={(e) => setMinorConfirmChecked(e.target.checked)}
+              />
+              <span>
+                J&apos;ai vérifié la date de naissance et je confirme
+                qu&apos;il s&apos;agit bien d&apos;un patient mineur.
+              </span>
+            </label>
+            <div className={s.minorConfirmActions}>
+              <button
+                type="button"
+                className={s.mCancelBtn}
+                onClick={() => setMinorConfirmOpen(false)}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className={s.mSubmitBtn}
+                disabled={!minorConfirmChecked || createMutation.isPending || updateMutation.isPending}
+                onClick={handleConfirmMinorAndSave}
+              >
+                Confirmer et enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

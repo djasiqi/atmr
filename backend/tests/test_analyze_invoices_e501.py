@@ -19,7 +19,9 @@ def test_format_vide_et_troncature():
     assert "Total E501 in routes/invoices.py: 0" in empty
     assert "Reste à analyser: 0 E501" in empty
 
-    items: list[dict] = [{"location": {"row": i}} for i in range(1, MAX_E501_TO_DISPLAY)]
+    items: list[dict] = [
+        {"location": {"row": i}} for i in range(1, MAX_E501_TO_DISPLAY)
+    ]
     items.append({})  # row manquant → 0 (20e affiché)
     items.extend([{"location": {"row": 99}}, {"location": {"row": 100}}])
     report = format_invoice_e501_report(items)

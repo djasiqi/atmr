@@ -1360,7 +1360,9 @@ def _login_post_body():
             }
             if web_handoff_token:
                 payload["web_handoff_token"] = web_handoff_token
-                payload["web_handoff_url"] = build_web_handoff_url(token=web_handoff_token)
+                payload["web_handoff_url"] = build_web_handoff_url(
+                    token=web_handoff_token
+                )
             return payload, 409
         except Exception as mds_exc:
             # F1b : login mobile v1 fail-closed — pas de session orpheline
@@ -3459,9 +3461,9 @@ class Logout(Resource):
 
                     revoke_web_session(
                         str(web_sid),
-                        reason=str(
-                            logout_body.get("reason") or "Logout utilisateur"
-                        )[:255],
+                        reason=str(logout_body.get("reason") or "Logout utilisateur")[
+                            :255
+                        ],
                         commit=False,
                     )
 

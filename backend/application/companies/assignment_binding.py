@@ -34,9 +34,7 @@ def build_sqlalchemy_assignment_writer() -> SqlAlchemyAssignmentWriter:
     )
 
 
-def ensure_booking_assignment(
-    *, company_id: int, booking: Any, driver_id: int
-) -> None:
+def ensure_booking_assignment(*, company_id: int, booking: Any, driver_id: int) -> None:
     """Garantit Assignment pour un booking déjà lié à un chauffeur.
 
     À appeler immédiatement après toute écriture `booking.driver_id = …`
@@ -58,4 +56,6 @@ def booking_status_requires_assignment(status: Any) -> bool:
     try:
         return BookingStatus(str(raw).upper()) in ACTIVE_STATUSES_REQUIRING_ASSIGNMENT
     except Exception:
-        return str(raw).upper() in {s.value for s in ACTIVE_STATUSES_REQUIRING_ASSIGNMENT}
+        return str(raw).upper() in {
+            s.value for s in ACTIVE_STATUSES_REQUIRING_ASSIGNMENT
+        }

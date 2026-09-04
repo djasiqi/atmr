@@ -13,6 +13,8 @@ def test_put_me_location_stale_header_calls_inc_socket_stale_fallback(
     client, sample_driver, db
 ) -> None:
     """PUT /api/v1/driver/me/location avec header socket-stale incrémente la métrique dédiée."""
+    from services.tracking.session_registry import register_tracking_session
+
     claims = {
         "role": sample_driver.user.role.value,
         "company_id": sample_driver.company_id,
@@ -27,12 +29,25 @@ def test_put_me_location_stale_header_calls_inc_socket_stale_fallback(
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "X-ATMR-Location-Fallback": "socket-stale",
+        "X-Location-Event-Id": "evt-stale-metric-001",
     }
+    tracking_session_id = f"trk_sess_stale_{sample_driver.id}"
+    auth = register_tracking_session(
+        db.session,
+        driver_id=sample_driver.id,
+        company_id=sample_driver.company_id,
+        tracking_session_id=tracking_session_id,
+        tracking_session_started_at=None,
+    )
+    db.session.commit()
     body = {
         "latitude": 46.2044,
         "longitude": 6.1432,
         "location_mode": "mission_live",
         "recorded_at": "2026-03-18T10:00:00Z",
+        "tracking_session_id": tracking_session_id,
+        "session_generation": int(auth["session_generation"]),
+        "sequence_id": 1,
     }
 
     uc_result = MagicMock(

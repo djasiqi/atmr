@@ -288,7 +288,9 @@ class CanaryClient:
 
     def get_institution(self, path: str) -> HttpResult:
         if not self.access_token:
-            raise HarnessStop("NOT_EXECUTED", "access_token manquant pour GET institution")
+            raise HarnessStop(
+                "NOT_EXECUTED", "access_token manquant pour GET institution"
+            )
         return self._request("GET", path, bearer=self.access_token)
 
 
@@ -515,7 +517,9 @@ def run_cny02b() -> int:
             )
         refresh_err = refresh_http.body.get("error_code")
         if refresh_http.status != 200:
-            failures.append(f"T29:30 refresh HTTP {refresh_http.status} ({refresh_err})")
+            failures.append(
+                f"T29:30 refresh HTTP {refresh_http.status} ({refresh_err})"
+            )
         if (ws_refresh or {}).get("last_interactive_activity_at") != activity_t00:
             failures.append("T29:30: refresh a prolongé last_interactive_activity_at")
 
