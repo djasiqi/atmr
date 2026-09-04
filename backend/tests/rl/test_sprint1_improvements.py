@@ -241,6 +241,7 @@ class TestRewardInvariants:
         assert reward < 0
         assert env.episode_stats["cancellations"] == before + 1
         assert all(b["id"] != 999 for b in env.bookings)
+
     def test_punctuality_rewards(self):
         """Test récompenses de ponctualité."""
         reward_shaping = AdvancedRewardShaping()
