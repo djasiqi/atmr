@@ -222,16 +222,25 @@ class TestRewardInvariants:
                     assert reward > 0  # Juste vérifier qu'elle est positive
 
     def test_cancellation_penalty(self):
-        """Test pénalité pour annulation."""
-        env = DispatchEnv(num_drivers=3, max_bookings=5)
-        env.reset()
+        """Test pénalité pour annulation (booking non assigné expiré)."""
+        env = DispatchEnv(num_drivers=3, max_bookings=5, seed=42)
+        env.reset(seed=42)
 
-        # Laisser expirer des bookings
-        for _ in range(20):  # 20 steps = 100 minutes
-            _, reward, _, _, _ = env.step(0)  # Action wait
+        # Contrat déterministe : un booking non assigné à échéance → pénalité < 0
+        env.bookings = [
+            {
+                "id": 999,
+                "priority": 5,
+                "time_remaining": 0,
+                "assigned": False,
+            }
+        ]
+        before = env.episode_stats["cancellations"]
+        reward = env._check_expired_bookings()
 
-        # Vérifier que les annulations donnent des pénalités négatives
-        assert reward < 0  # Pénalité pour annulation
+        assert reward < 0
+        assert env.episode_stats["cancellations"] == before + 1
+        assert all(b["id"] != 999 for b in env.bookings)
 
     def test_punctuality_rewards(self):
         """Test récompenses de ponctualité."""
