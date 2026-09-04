@@ -374,8 +374,24 @@ class SendTransportRequestUseCase:
 
             # ÉTAPE 5: Émettre événement temps réel vers l'institution
             try:
-                from services.events.institution_events import emit_request_sent
+                from services.events.institution_events import (
+                    emit_request_sent,
+                    format_institution_patient_bell_name,
+                )
+                from services.institutions.mission_schedule import (
+                    get_effective_dispatch_time,
+                )
 
+                patient = transport_request.patient
+                patient_label = (
+                    format_institution_patient_bell_name(
+                        first_name=getattr(patient, "first_name", None),
+                        last_name=getattr(patient, "last_name", None),
+                        gender=getattr(patient, "gender", None),
+                    )
+                    if patient is not None
+                    else None
+                )
                 emit_request_sent(
                     institution_id=input_data.institution_id,
                     request_id=transport_request.id,
@@ -383,6 +399,8 @@ class SendTransportRequestUseCase:
                     external_reference=transport_request.external_reference,
                     mode=mode,
                     offers_created=offers_created,
+                    patient_name=patient_label,
+                    departure_at=get_effective_dispatch_time(transport_request),
                 )
             except Exception as event_err:
                 logger.warning(

@@ -5,7 +5,8 @@ Ce module gère les événements Socket.IO envoyés aux institutions:
 - request_sent: Demande envoyée aux transporteurs
 - offer_accepted: Offre acceptée (socket UI ; pas de notif cloche — voir request_converted)
 - request_converted: Demande convertie en booking (+ notification cloche unique)
-- booking_status_updated: Statut du booking mis à jour
+- booking_status_updated: Statut du booking mis à jour (socket UI ; pas de notif cloche)
+- booking_assigned: Chauffeur assigné (socket UI ; pas de notif cloche)
 """
 
 from __future__ import annotations
@@ -96,16 +97,6 @@ _EVENT_TITLES: dict[str, str] = {
     "request_cancelled": "Demande annulée",
     "booking_cancelled": "Transport annulé",
     "booking_message": "Nouveau message",
-}
-
-_BOOKING_STATUS_LABELS: dict[str, str] = {
-    "pending": "En attente",
-    "confirmed": "Confirmé",
-    "assigned": "Assigné au chauffeur",
-    "en_route": "En route",
-    "in_progress": "En cours",
-    "completed": "Terminé",
-    "cancelled": "Annulé",
 }
 
 
@@ -199,6 +190,74 @@ def _persist_notification(
 
 
 # ---------------------------------------------------------------------------
+# Libellés cloche institution (lisibles : patient + horaire)
+# ---------------------------------------------------------------------------
+def format_institution_patient_bell_name(
+    *,
+    first_name: str | None,
+    last_name: str | None,
+    gender: str | None = None,
+) -> str | None:
+    """Nom patient pour la cloche : « Mme NOM Prénom » / « M. NOM Prénom »."""
+    last = (last_name or "").strip()
+    first = (first_name or "").strip()
+    if not last and not first:
+        return None
+    name = f"{last} {first}".strip() if last and first else (last or first)
+    g = (gender or "").strip().upper()
+    if g == "FEMME":
+        return f"Mme {name}"
+    if g == "HOMME":
+        return f"M. {name}"
+    return name
+
+
+def _format_departure_bell_label(departure_at: datetime | None) -> str | None:
+    if departure_at is None:
+        return None
+    return departure_at.strftime("%d.%m.%Y %H:%M")
+
+
+def _build_request_sent_bell_message(
+    *,
+    request_id: int,
+    patient_name: str | None,
+    departure_at: datetime | None,
+    offers_created: int,
+) -> str:
+    """Texte cloche « Demande envoyée » : patient + RDV, sans #demande."""
+    who = (patient_name or "").strip() or f"Demande #{request_id}"
+    when = _format_departure_bell_label(departure_at)
+    rdv = f"RDV {when}" if when else "RDV à confirmer"
+    n = max(0, int(offers_created))
+    carriers = "1 transporteur" if n == 1 else f"{n} transporteurs"
+    return f"{who} — {rdv} · envoyée à {carriers}"
+
+
+def _build_request_converted_bell_message(
+    *,
+    request_id: int,
+    patient_name: str | None,
+    departure_at: datetime | None,
+    departure_confirmed: bool,
+    company_name: str | None,
+) -> str:
+    """Construit le texte cloche « Transport confirmé » (patient + départ)."""
+    who = (patient_name or "").strip() or f"Demande #{request_id}"
+    when = _format_departure_bell_label(departure_at)
+    if when:
+        time_part = (
+            f"départ confirmé {when}" if departure_confirmed else f"départ {when}"
+        )
+    else:
+        time_part = "départ à confirmer"
+    carrier = (company_name or "").strip()
+    if carrier:
+        return f"{who} — {time_part} · {carrier}"
+    return f"{who} — {time_part}"
+
+
+# ---------------------------------------------------------------------------
 # Événements spécifiques
 # ---------------------------------------------------------------------------
 def emit_request_sent(
@@ -208,19 +267,31 @@ def emit_request_sent(
     external_reference: str | None,
     mode: str,  # "sequential" ou "broadcast"
     offers_created: int,
+    patient_name: str | None = None,
+    departure_at: datetime | None = None,
 ) -> bool:
-    """Émet l'événement request_sent.
+    """Émet l'événement request_sent + notification cloche lisible.
 
-    Appelé après envoi d'une demande aux transporteurs.
+    Message : patient (M./Mme) + RDV + nombre de transporteurs — pas « Demande #… ».
     """
+    message = _build_request_sent_bell_message(
+        request_id=request_id,
+        patient_name=patient_name,
+        departure_at=departure_at,
+        offers_created=offers_created,
+    )
+    departure_label = _format_departure_bell_label(departure_at)
     _persist_notification(
         institution_id=institution_id,
         event_type="request_sent",
-        message=f"Demande #{request_id} envoyée à {offers_created} transporteur(s)",
+        message=message,
         metadata={
             "request_id": request_id,
             "public_id": public_id,
             "external_reference": external_reference,
+            "patient_name": (patient_name or "").strip() or None,
+            "departure_at": departure_label,
+            "offers_created": offers_created,
         },
     )
     return emit_institution_event(
@@ -232,6 +303,8 @@ def emit_request_sent(
             "external_reference": external_reference,
             "mode": mode,
             "offers_created": offers_created,
+            "patient_name": (patient_name or "").strip() or None,
+            "departure_at": departure_label,
             "sent_at": datetime.now(UTC).isoformat(),
         },
     )
@@ -270,21 +343,34 @@ def emit_request_converted(
     booking_id: int,
     company_id: int | None = None,  # Masqué si None
     company_name: str | None = None,
+    patient_name: str | None = None,
+    departure_at: datetime | None = None,
+    departure_confirmed: bool = False,
 ) -> bool:
     """Émet l'événement request_converted + notification cloche unique.
 
-    Appelé quand une demande est convertie en booking (acceptation transporteur).
+    Message cloche lisible : patient + départ (confirmé si applicable) + transporteur.
     """
-    name = company_name or "un transporteur"
+    message = _build_request_converted_bell_message(
+        request_id=request_id,
+        patient_name=patient_name,
+        departure_at=departure_at,
+        departure_confirmed=departure_confirmed,
+        company_name=company_name,
+    )
+    departure_label = _format_departure_bell_label(departure_at)
     _persist_notification(
         institution_id=institution_id,
         event_type="request_converted",
-        message=f"Demande #{request_id} confirmée par {name}",
+        message=message,
         metadata={
             "request_id": request_id,
             "public_id": public_id,
             "booking_id": booking_id,
             "company_name": company_name,
+            "patient_name": (patient_name or "").strip() or None,
+            "departure_at": departure_label,
+            "departure_confirmed": bool(departure_confirmed and departure_at),
         },
         dedupe_key=f"request_converted:{request_id}",
     )
@@ -297,6 +383,9 @@ def emit_request_converted(
             "booking_id": booking_id,
             "company_id": company_id,
             "company_name": company_name,
+            "patient_name": (patient_name or "").strip() or None,
+            "departure_at": departure_label,
+            "departure_confirmed": bool(departure_confirmed and departure_at),
             "converted_at": datetime.now(UTC).isoformat(),
         },
     )
@@ -312,26 +401,12 @@ def emit_booking_status_updated(
     driver_name: str | None = None,  # Optionnel
     eta: str | None = None,  # ISO8601 si disponible
 ) -> bool:
-    """Émet l'événement booking_status_updated.
+    """Émet l'événement booking_status_updated (socket uniquement).
 
-    Appelé lors des changements de statut: EN_ROUTE, IN_PROGRESS, COMPLETED, etc.
+    Pas de notification cloche : les changements EN_ROUTE / IN_PROGRESS /
+    COMPLETED / etc. restent visibles sur le détail demande / timeline,
+    sans alimenter la cloche institution.
     """
-    status_label = _BOOKING_STATUS_LABELS.get(new_status, new_status)
-    driver_info = f" par {driver_name}" if driver_name else ""
-    req_ref = f"demande #{request_id}" if request_id else f"transport #{booking_id}"
-    _persist_notification(
-        institution_id=institution_id,
-        event_type="booking_status_updated",
-        message=f"Statut {req_ref}: {status_label}{driver_info}",
-        metadata={
-            "booking_id": booking_id,
-            "request_id": request_id,
-            "public_id": public_id,
-            "old_status": old_status,
-            "new_status": new_status,
-            "driver_name": driver_name,
-        },
-    )
     return emit_institution_event(
         institution_id=institution_id,
         event_name="booking_status_updated",
@@ -354,18 +429,11 @@ def emit_booking_assigned_to_institution(
     request_id: int | None,
     public_id: str | None,
 ) -> bool:
-    """Notifie l'institution qu'un chauffeur a ete assigne a sa course."""
-    req_ref = f"demande #{request_id}" if request_id else f"transport #{booking_id}"
-    _persist_notification(
-        institution_id=institution_id,
-        event_type="booking_assigned",
-        message=f"Chauffeur assigne pour {req_ref}",
-        metadata={
-            "booking_id": booking_id,
-            "request_id": request_id,
-            "public_id": public_id,
-        },
-    )
+    """Émet booking_assigned vers l'institution (socket uniquement).
+
+    Pas de notification cloche : l'assignation chauffeur ne doit plus
+    apparaître dans NotificationBell (ex. « Chauffeur assigne pour demande #… »).
+    """
     return emit_institution_event(
         institution_id=institution_id,
         event_name="booking_assigned",
@@ -462,6 +530,76 @@ def emit_booking_cancelled(
     )
 
 
+def _build_booking_message_bell_message(
+    *,
+    sender_label: str | None,
+    patient_name: str | None,
+    mission_date: datetime | None,
+    is_return: bool = False,
+) -> str:
+    """Texte cloche « Nouveau message » : contexte transport, pas le corps du chat.
+
+    Ex. « Emmenez Moi · Mme DUPONT Marie · retour 05.08.2026 »
+    """
+    parts: list[str] = []
+    sender = (sender_label or "").strip()
+    if sender:
+        parts.append(sender)
+    who = (patient_name or "").strip()
+    if who:
+        parts.append(who)
+    if mission_date is not None:
+        day = mission_date.strftime("%d.%m.%Y")
+        parts.append(f"retour {day}" if is_return else day)
+    if not parts:
+        return "Nouveau message sur un transport"
+    return " · ".join(parts)
+
+
+def _resolve_booking_message_bell_context(
+    booking_id: int,
+) -> tuple[str | None, datetime | None, bool]:
+    """Patient + date + flag retour pour la cloche mini-chat."""
+    try:
+        from models.booking import Booking as BookingRow
+
+        booking = db.session.get(BookingRow, booking_id)
+        if booking is None:
+            return None, None, False
+
+        is_return = bool(getattr(booking, "is_return", False))
+        mission_date = getattr(booking, "scheduled_time", None)
+
+        patient_label: str | None = None
+        try:
+            req = None
+            resolve = getattr(booking, "_resolve_source_transport_request", None)
+            if callable(resolve):
+                req = resolve()
+            patient = getattr(req, "patient", None) if req is not None else None
+            if patient is not None:
+                patient_label = format_institution_patient_bell_name(
+                    first_name=getattr(patient, "first_name", None),
+                    last_name=getattr(patient, "last_name", None),
+                    gender=getattr(patient, "gender", None),
+                )
+        except Exception:
+            patient_label = None
+
+        if not patient_label:
+            cust = (getattr(booking, "customer_name", None) or "").strip()
+            patient_label = cust or None
+
+        return patient_label, mission_date, is_return
+    except Exception:
+        logger.debug(
+            "[BookingChat] bell context unresolved booking_id=%s",
+            booking_id,
+            exc_info=True,
+        )
+        return None, None, False
+
+
 # ---------------------------------------------------------------------------
 # Mini-chat booking: emission bidirectionnelle
 # ---------------------------------------------------------------------------
@@ -525,20 +663,34 @@ def emit_booking_message(
                 institution_id,
             )
 
-        # Persist notification for the *receiving* side
+        # Persist notification for the *receiving* side — contexte transport, pas le corps du chat
         sender_label = message_data.get("sender_label", "")
-        content_preview = (message_data.get("content") or "")[:80]
+        patient_name, mission_date, is_return = _resolve_booking_message_bell_context(
+            booking_id
+        )
+        bell_message = _build_booking_message_bell_message(
+            sender_label=sender_label,
+            patient_name=patient_name,
+            mission_date=mission_date,
+            is_return=is_return,
+        )
+        bell_meta = {
+            "booking_id": booking_id,
+            "request_id": request_id,
+            "sender_label": sender_label,
+            "patient_name": patient_name,
+            "mission_date": (
+                mission_date.strftime("%d.%m.%Y") if mission_date is not None else None
+            ),
+            "is_return": is_return,
+        }
 
         if sender_type == "COMPANY" and institution_id:
             _persist_notification(
                 institution_id=institution_id,
                 event_type="booking_message",
-                message=f"{sender_label}: {content_preview}",
-                metadata={
-                    "booking_id": booking_id,
-                    "request_id": request_id,
-                    "sender_label": sender_label,
-                },
+                message=bell_message,
+                metadata=bell_meta,
             )
 
         if sender_type == "INSTITUTION" and company_id:
@@ -546,10 +698,13 @@ def emit_booking_message(
                 company_id=company_id,
                 event_type="booking_message",
                 title="Nouveau message",
-                message=f"{sender_label}: {content_preview}",
+                message=bell_message,
                 metadata={
                     "booking_id": booking_id,
                     "sender_label": sender_label,
+                    "patient_name": patient_name,
+                    "mission_date": bell_meta["mission_date"],
+                    "is_return": is_return,
                 },
             )
 
@@ -558,10 +713,13 @@ def emit_booking_message(
                 company_id=company_id,
                 event_type="booking_message",
                 title="Message client",
-                message=f"{sender_label}: {content_preview}",
+                message=bell_message,
                 metadata={
                     "booking_id": booking_id,
                     "sender_label": sender_label,
+                    "patient_name": patient_name,
+                    "mission_date": bell_meta["mission_date"],
+                    "is_return": is_return,
                 },
             )
 
@@ -569,12 +727,8 @@ def emit_booking_message(
             _persist_notification(
                 institution_id=institution_id,
                 event_type="booking_message",
-                message=f"{sender_label}: {content_preview}",
-                metadata={
-                    "booking_id": booking_id,
-                    "request_id": request_id,
-                    "sender_label": sender_label,
-                },
+                message=bell_message,
+                metadata=bell_meta,
             )
 
     except Exception as e:

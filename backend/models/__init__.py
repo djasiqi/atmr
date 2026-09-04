@@ -69,6 +69,8 @@ from .enums import (
     BreakType,
     BillingReviewStatus,
     InstitutionBillingControlStatus,
+    InvoiceBillingStatus,
+    BookingDisputeStatus,
     BillingPartyType,
     BillingSource,
     ClientType,
@@ -130,6 +132,11 @@ from .enums import (
 from .billing_profile import CompanyBillingProfile
 from .billing_audit_log import BillingAuditLog
 from .booking_change_event import BookingChangeAcknowledgement, BookingChangeEvent
+from .booking_dispute import (
+    BookingDispute,
+    BookingDisputeEvent,
+    BookingDisputeEvidence,
+)
 from .booking_change_request import (
     BookingChangeRequest,
     BookingChangeRequestStatus,
@@ -302,6 +309,9 @@ __all__ = [
     "BillingAuditLog",
     "BookingChangeAcknowledgement",
     "BookingChangeEvent",
+    "BookingDispute",
+    "BookingDisputeEvent",
+    "BookingDisputeEvidence",
     "BookingChangeRequest",
     "BookingChangeRequestStatus",
     "TransportActionExchange",
@@ -312,6 +322,8 @@ __all__ = [
     "TransportActionNextActor",
     "BillingReviewStatus",
     "InstitutionBillingControlStatus",
+    "InvoiceBillingStatus",
+    "BookingDisputeStatus",
     "BillingSource",
     "ClientBillingParty",
     "Client",

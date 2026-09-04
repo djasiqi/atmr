@@ -274,6 +274,7 @@ def init_namespaces(app):
         security_ns,
     )  # ✅ Security Tab V2: audit logs, export, policy
     from routes.invoices import invoices_ns
+    import routes.booking_disputes  # noqa: F401 — enregistre les routes contestation
     from routes.medical import medical_ns
     from routes.messages import messages_ns
     from routes.conversations import conversations_ns

@@ -10,9 +10,15 @@ from typing import Any
 from sqlalchemy import or_
 from sqlalchemy.orm import aliased
 
+from application.invoices.institution_invoice_eligibility import (
+    attach_invoice_request_ids,
+    build_eligibility_summary,
+    filter_institution_invoice_eligible,
+)
 from application.invoices.institution_patient_resolution import (
     resolve_missing_institution_patient_ids,
 )
+from application.invoices.invoice_booking_units import resolve_invoice_booking_units
 from application.invoices.invoice_line_description import (
     booking_source_type_for_preview,
     build_invoice_line_description,
@@ -21,11 +27,8 @@ from application.invoices.invoice_line_description import (
 )
 from application.invoices.round_trip_billing_lock import (
     filter_bookings_open_for_new_invoice_line,
-    round_trip_component_id_sets,
 )
-from application.invoices.round_trip_booking_pairs import (
-    normalize_address_for_round_trip_comparison,
-)
+from application.invoices.subject_identity import resolve_subject_identity
 from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
     round_to_5_cents,
@@ -43,43 +46,6 @@ from services.billing.clinic_s2_eligibility import clinic_s2_billed_to_company_p
 # > 2 sont des chaînes de trajets distincts qui doivent rester facturées en lignes
 # individuelles, pas regroupées en un faux A/R.
 _ROUND_TRIP_COMPONENT_SIZE = 2
-
-
-def _is_strict_round_trip_pair(bookings_pair: list[Any]) -> bool:
-    """Vrai A/R : 2 segments A→B et B→A (adresses inversées) ou liés explicitement.
-
-    Refuse les chaînes A→B + B→C ou les paires « hub » qui partagent une seule
-    extrémité — chacun doit rester facturé séparément.
-    """
-    if len(bookings_pair) != 2:
-        return False
-    a, b = bookings_pair
-    # Lien explicite parent / retour : toujours considéré comme A/R commercial.
-    pid_a = getattr(a, "parent_booking_id", None)
-    pid_b = getattr(b, "parent_booking_id", None)
-    try:
-        if pid_a is not None and int(pid_a) == int(getattr(b, "id", -1)):
-            return True
-        if pid_b is not None and int(pid_b) == int(getattr(a, "id", -1)):
-            return True
-    except (TypeError, ValueError):
-        pass
-    # Sinon : inversion stricte des adresses normalisées (A→B et B→A).
-    a_pick = normalize_address_for_round_trip_comparison(
-        getattr(a, "pickup_location", "") or ""
-    )
-    a_drop = normalize_address_for_round_trip_comparison(
-        getattr(a, "dropoff_location", "") or ""
-    )
-    b_pick = normalize_address_for_round_trip_comparison(
-        getattr(b, "pickup_location", "") or ""
-    )
-    b_drop = normalize_address_for_round_trip_comparison(
-        getattr(b, "dropoff_location", "") or ""
-    )
-    if not (a_pick and a_drop and b_pick and b_drop):
-        return False
-    return a_pick == b_drop and a_drop == b_pick
 
 
 def _preview_base_amount_ht(booking: Any, billing_settings_dto: Any) -> Decimal:
@@ -126,7 +92,15 @@ def _consolidate_period_preview_round_trip_rows(
     bookings: list[Any],
     _billing_settings_dto: Any,
 ) -> list[PeriodPreviewLine]:
-    """Une ligne par A/R (HT cumulé, description du segment principal)."""
+    """Une ligne par A/R uniquement si relation métier + même payeur.
+
+    Utilise ``resolve_invoice_booking_units`` (parent / request / route_group),
+    jamais « même patient + même date ».
+    """
+    if not preview_lines or not bookings:
+        return preview_lines
+
+    attach_invoice_request_ids(bookings)
     preview_ht_by_bid = {
         pl.booking_id: Decimal(str(pl.amount_ht)).quantize(Decimal("0.01"))
         for pl in preview_lines
@@ -135,31 +109,31 @@ def _consolidate_period_preview_round_trip_rows(
     def _amount_for_booking(b: Any) -> Decimal:
         return preview_ht_by_bid.get(int(b.id), Decimal("0"))
 
-    comps = [
-        c
-        for c in round_trip_component_id_sets(
-            bookings, amount_ht_fn=_amount_for_booking
-        )
-        if len(c) == _ROUND_TRIP_COMPONENT_SIZE
+    units = resolve_invoice_booking_units(
+        selected_ids=None,
+        scope_bookings=bookings,
+        subject_key_fn=lambda bk: resolve_subject_identity(bk).key,
+        amount_ht_fn=_amount_for_booking,
+        expand_explicit_peers=False,
+    )
+    rt_units = [
+        u
+        for u in units
+        if u.kind == "round_trip" and len(u.booking_ids) == _ROUND_TRIP_COMPONENT_SIZE
     ]
-    if not comps:
+    if not rt_units:
         return preview_lines
-    bookings_by_id = {int(b.id): b for b in bookings}
+
     by_id = {pl.booking_id: pl for pl in preview_lines}
     hidden_ids: set[int] = set()
     merged_rows: dict[int, PeriodPreviewLine] = {}
-    for comp in comps:
-        pls = [by_id[bid] for bid in comp if bid in by_id]
+    for unit in rt_units:
+        pls = [by_id[bid] for bid in unit.booking_ids if bid in by_id]
         if len(pls) != _ROUND_TRIP_COMPONENT_SIZE:
             continue
-        comp_bookings = [bookings_by_id[bid] for bid in comp if bid in bookings_by_id]
-        if not _is_strict_round_trip_pair(comp_bookings):
-            # 2 trajets sur la meme journee mais qui ne forment pas un A/R
-            # strict (ex. A->B puis B->C en chaine) : facturer separement.
-            continue
-        primary_pl = min(
-            pls,
-            key=lambda pl: ((pl.scheduled_at or ""), pl.booking_id),
+        primary_pl = next(
+            (p for p in pls if p.booking_id == unit.primary_booking_id),
+            min(pls, key=lambda pl: ((pl.scheduled_at or ""), pl.booking_id)),
         )
         pri = primary_pl.booking_id
         sum_ht = round(sum(float(p.amount_ht) for p in pls), 2)
@@ -246,6 +220,48 @@ class PeriodPreviewResult:
     estimated_subtotal_ht: float = 0.0
     estimated_vat_total: float = 0.0
     estimated_total_with_vat: float = 0.0
+    eligibility: dict[str, Any] | None = None
+
+
+def _eligibility_warnings(eligibility: dict[str, Any]) -> list[str]:
+    market = eligibility.get("market_lirie") or {}
+    out: list[str] = []
+    pending = int(market.get("pending") or 0)
+    disputed = int(market.get("disputed") or 0)
+    auto_rel = int(market.get("auto_released") or 0)
+    if pending:
+        out.append(
+            f"{pending} prestation(s) Market LIRIE encore en attente de validation "
+            "(exclues jusqu'à validation ou fin de mois)."
+        )
+    if disputed:
+        out.append(
+            f"{disputed} prestation(s) Market LIRIE contestée(s) — exclues de la facture."
+        )
+    if auto_rel:
+        out.append(
+            f"{auto_rel} prestation(s) Market LIRIE libérée(s) à échéance "
+            "(non validées par l'institution)."
+        )
+    return out
+
+
+def _apply_institution_invoice_gate(
+    bookings: list[Any],
+    *,
+    billing_settings_dto: Any,
+    now: datetime | None = None,
+) -> tuple[list[Any], dict[str, Any]]:
+    """Filtre Market LIRIE (pending bloqué, disputed bloqué, auto-released OK)."""
+    attach_invoice_request_ids(bookings)
+    eligible = filter_institution_invoice_eligible(bookings, now=now)
+    summary = build_eligibility_summary(
+        bookings,
+        eligible,
+        now=now,
+        amount_ht_fn=lambda b: _preview_base_amount_ht(b, billing_settings_dto),
+    )
+    return eligible, summary.to_dict()
 
 
 def build_period_invoice_preview(
@@ -258,6 +274,7 @@ def build_period_invoice_preview(
     institution_patient_id: int | None = None,
     billing_party_id: int | None = None,
     include_line_details: bool = True,
+    now: datetime | None = None,
 ) -> PeriodPreviewResult:
     """Aperçu read-only : exactement un de client_id (patient direct) ou clinic_company_id (S2).
 
@@ -333,6 +350,10 @@ def build_period_invoice_preview(
                 for b in bookings
                 if getattr(b, "billing_party_id", None) == int(billing_party_id)
             ]
+        bookings, eligibility_patient = _apply_institution_invoice_gate(
+            bookings, billing_settings_dto=billing_settings_dto, now=now
+        )
+        warnings.extend(_eligibility_warnings(eligibility_patient))
         client = crepo.find_model_by_id_with_user(int(client_id), company_id)
         patient_name = (
             resolve_patient_name_for_invoice(client, bookings)
@@ -428,6 +449,7 @@ def build_period_invoice_preview(
             estimated_subtotal_ht=float(total),
             estimated_vat_total=float(total_vat),
             estimated_total_with_vat=float(total_tw),
+            eligibility=eligibility_patient,
         )
 
     # --- S2 : même filtre que preview clinique / génération ---
@@ -502,6 +524,10 @@ def build_period_invoice_preview(
 
     # BUG B : IL NULL ne suffit pas — exclure les claims actives (merge_partner, etc.).
     eligible_bookings = filter_bookings_without_active_invoice_claim(eligible_bookings)
+    eligible_bookings, eligibility_s2 = _apply_institution_invoice_gate(
+        eligible_bookings, billing_settings_dto=billing_settings_dto, now=now
+    )
+    warnings.extend(_eligibility_warnings(eligibility_s2))
     rt_map_s2 = _round_trip_leg_by_booking_id(eligible_bookings)
     crepo = ClientRepository()
     # Batch : une requête client (+ user) pour toute la période clinique (Sentry N+1).
@@ -589,6 +615,7 @@ def build_period_invoice_preview(
         estimated_subtotal_ht=float(total),
         estimated_vat_total=float(total_vat),
         estimated_total_with_vat=float(total_tw),
+        eligibility=eligibility_s2,
     )
 
 
@@ -639,7 +666,7 @@ def preview_line_to_dict(pl: PeriodPreviewLine) -> dict[str, Any]:
 
 
 def preview_to_dict(p: PeriodPreviewResult) -> dict[str, Any]:
-    return {
+    out = {
         "mode": p.mode,
         "transports_count": p.transports_count,
         "estimated_total": p.estimated_total,
@@ -650,3 +677,6 @@ def preview_to_dict(p: PeriodPreviewResult) -> dict[str, Any]:
         "estimated_vat_total": p.estimated_vat_total,
         "estimated_total_with_vat": p.estimated_total_with_vat,
     }
+    if p.eligibility:
+        out["eligibility"] = p.eligibility
+    return out

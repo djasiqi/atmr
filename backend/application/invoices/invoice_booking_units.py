@@ -1,10 +1,11 @@
 """Résolveur d'unités de facturation (simple / A/R strict).
 
 Politique facturation (pas l'heuristique hub/chaîne d'affichage) :
-1. parent_booking_id explicite, même subject_key ;
-2. route_group_id avec exactement 2 segments aller+retour, même sujet ;
-3. fallback A→B / B→A strict, même sujet, même jour de service ;
-4. jamais A→B→C, hub, composante > 2, cross-subject.
+1. parent_booking_id explicite, même subject_key, même payeur ;
+2. même demande institution (request_id), 2 segments, même sujet, même payeur ;
+3. route_group_id avec exactement 2 segments aller+retour, même sujet, même payeur ;
+4. jamais « même patient + même date » sans relation métier ;
+5. jamais A→B→C, hub, composante > 2, cross-subject, payeurs différents.
 """
 
 from __future__ import annotations
@@ -57,13 +58,6 @@ def _sched(b: Any) -> datetime | None:
     return st if isinstance(st, datetime) else None
 
 
-def _service_day(b: Any) -> str | None:
-    st = _sched(b)
-    if st is None:
-        return None
-    return st.strftime("%Y-%m-%d")
-
-
 def _is_strict_reverse(a: Any, b: Any) -> bool:
     a_pick = normalize_address_for_round_trip_comparison(
         getattr(a, "pickup_location", "") or ""
@@ -97,6 +91,7 @@ def _order_pair(a: Any, b: Any) -> tuple[Any, Any]:
 
 
 def _same_billing_destination(a: Any, b: Any) -> bool:
+    """Même payeur de jambe — le regroupement A/R ne doit jamais fusionner deux dettes."""
     if (getattr(a, "billed_to_type", None) or "") != (
         getattr(b, "billed_to_type", None) or ""
     ):
@@ -105,7 +100,21 @@ def _same_billing_destination(a: Any, b: Any) -> bool:
     bpb = getattr(b, "billing_party_id", None)
     if bpa is not None or bpb is not None:
         return bpa == bpb
+    ca = getattr(a, "billed_to_company_id", None)
+    cb = getattr(b, "billed_to_company_id", None)
+    if ca is not None or cb is not None:
+        return ca == cb
     return True
+
+
+def _request_group_id(booking: Any) -> int | None:
+    cached = getattr(booking, "_invoice_request_id", None)
+    if cached is not None:
+        try:
+            return int(cached)
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def expand_explicit_peer_ids(
@@ -219,6 +228,48 @@ def resolve_invoice_booking_units(
         used.add(ids[0])
         used.add(ids[1])
 
+    # 2a) même demande institution (transport_request) — 2 segments, même payeur
+    by_req: dict[int, list[Any]] = defaultdict(list)
+    for bid in work_ids:
+        if bid in used:
+            continue
+        b = by_id[bid]
+        rid = _request_group_id(b)
+        if rid is None:
+            continue
+        by_req[rid].append(b)
+    for _rid, segs in by_req.items():
+        if len(segs) != 2:
+            continue
+        a, b = segs[0], segs[1]
+        if _bid(a) in used or _bid(b) in used:
+            continue
+        sk_a = _subject_key(a, subject_key_fn)
+        sk_b = _subject_key(b, subject_key_fn)
+        if sk_a != sk_b or not _same_billing_destination(a, b):
+            continue
+        returns = sum(1 for s in segs if bool(getattr(s, "is_return", False)))
+        if returns != 1 and not _is_strict_reverse(a, b):
+            continue
+        primary, secondary = _order_pair(a, b)
+        ids = (_bid(primary), _bid(secondary))
+        amt = _amount(primary, amount_ht_fn) + _amount(secondary, amount_ht_fn)
+        bp = getattr(primary, "billing_party_id", None)
+        units.append(
+            BookingUnit(
+                unit_key=f"unit:round_trip:{ids[0]}:{ids[1]}",
+                kind="round_trip",
+                primary_booking_id=ids[0],
+                booking_ids=ids,
+                subject_key=sk_a,
+                billing_party_id=int(bp) if bp is not None else None,
+                amount_ht=amt,
+                period_anchor_booking_id=ids[0],
+            )
+        )
+        used.add(ids[0])
+        used.add(ids[1])
+
     # 2) route_group_id exactement 2 segments
     by_rg: dict[str, list[Any]] = defaultdict(list)
     for bid in work_ids:
@@ -262,47 +313,7 @@ def resolve_invoice_booking_units(
         used.add(ids[0])
         used.add(ids[1])
 
-    # 3) Fallback legacy reverse strict même jour + même sujet
-    remaining = [by_id[i] for i in sorted(work_ids) if i not in used]
-    paired: set[int] = set()
-    for i, a in enumerate(remaining):
-        if _bid(a) in paired:
-            continue
-        for b in remaining[i + 1 :]:
-            if _bid(b) in paired:
-                continue
-            if _subject_key(a, subject_key_fn) != _subject_key(b, subject_key_fn):
-                continue
-            if not _same_billing_destination(a, b):
-                continue
-            if _service_day(a) != _service_day(b) or _service_day(a) is None:
-                continue
-            if not _is_strict_reverse(a, b):
-                continue
-            primary, secondary = _order_pair(a, b)
-            ids = (_bid(primary), _bid(secondary))
-            amt = _amount(primary, amount_ht_fn) + _amount(secondary, amount_ht_fn)
-            bp = getattr(primary, "billing_party_id", None)
-            sk = _subject_key(primary, subject_key_fn)
-            units.append(
-                BookingUnit(
-                    unit_key=f"unit:round_trip:{ids[0]}:{ids[1]}",
-                    kind="round_trip",
-                    primary_booking_id=ids[0],
-                    booking_ids=ids,
-                    subject_key=sk,
-                    billing_party_id=int(bp) if bp is not None else None,
-                    amount_ht=amt,
-                    period_anchor_booking_id=ids[0],
-                )
-            )
-            paired.add(ids[0])
-            paired.add(ids[1])
-            used.add(ids[0])
-            used.add(ids[1])
-            break
-
-    # 4) Singles
+    # 3) Singles — pas de fusion « même patient + même date »
     for bid in sorted(work_ids):
         if bid in used:
             continue

@@ -394,6 +394,26 @@ class BookingBillingUpdate(Resource):
 
             db.session.commit()
 
+            try:
+                from services.realtime.socketio import emit_company_event
+
+                company_id = getattr(booking, "company_id", None)
+                if company_id:
+                    emit_company_event(
+                        int(company_id),
+                        "booking_updated",
+                        {
+                            "booking_id": int(booking.id),
+                            "reason": "institution_payer_changed",
+                            "billed_to_type": booking.billed_to_type,
+                        },
+                    )
+            except Exception as emit_err:
+                logger.warning(
+                    "[InstitutionBilling] Fan-out payeur entreprise: %s",
+                    emit_err,
+                )
+
             # Audit log
             try:
                 AuditLogger.log_action(

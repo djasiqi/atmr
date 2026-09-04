@@ -376,15 +376,30 @@ class BookingMessageList(Resource):
                 claims = get_jwt()
                 sender_company_id = claims.get("company_id")
                 if sender_company_id and int(sender_company_id) != int(peer_company_id):
-                    content_preview = (msg.content or "")[:80]
+                    from services.events.institution_events import (
+                        _build_booking_message_bell_message,
+                        _resolve_booking_message_bell_context,
+                    )
+
+                    patient_name, mission_date, is_return = (
+                        _resolve_booking_message_bell_context(booking.id)
+                    )
+                    partner_msg = _build_booking_message_bell_message(
+                        sender_label=sender_label,
+                        patient_name=patient_name,
+                        mission_date=mission_date,
+                        is_return=is_return,
+                    )
                     persist_company_notification(
                         company_id=int(peer_company_id),
                         event_type="booking_message",
                         title="Nouveau message partenaire",
-                        message=f"{sender_label}: {content_preview}",
+                        message=partner_msg,
                         metadata={
                             "booking_id": booking.id,
                             "sender_label": sender_label,
+                            "patient_name": patient_name,
+                            "is_return": is_return,
                         },
                     )
 

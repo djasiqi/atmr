@@ -319,6 +319,35 @@ class InstitutionBillingControlStatus(str, PyEnum):
         return [e.value for e in cls]
 
 
+class InvoiceBillingStatus(str, PyEnum):
+    """Statut facturable persisté — indépendant du contrôle Market.
+
+    ``not_billable`` : exclusion définitive après contestation (pas de DELETE).
+    """
+
+    BILLABLE = "billable"
+    NOT_BILLABLE = "not_billable"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class BookingDisputeStatus(str, PyEnum):
+    """Cycle de résolution d'une contestation institution."""
+
+    DISPUTED = "disputed"
+    AWAITING_CARRIER_RESPONSE = "awaiting_carrier_response"
+    EVIDENCE_SUBMITTED = "evidence_submitted"
+    AWAITING_CORRECTION = "awaiting_correction"
+    RESOLVED_INSTITUTION = "resolved_institution"
+    RESOLVED_CARRIER = "resolved_carrier"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
 class InvoiceBillingStrategy(str, PyEnum):
     """Stratégie de facturation (niveau facture).
 

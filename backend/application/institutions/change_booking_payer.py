@@ -122,6 +122,17 @@ def change_booking_payer(
             error=lock_msg or "Facturation non modifiable.",
             status_code=409,
         )
+    from application.invoices.booking_dispute.freeze import (
+        financial_change_blocked_by_dispute,
+    )
+
+    frozen, freeze_msg = financial_change_blocked_by_dispute(booking)
+    if frozen:
+        return ChangeBookingPayerResult(
+            ok=False,
+            error=freeze_msg or "Contestation en cours : payeur gelé.",
+            status_code=409,
+        )
 
     if transport_request is None:
         resolve_fn = getattr(booking, "_resolve_source_transport_request", None)

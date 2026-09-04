@@ -77,6 +77,8 @@ export function controlStatusLabel(status) {
     pending_review: 'À vérifier',
     validated: 'Validé',
     anomaly: 'Anomalie',
+    auto_released: 'Libérée à échéance',
+    disputed: 'Contestée',
   };
   return map[status] || status || '—';
 }
@@ -153,4 +155,27 @@ export function isBookingEditable(item) {
 
 export function isBookingLocked(item) {
   return Boolean(item?.billing?.locked || item?.billing?.invoiced);
+}
+
+const OPEN_DISPUTE_STATUSES = new Set([
+  'disputed',
+  'awaiting_carrier_response',
+  'evidence_submitted',
+  'awaiting_correction',
+]);
+
+export function isOpenDisputeStatus(status) {
+  return OPEN_DISPUTE_STATUSES.has(String(status || ''));
+}
+
+export function canDecideDispute(item) {
+  return String(item?.control?.dispute_status || '') === 'evidence_submitted';
+}
+
+export function isFinanciallyFrozen(item) {
+  if (isOpenDisputeStatus(item?.control?.dispute_status)) return true;
+  const billing = String(item?.control?.invoice_billing_status || '');
+  return (
+    item?.control?.effective_status === 'anomaly' && billing !== 'not_billable'
+  );
 }

@@ -1648,6 +1648,253 @@ class PeriodInvoicePreview(Resource):
             )
 
 
+def _attach_invoice_numbers_to_plan(plan_dict: dict[str, Any]) -> dict[str, Any]:
+    """Présentation : n° de facture sur les prestations déjà facturées. Sans recalcul."""
+    recon = (plan_dict or {}).get("reconciliation") or {}
+    bookings = recon.get("bookings") or []
+    line_ids: list[int] = []
+    for row in bookings:
+        try:
+            line_ids.append(int(row.get("invoice_line_id")))
+        except (TypeError, ValueError):
+            continue
+    if not line_ids:
+        return plan_dict
+    mapped = {
+        int(line_id): str(number)
+        for line_id, number in (
+            db.session.query(InvoiceLine.id, Invoice.invoice_number)
+            .join(Invoice, Invoice.id == InvoiceLine.invoice_id)
+            .filter(InvoiceLine.id.in_(line_ids))
+            .all()
+        )
+        if number
+    }
+    for row in bookings:
+        try:
+            line_id = int(row.get("invoice_line_id"))
+        except (TypeError, ValueError):
+            continue
+        number = mapped.get(line_id)
+        if number:
+            row["invoice_number"] = number
+    return plan_dict
+
+
+def _attach_plan_display_context(plan_dict: dict[str, Any]) -> dict[str, Any]:
+    """Présentation : patient + date sur les lignes d'audit. Sans recalcul financier."""
+    recon = (plan_dict or {}).get("reconciliation") or {}
+    bookings = recon.get("bookings") or []
+    booking_ids: list[int] = []
+    for row in bookings:
+        try:
+            booking_ids.append(int(row.get("booking_id")))
+        except (TypeError, ValueError):
+            continue
+    if booking_ids:
+        found = Booking.query.filter(Booking.id.in_(booking_ids)).all()
+        by_id = {int(item.id): item for item in found}
+        for row in bookings:
+            try:
+                booking = by_id.get(int(row.get("booking_id")))
+            except (TypeError, ValueError):
+                booking = None
+            if booking is None:
+                continue
+            name = str(getattr(booking, "customer_name", "") or "").strip()
+            if name:
+                row["patient_name"] = name
+            scheduled = getattr(booking, "scheduled_time", None)
+            if scheduled is not None:
+                row["scheduled_at"] = scheduled.isoformat()
+            pickup = str(getattr(booking, "pickup_location", "") or "").strip()
+            if pickup:
+                row["pickup_location"] = pickup
+            dropoff = str(getattr(booking, "dropoff_location", "") or "").strip()
+            if dropoff:
+                row["dropoff_location"] = dropoff
+        from application.invoices.booking_dispute.service import latest_dispute_summaries
+
+        summaries = latest_dispute_summaries(booking_ids)
+        for row in bookings:
+            try:
+                extra = summaries.get(int(row.get("booking_id"))) or {}
+            except (TypeError, ValueError):
+                extra = {}
+            if extra:
+                row.update(extra)
+            else:
+                row.setdefault("dispute_treatable", False)
+    return _attach_invoice_numbers_to_plan(plan_dict)
+
+
+@invoices_ns.route("/companies/<int:company_id>/invoices/institution-invoice-plan")
+class InstitutionInvoicePlan(Resource):
+    """Buckets détectés (clinique / patients) pour une institution + période."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id: int):
+        from application.invoices.institution_invoice_plan import (
+            build_institution_invoice_plan,
+        )
+        from routes.companies import _get_current_company_via_use_case
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response or not company:
+            return error_response, status_code
+        cid = int(getattr(company, "id", 0) or 0)
+        if cid != company_id:
+            return APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
+
+        y = request.args.get("year", type=int) or request.args.get(
+            "period_year", type=int
+        )
+        m = request.args.get("month", type=int) or request.args.get(
+            "period_month", type=int
+        )
+        cc_id = request.args.get("clinic_company_id", type=int)
+        clinic_client_id = request.args.get("clinic_client_id", type=int)
+        if not y or not m or not (1 <= m <= PERIOD_MONTH_MAX):
+            return APIErrorHandler.handle_validation_error(
+                "Paramètres year et month (1-12) requis",
+                logger_instance=logger,
+            )
+        if not cc_id:
+            return APIErrorHandler.handle_validation_error(
+                "clinic_company_id requis",
+                logger_instance=logger,
+            )
+        try:
+            plan = build_institution_invoice_plan(
+                company_id=company_id,
+                period_year=y,
+                period_month=m,
+                clinic_company_id=cc_id,
+                clinic_client_id=clinic_client_id,
+            )
+            return success_response(data=_attach_plan_display_context(plan.to_dict()))
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+
+
+@invoices_ns.route("/companies/<int:company_id>/invoices/institution-patient-batch")
+class InstitutionPatientBatch(Resource):
+    """Prépare les drafts patients du plan institution (idempotent, sans envoi)."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @limiter.limit("10 per minute")
+    def post(self, company_id: int):
+        from application.invoices.institution_patient_batch import (
+            InstitutionPatientBatchInput,
+            InstitutionPatientBatchUseCase,
+        )
+        from routes.companies import _get_current_company_via_use_case
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response or not company:
+            return error_response, status_code
+        cid = int(getattr(company, "id", 0) or 0)
+        if cid != company_id:
+            return APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
+
+        data = request.get_json() or {}
+        y = data.get("year") or data.get("period_year")
+        m = data.get("month") or data.get("period_month")
+        cc_id = data.get("clinic_company_id")
+        clinic_client_id = data.get("clinic_client_id")
+        try:
+            y_int = int(y)
+            m_int = int(m)
+        except (TypeError, ValueError):
+            return APIErrorHandler.handle_validation_error(
+                "Paramètres year et month (1-12) requis",
+                logger_instance=logger,
+            )
+        if not (1 <= m_int <= PERIOD_MONTH_MAX):
+            return APIErrorHandler.handle_validation_error(
+                "month doit être entre 1 et 12",
+                logger_instance=logger,
+            )
+        if not cc_id:
+            return APIErrorHandler.handle_validation_error(
+                "clinic_company_id requis",
+                logger_instance=logger,
+            )
+        try:
+            clinic_company_id = int(cc_id)
+        except (TypeError, ValueError):
+            return APIErrorHandler.handle_validation_error(
+                "clinic_company_id invalide",
+                logger_instance=logger,
+            )
+
+        raw_patient_ids = data.get("institution_patient_ids")
+        if raw_patient_ids is None:
+            raw_patient_ids = data.get("patient_ids")
+        patient_ids = None
+        if raw_patient_ids is not None:
+            if not isinstance(raw_patient_ids, list):
+                return APIErrorHandler.handle_validation_error(
+                    "institution_patient_ids doit être une liste",
+                    logger_instance=logger,
+                )
+            patient_ids = []
+            for item in raw_patient_ids:
+                try:
+                    patient_ids.append(int(item))
+                except (TypeError, ValueError):
+                    return APIErrorHandler.handle_validation_error(
+                        "institution_patient_ids invalide",
+                        logger_instance=logger,
+                    )
+
+        raw_keys = data.get("patient_bucket_keys")
+        patient_keys = None
+        if raw_keys is not None:
+            if not isinstance(raw_keys, list):
+                return APIErrorHandler.handle_validation_error(
+                    "patient_bucket_keys doit être une liste",
+                    logger_instance=logger,
+                )
+            patient_keys = [str(k) for k in raw_keys]
+
+        clinic_client = None
+        if clinic_client_id is not None:
+            try:
+                clinic_client = int(clinic_client_id)
+            except (TypeError, ValueError):
+                return APIErrorHandler.handle_validation_error(
+                    "clinic_client_id invalide",
+                    logger_instance=logger,
+                )
+
+        try:
+            result = InstitutionPatientBatchUseCase().execute(
+                InstitutionPatientBatchInput(
+                    company_id=company_id,
+                    clinic_company_id=clinic_company_id,
+                    period_year=y_int,
+                    period_month=m_int,
+                    clinic_client_id=clinic_client,
+                    institution_patient_ids=patient_ids,
+                    patient_bucket_keys=patient_keys,
+                )
+            )
+            return success_response(data=result.to_dict())
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+
+
 @invoices_ns.route("/companies/<int:company_id>/invoices/billing-opportunities")
 class BillingOpportunities(Resource):
     """V2 : vue agrégée « factures à générer » (payeurs + période, read-only)."""

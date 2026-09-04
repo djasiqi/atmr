@@ -51,6 +51,8 @@ def apply_institution_payer_resolution(
 
     target = normalize_institution_target_payer(target_billed_to_type)
     billing_intent = billing_intent_for_billed_to_type(target)
+    if getattr(transport_request, "billing_intent", None) != billing_intent:
+        transport_request.billing_intent = billing_intent
 
     result = resolve_billing_party_for_institution_booking(
         booking=booking,

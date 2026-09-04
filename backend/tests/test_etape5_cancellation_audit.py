@@ -433,10 +433,45 @@ class TestInstitutionEvents:
     """Tests pour les événements Socket.IO institution."""
 
     def test_emit_request_sent(self):
-        """Test: emit_request_sent fonctionne."""
-        from services.events.institution_events import emit_request_sent
+        """Test: emit_request_sent cloche lisible (patient + RDV)."""
+        from datetime import datetime
 
-        with patch("services.events.institution_events.socketio") as mock_socketio:
+        from services.events.institution_events import (
+            _build_request_sent_bell_message,
+            emit_request_sent,
+            format_institution_patient_bell_name,
+        )
+
+        assert (
+            format_institution_patient_bell_name(
+                first_name="Jacques", last_name="BARBEY", gender="HOMME"
+            )
+            == "M. BARBEY Jacques"
+        )
+        assert (
+            format_institution_patient_bell_name(
+                first_name="Charlotte", last_name="CAVADINI", gender="FEMME"
+            )
+            == "Mme CAVADINI Charlotte"
+        )
+
+        msg = _build_request_sent_bell_message(
+            request_id=4584,
+            patient_name="Mme CAVADINI Charlotte",
+            departure_at=datetime(2026, 8, 3, 9, 0),
+            offers_created=1,
+        )
+        assert msg == (
+            "Mme CAVADINI Charlotte — RDV 03.08.2026 09:00 · envoyée à 1 transporteur"
+        )
+        assert "Demande #4584" not in msg
+
+        with (
+            patch("services.events.institution_events.socketio") as mock_socketio,
+            patch(
+                "services.events.institution_events._persist_notification"
+            ) as mock_persist,
+        ):
             result = emit_request_sent(
                 institution_id=1,
                 request_id=100,
@@ -444,9 +479,13 @@ class TestInstitutionEvents:
                 external_reference="REF-001",
                 mode="sequential",
                 offers_created=1,
+                patient_name="Mme CAVADINI Charlotte",
+                departure_at=datetime(2026, 8, 3, 9, 0),
             )
 
             assert result is True
+            mock_persist.assert_called_once()
+            assert mock_persist.call_args.kwargs["message"] == msg
             request_sent_calls = [
                 call
                 for call in mock_socketio.emit.call_args_list
@@ -457,11 +496,102 @@ class TestInstitutionEvents:
             assert call_args[0][0] == "request_sent"
             assert call_args[1]["to"] == "institution_1"
 
+    def test_emit_request_converted_bell_message_readable(self):
+        """Cloche request_converted : patient + départ, pas seulement #demande."""
+        from datetime import datetime
+
+        from services.events.institution_events import (
+            _build_request_converted_bell_message,
+            emit_request_converted,
+        )
+
+        msg = _build_request_converted_bell_message(
+            request_id=4584,
+            patient_name="M. BARBEY Jacques",
+            departure_at=datetime(2026, 8, 3, 9, 0),
+            departure_confirmed=True,
+            company_name="Emmenez Moi",
+        )
+        assert "M. BARBEY Jacques" in msg
+        assert "départ confirmé 03.08.2026 09:00" in msg
+        assert "Emmenez Moi" in msg
+        assert "Demande #4584" not in msg
+
+        with (
+            patch("services.events.institution_events.socketio"),
+            patch(
+                "services.events.institution_events._persist_notification"
+            ) as mock_persist,
+        ):
+            emit_request_converted(
+                institution_id=1,
+                request_id=4584,
+                public_id="abc",
+                booking_id=99,
+                company_name="Emmenez Moi",
+                patient_name="M. BARBEY Jacques",
+                departure_at=datetime(2026, 8, 3, 9, 0),
+                departure_confirmed=True,
+            )
+            assert mock_persist.called
+            kwargs = mock_persist.call_args.kwargs
+            assert kwargs["message"] == msg
+            assert kwargs["metadata"]["patient_name"] == "M. BARBEY Jacques"
+            assert kwargs["metadata"]["departure_confirmed"] is True
+
+    def test_booking_message_bell_is_context_not_chat_body(self):
+        """Cloche Nouveau message : patient + date, sans corps du chat."""
+        from datetime import datetime
+
+        from services.events.institution_events import (
+            _build_booking_message_bell_message,
+            emit_booking_message,
+        )
+
+        msg = _build_booking_message_bell_message(
+            sender_label="Emmenez Moi",
+            patient_name="Mme DUPONT Marie",
+            mission_date=datetime(2026, 8, 5, 14, 30),
+            is_return=True,
+        )
+        assert msg == "Emmenez Moi · Mme DUPONT Marie · retour 05.08.2026"
+        assert "fille prend en charge" not in msg
+
+        with (
+            patch("services.events.institution_events.socketio"),
+            patch(
+                "services.events.institution_events._persist_notification"
+            ) as mock_persist,
+            patch(
+                "services.events.institution_events._resolve_booking_message_bell_context",
+                return_value=("Mme DUPONT Marie", datetime(2026, 8, 5, 14, 30), True),
+            ),
+        ):
+            emit_booking_message(
+                company_id=1,
+                institution_id=2,
+                booking_id=99,
+                message_data={
+                    "sender_label": "Emmenez Moi",
+                    "content": "Transport retour Annuler, fille prend en charge le retour de Madame",
+                },
+                sender_type="COMPANY",
+                request_id=10,
+            )
+            assert mock_persist.called
+            assert mock_persist.call_args.kwargs["message"] == msg
+            assert "fille" not in mock_persist.call_args.kwargs["message"]
+
     def test_emit_booking_status_updated(self):
-        """Test: emit_booking_status_updated fonctionne."""
+        """Test: emit_booking_status_updated socket OK, sans notif cloche."""
         from services.events.institution_events import emit_booking_status_updated
 
-        with patch("services.events.institution_events.socketio") as mock_socketio:
+        with (
+            patch("services.events.institution_events.socketio") as mock_socketio,
+            patch(
+                "services.events.institution_events._persist_notification"
+            ) as mock_persist,
+        ):
             result = emit_booking_status_updated(
                 institution_id=1,
                 booking_id=200,
@@ -472,6 +602,7 @@ class TestInstitutionEvents:
             )
 
             assert result is True
+            mock_persist.assert_not_called()
             status_calls = [
                 call
                 for call in mock_socketio.emit.call_args_list
@@ -480,6 +611,33 @@ class TestInstitutionEvents:
             assert len(status_calls) >= 1
             call_args = status_calls[0]
             assert call_args[0][0] == "booking_status_updated"
+
+    def test_emit_booking_assigned_no_bell(self):
+        """Test: assignation chauffeur = socket sans persistance cloche."""
+        from services.events.institution_events import (
+            emit_booking_assigned_to_institution,
+        )
+
+        with (
+            patch("services.events.institution_events.socketio") as mock_socketio,
+            patch(
+                "services.events.institution_events._persist_notification"
+            ) as mock_persist,
+        ):
+            result = emit_booking_assigned_to_institution(
+                institution_id=1,
+                booking_id=200,
+                request_id=100,
+                public_id="abc-123",
+            )
+            assert result is True
+            mock_persist.assert_not_called()
+            assigned_calls = [
+                call
+                for call in mock_socketio.emit.call_args_list
+                if call.args and call.args[0] == "booking_assigned"
+            ]
+            assert len(assigned_calls) >= 1
 
     def test_get_institution_from_booking(self, db):
         """Test: get_institution_from_booking retrouve l'institution."""

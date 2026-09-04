@@ -304,11 +304,15 @@ def query_billing_control_bookings(
     page_bookings = filtered[start:end]
 
     institution_by_id = {int(b.id): b for b in all_bookings}
+    from application.invoices.booking_dispute.service import latest_dispute_summaries
+
+    dispute_map = latest_dispute_summaries([int(b.id) for b in page_bookings])
     items = [
         serialize_billing_control_booking(
             b,
             transport_request=tr_map.get(int(b.id)),
             institution_bookings_by_id=institution_by_id,
+            dispute_summary=dispute_map.get(int(b.id)),
         )
         for b in page_bookings
     ]

@@ -16,8 +16,10 @@ import {
   useValidateBillingControlBooking,
 } from '../../../hooks/useInstitutionData';
 import { canAccessBillingControl } from '../../../utils/institutionPermissions';
+import institutionBillingControlService from '../../../services/institutionBillingControlService';
 import {
   buildBillingControlQueryParams,
+  canDecideDispute,
   collectTransportCompanyOptions,
   controlStatusLabel,
   defaultPeriodValue,
@@ -25,6 +27,7 @@ import {
   groupBookingsForDisplay,
   isBookingEditable,
   isBookingLocked,
+  isFinanciallyFrozen,
   parseBillingControlApiError,
   payerTypeLabel,
   billingIntentFromPayerType,
@@ -76,13 +79,24 @@ function ControlStatusCell({ item }) {
     );
   }
   if (status === 'anomaly') {
+    const disputeStatus = item?.control?.dispute_status;
     return (
       <div>
         <span className={s.statusAnomaly}>⚠ Anomalie</span>
         {item?.control?.anomaly_reason && (
           <div className={s.anomalyReason}>Motif : {item.control.anomaly_reason}</div>
         )}
+        {disputeStatus === 'evidence_submitted' ? (
+          <div className={s.anomalyReason}>Justificatif soumis — à valider</div>
+        ) : null}
       </div>
+    );
+  }
+  if (item?.control?.invoice_gate_status === 'auto_released') {
+    return (
+      <span className={s.statusPending} title="En attente à la clôture — libérée pour facturation">
+        Libérée à échéance
+      </span>
     );
   }
   return <span className={s.statusPending}>{controlStatusLabel(status)}</span>;
@@ -93,13 +107,41 @@ function BookingActions({
   onValidate,
   onAnomaly,
   onReopen,
+  onAcceptEvidence,
+  onRejectEvidence,
   pendingId,
 }) {
   if (isBookingLocked(item) || !isBookingEditable(item)) return null;
   const status = item?.control?.effective_status;
   const busy = pendingId === item.booking_id;
 
+  if (canDecideDispute(item)) {
+    return (
+      <div className={s.actions}>
+        <button
+          type="button"
+          className={`${s.btn} ${s.btnPrimary}`}
+          disabled={busy}
+          data-testid={`dispute-accept-${item.booking_id}`}
+          onClick={() => onAcceptEvidence(item)}
+        >
+          Valider le justificatif
+        </button>
+        <button
+          type="button"
+          className={s.btn}
+          disabled={busy}
+          data-testid={`dispute-reject-${item.booking_id}`}
+          onClick={() => onRejectEvidence(item)}
+        >
+          Refuser
+        </button>
+      </div>
+    );
+  }
+
   if (status === 'anomaly' || status === 'validated') {
+    if (isFinanciallyFrozen(item)) return null;
     return (
       <div className={s.actions}>
         <button
@@ -235,6 +277,22 @@ const InstitutionBillingControl = () => {
       data: {},
     }).then(() => toast.success('Anomalie levée — à vérifier')));
   }, [reopenMutation, runMutation]);
+
+  const handleAcceptEvidence = useCallback((item) => {
+    runMutation(item.booking_id, () =>
+      institutionBillingControlService.decideBillingControlDispute(item.booking_id, {
+        decision: 'accept_carrier',
+      }).then(() => toast.success('Justificatif validé — prestation à nouveau facturable')),
+    );
+  }, [runMutation]);
+
+  const handleRejectEvidence = useCallback((item) => {
+    runMutation(item.booking_id, () =>
+      institutionBillingControlService.decideBillingControlDispute(item.booking_id, {
+        decision: 'reject_evidence',
+      }).then(() => toast.success('Justificatif refusé — le transporteur doit compléter')),
+    );
+  }, [runMutation]);
 
   const submitAnomaly = useCallback(() => {
     if (!anomalyTarget) return;
@@ -429,7 +487,7 @@ const InstitutionBillingControl = () => {
                           {item.transport_company?.display_name || '—'}
                         </td>
                         <td className={s.colPayer} data-label="Payeur">
-                          {isBookingEditable(item) ? (
+                          {isBookingEditable(item) && !isFinanciallyFrozen(item) ? (
                             <select
                               className={s.payerSelect}
                               data-testid={`payer-select-${item.booking_id}`}
@@ -455,6 +513,8 @@ const InstitutionBillingControl = () => {
                             onValidate={handleValidate}
                             onAnomaly={setAnomalyTarget}
                             onReopen={handleReopen}
+                            onAcceptEvidence={handleAcceptEvidence}
+                            onRejectEvidence={handleRejectEvidence}
                           />
                         </td>
                       </tr>

@@ -152,7 +152,8 @@ def test_chain_abc_not_merged_as_single_round_trip():
     assert all(u.kind == "single" for u in units)
 
 
-def test_legacy_reverse_same_day_same_subject():
+def test_same_patient_same_day_without_relation_never_merges():
+    """Même patient + même date + adresses inversées, sans lien métier → 2 lignes."""
     aller = _bk(
         10,
         client_id=99,
@@ -175,9 +176,9 @@ def test_legacy_reverse_same_day_same_subject():
         subject_key_fn=lambda b: resolve_subject_identity(b).key,
         amount_ht_fn=lambda b: Decimal(str(b.amount)),
     )
-    assert len(units) == 1
-    assert units[0].kind == "round_trip"
-    assert units[0].subject_key == "client:99"
+    assert len(units) == 2
+    assert {u.kind for u in units} == {"single"}
+    assert {i for u in units for i in u.booking_ids} == {10, 11}
 
 
 def test_segments_vs_units_four_segments_two_round_trips():

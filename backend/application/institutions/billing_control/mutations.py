@@ -148,6 +148,15 @@ def mark_booking_control_anomaly(
     booking.institution_control_anomaly_reason = reason_text
     clear_validation_fields(booking)
     bump_edit_version(booking)
+    from application.invoices.booking_dispute.service import ensure_open_dispute
+
+    ensure_open_dispute(
+        booking,
+        actor_user_id=actor_user_id,
+        actor_role=actor_role,
+        reason_code=code,
+        reason_text=reason_text,
+    )
     after = control_status_snapshot(booking)
 
     event = record_change_event(
@@ -202,6 +211,26 @@ def reopen_booking_control(
         return ControlMutationResult(
             ok=False,
             error="Seul un booking validé ou en anomalie peut être réouvert.",
+            status_code=409,
+        )
+    from application.invoices.booking_dispute.freeze import get_open_dispute_for_booking
+
+    if get_open_dispute_for_booking(int(booking.id)) is not None:
+        return ControlMutationResult(
+            ok=False,
+            error=(
+                "Une contestation est en cours. Validez ou refusez le justificatif "
+                "plutôt que de réouvrir silencieusement."
+            ),
+            status_code=409,
+        )
+    if str(getattr(booking, "invoice_billing_status", None) or "") == "not_billable":
+        return ControlMutationResult(
+            ok=False,
+            error=(
+                "Prestation exclue définitivement après contestation. "
+                "La course reste historisée."
+            ),
             status_code=409,
         )
 

@@ -21,6 +21,14 @@ jest.mock('sonner', () => ({
   toast: { success: jest.fn(), error: jest.fn() },
 }));
 
+const mockDecideDispute = jest.fn().mockResolvedValue({ success: true });
+jest.mock('../../../../services/institutionBillingControlService', () => ({
+  __esModule: true,
+  default: {
+    decideBillingControlDispute: (...args) => mockDecideDispute(...args),
+  },
+}));
+
 const hooks = require('../../../../hooks/useInstitutionData');
 
 const listPayload = {
@@ -215,10 +223,9 @@ describe('InstitutionBillingControl — U05–U16', () => {
     expect(screen.queryByRole('button', { name: /Valider/i })).not.toBeInTheDocument();
   });
 
-  it.each([
-    ['anomaly', 201],
-    ['validated', 202],
-  ])('U13 — Réouvrir visible sur %s et déclenche mutation', async (status, bookingId) => {
+  it('U13 — Réouvrir visible sur validated et déclenche mutation', async () => {
+    const status = 'validated';
+    const bookingId = 202;
     hooks.useBillingControlBookings.mockReturnValue({
       data: {
         items: [{
@@ -251,6 +258,39 @@ describe('InstitutionBillingControl — U05–U16', () => {
       expect(mutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({ bookingId }),
       );
+    });
+  });
+
+  it('affiche Valider le justificatif quand une preuve est soumise', async () => {
+    hooks.useBillingControlBookings.mockReturnValue({
+      data: {
+        items: [{
+          booking_id: 45705,
+          scheduled_time: '2026-08-16T10:00:00',
+          patient: { display_name: 'Marie DUPONT' },
+          segment_type: 'outbound',
+          payer: { type: 'clinic' },
+          control: {
+            effective_status: 'anomaly',
+            dispute_status: 'evidence_submitted',
+            anomaly_reason: 'TRANSPORT_DISPUTED',
+          },
+          billing: { editable: true, locked: false, invoiced: false },
+        }],
+        summary: { total: 1, anomaly: 1 },
+        pagination: { page: 1, total_pages: 1, total: 1 },
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mockRefetch,
+      isFetching: false,
+    });
+    const user = userEvent.setup();
+    renderPage();
+    expect(screen.queryByRole('button', { name: /Réouvrir/i })).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('dispute-accept-45705'));
+    await waitFor(() => {
+      expect(mockDecideDispute).toHaveBeenCalledWith(45705, { decision: 'accept_carrier' });
     });
   });
 

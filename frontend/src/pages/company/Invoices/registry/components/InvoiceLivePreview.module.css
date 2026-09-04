@@ -213,6 +213,24 @@
   line-height: 1.35;
 }
 
+.arExpand {
+  margin-top: 6px;
+}
+
+.arExpandSummary {
+  cursor: pointer;
+  font-size: var(--font-secondary-px);
+  color: var(--color-muted);
+}
+
+.arExpandList {
+  margin: 4px 0 0;
+  padding-left: 1.1rem;
+  font-size: var(--font-secondary-px);
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+
 .lineSub {
   margin-top: 4px;
   font-size: var(--font-secondary-px);

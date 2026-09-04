@@ -229,6 +229,7 @@ const DraftInvoiceEditorPanel = ({
   onUpdated,
   onOpenSendEmail,
   onMarkAsSent,
+  toolbarSubtitle,
 }) => {
   const [inv, setInv] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -2209,8 +2210,13 @@ const DraftInvoiceEditorPanel = ({
                   <div
                     className={styles.draftPdfBar}
                     role="toolbar"
+                    data-testid="invoice-draft-toolbar"
                     aria-label={
-                      allowsLineEditing ? 'Édition et aperçu facture' : 'Document PDF'
+                      toolbarSubtitle
+                        ? 'Brouillon et aperçu facture'
+                        : allowsLineEditing
+                          ? 'Édition et aperçu facture'
+                          : 'Document PDF'
                     }
                   >
                     <div className={styles.draftPdfBarLeft}>
@@ -2219,7 +2225,7 @@ const DraftInvoiceEditorPanel = ({
                           {allowsLineEditing ? 'Aperçu facture' : 'Facture PDF'}
                         </h3>
                         <p className={styles.draftPdfHeadSubtitle}>
-                          {inv?.invoice_number || '—'}
+                          {toolbarSubtitle || inv?.invoice_number || '—'}
                           {draftPdfStaleHint ? (
                             <span className={styles.draftPdfHeadMeta} role="status">
                               {' '}

@@ -356,7 +356,9 @@ class TestBillingControlACL:
         )
         assert r.status_code == 200
         db.session.refresh(booking)
+        db.session.refresh(_tr)
         assert booking.billed_to_type == "clinic"
+        assert _tr.billing_intent == "institution"
         assert effective_control_status(booking) == "pending_review"
 
     @pytest.mark.parametrize("topology", ["route_group", "parent"])
@@ -749,10 +751,10 @@ class TestBillingControlWorkflow:
             actor_role="institution_admin",
             actor_display_name="Reopen",
         )
-        assert result.ok is True
-        db.session.commit()
-        assert effective_control_status(booking) == "pending_review"
-        assert booking.institution_control_anomaly_reason is None
+        assert result.ok is False
+        assert result.status_code == 409
+        assert "contestation" in (result.error or "").lower()
+        assert effective_control_status(booking) == "anomaly"
 
     def test_reopen_validated_to_pending(
         self, db, control_institution, control_booking

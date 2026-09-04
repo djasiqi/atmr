@@ -160,7 +160,10 @@ class GenerateClinicMonthlyInvoiceUseCase:
         self.pdf_service = pdf_service or PDFService()
 
     def execute(
-        self, input_data: GenerateClinicMonthlyInvoiceInput
+        self,
+        input_data: GenerateClinicMonthlyInvoiceInput,
+        *,
+        now: datetime | None = None,
     ) -> GenerateClinicMonthlyInvoiceOutput:
         """Génère une facture clinique mensuelle unique (S2).
 
@@ -532,6 +535,15 @@ class GenerateClinicMonthlyInvoiceUseCase:
             scope_bookings = [b for b in scope_bookings if b.invoice_line_id is None]
             scope_bookings = filter_bookings_without_active_invoice_claim(
                 scope_bookings
+            )
+            from application.invoices.institution_invoice_eligibility import (
+                attach_invoice_request_ids,
+                filter_institution_invoice_eligible,
+            )
+
+            attach_invoice_request_ids(scope_bookings)
+            scope_bookings = filter_institution_invoice_eligible(
+                scope_bookings, now=now
             )
 
             def _amount_ht(b: Booking) -> Decimal:

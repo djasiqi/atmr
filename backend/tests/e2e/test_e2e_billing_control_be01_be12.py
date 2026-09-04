@@ -189,6 +189,24 @@ class TestE2EBillingControlBE01BE12:
         assert booking.billed_to_type == "clinic"
         assert booking.billing_party_id is not None
 
+        prev_pending = build_period_invoice_preview(
+            company_id=int(booking.company_id),
+            period_year=y,
+            period_month=m,
+            clinic_company_id=int(booking.billed_to_company_id),
+            include_line_details=True,
+        )
+        pending_ids = {line.booking_id for line in prev_pending.preview_lines}
+        assert int(booking.id) not in pending_ids
+
+        r_val = client.post(
+            f"/api/v1/institutions/billing/control/bookings/{booking.id}/validate",
+            headers=headers,
+            json={"actor_display_name": "E2E BE4"},
+        )
+        assert r_val.status_code == 200, r_val.get_json()
+        db.session.refresh(booking)
+
         prev = build_period_invoice_preview(
             company_id=int(booking.company_id),
             period_year=y,
@@ -254,9 +272,12 @@ class TestE2EBillingControlBE01BE12:
             headers=headers,
             json={},
         )
-        assert r_re.status_code == 200
+        assert r_re.status_code == 409
         db.session.refresh(booking)
-        assert effective_control_status(booking) == "pending_review"
+        assert (
+            booking.institution_control_status
+            == InstitutionBillingControlStatus.ANOMALY
+        )
 
     def test_be09_round_trip_independent_validation(
         self, client, db, bc_institution, bc_admin, bc_company
@@ -356,9 +377,12 @@ class TestE2EBillingControlBE01BE12:
     def test_be12_control_population_matches_preview_eligibility(
         self, client, db, bc_institution, bc_admin, bc_company, bc_eligible
     ):
-        """Invariant canary : IDs control (période) ⊆ éligibles period-preview patient."""
+        """Invariant : courses control *éligibles facture* ⊆ period-preview patient."""
         from application.invoices.billing_period_eligibility import (
             booking_matches_period_preview_eligibility,
+        )
+        from application.invoices.institution_invoice_eligibility import (
+            is_institution_invoice_eligible,
         )
 
         booking = bc_eligible["booking"]
@@ -383,7 +407,7 @@ class TestE2EBillingControlBE01BE12:
                 period_month=m,
                 billed_to_type=str(b.billed_to_type or "patient"),
             )
-            if int(b.id) == int(booking.id):
+            if int(b.id) == int(booking.id) and is_institution_invoice_eligible(b):
                 prev = build_period_invoice_preview(
                     company_id=int(b.company_id),
                     period_year=y,

@@ -565,6 +565,10 @@ class AcceptOfferUseCase:
                 from services.events.institution_events import (
                     emit_offer_accepted,
                     emit_request_converted,
+                    format_institution_patient_bell_name,
+                )
+                from services.institutions.mission_schedule import (
+                    get_effective_dispatch_time,
                 )
 
                 # Événement offer_accepted
@@ -576,7 +580,19 @@ class AcceptOfferUseCase:
                     company_name=offer.company.name if offer.company else None,
                 )
 
-                # Événement request_converted
+                # Événement request_converted (cloche : patient + départ)
+                patient = transport_request.patient
+                patient_label = (
+                    format_institution_patient_bell_name(
+                        first_name=getattr(patient, "first_name", None),
+                        last_name=getattr(patient, "last_name", None),
+                        gender=getattr(patient, "gender", None),
+                    )
+                    if patient is not None
+                    else None
+                )
+
+                departure_at = get_effective_dispatch_time(transport_request)
                 emit_request_converted(
                     institution_id=transport_request.institution_id,
                     request_id=transport_request.id,
@@ -584,6 +600,11 @@ class AcceptOfferUseCase:
                     booking_id=booking.id,
                     company_id=input_data.company_id,
                     company_name=offer.company.name if offer.company else None,
+                    patient_name=patient_label,
+                    departure_at=departure_at,
+                    departure_confirmed=bool(
+                        getattr(transport_request, "pickup_time_confirmed", False)
+                    ),
                 )
             except Exception as event_err:
                 logger.warning("[AcceptOffer] Error emitting events: %s", event_err)

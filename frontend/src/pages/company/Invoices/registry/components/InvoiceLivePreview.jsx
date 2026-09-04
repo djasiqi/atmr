@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { formatCurrencyCHF } from '../../../../../services/invoiceService';
 import { formatPatientDisplayNameNomPrenom } from '../../../../../utils/patientDisplayName';
+import { getRoundTripAuditLegs } from '../../../../../utils/invoiceLineRoundTrip';
 import styles from './InvoiceLivePreview.module.css';
 
 const MONTHS_FR = [
@@ -373,6 +374,7 @@ export default function InvoiceLivePreview({
   invoice,
   className,
   companyVatApplicable = true,
+  auditableRoundTrip = false,
 }) {
   const meta = useMemo(() => parseMeta(invoice?.meta), [invoice?.meta]);
   const gd = meta?.global_discount;
@@ -530,6 +532,7 @@ export default function InvoiceLivePreview({
                     ? safeText(line.adjustment_note, '')
                     : '';
                 const { ht, vat, ttc } = mergedRoundTripAmounts(line, mergePartner);
+                const auditLegs = auditableRoundTrip ? getRoundTripAuditLegs(line) : null;
                 return (
                   <tr key={line.id ?? `${line.description}-${line.line_total}`}>
                     {showTransportDateColumn ? (
@@ -548,7 +551,33 @@ export default function InvoiceLivePreview({
                           </span>
                         ) : null}
                       </div>
-                      {partnerDesc ? (
+                      {auditLegs ? (
+                        <details className={styles.arExpand}>
+                          <summary className={styles.arExpandSummary}>
+                            [A/R] [{auditLegs.segmentsCount} courses]
+                          </summary>
+                          <ul className={styles.arExpandList}>
+                            <li>
+                              Aller
+                              {auditLegs.outbound.bookingId != null
+                                ? ` booking #${auditLegs.outbound.bookingId}`
+                                : ''}
+                              {auditLegs.outbound.amountHt != null
+                                ? ` ${auditLegs.outbound.amountHt.toFixed(2)}`
+                                : ''}
+                            </li>
+                            <li>
+                              Retour
+                              {auditLegs.inbound.bookingId != null
+                                ? ` booking #${auditLegs.inbound.bookingId}`
+                                : ''}
+                              {auditLegs.inbound.amountHt != null
+                                ? ` ${auditLegs.inbound.amountHt.toFixed(2)}`
+                                : ''}
+                            </li>
+                          </ul>
+                        </details>
+                      ) : partnerDesc ? (
                         <div className={styles.lineSub}>
                           Retour : {partnerDesc}
                         </div>

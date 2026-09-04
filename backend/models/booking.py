@@ -333,6 +333,8 @@ class Booking(db.Model):
     )
     institution_control_validated_by_display_name = Column(String(200), nullable=True)
     institution_control_anomaly_reason = Column(Text, nullable=True)
+    # Exclusion facturable après contestation — jamais un DELETE de la course.
+    invoice_billing_status = Column(String(32), nullable=True)
 
     # Nouveau lien vers un tiers payeur “unifié” (optionnel en V1).
     billing_party_id: Mapped[int | None] = mapped_column(

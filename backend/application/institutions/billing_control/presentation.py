@@ -11,6 +11,10 @@ from application.institutions.billing_control.status import (
     control_status_snapshot,
     effective_control_status,
 )
+from application.invoices.institution_invoice_eligibility import (
+    invoice_gate_status,
+    resolve_commercial_origin,
+)
 from ext import db
 from models import BillingParty, Booking, Company, InstitutionPatient, TransportRequest
 
@@ -130,11 +134,27 @@ def _sibling_ref(booking: Booking) -> dict[str, Any]:
     }
 
 
+def _dispute_control_fields(
+    booking: Booking, *, dispute_summary: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    extra = dispute_summary
+    if extra is None:
+        from application.invoices.booking_dispute.service import latest_dispute_summaries
+
+        extra = latest_dispute_summaries([int(booking.id)]).get(int(booking.id), {})
+    return {
+        "dispute_id": extra.get("dispute_id"),
+        "dispute_status": extra.get("dispute_status"),
+        "dispute_treatable": bool(extra.get("dispute_treatable")),
+    }
+
+
 def serialize_billing_control_booking(
     booking: Booking,
     *,
     transport_request: TransportRequest | None = None,
     institution_bookings_by_id: dict[int, Booking] | None = None,
+    dispute_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Représentation API exploitable par la future UI Marc."""
     control = control_status_snapshot(booking)
@@ -167,9 +187,13 @@ def serialize_billing_control_booking(
         },
         "control": {
             "effective_status": control["control_status"],
+            "invoice_gate_status": invoice_gate_status(booking),
+            "commercial_origin": resolve_commercial_origin(booking),
             "validated_at": control.get("validated_at"),
             "validated_by_display_name": control.get("validated_by_display_name"),
             "anomaly_reason": control.get("anomaly_reason"),
+            "invoice_billing_status": getattr(booking, "invoice_billing_status", None),
+            **_dispute_control_fields(booking, dispute_summary=dispute_summary),
         },
         "billing": _billing_block(booking),
         "relationship": {

@@ -135,6 +135,9 @@ class GenerateInvoiceInput:
         overrides: Dict facultatif {reservation_id: {amount, vat_rate, note}}
         billing_opportunity_key: Clé opportunité sujet|payeur (autorité serveur)
         excluded_booking_ids: IDs à exclure lors de la génération par opportunité
+        institution_patient_id: Bénéficiaire institutionnel (batch patients)
+        strict_reservation_ids: Ne pas élargir la sélection via le DSU A/R
+        invoice_meta_extra: Métadonnées fusionnées à la création (idempotence)
     """
 
     company_id: int
@@ -150,6 +153,9 @@ class GenerateInvoiceInput:
     global_discount_note: str | None = None
     billing_opportunity_key: str | None = None
     excluded_booking_ids: list[int] | None = None
+    institution_patient_id: int | None = None
+    strict_reservation_ids: bool = False
+    invoice_meta_extra: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,7 +228,9 @@ class GenerateInvoiceUseCase:
         self.description_builder = description_builder or InvoiceDescriptionBuilder()
         self.pdf_service = pdf_service or PDFService()
 
-    def execute(self, input_data: GenerateInvoiceInput) -> GenerateInvoiceOutput:
+    def execute(
+        self, input_data: GenerateInvoiceInput, *, now: datetime | None = None
+    ) -> GenerateInvoiceOutput:
         """Génère une nouvelle facture pour un client et une période.
 
         Args:
@@ -267,6 +275,10 @@ class GenerateInvoiceUseCase:
             # PR3 : résolution opportunité (autorité serveur)
             opportunity_reservations: list[Booking] | None = None
             institution_patient_id_for_invoice: int | None = None
+            if input_data.institution_patient_id is not None:
+                institution_patient_id_for_invoice = int(
+                    input_data.institution_patient_id
+                )
             opportunity_meta: dict[str, Any] | None = None
             effective_client_id: int | None = input_data.client_id
             opportunity_billing_party_id: int | None = None
@@ -594,14 +606,15 @@ class GenerateInvoiceUseCase:
                     billed_to_type=None,
                 )
                 selected_ids = {int(x) for x in booking_ids}
-                comps = round_trip_component_id_sets(
-                    eligible_period,
-                    amount_ht_fn=None,
-                )
                 expanded_ids: set[int] = set(selected_ids)
-                for comp in comps:
-                    if comp & selected_ids:
-                        expanded_ids |= comp
+                if not input_data.strict_reservation_ids:
+                    comps = round_trip_component_id_sets(
+                        eligible_period,
+                        amount_ht_fn=None,
+                    )
+                    for comp in comps:
+                        if comp & selected_ids:
+                            expanded_ids |= comp
                 eligible_by_id = {int(b.id): b for b in eligible_period}
                 for sid in selected_ids:
                     if sid in bookings_by_id:
@@ -682,6 +695,22 @@ class GenerateInvoiceUseCase:
                 )
                 # Même accès qu'en mode reservation_ids (annulation / frais d'annulation)
                 bookings_by_id = {r.id: r for r in reservations}
+
+            from application.invoices.institution_invoice_eligibility import (
+                attach_invoice_request_ids,
+                filter_institution_invoice_eligible,
+            )
+
+            attach_invoice_request_ids(reservations)
+            reservations = filter_institution_invoice_eligible(reservations, now=now)
+            if input_data.strict_reservation_ids and input_data.reservation_ids:
+                allowed_ids = {int(x) for x in input_data.reservation_ids}
+                reservations = [
+                    r
+                    for r in reservations
+                    if int(getattr(r, "id", 0) or 0) in allowed_ids
+                ]
+            bookings_by_id = {r.id: r for r in reservations}
 
             if not reservations:
                 msg = "Aucune réservation trouvée pour cette période"
@@ -950,6 +979,41 @@ class GenerateInvoiceUseCase:
                 patient_name = f"Client #{effective_client_id}"
 
             # 8. Créer la facture
+            if (
+                institution_patient_id_for_invoice is not None
+                and not input_data.billing_opportunity_key
+            ):
+                draft_q = Invoice.query.filter(
+                    and_(
+                        Invoice.company_id == input_data.company_id,
+                        Invoice.period_year == input_data.period_year,
+                        Invoice.period_month == input_data.period_month,
+                        Invoice.status == InvoiceStatus.DRAFT,
+                        Invoice.institution_patient_id
+                        == institution_patient_id_for_invoice,
+                    )
+                )
+                if billing_party_id is not None:
+                    draft_q = draft_q.filter(
+                        Invoice.billing_party_id == billing_party_id
+                    )
+                existing_draft = (
+                    draft_q.order_by(Invoice.id.asc()).with_for_update().first()
+                )
+                if existing_draft is not None:
+                    return GenerateInvoiceOutput(
+                        success=False,
+                        error={
+                            "error": (
+                                "Une facture brouillon existe déjà pour ce sujet, "
+                                "ce destinataire et cette période. "
+                                "Complétez-la ou annulez-la avant d'en créer une nouvelle."
+                            ),
+                            "existing_invoice_id": existing_draft.id,
+                            "existing_invoice_number": existing_draft.invoice_number,
+                        },
+                        status_code=HTTP_409_CONFLICT,
+                    )
             two_places = Decimal("0.01")
             meta: dict[str, Any] | None = None
             if payer_needs_review_reason:
@@ -963,6 +1027,8 @@ class GenerateInvoiceUseCase:
                 }
             if opportunity_meta:
                 meta = {**(meta or {}), **opportunity_meta}
+            if input_data.invoice_meta_extra:
+                meta = {**(meta or {}), **dict(input_data.invoice_meta_extra)}
             # ✅ S2: Déterminer si c'est une facture S2 (clinique mensuelle multi-patients)
             # S2 = clinic_company_id fourni ET plusieurs clients différents dans les bookings
             unique_client_ids = {

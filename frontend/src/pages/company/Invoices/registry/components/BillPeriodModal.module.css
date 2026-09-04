@@ -1,5 +1,11 @@
 /* Même socle que InvoiceDraftEditModal — panel / head / body / footer */
 
+.overlayDisputeLocked,
+.overlayDisputeLocked .formScroll,
+.overlayDisputeLocked .body {
+  overflow: hidden !important;
+}
+
 .overlay {
   position: fixed;
   inset: 0;
@@ -58,6 +64,29 @@
   padding: var(--spacing-lg, 24px) var(--spacing-md, 16px) var(--spacing-md, 16px);
   border-bottom: 1px solid var(--border-primary, #e5e7eb);
   flex-shrink: 0;
+}
+
+.headCloseOnly {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--border-primary, #e5e7eb);
+  flex-shrink: 0;
+}
+
+.draftEditorMount {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--spacing-md, 16px) var(--spacing-sm, 8px);
+}
+
+.draftEditorMount > * {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .headText {
@@ -127,6 +156,11 @@
   gap: var(--spacing-md, 16px);
   flex: 1;
   min-height: 0;
+}
+
+.formScrollWithDraft {
+  flex: 0 1 auto;
+  max-height: 38%;
 }
 
 .emptyHint {
@@ -455,6 +489,515 @@
 .inputMonth:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.detectedPlan {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.institutionSummary {
+  padding: 14px 16px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 10px;
+  background: var(--bg-primary, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.institutionSummaryTitle {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-primary, #0f172a);
+}
+
+.institutionSummaryPeriod {
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+}
+
+.institutionSummaryTotals {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 16px;
+  color: var(--text-primary, #0f172a);
+}
+
+.institutionSummaryTotals strong {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.institutionSummaryNote {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+}
+
+.planLiveHint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--text-tertiary, #64748b);
+}
+
+.planLiveError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 12px;
+}
+
+.institutionAlreadyInvoiced {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-primary, #00796b) 7%, #fff);
+  color: var(--text-secondary, #334155);
+  font-size: 12px;
+}
+
+.alreadyInvoicedDetail {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--brand-primary, #00796b) 16%, var(--border-primary, #e5e7eb));
+  background: color-mix(in srgb, var(--brand-primary, #00796b) 4%, #fff);
+}
+
+.alreadyInvoicedDetailTitle {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-primary, #0f172a);
+  margin-bottom: 6px;
+}
+
+.institutionExcluded {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #b45309 8%, #fff);
+  color: #92400e;
+  font-size: 12px;
+}
+
+.excludedDetail {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, #b45309 18%, var(--border-primary, #e5e7eb));
+  background: color-mix(in srgb, #b45309 4%, #fff);
+}
+
+.excludedDetailTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #78350f;
+  margin-bottom: 8px;
+}
+
+.excludedDetailList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.excludedDetailItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+}
+
+.excludedDetailWho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--text-primary, #0f172a);
+  font-weight: 600;
+}
+
+.excludedDetailDate {
+  font-weight: 650;
+  color: var(--text-secondary, #475569);
+}
+
+.excludedDetailWhy {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 550;
+  color: #78350f;
+}
+
+.disputeTreatBtn {
+  align-self: flex-end;
+  margin-top: 4px;
+  border: 1px solid color-mix(in srgb, #b45309 35%, transparent);
+  background: #fff;
+  color: #92400e;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.disputeTreatBtn:hover {
+  background: color-mix(in srgb, #b45309 8%, #fff);
+}
+
+.invoiceLinesPreview {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 10px;
+  background: var(--bg-primary, #fff);
+}
+
+.invoiceLinesPreviewTitle {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-primary, #0f172a);
+}
+
+.invoiceLinesList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.invoiceLineItem {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.invoiceLineDate {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-secondary, #475569);
+  padding-top: 1px;
+}
+
+.invoiceLineBody {
+  min-width: 0;
+}
+
+.invoiceLinePatient {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-primary, #0f172a);
+}
+
+.invoiceLineRoute {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+}
+
+.invoiceLineAr {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-primary, #00796b) 10%, #fff);
+  color: var(--brand-primary, #00796b);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.invoiceLineLegs {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+}
+
+.invoiceLineLegs summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.invoiceLineLegs p {
+  margin: 4px 0 0;
+}
+
+.invoiceLineAmount {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.invoiceLinesFooter {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-primary, #e5e7eb);
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+}
+
+.invoiceLinesFooter strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+}
+
+.eligibilityCard {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-primary, #00796b) 16%, var(--border-primary, #e5e7eb));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-primary, #00796b) 5%, #fff);
+}
+
+.eligibilityTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+}
+
+.eligibilityTitle strong {
+  font-size: 13px;
+  color: var(--text-primary, #0f172a);
+}
+
+.eligibilityList {
+  margin: 8px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+}
+
+.eligibilityExcluded {
+  color: #b45309;
+}
+
+.detectedBuckets,
+.autoPlanCards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.autoPlanCards {
+  grid-template-columns: 1fr;
+}
+
+.planCardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.planCardAction {
+  margin-top: 8px;
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--brand-primary, #00796b) 35%, var(--border-primary, #e5e7eb));
+  background: color-mix(in srgb, var(--brand-primary, #00796b) 8%, #fff);
+  color: var(--brand-primary, #00796b);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.planCardAction:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.blockedBucket {
+  cursor: default;
+  background: color-mix(in srgb, #b45309 6%, #fff);
+  border-color: color-mix(in srgb, #b45309 22%, var(--border-primary, #e5e7eb));
+}
+
+.planAudit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.planAuditList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+}
+
+.planAuditGroup summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.planAuditGroup ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+
+.detectedBucket {
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 8px;
+  background: var(--bg-primary, #fff);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.detectedBucketActive {
+  border-color: color-mix(in srgb, var(--brand-primary, #00796b) 40%, var(--border-primary, #e5e7eb));
+  background: color-mix(in srgb, var(--brand-primary, #00796b) 6%, #fff);
+  cursor: default;
+}
+
+.detectedBucketLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary, #64748b);
+}
+
+.detectedBucketName {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+}
+
+.detectedBucketMeta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+}
+
+.patientBatchPanel {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 8px;
+  background: var(--bg-primary, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.patientBatchList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.patientBatchRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.patientBatchName {
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+}
+
+.patientBatchMeta {
+  color: var(--text-secondary, #475569);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.patientBatchResult {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary, #475569);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.patientBatchResult p {
+  margin: 0;
+}
+
+.patientBatchDrafts {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.linkBtn {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--brand-primary, #00796b);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.linkBtn:hover {
+  color: color-mix(in srgb, var(--brand-primary, #00796b) 80%, #000);
 }
 
 .formHint {

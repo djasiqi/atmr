@@ -25,10 +25,44 @@ import {
   FiChevronLeft,
   FiChevronRight,
 } from 'react-icons/fi';
-import { toast } from 'sonner';
 import { invoiceService, formatCurrencyCHF, generateInvoice } from '../../../../../services/invoiceService';
 import { getApiErrorMessage } from '../../../../../utils/apiErrorMessage';
+import {
+  alreadyInvoicedInvoiceLabel,
+  excludedBlockTitle,
+  excludedRowWhoLabel,
+  exclusionWhyText,
+  presentInstitutionAlreadyInvoicedRows,
+  presentInstitutionBillablePreviewLines,
+  presentInstitutionExcludedRows,
+  presentInstitutionInvoiceSummary,
+} from '../../../../../utils/institutionInvoicePlanUi';
+import {
+  bindInstitutionPlanLiveRefresh,
+  clinicMonthlyPreparePayload,
+  draftInvoiceFromPrepareError,
+  institutionPlanScopeKey,
+  shouldShowDraftInvoiceToolbar,
+  shouldShowSimpleInvoiceLinesPreview,
+  unwrapPreparedDraftInvoice,
+  isInstitutionPlanCurrent,
+  isInstitutionPlanFetchCanceled,
+  nextInstitutionPlanRequestId,
+  shouldApplyInstitutionPlanResponse,
+  shouldKeepPreviousInstitutionPlan,
+  shouldShowInstitutionPlanSkeleton,
+} from '../../../../../utils/institutionInvoicePlanLiveSync';
+import {
+  formatPreviewDayMonth,
+  presentInvoiceLinesPreview,
+} from '../../../../../utils/invoiceLinesPreviewUi';
+import {
+  presentPartnerInvoiceSummary,
+  presentPatientInvoiceSummary,
+} from '../../../../../utils/payerInvoiceSummaryUi';
+import { canTreatDispute } from '../../../../../utils/bookingDisputeUi';
 import DraftInvoiceEditorPanel from './DraftInvoiceEditorPanel';
+import DisputeResolutionPanel from './DisputeResolutionPanel';
 import InvoiceLivePreview from './InvoiceLivePreview';
 import InvoiceLineEditorContext from './InvoiceLineEditorContext';
 import draftEditorStyles from './InvoiceDraftEditModal.module.css';
@@ -36,7 +70,7 @@ import styles from './BillPeriodModal.module.css';
 import InlineMonthYearPicker from '../../../../../components/ui/InlineMonthYearPicker';
 import InlineDatePicker from '../../../../../components/ui/InlineDatePicker';
 import ChipSelect from '../../../../../components/ui/ChipSelect';
-import { syncDraftInvoiceWithMergedAssemblyPreview } from '../utils/periodAssemblyInvoiceSync';
+import useCompanySocket from '../../../../../hooks/useCompanySocket';
 import { normalizeServiceDateToIsoForApi } from '../../../../../utils/invoiceServiceDate';
 import { filterInvoiceLines } from '../../../../../utils/invoiceLineFilter';
 import {
@@ -79,6 +113,11 @@ const MONTHS_FR = [
   'novembre',
   'décembre',
 ];
+
+const periodLabelFr = (year, month) => {
+  const raw = String(MONTHS_FR[month - 1] || '');
+  return `${raw.charAt(0).toUpperCase()}${raw.slice(1)} ${year}`;
+};
 
 /** PDF / fichier : toujours après préparation d’un vrai brouillon. */
 const PERIOD_PREVIEW_DISABLED_HINT = 'Disponible après « Préparer la facture »';
@@ -346,33 +385,6 @@ function periodPreviewRowKey(row) {
   return null;
 }
 
-/** Union des booking_ids des lignes sélectionnées (A/R inclus). */
-function collectReservationIdsFromSelection(preview, selectedBookingIds) {
-  const lines = Array.isArray(preview?.preview_lines) ? preview.preview_lines : [];
-  const ids = new Set();
-  for (const row of lines) {
-    const k = periodPreviewRowKey(row);
-    if (k == null || !selectedBookingIds.has(k)) continue;
-    if (Array.isArray(row.booking_ids) && row.booking_ids.length > 0) {
-      for (const id of row.booking_ids) {
-        const n = Number(id);
-        if (Number.isFinite(n)) ids.add(n);
-      }
-      continue;
-    }
-    if (row.booking_id != null && Number.isFinite(Number(row.booking_id))) {
-      ids.add(Number(row.booking_id));
-    }
-    if (
-      row.round_trip_partner_booking_id != null &&
-      Number.isFinite(Number(row.round_trip_partner_booking_id))
-    ) {
-      ids.add(Number(row.round_trip_partner_booking_id));
-    }
-  }
-  return [...ids];
-}
-
 function buildSyntheticInvoiceForPeriodAssembly({
   preview,
   selectedBookingIds,
@@ -439,6 +451,20 @@ function buildSyntheticInvoiceForPeriodAssembly({
         ? {
             is_round_trip_leg: true,
             transport_type: 'A/R',
+            billing_unit: 'round_trip',
+            primary_booking_id: Number(row.booking_id),
+            ...(Array.isArray(row.booking_ids) && row.booking_ids.length
+              ? {
+                  booking_ids: row.booking_ids.map((id) => Number(id)),
+                }
+              : row.round_trip_partner_booking_id != null
+                ? {
+                    booking_ids: [
+                      Number(row.booking_id),
+                      Number(row.round_trip_partner_booking_id),
+                    ],
+                  }
+                : {}),
             ...(row.round_trip_partner_booking_id != null
               ? {
                   round_trip_merge_partner_reservation_id: Number(row.round_trip_partner_booking_id),
@@ -594,6 +620,10 @@ const BillPeriodModal = ({
   /** form = sélection payeur/lignes ; draft = préparation dans la même modale. */
   const [composerPhase, setComposerPhase] = useState('form');
   const [draftInvoiceStub, setDraftInvoiceStub] = useState(null);
+  const [showLinesPreview, setShowLinesPreview] = useState(false);
+  const [showAlreadyInvoicedLines, setShowAlreadyInvoicedLines] = useState(false);
+  const [showExcludedLines, setShowExcludedLines] = useState(false);
+  const [treatingExcludedRow, setTreatingExcludedRow] = useState(null);
   const [payerType, setPayerType] = useState('patient');
   const [periodYear, setPeriodYear] = useState(defaultYear);
   const [periodMonth, setPeriodMonth] = useState(defaultMonth);
@@ -601,6 +631,10 @@ const BillPeriodModal = ({
   const [institutions, setInstitutions] = useState([]);
   const [clientId, setClientId] = useState('');
   const [clinicKey, setClinicKey] = useState(''); // institution id as string
+  const companySocket = useCompanySocket();
+  const institutionPlanRequestId = useRef(0);
+  const institutionPlanAbortRef = useRef(null);
+  const fetchInstitutionPlanRef = useRef(null);
   const [partnershipId, setPartnershipId] = useState('');
   const [billablePartners, setBillablePartners] = useState([]);
   const [loadingLists, setLoadingLists] = useState(false);
@@ -638,6 +672,11 @@ const BillPeriodModal = ({
   const [selectedBookingIds, setSelectedBookingIds] = useState(() => new Set());
   const [periodLineFilter, setPeriodLineFilter] = useState('');
   const [periodLinePage, setPeriodLinePage] = useState(1);
+  const [institutionPlan, setInstitutionPlan] = useState(null);
+  const [institutionPlanScope, setInstitutionPlanScope] = useState('');
+  const [institutionPlanLoading, setInstitutionPlanLoading] = useState(false);
+  const [institutionPlanRefreshing, setInstitutionPlanRefreshing] = useState(false);
+  const [institutionPlanLiveError, setInstitutionPlanLiveError] = useState('');
   const periodLinesHeadingId = useId();
   const periodRemiseHeadingId = useId();
   const periodAddLineHeadingId = useId();
@@ -713,6 +752,7 @@ const BillPeriodModal = ({
               recipient_status: p.recipient_status,
               segments_count: p.segments_count,
               units_count: p.units_count,
+              transports_count: p.transports_count ?? p.segments_count,
             }))
           : [];
       setClients(Array.isArray(ec) ? ec : []);
@@ -739,7 +779,11 @@ const BillPeriodModal = ({
     setClinicKey('');
     setPartnershipId('');
     setPreview(null);
+    setShowLinesPreview(false);
     setSelectedBookingIds(new Set());
+    setInstitutionPlan(null);
+    setComposerPhase('form');
+    setDraftInvoiceStub(null);
   }, [companyId, open, periodYear, periodMonth, payerType]);
 
   useEffect(() => {
@@ -748,9 +792,14 @@ const BillPeriodModal = ({
       setClientId('');
       setClinicKey('');
       setPreview(null);
+      setShowLinesPreview(false);
       setSelectedBookingIds(new Set());
       setComposerPhase('form');
       setDraftInvoiceStub(null);
+      setShowAlreadyInvoicedLines(false);
+      setShowExcludedLines(false);
+      setTreatingExcludedRow(null);
+      setPayerType('patient');
       setAssemblyPreviewExpanded(false);
       const exit =
         document.exitFullscreen ||
@@ -1286,6 +1335,7 @@ const BillPeriodModal = ({
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'Escape' || !open || generateLoading || previewLoading) return;
+      if (treatingExcludedRow) return;
       if (periodEditSheet) {
         setPeriodEditSheet(null);
         return;
@@ -1294,10 +1344,135 @@ const BillPeriodModal = ({
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose, generateLoading, previewLoading, periodEditSheet]);
+  }, [open, onClose, generateLoading, previewLoading, periodEditSheet, treatingExcludedRow]);
 
   const selectedClinic = institutions.find((i) => String(i.id) === clinicKey);
   const clinicCompanyId = selectedClinic?.clinic_company_id ?? null;
+
+  const fetchInstitutionPlan = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!open || !companyId || !clinicCompanyId || payerType !== 'clinic') {
+        if (!silent && payerType !== 'clinic') {
+          setInstitutionPlan(null);
+          setInstitutionPlanScope('');
+          setInstitutionPlanLoading(false);
+          setInstitutionPlanRefreshing(false);
+          setInstitutionPlanLiveError('');
+        }
+        return;
+      }
+      const fetchScope = institutionPlanScopeKey({
+        clinicCompanyId,
+        periodYear,
+        periodMonth,
+      });
+      const reqId = nextInstitutionPlanRequestId(institutionPlanRequestId.current);
+      institutionPlanRequestId.current = reqId;
+      institutionPlanAbortRef.current?.abort();
+      const controller = new AbortController();
+      institutionPlanAbortRef.current = controller;
+      if (silent) {
+        setInstitutionPlanRefreshing(true);
+      } else {
+        setInstitutionPlanLoading(true);
+      }
+      try {
+        const res = await invoiceService.fetchInstitutionInvoicePlan(companyId, {
+          year: periodYear,
+          month: periodMonth,
+          clinicCompanyId,
+          clinicClientId: clinicKey || undefined,
+          signal: controller.signal,
+        });
+        if (!shouldApplyInstitutionPlanResponse(reqId, institutionPlanRequestId.current)) {
+          return;
+        }
+        setInstitutionPlan(unwrapApi(res));
+        setInstitutionPlanScope(fetchScope);
+        setInstitutionPlanLiveError('');
+        if (!silent) {
+          setShowAlreadyInvoicedLines(false);
+          setShowExcludedLines(false);
+        }
+      } catch (err) {
+        if (isInstitutionPlanFetchCanceled(err)) return;
+        if (!shouldApplyInstitutionPlanResponse(reqId, institutionPlanRequestId.current)) {
+          return;
+        }
+        setInstitutionPlanLiveError('Mise à jour du plan impossible.');
+        setInstitutionPlan((prev) =>
+          shouldKeepPreviousInstitutionPlan({
+            silent,
+            hasPreviousPlan: Boolean(prev),
+          })
+            ? prev
+            : null
+        );
+      } finally {
+        if (shouldApplyInstitutionPlanResponse(reqId, institutionPlanRequestId.current)) {
+          setInstitutionPlanRefreshing(false);
+          if (!silent) {
+            setInstitutionPlanLoading(false);
+          }
+        }
+      }
+    },
+    [
+      open,
+      companyId,
+      clinicCompanyId,
+      clinicKey,
+      periodYear,
+      periodMonth,
+      payerType,
+    ]
+  );
+
+  fetchInstitutionPlanRef.current = fetchInstitutionPlan;
+
+  useEffect(() => {
+    if (!open || !companyId || !clinicCompanyId || payerType !== 'clinic') {
+      institutionPlanRequestId.current = nextInstitutionPlanRequestId(
+        institutionPlanRequestId.current
+      );
+      institutionPlanAbortRef.current?.abort();
+      if (payerType !== 'clinic') {
+        setInstitutionPlan(null);
+        setInstitutionPlanScope('');
+        setInstitutionPlanLoading(false);
+        setInstitutionPlanRefreshing(false);
+        setInstitutionPlanLiveError('');
+      }
+      return undefined;
+    }
+    void fetchInstitutionPlan({ silent: false });
+    return undefined;
+  }, [open, companyId, clinicCompanyId, clinicKey, periodYear, periodMonth, payerType, fetchInstitutionPlan]);
+
+  useEffect(() => {
+    if (!open || payerType !== 'clinic' || !clinicCompanyId) return undefined;
+    return bindInstitutionPlanLiveRefresh({
+      socket: companySocket,
+      refresh: () => {
+        void fetchInstitutionPlanRef.current?.({ silent: true });
+      },
+    });
+  }, [open, payerType, clinicCompanyId, companySocket]);
+
+  const currentInstitutionPlanScope = institutionPlanScopeKey({
+    clinicCompanyId,
+    periodYear,
+    periodMonth,
+  });
+  const institutionPlanIsCurrent = isInstitutionPlanCurrent(
+    institutionPlan,
+    institutionPlanScope,
+    currentInstitutionPlanScope
+  );
+  const showInstitutionPlanSkeleton = shouldShowInstitutionPlanSkeleton({
+    loading: institutionPlanLoading,
+    planIsCurrent: institutionPlanIsCurrent,
+  });
 
   const canPreview = useCallback(() => {
     if (payerType === 'patient') return Boolean(clientId);
@@ -1306,27 +1481,220 @@ const BillPeriodModal = ({
     return false;
   }, [payerType, clientId, clinicKey, clinicCompanyId, partnershipId]);
 
+  const acceptPreparedDraft = (inv) => {
+    const stub = unwrapPreparedDraftInvoice(inv);
+    if (!stub?.id) return false;
+    setDraftInvoiceStub(stub);
+    setComposerPhase('draft');
+    setShowLinesPreview(false);
+    onInvoiceGenerated?.(stub);
+    return true;
+  };
+
+  const acceptPreparedDraftOrError = (err) => {
+    const existing = draftInvoiceFromPrepareError(err);
+    if (existing) {
+      acceptPreparedDraft(existing);
+      return true;
+    }
+    return false;
+  };
+
+  const prepareClinicFromPlan = async () => {
+    if (!clinicCompanyId) {
+      setError('Sélectionnez une institution pour préparer la facture.');
+      return;
+    }
+    setPayerType('clinic');
+    setError('');
+    setGenerateLoading(true);
+    try {
+      const result = await generateInvoice(
+        companyId,
+        clinicMonthlyPreparePayload({
+          clinicCompanyId,
+          periodYear,
+          periodMonth,
+        })
+      );
+      if (!acceptPreparedDraft(result)) {
+        setError('Réponse inattendue du serveur.');
+      }
+    } catch (err) {
+      if (!acceptPreparedDraftOrError(err)) {
+        setError(getApiErrorMessage(err, 'Échec de génération'));
+      }
+    } finally {
+      setGenerateLoading(false);
+    }
+  };
+
+  const preparePatientFromOpportunity = async () => {
+    const opp = clients.find((c) => String(c.id) === String(clientId));
+    if (!opp) {
+      setError('Sélectionnez un patient pour préparer la facture.');
+      return;
+    }
+    if (opp.can_generate === false) {
+      setError('Ce patient n’est pas encore facturable — identité ou destinataire à compléter.');
+      return;
+    }
+    const carrierId = Number(opp.carrier_client_id ?? opp.client_id);
+    setError('');
+    setGenerateLoading(true);
+    try {
+      const result = await generateInvoice(companyId, {
+        ...(Number.isFinite(carrierId) && carrierId > 0 ? { client_id: carrierId } : {}),
+        period_year: periodYear,
+        period_month: periodMonth,
+        billing_opportunity_key: String(opp.opportunity_key || clientId),
+      });
+      if (!acceptPreparedDraft(result)) {
+        setError('Réponse inattendue du serveur.');
+      }
+    } catch (err) {
+      if (!acceptPreparedDraftOrError(err)) {
+        setError(getApiErrorMessage(err, 'Échec de génération'));
+      }
+    } finally {
+      setGenerateLoading(false);
+    }
+  };
+
+  const preparePartnerFromRow = async () => {
+    if (!partnershipId) {
+      setError('Sélectionnez un partenaire pour préparer la facture.');
+      return;
+    }
+    setError('');
+    setGenerateLoading(true);
+    try {
+      const result = await invoiceService.generatePartnerInvoice(companyId, {
+        partnership_id: parseInt(partnershipId, 10),
+        period_year: periodYear,
+        period_month: periodMonth,
+      });
+      if (!acceptPreparedDraft(result)) {
+        setError('Réponse inattendue du serveur.');
+      }
+    } catch (err) {
+      if (!acceptPreparedDraftOrError(err)) {
+        setError(getApiErrorMessage(err, 'Échec de génération'));
+      }
+    } finally {
+      setGenerateLoading(false);
+    }
+  };
+
+  const selectedPatient = useMemo(
+    () => clients.find((c) => String(c.id) === String(clientId)) || null,
+    [clients, clientId]
+  );
+  const selectedPartner = useMemo(
+    () =>
+      billablePartners.find((p) => String(p.partnership_id) === String(partnershipId)) ||
+      null,
+    [billablePartners, partnershipId]
+  );
+  const patientSummary = useMemo(
+    () => presentPatientInvoiceSummary(selectedPatient),
+    [selectedPatient]
+  );
+  const partnerSummary = useMemo(
+    () => presentPartnerInvoiceSummary(selectedPartner),
+    [selectedPartner]
+  );
+  const institutionSummary = useMemo(
+    () => presentInstitutionInvoiceSummary(institutionPlan),
+    [institutionPlan]
+  );
+  const institutionAlreadyInvoicedRows = useMemo(
+    () => presentInstitutionAlreadyInvoicedRows(institutionPlan),
+    [institutionPlan]
+  );
+  const institutionExcludedRows = useMemo(
+    () => presentInstitutionExcludedRows(institutionPlan),
+    [institutionPlan]
+  );
+  const institutionPreviewLines = useMemo(
+    () => presentInstitutionBillablePreviewLines(institutionPlan),
+    [institutionPlan]
+  );
+  const linesPreview = useMemo(() => {
+    const prestationCount =
+      payerType === 'clinic'
+        ? institutionPlanIsCurrent
+          ? institutionSummary.transportsCount
+          : 0
+        : payerType === 'patient'
+          ? patientSummary.transportsCount
+          : partnerSummary.transportsCount;
+    const fallbackTotal =
+      payerType === 'clinic'
+        ? institutionPlanIsCurrent
+          ? institutionSummary.totalHt
+          : 0
+        : payerType === 'patient'
+          ? patientSummary.totalHt
+          : partnerSummary.totalHt;
+    const sourceLines =
+      payerType === 'clinic'
+        ? institutionPlanIsCurrent
+          ? institutionPreviewLines
+          : []
+        : preview?.preview_lines;
+    const sourceTotal =
+      payerType === 'clinic'
+        ? fallbackTotal
+        : preview?.estimated_total != null
+          ? preview.estimated_total
+          : fallbackTotal;
+    return presentInvoiceLinesPreview(sourceLines, {
+      prestationCount,
+      totalHt: sourceTotal,
+    });
+  }, [
+    preview,
+    payerType,
+    institutionPreviewLines,
+    institutionPlanIsCurrent,
+    institutionSummary.transportsCount,
+    institutionSummary.totalHt,
+    patientSummary.transportsCount,
+    patientSummary.totalHt,
+    partnerSummary.transportsCount,
+    partnerSummary.totalHt,
+  ]);
+
   const footerHint = useMemo(() => {
     if (loadingLists) return null;
     if (payerType === 'patient' && !clientId) {
-      return 'Sélectionnez un patient pour prévisualiser.';
+      return 'Sélectionnez un patient pour préparer la facture.';
+    }
+    if (payerType === 'patient' && clientId && !patientSummary.hasBillable) {
+      return patientSummary.blocked
+        ? 'Ce patient n’est pas encore facturable — identité ou destinataire à compléter.'
+        : 'Aucune prestation à charge de ce patient pour cette période.';
     }
     if (payerType === 'clinic') {
-      if (!clinicKey) return 'Sélectionnez une clinique pour prévisualiser.';
+      if (!clinicKey) return 'Sélectionnez une institution pour préparer la facture.';
       if (!clinicCompanyId) {
-        return 'Cette institution n’a pas d’entreprise S2 associée — impossible de facturer en mode clinique.';
+        return 'Cette institution n’a pas d’entreprise S2 associée — impossible de facturer.';
+      }
+      if (institutionPlanIsCurrent && !institutionSummary.hasBillable) {
+        return 'Aucune prestation à charge de cette institution pour cette période.';
       }
     }
     if (payerType === 'partner' && !partnershipId) {
-      return 'Sélectionnez un partenaire à facturer pour cette période.';
+      return 'Sélectionnez un partenaire pour préparer la facture.';
+    }
+    if (payerType === 'partner' && partnershipId && !partnerSummary.hasBillable) {
+      return 'Aucune prestation à charge de ce partenaire pour cette période.';
     }
     if (preview && preview.transports_count === 0) {
       return payerType === 'partner'
         ? 'Aucun transfert à facturer sur cette période pour ce partenaire.'
         : 'Aucun transport à facturer sur cette période pour ce payeur.';
-    }
-    if (canPreview() && !preview && !previewLoading && !generateLoading) {
-      return 'Utilisez « Prévisualiser les lignes » pour voir le détail avant de préparer la facture.';
     }
     return null;
   }, [
@@ -1336,10 +1704,12 @@ const BillPeriodModal = ({
     clinicKey,
     clinicCompanyId,
     preview,
-    previewLoading,
-    generateLoading,
     partnershipId,
-    canPreview,
+    institutionPlanIsCurrent,
+    institutionSummary.hasBillable,
+    patientSummary.hasBillable,
+    patientSummary.blocked,
+    partnerSummary.hasBillable,
   ]);
 
   const runPreview = async () => {
@@ -1410,14 +1780,14 @@ const BillPeriodModal = ({
       if (payerType === 'clinic') {
         const cc = clinicCompanyId;
         if (cc == null || !Number.isFinite(Number(cc))) {
-          setError('Sélectionnez une clinique avec identifiant de facturation (S2).');
+          setError('Sélectionnez une institution avec identifiant de facturation (S2).');
           setPreviewLoading(false);
           return;
         }
         const clinicAllowed = institutions.some((i) => Number(i.clinic_company_id) === Number(cc));
         if (!clinicAllowed) {
           setError(
-            'Cette clinique ne correspond pas à la liste chargée. Sélectionnez-la à nouveau après le chargement.'
+            'Cette institution ne correspond pas à la liste chargée. Sélectionnez-la à nouveau après le chargement.'
           );
           setPreviewLoading(false);
           return;
@@ -1445,153 +1815,39 @@ const BillPeriodModal = ({
     }
   };
 
+  const toggleLinesPreview = async () => {
+    if (showLinesPreview) {
+      setShowLinesPreview(false);
+      return;
+    }
+    if (payerType === 'clinic') {
+      setShowLinesPreview(true);
+      return;
+    }
+    if (!preview) {
+      await runPreview();
+    }
+    setShowLinesPreview(true);
+  };
+
   const runGenerate = async () => {
     if (!canPreview()) {
       setError('Sélectionnez un payeur.');
       return;
     }
-    if (!preview) {
-      setError('Prévisualisez d’abord l’aperçu.');
+    if (payerType === 'clinic') {
+      await prepareClinicFromPlan();
       return;
     }
-    if (preview.transports_count === 0) {
-      setError(
-        payerType === 'partner'
-          ? 'Aucun transfert à facturer sur cette période. Vérifiez le partenaire, le mois, ou des transferts déjà facturés.'
-          : 'Aucun transport à facturer sur cette période. Vérifiez le payeur, le mois, ou des courses déjà facturées.'
-      );
+    if (payerType === 'patient') {
+      await preparePatientFromOpportunity();
       return;
     }
-    setError('');
-    setGenerateLoading(true);
-    try {
-      if (payerType === 'partner') {
-        const result = await invoiceService.generatePartnerInvoice(companyId, {
-          partnership_id: parseInt(partnershipId, 10),
-          period_year: periodYear,
-          period_month: periodMonth,
-        });
-        const inv = result?.data ?? result;
-        if (inv?.id) {
-          setDraftInvoiceStub(inv);
-          setComposerPhase('draft');
-          onInvoiceGenerated?.(inv);
-        } else {
-          setError('Réponse inattendue du serveur.');
-        }
-        return;
-      }
-
-      if (payerType === 'patient') {
-        if (!clients.some((c) => String(c.id) === String(clientId))) {
-          setError('Patient invalide pour cette période — sélectionnez-le à nouveau dans la liste.');
-          setGenerateLoading(false);
-          return;
-        }
-      } else if (payerType === 'clinic') {
-        if (
-          clinicCompanyId == null ||
-          !institutions.some((i) => Number(i.clinic_company_id) === Number(clinicCompanyId))
-        ) {
-          setError('Clinique invalide pour cette période — sélectionnez-la à nouveau dans la liste.');
-          setGenerateLoading(false);
-          return;
-        }
-      }
-
-      let payload;
-      if (payerType === 'patient') {
-        const ids = collectReservationIdsFromSelection(preview, selectedBookingIds);
-        if (hasAssemblyLines && ids.length === 0) {
-          setError('Cochez au moins une ligne valide pour préparer la facture.');
-          setGenerateLoading(false);
-          return;
-        }
-        const opp = clients.find((c) => String(c.id) === String(clientId));
-        const carrierId = Number(opp?.carrier_client_id ?? opp?.client_id);
-        const oppKey = String(opp?.opportunity_key || clientId);
-        payload = {
-          ...(Number.isFinite(carrierId) && carrierId > 0
-            ? { client_id: carrierId }
-            : {}),
-          period_year: periodYear,
-          period_month: periodMonth,
-          ...(hasAssemblyLines ? { reservation_ids: ids } : {}),
-          billing_opportunity_key: oppKey,
-        };
-      } else {
-        const ids = collectReservationIdsFromSelection(preview, selectedBookingIds);
-        if (hasAssemblyLines && ids.length === 0) {
-          setError('Cochez au moins une ligne valide pour préparer la facture.');
-          setGenerateLoading(false);
-          return;
-        }
-        payload = {
-          mode: 'clinic_monthly',
-          clinic_company_id: clinicCompanyId,
-          period_year: periodYear,
-          period_month: periodMonth,
-          ...(hasAssemblyLines ? { reservation_ids: ids } : {}),
-        };
-      }
-      const result = await generateInvoice(companyId, payload);
-      let inv = result?.data ?? result;
-      if (inv?.data?.id != null) {
-        inv = inv.data;
-      }
-      if (inv?.id) {
-        if (
-          hasAssemblyLines &&
-          mergedPeriodInvoice &&
-          (payerType === 'patient' || payerType === 'clinic')
-        ) {
-          try {
-            inv = await syncDraftInvoiceWithMergedAssemblyPreview(
-              companyId,
-              inv.id,
-              mergedPeriodInvoice
-            );
-            // Le PDF initial est généré avant cette synchro : sans régénération il reste obsolète
-            // (une seule ligne, montants catalogue, pas les CUSTOM ajoutés à l’aperçu).
-            try {
-              const pdfRes = await invoiceService.regenerateInvoicePdf(companyId, inv.id);
-              const pdfUrl =
-                (pdfRes && typeof pdfRes === 'object' && pdfRes.pdf_url) ||
-                (pdfRes?.data && typeof pdfRes.data === 'object' && pdfRes.data.pdf_url);
-              if (typeof pdfUrl === 'string' && pdfUrl.trim()) {
-                inv = { ...inv, pdf_url: pdfUrl.trim() };
-              }
-            } catch (pdfErr) {
-              console.error(pdfErr);
-              toast.warning(
-                getApiErrorMessage(
-                  pdfErr,
-                  'Le PDF n’a pas pu être régénéré automatiquement. Ouvrez le brouillon et utilisez « Régénérer le PDF » si besoin.'
-                ),
-                { duration: 9000 }
-              );
-            }
-          } catch (syncErr) {
-            console.error(syncErr);
-            setError(
-              getApiErrorMessage(
-                syncErr,
-                'Facture créée, mais les changements de l’aperçu (lignes, remises, prestations) n’ont pas tous été appliqués. Vérifiez le brouillon.'
-              )
-            );
-          }
-        }
-        setDraftInvoiceStub(inv);
-        setComposerPhase('draft');
-        onInvoiceGenerated?.(inv);
-      } else {
-        setError('Réponse inattendue du serveur.');
-      }
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Échec de génération'));
-    } finally {
-      setGenerateLoading(false);
+    if (payerType === 'partner') {
+      await preparePartnerFromRow();
+      return;
     }
+    setError('Sélectionnez un payeur.');
   };
 
   /** Référence stable : un callback recréé à chaque rendu relancerait le chargement du panneau brouillon. */
@@ -1599,17 +1855,15 @@ const BillPeriodModal = ({
     onInvoiceGenerated?.(draftInvoiceStub);
   }, [onInvoiceGenerated, draftInvoiceStub]);
 
-  const assemblyNoSelectable =
-    hasAssemblyLines &&
-    preview &&
-    Array.isArray(preview?.preview_lines) &&
-    preview.preview_lines.length > 0 &&
-    preview.preview_lines.every((l) => l.is_locked);
-
   if (!open || !portalTarget) return null;
 
   return createPortal(
-    <div className={styles.overlay} onClick={onClose} role="presentation">
+    <>
+    <div
+      className={`${styles.overlay}${treatingExcludedRow ? ` ${styles.overlayDisputeLocked}` : ''}`}
+      onClick={onClose}
+      role="presentation"
+    >
       <div
         className={styles.panel}
         onClick={(e) => e.stopPropagation()}
@@ -1617,28 +1871,6 @@ const BillPeriodModal = ({
         aria-modal="true"
         aria-labelledby="bill-period-modal-title"
       >
-        {composerPhase === 'draft' && draftInvoiceStub ? (
-          <>
-            <div className={styles.head}>
-              <div className={styles.headText}>
-                <h2 className={styles.title}>Préparer la facture</h2>
-                <p className={styles.subtitle}>Ajuster les lignes, puis PDF ou envoi</p>
-              </div>
-              <button type="button" className={styles.close} onClick={onClose} aria-label="Fermer">
-                <FiX size={18} />
-              </button>
-            </div>
-            <DraftInvoiceEditorPanel
-              key={draftInvoiceStub?.id ?? 'draft-stub'}
-              open
-              initialInvoice={draftInvoiceStub}
-              companyId={companyId}
-              onUpdated={handleDraftPanelUpdated}
-              onOpenSendEmail={onOpenSendEmail}
-              onMarkAsSent={onMarkAsSent}
-            />
-          </>
-        ) : (
           <>
             <div className={styles.head}>
               <div className={styles.headText}>
@@ -1650,9 +1882,13 @@ const BillPeriodModal = ({
             </div>
 
             <div className={styles.formColumn}>
-              <div className={styles.formScroll}>
+              <div
+                className={`${styles.formScroll}${
+                  draftInvoiceStub ? ` ${styles.formScrollWithDraft}` : ''
+                }`}
+              >
           <div className={styles.section}>
-            <div className={styles.fieldGroup}>
+            <div className={styles.fieldGroup} data-testid="bill-period-payer-type">
               <span className={styles.fieldLabel}>Type de payeur</span>
               <div className={styles.payerSegment} role="radiogroup" aria-label="Type de payeur">
                 <label
@@ -1678,7 +1914,7 @@ const BillPeriodModal = ({
                 </label>
                 <label
                   className={`${styles.payerChoice} ${payerType === 'clinic' ? styles.payerChoiceActive : ''}`}
-                  title="Facturation mensuelle clinique (S2)"
+                  title="Facture à une institution"
                 >
                   <input
                     type="radio"
@@ -1695,7 +1931,7 @@ const BillPeriodModal = ({
                   <span className={styles.payerChoiceIcon} aria-hidden="true">
                     <FiHome strokeWidth={2} size={15} />
                   </span>
-                  <span className={styles.payerChoiceTitle}>Clinique</span>
+                  <span className={styles.payerChoiceTitle}>Institution</span>
                 </label>
                 <label
                   className={`${styles.payerChoice} ${payerType === 'partner' ? styles.payerChoiceActive : ''}`}
@@ -1715,7 +1951,7 @@ const BillPeriodModal = ({
                   <span className={styles.payerChoiceIcon} aria-hidden="true">
                     <FiUsers strokeWidth={2} size={15} />
                   </span>
-                  <span className={styles.payerChoiceTitle}>Partenaires</span>
+                  <span className={styles.payerChoiceTitle}>Partenaire</span>
                 </label>
               </div>
             </div>
@@ -1727,7 +1963,7 @@ const BillPeriodModal = ({
                 payerType === 'patient'
                   ? 'Période facturée et patient (facturation directe)'
                   : payerType === 'clinic'
-                    ? 'Période facturée et clinique'
+                    ? 'Période facturée et institution'
                     : payerType === 'partner'
                       ? 'Période facturée et partenaire'
                       : undefined
@@ -1763,6 +1999,7 @@ const BillPeriodModal = ({
                     onChange={(v) => {
                       setClientId(v == null || v === '' ? '' : String(v));
                       setPreview(null);
+                      setShowLinesPreview(false);
                     }}
                     disabled={loadingLists}
                     menuMinWidth={280}
@@ -1787,7 +2024,7 @@ const BillPeriodModal = ({
                     className={styles.billInlineLbl}
                     title="Institution à facturer"
                   >
-                    Clinique
+                    Institution
                   </label>
                   <ChipSelect
                     id="bill-period-clinic"
@@ -1795,10 +2032,11 @@ const BillPeriodModal = ({
                     className={styles.billChipSelectGrow}
                     options={billClinicChipOptions}
                     value={clinicKey}
-                    placeholder="— Choisir une clinique —"
+                    placeholder="— Choisir une institution —"
                     onChange={(v) => {
                       setClinicKey(v == null || v === '' ? '' : String(v));
                       setPreview(null);
+                      setShowLinesPreview(false);
                     }}
                     disabled={loadingLists}
                     menuMinWidth={300}
@@ -1835,6 +2073,7 @@ const BillPeriodModal = ({
                     onChange={(v) => {
                       setPartnershipId(v == null || v === '' ? '' : String(v));
                       setPreview(null);
+                      setShowLinesPreview(false);
                     }}
                     disabled={loadingLists}
                     menuMinWidth={300}
@@ -1843,6 +2082,341 @@ const BillPeriodModal = ({
                 </div>
               )}
             </div>
+
+            {payerType === 'patient' && clientId ? (
+              <div className={styles.detectedPlan} data-testid="patient-invoice-summary">
+                <div
+                  className={styles.institutionSummary}
+                  role="region"
+                  aria-label="Facture patient"
+                >
+                  <div className={styles.institutionSummaryTitle}>
+                    Facture {patientSummary.displayName}
+                  </div>
+                  <div className={styles.institutionSummaryPeriod}>
+                    {periodLabelFr(periodYear, periodMonth)}
+                  </div>
+                  {patientSummary.hasBillable ? (
+                    <>
+                      <div className={styles.institutionSummaryTotals}>
+                        <span data-testid="patient-summary-count">
+                          {patientSummary.transportsCount} prestation
+                          {patientSummary.transportsCount !== 1 ? 's' : ''}
+                        </span>
+                        <strong data-testid="patient-summary-amount">
+                          {formatCurrencyCHF(patientSummary.totalHt)}
+                        </strong>
+                      </div>
+                      <p className={styles.institutionSummaryNote}>
+                        Toutes les prestations à charge de ce patient sont incluses.
+                      </p>
+                    </>
+                  ) : (
+                    <p className={styles.institutionSummaryNote}>
+                      {patientSummary.blocked
+                        ? 'Identité ou destinataire à compléter avant facturation.'
+                        : 'Aucune prestation à facturer à ce patient pour cette période.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {payerType === 'partner' && partnershipId ? (
+              <div className={styles.detectedPlan} data-testid="partner-invoice-summary">
+                <div
+                  className={styles.institutionSummary}
+                  role="region"
+                  aria-label="Facture partenaire"
+                >
+                  <div className={styles.institutionSummaryTitle}>
+                    Facture {partnerSummary.displayName}
+                  </div>
+                  <div className={styles.institutionSummaryPeriod}>
+                    {periodLabelFr(periodYear, periodMonth)}
+                  </div>
+                  {partnerSummary.hasBillable ? (
+                    <>
+                      <div className={styles.institutionSummaryTotals}>
+                        <span data-testid="partner-summary-count">
+                          {partnerSummary.transportsCount} prestation
+                          {partnerSummary.transportsCount !== 1 ? 's' : ''}
+                        </span>
+                        <strong data-testid="partner-summary-amount">
+                          {formatCurrencyCHF(partnerSummary.totalHt)}
+                        </strong>
+                      </div>
+                      <p className={styles.institutionSummaryNote}>
+                        Toutes les prestations à charge de ce partenaire sont incluses.
+                      </p>
+                    </>
+                  ) : (
+                    <p className={styles.institutionSummaryNote}>
+                      Aucune prestation à facturer à ce partenaire pour cette période.
+                    </p>
+                  )}
+                  {partnerSummary.excluded.visible ? (
+                    <div
+                      className={styles.institutionExcluded}
+                      data-testid="partner-excluded-warning"
+                    >
+                      <span>
+                        {partnerSummary.excluded.count === 1
+                          ? "1 prestation n'est pas encore facturable"
+                          : `${partnerSummary.excluded.count} prestations ne sont pas encore facturables`}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {payerType === 'clinic' && clinicCompanyId ? (
+              <div className={styles.detectedPlan} data-testid="institution-invoice-plan">
+                {showInstitutionPlanSkeleton ? (
+                  <p className={styles.formHint} role="status">
+                    Calcul des prestations à charge de cette institution…
+                  </p>
+                ) : institutionPlanIsCurrent ? (
+                  <>
+                    <div
+                      className={styles.institutionSummary}
+                      role="region"
+                      aria-label="Facture institution"
+                    >
+                      <div className={styles.institutionSummaryTitle}>
+                        Facture {selectedClinic?.institution_name || institutionSummary.displayName}
+                      </div>
+                      <div className={styles.institutionSummaryPeriod}>
+                        {`${String(MONTHS_FR[periodMonth - 1] || '').charAt(0).toUpperCase()}${String(MONTHS_FR[periodMonth - 1] || '').slice(1)} ${periodYear}`}
+                      </div>
+                      {institutionSummary.hasBillable ? (
+                        <>
+                          <div className={styles.institutionSummaryTotals}>
+                            <span data-testid="institution-summary-count">
+                              {institutionSummary.transportsCount} prestation
+                              {institutionSummary.transportsCount !== 1 ? 's' : ''}
+                            </span>
+                            <strong data-testid="institution-summary-amount">
+                              {formatCurrencyCHF(institutionSummary.totalHt)}
+                            </strong>
+                          </div>
+                          <p className={styles.institutionSummaryNote}>
+                            Toutes les prestations encore à facturer à cette institution
+                            sont incluses. Un changement de payeur côté institution
+                            (patient ↔ clinique) est pris en compte tout de suite.
+                          </p>
+                          {institutionPlanRefreshing || institutionPlanLoading ? (
+                            <p
+                              className={styles.planLiveHint}
+                              data-testid="institution-plan-live-hint"
+                              role="status"
+                            >
+                              Actualisation…
+                            </p>
+                          ) : null}
+                        </>
+                      ) : (
+                        <p className={styles.institutionSummaryNote}>
+                          Aucune prestation à facturer à cette institution pour cette période.
+                        </p>
+                      )}
+                    </div>
+                    {institutionSummary.alreadyInvoiced.visible ? (
+                      <div
+                        className={styles.institutionAlreadyInvoiced}
+                        data-testid="institution-already-invoiced-warning"
+                      >
+                        <span>
+                          {institutionSummary.alreadyInvoiced.count === 1
+                            ? '1 prestation déjà facturée'
+                            : `${institutionSummary.alreadyInvoiced.count} prestations déjà facturées`}
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.linkBtn}
+                          onClick={() =>
+                            setShowAlreadyInvoicedLines((openLines) => !openLines)
+                          }
+                          data-testid="institution-already-invoiced-toggle"
+                        >
+                          {showAlreadyInvoicedLines ? 'Masquer' : 'Voir'}
+                        </button>
+                      </div>
+                    ) : null}
+                    {showAlreadyInvoicedLines ? (
+                      <div
+                        className={styles.alreadyInvoicedDetail}
+                        data-testid="institution-already-invoiced-lines"
+                      >
+                        <div className={styles.alreadyInvoicedDetailTitle}>
+                          {institutionAlreadyInvoicedRows.length === 1
+                            ? 'Déjà facturée'
+                            : 'Déjà facturées'}
+                        </div>
+                        <ul className={styles.excludedDetailList}>
+                          {institutionAlreadyInvoicedRows.map((row) => (
+                            <li key={row.bookingId} className={styles.excludedDetailItem}>
+                              <span>
+                                #{row.bookingId} · {formatCurrencyCHF(row.amountHt)}
+                              </span>
+                              <span>{alreadyInvoicedInvoiceLabel(row)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    {institutionSummary.excluded.visible ? (
+                      <div
+                        className={styles.institutionExcluded}
+                        data-testid="institution-excluded-warning"
+                      >
+                        <span>
+                          {institutionSummary.excluded.count === 1
+                            ? '1 prestation non facturable'
+                            : `${institutionSummary.excluded.count} prestations non facturables`}
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.linkBtn}
+                          onClick={() => setShowExcludedLines((openLines) => !openLines)}
+                          data-testid="institution-excluded-toggle"
+                        >
+                          {showExcludedLines ? 'Masquer' : 'Voir'}
+                        </button>
+                      </div>
+                    ) : null}
+                    {institutionPlanLiveError ? (
+                      <div
+                        className={styles.planLiveError}
+                        data-testid="institution-plan-live-error"
+                        role="alert"
+                      >
+                        <span>{institutionPlanLiveError}</span>
+                        <button
+                          type="button"
+                          className={styles.linkBtn}
+                          onClick={() => void fetchInstitutionPlan({ silent: true })}
+                        >
+                          Réessayer
+                        </button>
+                      </div>
+                    ) : null}
+                    {showExcludedLines ? (
+                      <div className={styles.excludedDetail} data-testid="institution-excluded-lines">
+                        <div className={styles.excludedDetailTitle}>
+                          {excludedBlockTitle(institutionExcludedRows.length)}
+                        </div>
+                        <ul className={styles.excludedDetailList}>
+                          {institutionExcludedRows.map((row) => {
+                            const who = excludedRowWhoLabel(row);
+                            const when = formatPreviewDayMonth(row.scheduledAt);
+                            return (
+                              <li
+                                key={row.bookingId}
+                                className={styles.excludedDetailItem}
+                                data-testid={`dispute-excluded-row-${row.bookingId}`}
+                              >
+                                <p className={styles.excludedDetailWhy}>{exclusionWhyText(row)}</p>
+                                <div className={styles.excludedDetailWho}>
+                                  {when ? (
+                                    <span className={styles.excludedDetailDate}>{when}</span>
+                                  ) : null}
+                                  {who ? <span>{who}</span> : null}
+                                  <strong>{formatCurrencyCHF(row.amountHt)}</strong>
+                                </div>
+                                {canTreatDispute(row) ? (
+                                  <button
+                                    type="button"
+                                    className={styles.disputeTreatBtn}
+                                    data-testid={`dispute-treat-${row.bookingId}`}
+                                    onClick={() => setTreatingExcludedRow(row)}
+                                  >
+                                    Traiter la contestation
+                                  </button>
+                                ) : null}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
+            {shouldShowSimpleInvoiceLinesPreview({
+              showLinesPreview,
+              hasPreparedDraft: Boolean(draftInvoiceStub),
+            }) ? (
+              <section
+                className={styles.invoiceLinesPreview}
+                data-testid="invoice-lines-preview"
+                aria-label="Lignes qui seront facturées"
+              >
+                <h3 className={styles.invoiceLinesPreviewTitle}>Lignes qui seront facturées</h3>
+                {previewLoading ? (
+                  <p className={styles.formHint} role="status">
+                    Chargement des lignes…
+                  </p>
+                ) : linesPreview.rows.length === 0 ? (
+                  <p className={styles.formHint}>Aucune ligne à afficher pour cette sélection.</p>
+                ) : (
+                  <>
+                    <ul className={styles.invoiceLinesList}>
+                      {linesPreview.rows.map((row) => (
+                        <li key={row.key} className={styles.invoiceLineItem}>
+                          <span className={styles.invoiceLineDate}>{row.dateLabel}</span>
+                          <div className={styles.invoiceLineBody}>
+                            <div className={styles.invoiceLinePatient}>{row.patientName}</div>
+                            <div className={styles.invoiceLineRoute}>
+                              <span>{row.route}</span>
+                              {row.isRoundTrip ? (
+                                <span className={styles.invoiceLineAr}>
+                                  A/R · {row.segmentsCount} course
+                                  {row.segmentsCount !== 1 ? 's' : ''}
+                                </span>
+                              ) : null}
+                            </div>
+                            {row.isRoundTrip ? (
+                              <details className={styles.invoiceLineLegs}>
+                                <summary>Voir aller / retour</summary>
+                                <p>
+                                  Aller booking #{row.outboundBookingId}
+                                  {row.outboundAmountHt != null
+                                    ? ` · ${formatCurrencyCHF(row.outboundAmountHt)}`
+                                    : ''}
+                                </p>
+                                <p>
+                                  Retour booking #{row.returnBookingId}
+                                  {row.returnAmountHt != null
+                                    ? ` · ${formatCurrencyCHF(row.returnAmountHt)}`
+                                    : ''}
+                                </p>
+                              </details>
+                            ) : null}
+                          </div>
+                          <strong className={styles.invoiceLineAmount}>
+                            {formatCurrencyCHF(row.amountHt)}
+                          </strong>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className={styles.invoiceLinesFooter} data-testid="invoice-lines-preview-meta">
+                      <span>
+                        {linesPreview.visualLineCount} ligne
+                        {linesPreview.visualLineCount !== 1 ? 's' : ''} de facture
+                        {' · '}
+                        {linesPreview.prestationCount} prestation
+                        {linesPreview.prestationCount !== 1 ? 's' : ''}
+                      </span>
+                      <strong>{formatCurrencyCHF(linesPreview.totalHt)}</strong>
+                    </div>
+                  </>
+                )}
+              </section>
+            ) : null}
 
             {loadingLists && (
               <p className={styles.formHint} role="status">
@@ -1853,53 +2427,24 @@ const BillPeriodModal = ({
 
           {error && <div className={styles.err}>{error}</div>}
 
-          {preview && !error && !hasAssemblyLines && (
-            <div className={styles.previewBox}>
-              <div className={styles.previewHead}>
-                <h3>Aperçu</h3>
-                <span className={styles.previewModeBadge}>
-                  {preview.mode === 'clinic_monthly'
-                    ? 'S2 clinique'
-                    : preview.mode === 'partner_monthly'
-                      ? 'Facturation partenaire'
-                      : 'Direct patient'}
-                </span>
-              </div>
-              <div className={styles.previewStats}>
-                <div className={styles.previewStat}>
-                  <span className={styles.previewStatValue}>{preview.transports_count ?? 0}</span>
-                  <span className={styles.previewStatLabel}>
-                    {preview.mode === 'partner_monthly'
-                      ? `transfert${preview.transports_count !== 1 ? 's' : ''} validé${preview.transports_count !== 1 ? 's' : ''}`
-                      : `transport${preview.transports_count !== 1 ? 's' : ''} éligible${preview.transports_count !== 1 ? 's' : ''}`}
-                  </span>
-                </div>
-                <div className={styles.previewStatHighlight}>
-                  <span className={styles.previewStatLabel}>Total estimé</span>
-                  <span className={styles.previewStatMoney}>
-                    {formatCurrencyCHF(preview.estimated_total ?? 0).replace(' CHF', '')}{' '}
-                    <span className={styles.previewStatCurrency}>CHF</span>
-                  </span>
-                </div>
-              </div>
-              {Array.isArray(preview.warnings) && preview.warnings.length > 0 && (
-                <ul className={styles.warnings}>
-                  {preview.warnings.map((w) => (
-                    <li key={w}>{w}</li>
-                  ))}
-                </ul>
-              )}
+          {shouldShowDraftInvoiceToolbar({
+            hasPreparedDraft: Boolean(draftInvoiceStub),
+          }) ? (
+            <div className={styles.draftEditorMount} data-testid="invoice-draft-editor">
+              <DraftInvoiceEditorPanel
+                key={draftInvoiceStub?.id ?? 'draft-stub'}
+                open
+                initialInvoice={draftInvoiceStub}
+                companyId={companyId}
+                toolbarSubtitle={periodPreviewBarSubtitle}
+                onUpdated={handleDraftPanelUpdated}
+                onOpenSendEmail={onOpenSendEmail}
+                onMarkAsSent={onMarkAsSent}
+              />
             </div>
-          )}
+          ) : null}
 
-          {payerType === 'partner' && preview && !hasAssemblyLines && (
-            <p className={styles.partnerHint} role="note">
-              Aucun détail de ligne n&apos;a pu être chargé pour ce partenaire. Vérifiez les transferts validés sur
-              la période.
-            </p>
-          )}
-
-          {hasAssemblyLines && preview && (
+          {false && composerPhase === 'draft' && hasAssemblyLines && preview && (
             <div
               ref={periodPdfWrapRef}
               className={`${draftEditorStyles.draftPdfWrap}${
@@ -2064,6 +2609,7 @@ const BillPeriodModal = ({
                   <InvoiceLivePreview
                     invoice={mergedPeriodInvoice}
                     companyVatApplicable={companyVatApplicable}
+                    auditableRoundTrip
                     className={draftEditorStyles.draftLivePreviewMount}
                   />
                 ) : null}
@@ -2817,22 +3363,9 @@ const BillPeriodModal = ({
             </div>
           )}
 
-          {hasAssemblyLines && preview && Array.isArray(preview.warnings) && preview.warnings.length > 0 && (
-            <ul className={styles.warnings}>
-              {preview.warnings.map((w) => (
-                <li key={w}>{w}</li>
-              ))}
-            </ul>
-          )}
-
-          {assemblyNoSelectable && (
-            <p className={styles.emptyHint} role="status">
-              Aucune course facturable à sélectionner pour cette période (courses déjà facturées ou verrouillées).
-            </p>
-          )}
-
               </div>
 
+          {!draftInvoiceStub ? (
           <div className={styles.stickyFooter}>
             {footerHint && (
               <p className={styles.footerHint} id="bill-period-footer-hint">
@@ -2846,15 +3379,20 @@ const BillPeriodModal = ({
               <button
                 type="button"
                 className={styles.btn}
-                onClick={runPreview}
+                onClick={toggleLinesPreview}
                 disabled={!canPreview() || previewLoading || generateLoading}
+                data-testid="invoice-lines-preview-toggle"
               >
                 {previewLoading ? (
                   <FiLoader className={styles.btnIconSpin} size={14} aria-hidden />
                 ) : (
                   <FiEye size={14} aria-hidden />
                 )}
-                {previewLoading ? 'Prévisualisation…' : 'Prévisualiser les lignes'}
+                {previewLoading
+                  ? 'Prévisualisation…'
+                  : showLinesPreview
+                    ? 'Masquer les lignes'
+                    : 'Prévisualiser les lignes'}
               </button>
               <button
                 type="button"
@@ -2862,12 +3400,15 @@ const BillPeriodModal = ({
                 onClick={runGenerate}
                 disabled={
                   !canPreview() ||
-                  !preview ||
                   generateLoading ||
                   previewLoading ||
-                  preview.transports_count === 0 ||
-                  (hasAssemblyLines && selectedBookingIds.size === 0) ||
-                  assemblyNoSelectable
+                  (payerType === 'clinic'
+                    ? !institutionPlanIsCurrent ||
+                      institutionPlanLoading ||
+                      !institutionSummary.hasBillable
+                    : payerType === 'patient'
+                      ? !patientSummary.hasBillable
+                      : !partnerSummary.hasBillable)
                 }
               >
                 {generateLoading ? (
@@ -2879,11 +3420,28 @@ const BillPeriodModal = ({
               </button>
             </div>
           </div>
+          ) : null}
             </div>
           </>
-        )}
       </div>
-    </div>,
+    </div>
+      {treatingExcludedRow ? (
+        <DisputeResolutionPanel
+          companyId={companyId}
+          row={treatingExcludedRow}
+          onClose={() => {
+            const bookingId = treatingExcludedRow.bookingId;
+            setTreatingExcludedRow(null);
+            window.requestAnimationFrame(() => {
+              document
+                .querySelector(`[data-testid="dispute-excluded-row-${bookingId}"]`)
+                ?.scrollIntoView({ block: 'nearest' });
+            });
+          }}
+          onChanged={() => void fetchInstitutionPlan({ silent: true })}
+        />
+      ) : null}
+    </>,
     portalTarget
   );
 };

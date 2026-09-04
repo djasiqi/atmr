@@ -231,6 +231,17 @@ class CompanyBookingBillingAdjustmentUseCase:
                 error={"error": lock_msg or "Facturation non modifiable."},
                 status_code=409,
             )
+        from application.invoices.booking_dispute.freeze import (
+            financial_change_blocked_by_dispute,
+        )
+
+        frozen, freeze_msg = financial_change_blocked_by_dispute(booking)
+        if frozen:
+            return BookingBillingAdjustmentResult(
+                ok=False,
+                error={"error": freeze_msg or "Contestation en cours : facturation gelée."},
+                status_code=409,
+            )
 
         override = (data.get("override_reason") or "").strip()
         if not override:
@@ -364,6 +375,16 @@ class CompanyBookingBillingAdjustmentUseCase:
             )
         else:
             propagated_ids = []
+
+        financial_changed = payer_changed or (
+            has_amount and float(booking.amount) != float(old["amount"])
+        )
+        if financial_changed:
+            from application.invoices.institution_invoice_eligibility import (
+                reopen_market_lirie_validation_after_financial_change,
+            )
+
+            reopen_market_lirie_validation_after_financial_change(booking)
 
         after = {
             "amount": float(booking.amount),

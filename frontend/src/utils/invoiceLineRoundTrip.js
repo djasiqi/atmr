@@ -183,3 +183,55 @@ export function roundTripLegLabel(line) {
   if (isSingleMergedRoundTripLine(line)) return 'A/R';
   return null;
 }
+
+/**
+ * Jambes A/R pour l'interface de contrôle (dépliable).
+ * Le PDF reste compact ; ici on expose les booking_id + montants.
+ */
+export function getRoundTripAuditLegs(line) {
+  const m = getInvoiceLineMeta(line);
+  if (!m || typeof m !== 'object') return null;
+  if (m.period_preview_single_leg) return null;
+  const primaryId = Number(
+    m.primary_booking_id ?? line?.reservation_id ?? line?.booking_id
+  );
+  const partnerId = Number(
+    m.round_trip_merge_partner_reservation_id ??
+      m.round_trip_secondary_reservation_id ??
+      (Array.isArray(m.round_trip_secondary_reservation_ids)
+        ? m.round_trip_secondary_reservation_ids[0]
+        : null)
+  );
+  const bookingIds = Array.isArray(m.booking_ids)
+    ? m.booking_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+    : [];
+  const isAr =
+    isRoundTripPreviewPrimaryLine(line) || isSingleMergedRoundTripLine(line);
+  if (!isAr) return null;
+  const outboundId = Number.isFinite(primaryId) ? primaryId : bookingIds[0];
+  const returnId = Number.isFinite(partnerId)
+    ? partnerId
+    : bookingIds.find((id) => id !== outboundId);
+  if (!Number.isFinite(outboundId) && !Number.isFinite(returnId)) return null;
+  const primaryHt = Number(m.round_trip_primary_amount_ht);
+  const partnerHt = Number(m.round_trip_partner_amount_ht);
+  return {
+    segmentsCount: bookingIds.length >= 2 ? bookingIds.length : 2,
+    outbound: {
+      bookingId: Number.isFinite(outboundId) ? outboundId : null,
+      amountHt: Number.isFinite(primaryHt) ? primaryHt : null,
+      description:
+        m.round_trip_primary_description != null
+          ? String(m.round_trip_primary_description).trim()
+          : null,
+    },
+    inbound: {
+      bookingId: Number.isFinite(returnId) ? returnId : null,
+      amountHt: Number.isFinite(partnerHt) ? partnerHt : null,
+      description:
+        m.round_trip_partner_description != null
+          ? String(m.round_trip_partner_description).trim()
+          : null,
+    },
+  };
+}

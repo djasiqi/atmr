@@ -430,6 +430,77 @@ export const invoiceService = {
     return response.data;
   },
 
+  /** Plan institution : buckets clinique / patients détectés (origine × gate × payeur) */
+  async fetchInstitutionInvoicePlan(
+    companyId,
+    { year, month, clinicCompanyId, clinicClientId, signal }
+  ) {
+    const params = new URLSearchParams();
+    params.append('year', year);
+    params.append('month', month);
+    params.append('clinic_company_id', clinicCompanyId);
+    if (clinicClientId) params.append('clinic_client_id', clinicClientId);
+    const response = await apiClient.get(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/institution-invoice-plan?${params}`,
+      signal ? { signal } : undefined
+    );
+    return response.data;
+  },
+
+  async getBookingDispute(companyId, bookingId) {
+    const response = await apiClient.get(
+      `${API_BASE}/invoices/companies/${companyId}/bookings/${bookingId}/dispute`
+    );
+    return response.data;
+  },
+
+  async respondBookingDispute(companyId, bookingId, body) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/bookings/${bookingId}/dispute`,
+      body
+    );
+    return response.data;
+  },
+
+  async addBookingDisputeEvidence(companyId, bookingId, body) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/bookings/${bookingId}/dispute/evidence`,
+      body
+    );
+    return response.data;
+  },
+
+  async submitBookingDispute(companyId, bookingId) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/bookings/${bookingId}/dispute/submit`
+    );
+    return response.data;
+  },
+
+  /** Batch drafts patients depuis le plan institution (idempotent, sans envoi). */
+  async createInstitutionPatientBatch(
+    companyId,
+    { year, month, clinicCompanyId, clinicClientId, institutionPatientIds, patientBucketKeys }
+  ) {
+    const payload = {
+      year,
+      month,
+      clinic_company_id: clinicCompanyId,
+    };
+    if (clinicClientId) payload.clinic_client_id = clinicClientId;
+    if (institutionPatientIds !== undefined) {
+      payload.institution_patient_ids = institutionPatientIds;
+    }
+    if (patientBucketKeys !== undefined) {
+      payload.patient_bucket_keys = patientBucketKeys;
+    }
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/institution-patient-batch`,
+      payload
+    );
+    return response.data;
+  },
+
   /** V2 : agrégat des payeurs avec courses à facturer sur la période (dashboard) */
   async fetchBillingOpportunities(companyId, year, month) {
     const params = new URLSearchParams();
@@ -705,6 +776,12 @@ export const {
   exportInvoicesCSV,
   exportPaymentsCSV,
   fetchPeriodPreview,
+  fetchInstitutionInvoicePlan,
+  getBookingDispute,
+  respondBookingDispute,
+  addBookingDisputeEvidence,
+  submitBookingDispute,
+  createInstitutionPatientBatch,
   fetchBillingOpportunities,
   removeDraftInvoiceLine,
   updateDraftInvoiceLine,

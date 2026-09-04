@@ -45,6 +45,19 @@ export const changeBillingControlPayer = async (bookingId, data) => {
   return response.data;
 };
 
+export const getBillingControlDispute = async (bookingId) => {
+  const response = await apiClient.get(`${BASE_PATH}/bookings/${bookingId}/dispute`);
+  return response.data;
+};
+
+export const decideBillingControlDispute = async (bookingId, body) => {
+  const response = await apiClient.post(
+    `${BASE_PATH}/bookings/${bookingId}/dispute/decide`,
+    body,
+  );
+  return response.data;
+};
+
 const institutionBillingControlService = {
   listBillingControlBookings,
   getBillingControlBooking,
@@ -52,6 +65,8 @@ const institutionBillingControlService = {
   markBillingControlAnomaly,
   reopenBillingControlBooking,
   changeBillingControlPayer,
+  getBillingControlDispute,
+  decideBillingControlDispute,
 };
 
 export default institutionBillingControlService;

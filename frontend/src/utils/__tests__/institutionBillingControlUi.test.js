@@ -53,6 +53,7 @@ describe('institutionBillingControlUi', () => {
   it('mappe les libellés payeur / statut / intent', () => {
     expect(payerTypeLabel('clinic')).toBe('Clinique');
     expect(controlStatusLabel('pending_review')).toBe('À vérifier');
+    expect(controlStatusLabel('auto_released')).toBe('Libérée à échéance');
     expect(billingIntentFromPayerType('clinic')).toBe('institution');
   });
 
