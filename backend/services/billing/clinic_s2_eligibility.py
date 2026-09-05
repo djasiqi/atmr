@@ -93,17 +93,39 @@ def cancellation_authorized_sql() -> ColumnElement[bool]:
     )
 
 
+def _canceled_return_parent_is_not_canceled_sql() -> ColumnElement[bool]:
+    """Retour annulé autonome : l'aller n'est pas CANCELED (pas une réinjection A/R)."""
+    parent = aliased(Booking)
+    return exists().where(
+        parent.id == Booking.parent_booking_id,
+        parent.status != BookingStatus.CANCELED.value,
+    )
+
+
 def clinic_canceled_billable_sql() -> ColumnElement[bool]:
-    """Annulation clinique éligible : payeur déjà filtré, pas de ClientStay."""
+    """Annulation clinique éligible : payeur déjà filtré, pas de ClientStay.
+
+    C1 : un retour n'est pas réinjecté si l'aller est annulé. Un retour
+    annulé reste éligible si l'aller est effectué (annulation indépendante).
+    """
     return and_(
         Booking.status == BookingStatus.CANCELED.value,
         Booking.amount > 0,
         cancellation_authorized_sql(),
-        Booking.is_return == False,  # noqa: E712
+        or_(
+            Booking.is_return == False,  # noqa: E712
+            and_(
+                Booking.is_return == True,  # noqa: E712
+                Booking.parent_booking_id.isnot(None),
+                _canceled_return_parent_is_not_canceled_sql(),
+            ),
+        ),
     )
 
 
-def booking_is_clinic_canceled_c1_eligible(booking: object) -> bool:
+def booking_is_clinic_canceled_c1_eligible(
+    booking: object, *, parent: object | None = None
+) -> bool:
     """Revalidation in-memory C1 d'un segment (après expansion A/R)."""
     status = _booking_status_value(booking)
     if status not in _CANCELED_FOR_S2:
@@ -115,7 +137,15 @@ def booking_is_clinic_canceled_c1_eligible(booking: object) -> bool:
     if amount <= 0:
         return False
     if bool(getattr(booking, "is_return", False)):
-        return False
+        parent_obj = parent
+        if parent_obj is None:
+            parent_id = getattr(booking, "parent_booking_id", None)
+            if parent_id is not None:
+                from ext import db
+
+                parent_obj = db.session.get(Booking, int(parent_id))
+        if parent_obj is None or _booking_status_value(parent_obj) in _CANCELED_FOR_S2:
+            return False
     payer = str(getattr(booking, "billed_to_type", "") or "").lower().strip()
     if payer and payer != "clinic":
         return False
@@ -125,14 +155,18 @@ def booking_is_clinic_canceled_c1_eligible(booking: object) -> bool:
 def filter_clinic_s2_financial_segments(bookings: list) -> list:
     """Garde les courses terminées et les annulations qui passent C1.
 
-    Un pair A/R peut rester en mémoire ; il ne devient pas un segment financier.
+    Un pair A/R peut rester en mémoire ; il ne devient pas un segment financier
+    si l'aller est annulé.
     """
+    by_id = {int(b.id): b for b in bookings if getattr(b, "id", None) is not None}
     kept: list = []
     for booking in bookings:
         status = _booking_status_value(booking)
         if status in _COMPLETED_FOR_S2:
             kept.append(booking)
             continue
-        if booking_is_clinic_canceled_c1_eligible(booking):
+        parent_id = getattr(booking, "parent_booking_id", None)
+        parent = by_id.get(int(parent_id)) if parent_id is not None else None
+        if booking_is_clinic_canceled_c1_eligible(booking, parent=parent):
             kept.append(booking)
     return kept

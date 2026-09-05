@@ -712,7 +712,9 @@ class TestP0StabilizationE2E:
         if header_trace is not None:
             assert header_trace == expected_trace
 
-    def test_e2e_payment_flow(self, client, auth_headers, sample_company, db):
+    def test_e2e_payment_flow(
+        self, client, auth_headers, sample_company, sample_client, db
+    ):
         """Test E2E complet: paiement avec idempotency (CRITIQUE)."""
         # Créer une facture de test
         from datetime import UTC, datetime, timedelta
@@ -723,7 +725,7 @@ class TestP0StabilizationE2E:
         _issued = datetime.now(UTC)
         invoice = Invoice(
             company_id=sample_company.id,
-            client_id=1,  # ID fictif pour le test
+            client_id=sample_client.id,
             period_month=12,
             period_year=2024,
             invoice_number="TEST-001",
