@@ -3017,6 +3017,32 @@ def _line_description_from_consolidated_item(item: dict[str, Any]) -> str | None
     return _one(item.get("line"))
 
 
+def _pdf_s2_item_is_cancellation(
+    item: dict[str, Any], bookings_by_id: dict[int, Any]
+) -> bool:
+    """C4 : une ligne d'annulation ne doit pas être rendue comme un trajet effectué."""
+    from application.invoices.booking_status import booking_status_is_canceled
+
+    for key in ("line", "line1", "line2"):
+        ln = item.get(key)
+        if ln is None:
+            continue
+        meta = getattr(ln, "line_meta", None)
+        if isinstance(meta, dict) and meta.get("is_cancellation") is True:
+            return True
+        ids: list[int] = []
+        rid = getattr(ln, "reservation_id", None)
+        if rid is not None:
+            ids.append(int(rid))
+        if isinstance(meta, dict):
+            ids.extend(int(i) for i in (meta.get("booking_ids") or []))
+        for bid in ids:
+            booking = bookings_by_id.get(int(bid))
+            if booking is not None and booking_status_is_canceled(booking):
+                return True
+    return False
+
+
 def _consolidated_item_is_ride_transport(item: dict[str, Any]) -> bool:
     """« Trajet : » uniquement pour les lignes RIDE (pas livraison matériel, CUSTOM, frais)."""
     if item.get("is_round_trip"):
@@ -3784,7 +3810,8 @@ def _build_s2_table(
                 cat_disp, net_disp, compact_private_sub=True
             )
         line_desc_opt = _line_description_from_consolidated_item(item)
-        if is_s2_invoice and is_ride_td:
+        is_cancellation_line = _pdf_s2_item_is_cancellation(item, bookings_by_id)
+        if is_s2_invoice and is_ride_td and not is_cancellation_line:
             transport_html = _pdf_s2_full_address_transport_text(
                 item,
                 font_name=font_name,

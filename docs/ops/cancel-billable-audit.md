@@ -11,7 +11,7 @@ C1 ✅ CLOSED / PASS   HEAD 08eefae4
 C2a ✅ SOURCE CANONIQUE CLOSED / PASS
 C2b ✅ UNRESOLVED CONSUMER CLOSED / PASS
 C3 ✅ CLOSED / PASS   libellés 5/5
-C4 HOLD
+C4 ✅ CLOSED / PASS   PDF / QR 3/3
 
 #97 / 1b7acbeb = INTOUCHÉ
 ```
@@ -21,6 +21,7 @@ C1 figé : `08eefae4` (`cert(billing): figer CANCEL-BILLABLE C1 CLOSED`).
 Tests C1 : `backend/tests/application/test_cancel_billable_c1_eligibility.py`.
 Tests C2 : `backend/tests/application/test_cancel_billable_c2_amount.py`.
 Tests C3 : `backend/tests/application/test_cancel_billable_c3_labels.py`.
+Tests C4 : `backend/tests/application/test_cancel_billable_c4_emission.py`.
 
 Comportement voulu :
 
@@ -330,7 +331,43 @@ C4 untouched
 ```
 
 Tests : `backend/tests/application/test_cancel_billable_c3_labels.py`.
-C4 ensuite : PDF conserve motif + montant C2, QR conserve le total.
+
+## C4 — verdict 5 septembre 2026 (émission PDF / QR)
+
+Chaîne réelle, sans mock PDF :
+
+```text
+eligibility → amount → description → preview → InvoiceLine → PDF → QR
+```
+
+| Cas | Attendu | Verdict |
+| --- | --- | --- |
+| NO_SHOW, fee 45 / course 90 | facture 45, source `cancellation_fee_amount`, motif NO_SHOW, pas de trajet effectué, QR 45 | **PASS** |
+| fee NULL + course 320 | aucune ligne 0 CHF, total 320, QR 320 | **PASS** |
+| FULL_FARE fee 90 / course 90 | 90 depuis `cancellation_fee_amount`, motif NO_SHOW, QR 90 | **PASS** |
+
+✅ **Implémenté** : le PDF S2 n'utilise plus pickup→dropoff pour une ligne d'annulation (`is_cancellation` + statut booking). Le motif C3 et le montant C2 sont ceux imprimés. Tests : `test_cancel_billable_c4_emission.py`.
+
+```text
+C4 CLOSED / PASS
+
+3/3
+
+partial 45 / NO_SHOW
+unresolved → hors total
+FULL_FARE 90 / cancellation_fee_amount
+
+PDF motif == InvoiceLine.description
+QR == total facture
+aucune annulation rendue comme trajet effectué
+
+C1 untouched
+C2 untouched
+C3 untouched
+#97 / 1b7acbeb = INTOUCHÉ
+```
+
+`CANCEL-BILLABLE CLOSED / PASS` : C1–C4 verts.
 
 ## Hors scope
 
@@ -339,6 +376,5 @@ extension A/R hors politique OUTBOUND_ONLY déjà posée.
 
 ## Fermeture
 
-`CANCEL-BILLABLE CLOSED / PASS` seulement quand C1–C4 sont verts sur
-les cinq sentinelles, **sans** modifier le HEAD contestation
-`1b7acbeb` sauf régression démontrée sur ce HEAD.
+`CANCEL-BILLABLE CLOSED / PASS` — C1–C4 verts. HEAD contestation
+`1b7acbeb` intact (ancêtre, non réécrit).

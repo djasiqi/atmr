@@ -24,6 +24,7 @@ from infrastructure.invoices.invoice_calculator import (
     round_to_5_cents,
 )
 from application.invoices.billable_amount import calculate_billable_booking_amount
+from application.invoices.booking_status import booking_status_is_canceled
 from application.invoices.invoice_booking_units import (
     collect_explicit_peer_ids_to_load,
     resolve_invoice_booking_units,
@@ -1045,6 +1046,8 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     "booking_ids": booking_ids,
                     "primary_booking_id": int(primary.id),
                 }
+                if any(booking_status_is_canceled(seg) for seg in segments):
+                    line_meta["is_cancellation"] = True
                 if patient_name and str(patient_name).strip():
                     line_meta["patient_name"] = patient_name
                 if unit.kind == "round_trip":
