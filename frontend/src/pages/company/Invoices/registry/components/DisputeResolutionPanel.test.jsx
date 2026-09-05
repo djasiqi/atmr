@@ -119,6 +119,8 @@ function TreatHost({ firstRow = dupont }) {
 }
 
 describe('DisputeResolutionPanel — overlay viewport', () => {
+  // G3 HOLD : toBeInTheDocument / getBoundingClientRect mocké = insuffisant.
+  // Fermeture G3 uniquement via Playwright réel (e2e/institution-billing-g3.spec.js).
   let restoreBox;
 
   beforeEach(() => {

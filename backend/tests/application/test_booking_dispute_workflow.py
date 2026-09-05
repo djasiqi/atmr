@@ -105,6 +105,7 @@ def test_institution_right_marks_not_billable_without_delete(monkeypatch):
 def test_submit_requires_uploaded_evidence(monkeypatch):
     booking = _booking()
     dispute = _dispute(
+        status="awaiting_carrier_response",
         carrier_stance="mission_done",
         evidence=[SimpleNamespace(source="system", kind="system_snapshot")],
     )

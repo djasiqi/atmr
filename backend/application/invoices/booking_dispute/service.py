@@ -25,6 +25,11 @@ from services.institutions.booking_change_service import (
 )
 
 from .freeze import OPEN_DISPUTE_STATUSES, get_open_dispute_for_booking
+from .machine import (
+    ALLOWED_CORRECTION_PAYERS,
+    is_carrier_actable,
+    is_submittable,
+)
 
 CARRIER_STANCES = frozenset({"institution_right", "mission_done", "needs_correction"})
 EXCLUSION_REASONS = frozenset(
@@ -58,6 +63,16 @@ INSTITUTION_OR_ADMIN_ROLES = frozenset(
 _CARRIER_CANNOT_SELF_RESOLVE = (
     "Le transporteur ne peut pas lever lui-même la contestation. "
     "Soumettez une preuve : l'institution ou un opérateur LIRIE tranche."
+)
+_PENDING_THIRD_PARTY = (
+    "Cette contestation est soumise : seule l'institution ou un opérateur "
+    "LIRIE peut trancher."
+)
+_NEED_STANCE_BEFORE_EVIDENCE = (
+    "Choisissez d'abord une position (mission effectuée ou informations à corriger)."
+)
+_SUBMIT_WRONG_STATUS = (
+    "Soumettez uniquement après avoir choisi une position et ajouté une preuve."
 )
 
 
@@ -285,6 +300,13 @@ def confirm_institution_right(
             status_code=409,
             dispute=dispute,
         )
+    if not is_carrier_actable(dispute.status):
+        return DisputeResult(
+            ok=False,
+            error=_PENDING_THIRD_PARTY,
+            status_code=409,
+            dispute=dispute,
+        )
 
     now = _now()
     dispute.carrier_stance = "institution_right"
@@ -357,6 +379,13 @@ def carrier_respond(
             status_code=409,
             dispute=dispute,
         )
+    if not is_carrier_actable(dispute.status):
+        return DisputeResult(
+            ok=False,
+            error=_PENDING_THIRD_PARTY,
+            status_code=409,
+            dispute=dispute,
+        )
 
     now = _now()
     dispute.carrier_stance = raw
@@ -364,11 +393,19 @@ def carrier_respond(
     dispute.carrier_responded_at = now
     dispute.carrier_responded_by_user_id = actor_user_id
     if raw == "needs_correction":
+        payer = (proposed_payer_type or "").strip() or None
+        if payer is not None and payer not in ALLOWED_CORRECTION_PAYERS:
+            return DisputeResult(
+                ok=False,
+                error="Correction limitée au montant et au payeur (institution ou patient).",
+                status_code=400,
+                dispute=dispute,
+            )
         dispute.status = BookingDisputeStatus.AWAITING_CORRECTION.value
         dispute.proposed_amount_ht = (
             Decimal(str(proposed_amount_ht)) if proposed_amount_ht is not None else None
         )
-        dispute.proposed_payer_type = (proposed_payer_type or "").strip() or None
+        dispute.proposed_payer_type = payer
         dispute.proposed_correction_note = (
             proposed_correction_note or note or ""
         ).strip() or None
@@ -428,22 +465,24 @@ def add_carrier_evidence(
             error="Aucune contestation ouverte.",
             status_code=404,
         )
-    if dispute.status not in (
-        BookingDisputeStatus.AWAITING_CARRIER_RESPONSE.value,
-        BookingDisputeStatus.AWAITING_CORRECTION.value,
-        BookingDisputeStatus.DISPUTED.value,
-        BookingDisputeStatus.EVIDENCE_SUBMITTED.value,
-    ):
+    if not is_carrier_actable(dispute.status):
         return DisputeResult(
             ok=False,
-            error="Impossible d'ajouter une preuve sur une contestation close.",
+            error=(
+                _PENDING_THIRD_PARTY
+                if dispute.status == BookingDisputeStatus.EVIDENCE_SUBMITTED.value
+                else "Impossible d'ajouter une preuve sur une contestation close."
+            ),
             status_code=409,
             dispute=dispute,
         )
-    if dispute.status == BookingDisputeStatus.DISPUTED.value:
-        dispute.status = BookingDisputeStatus.AWAITING_CARRIER_RESPONSE.value
-        if not dispute.carrier_stance:
-            dispute.carrier_stance = "mission_done"
+    if dispute.carrier_stance not in ("mission_done", "needs_correction"):
+        return DisputeResult(
+            ok=False,
+            error=_NEED_STANCE_BEFORE_EVIDENCE,
+            status_code=409,
+            dispute=dispute,
+        )
     db.session.add(
         BookingDisputeEvidence(
             dispute=dispute,
@@ -481,6 +520,13 @@ def submit_dispute_for_validation(
             ok=False,
             error="Choisissez d'abord « mission effectuée » ou « informations à corriger ».",
             status_code=400,
+            dispute=dispute,
+        )
+    if not is_submittable(dispute.status):
+        return DisputeResult(
+            ok=False,
+            error=_SUBMIT_WRONG_STATUS,
+            status_code=409,
             dispute=dispute,
         )
     human_proofs = [row for row in (dispute.evidence or []) if row.source == "uploaded"]
@@ -549,7 +595,10 @@ def decide_dispute(
         )
 
     if action == "reject_evidence":
-        dispute.status = BookingDisputeStatus.AWAITING_CARRIER_RESPONSE.value
+        if dispute.carrier_stance == "needs_correction":
+            dispute.status = BookingDisputeStatus.AWAITING_CORRECTION.value
+        else:
+            dispute.status = BookingDisputeStatus.AWAITING_CARRIER_RESPONSE.value
         dispute.resolution_note = (note or "").strip() or None
         _append_event(
             dispute,

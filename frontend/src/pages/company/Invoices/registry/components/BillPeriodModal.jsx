@@ -1886,6 +1886,7 @@ const BillPeriodModal = ({
                 className={`${styles.formScroll}${
                   draftInvoiceStub ? ` ${styles.formScrollWithDraft}` : ''
                 }`}
+                data-testid="bill-period-form-scroll"
               >
           <div className={styles.section}>
             <div className={styles.fieldGroup} data-testid="bill-period-payer-type">

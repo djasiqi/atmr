@@ -74,7 +74,9 @@ API institution : `GET/POST …/institutions/billing/bookings/<id>/dispute[/deci
 UI : bouton **Traiter la contestation** dans le bloc exclu. Le panneau s’ouvre en **sous-modal centré** (portal `document.body`, overlay au-dessus de `BillPeriodModal`, indépendant du scroll). Motif institution = catégorie choisie + commentaire, jamais la liste des codes. Un GET ne rouvre pas une course déjà `not_billable`. Contrôle institution : Valider / Refuser le justificatif.
 
 Fichiers : `backend/application/invoices/booking_dispute/`, `backend/models/booking_dispute.py`, `frontend/src/utils/bookingDisputeUi.js`, `DisputeResolutionPanel.jsx`.  
-Tests : `backend/tests/application/test_booking_dispute_workflow.py`, `frontend/src/utils/__tests__/bookingDisputeUi.test.js`, `DisputeResolutionPanel.test.jsx` (overlay visible hors scroll, Escape, enchaînement, mobile).
+Tests : `backend/tests/application/test_booking_dispute_workflow.py`, `test_booking_dispute_g2_state_machine.py` (G2 machine d’état, **PASS**), `test_booking_dispute_g1_financial_matrix.py` + `test_booking_dispute_g1_plan_preview.py` (G1 exactitude financière, **CLOSED / PASS**), `tests/e2e/test_e2e_institution_billing_g4_emission.py` (G4 émission PDF/QR, **CLOSED / PASS**).  
+UI : `frontend/src/utils/__tests__/bookingDisputeUi.test.js`, `DisputeResolutionPanel.test.jsx` (overlay, Escape — **ne ferme pas G3**).  
+G3 navigateur réel : `frontend/e2e/institution-billing-g3.spec.js` — **CLOSED / PASS**. Charte : `docs/ops/institution-billing-hold-certification.md` — **Institution Billing = CLOSED**.
 
 Fichiers : `frontend/src/utils/institutionInvoicePlanUi.js`, `frontend/src/utils/invoiceLinesPreviewUi.js`, `BillPeriodModal.jsx`  
 Tests de parité : `frontend/src/utils/__tests__/institutionInvoicePlanUi.test.js`, `frontend/src/utils/__tests__/invoiceLinesPreviewUi.test.js`

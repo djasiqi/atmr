@@ -65,6 +65,7 @@
     "test:ci": "CI=true react-scripts test --coverage --watchAll=false",
     "test:coverage": "react-scripts test --coverage --watchAll=false",
     "e2e:demo": "playwright test e2e/demo-commercial.spec.js",
+    "e2e:institution-billing-g3": "playwright test --config=playwright.institution-billing.config.js",
     "e2e:dashboard-targeted-audit": "node scripts/collect-dashboard-targeted-audit.mjs",
     "e2e:dashboard-targeted-audit:merge": "node scripts/merge-targeted-audit-summary.mjs",
     "e2e:company-space-baseline": "node scripts/collect-company-space-baseline.mjs",
