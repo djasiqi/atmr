@@ -33,7 +33,7 @@ from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
     round_to_5_cents,
 )
-from models import Booking, ClientStay, Company
+from models import Booking, Company
 from models.enums import BookingStatus
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
@@ -470,31 +470,9 @@ def build_period_invoice_preview(
         BookingStatus.COMPLETED.value,
         BookingStatus.RETURN_COMPLETED.value,
     ]
-    from sqlalchemy import exists
+    from services.billing.clinic_s2_eligibility import clinic_canceled_billable_sql
 
-    stay_overlaps_booking = exists().where(
-        ClientStay.client_id == Booking.client_id,
-        ClientStay.company_id == ccid,
-        ClientStay.status == "active",
-        ClientStay.start_date <= Booking.scheduled_time,
-        or_(
-            ClientStay.end_date.is_(None),
-            ClientStay.end_date >= Booking.scheduled_time,
-        ),
-    )
-    canceled_eligible = (
-        (Booking.status == BookingStatus.CANCELED.value)
-        & (Booking.amount > 0)
-        & (
-            (Booking.is_cancellation_billable == True)  # noqa: E712
-            | (
-                Booking.billing_override_reason.isnot(None)
-                & (Booking.billing_override_reason != "")
-            )
-        )
-        & stay_overlaps_booking
-        & (Booking.is_return == False)  # noqa: E712
-    )
+    canceled_eligible = clinic_canceled_billable_sql()
     eligible_query = Booking.query.filter(
         Booking.company_id == company_id,
         clinic_s2_billed_to_company_predicate(ccid, company_id),

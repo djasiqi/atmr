@@ -15,7 +15,7 @@ from flask_restx import (
     fields,
     reqparse,
 )
-from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.orm import aliased, joinedload
 
@@ -887,32 +887,13 @@ class EligibleClients(Resource):
                 Booking.status.in_(target_statuses), canceled_eligible_patient
             )
 
-        # S2 / facturation clinique : inclure aussi les annulations éligibles (aller uniquement, client hospitalisé)
+        # S2 : même règle C1 que preview / generate (pas de ClientStay financier)
         if clinic_company_id and billed_to_type != "patient":
-            stay_overlaps = exists().where(
-                ClientStay.client_id == Booking.client_id,
-                ClientStay.company_id == clinic_company_id,
-                ClientStay.status == "active",
-                ClientStay.start_date <= Booking.scheduled_time,
-                or_(
-                    ClientStay.end_date.is_(None),
-                    ClientStay.end_date >= Booking.scheduled_time,
-                ),
+            from services.billing.clinic_s2_eligibility import (
+                clinic_canceled_billable_sql,
             )
-            # Annulations : motif facturable ou justification + séjour actif ; aller uniquement
-            canceled_eligible = (
-                (Booking.status == BookingStatus.CANCELED.value)
-                & (Booking.amount > 0)
-                & (
-                    (Booking.is_cancellation_billable == True)  # noqa: E712
-                    | (
-                        Booking.billing_override_reason.isnot(None)
-                        & (Booking.billing_override_reason != "")
-                    )
-                )
-                & stay_overlaps
-                & (Booking.is_return == False)  # noqa: E712 — SQLAlchemy column comparison
-            )
+
+            canceled_eligible = clinic_canceled_billable_sql()
             status_filter = or_(Booking.status.in_(target_statuses), canceled_eligible)
 
         unbilled_query = (
@@ -1323,21 +1304,8 @@ class ClinicMonthlyTotals(Resource):
                 BookingStatus.COMPLETED.value,
                 BookingStatus.RETURN_COMPLETED.value,
             ]
-            # Règle métier : eligible (clinique) et excluded (patient) partagent le même périmètre
-            # Inclut COMPLETED, RETURN_COMPLETED et CANCELED avec amount > 0 UNIQUEMENT si client
-            # hospitalisé (annulation dernière minute facturée à la clinique ; sinon au patient)
-            # (période [start_date, end_date)) pour cohérence S2.
-            stay_overlaps_booking = exists().where(
-                ClientStay.client_id == Booking.client_id,
-                ClientStay.company_id == clinic_company_id,
-                ClientStay.status == "active",
-                ClientStay.start_date <= Booking.scheduled_time,
-                or_(
-                    ClientStay.end_date.is_(None),
-                    ClientStay.end_date >= Booking.scheduled_time,
-                ),
-            )
 
+            # Règle métier : eligible (clinique) et excluded (patient) partagent le même périmètre
             # ✅ Hardening: safe Number(amount||0) pour éviter NaN
             def safe_amount(amount):
                 """Convertit un montant en float de manière sûre, retourne 0.0 si invalide."""
@@ -1348,19 +1316,11 @@ class ClinicMonthlyTotals(Resource):
                 except (ValueError, TypeError):
                     return 0.0
 
-            # ✅ Transports éligibles (billed_to_type='clinic') - annulations motif facturable ou justification
-            canceled_eligible = (
-                (Booking.status == BookingStatus.CANCELED.value)
-                & (Booking.amount > 0)
-                & (
-                    (Booking.is_cancellation_billable == True)  # noqa: E712
-                    | (
-                        Booking.billing_override_reason.isnot(None)
-                        & (Booking.billing_override_reason != "")
-                    )
-                )
-                & stay_overlaps_booking
+            from services.billing.clinic_s2_eligibility import (
+                clinic_canceled_billable_sql,
             )
+
+            canceled_eligible = clinic_canceled_billable_sql()
             eligible_query = Booking.query.filter(
                 Booking.company_id == company_id,
                 Booking.billed_to_company_id == clinic_company_id,

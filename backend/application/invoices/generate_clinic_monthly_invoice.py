@@ -8,12 +8,12 @@ from __future__ import annotations  # noqa: I001
 
 # pyright: reportUnusedImport=false, reportUnusedVariable=false, reportGeneralTypeIssues=false, reportUnusedFunction=false
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
-from sqlalchemy import and_, exists, or_
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.orm import aliased
 
@@ -42,7 +42,7 @@ from infrastructure.invoices.invoice_description_builder import (
     InvoiceDescriptionBuilder,
 )
 from infrastructure.invoices.invoice_number_generator import InvoiceNumberGenerator
-from models import Booking, ClientStay, Invoice, InvoiceLineType, InvoiceStatus
+from models import Booking, Invoice, InvoiceLineType, InvoiceStatus
 from models.enums import BookingStatus, InvoiceBillingStrategy
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
@@ -53,7 +53,11 @@ from repositories.invoice_line_repository import InvoiceLineRepository
 from repositories.invoice_repository import InvoiceRepository
 from repositories.invoice_sequence_repository import InvoiceSequenceRepository
 from services.billing.billing_party_linker import resolve_billing_party_for_clinic
-from services.billing.clinic_s2_eligibility import clinic_s2_billed_to_company_predicate
+from services.billing.clinic_s2_eligibility import (
+    clinic_canceled_billable_sql,
+    clinic_s2_billed_to_company_predicate,
+    filter_clinic_s2_financial_segments,
+)
 from services.documents.pdf import PDFService
 
 logger = logging.getLogger(__name__)
@@ -373,26 +377,8 @@ class GenerateClinicMonthlyInvoiceUseCase:
             # Scope strict: billed_to_type='clinic', clinic_company_id match, invoice_line_id null, status target_statuses
             # ✅ Scope strict: billed_to_type='clinic' suffit (exclut automatiquement les overrides patient)
             # Le critère réel = billed_to_type == 'clinic' (pas besoin de vérifier billing_source)
-            # Inclut COMPLETED, RETURN_COMPLETED et CANCELED facturables UNIQUEMENT si client hospitalisé
-            # (annulations billables à la clinique ; legacy / non billables → pas en facture)
-            stay_overlaps_booking = exists().where(
-                ClientStay.client_id == Booking.client_id,
-                ClientStay.company_id == input_data.clinic_company_id,
-                ClientStay.status == "active",
-                ClientStay.start_date <= Booking.scheduled_time,
-                or_(
-                    ClientStay.end_date.is_(None),
-                    ClientStay.end_date >= Booking.scheduled_time,
-                ),
-            )
-            # ✅ Annulations : uniquement billables + aller (pas le retour) ; amount > 0 = garde-fou anti-ligne zéro
-            canceled_condition = (
-                (Booking.status == "CANCELED")
-                & (Booking.is_cancellation_billable == True)  # noqa: E712
-                & (Booking.amount > 0)
-                & stay_overlaps_booking
-                & (Booking.is_return == False)  # noqa: E712 — SQLAlchemy column comparison
-            )
+            # C1 : annulation clinique = payeur explicite + autorisation, sans ClientStay.
+            canceled_condition = clinic_canceled_billable_sql()
             query = Booking.query.filter(
                 Booking.company_id == input_data.company_id,
                 clinic_s2_billed_to_company_predicate(
@@ -545,6 +531,8 @@ class GenerateClinicMonthlyInvoiceUseCase:
             scope_bookings = filter_institution_invoice_eligible(
                 scope_bookings, now=now
             )
+            # C1 : l'expansion A/R charge le pair ; seul un segment C1-valide est financier.
+            scope_bookings = filter_clinic_s2_financial_segments(scope_bookings)
 
             def _amount_ht(b: Booking) -> Decimal:
                 return calculate_billable_booking_amount(
@@ -585,9 +573,38 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     still_open_units.append(u)
                 units = still_open_units
 
-            reservations = [
-                by_id[bid] for u in units for bid in u.booking_ids if bid in by_id
-            ]
+            reservations = filter_clinic_s2_financial_segments(
+                [by_id[bid] for u in units for bid in u.booking_ids if bid in by_id]
+            )
+            financial_ids = {int(b.id) for b in reservations}
+            pruned_units = []
+            for unit in units:
+                kept_ids = tuple(i for i in unit.booking_ids if i in financial_ids)
+                if not kept_ids:
+                    continue
+                if kept_ids == unit.booking_ids:
+                    pruned_units.append(unit)
+                    continue
+                primary = (
+                    unit.primary_booking_id
+                    if unit.primary_booking_id in financial_ids
+                    else kept_ids[0]
+                )
+                pruned_units.append(
+                    replace(
+                        unit,
+                        booking_ids=kept_ids,
+                        kind="single" if len(kept_ids) == 1 else unit.kind,
+                        primary_booking_id=primary,
+                        unit_key=(
+                            f"unit:single:{primary}"
+                            if len(kept_ids) == 1
+                            else unit.unit_key
+                        ),
+                        period_anchor_booking_id=primary,
+                    )
+                )
+            units = pruned_units
 
             # ✅ Pré-vérification : livraisons matériel sans description
             missing_desc_ids = [
