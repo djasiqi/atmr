@@ -5,16 +5,22 @@ Chantier **séparé**. N’ouvre pas Institution Billing (G1–G4 restent
 seule, 5 septembre 2026, HEAD certifié contestation `1b7acbeb`.
 
 ```text
-CANCEL-BILLABLE — AUDIT
+CANCEL-BILLABLE
 
-C1 — éligibilité     CLOSED / PASS (6/6)
-C2 — montant         OPEN
-C3 — libellé         OPEN
-C4 — émission PDF/QR OPEN
+C1 ✅ CLOSED / PASS   HEAD 08eefae4
+C2a ✅ SOURCE CANONIQUE CLOSED / PASS
+C2b ✅ UNRESOLVED CONSUMER CLOSED / PASS
+C3 ✅ CLOSED / PASS   libellés 5/5
+C4 HOLD
+
+#97 / 1b7acbeb = INTOUCHÉ
 ```
 
 Branche : `feat/cancel-billable-c1` (pas #97, pas `1b7acbeb`).
-Tests : `backend/tests/application/test_cancel_billable_c1_eligibility.py`.
+C1 figé : `08eefae4` (`cert(billing): figer CANCEL-BILLABLE C1 CLOSED`).
+Tests C1 : `backend/tests/application/test_cancel_billable_c1_eligibility.py`.
+Tests C2 : `backend/tests/application/test_cancel_billable_c2_amount.py`.
+Tests C3 : `backend/tests/application/test_cancel_billable_c3_labels.py`.
 
 Comportement voulu :
 
@@ -178,15 +184,153 @@ financière d’annulation. Expansion A/R autorisée pour le contexte ;
 revalidation C1 avant construction des unités. Tests :
 `backend/tests/application/test_cancel_billable_c1_eligibility.py`.
 
-**C1 = CLOSED / PASS.** `#97` / `1b7acbeb` intacts. Prochain gate : C2
-(`fee=NULL → 90` vs `fee=0 → 0`).
+**C1 = CLOSED / PASS.** HEAD figé `08eefae4`. `#97` / `1b7acbeb` intacts.
 
-## Sentinelles restantes (C2–C4, pas C1)
+## C2 — verdict 5 septembre 2026 (tests first, sans correctif)
 
-| Cas | Attendu |
-| --- | --- |
-| Annulation facturable 45 sur course 90 | présente à **45**, pas 90 |
-| NO_SHOW facturable | motif NO_SHOW, pas « dernière minute » |
+Contrat : sur `CANCELED`, `booking.amount` est le tarif course.
+Le montant facturé doit venir d’un frais **explicitement résolu**.
+`NULL` = non résolu, jamais un fallback silencieux à 90.
+
+Invariant :
+
+```text
+effective_amount registry
+==
+effective_amount preview
+==
+effective_amount generation
+```
+
+| Cas | amount | fee | Attendu | Verdict |
+| --- | ---: | ---: | ---: | --- |
+| `COMPLETED` | 90 | NULL | **90** / `booking.amount` | **PASS** |
+| Annulation frais partiels | 90 | 45 | **45** / `cancellation_fee_amount` | **PASS** |
+| Annulation plein tarif explicite | 90 | 90 | **90** / `cancellation_fee_amount` | **PASS** |
+| Annulation frais explicitement 0 | 90 | 0 | **0** / `cancellation_fee_amount` | **PASS** |
+| Annulation facturable, frais NULL | 90 | NULL | unresolved, jamais 90 | **PASS** |
+
+✅ **Implémenté** (source canonique seulement) :
+`normalize_booking_status` dans `booking_status.py` ;
+`calculate_billable_booking_amount` n’utilise plus `str(status)`.
+`CANCELED` + fee non NULL → frais persisté. `CANCELED` + fee NULL →
+`amount_ht=0`, `source=cancellation_fee_unresolved`, `resolved=false`.
+Pas d’exception. Pas de fallback `booking.amount`. 90 CHF n’est
+autorisé que si `cancellation_fee_amount=90` (FULL_FARE explicite).
+
+```text
+C2 CLOSED / PASS
+
+COMPLETED 90 / fee NULL
+→ 90 / booking.amount
+
+CANCELED 90 / fee 45
+→ 45 / cancellation_fee_amount
+
+CANCELED 90 / fee 90
+→ 90 / cancellation_fee_amount
+
+CANCELED 90 / fee 0
+→ 0 / cancellation_fee_amount
+
+CANCELED 90 / fee NULL
+→ unresolved
+→ jamais booking.amount
+
+C1 untouched (08eefae4)
+C3 untouched
+C4 untouched
+```
+
+## C2b — consommateur unresolved (5 septembre 2026)
+
+```text
+CANCELED + autorisée + fee NULL
+→ pas facturable immédiatement
+→ exclue du total
+→ signalée « montant d'annulation à déterminer »
+→ n'empêche pas l'émission des autres prestations
+```
+
+Sentinelle : course A `COMPLETED` 320 + course B `CANCELED` 40 / fee NULL
+→ facture **320**, B excluded / needs review, pas de ligne 0 CHF.
+Pendant : fee B = 35 → total **355** / `cancellation_fee_amount`.
+
+| Surface | `fee=NULL` | Verdict |
+| --- | --- | --- |
+| Registre / plan | identifiée, hors total | **PASS** |
+| Preview | exclue du total, motif explicite | **PASS** |
+| Generate | aucune `InvoiceLine` | **PASS** |
+| Autres prestations | facturables (320) | **PASS** |
+
+✅ **Implémenté** : `partition_invoiceable_bookings` dans
+`billable_amount.py`. Preview / generate S2 / generate patient / plan
+consomment `resolved`. Pas de fallback `booking.amount`. Tests :
+`test_cancel_billable_c2b_unresolved_consumer.py`.
+
+```text
+C2b CLOSED / PASS
+
+resolved cancellation fee → peut entrer dans la facture
+unresolved → ne modifie jamais le total
+unresolved → ne crée jamais de ligne financière
+
+C3 HOLD
+C4 HOLD
+#97 / 1b7acbeb = INTOUCHÉ
+```
+
+## C3 — verdict 5 septembre 2026 (tests first, sans correctif)
+
+Contrat : une facture d’annulation explique **pourquoi** elle est
+facturée. Le motif réel ne doit jamais être remplacé par le générique
+« Annulation dernière minute ».
+
+Priorité des sources :
+
+```text
+1. cancellation_display_label persisté
+2. sinon get_cancellation_display_label(reason_code, reason_text)
+3. sinon "Annulation (historique)"
+```
+
+Invariant : `preview description == generated InvoiceLine.description`.
+Pas de PDF (C4).
+
+| Cas | Attendu | Verdict |
+| --- | --- | --- |
+| `LAST_MINUTE` | Annulation dernière minute | **PASS** |
+| `NO_SHOW` | Client ne s'est pas présenté | **PASS** |
+| `CLIENT_REQUEST` + 50 % | motif client + frais 50 % | **PASS** |
+| `OTHER` + commentaire | commentaire métier, pas `OTHER:` | **PASS** |
+| historique sans motif | Annulation (historique) | **PASS** |
+
+✅ **Implémenté** : `canonical_cancellation_invoice_label` dans
+`invoice_line_description.py`. Statut via `booking_status_is_canceled`.
+Preview S2 et generate S2 / patient passent par le même helper.
+`cancellation_fee_tier_id` n'est plus un texte client.
+
+```text
+C3 CLOSED / PASS
+
+5/5
+
+LAST_MINUTE
+NO_SHOW
+CLIENT_REQUEST + frais %
+OTHER + commentaire
+historique
+
+preview description == InvoiceLine.description
+aucune annulation décrite comme trajet effectué
+
+C1 untouched
+C2 untouched
+C4 untouched
+```
+
+Tests : `backend/tests/application/test_cancel_billable_c3_labels.py`.
+C4 ensuite : PDF conserve motif + montant C2, QR conserve le total.
 
 ## Hors scope
 

@@ -48,6 +48,35 @@ from services.billing.clinic_s2_eligibility import clinic_s2_billed_to_company_p
 _ROUND_TRIP_COMPONENT_SIZE = 2
 
 
+def _consume_unresolved_cancellations(
+    bookings: list[Any],
+    *,
+    billing_settings_dto: Any,
+    eligibility: dict[str, Any] | None,
+    warnings: list[str],
+) -> list[Any]:
+    """C2b : unresolved identifié, hors total, sans ligne 0 CHF."""
+    from application.invoices.billable_amount import (
+        partition_invoiceable_bookings,
+        unresolved_cancellation_payload,
+        unresolved_cancellation_warnings,
+    )
+
+    invoiceable, unresolved = partition_invoiceable_bookings(
+        bookings, billing_settings=billing_settings_dto
+    )
+    if unresolved:
+        warnings.extend(unresolved_cancellation_warnings(unresolved))
+        if eligibility is not None:
+            payload = unresolved_cancellation_payload(unresolved)
+            eligibility["cancellation_fee_unresolved"] = payload
+            eligibility["excluded_count"] = int(
+                eligibility.get("excluded_count") or 0
+            ) + int(payload["count"])
+            eligibility["eligible_count"] = len(invoiceable)
+    return invoiceable
+
+
 def _preview_base_amount_ht(booking: Any, billing_settings_dto: Any) -> Decimal:
     """HT ligne pour preview : montant facturable canonique."""
     from application.invoices.billable_amount import calculate_billable_booking_amount
@@ -354,6 +383,12 @@ def build_period_invoice_preview(
             bookings, billing_settings_dto=billing_settings_dto, now=now
         )
         warnings.extend(_eligibility_warnings(eligibility_patient))
+        bookings = _consume_unresolved_cancellations(
+            bookings,
+            billing_settings_dto=billing_settings_dto,
+            eligibility=eligibility_patient,
+            warnings=warnings,
+        )
         client = crepo.find_model_by_id_with_user(int(client_id), company_id)
         patient_name = (
             resolve_patient_name_for_invoice(client, bookings)
@@ -506,6 +541,12 @@ def build_period_invoice_preview(
         eligible_bookings, billing_settings_dto=billing_settings_dto, now=now
     )
     warnings.extend(_eligibility_warnings(eligibility_s2))
+    eligible_bookings = _consume_unresolved_cancellations(
+        eligible_bookings,
+        billing_settings_dto=billing_settings_dto,
+        eligibility=eligibility_s2,
+        warnings=warnings,
+    )
     rt_map_s2 = _round_trip_leg_by_booking_id(eligible_bookings)
     crepo = ClientRepository()
     # Batch : une requête client (+ user) pour toute la période clinique (Sentry N+1).

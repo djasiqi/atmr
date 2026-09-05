@@ -533,6 +533,14 @@ class GenerateClinicMonthlyInvoiceUseCase:
             )
             # C1 : l'expansion A/R charge le pair ; seul un segment C1-valide est financier.
             scope_bookings = filter_clinic_s2_financial_segments(scope_bookings)
+            # C2b : unresolved = revue, jamais une ligne financière.
+            from application.invoices.billable_amount import (
+                partition_invoiceable_bookings,
+            )
+
+            scope_bookings, _unresolved_fees = partition_invoiceable_bookings(
+                scope_bookings, billing_settings=billing_settings_dto
+            )
 
             def _amount_ht(b: Booking) -> Decimal:
                 return calculate_billable_booking_amount(

@@ -11,7 +11,10 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from application.invoices.billable_amount import calculate_billable_booking_amount
+from application.invoices.billable_amount import (
+    calculate_billable_booking_amount,
+    partition_invoiceable_bookings,
+)
 from application.invoices.institution_invoice_eligibility import (
     EligibilitySummary,
     InstitutionInvoicePlan,
@@ -175,6 +178,9 @@ def build_institution_invoice_plan(
     ]
 
     settings = CompanyBillingSettingsRepository().find_or_create(company_id)
+    patient_eligible, _unresolved_patient = partition_invoiceable_bookings(
+        patient_eligible, billing_settings=settings
+    )
 
     def _amt(b: Booking) -> Decimal:
         return calculate_billable_booking_amount(b, billing_settings=settings).amount_ht

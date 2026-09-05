@@ -6,9 +6,13 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from application.invoices.booking_status import booking_status_is_canceled
 from infrastructure.invoices.invoice_calculator import round_to_5_cents
 
 _TWO = Decimal("0.01")
+SOURCE_BOOKING_AMOUNT = "booking.amount"
+SOURCE_CANCELLATION_FEE = "cancellation_fee_amount"
+SOURCE_CANCELLATION_UNRESOLVED = "cancellation_fee_unresolved"
 
 
 @dataclass(frozen=True)
@@ -17,6 +21,7 @@ class BillableAmount:
     source: str
     cancellation_fee_applied: bool
     catalog_amount_ht: Decimal | None
+    resolved: bool = True
 
 
 def calculate_billable_booking_amount(
@@ -27,9 +32,6 @@ def calculate_billable_booking_amount(
 ) -> BillableAmount:
     """Calcule le HT facturable (annulation = frais, livraison = prix fixe settings)."""
     mission_type = getattr(booking, "mission_type", None) or "patient_transport"
-    catalog: Decimal | None = None
-    cancellation_fee_applied = False
-    source = "booking.amount"
 
     if mission_type == "material_delivery":
         fp = None
@@ -43,29 +45,37 @@ def calculate_billable_booking_amount(
                 catalog_amount_ht=None,
             )
         amount = Decimal(str(fp)).quantize(_TWO)
-        source = "material_delivery_fixed"
         return BillableAmount(
             amount_ht=round_to_5_cents(amount),
-            source=source,
+            source="material_delivery_fixed",
             cancellation_fee_applied=False,
             catalog_amount_ht=None,
+            resolved=True,
         )
 
     catalog = Decimal(str(getattr(booking, "amount", None) or 0)).quantize(_TWO)
-    amount = catalog
+    cancellation_fee_applied = False
+    resolved = True
 
-    if (
-        str(getattr(booking, "status", "") or "").upper() == "CANCELED"
-        and getattr(booking, "cancellation_fee_amount", None) is not None
-    ):
-        amount = Decimal(str(booking.cancellation_fee_amount)).quantize(_TWO)
-        cancellation_fee_applied = True
-        source = "cancellation_fee_amount"
+    if booking_status_is_canceled(booking):
+        fee = getattr(booking, "cancellation_fee_amount", None)
+        if fee is not None:
+            amount = Decimal(str(fee)).quantize(_TWO)
+            cancellation_fee_applied = True
+            source = SOURCE_CANCELLATION_FEE
+        else:
+            amount = Decimal("0.00")
+            source = SOURCE_CANCELLATION_UNRESOLVED
+            resolved = False
+    else:
+        amount = catalog
+        source = SOURCE_BOOKING_AMOUNT
 
     if override and override.get("amount") is not None:
         try:
             amount = Decimal(str(override["amount"])).quantize(_TWO)
             source = "override.amount"
+            resolved = True
         except Exception:
             pass
 
@@ -74,4 +84,56 @@ def calculate_billable_booking_amount(
         source=source,
         cancellation_fee_applied=cancellation_fee_applied,
         catalog_amount_ht=catalog,
+        resolved=resolved,
     )
+
+
+UNRESOLVED_CANCELLATION_REASON = "montant d'annulation à déterminer"
+
+
+def partition_invoiceable_bookings(
+    bookings: list,
+    *,
+    billing_settings: Any = None,
+) -> tuple[list, list]:
+    """Sépare les segments financièrement émissibles des annulations unresolved."""
+    invoiceable: list = []
+    unresolved: list = []
+    for booking in bookings:
+        billed = calculate_billable_booking_amount(
+            booking, billing_settings=billing_settings
+        )
+        if billed.resolved:
+            invoiceable.append(booking)
+        else:
+            unresolved.append(booking)
+    return invoiceable, unresolved
+
+
+def unresolved_cancellation_payload(unresolved: list) -> dict[str, Any]:
+    ids: list[int] = []
+    for booking in unresolved:
+        try:
+            ids.append(int(booking.id))
+        except (TypeError, ValueError, AttributeError):
+            continue
+    return {
+        "count": len(ids),
+        "booking_ids": ids,
+        "reason": UNRESOLVED_CANCELLATION_REASON,
+        "needs_review": True,
+    }
+
+
+def unresolved_cancellation_warnings(unresolved: list) -> list[str]:
+    if not unresolved:
+        return []
+    ids = ", ".join(
+        f"#{int(booking.id)}"
+        for booking in unresolved
+        if getattr(booking, "id", None) is not None
+    )
+    return [
+        f"{len(unresolved)} annulation(s) avec {UNRESOLVED_CANCELLATION_REASON} "
+        f"({ids}) — exclue(s) du total, besoin de revue."
+    ]

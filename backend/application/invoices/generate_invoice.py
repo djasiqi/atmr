@@ -703,6 +703,13 @@ class GenerateInvoiceUseCase:
 
             attach_invoice_request_ids(reservations)
             reservations = filter_institution_invoice_eligible(reservations, now=now)
+            from application.invoices.billable_amount import (
+                partition_invoiceable_bookings,
+            )
+
+            reservations, _unresolved_fees = partition_invoiceable_bookings(
+                reservations, billing_settings=billing_settings_dto
+            )
             if input_data.strict_reservation_ids and input_data.reservation_ids:
                 allowed_ids = {int(x) for x in input_data.reservation_ids}
                 reservations = [

@@ -5,10 +5,39 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from application.bookings.cancellation_rules import get_cancellation_display_label
+from application.invoices.booking_status import booking_status_is_canceled
 from infrastructure.invoices.invoice_description_builder import (
     InvoiceDescriptionBuilder,
 )
 from models import Booking
+
+_HISTORICAL_CANCELLATION_LABEL = "Annulation (historique)"
+
+
+def canonical_cancellation_invoice_label(booking: Any) -> str:
+    """Motif d'annulation facture : persisté → helper métier → historique.
+
+    Le palier technique (``cancellation_fee_tier_id``) n'apparaît pas.
+    Un pourcentage explicite s'ajoute en complément financier.
+    """
+    persisted = (getattr(booking, "cancellation_display_label", None) or "").strip()
+    if persisted:
+        motif = persisted
+    else:
+        motif = get_cancellation_display_label(
+            getattr(booking, "cancellation_reason_code", None),
+            getattr(booking, "cancellation_reason_text", None),
+        )
+    motif = (motif or "").strip() or _HISTORICAL_CANCELLATION_LABEL
+    percent = getattr(booking, "cancellation_fee_percent", None)
+    if percent is None:
+        return motif
+    try:
+        pct = int(percent)
+    except (TypeError, ValueError):
+        return motif
+    return f"{motif} — frais {pct} %"
 
 
 def resolve_patient_name_for_invoice(
@@ -56,22 +85,14 @@ def build_invoice_line_description(
     description_builder: InvoiceDescriptionBuilder | None = None,
 ) -> str:
     """Aligné sur GenerateInvoiceUseCase (facturation simple / tierce, pas S2 clinique mensuelle)."""
+    bobj = booking_for_cancellation or reservation
+    if booking_status_is_canceled(bobj) or booking_status_is_canceled(reservation):
+        return canonical_cancellation_invoice_label(bobj)
+
     builder = description_builder or InvoiceDescriptionBuilder()
     mission_type = getattr(reservation, "mission_type", None) or "patient_transport"
     is_delivery = mission_type == "material_delivery"
     delivery_desc = getattr(reservation, "delivery_description", None) or None
-    _is_cancelled = str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
-    bobj = booking_for_cancellation or reservation
-    _fee_pct = (
-        getattr(bobj, "cancellation_fee_percent", None)
-        if bobj and _is_cancelled
-        else None
-    )
-    _fee_tier = (
-        getattr(bobj, "cancellation_fee_tier_id", None)
-        if bobj and _is_cancelled
-        else None
-    )
 
     show_patient = (
         bool(bill_to_client_id or clinic_company_id or billing_party_id)
@@ -85,9 +106,6 @@ def build_invoice_line_description(
         bill_to_client_id=bill_to_client_id if not is_delivery else None,
         is_material_delivery=is_delivery,
         delivery_description=delivery_desc,
-        is_cancelled=_is_cancelled,
-        cancellation_fee_percent=_fee_pct,
-        cancellation_fee_label=str(_fee_tier) if _fee_tier is not None else None,
     )
 
 
@@ -97,23 +115,13 @@ def build_invoice_line_description_clinic_monthly(
     description_builder: InvoiceDescriptionBuilder | None = None,
 ) -> str:
     """Aligné sur GenerateClinicMonthlyInvoiceUseCase (lignes S2)."""
+    if booking_status_is_canceled(reservation):
+        return canonical_cancellation_invoice_label(reservation)
+
     builder = description_builder or InvoiceDescriptionBuilder()
     mission_type = getattr(reservation, "mission_type", None) or "patient_transport"
     is_delivery = mission_type == "material_delivery"
     delivery_desc = getattr(reservation, "delivery_description", None) or None
-    _is_cancelled_c = (
-        str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
-    )
-    _fee_pct_c = (
-        getattr(reservation, "cancellation_fee_percent", None)
-        if _is_cancelled_c
-        else None
-    )
-    _fee_tier_c = (
-        getattr(reservation, "cancellation_fee_tier_id", None)
-        if _is_cancelled_c
-        else None
-    )
     return builder.build_description(
         pickup_location=reservation.pickup_location or "",
         dropoff_location=reservation.dropoff_location or "",
@@ -121,9 +129,6 @@ def build_invoice_line_description_clinic_monthly(
         bill_to_client_id=None,
         is_material_delivery=is_delivery,
         delivery_description=delivery_desc,
-        is_cancelled=_is_cancelled_c,
-        cancellation_fee_percent=_fee_pct_c,
-        cancellation_fee_label=str(_fee_tier_c) if _fee_tier_c is not None else None,
     )
 
 
