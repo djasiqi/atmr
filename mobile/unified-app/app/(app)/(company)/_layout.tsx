@@ -1,7 +1,8 @@
 import { Redirect, Tabs } from "expo-router";
-import { useEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo } from "react";
 import { View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   isFeatureEnabled,
   isCompanyRealtimeSocketExpected,
@@ -11,7 +12,12 @@ import { CompanyContextGuard } from "../../../src/core/guards";
 import { companyRealtimeBridge } from "../../../src/features/company/realtime/companyRealtimeBridge";
 import { CompanyFloatingTabBar } from "../../../src/features/company/navigation/CompanyFloatingTabBar";
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
-import { buildFloatingTabScreenOptions, FLOATING_TAB_IMPLEMENTATION } from "../../../src/navigation/floatingTabScreenOptions";
+import {
+  buildFloatingTabScreenOptions,
+  FLOATING_TAB_BAR_OVERLAY_STYLE,
+  FLOATING_TAB_IMPLEMENTATION,
+  FLOATING_TAB_SAFE_AREA_NONE,
+} from "../../../src/navigation/floatingTabScreenOptions";
 import { useCompanyUrgentAlertSound } from "../../../src/features/messaging/useCompanyUrgentAlertSound";
 import { useCompanyRecoveryListener } from "../../../src/features/company/realtime/useCompanyRecoveryListener";
 import { useInstitutionOffersRealtimeListener } from "../../../src/features/company/realtime/useInstitutionOffersRealtimeListener";
@@ -20,6 +26,13 @@ import { useAppViewport } from "../../../src/design/responsive";
 import { AppFloatingBarMetricsProvider } from "../../../src/design/navigation/AppFloatingBarMetricsProvider";
 import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
 import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRouteTracking";
+import {
+  CompanyColdStartPhaseContext,
+  useCompanyColdStartPhaseState,
+} from "../../../src/features/company/boot/companyColdStartPhase";
+import { hydrateCompanyColdStartSnapshot } from "../../../src/features/company/boot/companyColdStartSnapshot";
+import { resolveCompanyTabLazy } from "../../../src/features/company/boot/companyColdStartGraph";
+import { usePreloadCompanyTabModules } from "../../../src/features/company/boot/companyTabModulePreload";
 
 export default function CompanyLayout() {
   usePerfRouteTracking("company");
@@ -30,6 +43,9 @@ export default function CompanyLayout() {
     [width, reduceMotion]
   );
   const { activeContext, status, contextSwitchInFlight } = useSession();
+  const queryClient = useQueryClient();
+  const coldStartPhase = useCompanyColdStartPhaseState();
+  usePreloadCompanyTabModules(coldStartPhase === "background");
   const dispatchEnabled = isFeatureEnabled("company_dispatch_enabled");
   const realtimeEnabled = isCompanyRealtimeSocketExpected();
   const companyRuntimeResumeEnabled = isFeatureEnabled("company_runtime_resume_enabled");
@@ -37,6 +53,10 @@ export default function CompanyLayout() {
     activeContext && activeContext.context_type === "company"
       ? activeContext.context_id
       : null;
+
+  useLayoutEffect(() => {
+    void hydrateCompanyColdStartSnapshot(queryClient, companyContextId);
+  }, [companyContextId, queryClient]);
 
   useCompanyUrgentAlertSound();
   // Phase 2 PR B/C — gate D3.2 : recovery cohérent dashboard/missions/inbox/chat
@@ -86,12 +106,15 @@ export default function CompanyLayout() {
   /** Fond onglets aligné sur `operations-app` `(enterprise)/_layout` (#F5F7F6). */
   return (
     <CompanyContextGuard>
+      <CompanyColdStartPhaseContext.Provider value={coldStartPhase}>
       <AppFloatingBarMetricsProvider preset="company">
       <View style={{ flex: 1, backgroundColor: E.BG }}>
       <Tabs
         implementation={FLOATING_TAB_IMPLEMENTATION}
         screenOptions={{
           ...tabScreenOptions,
+          tabBarStyle: FLOATING_TAB_BAR_OVERLAY_STYLE,
+          safeAreaInsets: FLOATING_TAB_SAFE_AREA_NONE,
           tabBarActiveTintColor: E.BRAND,
           tabBarInactiveTintColor: "#64748B",
         }}
@@ -102,12 +125,14 @@ export default function CompanyLayout() {
           options={{
             title: "Accueil",
             href: null,
+            lazy: resolveCompanyTabLazy("index"),
           }}
         />
         <Tabs.Screen
           name="dashboard"
           options={{
             title: "Dashboard",
+            lazy: resolveCompanyTabLazy("dashboard"),
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="speedometer-outline" size={size} color={color} />
             ),
@@ -117,6 +142,7 @@ export default function CompanyLayout() {
           name="rides"
           options={{
             title: "Courses",
+            lazy: resolveCompanyTabLazy("rides"),
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="car-outline" size={size} color={color} />
             ),
@@ -126,16 +152,18 @@ export default function CompanyLayout() {
           name="chat"
           options={{
             title: "Chat",
+            lazy: resolveCompanyTabLazy("chat"),
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="chatbubble-ellipses-outline" size={size} color={color} />
             ),
           }}
         />
-        <Tabs.Screen name="messages" options={{ href: null }} />
+        <Tabs.Screen name="messages" options={{ href: null, lazy: resolveCompanyTabLazy("messages") }} />
         <Tabs.Screen
           name="clients-facturation"
           options={{
             title: "Clients & facturation",
+            lazy: resolveCompanyTabLazy("clients-facturation"),
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="reader-outline" size={size} color={color} />
             ),
@@ -145,6 +173,7 @@ export default function CompanyLayout() {
           name="invoices"
           options={{
             title: "Factures",
+            lazy: resolveCompanyTabLazy("invoices"),
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="receipt-outline" size={size} color={color} />
             ),
@@ -154,19 +183,21 @@ export default function CompanyLayout() {
           name="settings"
           options={{
             title: "Parametres",
+            lazy: resolveCompanyTabLazy("settings"),
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="settings-outline" size={size} color={color} />
             ),
           }}
         />
-        <Tabs.Screen name="ride-details" options={{ href: null }} />
-        <Tabs.Screen name="offers/index" options={{ href: null }} />
-        <Tabs.Screen name="offers/[offerId]" options={{ href: null }} />
-        <Tabs.Screen name="fleet-map" options={{ href: null }} />
-        <Tabs.Screen name="dispatch" options={{ href: null }} />
+        <Tabs.Screen name="ride-details" options={{ href: null, lazy: resolveCompanyTabLazy("ride-details") }} />
+        <Tabs.Screen name="offers/index" options={{ href: null, lazy: resolveCompanyTabLazy("offers/index") }} />
+        <Tabs.Screen name="offers/[offerId]" options={{ href: null, lazy: resolveCompanyTabLazy("offers/[offerId]") }} />
+        <Tabs.Screen name="fleet-map" options={{ href: null, lazy: resolveCompanyTabLazy("fleet-map") }} />
+        <Tabs.Screen name="dispatch" options={{ href: null, lazy: resolveCompanyTabLazy("dispatch") }} />
       </Tabs>
       </View>
       </AppFloatingBarMetricsProvider>
+      </CompanyColdStartPhaseContext.Provider>
     </CompanyContextGuard>
   );
 }

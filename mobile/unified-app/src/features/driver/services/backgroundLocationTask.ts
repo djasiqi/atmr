@@ -9,6 +9,10 @@ import { driverTrackingQueue } from "./driverTrackingQueue";
 import { createCaptureId } from "./captureId";
 import { trackingQueueStore } from "./trackingQueueStore";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
+import {
+  recordBatteryCallback,
+  setBatteryNativeTaskActive,
+} from "../../../core/observability/batteryEnergyCounters";
 import { PRODUCTION_LOCALE } from "../../../i18n/productionLocale";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { resolveTrackingCadence } from "../../../core/tracking/cadenceResolver";
@@ -16,6 +20,10 @@ import {
   canUseBackgroundLocation,
   describeBackgroundRuntime,
 } from "./backgroundRuntimeCompat";
+import {
+  isDirectResumeNativeStartReason,
+  readGpsMissionStartHold,
+} from "./gpsAppStateController";
 import {
   clearNativeStartFailure,
   clearPendingFgsStart,
@@ -1036,6 +1044,12 @@ function defineTaskIfNeeded() {
         });
         const osIdRaw = (location as unknown as { id?: unknown }).id;
         const osId = typeof osIdRaw === "string" ? osIdRaw : null;
+        recordBatteryCallback({
+          source: "native_task",
+          recordedAt: timestamp,
+          trackingMode: mode,
+          appState: AppState.currentState,
+        });
         const captureId = osId ? `os:${osId}` : createCaptureId();
         const trackingGenerationId =
           context.nativeOwner?.trackingGenerationId ?? null;
@@ -1045,6 +1059,7 @@ function defineTaskIfNeeded() {
           missionId: context.missionId,
           appState: "background" as AppStateStatus,
           locationMode: mode,
+          energySource: "native_task",
           captureId,
           trackingGenerationId,
           missionContextVersion,
@@ -1353,6 +1368,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       fg_permission: perms.fg,
       bg_permission: perms.bg,
     });
+    setBatteryNativeTaskActive(true);
     emitDriverTelemetry("tracking.background.start_success", {
       source: "driver.services.backgroundLocationTask",
       reason: startReason,
@@ -1446,6 +1462,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       native_started_after: lifecycleAfter.taskStarted,
     });
 
+    setBatteryNativeTaskActive(true);
     emitDriverTelemetry("tracking.background.start_success", {
       source: "driver.services.backgroundLocationTask",
       reason: startReason,
@@ -1769,6 +1786,31 @@ export async function ensureNativeTrackingWhileForeground(
 
   const isPresenceWindow = options.presenceWindow === true;
   if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) {
+    return;
+  }
+  if (isDirectResumeNativeStartReason(reason)) {
+    recordNativeStartDiagnostics({
+      native_start_phase: "ensureNativeTrackingWhileForeground",
+      native_start_error: "resume_reconcile_only",
+    });
+    emitDriverTelemetry("tracking.gps.resume_reconcile_only", {
+      source: "driver.services.backgroundLocationTask",
+      reason,
+      mission_id: missionId,
+    });
+    return;
+  }
+  const snapshotHold = readGpsMissionStartHold();
+  if (snapshotHold.blocked) {
+    recordNativeStartDiagnostics({
+      native_start_phase: "ensureNativeTrackingWhileForeground",
+      native_start_error: snapshotHold.reason,
+    });
+    emitDriverTelemetry("tracking.gps.native_start_blocked", {
+      source: "driver.services.backgroundLocationTask",
+      reason: snapshotHold.reason,
+      mission_id: missionId,
+    });
     return;
   }
   // A2 : plus de refus contexte présence hors fenêtre 07–19
@@ -2212,6 +2254,9 @@ export async function stopBackgroundLocationTask(
         stopNativeBackgroundLocationUpdatesUnlocked(reason, opts?.shouldAbortNativeStop),
     });
     nativeStopped = Boolean(controllerResult.result?.nativeStopped);
+    if (nativeStopped) {
+      setBatteryNativeTaskActive(false);
+    }
     emitDriverTelemetry("tracking.background.task.stopped", {
       source: "driver.services.backgroundLocationTask",
       task_name: BACKGROUND_LOCATION_TASK_NAME,

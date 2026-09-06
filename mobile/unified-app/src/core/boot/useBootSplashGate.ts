@@ -10,6 +10,10 @@ import { computeBootLottieDisplaySize } from "./bootLottieLayout";
 import { reportBootFallback } from "../observability/bootDiagnostics";
 import { resolveBootLottieSource } from "./resolveBootLottieSource";
 import type { BootLottieAsset } from "./bootLottieAssets";
+import { SPLASH_BACKGROUND_COLOR } from "./bootSurface";
+import { markBootMilestone } from "../observability/bootMilestones";
+
+export { SPLASH_BACKGROUND_COLOR } from "./bootSurface";
 
 type IntroState = "loading" | "play" | "skip";
 
@@ -19,9 +23,6 @@ export const SPLASH_FADE_OUT_MS = 420;
 export const SPLASH_EXIT_HOLD_MS = 60;
 /** Fondu du calque Lottie pour une sortie plus douce. */
 export const SPLASH_LOTTIE_FADE_OUT_MS = 260;
-/** Fond aligné avec les écrans publics pour éviter l'effet de flash. */
-export const SPLASH_BACKGROUND_COLOR = "#EAF3F1";
-
 /**
  * Sur web il n’y a pas de Lottie natif (sans dépendance dotlottie) : durée de simulation
  * avant de considérer l’intro terminée (~2,6 s ≈ op 157 @ 60 fps sur les JSON fournis).
@@ -129,7 +130,8 @@ export function useBootSplashGate(): {
           ? false
           : animFinished;
 
-  const skipEntireIntro = BOOT_LOTTIE_FIRST_LAUNCH_ONLY && introState === "skip";
+  /** Cold start suivant : pas de Lottie, mais l’overlay reste jusqu’au shell prêt. */
+  const skipLottie = BOOT_LOTTIE_FIRST_LAUNCH_ONLY && introState === "skip";
   const waitingIntroStorage = BOOT_LOTTIE_FIRST_LAUNCH_ONLY && introState === "loading";
 
   const sessionBlocksOverlay = resolveBootSplashSessionBlocksOverlay(
@@ -139,7 +141,7 @@ export function useBootSplashGate(): {
   );
 
   const showOverlay =
-    status !== "error" && !skipEntireIntro && (waitingIntroStorage || sessionBlocksOverlay);
+    status !== "error" && (waitingIntroStorage || sessionBlocksOverlay);
 
   const [overlayMounted, setOverlayMounted] = useState(showOverlay);
 
@@ -181,6 +183,13 @@ export function useBootSplashGate(): {
             Date.now() - bootStartedAtRef.current,
             "ms",
           );
+          markBootMilestone("OVERLAY_HIDDEN", {
+            overlay_hidden_ms: Date.now() - bootStartedAtRef.current,
+          });
+          markBootMilestone("DASHBOARD_INTERACTIVE", {
+            meaning: "overlay_hidden",
+            overlay_hidden_ms: Date.now() - bootStartedAtRef.current,
+          });
           setOverlayMounted(false);
           fadeOpacity.setValue(1);
           lottieOpacity.setValue(1);
@@ -196,7 +205,9 @@ export function useBootSplashGate(): {
   }, [showOverlay, overlayMounted, fadeOpacity, lottieOpacity]);
 
   const lottieBaseAllowed =
-    !waitingIntroStorage && (introState === "play" || !BOOT_LOTTIE_FIRST_LAUNCH_ONLY);
+    !skipLottie &&
+    !waitingIntroStorage &&
+    (introState === "play" || !BOOT_LOTTIE_FIRST_LAUNCH_ONLY);
 
   const showLottieLayer = overlayMounted && lottieBaseAllowed && (showOverlay || isExiting);
 

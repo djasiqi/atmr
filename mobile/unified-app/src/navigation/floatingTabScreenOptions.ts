@@ -10,6 +10,21 @@ export const FLOATING_TAB_PAGE_BG = {
 } as const;
 
 /**
+ * Barre flottante en overlay : la scène garde toute la hauteur (carte full-bleed).
+ * À appliquer uniquement là où le contenu gère déjà un clearance (cockpit, chat, settings).
+ */
+export const FLOATING_TAB_BAR_OVERLAY_STYLE = {
+  position: "absolute" as const,
+  backgroundColor: "transparent",
+  borderTopWidth: 0,
+  elevation: 0,
+  shadowOpacity: 0,
+};
+
+/** Empêche le navigator de réserver le safe-area inférieur à la scène. */
+export const FLOATING_TAB_SAFE_AREA_NONE = { top: 0, bottom: 0 } as const;
+
+/**
  * Spec transition LIRIE — fade + slide 8 px, 180 ms, easing unique.
  * Conserve `Easing` import pour compat ascendante des consommateurs externes.
  */

@@ -70,7 +70,7 @@ export function AssignDriverModal({
           <AppSpinner />
         </View>
       ) : null}
-      {!pending && drivers.length === 0 ? (
+      {!pending && drivers.length === 0 && !error ? (
         <AppText variant="bodyMuted" style={styles.emptyText}>
           Aucun chauffeur disponible pour cette course.
         </AppText>

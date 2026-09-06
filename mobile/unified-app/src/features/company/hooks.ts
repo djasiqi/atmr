@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   QueryClient,
@@ -7,8 +7,23 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { QUERY_STALE_TIME_MS } from "../../core/queryStaleTimes";
+import { dispatchDayCacheOptions, queryCacheOptions } from "../../core/queryCachePolicy";
+import { shareDispatchMissionsQueryData } from "./utils/dispatchMissionListReconcile";
+import type { CompanyDispatchMissionListResponse } from "./api/contracts";
+import { applyDayPage } from "./utils/dispatchDayPagination";
+import { useCompleteOpenDispatchDay } from "./utils/useCompleteOpenDispatchDay";
+import {
+  reconcileAuthoritativeMission,
+  refetchObservedDispatchDays,
+  shouldSkipFocusRefetchForDispatchDay,
+} from "./utils/dispatchMissionCachePatch";
+import { setStickyRidesFetchReason, type RidesFetchReason } from "./utils/ridesFetchReason";
 import { useSession } from "../../core/sessionProvider";
+import {
+  recordMissionDetailsPhase,
+  recordQueryCacheAccess,
+} from "../../core/observability/perfResponsiveness";
+import { useCompanySessionNetworkReady } from "./sessionNetworkGate";
 import { contextScopedKey } from "../../core/cache/contextCache";
 import {
   assignCompanyRide,
@@ -46,6 +61,12 @@ import { reportCompanyPushTelemetry } from "./api/companyPushTelemetryApi";
 import { consumeOfferOpenToAcceptSeconds } from "./push/companyPush";
 import { filterVisibleInstitutionOffers } from "./utils/institutionOfferResponse";
 import { companyContextScope, companyQueryKeys } from "./companyQueryKeys";
+import { OPTIMIZER_ENABLED } from "./dispatch/dispatchModeLock";
+import {
+  assertCompanyOnlineForMutation,
+  shouldRetryCompanyMutation,
+  shouldRetryCompanyQuery,
+} from "./utils/companyOfflinePolicy";
 import { companyRealtimeBridge } from "./realtime/companyRealtimeBridge";
 import {
   CompanyRealtimeSnapshot,
@@ -54,7 +75,6 @@ import {
 import { SharedChatMessage } from "../chat";
 import { isFeatureEnabled } from "../../core/featureFlags/registry";
 import { resolveMediaUrl } from "../../core/api/mediaUrl";
-import { AxiosError } from "axios";
 import { traceInvalidateQueries } from "../../core/observability/perfInstrumentation";
 
 const DRIVER_LOCATION_INVALIDATION_BATCH_MS = 500;
@@ -104,6 +124,7 @@ export type CompanyRealtimeInvalidationEvent =
 type CompanyEventContext = {
   contextId: string;
   missionId?: number;
+  reason?: RidesFetchReason;
 };
 
 const invalidationDedupMap = new Map<string, number>();
@@ -111,6 +132,19 @@ const EVENT_DEDUP_WINDOW_MS = 1_500;
 
 export function resetCompanyInvalidationDedupStateForTests() {
   invalidationDedupMap.clear();
+}
+
+function pruneExpiredMap(map: Map<string, number>, maxAgeMs: number, maxSize: number): void {
+  if (map.size <= maxSize) return;
+  const now = Date.now();
+  for (const [entry, stamp] of map) {
+    if (now - stamp > maxAgeMs) map.delete(entry);
+  }
+  if (map.size <= maxSize) return;
+  const overflow = [...map.entries()].sort((left, right) => left[1] - right[1]);
+  for (const [entry] of overflow.slice(0, map.size - maxSize)) {
+    map.delete(entry);
+  }
 }
 
 function shouldSkipDuplicateInvalidation(
@@ -121,6 +155,7 @@ function shouldSkipDuplicateInvalidation(
   const now = Date.now();
   const previous = invalidationDedupMap.get(key);
   invalidationDedupMap.set(key, now);
+  pruneExpiredMap(invalidationDedupMap, EVENT_DEDUP_WINDOW_MS * 8, 64);
   if (!previous) return false;
   return now - previous < EVENT_DEDUP_WINDOW_MS;
 }
@@ -131,31 +166,78 @@ export function useActiveCompanyContextId(): string | null {
   return activeContext.context_id;
 }
 
-export function useCompanyDispatchMissionsQuery(params: { date: string; search?: string; status?: string }) {
+function useCompanyNetworkQueriesEnabled(extra = true): boolean {
   const contextId = useActiveCompanyContextId();
-  const search = params.search ?? "";
-  const status = params.status ?? "all";
-  return useQuery({
-    queryKey: contextId
-      ? contextScopedKey(
-          contextId,
-          [...companyQueryKeys.missions(contextId, params.date, search, status)] as unknown[]
-        )
-      : ["company", "dispatch", "missions", "disabled"],
-    queryFn: () =>
-      getDispatchMissions({
+  const networkReady = useCompanySessionNetworkReady();
+  return Boolean(contextId) && networkReady && extra;
+}
+
+export function useCompanyDispatchMissionsQuery(params: {
+  date: string;
+  search?: string;
+  status?: string;
+  /** J ouvert : pages 2..N en fond. J±1 / Cockpit = false (page 1 seulement). */
+  completeDay?: boolean;
+}) {
+  const contextId = useActiveCompanyContextId();
+  const queryClient = useQueryClient();
+  // PERF-07 : search / status ne font plus partie de la clé ni du GET (filtre local Courses).
+  void params.search;
+  void params.status;
+  const queryKey = contextId
+    ? contextScopedKey(
+        contextId,
+        [...companyQueryKeys.missions(contextId, params.date)] as unknown[]
+      )
+    : ["company", "dispatch", "missions", "disabled"];
+  const query = useQuery<CompanyDispatchMissionListResponse>({
+    queryKey,
+    queryFn: async () => {
+      const pageOne = await getDispatchMissions({
         contextId: contextId as string,
         date: params.date,
-        search,
-        status: status === "all" ? undefined : status,
-      }),
-    enabled: Boolean(contextId),
-    staleTime: QUERY_STALE_TIME_MS.companyDetail,
+        page: 1,
+      });
+      const existing = queryClient.getQueryData<CompanyDispatchMissionListResponse>(queryKey);
+      return applyDayPage(existing, pageOne);
+    },
+    enabled: useCompanyNetworkQueriesEnabled(),
+    ...dispatchDayCacheOptions(params.date, { completeDay: params.completeDay }),
+    retry: shouldRetryCompanyQuery,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: (focusQuery) => {
+      if (!params.completeDay) return false;
+      if (shouldSkipFocusRefetchForDispatchDay()) return false;
+      if (focusQuery.isStale()) setStickyRidesFetchReason("focus");
+      return true;
+    },
+    structuralSharing: (oldData, newData) =>
+      shareDispatchMissionsQueryData(
+        oldData as CompanyDispatchMissionListResponse | undefined,
+        newData as CompanyDispatchMissionListResponse
+      ),
+    // Pas de placeholder inter-jours : un miss n’affiche jamais les courses de J sous J+1.
   });
+  const { retryDayPagination } = useCompleteOpenDispatchDay({
+    enabled: useCompanyNetworkQueriesEnabled(Boolean(params.completeDay && query.isSuccess)),
+    contextId,
+    date: params.date,
+    queryClient,
+    isQueryFetching: query.isFetching,
+  });
+  const lastMissionsCacheKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!contextId) return;
+    const key = params.date;
+    if (lastMissionsCacheKeyRef.current === key) return;
+    lastMissionsCacheKeyRef.current = key;
+    recordQueryCacheAccess(`dispatch.missions:${key}`, query.data != null);
+  }, [contextId, params.date, query.data]);
+  return { ...query, retryDayPagination };
 }
 
 /** Retards dispatch : même logique que le web (`delays/live` si dispo, sinon `/delays` + fusion minutes). */
-export function useCompanyDispatchDelaysQuery(params: { date: string }) {
+export function useCompanyDispatchDelaysQuery(params: { date: string; enabled?: boolean }) {
   const contextId = useActiveCompanyContextId();
   return useQuery({
     queryKey: contextId
@@ -168,20 +250,20 @@ export function useCompanyDispatchDelaysQuery(params: { date: string }) {
         contextId: contextId as string,
         date: params.date,
       }),
-    enabled: Boolean(contextId),
-    staleTime: 20_000,
+    enabled: useCompanyNetworkQueriesEnabled(params.enabled ?? true),
+    ...queryCacheOptions("operational"),
   });
 }
 
-export function useCompanyInboxQuery() {
+export function useCompanyInboxQuery(options?: { enabled?: boolean }) {
   const contextId = useActiveCompanyContextId();
   return useQuery({
     queryKey: contextId
       ? contextScopedKey(contextId, [...companyQueryKeys.inbox(contextId)] as unknown[])
       : ["company", "inbox", "disabled"],
     queryFn: () => getCompanyInboxNotifications({ limit: 30 }),
-    enabled: Boolean(contextId),
-    staleTime: QUERY_STALE_TIME_MS.companyList,
+    enabled: useCompanyNetworkQueriesEnabled(options?.enabled ?? true),
+    ...queryCacheOptions("operational"),
   });
 }
 
@@ -217,21 +299,31 @@ export function useCompanyInboxReadAllMutation() {
 
 export function useCompanyDashboardQuery(date: string) {
   const contextId = useActiveCompanyContextId();
-  return useQuery({
-    queryKey: contextId
-      ? contextScopedKey(
-          contextId,
-          [...companyQueryKeys.dashboard(contextId), date] as unknown[]
-        )
-      : ["company", "dispatch", "dashboard", "disabled"],
+  const queryKey = contextId
+    ? contextScopedKey(
+        contextId,
+        [...companyQueryKeys.dashboard(contextId), date] as unknown[]
+      )
+    : ["company", "dispatch", "dashboard", "disabled"];
+  const query = useQuery({
+    queryKey,
     queryFn: () =>
       getRealtimeDashboard({
         contextId: contextId as string,
         date,
       }),
-    enabled: Boolean(contextId),
-    staleTime: QUERY_STALE_TIME_MS.companyList,
+    enabled: useCompanyNetworkQueriesEnabled(),
+    ...queryCacheOptions("operational"),
   });
+  const lastDashboardCacheKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!contextId) return;
+    const key = date;
+    if (lastDashboardCacheKeyRef.current === key) return;
+    lastDashboardCacheKeyRef.current = key;
+    recordQueryCacheAccess(`dispatch.dashboard:${date}`, query.data != null);
+  }, [contextId, date, query.data]);
+  return query;
 }
 
 export function useCompanyOptimizerStatusQuery() {
@@ -244,8 +336,8 @@ export function useCompanyOptimizerStatusQuery() {
       getOptimizerStatus({
         contextId: contextId as string,
       }),
-    enabled: Boolean(contextId),
-    staleTime: QUERY_STALE_TIME_MS.companySlow,
+    enabled: useCompanyNetworkQueriesEnabled(OPTIMIZER_ENABLED),
+    ...queryCacheOptions("referential"),
   });
 }
 
@@ -263,8 +355,8 @@ export function useCompanyDispatchStatusQuery(date?: string) {
         contextId: contextId as string,
         date,
       }),
-    enabled: Boolean(contextId),
-    staleTime: QUERY_STALE_TIME_MS.companyDetail,
+    enabled: useCompanyNetworkQueriesEnabled(),
+    ...queryCacheOptions("referential"),
   });
 }
 
@@ -278,14 +370,15 @@ export function useCompanyDriversLocationsSnapshotQuery() {
       getDriversLocationsSnapshot({
         contextId: contextId as string,
       }),
-    enabled: Boolean(contextId),
-    staleTime: QUERY_STALE_TIME_MS.companyDetail,
+    enabled: useCompanyNetworkQueriesEnabled(),
+    ...queryCacheOptions("realtime"),
+    refetchOnReconnect: false,
   });
 }
 
 export function useCompanyRideDetailsQuery(params: { date: string; rideId: number | null }) {
   const contextId = useActiveCompanyContextId();
-  return useQuery({
+  const query = useQuery({
     queryKey:
       contextId && params.rideId != null
         ? contextScopedKey(
@@ -332,9 +425,37 @@ export function useCompanyRideDetailsQuery(params: { date: string; rideId: numbe
       }
       return null;
     },
-    enabled: Boolean(contextId) && params.rideId != null,
-    staleTime: QUERY_STALE_TIME_MS.companyDetail,
+    enabled: useCompanyNetworkQueriesEnabled(params.rideId != null),
+    ...queryCacheOptions("detail"),
   });
+  const lastDetailCacheKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!contextId || params.rideId == null) return;
+    const key = String(params.rideId);
+    if (lastDetailCacheKeyRef.current === key) return;
+    lastDetailCacheKeyRef.current = key;
+    const hit = query.data != null;
+    recordQueryCacheAccess(`dispatch.ride-details:${key}`, hit);
+    if (hit) recordMissionDetailsPhase("cache_hit");
+  }, [contextId, params.rideId, query.data]);
+  return query;
+}
+
+function invalidateDashboardExact(
+  queryClient: QueryClient,
+  contextId: string,
+  trigger: string
+): void {
+  void traceInvalidateQueries(
+    contextScopedKey(contextId, [...companyQueryKeys.dashboard(contextId)]),
+    trigger,
+    async () => {
+      await queryClient.invalidateQueries({
+        queryKey: contextScopedKey(contextId, [...companyQueryKeys.dashboard(contextId)] as unknown[]),
+        exact: true,
+      });
+    }
+  );
 }
 
 export function invalidateCompanyQueriesForEvent(
@@ -346,22 +467,9 @@ export function invalidateCompanyQueriesForEvent(
     return;
   }
   const scope = companyContextScope(context.contextId);
+  const ridesReason: RidesFetchReason = context.reason ?? "recovery";
 
-  const invalidateMissionsDashboardInbox = () => {
-    void queryClient.invalidateQueries({
-      queryKey: contextScopedKey(
-        context.contextId,
-        [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
-      ),
-      exact: true,
-    });
-    void queryClient.invalidateQueries({
-      queryKey: contextScopedKey(
-        context.contextId,
-        [...companyQueryKeys.root, "missions", scope] as unknown[]
-      ),
-      exact: false,
-    });
+  const invalidateInbox = () => {
     void queryClient.invalidateQueries({
       queryKey: contextScopedKey(
         context.contextId,
@@ -372,73 +480,35 @@ export function invalidateCompanyQueriesForEvent(
   };
 
   if (event === "booking_created" || event === "urgent_alert") {
-    invalidateMissionsDashboardInbox();
+    if (typeof context.missionId === "number") {
+      void reconcileAuthoritativeMission(
+        queryClient,
+        context.contextId,
+        context.missionId,
+        ridesReason
+      );
+    } else {
+      void refetchObservedDispatchDays(queryClient, context.contextId, ridesReason);
+    }
+    invalidateDashboardExact(queryClient, context.contextId, `${event}_dashboard`);
+    invalidateInbox();
     return;
   }
 
   if (event === "booking_updated") {
     if (typeof context.missionId === "number") {
-      void traceInvalidateQueries(
-        contextScopedKey(
-          context.contextId,
-          [...companyQueryKeys.rideDetails(context.contextId, context.missionId)] as unknown[]
-        ),
-        "booking_updated_mission_detail",
-        async () => {
-          await queryClient.invalidateQueries({
-            queryKey: contextScopedKey(
-              context.contextId,
-              [...companyQueryKeys.rideDetails(context.contextId, context.missionId)] as unknown[]
-            ),
-            exact: true,
-          });
-        }
+      void reconcileAuthoritativeMission(
+        queryClient,
+        context.contextId,
+        context.missionId,
+        ridesReason
       );
-      void traceInvalidateQueries(
-        contextScopedKey(context.contextId, [...companyQueryKeys.dashboard(context.contextId)]),
-        "booking_updated_mission_dashboard",
-        async () => {
-          await queryClient.invalidateQueries({
-            queryKey: contextScopedKey(
-              context.contextId,
-              [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
-            ),
-            exact: true,
-          });
-        }
-      );
+      invalidateDashboardExact(queryClient, context.contextId, "booking_updated_mission_dashboard");
       return;
     }
 
-    void traceInvalidateQueries(
-      contextScopedKey(context.contextId, [...companyQueryKeys.dashboard(context.contextId)]),
-      "booking_updated",
-      async () => {
-        await queryClient.invalidateQueries({
-          queryKey: contextScopedKey(
-            context.contextId,
-            [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
-          ),
-          exact: true,
-        });
-      }
-    );
-    void traceInvalidateQueries(
-      contextScopedKey(
-        context.contextId,
-        [...companyQueryKeys.root, "missions", scope] as unknown[]
-      ),
-      "booking_updated_missions",
-      async () => {
-        await queryClient.invalidateQueries({
-          queryKey: contextScopedKey(
-            context.contextId,
-            [...companyQueryKeys.root, "missions", scope] as unknown[]
-          ),
-          exact: false,
-        });
-      }
-    );
+    void refetchObservedDispatchDays(queryClient, context.contextId, ridesReason);
+    invalidateDashboardExact(queryClient, context.contextId, "booking_updated");
     void traceInvalidateQueries(
       contextScopedKey(
         context.contextId,
@@ -455,32 +525,38 @@ export function invalidateCompanyQueriesForEvent(
         });
       }
     );
-    void traceInvalidateQueries(
-      contextScopedKey(
-        context.contextId,
-        [...companyQueryKeys.optimizer(context.contextId)] as unknown[]
-      ),
-      "booking_updated_optimizer",
-      async () => {
-        await queryClient.invalidateQueries({
-          queryKey: contextScopedKey(
-            context.contextId,
-            [...companyQueryKeys.optimizer(context.contextId)] as unknown[]
-          ),
-          exact: true,
-        });
-      }
-    );
+    if (OPTIMIZER_ENABLED) {
+      void traceInvalidateQueries(
+        contextScopedKey(
+          context.contextId,
+          [...companyQueryKeys.optimizer(context.contextId)] as unknown[]
+        ),
+        "booking_updated_optimizer",
+        async () => {
+          await queryClient.invalidateQueries({
+            queryKey: contextScopedKey(
+              context.contextId,
+              [...companyQueryKeys.optimizer(context.contextId)] as unknown[]
+            ),
+            exact: true,
+          });
+        }
+      );
+    }
     return;
   }
   if (event === "booking_cancelled") {
-    void queryClient.invalidateQueries({
-      queryKey: contextScopedKey(
+    if (typeof context.missionId === "number") {
+      void reconcileAuthoritativeMission(
+        queryClient,
         context.contextId,
-        [...companyQueryKeys.root, "missions", scope] as unknown[]
-      ),
-      exact: false,
-    });
+        context.missionId,
+        ridesReason
+      );
+    } else {
+      void refetchObservedDispatchDays(queryClient, context.contextId, ridesReason);
+    }
+    invalidateDashboardExact(queryClient, context.contextId, "booking_cancelled_dashboard");
     return;
   }
   if (event === "driver_location_update") {
@@ -488,6 +564,7 @@ export function invalidateCompanyQueriesForEvent(
     return;
   }
   if (event === "optimizer_status_changed") {
+    if (!OPTIMIZER_ENABLED) return;
     void queryClient.invalidateQueries({
       queryKey: contextScopedKey(
         context.contextId,
@@ -541,97 +618,25 @@ export function invalidateCompanyQueriesForEvent(
     });
     return;
   }
-  // Phase 2 PR B/C — gate D3.1 : dispatch_assignment touche dashboard + missions
-  // (et ride detail si on connaît le missionId). On ne refetch pas l'optimizer
-  // pour rester ciblé et éviter le surfetch identifié dans l'audit.
+  // OPT-04E : assignment = patch #mission + dashboard. Jamais la famille missions.
   if (event === "dispatch_assignment") {
-    void traceInvalidateQueries(
-      contextScopedKey(
-        context.contextId,
-        [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
-      ),
-      "dispatch_assignment_dashboard",
-      async () => {
-        await queryClient.invalidateQueries({
-          queryKey: contextScopedKey(
-            context.contextId,
-            [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
-          ),
-          exact: true,
-        });
-      }
-    );
-    void traceInvalidateQueries(
-      contextScopedKey(
-        context.contextId,
-        [...companyQueryKeys.root, "missions", scope] as unknown[]
-      ),
-      "dispatch_assignment_missions",
-      async () => {
-        await queryClient.invalidateQueries({
-          queryKey: contextScopedKey(
-            context.contextId,
-            [...companyQueryKeys.root, "missions", scope] as unknown[]
-          ),
-          exact: false,
-        });
-      }
-    );
     if (typeof context.missionId === "number") {
-      void traceInvalidateQueries(
-        contextScopedKey(
-          context.contextId,
-          [...companyQueryKeys.rideDetails(context.contextId, context.missionId)] as unknown[]
-        ),
-        "dispatch_assignment_ride_detail",
-        async () => {
-          await queryClient.invalidateQueries({
-            queryKey: contextScopedKey(
-              context.contextId,
-              [...companyQueryKeys.rideDetails(context.contextId, context.missionId as number)] as unknown[]
-            ),
-            exact: true,
-          });
-        }
+      void reconcileAuthoritativeMission(
+        queryClient,
+        context.contextId,
+        context.missionId,
+        ridesReason
       );
+    } else {
+      void refetchObservedDispatchDays(queryClient, context.contextId, ridesReason);
     }
+    invalidateDashboardExact(queryClient, context.contextId, "dispatch_assignment_dashboard");
     return;
   }
-  // Phase 2 PR B/C — gate D3.1 : dispatch_run_lifecycle (started/completed/failed)
-  // touche dashboard + missions + dispatch-delays (impact sur l'ETA agrégé).
+  // OPT-04E : lifecycle = dashboard + delays + J observé. J±1 intacts.
   if (event === "dispatch_run_lifecycle") {
-    void traceInvalidateQueries(
-      contextScopedKey(
-        context.contextId,
-        [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
-      ),
-      "dispatch_run_lifecycle_dashboard",
-      async () => {
-        await queryClient.invalidateQueries({
-          queryKey: contextScopedKey(
-            context.contextId,
-            [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
-          ),
-          exact: true,
-        });
-      }
-    );
-    void traceInvalidateQueries(
-      contextScopedKey(
-        context.contextId,
-        [...companyQueryKeys.root, "missions", scope] as unknown[]
-      ),
-      "dispatch_run_lifecycle_missions",
-      async () => {
-        await queryClient.invalidateQueries({
-          queryKey: contextScopedKey(
-            context.contextId,
-            [...companyQueryKeys.root, "missions", scope] as unknown[]
-          ),
-          exact: false,
-        });
-      }
-    );
+    void refetchObservedDispatchDays(queryClient, context.contextId, ridesReason);
+    invalidateDashboardExact(queryClient, context.contextId, "dispatch_run_lifecycle_dashboard");
     void traceInvalidateQueries(
       contextScopedKey(
         context.contextId,
@@ -662,6 +667,7 @@ export function useCompanyRealtimeInvalidation() {
         invalidateCompanyQueriesForEvent(queryClient, event, {
           contextId,
           missionId,
+          reason: "recovery",
         });
       },
     }),
@@ -702,7 +708,11 @@ export function useCompanyRideActions() {
   const queryClient = useQueryClient();
   const invalidateScope = (missionId?: number) => {
     if (!contextId) return;
-    invalidateCompanyQueriesForEvent(queryClient, "booking_updated", { contextId, missionId });
+    invalidateCompanyQueriesForEvent(queryClient, "booking_updated", {
+      contextId,
+      missionId,
+      reason: "mutation",
+    });
   };
   const optimisticAssignEnabled = isFeatureEnabled("company_mobile_assign_optimistic_enabled");
 
@@ -731,8 +741,11 @@ export function useCompanyRideActions() {
 
   return {
     assign: useMutation({
-      mutationFn: (params: { missionId: number; driverId: number }) =>
-        assignCompanyRide({ contextId: contextId as string, ...params }),
+      retry: shouldRetryCompanyMutation,
+      mutationFn: (params: { missionId: number; driverId: number }) => {
+        assertCompanyOnlineForMutation();
+        return assignCompanyRide({ contextId: contextId as string, ...params });
+      },
       onMutate: async (params) => {
         if (!contextId || !optimisticAssignEnabled) return undefined;
         await queryClient.cancelQueries({
@@ -761,27 +774,27 @@ export function useCompanyRideActions() {
         }
         return { previousMissionQueries, previousDetail, missionId: params.missionId };
       },
-      onError: (error, _params, context) => {
-        const status = (error as AxiosError | undefined)?.response?.status;
+      onError: (_error, _params, context) => {
         if (!contextId || !context) return;
-        if (status === 409 || status === 422) {
-          context.previousMissionQueries?.forEach(([queryKey, snapshot]) => {
-            queryClient.setQueryData(queryKey, snapshot);
-          });
-          const detailKey = contextScopedKey(
-            contextId,
-            [...companyQueryKeys.rideDetails(contextId, context.missionId)] as unknown[]
-          );
-          if (context.previousDetail !== undefined) {
-            queryClient.setQueryData(detailKey, context.previousDetail);
-          }
+        context.previousMissionQueries?.forEach(([queryKey, snapshot]) => {
+          queryClient.setQueryData(queryKey, snapshot);
+        });
+        const detailKey = contextScopedKey(
+          contextId,
+          [...companyQueryKeys.rideDetails(contextId, context.missionId)] as unknown[]
+        );
+        if (context.previousDetail !== undefined) {
+          queryClient.setQueryData(detailKey, context.previousDetail);
         }
       },
       onSuccess: (_, params) => invalidateScope(params.missionId),
     }),
     reassign: useMutation({
-      mutationFn: (params: { missionId: number; driverId: number }) =>
-        reassignCompanyRide({ contextId: contextId as string, ...params }),
+      retry: shouldRetryCompanyMutation,
+      mutationFn: (params: { missionId: number; driverId: number }) => {
+        assertCompanyOnlineForMutation();
+        return reassignCompanyRide({ contextId: contextId as string, ...params });
+      },
       onMutate: async (params) => {
         if (!contextId || !optimisticAssignEnabled) return undefined;
         await queryClient.cancelQueries({
@@ -810,47 +823,57 @@ export function useCompanyRideActions() {
         }
         return { previousMissionQueries, previousDetail, missionId: params.missionId };
       },
-      onError: (error, _params, context) => {
-        const status = (error as AxiosError | undefined)?.response?.status;
+      onError: (_error, _params, context) => {
         if (!contextId || !context) return;
-        if (status === 409 || status === 422) {
-          context.previousMissionQueries?.forEach(([queryKey, snapshot]) => {
-            queryClient.setQueryData(queryKey, snapshot);
-          });
-          const detailKey = contextScopedKey(
-            contextId,
-            [...companyQueryKeys.rideDetails(contextId, context.missionId)] as unknown[]
-          );
-          if (context.previousDetail !== undefined) {
-            queryClient.setQueryData(detailKey, context.previousDetail);
-          }
+        context.previousMissionQueries?.forEach(([queryKey, snapshot]) => {
+          queryClient.setQueryData(queryKey, snapshot);
+        });
+        const detailKey = contextScopedKey(
+          contextId,
+          [...companyQueryKeys.rideDetails(contextId, context.missionId)] as unknown[]
+        );
+        if (context.previousDetail !== undefined) {
+          queryClient.setQueryData(detailKey, context.previousDetail);
         }
       },
       onSuccess: (_, params) => invalidateScope(params.missionId),
     }),
     cancel: useMutation({
-      mutationFn: (params: { missionId: number; reasonCode: string; note?: string; reason?: string }) =>
-        cancelCompanyRide({ contextId: contextId as string, ...params }),
+      retry: shouldRetryCompanyMutation,
+      mutationFn: (params: { missionId: number; reasonCode: string; note?: string; reason?: string }) => {
+        assertCompanyOnlineForMutation();
+        return cancelCompanyRide({ contextId: contextId as string, ...params });
+      },
       onSuccess: (_, params) => invalidateScope(params.missionId),
     }),
     schedule: useMutation({
+      retry: shouldRetryCompanyMutation,
       mutationFn: (params: {
         missionId: number;
         payload: { pickup_at: string; timezone?: string; force_recompute?: boolean; note?: string | null };
-      }) => scheduleCompanyRide({ contextId: contextId as string, ...params }),
+      }) => {
+        assertCompanyOnlineForMutation();
+        return scheduleCompanyRide({ contextId: contextId as string, ...params });
+      },
       onSuccess: (_, params) => invalidateScope(params.missionId),
     }),
     urgent: useMutation({
+      retry: shouldRetryCompanyMutation,
       mutationFn: (params: {
         missionId: number;
         payload?: { urgent?: boolean; reason_code?: string | null; note?: string | null; source?: string | null };
-      }) =>
-        markCompanyRideUrgent({ contextId: contextId as string, ...params }),
+      }) => {
+        assertCompanyOnlineForMutation();
+        return markCompanyRideUrgent({ contextId: contextId as string, ...params });
+      },
       onSuccess: (_, params) => invalidateScope(params.missionId),
     }),
     transfer: useMutation({
-      mutationFn: (params: { missionId: number; partnershipId: number }) =>
-        transferCompanyRide({ contextId: contextId as string, ...params }),
+      retry: shouldRetryCompanyMutation,
+      mutationFn: (params: { missionId: number; partnershipId: number }) => {
+        assertCompanyOnlineForMutation();
+        return transferCompanyRide({ contextId: contextId as string, ...params });
+      },
       onSuccess: (_, params) => invalidateScope(params.missionId),
     }),
   };
@@ -912,8 +935,8 @@ export function useCompanyClientsReadonlyQuery(params: { q?: string; page?: numb
         total: extractClientsListTotal(payload),
       };
     },
-    enabled: Boolean(contextId) && flagOn,
-    staleTime: QUERY_STALE_TIME_MS.companyList,
+    enabled: useCompanyNetworkQueriesEnabled(flagOn),
+    ...queryCacheOptions("referential"),
   });
 }
 
@@ -943,8 +966,8 @@ export function useCompanyClientReadonlyDetailQuery(clientId: number | null) {
       }
       return null;
     },
-    enabled: Boolean(contextId) && flagOn && clientId != null,
-    staleTime: QUERY_STALE_TIME_MS.companyList,
+    enabled: useCompanyNetworkQueriesEnabled(flagOn && clientId != null),
+    ...queryCacheOptions("referential"),
   });
 }
 
@@ -967,8 +990,8 @@ export function useCompanyInvoicesReadonlyQuery(params: { q?: string; page?: num
       });
       return normalizeReadonlyRows(payload);
     },
-    enabled: Boolean(contextId) && flagOn,
-    staleTime: QUERY_STALE_TIME_MS.companyList,
+    enabled: useCompanyNetworkQueriesEnabled(flagOn),
+    ...queryCacheOptions("referential"),
   });
 }
 
@@ -1039,7 +1062,8 @@ export function useCompanyChatMessages(date: string) {
             : null,
       };
     },
-    enabled: Boolean(contextId),
+    enabled: useCompanyNetworkQueriesEnabled(),
+    ...queryCacheOptions("operational"),
     getNextPageParam: (lastPage) => lastPage.nextBefore ?? undefined,
     initialPageParam: undefined as string | undefined,
     refetchInterval:
@@ -1114,7 +1138,7 @@ export function useCompanyChatUnread() {
       return AsyncStorage.getItem(companyDispatchChatLastReadKey(contextId));
     },
     enabled: Boolean(contextId),
-    staleTime: QUERY_STALE_TIME_MS.default,
+    ...queryCacheOptions("referential"),
   });
 
   const lastReadEpoch = toEpoch(lastReadQ.data);
@@ -1162,21 +1186,21 @@ export function useCompanyChatUnread() {
   };
 }
 
-export function useInstitutionOffersQuery(status = "PENDING") {
+export function useInstitutionOffersQuery(status = "PENDING", options?: { enabled?: boolean }) {
   const contextId = useActiveCompanyContextId();
   return useQuery({
     queryKey: contextId
       ? companyQueryKeys.institutionOffers(contextId, status)
       : ["company", "institution-offers", "disabled"],
     queryFn: () => fetchInstitutionOffers(status),
-    enabled: Boolean(contextId),
-    staleTime: QUERY_STALE_TIME_MS.companyList,
+    enabled: useCompanyNetworkQueriesEnabled(options?.enabled ?? true),
+    ...queryCacheOptions("operational"),
   });
 }
 
 /** Nombre d'offres institution PENDING encore visibles (badge navigation). */
-export function useInstitutionOffersPendingBadge(): number {
-  const { data } = useInstitutionOffersQuery("PENDING");
+export function useInstitutionOffersPendingBadge(options?: { enabled?: boolean }): number {
+  const { data } = useInstitutionOffersQuery("PENDING", options);
   return useMemo(
     () => filterVisibleInstitutionOffers(data?.offers ?? []).length,
     [data?.offers]
@@ -1191,8 +1215,8 @@ export function useInstitutionOfferDetailQuery(offerId: number | null) {
         ? companyQueryKeys.institutionOfferDetail(contextId, offerId)
         : ["company", "institution-offer", "disabled"],
     queryFn: () => fetchInstitutionOfferDetail(offerId as number),
-    enabled: Boolean(contextId) && offerId != null && Number.isFinite(offerId),
-    staleTime: QUERY_STALE_TIME_MS.companyList,
+    enabled: useCompanyNetworkQueriesEnabled(offerId != null && Number.isFinite(offerId)),
+    ...queryCacheOptions("operational"),
     retry: (count, error) => {
       const parsed = parseInstitutionOfferApiError(error);
       if (parsed.status === 404 || parsed.status === 403) return false;

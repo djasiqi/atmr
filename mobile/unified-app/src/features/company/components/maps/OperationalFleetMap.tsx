@@ -119,6 +119,9 @@ export type OperationalFleetMapProps = {
   /** Synchronise la sélection chauffeur depuis le cockpit (désélection panneau ops). */
   syncSelectedDriverId?: number | null;
 
+  /** Focus explicite depuis la feuille « Suivi en direct ». */
+  focusDriverRequest?: { driverId: number; nonce: number } | null;
+
   /** iOS : diffère markers/routes tant que socket instable (reconnexion cockpit). */
   nativeOverlaysEnabled?: boolean;
 
@@ -126,6 +129,9 @@ export type OperationalFleetMapProps = {
   upcomingTableExpanded?: boolean;
 
   onUpcomingTableExpandedChange?: (expanded: boolean) => void;
+
+  /** false = cockpit monté hors focus : geler le travail visuel carte. */
+  visualWorkEnabled?: boolean;
 
 };
 
@@ -349,38 +355,40 @@ function FleetMapSurface({
 
       </FleetMapErrorBoundary>
 
-      {fleet.rosterResolved ? (
-        <View
-          style={s.liveBadge}
-          accessibilityRole="text"
-          accessibilityLabel={`${fleet.liveCount} sur ${fleet.totalCount} en direct`}
-        >
+      {!isCockpit ? (
+        fleet.rosterResolved ? (
           <View
-            style={[
-              s.liveBadgeDot,
-              { backgroundColor: fleet.liveCount > 0 ? "#00796B" : "#91A3A0" },
-            ]}
-          />
-          <AppText variant="caption" style={s.liveBadgeText}>
-            {fleet.liveCount}/{fleet.totalCount} en direct
-          </AppText>
-          {fleet.filteredDisplayedCount !== fleet.totalCount ? (
-            <AppText variant="caption" style={s.liveBadgeFilterHint}>
-              · {fleet.filteredDisplayedCount} affiché
-              {fleet.filteredDisplayedCount > 1 ? "s" : ""}
+            style={s.liveBadge}
+            accessibilityRole="text"
+            accessibilityLabel={`${fleet.liveCount} sur ${fleet.totalCount} en direct`}
+          >
+            <View
+              style={[
+                s.liveBadgeDot,
+                { backgroundColor: fleet.liveCount > 0 ? "#00796B" : "#91A3A0" },
+              ]}
+            />
+            <AppText variant="caption" style={s.liveBadgeText}>
+              {fleet.liveCount}/{fleet.totalCount} en direct
             </AppText>
-          ) : null}
-        </View>
-      ) : (
-        <View style={s.liveBadge} accessibilityLabel="Localisation en cours">
-          <AppText variant="caption" style={s.liveBadgeText}>
-            Localisation…
-          </AppText>
-        </View>
-      )}
+            {fleet.filteredDisplayedCount !== fleet.totalCount ? (
+              <AppText variant="caption" style={s.liveBadgeFilterHint}>
+                · {fleet.filteredDisplayedCount} affiché
+                {fleet.filteredDisplayedCount > 1 ? "s" : ""}
+              </AppText>
+            ) : null}
+          </View>
+        ) : (
+          <View style={s.liveBadge} accessibilityLabel="Localisation en cours">
+            <AppText variant="caption" style={s.liveBadgeText}>
+              Localisation…
+            </AppText>
+          </View>
+        )
+      ) : null}
 
-      {fleet.showNoGpsBanner ? (
-        <View style={s.noGpsBanner} pointerEvents="none">
+      {fleet.showNoGpsBanner && !isCockpit ? (
+        <View style={[s.noGpsBanner, isCockpit && s.noGpsBannerCockpit]} pointerEvents="none">
           <AppText variant="label" style={s.noGpsTitle}>
             {socketConnected ? "Aucun GPS récent" : "Temps réel indisponible"}
           </AppText>
@@ -614,9 +622,11 @@ export function OperationalFleetMap({
   cockpitMapPolicy,
   onMapSignalsChange,
   syncSelectedDriverId,
+  focusDriverRequest = null,
   nativeOverlaysEnabled: nativeOverlaysEnabledProp,
   upcomingTableExpanded = true,
   onUpcomingTableExpandedChange,
+  visualWorkEnabled = true,
 }: OperationalFleetMapProps) {
   const realtime = useCompanyRealtimeStatus();
   const gatedNativeOverlays = useCompanyMapNativeOverlayGate(realtime.transportStatus);
@@ -653,7 +663,9 @@ export function OperationalFleetMap({
     onMapSignalsChange,
     inlineDriverSelection: isCockpit,
     syncSelectedDriverId: isCockpit ? syncSelectedDriverId : undefined,
+    focusDriverRequest: isCockpit ? focusDriverRequest : null,
     onBeforeExplicitRecenter: () => fleetMapCameraControlRef.current?.clearUserCameraLock(),
+    visualWorkEnabled,
 
   });
 
@@ -974,6 +986,10 @@ const s = StyleSheet.create({
   },
   liveBadgeFilterHint: {
     color: FLEET_MAP_COLORS.textMuted,
+  },
+
+  noGpsBannerCockpit: {
+    top: 118,
   },
 
   noGpsBanner: {

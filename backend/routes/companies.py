@@ -3639,7 +3639,7 @@ class CompanyDriversLive(Resource):
 
         driver_repo = DriverRepository()
         uc = ListCompanyDriversUseCase(driver_repo=driver_repo)
-        result = uc.execute(company_id=cid)
+        result = uc.execute(company_id=cid, active_only=True)
         drivers_list = list(result.payload.get("drivers") or [])
 
         locations = build_company_driver_locations_items(

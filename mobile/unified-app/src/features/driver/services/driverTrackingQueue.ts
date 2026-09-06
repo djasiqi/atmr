@@ -16,6 +16,11 @@ import {
 } from "./trackingContextLease";
 import { onAuthRefreshSuccess } from "../../../core/auth/authRefreshListeners";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
+import {
+  recordBatteryEnqueue,
+  recordBatteryPutSuccess,
+  type BatteryEnqueueSource,
+} from "../../../core/observability/batteryEnergyCounters";
 import { realtimeManager } from "../../../core/realtime/realtimeManager";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import {
@@ -1802,6 +1807,8 @@ class DriverTrackingQueue {
     captureId?: string | null;
     trackingGenerationId?: string | null;
     missionContextVersion?: number | null;
+    /** Observabilité batterie uniquement — ignoré par le GPS. */
+    energySource?: BatteryEnqueueSource;
   }): Promise<DriverTrackingQueueItem | null> {
     await this.ensureLoaded();
 
@@ -1949,6 +1956,15 @@ class DriverTrackingQueue {
       sequence_id: sequenceId,
       tracking_session_id: this.trackingSessionId,
       session_generation: this.sessionGeneration,
+    });
+    recordBatteryEnqueue({
+      source: entry.energySource ?? "bridge_tick",
+      recordedAt: frozenPayload.recordedAt ?? frozenPayload.timestamp,
+      eventId: item.id,
+      enqueueAtMs: item.queuedAt,
+      queueDepth: this.items.length,
+      trackingMode: locationMode,
+      appState: String(entry.appState),
     });
     return item;
   }
@@ -2384,6 +2400,14 @@ class DriverTrackingQueue {
               null,
           });
           sent += 1;
+          recordBatteryPutSuccess({
+            eventId: item.id,
+            recordedAt: item.payload.recordedAt ?? item.payload.timestamp,
+            queuedAtMs: item.queuedAt,
+            queueDepth: this.items.length,
+            trackingMode: item.locationMode,
+            appState: String(item.appState),
+          });
           lastBackendAckRequestEventId = item.id;
           lastBackendAckServerEventId = ack.tracking_event_id ?? null;
           lastBackendAckStatus = ack.ack_status;

@@ -1,10 +1,11 @@
 import { uploadChatAttachment } from "../../chat/services/chatMediaUpload";
 import { sendHubMessage } from "./api";
-import { MESSAGE_HUB_THREAD_TEAM } from "./contracts";
 
 export type SendDriverHubVoiceMessageOptions = {
   companyId: number;
-  threadId?: string;
+  /** Obligatoire : pas de défaut « team » (évite un fallback silencieux). */
+  threadId: string;
+  source?: string;
 };
 
 /**
@@ -15,7 +16,10 @@ export async function sendDriverHubVoiceMessage(
   localUri: string,
   options: SendDriverHubVoiceMessageOptions
 ): Promise<void> {
-  const threadId = options.threadId ?? MESSAGE_HUB_THREAD_TEAM;
+  const threadId = options.threadId.trim();
+  if (!threadId) {
+    throw new Error("threadId Dispatch/hub manquant — envoi vocal refusé.");
+  }
   const localId = `local-voice-${Date.now()}`;
   const publicUrl = await uploadChatAttachment({ uri: localUri });
   const outbound: Record<string, unknown> = {
@@ -27,6 +31,7 @@ export async function sendDriverHubVoiceMessage(
     booking_id: null,
     message_type: "audio",
     priority: "normal",
+    ...(options.source ? { source: options.source } : {}),
   };
 
   await sendHubMessage(options.companyId, threadId, outbound);

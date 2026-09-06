@@ -16,7 +16,21 @@ import {
 } from "./contracts";
 import { emitCompanyDispatchTelemetry } from "../telemetry/companyTelemetry";
 import { mergeCompanyDispatchDelaySources } from "../utils/dispatchWebAlignment";
-import { filterMissionsByDispatchListChip } from "../utils/rideListStatusFilter";
+import { DISPATCH_DAY_PAGE_SIZE } from "../utils/dispatchDayPagination";
+import {
+  peekRidesFetchReason,
+  recordRidesFetch,
+  type RidesFetchReason,
+} from "../utils/ridesFetchReason";
+import {
+  assertDispatchModeSwitchAllowed,
+  assertOptimizerEnabled,
+  assertSemiAutoDispatchEnabled,
+} from "../dispatch/dispatchModeLock";
+import {
+  COMPANY_OFFLINE_ACTION_MESSAGE,
+  isCompanyNetworkRequestError,
+} from "../utils/companyOfflinePolicy";
 
 type CompanyRequestOptions = {
   contextId: string;
@@ -30,6 +44,9 @@ const GENERIC_RESTX_CONFLICT =
  * y compris quand Flask-RESTX renvoie le message 409 générique.
  */
 export function getDispatchApiErrorMessage(error: unknown, fallback: string): string {
+  if (isCompanyNetworkRequestError(error)) {
+    return COMPANY_OFFLINE_ACTION_MESSAGE;
+  }
   if (!(error instanceof Error) || !(error as AxiosError).isAxiosError) {
     return error instanceof Error ? error.message : fallback;
   }
@@ -227,6 +244,9 @@ type RawRide = {
 type RawDispatchRidesResponse = {
   items?: RawRide[];
   missions?: RawRide[];
+  page?: number;
+  page_size?: number;
+  total?: number;
 };
 
 type RawOptimizerResponse = {
@@ -446,6 +466,12 @@ function normalizeMission(raw: RawRide): CompanyDispatchMission | null {
   };
 }
 
+/** OPT-04E — normalise un payload détail / mutation en DTO liste. */
+export function normalizeDispatchMission(raw: unknown): CompanyDispatchMission | null {
+  if (!raw || typeof raw !== "object") return null;
+  return normalizeMission(raw as RawRide);
+}
+
 function normalizeLocation(
   raw: NonNullable<RawDriversResponse["locations"]>[number] & {
     id?: number | string;
@@ -508,12 +534,22 @@ function normalizeLocation(
     typeof raw.status === "string" && raw.status.trim()
       ? raw.status.trim().toLowerCase()
       : null;
+  const isActiveRaw = (raw as { is_active?: unknown }).is_active;
+  const isActive =
+    typeof isActiveRaw === "boolean"
+      ? isActiveRaw
+      : isActiveRaw === 0 || isActiveRaw === "false"
+        ? false
+        : isActiveRaw === 1 || isActiveRaw === "true"
+          ? true
+          : null;
   return {
     driver_id: driverId,
     driver_name: driverName,
     full_name: fullName ?? driverName,
     first_name: firstName,
     last_name: lastName,
+    is_active: isActive,
     mission_id:
       toFiniteNumber(raw.mission_id ?? raw.current_booking_id) ?? null,
     latitude: latitude,
@@ -550,8 +586,13 @@ export async function getDispatchMissions(
     date: string;
     search?: string;
     status?: string;
+    page?: number;
+    fetchReason?: RidesFetchReason;
   }
 ): Promise<CompanyDispatchMissionListResponse> {
+  const page = Number.isFinite(options.page) && (options.page as number) >= 1 ? Math.floor(options.page as number) : 1;
+  const reason = options.fetchReason ?? peekRidesFetchReason(page > 1 ? "pagination" : "initial");
+  recordRidesFetch(reason, { date: options.date, page });
   const response = await requestWithFallback<RawDispatchRidesResponse>([
     () =>
       apiClient.get<RawDispatchRidesResponse>("/company_mobile/dispatch/v1/rides", {
@@ -560,7 +601,8 @@ export async function getDispatchMissions(
           date: options.date,
           q: options.search || undefined,
           status: options.status || undefined,
-          page_size: 50,
+          page,
+          page_size: DISPATCH_DAY_PAGE_SIZE,
         },
       }),
     () =>
@@ -570,22 +612,35 @@ export async function getDispatchMissions(
           date: options.date,
           q: options.search || undefined,
           status: options.status || undefined,
-          page_size: 50,
+          page,
+          page_size: DISPATCH_DAY_PAGE_SIZE,
         },
       }),
   ], { domain: "dispatch_missions_get", contextId: options.contextId });
-  const rawMissions = response.data.items ?? response.data.missions ?? [];
+  const raw = response.data;
+  const rawMissions = raw.items ?? raw.missions ?? [];
   const missions = rawMissions
     .map(normalizeMission)
     .filter((mission): mission is CompanyDispatchMission => mission !== null);
-  const afterChip = filterMissionsByDispatchListChip(
-    missions,
-    options.status ?? "all"
-  );
+  // Filtre statut : local Courses (PERF-07), pas sur la page serveur.
+  const apiTotal = typeof raw.total === "number" && Number.isFinite(raw.total) ? raw.total : null;
+  const pageSize =
+    typeof raw.page_size === "number" && raw.page_size > 0 ? raw.page_size : DISPATCH_DAY_PAGE_SIZE;
+  const total = apiTotal ?? missions.length;
+  const loaded = missions.length;
+  const isComplete = apiTotal == null || (page - 1) * pageSize + loaded >= total;
   const normalized: CompanyDispatchMissionListResponse = {
     context_id: options.contextId,
-    missions: afterChip,
+    date: options.date,
+    missions,
     refreshed_at: new Date().toISOString(),
+    total,
+    page_size: pageSize,
+    loaded,
+    page,
+    next_page: page + 1,
+    is_complete: isComplete,
+    pagination_error: false,
   };
   if (!validateCompanyMissionListResponse(normalized)) {
     throw new Error("Company missions payload contract mismatch");
@@ -635,6 +690,7 @@ export async function getRealtimeDashboard(
 export async function getOptimizerStatus(
   options: CompanyRequestOptions
 ): Promise<CompanyOptimizerStatusResponse> {
+  assertOptimizerEnabled();
   const response = await requestWithFallback<RawOptimizerResponse>([
     () =>
       apiClient.get<RawOptimizerResponse>("/company_mobile/dispatch/v1/status", {
@@ -838,6 +894,7 @@ async function resolveReservationIdFromMission(
 }
 
 export async function runCompanyDispatch(options: CompanyRequestOptions & { date?: string }) {
+  assertSemiAutoDispatchEnabled();
   const response = await requestWithFallback<CompanyAnyPayload>(
     [
       () =>
@@ -859,6 +916,7 @@ export async function runCompanyDispatch(options: CompanyRequestOptions & { date
 }
 
 export async function runCompanyOptimizer(options: CompanyRequestOptions & { date?: string }) {
+  assertOptimizerEnabled();
   const response = await requestWithFallback<CompanyAnyPayload>(
     [
       () =>
@@ -1424,6 +1482,7 @@ export async function getCompanyDispatchModes(options: CompanyRequestOptions) {
 export async function switchCompanyDispatchMode(
   options: CompanyRequestOptions & { mode: "manual" | "semi_auto" | "fully_auto" }
 ) {
+  assertDispatchModeSwitchAllowed(options.mode);
   const response = await requestWithFallback<CompanyAnyPayload>([
     () =>
       apiClient.put(

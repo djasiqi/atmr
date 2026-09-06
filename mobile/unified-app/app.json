@@ -102,9 +102,14 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#EAF3F1",
-          "image": "./assets/images/splash-solid.png",
-          "imageWidth": 128,
-          "resizeMode": "contain"
+          "image": "./assets/images/lirie-logo-color.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "android": {
+            "backgroundColor": "#EAF3F1",
+            "image": "./assets/images/lirie-logo-color.png",
+            "imageWidth": 220
+          }
         }
       ],
       [

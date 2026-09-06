@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../utils/apiClient';
-import { hasCompanyScopedAccessToken } from '../utils/webAuthSession';
+import { hasCompanyDispatchSession } from '../utils/webAuthSession';
 import { recordDashboardApiCall } from '../utils/companyDashboardDuplicationReport';
 import { isCompanyDashboardPerfEnabled } from '../utils/companyDashboardPerfInstrumentation';
 import { lirieKeys } from '../queryKeys/lirie';
@@ -13,7 +13,7 @@ import { lirieKeys } from '../queryKeys/lirie';
  */
 export const useDispatchMode = () => {
   const queryClient = useQueryClient();
-  const canCallDispatch = hasCompanyScopedAccessToken();
+  const canCallDispatch = hasCompanyDispatchSession();
 
   const query = useQuery({
     queryKey: lirieKeys.dispatchMode(),

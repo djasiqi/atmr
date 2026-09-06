@@ -6,6 +6,7 @@ import { QUERY_STALE_TIME_MS } from "../../core/queryStaleTimes";
 import { realtimeManager } from "../../core/realtime/realtimeManager";
 import { useActiveDriverContextId } from "./hooks";
 import { getDriverMessages, type DriverChatMessage } from "./api";
+import { useDriverSessionNetworkReady } from "./sessionNetworkGate";
 
 const DRIVER_CHAT_KEY = ["driver", "chat"] as const;
 
@@ -20,10 +21,11 @@ function getLastReadKey(contextId: string) {
 }
 
 export function useDriverChatMessages(companyId: number | null, contextId: string | null) {
+  const networkReady = useDriverSessionNetworkReady();
   return useQuery({
     queryKey: [...DRIVER_CHAT_KEY, contextId ?? "none", companyId ?? "none"],
     queryFn: () => getDriverMessages(companyId as number, { limit: 40 }),
-    enabled: Boolean(companyId && contextId),
+    enabled: networkReady && Boolean(companyId && contextId),
     refetchInterval: () =>
       realtimeManager.isDriverSocketReady() ? false : 10_000,
     staleTime: QUERY_STALE_TIME_MS.default,

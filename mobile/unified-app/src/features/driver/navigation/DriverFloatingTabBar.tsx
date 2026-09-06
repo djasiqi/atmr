@@ -20,8 +20,8 @@ import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { useDriverChatUnreadCount } from "../chatHooks";
 import { RadialActionMenu, type RadialAction } from "../../../components/RadialActionMenu";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
-import { DriverTeamVoiceFab } from "./DriverTeamVoiceFab";
-import type { DriverTeamVoiceFeedback } from "./useDriverTeamVoiceBroadcast";
+import { DriverDispatchVoiceFab } from "./DriverDispatchVoiceFab";
+import type { DriverDispatchVoiceFeedback } from "./useDriverDispatchVoiceBroadcast";
 
 const C = {
   textMuted: "#7A808A",
@@ -106,7 +106,7 @@ function useDriverTabHighlight(): {
 
 /**
  * Barre d’onglets flottante alignée sur {@link CompanyFloatingTabBar} :
- * Accueil, Courses, micro vocal (canal équipe), Chat + menu radial « Autres ».
+ * Accueil, Courses, micro vocal (canal Dispatch), Messages + menu radial « Autres ».
  */
 export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
   const { usableWidth, bottomInset, horizontalPadding } = useAppViewport();
@@ -115,7 +115,7 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
   const { activeContext, bootstrap, changeContext } = useSession();
   const [switchPending, setSwitchPending] = useState(false);
   const [switchMessage, setSwitchMessage] = useState<string | null>(null);
-  const [voiceFeedback, setVoiceFeedback] = useState<DriverTeamVoiceFeedback | null>(null);
+  const [voiceFeedback, setVoiceFeedback] = useState<DriverDispatchVoiceFeedback | null>(null);
   const voiceFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEnsureDriverSocketForHub();
   const hubUnread = useDriverMessageHubUnreadBadge();
@@ -214,7 +214,7 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
     return items;
   }, [canSwitchToCompany, changeContext, router, switchPending, targetCompanyContext]);
 
-  const handleVoiceFeedback = (feedback: DriverTeamVoiceFeedback | null) => {
+  const handleVoiceFeedback = (feedback: DriverDispatchVoiceFeedback | null) => {
     if (voiceFeedbackTimerRef.current) {
       clearTimeout(voiceFeedbackTimerRef.current);
       voiceFeedbackTimerRef.current = null;
@@ -256,7 +256,7 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
           }}
         />
         <View style={styles.barSlot}>
-          <DriverTeamVoiceFab onFeedback={handleVoiceFeedback} />
+          <DriverDispatchVoiceFab onFeedback={handleVoiceFeedback} />
         </View>
         <BarTabButton
           label="Messages"
@@ -296,14 +296,29 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
           onPress={() => {
             if (voiceFeedback.openSettings) {
               void Linking.openSettings();
+              return;
+            }
+            if (voiceFeedback.onRetry) {
+              voiceFeedback.onRetry();
             }
           }}
-          disabled={!voiceFeedback.openSettings}
-          style={styles.voiceFeedbackFloating}
-          accessibilityRole={voiceFeedback.openSettings ? "button" : "text"}
+          disabled={!voiceFeedback.openSettings && !voiceFeedback.onRetry}
+          style={[
+            styles.voiceFeedbackFloating,
+            voiceFeedback.tone === "success" && styles.voiceFeedbackSuccess,
+          ]}
+          accessibilityRole={
+            voiceFeedback.openSettings || voiceFeedback.onRetry ? "button" : "text"
+          }
           accessibilityLabel={voiceFeedback.message}
         >
-          <AppText variant="caption" style={styles.voiceFeedbackMessage}>
+          <AppText
+            variant="caption"
+            style={[
+              styles.voiceFeedbackMessage,
+              voiceFeedback.tone === "success" && styles.voiceFeedbackMessageSuccess,
+            ]}
+          >
             {voiceFeedback.message}
           </AppText>
         </Pressable>
@@ -464,9 +479,15 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  voiceFeedbackSuccess: {
+    borderColor: "rgba(0, 121, 107, 0.36)",
+  },
   voiceFeedbackMessage: {
     color: "#B42318",
     lineHeight: 16,
+  },
+  voiceFeedbackMessageSuccess: {
+    color: "#0A8F7A",
   },
   switchMessageFloating: {
     position: "absolute",

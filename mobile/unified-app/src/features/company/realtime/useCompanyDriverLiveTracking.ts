@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useIsFocused } from "@react-navigation/native";
 import {
   configureGpsMetricsSampling,
   recordGpsBatchCoalesced,
@@ -20,8 +21,16 @@ import {
 import { REALTIME_FLUSH_MS } from "./gpsFlushConstants";
 import { resolveRealtimeFlushMs } from "./companyMapRuntimeConfig";
 import { AppState } from "react-native";
-import { applyLocalLocationFreshness } from "../utils/localDriverLocationFreshness";
+import {
+  rematerializeLiveDrivers,
+  reuseLiveDriverListIfUnchanged,
+  type AppliedLiveDriverEntry,
+} from "../utils/liveDriverListMaterialize";
 import { markBootMilestone } from "../../../core/observability/bootMilestones";
+import {
+  measureCompanyDashboardPhase,
+  recordCompanyDashboardPhase,
+} from "../observability/companyDashboardPhases";
 
 export { REALTIME_FLUSH_MS };
 export const MAX_BATCH_AGE_MS = 1_000;
@@ -52,7 +61,7 @@ function toEpoch(value: string | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-type DriverRealtimePayload = Partial<CompanyDriverLiveLocation> & {
+type DriverRealtimePayload = Omit<Partial<CompanyDriverLiveLocation>, "is_active"> & {
   driver_id?: number | string;
   driver_name?: string | null;
   full_name?: string | null;
@@ -71,6 +80,7 @@ type DriverRealtimePayload = Partial<CompanyDriverLiveLocation> & {
   device_health?: CompanyDriverLiveLocation["device_health"];
   recorded_at?: string | null;
   received_at?: string | null;
+  is_active?: boolean | number | string | null;
 };
 
 function extractLatitude(payload: DriverRealtimePayload): number {
@@ -141,6 +151,14 @@ export function normalizeRealtimeLocation(payload: DriverRealtimePayload): Compa
     first_name: firstName,
     last_name: lastName,
     mission_id: missionId,
+    is_active:
+      typeof payload.is_active === "boolean"
+        ? payload.is_active
+        : payload.is_active === 0 || payload.is_active === "false"
+          ? false
+          : payload.is_active === 1 || payload.is_active === "true"
+            ? true
+            : null,
     latitude,
     longitude,
     timestamp: payload.timestamp ?? new Date().toISOString(),
@@ -268,10 +286,12 @@ export function applyPendingDriverUpdates(
 }
 
 export function useCompanyDriverLiveTracking() {
+  const visualWorkEnabled = useIsFocused();
   const contextId = useActiveCompanyContextId();
   const snapshotQuery = useCompanyDriversLocationsSnapshotQuery();
   const refetchSnapshot = snapshotQuery.refetch;
   const [driversMap, setDriversMap] = useState<Record<number, CompanyDriverLiveLocation>>({});
+  const [drivers, setDrivers] = useState<CompanyDriverLiveLocation[]>([]);
   /** Armé dès le mount ; réarmé seulement après merge coords valide. */
   const lastRealtimeEventAtRef = useRef<number>(Date.now());
   const lastWatchdogSuccessAtRef = useRef<number>(0);
@@ -284,7 +304,6 @@ export function useCompanyDriverLiveTracking() {
   const firstGpsAfterReconnectRef = useRef(false);
   const driversMapRef = useRef(driversMap);
   driversMapRef.current = driversMap;
-  const [freshnessTick, setFreshnessTick] = useState(0);
 
   useEffect(() => {
     configureGpsMetricsSampling(5);
@@ -316,7 +335,11 @@ export function useCompanyDriverLiveTracking() {
     }
 
     setDriversMap((currentMap) => {
-      const next = applyPendingDriverUpdates(currentMap, batch);
+      const next = measureCompanyDashboardPhase(
+        "realtime_fusion",
+        () => applyPendingDriverUpdates(currentMap, batch),
+        { pending_count: batch.size }
+      );
       if (next !== currentMap && shouldSampleGpsMetricEvent()) {
         recordMapSetState();
       }
@@ -409,10 +432,18 @@ export function useCompanyDriverLiveTracking() {
     // Snapshot chargé : arme le watchdog (même sans event socket).
     lastRealtimeEventAtRef.current = Date.now();
     setDriversMap((currentMap) => {
-      let changed = false;
-      let mergedValidCoords = false;
-      const nextMap = { ...currentMap };
-      snapshotLocations.forEach((driver) => {
+      return measureCompanyDashboardPhase("snapshot", () => {
+        let changed = false;
+        let mergedValidCoords = false;
+        const nextMap = { ...currentMap };
+        snapshotLocations.forEach((driver) => {
+        if (driver.is_active === false) {
+          if (nextMap[driver.driver_id] != null) {
+            delete nextMap[driver.driver_id];
+            changed = true;
+          }
+          return;
+        }
         const currentDriver = nextMap[driver.driver_id];
         const normalizedDriver: CompanyDriverLiveLocation = {
           ...driver,
@@ -436,6 +467,7 @@ export function useCompanyDriverLiveTracking() {
         lastRealtimeEventAtRef.current = Date.now();
       }
       return changed ? nextMap : currentMap;
+      });
     });
   }, [snapshotQuery.data]);
 
@@ -532,10 +564,47 @@ export function useCompanyDriverLiveTracking() {
     return () => clearInterval(interval);
   }, [contextId, refetchSnapshot]);
 
-  useEffect(() => {
-    const id = setInterval(() => setFreshnessTick((t) => t + 1), 5_000);
-    return () => clearInterval(id);
+  const sortedDriversRef = useRef<CompanyDriverLiveLocation[]>([]);
+  const appliedByIdRef = useRef<
+    Map<number, AppliedLiveDriverEntry<CompanyDriverLiveLocation>>
+  >(new Map());
+
+  const publishDrivers = useCallback((refreshAge: boolean) => {
+    const nowMs = Date.now();
+    const sources = Object.values(driversMapRef.current);
+    const materialized = rematerializeLiveDrivers({
+      sources,
+      previousById: appliedByIdRef.current,
+      nowMs,
+      refreshAgeForUnchangedSources: refreshAge,
+    });
+    appliedByIdRef.current = materialized.nextById;
+    const next = reuseLiveDriverListIfUnchanged(
+      sortedDriversRef.current,
+      materialized.drivers
+    );
+    recordCompanyDashboardPhase("snapshot", Date.now() - nowMs, {
+      kind: "rematerialize",
+      source_count: sources.length,
+      refresh_age: refreshAge,
+      reused: materialized.reused,
+      replaced: materialized.replaced,
+      list_identity_changed: next !== sortedDriversRef.current,
+    });
+    if (next === sortedDriversRef.current) return;
+    sortedDriversRef.current = next;
+    setDrivers(next);
   }, []);
+
+  useEffect(() => {
+    publishDrivers(false);
+  }, [driversMap, publishDrivers]);
+
+  useEffect(() => {
+    if (!visualWorkEnabled) return;
+    const id = setInterval(() => publishDrivers(true), 5_000);
+    return () => clearInterval(id);
+  }, [publishDrivers, visualWorkEnabled]);
 
   useEffect(() => {
     return () => {
@@ -554,32 +623,6 @@ export function useCompanyDriverLiveTracking() {
       }
     };
   }, []);
-
-  const sortedDriversRef = useRef<CompanyDriverLiveLocation[]>([]);
-  const drivers = useMemo(() => {
-    // freshnessTick force le recalcul d'âge local même si driversMap est stable.
-    void freshnessTick;
-    const nowMs = Date.now();
-    const next = Object.values(driversMap)
-      .map((driver) => applyLocalLocationFreshness(driver, nowMs))
-      .sort((a, b) => a.driver_id - b.driver_id);
-    const prev = sortedDriversRef.current;
-    if (
-      prev.length === next.length &&
-      prev.every(
-        (driver, index) =>
-          driver === next[index] ||
-          (driver.driver_id === next[index]?.driver_id &&
-            driver.last_seen_seconds === next[index]?.last_seen_seconds &&
-            driver.location_status === next[index]?.location_status &&
-            driver.recorded_at === next[index]?.recorded_at)
-      )
-    ) {
-      return prev;
-    }
-    sortedDriversRef.current = next;
-    return next;
-  }, [driversMap, freshnessTick]);
 
   return {
     drivers,

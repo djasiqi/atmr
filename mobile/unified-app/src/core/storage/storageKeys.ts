@@ -13,6 +13,8 @@ export const STORAGE_KEYS = {
   AUTH_BIOMETRIC_ENABLED: "auth.biometric.enabled",
   LOGIN_PREFERENCES: "auth.login.preferences",
   LOGIN_REMEMBERED_PASSWORD: "auth.login.remembered_password",
+  COMPANY_COLD_START_SNAPSHOT: "company.cold_start.snapshot.v1",
+  DRIVER_LAST_MAP_VIEWPORT: "driver.last_map_viewport.v1",
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

@@ -286,6 +286,36 @@ export const hasCompanyScopedAccessToken = (env = getAuthEnv()) => {
   );
 };
 
+const isCompanyOrAdminRole = (role) => {
+  const normalized = normalizeAuthRole(role);
+  return normalized === 'company' || normalized === 'admin';
+};
+
+/**
+ * Session entreprise utilisable pour /company_dispatch/* :
+ * JWT JS (legacy) OU cookie httpOnly + user company/admin en storage.
+ * Ne jamais traiter un chauffeur comme session dispatch.
+ */
+export const hasCompanyDispatchSession = (env = getAuthEnv()) => {
+  if (hasCompanyScopedAccessToken(env)) {
+    return true;
+  }
+  const candidates = [getEnvUser(env), getActiveUser(env)];
+  if (candidates.some((user) => isCompanyOrAdminRole(user?.role))) {
+    return true;
+  }
+  const rawCompanyUser = safeGet('company_user');
+  if (!rawCompanyUser) {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(rawCompanyUser);
+    return isCompanyOrAdminRole(parsed?.role);
+  } catch (_) {
+    return false;
+  }
+};
+
 export const hasActiveSession = (env = getAuthEnv()) =>
   Boolean(getEnvAccessToken(env, { allowLegacy: true }) || getEnvUser(env));
 

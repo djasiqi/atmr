@@ -27,8 +27,11 @@ class ListCompanyDriversUseCase:
         super().__init__()
         self._driver_repo = driver_repo
 
-    def execute(self, *, company_id: int) -> ListCompanyDriversResult:
-        dtos = self._driver_repo.find_by_company_id(company_id, active_only=False)
+    def execute(
+        self, *, company_id: int, active_only: bool = False
+    ) -> ListCompanyDriversResult:
+        """Liste les chauffeurs. ``active_only=True`` = flotte opérationnelle (pas les comptes historiques)."""
+        dtos = self._driver_repo.find_by_company_id(company_id, active_only=active_only)
         ids: list[int] = []
         for d in dtos:
             try:

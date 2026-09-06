@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
 import { useSession } from "../../../core/sessionProvider";
-import { QUERY_STALE_TIME_MS } from "../../../core/queryStaleTimes";
+import { queryCacheOptions, QUERY_STALE_TIME_MS } from "../../../core/queryCachePolicy";
 import { contextRealtimeRouter } from "../../../core/realtime/contextRealtimeRouter";
 import { normalizeCompanyEventType } from "../../../core/realtime/eventContracts";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
@@ -44,6 +44,7 @@ import { dedupeMessageHubThreads } from "../../driver/messages/dedupeHubThreads"
 import type { HubChatMessage, MessageHubThread, SyncPresenceStatus } from "../../driver/messages/types";
 import { useCompanyNumericId } from "./companyId";
 import { useCompanyRealtimeStatus } from "../hooks";
+import { useCompanySessionNetworkReady } from "../sessionNetworkGate";
 
 const HUB_KEY = ["company", "message-hub"] as const;
 
@@ -61,9 +62,10 @@ export { HUB_KEY };
 
 export function useCompanyMessageHubThreads(companyId: number | null) {
   const queryClient = useQueryClient();
+  const networkReady = useCompanySessionNetworkReady();
   return useQuery({
     queryKey: [...HUB_KEY, "threads", companyId ?? "none"],
-    enabled: Boolean(companyId),
+    enabled: Boolean(companyId) && networkReady,
     queryFn: async () => {
       const hub = await fetchMessageHubThreads(companyId as number, { source: "hub-only" });
       const threads = filterMissionThreadsWithDiscussion(
@@ -102,9 +104,13 @@ export function useCompanyMessageHubThreads(companyId: number | null) {
   });
 }
 
-export function useCompanyHubUnreadCount(companyId: number | null) {
+export function useCompanyHubUnreadCount(
+  companyId: number | null,
+  options?: { enabled?: boolean }
+) {
   const realtime = useCompanyRealtimeStatus();
   const queryClient = useQueryClient();
+  const networkReady = useCompanySessionNetworkReady();
   return useQuery({
     queryKey: [...HUB_KEY, "unread", companyId ?? "none"],
     queryFn: async () => {
@@ -122,24 +128,26 @@ export function useCompanyHubUnreadCount(companyId: number | null) {
       }
       return server;
     },
-    enabled: Boolean(companyId),
+    enabled: Boolean(companyId) && networkReady && (options?.enabled ?? true),
     refetchInterval:
       realtime.status === "healthy" && realtime.connected ? false : 15_000,
-    staleTime: QUERY_STALE_TIME_MS.default,
+    ...queryCacheOptions("operational"),
+    staleTime: queryCacheOptions("operational").staleTime ?? QUERY_STALE_TIME_MS.default,
   });
 }
 
-export function useCompanyMessageHubUnreadBadge(): number {
+export function useCompanyMessageHubUnreadBadge(options?: { enabled?: boolean }): number {
   const companyId = useCompanyNumericId();
-  const hubUnread = useCompanyHubUnreadCount(companyId);
+  const hubUnread = useCompanyHubUnreadCount(companyId, options);
   return hubUnread.data ?? 0;
 }
 
 export function useCompanyThreadMessages(companyId: number | null, threadId: string | null) {
   const queryClient = useQueryClient();
+  const networkReady = useCompanySessionNetworkReady();
   return useQuery({
     queryKey: [...HUB_KEY, "messages", companyId ?? "none", threadId ?? "none"],
-    enabled: Boolean(companyId && threadId),
+    enabled: Boolean(companyId && threadId) && networkReady,
     staleTime: 20_000,
     refetchOnWindowFocus: true,
     placeholderData: (previous) => previous,

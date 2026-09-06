@@ -176,6 +176,13 @@ export const featureFlags = {
     enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_ADAPTIVE_CADENCE),
     description: "Enable network-aware cadence resolver for tracking loops and ACK stale policy.",
   } satisfies FeatureFlagDefinition,
+  tracking_battery_energy_instrumentation_enabled: {
+    key: "tracking_battery_energy_instrumentation_enabled",
+    source: "env",
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_BATTERY_ENERGY_INSTR),
+    description:
+      "Campagne batterie T0 : compteurs minute (callbacks / enqueue / PUT). OFF store. Ne change pas le GPS.",
+  } satisfies FeatureFlagDefinition,
   driver_runtime_decommission_enabled: {
     key: "driver_runtime_decommission_enabled",
     source: "env",

@@ -20,14 +20,13 @@ import {
 import type { RideAddressOption, RideClientOption } from "../../useRideForms";
 import { useActiveCompanyContextId } from "../../hooks";
 import { searchCompanyAddresses } from "../../api/companyApi";
-import { AddressSelector } from "./AddressSelector";
-import { ClientSelector } from "./ClientSelector";
+import { AddressFieldTrigger, AddressPickerSheet } from "./AddressPickerSheet";
+import { ClientPickerSheet, CreateClientTrigger } from "./ClientPickerSheet";
 import {
-  suggestionContentBelowOverlayStyle,
-  suggestionOverlayFieldStyle,
-  suggestionOverlayFieldWithBgStyle,
-  suggestionOverlaySectionStyle,
-} from "./suggestionOverlayStyles";
+  applyCreateRideActiveField,
+  createRideMissingHint,
+  type CreateRideActiveField,
+} from "./createRideActiveField";
 import { RecurrenceSelector } from "./RecurrenceSelector";
 import { TimeDatePicker } from "./TimeDatePicker";
 import { ClientCreateModal } from "./ClientCreateModal";
@@ -189,13 +188,6 @@ const s = StyleSheet.create({
     gap: 6,
   },
   inlineActionGrow: { flex: 1, minWidth: 0 },
-  addressShell: {
-    minHeight: 48,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
-  },
-
   /* ---------- Date / Heure ---------- */
   dateTimeRow: {
     flexDirection: "row" as const,
@@ -1009,6 +1001,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   const form = useRideFormState();
   const [error, setError] = useState<string | null>(null);
   const [selectedClientLabel, setSelectedClientLabel] = useState("");
+  const [selectedClientSubtitle, setSelectedClientSubtitle] = useState("");
   const [amountSource, setAmountSource] = useState<"preferential" | "simulated" | "manual" | null>(null);
   const [amountLocked, setAmountLocked] = useState(false);
   const [pricingWarning, setPricingWarning] = useState("");
@@ -1023,26 +1016,21 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   const [routeDurationSeconds, setRouteDurationSeconds] = useState<number | null>(null);
   const [routePricingReady, setRoutePricingReady] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [openSuggestionFields, setOpenSuggestionFields] = useState<readonly string[]>([]);
+  const [activeField, setActiveField] = useState<CreateRideActiveField>(null);
   const priceAutoOpenedRef = useRef(false);
   const swapRotation = useRef(new Animated.Value(0)).current;
   const swapRotationTargetRef = useRef(0);
 
-  const openSuggestionSet = useMemo(() => new Set(openSuggestionFields), [openSuggestionFields]);
-  const anySuggestionOverlayOpen = openSuggestionFields.length > 0;
-  const clientSuggestionOverlayOpen = openSuggestionSet.has("client");
-  const pickupSuggestionOverlayOpen = openSuggestionSet.has("pickup");
-  const dropoffSuggestionOverlayOpen = openSuggestionSet.has("dropoff");
-  const addressSuggestionOverlayOpen = pickupSuggestionOverlayOpen || dropoffSuggestionOverlayOpen;
+  const pickerSheetOpen =
+    activeField === "client" || activeField === "pickup" || activeField === "dropoff";
+  const parentKeyboardActive = keyboardVisible && !pickerSheetOpen;
 
-  const handleAddressSuggestionsVisibility = useCallback((fieldKey: string, visible: boolean) => {
-    setOpenSuggestionFields((prev) => {
-      const next = new Set(prev);
-      if (visible) next.add(fieldKey);
-      else next.delete(fieldKey);
-      return [...next];
-    });
-  }, []);
+  const setFieldActive = useCallback(
+    (field: Exclude<CreateRideActiveField, null>, open: boolean) => {
+      setActiveField((prev) => applyCreateRideActiveField(prev, field, open));
+    },
+    []
+  );
 
   const handleSwapAddresses = useCallback(() => {
     form.swapAddresses();
@@ -1074,12 +1062,20 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardVisible(false);
+    });
     return () => {
       showSub.remove();
       hideSub.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (!visible) {
+      setActiveField(null);
+    }
+  }, [visible]);
   const clientDetailHydrationKeyRef = useRef<string>("");
   const completedSimulationKeyRef = useRef<string>("");
   const activeSimulationKeyRef = useRef<string>("");
@@ -1309,6 +1305,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
 
   const handlePickupAddressSelected = useCallback(async (address: RideAddressOption) => {
     form.selectPickupAddress(address);
+    setActiveField(null);
     const enriched = await enrichAddressWithPlaceDetails(address);
     if (enriched !== address && hasValidCoords(enriched)) {
       form.selectPickupAddress(enriched);
@@ -1318,6 +1315,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
 
   const handleDropoffAddressSelected = useCallback(async (address: RideAddressOption) => {
     form.selectDropoffAddress(address);
+    setActiveField(null);
     const enriched = await enrichAddressWithPlaceDetails(address);
     if (enriched !== address && hasValidCoords(enriched)) {
       form.selectDropoffAddress(enriched);
@@ -1326,8 +1324,11 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   }, [form]);
 
   const handleClientSelected = (client: RideClientOption) => {
+    Keyboard.dismiss();
     form.setClientId(client.id);
     setSelectedClientLabel(client.label);
+    setSelectedClientSubtitle(client.pickupAddressCandidate?.label?.trim() ?? "");
+    setActiveField(null);
     setSelectedClientPreferentialRate(
       isValidPreferentialAmount(client.preferentialRate) ? client.preferentialRate : null
     );
@@ -1950,6 +1951,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       await createRide.mutateAsync(payload);
       form.reset();
       setSelectedClientLabel("");
+      setSelectedClientSubtitle("");
       setAmountSource(null);
       setAmountLocked(false);
       setPricingWarning("");
@@ -1968,39 +1970,17 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     }
   };
 
-  const footerSummaryText = useMemo(() => {
-    if (!form.clientId) return "Client non sélectionné";
-    if (!scheduledOk) return "Date/heure manquante";
-    const client = selectedClientLabel || `Client #${form.clientId}`;
-    const pickup = form.pickup.trim().split(",")[0] || "…";
-    const dropoff = form.dropoff.trim().split(",")[0] || "…";
-    const datetime = formatSwissDateTime(form.scheduledAt);
-    const amount = parseOptionalAmount(form.amountInput);
-    const badges = [
-      form.isRoundTrip ? "A/R" : "",
-      form.recurrence !== "none" ? "Récurrente" : "",
-      form.isMaterialDelivery ? "Livraison" : "",
-      clientDetailQuery.data?.hasActiveStay ? "Départ établissement" : "",
-      clientDetailQuery.data?.hasActiveStay && !billToPatient ? "Facturation clinique" : "",
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    const amountText = amount != null ? `${amount.toFixed(2)} CHF` : "Montant manquant";
-    return [client, `${pickup} → ${dropoff}`, datetime, badges, amountText].filter(Boolean).join(" · ");
-  }, [
-    form.amountInput,
-    form.clientId,
-    form.dropoff,
-    form.isMaterialDelivery,
-    form.isRoundTrip,
-    form.pickup,
-    form.recurrence,
-    form.scheduledAt,
-    scheduledOk,
-    selectedClientLabel,
-    clientDetailQuery.data?.hasActiveStay,
-    billToPatient,
-  ]);
+  const footerSummaryText = useMemo(
+    () =>
+      createRideMissingHint({
+        hasClient: Boolean(form.clientId),
+        hasPickup: form.pickup.trim().length > 0,
+        hasDropoff: form.dropoff.trim().length > 0,
+        hasSchedule: scheduledOk,
+        hasAmount: form.isMaterialDelivery || amountValid,
+      }),
+    [amountValid, form.clientId, form.dropoff, form.isMaterialDelivery, form.pickup, scheduledOk]
+  );
 
   const summaryData = useMemo(() => {
     const clientLabel = selectedClientLabel || (form.clientId ? `Client #${form.clientId}` : "");
@@ -2120,7 +2100,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
 
   const footer = (
     <View style={s.footerCol}>
-      {keyboardVisible ? null : (
+      {parentKeyboardActive ? null : (
       <View style={s.summaryPanel}>
         <View style={s.summaryPanelHeader}>
           <Ionicons name="receipt-outline" size={14} color={E.BRAND_DARK} />
@@ -2180,7 +2160,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       <ModalFooterActions
         stacked={shouldStackRows}
         hint={
-          !canSubmit && !createRide.isPending && !keyboardVisible ? (
+          !canSubmit && !createRide.isPending && !parentKeyboardActive ? (
             <AppText variant="caption" style={s.footerHint}>
               {footerSummaryText}
             </AppText>
@@ -2230,31 +2210,27 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
           {/* ============================================== */}
           {/* Section 1 — Informations essentielles          */}
           {/* ============================================== */}
-          <View style={anySuggestionOverlayOpen ? suggestionOverlaySectionStyle : undefined}>
           <RideCreateSection
             number={1}
             title="Informations essentielles"
             gap={0}
             complete={section1Complete}
           >
-            <View
-              style={[
-                s.formGroup,
-                // z-index sur le frère du bloc adresses (pas seulement la rangée interne)
-                clientSuggestionOverlayOpen ? suggestionOverlayFieldWithBgStyle : null,
-              ]}
-            >
+            <View style={s.formGroup}>
               <View style={s.inlineActionRow}>
                 <View style={s.inlineActionGrow}>
-                  <ClientSelector
-                    showFieldLabel={false}
-                    value={form.clientId}
-                    onChange={form.setClientId}
-                    onSelectClient={handleClientSelected}
-                    onCreateClient={() => setCreateClientVisible(true)}
-                    onSuggestionsVisibilityChange={(visible) =>
-                      handleAddressSuggestionsVisibility("client", visible)
-                    }
+                  <CreateClientTrigger
+                    selectedId={form.clientId}
+                    selectedLabel={selectedClientLabel}
+                    selectedSubtitle={selectedClientSubtitle || undefined}
+                    onPress={() => setFieldActive("client", true)}
+                    onClear={() => {
+                      form.setClientId(null);
+                      setSelectedClientLabel("");
+                      setSelectedClientSubtitle("");
+                      setSelectedClientPreferentialRate(null);
+                      setFieldActive("client", true);
+                    }}
                     leftSlot={<Ionicons name="person-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                   />
                 </View>
@@ -2278,7 +2254,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
               </View>
             </View>
 
-            <View style={clientSuggestionOverlayOpen ? suggestionContentBelowOverlayStyle : undefined}>
+            <>
               {form.isMaterialDelivery ? (
                 <View style={s.formGroup}>
                 <View style={s.inlineActionRow}>
@@ -2358,81 +2334,25 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
 
             <View style={s.formGroupDivider} />
 
-            <View
-              style={[
-                s.pickupDropoffSplit,
-                addressSuggestionOverlayOpen ? suggestionOverlayFieldStyle : null,
-              ]}
-            >
+            <View style={s.pickupDropoffSplit}>
               <View style={s.addressColumnLeft}>
-                <View
-                  style={
-                    pickupSuggestionOverlayOpen ? suggestionOverlayFieldWithBgStyle : undefined
-                  }
-                >
-                <AddressSelector
-                  label=""
+                <AddressFieldTrigger
                   value={form.pickup}
-                  onChange={form.setPickup}
-                  onSelectAddress={(address) => {
-                    void handlePickupAddressSelected(address);
-                  }}
-                  onSuggestionsVisibilityChange={(visible) =>
-                    handleAddressSuggestionsVisibility("pickup", visible)
-                  }
                   placeholder="Adresse de départ…"
+                  required
+                  onPress={() => setFieldActive("pickup", true)}
+                  onClear={() => form.setPickup("")}
                   leftSlot={<Ionicons name="navigate-outline" size={16} color={E.TEXT_SEC} />}
-                  shellStyle={s.addressShell}
-                  required
                 />
-                </View>
-                <View
-                  style={
-                    pickupSuggestionOverlayOpen
-                      ? suggestionContentBelowOverlayStyle
-                      : dropoffSuggestionOverlayOpen
-                        ? suggestionOverlayFieldWithBgStyle
-                        : undefined
-                  }
-                >
-                <AddressSelector
-                  label=""
+                <AddressFieldTrigger
                   value={form.dropoff}
-                  onChange={form.setDropoff}
-                  onSelectAddress={(address) => {
-                    void handleDropoffAddressSelected(address);
-                    const hints = parseMedicalHintsFromAddress(address.label);
-                    if (hints.establishment && form.establishment.trim().length === 0) {
-                      form.setEstablishment(hints.establishment);
-                      setExtraInfoOpen(true);
-                    }
-                    if (hints.doctorName && form.doctorName.trim().length === 0) {
-                      form.setDoctorName(hints.doctorName);
-                      setExtraInfoOpen(true);
-                    }
-                    if (hints.hospitalService && form.hospitalService.trim().length === 0) {
-                      form.setHospitalService(hints.hospitalService);
-                      setExtraInfoOpen(true);
-                    }
-                    if (hints.notesMedical && form.notesMedical.trim().length === 0) {
-                      form.setNotesMedical(hints.notesMedical);
-                    }
-                  }}
-                  onSuggestionsVisibilityChange={(visible) =>
-                    handleAddressSuggestionsVisibility("dropoff", visible)
-                  }
                   placeholder="Adresse de destination…"
-                  leftSlot={<Ionicons name="location-outline" size={16} color={E.TEXT_SEC} />}
-                  shellStyle={s.addressShell}
                   required
+                  onPress={() => setFieldActive("dropoff", true)}
+                  onClear={() => form.setDropoff("")}
+                  leftSlot={<Ionicons name="location-outline" size={16} color={E.TEXT_SEC} />}
                 />
-                </View>
               </View>
-              <View
-                style={
-                  addressSuggestionOverlayOpen ? suggestionContentBelowOverlayStyle : undefined
-                }
-              >
               <View style={s.addressActionsColumn}>
                 <Animated.View style={swapRotateStyle}>
                   <Pressable
@@ -2479,14 +2399,8 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   />
                 </Pressable>
               </View>
-              </View>
             </View>
 
-            <View
-              style={
-                addressSuggestionOverlayOpen ? suggestionContentBelowOverlayStyle : undefined
-              }
-            >
             <View style={{ marginTop: 10 }}>
               <RideRoutePreview
                 pickupLat={pickupAddress ? Number(pickupAddress.latitude) : null}
@@ -2833,12 +2747,9 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
               </View>
             ) : null}
             </View>
-            </View>
-            </View>
+            </>
           </RideCreateSection>
-          </View>
 
-          <View style={anySuggestionOverlayOpen ? suggestionContentBelowOverlayStyle : undefined}>
           <View style={s.sectionDivider} />
 
           {/* ============================================== */}
@@ -3106,7 +3017,6 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
             </View>
 
           </RideCreateSection>
-          </View>
 
           {error ? (
             <AppText variant="error" style={s.error}>
@@ -3115,6 +3025,57 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
           ) : null}
         </View>
       </Modal>
+      <ClientPickerSheet
+        visible={activeField === "client"}
+        selectedId={form.clientId}
+        onClose={() => setFieldActive("client", false)}
+        onSelect={(client) => {
+          handleClientSelected(client);
+        }}
+        onCreateClient={() => {
+          Keyboard.dismiss();
+          setFieldActive("client", false);
+          setCreateClientVisible(true);
+        }}
+      />
+      <AddressPickerSheet
+        visible={activeField === "pickup"}
+        title="Adresse de départ"
+        value={form.pickup}
+        onClose={() => setFieldActive("pickup", false)}
+        onChange={form.setPickup}
+        onSelect={(address) => {
+          Keyboard.dismiss();
+          void handlePickupAddressSelected(address);
+        }}
+      />
+      <AddressPickerSheet
+        visible={activeField === "dropoff"}
+        title="Adresse de destination"
+        value={form.dropoff}
+        onClose={() => setFieldActive("dropoff", false)}
+        onChange={form.setDropoff}
+        onSelect={(address) => {
+          Keyboard.dismiss();
+          void handleDropoffAddressSelected(address);
+          const hints = parseMedicalHintsFromAddress(address.label);
+          if (hints.establishment && form.establishment.trim().length === 0) {
+            form.setEstablishment(hints.establishment);
+            setExtraInfoOpen(true);
+          }
+          if (hints.doctorName && form.doctorName.trim().length === 0) {
+            form.setDoctorName(hints.doctorName);
+            setExtraInfoOpen(true);
+          }
+          if (hints.hospitalService && form.hospitalService.trim().length === 0) {
+            form.setHospitalService(hints.hospitalService);
+            setExtraInfoOpen(true);
+          }
+          if (hints.notesMedical && form.notesMedical.trim().length === 0) {
+            form.setNotesMedical(hints.notesMedical);
+          }
+        }}
+      />
       <ClientCreateModal
         visible={createClientVisible}
         onClose={() => setCreateClientVisible(false)}

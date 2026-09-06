@@ -11,7 +11,6 @@ export function atmrJsDiag(step: string, fields: DiagFields = {}): void {
       .filter(([, v]) => v !== undefined)
       .map(([k, v]) => `${k}=${v === null ? "null" : String(v)}`)
       .join(" ");
-    // eslint-disable-next-line no-console
     console.log(`ATMR_JS_J ${step}${parts ? ` ${parts}` : ""}`);
   } catch {
     /* noop */

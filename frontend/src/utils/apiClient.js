@@ -8,6 +8,8 @@ import {
   getEnvAccessToken,
   getEnvRefreshToken,
   getEnvUser,
+  hasCompanyDispatchSession,
+  normalizeAuthRole,
   removeLegacyGlobalTokens,
   setAuthEnv as setSessionAuthEnv,
 } from './webAuthSession';
@@ -314,7 +316,7 @@ apiRest.interceptors.request.use((config) => {
     let companyToken = getScopedCompanyAccessToken(env);
 
     if (!companyToken) {
-      const role = getStoredRoleFromEnv(env);
+      const role = normalizeAuthRole(getStoredRoleFromEnv(env));
       const envToken = getStorageTokenByEnv(env);
       if ((role === 'company' || role === 'admin') && envToken) {
         companyToken = envToken;
@@ -331,7 +333,13 @@ apiRest.interceptors.request.use((config) => {
       config.headers.Authorization = `Bearer ${companyToken}`;
       return config;
     }
-    // ✅ Fail fast : impossible de réintroduire le bug 401 sur company_dispatch
+    // Cookie httpOnly entreprise : withCredentials suffit. Ne pas rejeter
+    // une session valide faute de JWT lisible en JS (sinon le mode manuel
+    // est impossible à activer).
+    if (hasCompanyDispatchSession(env)) {
+      return config;
+    }
+    // Fail fast : pas de token chauffeur réinjecté sur company_dispatch
     return Promise.reject(new Error(COMPANY_DISPATCH_MISSING_TOKEN));
   }
   return config;

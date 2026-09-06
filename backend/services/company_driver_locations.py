@@ -61,7 +61,9 @@ def build_company_driver_locations_items(
     """Construit la liste `locations` (même sémantique que l'ancien handler Flask)."""
     # selectinload(user) : évite N+1 sur driver.user (first_name, email demo) dans la boucle ci-dessous
     drivers = (
-        Driver.query.options(selectinload(Driver.user)).filter_by(company_id=cid).all()
+        Driver.query.options(selectinload(Driver.user))
+        .filter_by(company_id=cid, is_active=True)
+        .all()
     )
     if not drivers:
         return []

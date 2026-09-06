@@ -9,9 +9,10 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native — générés par prebuild (CNG / EAS Build)
-android/
-ios/
+# Native — générés par prebuild (CNG / EAS Build) à la racine only.
+# Les sources `modules/*/android` restent versionnées.
+/android/
+/ios/
 
 # Native credentials
 *.orig.*
@@ -30,6 +31,7 @@ GoogleService-Info.plist
 
 # Metro
 .metro-health-check*
+.expo-tmp-bundle-test/
 
 # debug
 npm-debug.*

@@ -9,10 +9,12 @@ import { driverFcmPlatform } from "../../features/driver/firebaseMessaging";
 import { setPushPermissionDenied } from "../notifications/pushPermissionState";
 import { startDeviceHealthHeartbeat } from "../../features/driver/services/deviceHealthHeartbeat";
 import { reportPushRegistrationTelemetry } from "../notifications/pushRegistrationTelemetry";
+import { useDriverSessionNetworkReady } from "../../features/driver/sessionNetworkGate";
 
 /** Enregistrement push chauffeur (Expo + FCM) — monté uniquement en contexte driver. */
 export function DriverNotificationsBridge() {
   const { status, activeContext, bootstrap } = useSession();
+  const networkReady = useDriverSessionNetworkReady();
 
   const contextDriverId = useMemo(() => {
     if (activeContext?.context_type !== "driver") return null;
@@ -32,7 +34,7 @@ export function DriverNotificationsBridge() {
 
   const enabled =
     isFeatureEnabled("driver_push_enabled") &&
-    status === "ready" &&
+    networkReady &&
     activeContext?.context_type === "driver" &&
     driverId != null &&
     Platform.OS !== "web";

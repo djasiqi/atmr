@@ -24,7 +24,13 @@ export type PerfKpiEventName =
   | "perf.js_long_task"
   | "perf.js_heap"
   | "perf.instrumentation.aggregate"
-  | "perf.thread_runtime";
+  | "perf.thread_runtime"
+  | "perf.tap"
+  | "perf.query.cache"
+  | "perf.api.roundtrip"
+  | "perf.mission_details"
+  | "perf.company.dashboard.phase"
+  | "perf.company.screen.usable";
 
 export type PerfKpiPayload = {
   source: string;

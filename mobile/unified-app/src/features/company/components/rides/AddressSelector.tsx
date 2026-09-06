@@ -1,51 +1,34 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, View, type TextStyle, type ViewStyle } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Keyboard, Pressable, ScrollView, View, type TextInput, type TextStyle, type ViewStyle } from "react-native";
 import { useAccessibilityScale, useResponsiveTokens } from "../../../../design/responsive";
 import { AppInput } from "../../../../design/ui/AppInput";
 import { AppText } from "../../../../design/ui/AppText";
 import { RideAddressOption, useCompanyAddressSearch } from "../../useRideForms";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 import {
+  ADDRESS_IGNORE_QUERIES,
+  isAliasSuggestion,
+  isGoogleLikeSuggestion,
+  looksLikePoi,
+  sortAddressSuggestions,
+  splitAddressLabel,
+} from "./addressSuggestionRank";
+import {
   suggestionDropdownAnchorStyle,
   suggestionDropdownHitAreaStyle,
   suggestionDropdownPanelStyle,
   suggestionFieldOpenStyle,
 } from "./suggestionOverlayStyles";
+import {
+  computeCreateRideAddressListMaxHeight,
+  useCreateRideKeyboardFrame,
+} from "./createRideSheetLayout";
 
 const UI_BORDER_SOFT = "rgba(0, 121, 107, 0.12)";
 const ROW_RADIUS = 12;
 const SUGGESTIONS_MAX_VISIBLE = 5;
 const SELECTION_REOPEN_GUARD_MS = 450;
-const IGNORE_QUERIES = new Set(["non spécifié", "non specifie", "n/a", "na"]);
-
-function splitAddressLabel(label: string) {
-  const parts = label
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (parts.length <= 1) {
-    return { primary: label.trim(), secondary: "" };
-  }
-  const [primary, ...rest] = parts;
-  return { primary, secondary: rest.join(", ") };
-}
-
-function isAliasSuggestion(item: RideAddressOption): boolean {
-  return item.source === "alias";
-}
-
-function isGoogleLikeSuggestion(item: RideAddressOption): boolean {
-  return item.source === "google_places" || item.source === "google";
-}
-
-function looksLikePoi(item: RideAddressOption): boolean {
-  return (
-    isGoogleLikeSuggestion(item) &&
-    Array.isArray(item.types) &&
-    item.types.some((t) => t !== "geocode" && t !== "route" && t !== "street_address")
-  );
-}
 
 type AddressSelectorProps = {
   label: string;
@@ -61,6 +44,12 @@ type AddressSelectorProps = {
   required?: boolean;
   /** Notifie le parent lorsque la liste de suggestions s’ouvre ou se ferme (empilement z-index). */
   onSuggestionsVisibilityChange?: (visible: boolean) => void;
+  /**
+   * CREATE-RIDE-01 : le parent possède le champ actif.
+   * `false` ferme le dropdown immédiatement (un seul overlay).
+   */
+  fieldActive?: boolean;
+  onFieldActiveChange?: (active: boolean) => void;
 };
 
 export function AddressSelector({
@@ -75,9 +64,16 @@ export function AddressSelector({
   inputStyle,
   required = false,
   onSuggestionsVisibilityChange,
+  fieldActive,
+  onFieldActiveChange,
 }: AddressSelectorProps) {
   const t = useResponsiveTokens();
   const { isVeryLargeText } = useAccessibilityScale();
+  const keyboardFrame = useCreateRideKeyboardFrame();
+  const suggestionsMaxHeight = computeCreateRideAddressListMaxHeight(
+    keyboardFrame,
+    SUGGESTIONS_MAX_VISIBLE * 46
+  );
   const suggestionLines = isVeryLargeText ? undefined : 1;
   const [query, setQuery] = useState(value);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
@@ -87,33 +83,29 @@ export function AddressSelector({
   const normalizedQuery = query.trim().toLowerCase();
   const canQuery = query.trim().length > 2;
   const shouldIgnoreQuery = useMemo(
-    () => normalizedQuery.length === 0 || IGNORE_QUERIES.has(normalizedQuery),
+    () => normalizedQuery.length === 0 || ADDRESS_IGNORE_QUERIES.has(normalizedQuery),
     [normalizedQuery]
   );
+  const exclusiveClosed = fieldActive === false;
   const shouldShowDropdown = useMemo(
     () =>
+      !exclusiveClosed &&
       isSuggestionsOpen &&
       canQuery &&
       !shouldIgnoreQuery &&
       normalizedQuery !== lastSelectedNormalized,
-    [canQuery, isSuggestionsOpen, lastSelectedNormalized, normalizedQuery, shouldIgnoreQuery]
+    [
+      canQuery,
+      exclusiveClosed,
+      isSuggestionsOpen,
+      lastSelectedNormalized,
+      normalizedQuery,
+      shouldIgnoreQuery,
+    ]
   );
   const sortedSuggestions = useMemo(() => {
-    const rows = Array.isArray(addressesQuery.data) ? [...addressesQuery.data] : [];
-    const score = (item: RideAddressOption): number => {
-      if (isAliasSuggestion(item)) return 500;
-      const label = (item.label || "").toLowerCase();
-      const mainText = (item.mainText || "").toLowerCase();
-      const startsWithQuery = label.startsWith(normalizedQuery) || mainText.startsWith(normalizedQuery);
-      if (startsWithQuery && looksLikePoi(item)) return 400;
-      if (startsWithQuery && isGoogleLikeSuggestion(item)) return 350;
-      if (looksLikePoi(item)) return 300;
-      if (isGoogleLikeSuggestion(item)) return 250;
-      if (startsWithQuery) return 200;
-      return 100;
-    };
-    rows.sort((a, b) => score(b) - score(a));
-    return rows;
+    const rows = Array.isArray(addressesQuery.data) ? addressesQuery.data : [];
+    return sortAddressSuggestions(rows, normalizedQuery);
   }, [addressesQuery.data, normalizedQuery]);
   const groupedSuggestions = useMemo(() => {
     const limited = sortedSuggestions.slice(0, SUGGESTIONS_MAX_VISIBLE);
@@ -126,7 +118,11 @@ export function AddressSelector({
 
   useEffect(() => {
     setQuery(value);
-  }, [value]);
+    if (fieldActive === false) {
+      setLastSelectedNormalized(value.trim().toLowerCase());
+      setIsSuggestionsOpen(false);
+    }
+  }, [value, fieldActive]);
 
   useEffect(() => {
     if (!justSelected) return undefined;
@@ -135,13 +131,30 @@ export function AddressSelector({
   }, [justSelected]);
 
   useEffect(() => {
-    onSuggestionsVisibilityChange?.(shouldShowDropdown);
+    if (fieldActive === false) {
+      setIsSuggestionsOpen(false);
+    }
+  }, [fieldActive]);
+
+  const inputRef = useRef<TextInput>(null);
+  const blurCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (blurCloseTimerRef.current) clearTimeout(blurCloseTimerRef.current);
+    },
+    []
+  );
+
+  const visibilityChangeRef = useRef(onSuggestionsVisibilityChange);
+  visibilityChangeRef.current = onSuggestionsVisibilityChange;
+  useEffect(() => {
+    visibilityChangeRef.current?.(shouldShowDropdown);
     return () => {
       if (shouldShowDropdown) {
-        onSuggestionsVisibilityChange?.(false);
+        visibilityChangeRef.current?.(false);
       }
     };
-  }, [onSuggestionsVisibilityChange, shouldShowDropdown]);
+  }, [shouldShowDropdown]);
 
   const openStackStyle = shouldShowDropdown ? suggestionFieldOpenStyle : null;
 
@@ -150,6 +163,7 @@ export function AddressSelector({
       {label ? <AppText variant="label">{label}</AppText> : null}
       <View style={[{ position: "relative" }, openStackStyle]}>
         <AppInput
+          ref={inputRef}
           value={query}
           onChangeText={(next) => {
             setQuery(next);
@@ -160,18 +174,32 @@ export function AddressSelector({
             const normalizedNext = next.trim().toLowerCase();
             if (normalizedNext.length <= 2) {
               setIsSuggestionsOpen(false);
+              onFieldActiveChange?.(true);
               return;
             }
             if (normalizedNext !== lastSelectedNormalized) {
               setLastSelectedNormalized("");
             }
             setIsSuggestionsOpen(true);
+            onFieldActiveChange?.(true);
           }}
           onFocus={() => {
             if (justSelected) return;
+            if (blurCloseTimerRef.current) {
+              clearTimeout(blurCloseTimerRef.current);
+              blurCloseTimerRef.current = null;
+            }
+            onFieldActiveChange?.(true);
             if (canQuery && normalizedQuery !== lastSelectedNormalized) {
               setIsSuggestionsOpen(true);
             }
+          }}
+          onBlur={() => {
+            if (justSelected || !onFieldActiveChange) return;
+            if (blurCloseTimerRef.current) clearTimeout(blurCloseTimerRef.current);
+            blurCloseTimerRef.current = setTimeout(() => {
+              onFieldActiveChange(false);
+            }, 180);
           }}
           placeholder={placeholder}
           leftSlot={leftSlot}
@@ -214,7 +242,7 @@ export function AddressSelector({
             <ScrollView
               nestedScrollEnabled
               keyboardShouldPersistTaps="always"
-              style={{ maxHeight: SUGGESTIONS_MAX_VISIBLE * 46 }}
+              style={{ maxHeight: suggestionsMaxHeight }}
             >
               {addressesQuery.isLoading ? (
                 <AppText
@@ -268,6 +296,7 @@ export function AddressSelector({
                         // Sélection dès pressIn : évite la course blur/focus web qui annule onPress.
                         onPressIn={(event) => {
                           event.preventDefault?.();
+                          Keyboard.dismiss();
                           setQuery(address.label);
                           onChange(address.label);
                           onSelectAddress?.(address);

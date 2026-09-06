@@ -26,8 +26,15 @@ import {
 } from "./pushRegistrationState";
 import {
   clearFcmRegistrationSuccessIfOwnerChanged,
+  hasSuccessfulFcmRegistrationForOwner,
   runFcmRegistrationOnce,
+  runFcmTokenAcquisitionOnce,
 } from "./fcmRegistrationGuard";
+import { isDriverSessionNetworkReady } from "../network/driverSessionNetworkGate";
+import {
+  subscribeDriverForegroundResume,
+  tryClaimDriverResumeWork,
+} from "../../features/driver/driverForegroundResumeAuthority";
 import { reportPushRegistrationTelemetry } from "./pushRegistrationTelemetry";
 import { requestNotificationOsPermissionsAsync } from "./requestNotificationOsPermissions";
 
@@ -289,65 +296,98 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       });
     };
 
-    const attemptFcmRegistration = async (stage: string): Promise<boolean> => {
+    const attemptFcmRegistration = async (
+      stage: string,
+      resumeEpoch?: number
+    ): Promise<boolean> => {
       if (cancelled) return false;
-      console.info("[FCM-GATE] register effect start", {
-        source: telemetrySource,
-        stage,
-        enabled,
-        fcmEnabled,
-        ownerKey: resolvedOwnerKey,
-      });
-      if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return false;
-      const NotificationsModule = getExpoNotificationsModule();
-      if (NotificationsModule) {
-        const perm = await NotificationsModule.getPermissionsAsync();
-        if (!perm.granted && perm.status !== "granted") {
-          console.info("[FCM-GATE] OS notification permission missing", {
-            source: telemetrySource,
-            stage,
-            status: perm.status,
-          });
-          reportPushRegistrationTelemetry("driver_push.permission_blocked", {
-            source: telemetrySource,
-            stage,
-            permission_status: perm.status,
-          });
-          return false;
-        }
+      if (!isDriverSessionNetworkReady()) {
+        console.info("[FCM-GATE] skip — SESSION_READY not open", {
+          source: telemetrySource,
+          stage,
+          ownerKey: resolvedOwnerKey,
+        });
+        return false;
       }
-      await flushPendingPushTokenRegistrations(callbacks);
-      console.info("[FCM-GATE] requesting token", { source: telemetrySource, stage });
-      const token = await getDriverFcmToken();
-      if (token) {
-        console.info("[FCM-GATE] token received", {
+      if (
+        (stage === "app_foreground" || stage === "session_ready") &&
+        hasSuccessfulFcmRegistrationForOwner(resolvedOwnerKey)
+      ) {
+        console.info("[FCM-GATE] skip getToken — already registered", {
           source: telemetrySource,
           stage,
-          tokenLength: token.length,
+          ownerKey: resolvedOwnerKey,
         });
-        reportPushRegistrationTelemetry("driver_push.token_acquired", {
-          source: telemetrySource,
-          stage,
-          provider: "fcm",
-          token_length: token.length,
-        });
-        console.info("[FCM-GATE] posting token", { source: telemetrySource, stage, provider: "fcm" });
-        await registerFcm(token);
         return true;
       }
-      if (androidNativeFcmMode) {
-        console.info("[FCM-GATE] getToken returned empty — expo fallback", {
-          source: telemetrySource,
-          stage,
-        });
-        emitDriverTelemetry("driver.push.fcm.unavailable", {
-          source: telemetrySource,
-          reason: "fcm_token_missing_after_get",
-          stage,
-        });
-        await registerExpoFallback();
+      if (stage === "app_foreground") {
+        if (resumeEpoch != null && !tryClaimDriverResumeWork("fcm", resumeEpoch)) {
+          return true;
+        }
       }
-      return false;
+      return runFcmTokenAcquisitionOnce(resolvedOwnerKey, async () => {
+        if (cancelled) return false;
+        if (hasSuccessfulFcmRegistrationForOwner(resolvedOwnerKey)) {
+          return true;
+        }
+        console.info("[FCM-GATE] register effect start", {
+          source: telemetrySource,
+          stage,
+          enabled,
+          fcmEnabled,
+          ownerKey: resolvedOwnerKey,
+        });
+        if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return false;
+        const NotificationsModule = getExpoNotificationsModule();
+        if (NotificationsModule) {
+          const perm = await NotificationsModule.getPermissionsAsync();
+          if (!perm.granted && perm.status !== "granted") {
+            console.info("[FCM-GATE] OS notification permission missing", {
+              source: telemetrySource,
+              stage,
+              status: perm.status,
+            });
+            reportPushRegistrationTelemetry("driver_push.permission_blocked", {
+              source: telemetrySource,
+              stage,
+              permission_status: perm.status,
+            });
+            return false;
+          }
+        }
+        await flushPendingPushTokenRegistrations(callbacks);
+        console.info("[FCM-GATE] requesting token", { source: telemetrySource, stage });
+        const token = await getDriverFcmToken();
+        if (token) {
+          console.info("[FCM-GATE] token received", {
+            source: telemetrySource,
+            stage,
+            tokenLength: token.length,
+          });
+          reportPushRegistrationTelemetry("driver_push.token_acquired", {
+            source: telemetrySource,
+            stage,
+            provider: "fcm",
+            token_length: token.length,
+          });
+          console.info("[FCM-GATE] posting token", { source: telemetrySource, stage, provider: "fcm" });
+          await registerFcm(token);
+          return true;
+        }
+        if (androidNativeFcmMode) {
+          console.info("[FCM-GATE] getToken returned empty — expo fallback", {
+            source: telemetrySource,
+            stage,
+          });
+          emitDriverTelemetry("driver.push.fcm.unavailable", {
+            source: telemetrySource,
+            reason: "fcm_token_missing_after_get",
+            stage,
+          });
+          await registerExpoFallback();
+        }
+        return false;
+      });
     };
 
     void attemptFcmRegistration("session_ready");
@@ -359,16 +399,16 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       void attemptFcmRegistration("disclosure_accepted");
     });
 
-    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState !== "active" || cancelled) return;
-      void attemptFcmRegistration("app_foreground");
+    const stopForeground = subscribeDriverForegroundResume((resumeEpoch) => {
+      if (cancelled) return;
+      void attemptFcmRegistration("app_foreground", resumeEpoch);
     });
 
     return () => {
       cancelled = true;
       unsubscribeRefresh();
       unsubscribeDisclosure();
-      appStateSubscription.remove();
+      stopForeground();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- MOB-STARTUP-STORM-FIX-01
   }, [androidNativeFcmMode, enabled, fcmEnabled, resolvedOwnerKey, telemetrySource]);

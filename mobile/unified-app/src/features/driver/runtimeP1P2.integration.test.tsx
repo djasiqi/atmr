@@ -5,6 +5,15 @@ import { AppState } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NotificationsProvider } from "../../core/providers/NotificationsProvider";
 import { useDriverRealtimeSync } from "./hooks";
+import {
+  emitDriverProcessForegroundForTests,
+  getDriverForegroundResumeListenerCountForTests,
+  resetDriverForegroundResumeAuthorityForTests,
+} from "./driverForegroundResumeAuthority";
+import {
+  resetDriverSessionNetworkGateForTests,
+  setDriverSessionNetworkReady,
+} from "../../core/network/driverSessionNetworkGate";
 
 const mockRouterPush = jest.fn();
 const mockRegisterDriverPushToken = jest.fn();
@@ -104,6 +113,10 @@ jest.mock("../../core/featureFlags/registry", () => ({
 
 jest.mock("../../core/api/client", () => ({
   refreshAuthTokenNow: () => mockRefreshAuthTokenNow(),
+}));
+
+jest.mock("../../core/auth/authTokenOrchestrator", () => ({
+  refreshAuthTokenSingleflight: () => mockRefreshAuthTokenNow(),
 }));
 
 jest.mock("../../core/realtime/realtimeManager", () => ({
@@ -207,12 +220,6 @@ function DriverRuntimeHarness() {
   return null;
 }
 
-function emitAppState(state: "active" | "inactive" | "background") {
-  for (const handler of mockAppStateHandlers) {
-    handler(state);
-  }
-}
-
 describe("P1->P2 lightweight integration", () => {
   beforeEach(() => {
     mockAppStateHandlers = [];
@@ -231,6 +238,9 @@ describe("P1->P2 lightweight integration", () => {
       configurable: true,
       get: () => "active",
     });
+    resetDriverForegroundResumeAuthorityForTests();
+    resetDriverSessionNetworkGateForTests();
+    setDriverSessionNetworkReady(true);
 
     mockRouterPush.mockReset();
     mockRegisterDriverPushToken.mockReset();
@@ -286,6 +296,7 @@ describe("P1->P2 lightweight integration", () => {
       expect.objectContaining({ token: "ExpoPushToken[integration]", driverId: 42 })
     );
     expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)");
+    expect(getDriverForegroundResumeListenerCountForTests()).toBeGreaterThan(0);
 
     let releaseReconcile: (() => void) | null = null;
     mockReconcileDriverMissions.mockImplementationOnce(
@@ -296,10 +307,10 @@ describe("P1->P2 lightweight integration", () => {
     );
 
     await act(async () => {
-      emitAppState("inactive");
-      emitAppState("active");
-      emitAppState("inactive");
-      emitAppState("active");
+      emitDriverProcessForegroundForTests(false);
+      emitDriverProcessForegroundForTests(true);
+      emitDriverProcessForegroundForTests(false);
+      emitDriverProcessForegroundForTests(true);
       await Promise.resolve();
     });
 

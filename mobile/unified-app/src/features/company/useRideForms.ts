@@ -17,9 +17,18 @@ import {
   linkStandardCompanyClientBillingParty,
 } from "./api/companyStandardApi";
 import { useActiveCompanyContextId } from "./hooks";
-import { QUERY_STALE_TIME_MS } from "../../core/queryStaleTimes";
+import { useCompanySessionNetworkReady } from "./sessionNetworkGate";
+import { queryCacheOptions } from "../../core/queryCachePolicy";
 import { contextScopedKey } from "../../core/cache/contextCache";
 import { companyQueryKeys } from "./companyQueryKeys";
+import {
+  reconcileAuthoritativeMission,
+  refetchObservedDispatchDays,
+} from "./utils/dispatchMissionCachePatch";
+import {
+  assertCompanyOnlineForMutation,
+  shouldRetryCompanyMutation,
+} from "./utils/companyOfflinePolicy";
 
 export type RideFormOption = { id: number; label: string };
 export type RideClientOption = RideFormOption & {
@@ -652,6 +661,7 @@ function buildAddressFallbackQueries(rawQuery: string): string[] {
 
 export function useCompanyClientSearch(query: string) {
   const contextId = useActiveCompanyContextId();
+  const networkReady = useCompanySessionNetworkReady();
   return useQuery({
     queryKey: contextId
       ? contextScopedKey(
@@ -659,17 +669,18 @@ export function useCompanyClientSearch(query: string) {
           [...companyQueryKeys.root, "ride-form", "clients", contextId, query] as unknown[]
         )
       : ["company", "ride-form", "clients", "disabled"],
-    enabled: Boolean(contextId) && query.trim().length > 1,
+    enabled: Boolean(contextId) && networkReady && query.trim().length > 1,
     queryFn: async () => {
       const payload = await searchCompanyClients({ contextId: contextId as string, q: query.trim() });
       return parseClientOptions(payload);
     },
-    staleTime: QUERY_STALE_TIME_MS.default,
+    ...queryCacheOptions("referential"),
   });
 }
 
 export function useCompanyAddressSearch(query: string) {
   const contextId = useActiveCompanyContextId();
+  const networkReady = useCompanySessionNetworkReady();
   return useQuery({
     queryKey: contextId
       ? contextScopedKey(
@@ -677,7 +688,7 @@ export function useCompanyAddressSearch(query: string) {
           [...companyQueryKeys.root, "ride-form", "addresses", contextId, query] as unknown[]
         )
       : ["company", "ride-form", "addresses", "disabled"],
-    enabled: Boolean(contextId) && query.trim().length > 2,
+    enabled: Boolean(contextId) && networkReady && query.trim().length > 2,
     queryFn: async () => {
       const baseQuery = query.trim();
       const payload = await searchCompanyAddresses({ contextId: contextId as string, q: baseQuery });
@@ -698,12 +709,13 @@ export function useCompanyAddressSearch(query: string) {
       }
       return [];
     },
-    staleTime: QUERY_STALE_TIME_MS.default,
+    ...queryCacheOptions("referential"),
   });
 }
 
 export function useCompanyClientDetail(clientId: number | null) {
   const contextId = useActiveCompanyContextId();
+  const networkReady = useCompanySessionNetworkReady();
   return useQuery({
     queryKey:
       contextId && clientId
@@ -712,7 +724,7 @@ export function useCompanyClientDetail(clientId: number | null) {
             [...companyQueryKeys.root, "ride-form", "client-detail", contextId, clientId] as unknown[]
           )
         : ["company", "ride-form", "client-detail", "disabled"],
-    enabled: Boolean(contextId) && clientId != null,
+    enabled: Boolean(contextId) && networkReady && clientId != null,
     queryFn: async () => {
       const payload = await getCompanyClientDetail({
         contextId: contextId as string,
@@ -745,7 +757,7 @@ export function useCompanyClientDetail(clientId: number | null) {
         phone: parsed.phone ?? enriched?.phone ?? null,
       };
     },
-    staleTime: QUERY_STALE_TIME_MS.default,
+    ...queryCacheOptions("referential"),
   });
 }
 
@@ -771,6 +783,7 @@ function parseCompanyBillingPricingContext(payload: unknown): CompanyBillingPric
 
 export function useCompanyBillingPricingContext() {
   const contextId = useActiveCompanyContextId();
+  const networkReady = useCompanySessionNetworkReady();
   return useQuery({
     queryKey: contextId
       ? contextScopedKey(
@@ -778,12 +791,12 @@ export function useCompanyBillingPricingContext() {
           [...companyQueryKeys.root, "ride-form", "billing-pricing-context", contextId] as unknown[]
         )
       : ["company", "ride-form", "billing-pricing-context", "disabled"],
-    enabled: Boolean(contextId),
+    enabled: Boolean(contextId) && networkReady,
     queryFn: async () => {
       const payload = await getCompanyBillingSettings({ contextId: contextId as string });
       return parseCompanyBillingPricingContext(payload);
     },
-    staleTime: QUERY_STALE_TIME_MS.companySlow,
+    ...queryCacheOptions("referential"),
   });
 }
 
@@ -799,16 +812,20 @@ export function useRideCreate() {
   const contextId = useActiveCompanyContextId();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: Record<string, unknown>) =>
-      createCompanyRide({ contextId: contextId as string, payload }),
+    retry: shouldRetryCompanyMutation,
+    mutationFn: async (payload: Record<string, unknown>) => {
+      assertCompanyOnlineForMutation();
+      return createCompanyRide({ contextId: contextId as string, payload });
+    },
     onSuccess: async () => {
       if (!contextId) return;
+      await refetchObservedDispatchDays(queryClient, contextId, "mutation");
       await queryClient.invalidateQueries({
         queryKey: contextScopedKey(
           contextId,
-          [...companyQueryKeys.root, "missions"] as unknown[]
+          [...companyQueryKeys.dashboard(contextId)] as unknown[]
         ),
-        exact: false,
+        exact: true,
       });
     },
   });
@@ -818,19 +835,25 @@ export function useRideEdit() {
   const contextId = useActiveCompanyContextId();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { missionId: number; payload: Record<string, unknown> }) =>
-      updateCompanyRide({ contextId: contextId as string, missionId: params.missionId, payload: params.payload }),
+    retry: shouldRetryCompanyMutation,
+    mutationFn: async (params: { missionId: number; payload: Record<string, unknown> }) => {
+      assertCompanyOnlineForMutation();
+      return updateCompanyRide({ contextId: contextId as string, missionId: params.missionId, payload: params.payload });
+    },
     onSuccess: async (_, params) => {
       if (!contextId) return;
+      await reconcileAuthoritativeMission(
+        queryClient,
+        contextId,
+        params.missionId,
+        "mutation"
+      );
       await queryClient.invalidateQueries({
         queryKey: contextScopedKey(
           contextId,
-          [...companyQueryKeys.rideDetails(contextId, params.missionId)] as unknown[]
+          [...companyQueryKeys.dashboard(contextId)] as unknown[]
         ),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: contextScopedKey(contextId, [...companyQueryKeys.root, "missions"] as unknown[]),
-        exact: false,
+        exact: true,
       });
     },
   });
@@ -916,6 +939,7 @@ export function useClientCreate() {
 
 export function useCompanyBillingPartiesQuery() {
   const contextId = useActiveCompanyContextId();
+  const networkReady = useCompanySessionNetworkReady();
   return useQuery({
     queryKey: contextId
       ? contextScopedKey(
@@ -923,9 +947,9 @@ export function useCompanyBillingPartiesQuery() {
           [...companyQueryKeys.root, "ride-form", "billing-parties", contextId] as unknown[]
         )
       : ["company", "ride-form", "billing-parties", "disabled"],
-    enabled: Boolean(contextId),
+    enabled: Boolean(contextId) && networkReady,
     queryFn: async () => fetchStandardCompanyBillingParties({ contextId: contextId as string }),
-    staleTime: QUERY_STALE_TIME_MS.companySlow,
+    ...queryCacheOptions("referential"),
   });
 }
 

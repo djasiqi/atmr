@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -10,6 +10,8 @@ import { useNotifications, useTrackingState } from "../hooks";
 import { formatBridgeSyncLabel } from "../services/bridgeAckSemantics";
 import { D } from "../theme/driverDashboardTheme";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
+import { DRIVER_DASHBOARD_AVATAR } from "./driverDashboardShell";
+import { measureDriverHubWindowEdge } from "./driverHubLayoutMeasure";
 
 const C = {
   text: D.text,
@@ -28,6 +30,8 @@ type Props = {
   isAvailable: boolean | null;
   onToggleAvailability?: () => void;
   availabilityPending?: boolean;
+  /** Ligne 3 : GPS idle, ou alerte qui la remplace (même hauteur). */
+  renderStatusLine?: (idleLabel: ReactNode) => ReactNode;
 };
 
 function formatSyncTime(ts: number | undefined): string {
@@ -52,8 +56,9 @@ export function DriverDashboardHeader({
   isAvailable,
   onToggleAvailability,
   availabilityPending = false,
+  renderStatusLine,
 }: Props) {
-  const { bootstrap } = useSession();
+  const { bootstrap, status: sessionStatus } = useSession();
   const tracking = useTrackingState();
   const { unreadCount } = useNotifications();
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -61,7 +66,8 @@ export function DriverDashboardHeader({
   const [gpsEnabled, setGpsEnabled] = useState(true);
 
   const user = bootstrap?.user ?? null;
-  const displayName = formatDriverName(profileName ?? user?.full_name ?? user?.username);
+  const rawName = profileName ?? user?.full_name ?? user?.username ?? "";
+  const displayName = rawName.trim().length > 0 ? formatDriverName(rawName) : "";
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +87,7 @@ export function DriverDashboardHeader({
           setPhotoUrl(p.photo_url);
         }
       }
+      if (sessionStatus !== "ready") return;
       try {
         const profile = await getDriverProfile();
         if (cancelled) return;
@@ -101,7 +108,7 @@ export function DriverDashboardHeader({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [sessionStatus]);
 
   useEffect(() => {
     let mounted = true;
@@ -158,7 +165,15 @@ export function DriverDashboardHeader({
     return `${parts[0]![0] ?? ""}${parts[parts.length - 1]![0] ?? ""}`.toUpperCase();
   }, [displayName]);
 
+  const envelopeRef = useRef<View>(null);
+  const statusRef = useRef<View>(null);
+
   return (
+    <View
+      ref={envelopeRef}
+      style={styles.envelope}
+      onLayout={() => measureDriverHubWindowEdge(envelopeRef.current, "headerBottom")}
+    >
     <View style={styles.wrap}>
       <View style={styles.leftCol}>
         <View style={styles.avatarCircle} accessibilityElementsHidden>
@@ -178,9 +193,13 @@ export function DriverDashboardHeader({
           )}
         </View>
         <View style={styles.identityCol}>
-          <AppText variant="sectionTitle" style={styles.name} numberOfLines={1}>
-            {displayName}
-          </AppText>
+          {displayName ? (
+            <AppText variant="sectionTitle" style={styles.name} numberOfLines={1}>
+              {displayName}
+            </AppText>
+          ) : (
+            <View style={styles.nameBone} accessibilityLabel="Nom en cours de chargement" />
+          )}
           <Pressable
             onPress={onToggleAvailability}
             disabled={!onToggleAvailability || availabilityPending || isAvailable == null}
@@ -207,22 +226,38 @@ export function DriverDashboardHeader({
                 { backgroundColor: isAvailable === true ? C.available : C.textMuted },
               ]}
             />
-            <AppText
-              variant="caption"
-              style={[styles.statusLabel, isAvailable === true && styles.statusLabelAvailable]}
-            >
-              {availabilityPending
-                ? "Mise à jour…"
-                : isAvailable == null
-                  ? "Chargement…"
+            {isAvailable == null && !availabilityPending ? (
+              <View style={styles.statusBone} accessibilityLabel="Disponibilité en cours de chargement" />
+            ) : (
+              <AppText
+                variant="caption"
+                style={[styles.statusLabel, isAvailable === true && styles.statusLabelAvailable]}
+              >
+                {availabilityPending
+                  ? "Mise à jour…"
                   : isAvailable
                     ? "Disponible"
                     : "Indisponible"}
-            </AppText>
+              </AppText>
+            )}
           </Pressable>
-          <AppText variant="caption" style={styles.syncLine} numberOfLines={1}>
-            {syncLabel}
-          </AppText>
+          <View
+            ref={statusRef}
+            style={styles.statusLine}
+            onLayout={() => measureDriverHubWindowEdge(statusRef.current, "status")}
+          >
+            {renderStatusLine
+              ? renderStatusLine(
+                  <AppText variant="caption" style={styles.syncLine} numberOfLines={1}>
+                    {syncLabel}
+                  </AppText>
+                )
+              : (
+                  <AppText variant="caption" style={styles.syncLine} numberOfLines={1}>
+                    {syncLabel}
+                  </AppText>
+                )}
+          </View>
         </View>
       </View>
 
@@ -237,23 +272,32 @@ export function DriverDashboardHeader({
         </Pressable>
       </View>
     </View>
+    </View>
   );
 }
 
-const AVATAR_SIZE = 46;
+const AVATAR_SIZE = DRIVER_DASHBOARD_AVATAR;
 
 const styles = StyleSheet.create({
+  envelope: {
+    alignSelf: "stretch",
+  },
   wrap: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 10,
+    marginBottom: 0,
+  },
+  statusLine: {
+    marginTop: 1,
+    justifyContent: "center",
   },
   leftCol: {
     flex: 1,
     minWidth: 0,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 10,
   },
   /** Cercle strict — pas d'elevation ici (sinon artefact octogonal sur Android). */
@@ -297,6 +341,20 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 20,
     letterSpacing: -0.12,
+    minHeight: 20,
+  },
+  nameBone: {
+    height: 16,
+    width: 132,
+    borderRadius: 6,
+    backgroundColor: "rgba(15, 23, 42, 0.08)",
+    marginTop: 2,
+  },
+  statusBone: {
+    height: 12,
+    width: 72,
+    borderRadius: 6,
+    backgroundColor: "rgba(15, 23, 42, 0.08)",
   },
   statusChip: {
     flexDirection: "row",
@@ -335,13 +393,14 @@ const styles = StyleSheet.create({
     color: C.textMuted,
     fontSize: FONT_SIZE.px10,
     lineHeight: 12,
-    marginTop: 1,
+    marginTop: 0,
     letterSpacing: 0.05,
   },
   actionsCol: {
     flexDirection: "row",
     alignItems: "center",
     flexShrink: 0,
+    paddingTop: 2,
   },
   iconBtn: {
     width: 32,

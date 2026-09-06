@@ -6,8 +6,7 @@
  *   - `company_socket_reconnected` (dispatché par `companyRealtimeBridge` au reconnect)
  *
  * Sans ce listener, après un background long ou un reconnect, seul GPS était
- * rafraîchi (`useCompanyDriverLiveTracking`). Dashboard, missions, inbox et chat
- * restaient silencieusement obsolètes.
+ * rafraîchi. OPT-08 : dashboard + J observé + live (+ delays), pas inbox/chat/offres.
  *
  * Throttle 30 s par `contextId` pour éviter un storm d'invalidations sur des
  * reconnects rapprochés (transition WiFi/4G, captive portal, etc.).
@@ -21,6 +20,12 @@ import { contextScopedKey } from "../../../core/cache/contextCache";
 import { companyContextScope, companyQueryKeys } from "../companyQueryKeys";
 import { recordCompanyRecoveryResync } from "../../../core/observability/realtimeMetrics";
 import { traceInvalidateQueries } from "../../../core/observability/perfInstrumentation";
+import {
+  reconcileAuthoritativeMission,
+  refetchExactDispatchDay,
+  refetchObservedDispatchDays,
+} from "../utils/dispatchMissionCachePatch";
+import type { RidesFetchReason } from "../utils/ridesFetchReason";
 
 export const RECOVERY_THROTTLE_MS = 30_000;
 
@@ -28,6 +33,9 @@ export type RecoveryTrigger = "stale" | "reconnect";
 
 type RecoveryEvent = {
   event_type?: string;
+  mission_id?: number;
+  missionId?: number;
+  date?: string;
 };
 
 function isRecoveryEvent(input: unknown): input is RecoveryEvent {
@@ -40,65 +48,56 @@ export function resolveRecoveryTrigger(eventType: string | undefined): RecoveryT
   return null;
 }
 
+function recoveryRidesReason(trigger: RecoveryTrigger): RidesFetchReason {
+  return trigger === "reconnect" ? "reconnect" : "recovery";
+}
+
+function parseRecoveryMissionId(event?: RecoveryEvent): number | undefined {
+  const raw = event?.mission_id ?? event?.missionId;
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
+}
+
 /**
- * Exécute le resync coherent dashboard + missions + inbox + chat + delays.
- * Exporté pour testabilité (le hook lui-même est un thin wrapper React).
+ * OPT-04E + OPT-08 — resync ciblé : J observé, dashboard, delays, live.
+ * Pas de famille rides, pas d’inbox / chat / offres / billing au reconnect.
  */
 export function performCompanyRecoveryResync(
   queryClient: QueryClient,
   contextId: string,
-  trigger: RecoveryTrigger
+  trigger: RecoveryTrigger,
+  event?: RecoveryEvent
 ): void {
   recordCompanyRecoveryResync(trigger);
+  const ridesReason = recoveryRidesReason(trigger);
+  const missionId = parseRecoveryMissionId(event);
+  const knownDate = typeof event?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(event.date)
+    ? event.date
+    : undefined;
+
+  if (missionId != null) {
+    void reconcileAuthoritativeMission(queryClient, contextId, missionId, ridesReason);
+  } else if (knownDate) {
+    void refetchExactDispatchDay(queryClient, contextId, knownDate, ridesReason);
+  } else {
+    void refetchObservedDispatchDays(queryClient, contextId, ridesReason);
+  }
 
   const scope = companyContextScope(contextId);
   const dashboardKey = contextScopedKey(
     contextId,
     [...companyQueryKeys.dashboard(contextId)] as unknown[]
   );
-  const missionsKey = contextScopedKey(
-    contextId,
-    [...companyQueryKeys.root, "missions", scope] as unknown[]
-  );
-  const inboxKey = contextScopedKey(
-    contextId,
-    [...companyQueryKeys.inbox(contextId)] as unknown[]
-  );
   const dispatchDelaysKey = contextScopedKey(
     contextId,
     [...companyQueryKeys.root, "dispatch-delays", scope] as unknown[]
-  );
-  const chatKey = contextScopedKey(
-    contextId,
-    [...companyQueryKeys.root, "chat", contextId] as unknown[]
   );
 
   void traceInvalidateQueries(dashboardKey, `recovery_resync_${trigger}_dashboard`, async () => {
     await queryClient.invalidateQueries({ queryKey: dashboardKey, exact: true });
   });
-  void traceInvalidateQueries(missionsKey, `recovery_resync_${trigger}_missions`, async () => {
-    await queryClient.invalidateQueries({ queryKey: missionsKey, exact: false });
-  });
-  void traceInvalidateQueries(inboxKey, `recovery_resync_${trigger}_inbox`, async () => {
-    await queryClient.invalidateQueries({ queryKey: inboxKey, exact: false });
-  });
   void traceInvalidateQueries(dispatchDelaysKey, `recovery_resync_${trigger}_delays`, async () => {
     await queryClient.invalidateQueries({ queryKey: dispatchDelaysKey, exact: false });
   });
-  void traceInvalidateQueries(chatKey, `recovery_resync_${trigger}_chat`, async () => {
-    await queryClient.invalidateQueries({ queryKey: chatKey, exact: false });
-  });
-  const institutionOffersKey = contextScopedKey(
-    contextId,
-    [...companyQueryKeys.institutionOffers(contextId, "PENDING")] as unknown[]
-  );
-  void traceInvalidateQueries(
-    institutionOffersKey,
-    `recovery_resync_${trigger}_institution_offers`,
-    async () => {
-      await queryClient.invalidateQueries({ queryKey: institutionOffersKey, exact: false });
-    }
-  );
   const driversLocationsKey = contextScopedKey(
     contextId,
     [...companyQueryKeys.driversLocations(contextId)] as unknown[]
@@ -129,7 +128,7 @@ export function useCompanyRecoveryListener(contextId: string | null): void {
         return;
       }
       lastResyncAtRef.current = now;
-      performCompanyRecoveryResync(queryClient, contextId, trigger);
+      performCompanyRecoveryResync(queryClient, contextId, trigger, event);
     });
   }, [contextId, queryClient]);
 }

@@ -17,6 +17,7 @@ import {
   recordSocketEventByChannel,
   type SocketPerfChannel,
 } from "../observability/perfInstrumentation";
+import { isDriverSessionNetworkReady } from "../network/driverSessionNetworkGate";
 import { appendSessionJournalEvent } from "../observability/sessionJournal";
 import {
   recordSocketConnectTotal,
@@ -266,6 +267,15 @@ class RealtimeManager {
   }
 
   connect(contextId: string, options?: { enableSocket?: boolean }) {
+    if (contextId.startsWith("driver:") && options?.enableSocket) {
+      if (!isDriverSessionNetworkReady()) {
+        emitDriverTelemetry("realtime.connect.blocked_before_session_ready", {
+          source: "core.realtime.manager",
+          context_id: contextId,
+        });
+        return;
+      }
+    }
     const desiredTransport = options?.enableSocket ? "socket" : "polling";
     if (
       this.state.connected &&

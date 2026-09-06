@@ -21,7 +21,7 @@ jest.mock("../hooks", () => ({
 }));
 
 jest.mock("../../../core/sessionProvider", () => ({
-  useSession: () => ({ bootstrap: null }),
+  useSession: () => ({ bootstrap: null, status: "ready" }),
 }));
 
 jest.mock("../../../core/realtime/realtimeManager", () => ({
@@ -37,6 +37,10 @@ jest.mock("../api", () => ({
     mockGetDriverMissionEta(bookingId, opts),
 }));
 
+import {
+  resetDriverSessionNetworkGateForTests,
+  setDriverSessionNetworkReady,
+} from "../../../core/network/driverSessionNetworkGate";
 import { useHubUnreadCount, useMissionEtaMinutes } from "./hooks";
 
 function HookProbe() {
@@ -72,6 +76,8 @@ async function renderProbe(): Promise<() => void> {
 
 describe("P1-C3 - gate contexte des pollers hub driver", () => {
   beforeEach(() => {
+    resetDriverSessionNetworkGateForTests();
+    setDriverSessionNetworkReady(true);
     mockDriverContextId.mockReset();
     mockFetchHubUnreadCount.mockReset();
     mockGetDriverMissionEta.mockReset();

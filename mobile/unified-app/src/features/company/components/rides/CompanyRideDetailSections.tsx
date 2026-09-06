@@ -68,15 +68,22 @@ export function RideDetailInfoSection({ rows }: { rows: RideDetailInfoRow[] }) {
           style={[styles.infoRow, idx === rows.length - 1 ? styles.infoRowLast : null]}
         >
           <AppText variant="bodyMuted" style={styles.infoLabel}>{row.label}</AppText>
-          <AppText
-            variant="body"
-            style={[
-              styles.infoValue,
-              row.tone === "danger" ? styles.infoValueDanger : null,
-            ]}
-          >
-            {row.value}
-          </AppText>
+          {row.pending ? (
+            <View
+              style={styles.infoPending}
+              accessibilityLabel={`${row.label}, actualisation`}
+            />
+          ) : (
+            <AppText
+              variant="body"
+              style={[
+                styles.infoValue,
+                row.tone === "danger" ? styles.infoValueDanger : null,
+              ]}
+            >
+              {row.value}
+            </AppText>
+          )}
         </View>
       ))}
     </RideDetailSection>
@@ -233,6 +240,13 @@ const styles = StyleSheet.create({
     fontWeight: "600" as const,
   },
   infoValueDanger: { color: E.DANGER },
+  infoPending: {
+    width: 96,
+    height: 12,
+    borderRadius: 6,
+    alignSelf: "center",
+    backgroundColor: "rgba(15, 23, 42, 0.08)",
+  },
   routeCard: {
     flexDirection: "row",
     gap: 12,

@@ -375,12 +375,11 @@ const s = StyleSheet.create({
   },
   row: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
     minHeight: HEADER_ROW_MIN_HEIGHT,
-    rowGap: 8,
   },
   rowFloating: {
     justifyContent: "flex-start",
@@ -390,7 +389,7 @@ const s = StyleSheet.create({
   /** Bloc gauche : titre optionnel + pilule date (réf. Courses / justify-between). */
   leftCluster: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
     alignItems: "center",
     gap: 10,
     flex: 1,
@@ -399,7 +398,7 @@ const s = StyleSheet.create({
   /** Bloc droit : chip mode + cloche + trailing. */
   rightCluster: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
     alignItems: "center",
     gap: 0,
     flexShrink: 1,
@@ -410,33 +409,32 @@ const s = StyleSheet.create({
     paddingLeft: 0,
     flex: 1,
     minWidth: 0,
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
   },
   floatingUnifiedControls: {
     flex: 1,
     minWidth: 0,
     flexDirection: "row",
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
     alignItems: "center",
     justifyContent: "flex-start",
-    overflow: "visible",
-    rowGap: 8,
+    overflow: "hidden",
   },
   rightLeadGap: { marginLeft: 6 },
   rightItemGap: { marginLeft: 6 },
   rightItemGapFloating: { marginLeft: 12 },
   floatingDateSlot: {
-    flexShrink: 0,
+    flexShrink: 1,
     flexGrow: 0,
-    minWidth: 0,
+    minWidth: 72,
     maxWidth: 148,
   },
   floatingLiveSlot: {
     flexGrow: 1,
     flexShrink: 1,
     flexBasis: 0,
-    minWidth: 52,
-    marginLeft: 12,
+    minWidth: 108,
+    marginLeft: 8,
     overflow: "hidden",
     justifyContent: "center",
   },
@@ -448,11 +446,12 @@ const s = StyleSheet.create({
   floatingTrailingSlot: {
     flexShrink: 0,
     flexGrow: 0,
-    marginLeft: 12,
+    marginLeft: 8,
   },
-  /** Aligne la cloche sur la hauteur du chip mode (minHeight 39). */
+  /** Aligne la cloche sur la hauteur du chip mode (minHeight 39). Jamais wrap. */
   inboxWell: {
     flexDirection: "row",
+    flexShrink: 0,
     minHeight: 39,
     minWidth: 44,
     borderRadius: 16,

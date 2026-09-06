@@ -15,11 +15,11 @@ import apiClient from '../../../../utils/apiClient';
 import { showSuccess, showError } from '../../../../utils/toast';
 import {
   getAuthEnv,
-  hasCompanyScopedAccessToken,
+  hasCompanyDispatchSession,
 } from '../../../../utils/webAuthSession';
 
 const hasCompanyToken = () =>
-  hasCompanyScopedAccessToken(getAuthEnv());
+  hasCompanyDispatchSession(getAuthEnv());
 
 const SERVICE_AREA_ALLOWED_TYPES = new Set(['commune', 'district', 'canton']);
 const SERVICE_AREA_SINGLE_MODES = new Set(['canton', 'district']);

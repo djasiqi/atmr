@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { QueryClient } from "@tanstack/react-query";
 import { startDriverRealtimeBridge } from "./driverRealtimeBridge";
+import { resetDriverForegroundResumeAuthorityForTests } from "../driverForegroundResumeAuthority";
 
 jest.mock(
   "expo-battery",
@@ -71,6 +72,7 @@ jest.mock("./socketBatchPacing", () => ({
 
 describe("driverRealtimeBridge ack handling", () => {
   beforeEach(() => {
+    resetDriverForegroundResumeAuthorityForTests();
     mockSubscribe.mockReset();
     mockSubscribeDriverEvents.mockReset();
     mockConnect.mockReset();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -11,14 +11,17 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { PermissionGuard } from "../../../src/core/guards";
 import {
-  AppButton,
   AppText,
   Screen,
+  computeCompanyFloatingBottomPad,
+  useAppViewport,
+  useFloatingBarClearance,
 } from "../../../src/design/responsive";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "../../../src/core/sessionProvider";
 import {
   useActiveCompanyContextId,
@@ -32,15 +35,32 @@ import { emitCompanyDispatchTelemetry } from "../../../src/features/company/tele
 import { contextRealtimeRouter } from "../../../src/core/realtime/contextRealtimeRouter";
 import { normalizeCompanyEventType } from "../../../src/core/realtime/eventContracts";
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
-import { RideCreateModal } from "../../../src/features/company/components/rides/RideCreateModal";
-import { RideEditModal } from "../../../src/features/company/components/rides/RideEditModal";
-import { AssignDriverModal } from "../../../src/features/company/components/rides/AssignDriverModal";
-import { RideScheduleModal } from "../../../src/features/company/components/rides/RideScheduleModal";
+import {
+  beginTapFeedback,
+  endTapLocal,
+  endTapNavigation,
+  recordMissionDetailsPhase,
+  recordScreenRender,
+} from "../../../src/core/observability/perfResponsiveness";
+import { useCompanyBackgroundBootReady } from "../../../src/features/company/boot/companyColdStartPhase";
+import { markCompanyScreenUsable } from "../../../src/features/company/observability/companyDashboardPhases";
 import { EnterpriseHeader } from "../../../src/features/company/components/EnterpriseHeader";
 import { DayPickerSheet } from "../../../src/features/company/components/DayPickerSheet";
 import { CompanyRidesMissionFlatList } from "../../../src/features/company/components/rides/CompanyRidesMissionFlatList";
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { filterMissionsByDispatchListChip } from "../../../src/features/company/utils/rideListStatusFilter";
+import { filterDayMissionsForLocalSearch } from "../../../src/features/company/utils/filterMissionsByLocalSearch";
+import { prefetchAdjacentDispatchMissions } from "../../../src/features/company/utils/prefetchAdjacentDispatchMissions";
+import { remainingUnloadedCount } from "../../../src/features/company/utils/dispatchDayPagination";
+import { useRetainDispatchQueryCache } from "../../../src/features/company/utils/dispatchQueryRetention";
+import { setStickyRidesFetchReason } from "../../../src/features/company/utils/ridesFetchReason";
+import {
+  COMPANY_OFFLINE_ACTION_MESSAGE,
+  isCompanyNetworkRequestError,
+  resolveDispatchDayEmptyKind,
+} from "../../../src/features/company/utils/companyOfflinePolicy";
+import { useCompanyNetworkOffline } from "../../../src/features/company/utils/useCompanyNetworkOffline";
+import { rememberRideDetailSnapshot } from "../../../src/features/company/utils/rideDetailSnapshotStore";
 import {
   flattenCompanyDispatchDelays,
   pickupDelaysByBookingLastWins,
@@ -51,21 +71,44 @@ import {
   missionBelongsToSelectedDay,
 } from "../../../src/features/company/utils/companyDateUtils";
 import { hasConfirmedPickupTime, missionHasRenderableSchedule } from "../../../src/features/company/utils/pickupSentinel";
-import { TransferRideModal } from "../../../src/features/company/components/transfers/TransferRideModal";
 import {
   cancelCompanyRide,
   getCompanyAvailableDrivers,
-  getCompanyDispatchModes,
   getCompanyPartnershipsForTransfer,
   getDispatchApiErrorMessage,
   markCompanyRideUrgent,
-  runCompanyDispatch,
-  runCompanyOptimizer,
   transferCompanyRide,
 } from "../../../src/features/company/api/companyApi";
+import { MaybeCompanyRidesEngineActions } from "../../../src/features/company/components/rides/MaybeCompanyRidesEngineActions";
 import type { CompanyDispatchMission } from "../../../src/features/company/api/contracts";
 import { createShadow } from "../../../src/styles/shadowStyles";
 import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
+
+const RideCreateModal = lazy(() =>
+  import("../../../src/features/company/components/rides/RideCreateModal").then((m) => ({
+    default: m.RideCreateModal,
+  }))
+);
+const RideEditModal = lazy(() =>
+  import("../../../src/features/company/components/rides/RideEditModal").then((m) => ({
+    default: m.RideEditModal,
+  }))
+);
+const AssignDriverModal = lazy(() =>
+  import("../../../src/features/company/components/rides/AssignDriverModal").then((m) => ({
+    default: m.AssignDriverModal,
+  }))
+);
+const RideScheduleModal = lazy(() =>
+  import("../../../src/features/company/components/rides/RideScheduleModal").then((m) => ({
+    default: m.RideScheduleModal,
+  }))
+);
+const TransferRideModal = lazy(() =>
+  import("../../../src/features/company/components/transfers/TransferRideModal").then((m) => ({
+    default: m.TransferRideModal,
+  }))
+);
 
 const searchBarShadowOps = createShadow({
   shadowColor: "#000000",
@@ -206,19 +249,6 @@ const rideStyles = StyleSheet.create({
     fontSize: FONT_SIZE.px15,
     outlineStyle: Platform.OS === "web" ? ("none" as const) : undefined,
   },
-  /** Carte actions dispatch — même langage que recherche / filtres. */
-  dispatchActionsCard: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    backgroundColor: E.CARD,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.22)",
-    ...searchBarShadowOps,
-  },
-  actionBtn: { flexGrow: 1, minWidth: 108 },
   /** Bandeau filtres — bordure slate légère comme la barre de recherche. */
   tabsPanel: {
     alignSelf: "stretch",
@@ -303,6 +333,20 @@ const rideStyles = StyleSheet.create({
   pressed: { opacity: 0.88 },
   /** Réf. `ridesListContainer` operations : marge haute portée par `page.gap`. */
   listTop: { marginTop: 0, gap: DISPATCH_RIDE_LIST_CARD_GAP },
+  dayPaginationHint: {
+    paddingVertical: 12,
+    alignItems: "center",
+    gap: 8,
+  },
+  dayPaginationHintText: { color: E.TEXT_MUTED, textAlign: "center" },
+  dayPaginationRetry: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: E.BRAND,
+  },
+  dayPaginationRetryLabel: { color: E.BRAND, fontWeight: "600" },
   loadingBox: {
     alignItems: "center",
     paddingVertical: 48,
@@ -397,14 +441,18 @@ const rideStyles = StyleSheet.create({
 });
 
 export default function CompanyRidesScreen() {
+  recordScreenRender("company.rides");
   const router = useRouter();
   const params = useLocalSearchParams<{ filter?: string; create?: string; status?: string }>();
   const { activeContext, can, bootstrapSession } = useSession();
+  const { bottomInset } = useAppViewport();
+  const ridesBottomClearance = useFloatingBarClearance(
+    "company",
+    computeCompanyFloatingBottomPad(bottomInset)
+  );
   const [sessionRetryBusy, setSessionRetryBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
-  const [actionPending, setActionPending] = useState<null | "dispatch" | "optimizer">(null);
-  const [activeMode, setActiveMode] = useState<"manual" | "semi_auto" | "fully_auto" | null>(null);
   const [assignModalMissionId, setAssignModalMissionId] = useState<number | null>(null);
   const [transferModalMissionId, setTransferModalMissionId] = useState<number | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
@@ -437,17 +485,32 @@ export default function CompanyRidesScreen() {
   }, [filterNorm, statusParam]);
 
   const contextId = useActiveCompanyContextId();
+  const queryClient = useQueryClient();
+  const ridesFocused = useIsFocused();
+  const backgroundReady = useCompanyBackgroundBootReady();
+  const networkOffline = useCompanyNetworkOffline();
+  useRetainDispatchQueryCache("rides", contextId, selectedDate);
   const rideActions = useCompanyRideActions();
-  const missionsQuery = useCompanyDispatchMissionsQuery({ date: selectedDate, search, status });
-  const missionsRefetch = missionsQuery.refetch;
-  const dispatchDelaysQuery = useCompanyDispatchDelaysQuery({ date: selectedDate });
-  const delaysRefetch = dispatchDelaysQuery.refetch;
-  const allMissionsForCountsQuery = useCompanyDispatchMissionsQuery({
+  const missionsQuery = useCompanyDispatchMissionsQuery({
     date: selectedDate,
-    search,
-    status: "all",
+    completeDay: ridesFocused,
   });
-  const allMissionsRefetch = allMissionsForCountsQuery.refetch;
+  const missionsRefetch = missionsQuery.refetch;
+  const dispatchDelaysQuery = useCompanyDispatchDelaysQuery({
+    date: selectedDate,
+    enabled: ridesFocused || backgroundReady,
+  });
+  const delaysRefetch = dispatchDelaysQuery.refetch;
+  const ridesUsableMarkedRef = useRef(false);
+  useLayoutEffect(() => {
+    if (!ridesFocused) {
+      ridesUsableMarkedRef.current = false;
+      return;
+    }
+    if (ridesUsableMarkedRef.current) return;
+    ridesUsableMarkedRef.current = true;
+    markCompanyScreenUsable("company.rides", { trigger: "focus_commit" });
+  }, [ridesFocused]);
   const { invalidate } = useCompanyRealtimeInvalidation();
   const realtimeStatus = useCompanyRealtimeStatus();
   const lastOpenedTelemetryKeyRef = useRef<string | null>(null);
@@ -464,27 +527,16 @@ export default function CompanyRidesScreen() {
   }, [createParam, params.filter, router]);
 
   const refresh = useCallback(async () => {
-    await Promise.all([missionsRefetch(), allMissionsRefetch(), delaysRefetch()]);
-  }, [missionsRefetch, allMissionsRefetch, delaysRefetch]);
+    setStickyRidesFetchReason("manual");
+    await Promise.all([missionsRefetch(), delaysRefetch()]);
+  }, [missionsRefetch, delaysRefetch]);
 
   const refreshStaleOnly = useCallback(async () => {
-    const now = Date.now();
-    const tasks: Promise<unknown>[] = [];
-    if (now - missionsQuery.dataUpdatedAt > STALE_DATA_MS) tasks.push(missionsRefetch());
-    if (now - allMissionsForCountsQuery.dataUpdatedAt > STALE_DATA_MS) {
-      tasks.push(allMissionsRefetch());
+    // OPT-04E : J se réconcilie via refetchOnWindowFocus (si stale), pas un 2e GET ici.
+    if (Date.now() - dispatchDelaysQuery.dataUpdatedAt > STALE_DATA_MS) {
+      await delaysRefetch();
     }
-    if (now - dispatchDelaysQuery.dataUpdatedAt > STALE_DATA_MS) tasks.push(delaysRefetch());
-    if (tasks.length === 0) return;
-    await Promise.all(tasks);
-  }, [
-    allMissionsForCountsQuery.dataUpdatedAt,
-    allMissionsRefetch,
-    delaysRefetch,
-    dispatchDelaysQuery.dataUpdatedAt,
-    missionsQuery.dataUpdatedAt,
-    missionsRefetch,
-  ]);
+  }, [delaysRefetch, dispatchDelaysQuery.dataUpdatedAt]);
 
   const clearRouteFilterOverride = useCallback(() => {
     if (filterNorm === "exceptions" || filterNorm === "delayed" || filterNorm === "urgent") {
@@ -566,10 +618,27 @@ export default function CompanyRidesScreen() {
     }, [activeContext, invalidate, refresh])
   );
 
-  const missions = useMemo(() => {
+  useEffect(() => {
+    if (!contextId || !missionsQuery.isSuccess) return;
+    if (!ridesFocused && !backgroundReady) return;
+    const handle = setTimeout(() => {
+      prefetchAdjacentDispatchMissions(queryClient, contextId, selectedDate);
+    }, 220);
+    return () => clearTimeout(handle);
+  }, [backgroundReady, contextId, missionsQuery.isSuccess, queryClient, ridesFocused, selectedDate]);
+
+  const dayMissions = useMemo(() => {
     const raw = missionsQuery.data?.missions ?? [];
     return raw.filter((mission) => missionBelongsToSelectedDay(mission, selectedDate));
   }, [missionsQuery.data?.missions, selectedDate]);
+  const searchedDayMissions = useMemo(
+    () => filterDayMissionsForLocalSearch(dayMissions, selectedDate, search),
+    [dayMissions, search, selectedDate]
+  );
+  const missions = useMemo(
+    () => filterMissionsByDispatchListChip(searchedDayMissions, status),
+    [searchedDayMissions, status]
+  );
   const delayPickupByBookingId = useMemo(() => {
     const rows = flattenCompanyDispatchDelays(dispatchDelaysQuery.data ?? []);
     return pickupDelaysByBookingLastWins(rows);
@@ -599,10 +668,7 @@ export default function CompanyRidesScreen() {
       notes: null,
     };
   }, [missionBeingEdited]);
-  const allMissions = useMemo(() => {
-    const raw = allMissionsForCountsQuery.data?.missions ?? [];
-    return raw.filter((mission) => missionBelongsToSelectedDay(mission, selectedDate));
-  }, [allMissionsForCountsQuery.data?.missions, selectedDate]);
+  const allMissions = searchedDayMissions;
   const allMissionsWithSchedule = useMemo(
     () => allMissions.filter(missionHasRenderableSchedule),
     [allMissions]
@@ -627,7 +693,6 @@ export default function CompanyRidesScreen() {
   const canUrgentRide = canRunSensitiveAction("company:rides:urgent", "company:rides:read");
   const canCancelRide = canRunSensitiveAction("company:rides:cancel", "company:rides:read");
   const canScheduleRide = canRunSensitiveAction("company:rides:schedule", "company:rides:read");
-  const canDispatchManage = canRunSensitiveAction("company:dispatch:manage", "company:rides:read");
   const filteredMissions = useMemo(() => {
     const missionsWithSchedule = missions.filter(missionHasRenderableSchedule);
     const f = filterNorm;
@@ -661,32 +726,44 @@ export default function CompanyRidesScreen() {
         if (m.status === "completed" || m.status === "cancelled") return false;
         // Exclure les courses sans heure confirmée du calcul des retards.
         if (!hasConfirmedPickupTime(m)) return false;
-        const t = Date.parse(m.scheduled_at);
+        const scheduledAt = m.scheduled_at;
+        if (!scheduledAt) return false;
+        const t = Date.parse(scheduledAt);
         if (!Number.isFinite(t)) return false;
         return t < now;
       });
     }
     return missionsWithSchedule;
   }, [missions, filterNorm]);
-
-  const loadDispatchMode = useCallback(async () => {
-    if (!contextId) return;
-    try {
-      const payload = await getCompanyDispatchModes({ contextId });
-      if (!payload || typeof payload !== "object") return;
-      const obj = payload as Record<string, unknown>;
-      const nextMode = obj.mode ?? obj.current_mode ?? obj.dispatch_mode ?? null;
-      if (nextMode === "manual" || nextMode === "semi_auto" || nextMode === "fully_auto") {
-        setActiveMode(nextMode);
-      }
-    } catch {
-      // Mode illisible : l’en-tête affichera « — »; le reglage se fait via Parametres
-    }
-  }, [contextId]);
+  const ridesListContentStyle = useMemo(
+    () => [rideStyles.page, rideStyles.listTop, { paddingBottom: Math.max(20, ridesBottomClearance) }],
+    [ridesBottomClearance]
+  );
+  const dayLoaded = missionsQuery.data?.loaded ?? 0;
+  const dayTotal = missionsQuery.data?.total ?? dayLoaded;
+  const isDayComplete = missionsQuery.data?.is_complete ?? Boolean(missionsQuery.data);
+  const dayRemaining = remainingUnloadedCount({ loaded: dayLoaded, total: dayTotal });
+  const paginationError = missionsQuery.data?.pagination_error === true;
+  const dayEmptyKind = resolveDispatchDayEmptyKind({
+    missionCount: filteredMissions.length,
+    hasCachedDay: missionsQuery.data != null,
+    isLoading: missionsQuery.isLoading,
+    isError: missionsQuery.isError,
+    isOffline: networkOffline,
+    isNetworkError: isCompanyNetworkRequestError(missionsQuery.error),
+    searchActive: search.trim().length > 0,
+    isDayComplete,
+  });
 
   const openAssignModal = useCallback(
     async (missionId: number) => {
       if (!contextId) return;
+      if (networkOffline) {
+        setAssignModalMissionId(missionId);
+        setModalError(COMPANY_OFFLINE_ACTION_MESSAGE);
+        setModalPending(false);
+        return;
+      }
       setAssignModalMissionId(missionId);
       setModalError(null);
       setModalPending(true);
@@ -701,17 +778,25 @@ export default function CompanyRidesScreen() {
         setDrivers(options);
         setSelectedDriverId(options[0]?.id ?? null);
       } catch (error) {
-        setModalError(error instanceof Error ? error.message : "Chargement des chauffeurs impossible.");
+        setDrivers([]);
+        setSelectedDriverId(null);
+        setModalError(getDispatchApiErrorMessage(error, "Chargement des chauffeurs impossible."));
       } finally {
         setModalPending(false);
       }
     },
-    [contextId]
+    [contextId, networkOffline]
   );
 
   const openTransferModal = useCallback(
     async (missionId: number) => {
       if (!contextId) return;
+      if (networkOffline) {
+        setTransferModalMissionId(missionId);
+        setModalError(COMPANY_OFFLINE_ACTION_MESSAGE);
+        setModalPending(false);
+        return;
+      }
       setTransferModalMissionId(missionId);
       setModalError(null);
       setModalPending(true);
@@ -725,7 +810,7 @@ export default function CompanyRidesScreen() {
         setModalPending(false);
       }
     },
-    [contextId]
+    [contextId, networkOffline]
   );
 
   const applyAssign = useCallback(async () => {
@@ -788,28 +873,6 @@ export default function CompanyRidesScreen() {
     }
   }, [activeContext?.context_id, contextId, refresh, selectedPartnerId, transferModalMissionId]);
 
-  const runDispatchNow = useCallback(async () => {
-    if (!contextId) return;
-    setActionPending("dispatch");
-    try {
-      await runCompanyDispatch({ contextId, date: selectedDate });
-      await refresh();
-    } finally {
-      setActionPending(null);
-    }
-  }, [contextId, refresh, selectedDate]);
-
-  const runOptimizerNow = useCallback(async () => {
-    if (!contextId) return;
-    setActionPending("optimizer");
-    try {
-      await runCompanyOptimizer({ contextId, date: selectedDate });
-      await refresh();
-    } finally {
-      setActionPending(null);
-    }
-  }, [contextId, refresh, selectedDate]);
-
   const markUrgentNow = useCallback(
     async (missionId: number) => {
       if (!contextId) return;
@@ -860,18 +923,17 @@ export default function CompanyRidesScreen() {
     setScheduleMissionId(missionId);
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadDispatchMode();
-    }, [loadDispatchMode])
-  );
-
   const handleToggleMissionExpand = useCallback((missionId: number) => {
+    const tapId = beginTapFeedback("rides.expand", "company.rides");
     setExpandedMissionId((prev) => (prev === missionId ? null : missionId));
+    endTapLocal(tapId);
   }, []);
 
   const goRideDetails = useCallback(
     (mission: CompanyDispatchMission) => {
+      const tapId = beginTapFeedback("rides.details", "company.rides");
+      rememberRideDetailSnapshot(mission);
+      recordMissionDetailsPhase("tap");
       emitCompanyDispatchTelemetry(
         "company.dispatch.driver_selected",
         {
@@ -887,6 +949,8 @@ export default function CompanyRidesScreen() {
         pathname: "/(app)/(company)/ride-details",
         params: { rideId: String(mission.mission_id) },
       });
+      endTapNavigation(tapId);
+      recordMissionDetailsPhase("navigation");
     },
     [activeContext?.context_id, router]
   );
@@ -902,7 +966,7 @@ export default function CompanyRidesScreen() {
           <EnterpriseHeader
             metaDetail="networkOnly"
             date={selectedDate}
-            mode={activeMode}
+            mode="manual"
             realtimeStatus={realtimeStatus.status}
             showModeChip={false}
             onOpenDatePicker={() => setDateSheetOpen(true)}
@@ -926,7 +990,11 @@ export default function CompanyRidesScreen() {
           canUrgentRide={canUrgentRide}
           canCancelRide={canCancelRide}
           canScheduleRide={canScheduleRide}
-          contentContainerStyle={[rideStyles.page, rideStyles.listTop]}
+          contentContainerStyle={ridesListContentStyle}
+          searchQuery={search}
+          isDayComplete={isDayComplete}
+          remainingUnloadedCount={dayRemaining}
+          emptyKind={dayEmptyKind}
           refreshControl={
             <RefreshControl
               refreshing={missionsQuery.isFetching && !missionsQuery.isLoading}
@@ -991,24 +1059,12 @@ export default function CompanyRidesScreen() {
             </Pressable>
           ) : null}
         </View>
-        {activeMode !== "manual" ? (
-          <View style={rideStyles.dispatchActionsCard}>
-            <AppButton
-              title={actionPending === "dispatch" ? "Exécution…" : "Lancer le dispatch"}
-              variant="primary"
-              onPress={() => void runDispatchNow()}
-              disabled={!contextId || actionPending !== null || !canDispatchManage}
-              style={rideStyles.actionBtn}
-            />
-            <AppButton
-              title={actionPending === "optimizer" ? "Optimiseur…" : "Lancer l’optimiseur"}
-              variant="secondary"
-              onPress={() => void runOptimizerNow()}
-              disabled={!contextId || actionPending !== null || !canDispatchManage}
-              style={rideStyles.actionBtn}
-            />
-          </View>
-        ) : null}
+        {/* LOCK OFF : gate avant instanciation — aucun hook / GET / CTA moteur. */}
+        <MaybeCompanyRidesEngineActions
+          contextId={contextId}
+          selectedDate={selectedDate}
+          onRan={refresh}
+        />
         {filterNorm === "exceptions" ? (
           <AppText variant="caption" style={rideStyles.exceptionsRouteHint} accessibilityRole="text">
             Vue « exceptions » : filtre local sur l’échéance (pas le comptage moteur). Les puces
@@ -1079,13 +1135,17 @@ export default function CompanyRidesScreen() {
           onToggleExpand={handleToggleMissionExpand}
           onOpenAssign={openAssignModal}
           onGoDetails={goRideDetails}
-          onEdit={setEditMissionId}
+          onEdit={(missionId) => {
+            const tapId = beginTapFeedback("rides.edit", "company.rides");
+            setEditMissionId(missionId);
+            endTapLocal(tapId);
+          }}
           onSchedule={openScheduleModal}
           onTransfer={openTransferModal}
           onCancel={cancelRideNow}
           onMarkUrgent={markUrgentNow}
           listFooterComponent={
-            missionsQuery.error ? (
+            missionsQuery.error && !missionsQuery.data && dayEmptyKind !== "offline_unavailable" ? (
           <View style={rideStyles.opsAlert} accessibilityRole="alert">
             <View style={rideStyles.opsAlertIconWell}>
               <Ionicons name="alert-circle" size={20} color="#B91C1C" />
@@ -1093,73 +1153,107 @@ export default function CompanyRidesScreen() {
             <View style={rideStyles.opsAlertBodyCol}>
               <Text style={rideStyles.opsAlertTitle}>Courses inaccessibles</Text>
               <Text style={rideStyles.opsAlertMessage}>
-                {missionsQuery.error instanceof Error
-                  ? missionsQuery.error.message
-                  : "Erreur de chargement des courses."}
+                {getDispatchApiErrorMessage(missionsQuery.error, "Erreur de chargement des courses.")}
               </Text>
             </View>
           </View>
+            ) : paginationError ? (
+              <View style={rideStyles.dayPaginationHint} accessibilityRole="alert">
+                <Text style={rideStyles.dayPaginationHintText}>
+                  Impossible de charger les courses restantes. Les {dayLoaded} déjà reçues restent visibles.
+                </Text>
+                <Pressable
+                  onPress={() => missionsQuery.retryDayPagination()}
+                  style={({ pressed }) => [
+                    rideStyles.dayPaginationRetry,
+                    pressed ? rideStyles.pressed : null,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reprendre le chargement des courses restantes"
+                >
+                  <Text style={rideStyles.dayPaginationRetryLabel}>Réessayer</Text>
+                </Pressable>
+              </View>
+            ) : dayRemaining > 0 && !isDayComplete ? (
+              <View style={rideStyles.dayPaginationHint} accessibilityRole="text">
+                <Text style={rideStyles.dayPaginationHintText}>
+                  Chargement de {dayRemaining} courses supplémentaires…
+                </Text>
+              </View>
             ) : null
           }
         />
 
       </Screen>
-      <AssignDriverModal
-        visible={assignModalMissionId != null}
-        pending={modalPending}
-        drivers={drivers}
-        selectedDriverId={selectedDriverId}
-        error={modalError}
-        onSelect={setSelectedDriverId}
-        onConfirm={() => void applyAssign()}
-        onClose={() => setAssignModalMissionId(null)}
-        mode={
-          assignModalMissionId != null &&
-          missions.some((m) => m.mission_id === assignModalMissionId && m.driver_id != null)
-            ? "reassign"
-            : "assign"
-        }
-      />
-      <TransferRideModal
-        visible={transferModalMissionId != null}
-        pending={modalPending}
-        options={partnerships}
-        selectedPartnerId={selectedPartnerId}
-        error={modalError}
-        onSelect={setSelectedPartnerId}
-        onConfirm={() => void applyTransfer()}
-        onClose={() => {
-          if (!modalPending) setTransferModalMissionId(null);
-        }}
-      />
-      <RideCreateModal
-        visible={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
-        onCreated={() => void refresh()}
-      />
-      <RideScheduleModal
-        visible={scheduleMissionId != null}
-        missionId={scheduleMissionId}
-        initialScheduledAt={missionBeingScheduled?.scheduled_at ?? null}
-        onClose={() => setScheduleMissionId(null)}
-        onSaved={() => void refresh()}
-      />
-      <RideEditModal
-        visible={editMissionId != null}
-        missionId={editMissionId}
-        detailDate={selectedDate}
-        isGuestMission
-        initial={rideEditInitial}
-        onClose={() => setEditMissionId(null)}
-        onSaved={() => void refresh()}
-      />
+      <Suspense fallback={null}>
+        {assignModalMissionId != null ? (
+          <AssignDriverModal
+            visible
+            pending={modalPending}
+            drivers={drivers}
+            selectedDriverId={selectedDriverId}
+            error={modalError}
+            onSelect={setSelectedDriverId}
+            onConfirm={() => void applyAssign()}
+            onClose={() => setAssignModalMissionId(null)}
+            mode={
+              missions.some((m) => m.mission_id === assignModalMissionId && m.driver_id != null)
+                ? "reassign"
+                : "assign"
+            }
+          />
+        ) : null}
+        {transferModalMissionId != null ? (
+          <TransferRideModal
+            visible
+            pending={modalPending}
+            options={partnerships}
+            selectedPartnerId={selectedPartnerId}
+            error={modalError}
+            onSelect={setSelectedPartnerId}
+            onConfirm={() => void applyTransfer()}
+            onClose={() => {
+              if (!modalPending) setTransferModalMissionId(null);
+            }}
+          />
+        ) : null}
+        {createModalVisible ? (
+          <RideCreateModal
+            visible
+            onClose={() => setCreateModalVisible(false)}
+            onCreated={() => void refresh()}
+          />
+        ) : null}
+        {scheduleMissionId != null ? (
+          <RideScheduleModal
+            visible
+            missionId={scheduleMissionId}
+            initialScheduledAt={missionBeingScheduled?.scheduled_at ?? null}
+            onClose={() => setScheduleMissionId(null)}
+            onSaved={() => void refresh()}
+          />
+        ) : null}
+        {editMissionId != null ? (
+          <RideEditModal
+            visible
+            missionId={editMissionId}
+            detailDate={selectedDate}
+            isGuestMission
+            initial={rideEditInitial}
+            onClose={() => setEditMissionId(null)}
+            onSaved={() => void refresh()}
+          />
+        ) : null}
+      </Suspense>
       <DayPickerSheet
         visible={dateSheetOpen}
         selectedDate={selectedDate}
         onClose={() => setDateSheetOpen(false)}
         onSelectDate={(iso) => {
+          const tapId = beginTapFeedback("rides.date", "company.rides");
           setSelectedDate(iso);
           setDateSheetOpen(false);
+          endTapLocal(tapId);
         }}
       />
     </PermissionGuard>

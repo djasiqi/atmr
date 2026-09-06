@@ -21,6 +21,7 @@ describe("driverAvailabilityBridge", () => {
       hasActiveMission: false,
     });
     expect(r.availabilityPending).toBe(true);
+    expect(r.hold).toBe(true);
     expect(r.trackingEligible).toBe(false);
     expect(r.blocked).toBe(false);
     expect(r.mode).toBe("OFF");

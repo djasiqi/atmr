@@ -4,6 +4,7 @@ import * as Location from "expo-location";
 import { sendDriverLocation } from "../api/driverHttp";
 import { DriverMissionStatus, type DriverMission, type DriverLocationAckStatus } from "../types";
 import { isTrackingActiveStatus } from "../domain/status";
+import type { DriverMissionSnapshot } from "../tracking/resolveMissionSnapshotReady";
 import { resolveMissionTrackingMode } from "../domain/resolveMissionTrackingMode";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
@@ -20,10 +21,25 @@ import { stopMissionLiveActivity } from "../missionBarIOS";
 import {
   ensureNativeTrackingWhileForeground,
   initializeBackgroundLocationTask,
-  resumePendingNativeTrackingIfNeeded,
   setBackgroundTrackingMissionContext,
   stopBackgroundLocationTask,
 } from "./backgroundLocationTask";
+import {
+  isDriverProcessForeground,
+  subscribeDriverProcessForeground,
+} from "../driverForegroundResumeAuthority";
+import {
+  buildGpsControllerDecisionKey,
+  invalidateGpsControllerDecision,
+  isGpsOscillationOpen,
+  recordGpsControllerTransition,
+  resetGpsOscillationOnTrustedSignal,
+  resolveGpsControllerForeground,
+  resolveGpsMissionStartHold,
+  setGpsMissionStartHoldReader,
+  shouldApplyGpsControllerDecision,
+  shouldIgnoreAppStateForGps,
+} from "./gpsAppStateController";
 import { canUseBackgroundLocation } from "./backgroundRuntimeCompat";
 import { formatTrackingSendError } from "./driverTrackingSendErrorFormat";
 import {
@@ -31,6 +47,11 @@ import {
   isPresenceDisclosureAccepted,
 } from "./liveTrackingDisclosureSession";
 import { emitBatteryBaselineIfTracing } from "../../../core/observability/gpsFidelityTrace";
+import {
+  recordBatteryCallback,
+  recordBatteryPutSuccess,
+  setBatteryWatchActive,
+} from "../../../core/observability/batteryEnergyCounters";
 import {
   canAttemptTrackingOperation,
   recordTrackingCircuitFailure,
@@ -46,12 +67,6 @@ import {
 } from "../tracking/trackingSelfHeal";
 import type {
   TrackingDesiredState,
-  TrackingStopOutcome,
-  TrackingStopRequest,
-} from "../tracking/trackingLifecycleOwner";
-export type {
-  TrackingDesiredState,
-  TrackingStopAuthority,
   TrackingStopOutcome,
   TrackingStopRequest,
 } from "../tracking/trackingLifecycleOwner";
@@ -90,6 +105,12 @@ import {
   setTrackingContextLeaseSwitching,
 } from "./trackingContextLease";
 
+export type {
+  TrackingDesiredState,
+  TrackingStopAuthority,
+  TrackingStopOutcome,
+  TrackingStopRequest,
+} from "../tracking/trackingLifecycleOwner";
 export { computeFixAgeMs, WATCH_STALE_MS } from "./driverTrackingFixAge";
 
 const FOREGROUND_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_FOREGROUND_INTERVAL_MS ?? "8000");
@@ -114,6 +135,7 @@ const STALE_FALLBACK_BREAKER_MS = Number(
 );
 let permissionRequestInFlight: Promise<boolean> | null = null;
 let nativeTrackingAppStateSubscribed = false;
+let processForegroundGpsSubscribed = false;
 let stopDriverTrackingInProgress: Promise<void> | null = null;
 /** Génération de cycle de vie : un ancien stop ne peut pas muter une génération plus récente. */
 let lifecycleGeneration = 0;
@@ -124,6 +146,45 @@ let noLocationCallbackTimer: ReturnType<typeof setTimeout> | null = null;
 const NO_LOCATION_CALLBACK_MS = Number(
   process.env.EXPO_PUBLIC_DRIVER_NO_LOCATION_CALLBACK_MS ?? String(3 * 60_000)
 );
+
+/** resolved_none par défaut : les tests et le runtime déjà hydraté ne hold pas. */
+let missionSnapshot: DriverMissionSnapshot = {
+  status: "resolved_none",
+};
+
+function missionSnapshotEquals(
+  left: DriverMissionSnapshot,
+  right: DriverMissionSnapshot
+): boolean {
+  if (left.status !== right.status) return false;
+  if (left.status === "resolved_mission" && right.status === "resolved_mission") {
+    return left.missionId === right.missionId;
+  }
+  return true;
+}
+
+export function setDriverMissionSnapshot(next: DriverMissionSnapshot): void {
+  if (missionSnapshotEquals(missionSnapshot, next)) return;
+  missionSnapshot = next;
+  invalidateGpsControllerDecision();
+  if (next.status !== "pending") {
+    resetGpsOscillationOnTrustedSignal();
+  }
+  emitDriverTelemetry("tracking.mission_snapshot.gate", {
+    source: "driver.tracking.bridge",
+    reason: next.status,
+    mission_id: next.status === "resolved_mission" ? next.missionId : state.missionId,
+  });
+  ensureManagerState();
+}
+
+export function setDriverMissionSnapshotResolved(resolved: boolean): void {
+  setDriverMissionSnapshot(resolved ? { status: "resolved_none" } : { status: "pending" });
+}
+
+export function isDriverMissionSnapshotResolved(): boolean {
+  return missionSnapshot.status !== "pending";
+}
 
 function resolveForegroundIntervalMs(): number {
   if (isFeatureEnabled("driver_capture_aggressive_enabled")) {
@@ -147,11 +208,32 @@ function resolveBridgeDriverId(): number {
   return 0;
 }
 
+function readBridgeGpsMissionStartHold() {
+  const runtime = captureActiveRuntime();
+  return resolveGpsMissionStartHold({
+    snapshot: missionSnapshot,
+    bridgeMissionId: state.missionId,
+    nativeOwnerPresent: runtime != null,
+    presenceWindow: state.missionId == null,
+  });
+}
+
+function reconcileGpsController(source: string, appStateOverride?: AppStateStatus): void {
+  emitDriverTelemetry("tracking.gps.resume_reconcile_only", {
+    source: "driver.tracking.bridge",
+    reason: source,
+    process_foreground: isDriverProcessForeground(),
+  });
+  ensureManagerState(appStateOverride);
+  notifyTrackingBridgeListeners();
+}
+
 function ensureNativeTrackingAppStateListener(): void {
   if (nativeTrackingAppStateSubscribed || Platform.OS === "web") return;
   nativeTrackingAppStateSubscribed = true;
   initializeBackgroundLocationTask();
   ensureTrackingAuthTerminalSubscription();
+  setGpsMissionStartHoldReader(readBridgeGpsMissionStartHold);
   registerTrackingPhysicalStop(async (request) => {
     await stopDriverTrackingBridge({
       expectedTrackingGenerationId: request.expectedTrackingGenerationId,
@@ -160,41 +242,26 @@ function ensureNativeTrackingAppStateListener(): void {
     });
   });
   AppState.addEventListener("change", (next) => {
-    // Toute transition active ↔ background/inactive : recalcul d’éligibilité
-    // puis start / update mode / stop (une seule runtime GPS).
-    ensureManagerState(next);
-    notifyTrackingBridgeListeners();
-
-    if (next === "active") {
-      const runtime = captureActiveRuntime();
-      if (!runtime) {
-        void resumePendingNativeTrackingIfNeeded();
-        return;
-      }
-      void resumePendingNativeTrackingIfNeeded();
-      if (
-        !isRuntimeActive(runtime.identity) ||
-        !isFeatureEnabled("tracking_background_enabled")
-      ) {
-        return;
-      }
-      const missionSnapshot = runtime.missionContext;
-      if (missionSnapshot.missionId != null) {
-        void ensureNativeTrackingWhileForeground(
-          missionSnapshot.missionId,
-          missionSnapshot.missionStatus,
-          {},
-          "app_resume"
-        );
-      } else if (
-        state.driverAvailable &&
-        state.presenceWindowOpen &&
-        isPresenceDisclosureAccepted()
-      ) {
-        void ensurePresenceNativeOwnerInitialized();
-      }
+    if (shouldIgnoreAppStateForGps()) {
+      emitDriverTelemetry("tracking.gps.app_state_ignored", {
+        source: "driver.tracking.bridge",
+        reason: "android_app_state_ignored",
+        app_state: next,
+        process_foreground: isDriverProcessForeground(),
+      });
+      return;
     }
+    // iOS : AppState = cycle processus. Reconcile uniquement, jamais un start direct.
+    reconcileGpsController("ios_app_state", next);
   });
+  if (!processForegroundGpsSubscribed && Platform.OS === "android") {
+    processForegroundGpsSubscribed = true;
+    subscribeDriverProcessForeground(() => {
+      resetGpsOscillationOnTrustedSignal();
+      invalidateGpsControllerDecision();
+      reconcileGpsController("android_process_foreground");
+    });
+  }
 }
 
 type MissionSchedulingSnapshot = Pick<DriverMission, "scheduled_time" | "time_confirmed" | "scheduling">;
@@ -616,7 +683,10 @@ function refreshFsmState(appState: AppStateStatus, fixStale: boolean) {
       eligibility.backgroundPresenceEligible,
     blocked: eligibility.blocked,
     enService: getDriverAvailabilityActive() === true,
-    appForeground: appState === "active",
+    appForeground: resolveGpsControllerForeground({
+      appState,
+      processForeground: isDriverProcessForeground(),
+    }),
     missionLive: resolveTrackingMode(appState) === "mission_live",
     fixStale,
     circuitOpen: !canAttemptTrackingOperation(Date.now(), true),
@@ -640,7 +710,10 @@ function resolveBridgeEligibility(
   return resolveTrackingEligibility({
     driverAvailable,
     presenceWindowOpen: true,
-    appForeground: appState === "active",
+    appForeground: resolveGpsControllerForeground({
+      appState,
+      processForeground: isDriverProcessForeground(),
+    }),
     presenceDisclosureAccepted: isPresenceDisclosureAccepted(),
     permissionsReady: getTrackingPermissionsReady(),
     hasActiveMission: hasActiveMission(),
@@ -656,7 +729,10 @@ function isEligible(
 function resolveExpoLocationAccuracy(appState: AppStateStatus): number {
   const tier = resolvePresenceGpsAccuracy({
     hasActiveMission: hasActiveMission(),
-    appForeground: appState === "active",
+    appForeground: resolveGpsControllerForeground({
+      appState,
+      processForeground: isDriverProcessForeground(),
+    }),
   });
   return tier === "high" ? Location.Accuracy.High : Location.Accuracy.Balanced;
 }
@@ -833,7 +909,8 @@ async function flushPoint(appState: AppStateStatus) {
   const mode = resolveTrackingMode(appState);
   const payloadMode = resolvePayloadLocationMode(mode);
   refreshFsmState(appState, false);
-  const position = await resolvePositionFromWatchOrFallback(appState, mode);
+  const resolved = await resolvePositionFromWatchOrFallback(appState, mode);
+  const position = resolved?.position ?? null;
   if (!position) {
     refreshFsmState(appState, true);
     emitDriverTelemetry("tracking.send.skipped", {
@@ -858,6 +935,7 @@ async function flushPoint(appState: AppStateStatus) {
     missionId: capturedMissionId,
     appState,
     locationMode: payloadMode,
+    energySource: resolved?.source ?? "bridge_tick",
     captureId: createCaptureId(),
     trackingGenerationId: identitySnapshot?.trackingGenerationId ?? null,
     missionContextVersion: missionSnapshot?.missionContextVersion ?? null,
@@ -990,6 +1068,13 @@ async function flushPoint(appState: AppStateStatus) {
       state.lastAckStatus = null;
       throw error;
     }
+    recordBatteryPutSuccess({
+      eventId: fallbackTrackingEventId,
+      recordedAt: nowIso,
+      queuedAtMs: Date.parse(nowIso),
+      trackingMode: payloadMode,
+      appState,
+    });
     state.lastHttpFallbackTrackingEventId = fallbackTrackingEventId;
     state.flushPathUsed = "http_fallback";
   }
@@ -1022,7 +1107,10 @@ async function flushPoint(appState: AppStateStatus) {
 async function resolvePositionFromWatchOrFallback(
   appState: AppStateStatus,
   _mode: DriverTrackingMode
-) {
+): Promise<{
+  position: Location.LocationObject;
+  source: "bridge_tick" | "bridge_fallback_fix";
+} | null> {
   const hasWatch =
     state.lastWatchedPosition !== null && state.lastWatchAtMs !== null;
   if (hasWatch && state.lastWatchedPosition) {
@@ -1032,10 +1120,11 @@ async function resolvePositionFromWatchOrFallback(
     );
     // Même seuil pour tous les modes (plus d'exemption availability_presence).
     if (fixAgeMs < WATCH_STALE_MS) {
-      return state.lastWatchedPosition;
+      return { position: state.lastWatchedPosition, source: "bridge_tick" };
     }
   }
-  return getCurrentPositionWithTimeout(appState);
+  const fallback = await getCurrentPositionWithTimeout(appState);
+  return fallback ? { position: fallback, source: "bridge_fallback_fix" } : null;
 }
 
 function buildActiveMissionSnapshot(): DriverMission | null {
@@ -1084,12 +1173,27 @@ async function ensureLocationWatch(appStateOverride?: AppStateStatus) {
       {
         accuracy,
         distanceInterval: resolveWatchDistanceMeters(),
-        timeInterval: appState === "active" ? resolveForegroundIntervalMs() : BACKGROUND_INTERVAL_MS,
+        timeInterval: resolveGpsControllerForeground({
+          appState,
+          processForeground: isDriverProcessForeground(),
+        })
+          ? resolveForegroundIntervalMs()
+          : BACKGROUND_INTERVAL_MS,
         mayShowUserSettingsDialog: true,
       },
       (position) => {
         state.lastWatchedPosition = position;
         state.lastWatchAtMs = Date.now();
+        const recordedAt =
+          typeof position.timestamp === "number" && Number.isFinite(position.timestamp)
+            ? new Date(position.timestamp).toISOString()
+            : null;
+        recordBatteryCallback({
+          source: "js_watch",
+          recordedAt,
+          trackingMode: resolveTrackingMode(appState),
+          appState,
+        });
         if (
           typeof position.timestamp === "number" &&
           Number.isFinite(position.timestamp)
@@ -1101,6 +1205,7 @@ async function ensureLocationWatch(appStateOverride?: AppStateStatus) {
       }
     );
     state.watchAccuracy = accuracy;
+    setBatteryWatchActive(true);
     emitDriverTelemetry("tracking.watch.started", {
       source: "driver.tracking.bridge",
       mission_id: state.missionId,
@@ -1109,7 +1214,10 @@ async function ensureLocationWatch(appStateOverride?: AppStateStatus) {
       accuracy_tier:
         resolvePresenceGpsAccuracy({
           hasActiveMission: hasActiveMission(),
-          appForeground: appState === "active",
+          appForeground: resolveGpsControllerForeground({
+      appState,
+      processForeground: isDriverProcessForeground(),
+    }),
         }),
     });
   } catch (error) {
@@ -1136,6 +1244,7 @@ function stopLocationWatch() {
   state.watchAccuracy = null;
   state.lastWatchAtMs = null;
   state.lastWatchedPosition = null;
+  setBatteryWatchActive(false);
   notifyTrackingBridgeListeners();
 }
 
@@ -1638,11 +1747,64 @@ export async function hardStopDriverContextRuntime(reason = "context_left_driver
   });
 }
 
+function emitGpsOscillationHold(reason: string): void {
+  emitDriverTelemetry("tracking.gps.oscillation_open", {
+    source: "driver.tracking.bridge",
+    reason,
+    process_foreground: isDriverProcessForeground(),
+  });
+}
+
 function ensureManagerState(appStateOverride?: AppStateStatus) {
+  setGpsMissionStartHoldReader(readBridgeGpsMissionStartHold);
   const appState = appStateOverride ?? trackingManager.getSnapshot().appState;
   const eligibility = resolveBridgeEligibility(appState);
+  const snapshotHold =
+    missionSnapshot.status === "pending"
+      ? "mission_snapshot_pending"
+      : missionSnapshot.status === "resolved_mission" &&
+          state.missionId !== missionSnapshot.missionId
+        ? "mission_snapshot_awaiting_start"
+        : eligibility.hold || eligibility.availabilityPending
+          ? "availability_pending"
+          : null;
+  const decisionKey = buildGpsControllerDecisionKey([
+    snapshotHold ?? "ready",
+    eligibility.mode,
+    eligibility.trackingEligible,
+    state.missionId,
+    state.missionStatus,
+    missionSnapshot.status,
+    missionSnapshot.status === "resolved_mission" ? missionSnapshot.missionId : "",
+    resolveGpsControllerForeground({
+      appState,
+      processForeground: isDriverProcessForeground(),
+    }),
+    getDriverAvailabilityActive(),
+  ]);
+  if (!shouldApplyGpsControllerDecision(decisionKey)) {
+    return;
+  }
+
+  if (snapshotHold) {
+    void syncBridgeQueueDepthFromPersistence();
+    emitDriverTelemetry("tracking.eligibility.hold", {
+      source: "driver.tracking.bridge",
+      reason: snapshotHold,
+      mission_id:
+        snapshotHold === "mission_snapshot_awaiting_start" &&
+        missionSnapshot.status === "resolved_mission"
+          ? missionSnapshot.missionId
+          : state.missionId,
+    });
+    return;
+  }
 
   if (!eligibility.trackingEligible) {
+    if (isGpsOscillationOpen() || recordGpsControllerTransition("stop") === "tripped") {
+      emitGpsOscillationHold("ineligible_tracking_state");
+      return;
+    }
     void syncBridgeQueueDepthFromPersistence();
     // D5 : plus de stopBackgroundLocationTask direct (bypass B2).
     void requestTrackingStop({
@@ -1663,20 +1825,36 @@ function ensureManagerState(appStateOverride?: AppStateStatus) {
   if (eligibility.missionEligible && state.missionId != null) {
     const runtime = captureActiveRuntime();
     const nativeOwner = runtime ? toNativeTrackingOwner(runtime) : undefined;
-    void setBackgroundTrackingMissionContext(
-      state.missionId,
-      state.missionStatus,
-      "mission",
-      state.missionScheduling,
-      nativeOwner
-    );
-    if (isFeatureEnabled("tracking_background_enabled")) {
-      void ensureNativeTrackingWhileForeground(
+    const missionHold = resolveGpsMissionStartHold({
+      snapshot: missionSnapshot,
+      bridgeMissionId: state.missionId,
+      nativeOwnerPresent: nativeOwner != null,
+      presenceWindow: false,
+    });
+    if (missionHold.blocked) {
+      emitDriverTelemetry("tracking.gps.native_start_blocked", {
+        source: "driver.tracking.bridge",
+        reason: missionHold.reason,
+        mission_id: state.missionId,
+      });
+    } else if (isFeatureEnabled("tracking_background_enabled")) {
+      void setBackgroundTrackingMissionContext(
         state.missionId,
         state.missionStatus,
-        { scheduling: state.missionScheduling, nativeOwner },
-        "ensure_manager_state"
+        "mission",
+        state.missionScheduling,
+        nativeOwner
       );
+      if (isGpsOscillationOpen() || recordGpsControllerTransition("start") === "tripped") {
+        emitGpsOscillationHold("ensure_manager_state");
+      } else {
+        void ensureNativeTrackingWhileForeground(
+          state.missionId,
+          state.missionStatus,
+          { scheduling: state.missionScheduling, nativeOwner },
+          "ensure_manager_state"
+        );
+      }
     }
   } else if (eligibility.backgroundPresenceEligible) {
     void ensurePresenceNativeOwnerInitialized();
@@ -1763,6 +1941,8 @@ export function startDriverTrackingBridge(
   state.lastStaleFallbackAttemptMs = null;
   state.lastHttpFallbackTrackingEventId = null;
   resetPermissionState();
+  invalidateGpsControllerDecision();
+  resetGpsOscillationOnTrustedSignal();
   void hideMissionBarAndroid();
   ensureNativeTrackingAppStateListener();
 
@@ -1894,6 +2074,7 @@ export async function stopDriverTrackingBridge(opts?: {
   }
 
   stopDriverTrackingInProgress = (async () => {
+    invalidateGpsControllerDecision();
     clearNoLocationCallbackWatchdog();
     void hideMissionBarAndroid();
     const missionIdForBar = state.missionId;
@@ -1966,6 +2147,10 @@ export function setDriverTrackingPresenceContext(ctx: DriverPresenceContext) {
     presence_window_open: windowOpen,
     mission_id: state.missionId,
   });
+  if (available == null) {
+    notifyTrackingBridgeListeners();
+    return;
+  }
   if (knownAvailable) {
     void ensurePresenceNativeOwnerInitialized().finally(() => {
       ensureManagerState();

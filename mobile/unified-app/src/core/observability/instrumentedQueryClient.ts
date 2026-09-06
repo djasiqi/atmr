@@ -6,6 +6,7 @@ import {
   type InvalidateOptions,
 } from "@tanstack/react-query";
 import { QUERY_STALE_TIME_MS } from "../queryStaleTimes";
+import { DEFAULT_QUERY_GC_TIME_MS } from "../queryCachePolicy";
 import { recordReactQueryRefetch } from "./perfKpi";
 import { traceInvalidateQueries } from "./perfInstrumentation";
 
@@ -26,6 +27,7 @@ export function createInstrumentedQueryClient(): QueryClient {
     defaultOptions: {
       queries: {
         staleTime: QUERY_STALE_TIME_MS.default,
+        gcTime: DEFAULT_QUERY_GC_TIME_MS,
         retry: 1,
         refetchOnMount: "ifStale",
       },

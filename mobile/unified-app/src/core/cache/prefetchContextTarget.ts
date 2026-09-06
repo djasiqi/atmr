@@ -2,15 +2,14 @@ import { QueryClient } from "@tanstack/react-query";
 import type { AuthContext } from "../contracts/auth";
 import { contextScopedKey } from "./contextCache";
 import { QUERY_STALE_TIME_MS } from "../queryStaleTimes";
+import { queryCacheOptions } from "../queryCachePolicy";
 import { driverQueryKeys } from "../../features/driver/queryKeys";
 import { getDriverMissions } from "../../features/driver/api/driverHttp";
 import { fetchHubUnreadCount } from "../../features/driver/messages/api";
 import { companyQueryKeys } from "../../features/company/companyQueryKeys";
 import {
-  getCompanyDispatchDelays,
   getDispatchMissions,
   getDriversLocationsSnapshot,
-  getOptimizerStatus,
   getRealtimeDashboard,
 } from "../../features/company/api/companyApi";
 
@@ -45,52 +44,27 @@ export function prefetchContextTarget(queryClient: QueryClient, target: AuthCont
         date,
       ] as unknown[]),
       queryFn: () => getRealtimeDashboard({ contextId: target.context_id, date }),
-      staleTime: QUERY_STALE_TIME_MS.companyList,
+      ...queryCacheOptions("operational"),
     });
     void queryClient.prefetchQuery({
       queryKey: contextScopedKey(
         target.context_id,
-        [...companyQueryKeys.missions(target.context_id, date, "", "all")] as unknown[]
+        [...companyQueryKeys.missions(target.context_id, date)] as unknown[]
       ),
       queryFn: () =>
         getDispatchMissions({
           contextId: target.context_id,
           date,
         }),
-      staleTime: QUERY_STALE_TIME_MS.companyDetail,
+      ...queryCacheOptions("operational"),
     });
-    const numericCompanyId = target.company_id;
-    if (typeof numericCompanyId === "number" && Number.isFinite(numericCompanyId)) {
-      void queryClient.prefetchQuery({
-        queryKey: ["company", "message-hub", "unread", numericCompanyId],
-        queryFn: () => fetchHubUnreadCount(numericCompanyId),
-        staleTime: QUERY_STALE_TIME_MS.default,
-      });
-    }
-    void queryClient.prefetchQuery({
-      queryKey: contextScopedKey(target.context_id, [
-        ...companyQueryKeys.dispatchDelays(target.context_id, date),
-      ] as unknown[]),
-      queryFn: () =>
-        getCompanyDispatchDelays({
-          contextId: target.context_id,
-          date,
-        }),
-      staleTime: QUERY_STALE_TIME_MS.companyList,
-    });
-    void queryClient.prefetchQuery({
-      queryKey: contextScopedKey(target.context_id, [
-        ...companyQueryKeys.optimizer(target.context_id),
-      ] as unknown[]),
-      queryFn: () => getOptimizerStatus({ contextId: target.context_id }),
-      staleTime: QUERY_STALE_TIME_MS.companyDetail,
-    });
+    // OPT-07A : unread / delays / optimizer hors chemin critique (après premier écran).
     void queryClient.prefetchQuery({
       queryKey: contextScopedKey(target.context_id, [
         ...companyQueryKeys.driversLocations(target.context_id),
       ] as unknown[]),
       queryFn: () => getDriversLocationsSnapshot({ contextId: target.context_id }),
-      staleTime: QUERY_STALE_TIME_MS.companyList,
+      ...queryCacheOptions("realtime"),
     });
   }
 }

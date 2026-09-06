@@ -5,6 +5,7 @@
 import { describe, expect, it } from "@jest/globals";
 
 import {
+  applyLocalLocationFreshness,
   LOCAL_LIVE_MAX_SECONDS,
   LOCAL_RECENT_MAX_SECONDS,
 } from "../../utils/localDriverLocationFreshness";
@@ -15,7 +16,6 @@ import {
   type FleetDriverPresenceInput,
 } from "./driverLocationPresence";
 import { resolveFleetOperationalStatus } from "./fleetMapLogic";
-import { applyLocalLocationFreshness } from "../../utils/localDriverLocationFreshness";
 
 function driver(partial: Partial<FleetDriverPresenceInput> & { driver_id?: number }): FleetDriverPresenceInput {
   return {

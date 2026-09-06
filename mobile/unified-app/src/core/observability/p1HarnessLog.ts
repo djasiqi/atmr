@@ -7,7 +7,6 @@ export function emitP1HarnessLog(
   payload: Record<string, unknown> = {}
 ): void {
   if (typeof __DEV__ !== "undefined" && __DEV__) {
-    // eslint-disable-next-line no-console -- harness debug uniquement
     console.debug(`[p1-harness] ${event}`, payload);
   }
 }

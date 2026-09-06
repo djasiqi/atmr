@@ -1,0 +1,6 @@
+{
+  "name": "driver-process-lifecycle",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "private": true
+}

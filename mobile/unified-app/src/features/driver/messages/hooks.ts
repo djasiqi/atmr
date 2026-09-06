@@ -3,6 +3,7 @@ import { useCallback, useMemo , useEffect, useRef, useState } from "react";
 import { useSession } from "../../../core/sessionProvider";
 import { QUERY_STALE_TIME_MS } from "../../../core/queryStaleTimes";
 import { useActiveDriverContextId } from "../hooks";
+import { useDriverSessionNetworkReady } from "../sessionNetworkGate";
 import { driverQueryKeys } from "../queryKeys";
 import { getDriverMissionEta, getDriverProfile , getDriverMessages } from "../api";
 
@@ -418,10 +419,14 @@ export function useDriverCompanyId(): number | null {
   const { activeContext, bootstrap } = useSession();
   const queryClient = useQueryClient();
   const driverContextId = useActiveDriverContextId();
+  const networkReady = useDriverSessionNetworkReady();
 
   const profileCompanyQuery = useQuery({
     queryKey: ["driver", "hub-company-id", driverContextId ?? "none"],
-    enabled: activeContext?.context_type === "driver" && Boolean(driverContextId),
+    enabled:
+      networkReady &&
+      activeContext?.context_type === "driver" &&
+      Boolean(driverContextId),
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<number | null> => {
       const cached = await readDriverProfileCache({ allowStale: true });
@@ -475,6 +480,7 @@ export function useMessageHubThreads(companyId: number | null) {
   const queryClient = useQueryClient();
   const driverContextId = useActiveDriverContextId();
   const { bootstrap } = useSession();
+  const networkReady = useDriverSessionNetworkReady();
   const myUserId = useMemo(() => {
     const id = bootstrap?.user?.id;
     if (typeof id === "number" && Number.isFinite(id)) return id;
@@ -499,7 +505,7 @@ export function useMessageHubThreads(companyId: number | null) {
 
   const threadsQuery = useQuery({
     queryKey: [...HUB_KEY, "threads", companyId ?? "none", myUserId],
-    enabled: Boolean(companyId),
+    enabled: networkReady && Boolean(companyId),
     queryFn: async (): Promise<{
       threads: MessageHubThread[];
       unread_total: number;
@@ -578,6 +584,7 @@ export function useHubUnreadCount(companyId: number | null) {
   // /driver/me/* car l'endpoint est /messages/<cid>/hub/unread-count).
   const driverContextId = useActiveDriverContextId();
   const { bootstrap } = useSession();
+  const networkReady = useDriverSessionNetworkReady();
   const myUserId = useMemo(() => {
     const id = bootstrap?.user?.id;
     if (typeof id === "number" && Number.isFinite(id)) return id;
@@ -609,7 +616,7 @@ export function useHubUnreadCount(companyId: number | null) {
       }
       return server;
     },
-    enabled: Boolean(companyId && driverContextId),
+    enabled: networkReady && Boolean(companyId && driverContextId),
     refetchInterval: () =>
       realtimeManager.isDriverSocketReady() ? false : 15_000,
     staleTime: QUERY_STALE_TIME_MS.default,
@@ -622,6 +629,7 @@ export function useThreadMessages(
   conversationId?: number | null
 ) {
   const queryClient = useQueryClient();
+  const networkReady = useDriverSessionNetworkReady();
   return useQuery({
     queryKey: buildDriverThreadMessagesKey(companyId, threadId),
     staleTime: THREAD_MESSAGES_STALE_MS,
@@ -884,7 +892,7 @@ export function useThreadMessages(
 
       return loadLegacy();
     },
-    enabled: Boolean(companyId && threadId),
+    enabled: networkReady && Boolean(companyId && threadId),
   });
 }
 
@@ -1010,10 +1018,11 @@ export function useSyncPresenceStatus(httpReachable?: boolean): SyncPresenceStat
 export function useMissionEtaMinutes(bookingId: number | null | undefined, status?: string | null) {
   // P1-C3 : /driver/me/bookings/eta ne doit jamais poller hors contexte chauffeur.
   const driverContextId = useActiveDriverContextId();
+  const networkReady = useDriverSessionNetworkReady();
   return useQuery({
     queryKey: [...HUB_KEY, "eta", bookingId ?? "none"],
     queryFn: () => getDriverMissionEta(bookingId as number, { missionStatus: status }),
-    enabled: Boolean(bookingId && driverContextId),
+    enabled: networkReady && Boolean(bookingId && driverContextId),
     refetchInterval: () =>
       realtimeManager.isDriverSocketReady() ? false : 20_000,
     staleTime: QUERY_STALE_TIME_MS.default,
@@ -1021,6 +1030,7 @@ export function useMissionEtaMinutes(bookingId: number | null | undefined, statu
 }
 
 export function useTeamMemberCount(companyId: number | null) {
+  const networkReady = useDriverSessionNetworkReady();
   return useQuery({
     queryKey: [...HUB_KEY, "team-member-count", companyId ?? "none"],
     queryFn: async () => {
@@ -1030,7 +1040,7 @@ export function useTeamMemberCount(companyId: number | null) {
       }
       return colleagues.length + 1;
     },
-    enabled: Boolean(companyId),
+    enabled: networkReady && Boolean(companyId),
     staleTime: 60_000,
     retry: 2,
     placeholderData: (previous) => previous,

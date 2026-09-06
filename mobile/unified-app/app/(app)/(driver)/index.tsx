@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePerfScreenReady } from "../../../src/core/observability/usePerfScreenReady";
 import { InteractionManager, RefreshControl, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
@@ -14,17 +14,23 @@ import { getDriverStatusUx } from "../../../src/features/driver/statusDictionary
 import { useSession } from "../../../src/core/sessionProvider";
 import type { DriverMission, DriverTransitionStatus } from "../../../src/features/driver/types";
 import { useDriverFloatingTabScrollPadding } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
-import { DashboardMissionListSkeleton } from "../../../src/features/driver/components/DashboardMissionListSkeleton";
+import { DashboardMissionSlotSkeleton } from "../../../src/features/driver/components/DashboardMissionSlotSkeleton";
+import { DashboardMapPlaceholder } from "../../../src/features/driver/components/DashboardMapPlaceholder";
+import {
+  DRIVER_DASHBOARD_MAP_HEIGHT,
+  DRIVER_DASHBOARD_MISSION_SLOT_MIN,
+  DRIVER_DASHBOARD_STATUS_TO_MISSION_GAP,
+  resolveDriverDashboardPrimarySlot,
+} from "../../../src/features/driver/components/driverDashboardShell";
 import { ConfirmCompletionModal } from "../../../src/features/driver/components/ConfirmCompletionModal";
 import { CancelJustificationModal } from "../../../src/features/driver/components/CancelJustificationModal";
 import { ReleaseConfirmationModal } from "../../../src/features/driver/components/ReleaseConfirmationModal";
 import { UnavailableConfirmationModal } from "../../../src/features/driver/components/UnavailableConfirmationModal";
 import { getMissionClientDisplayName } from "../../../src/features/driver/domain/missionDisplay";
-import { DriverStateBanners } from "../../../src/features/driver/components/DriverStateBanners";
-import { DriverTrackingReadinessGate } from "../../../src/features/driver/components/DriverTrackingReadinessGate";
+import { DriverStatusArea } from "../../../src/features/driver/components/DriverHubStatusLine";
+import { measureDriverHubWindowEdge } from "../../../src/features/driver/components/driverHubLayoutMeasure";
 import { useMissionLiveTrackingGuard } from "../../../src/features/driver/hooks/useMissionLiveTrackingGuard";
 import { useTrackingAttentionState } from "../../../src/features/driver/hooks/useTrackingAttentionState";
-import { setDriverTrackingReadinessPanelVisible } from "../../../src/features/driver/services/driverDisclosureOrchestrator";
 import { requiresLiveTrackingPermission } from "../../../src/features/driver/services/missionLiveTrackingEligibility";
 import { DashboardMissionMap } from "../../../src/features/driver/components/DashboardMissionMap";
 import { DashboardActiveMission } from "../../../src/features/driver/components/DashboardActiveMission";
@@ -33,20 +39,11 @@ import { DriverIdleState } from "../../../src/features/driver/components/DriverI
 import { filterNextMissionsOnly } from "../../../src/features/driver/domain/missionGrouping";
 import { useMissionLayout } from "../../../src/features/driver/hooks/useMissionLayout";
 import { AppText, Screen, useAppViewport } from "../../../src/design/responsive";
-import { createShadow } from "../../../src/styles/shadowStyles";
 import { DriverUpcomingMissions } from "../../../src/features/driver/components/DriverUpcomingMissions";
-import {
-  D,
-  dashboardCardShadow,
-} from "../../../src/features/driver/theme/driverDashboardTheme";
-
-const dashboardSurfaceShadow = createShadow(dashboardCardShadow);
+import { D } from "../../../src/features/driver/theme/driverDashboardTheme";
 
 const C = {
   pageBg: D.pageBg,
-  cardBg: D.cardBg,
-  textMuted: D.textMuted,
-  border: D.cardBorder,
   brand: D.brand,
 } as const;
 
@@ -102,9 +99,16 @@ export default function DriverHomeScreen() {
     return () => task.cancel();
   }, [activeMission]);
   const dashboardMapHeight = useMemo(
-    () => Math.min(missionLayout.mapHeight, 142),
+    () => Math.min(missionLayout.mapHeight, DRIVER_DASHBOARD_MAP_HEIGHT),
     [missionLayout.mapHeight]
   );
+  const bootstrapPending =
+    sessionStatus !== "ready" ||
+    (missionsQuery.isLoading && missionsQuery.data === undefined);
+  const primarySlot = resolveDriverDashboardPrimarySlot({
+    pending: bootstrapPending,
+    hasActiveMission: Boolean(activeMission),
+  });
   const {
     isAvailable,
     availabilityPending,
@@ -117,9 +121,6 @@ export default function DriverHomeScreen() {
   const [confirmCompletionOpen, setConfirmCompletionOpen] = useState(false);
   const [cancelMissionOpen, setCancelMissionOpen] = useState(false);
   const [releaseMissionOpen, setReleaseMissionOpen] = useState(false);
-  const bootstrapPending =
-    sessionStatus !== "ready" ||
-    (missionsQuery.isLoading && missionsQuery.data === undefined);
 
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const {
@@ -129,11 +130,6 @@ export default function DriverHomeScreen() {
     dismissPedagogicalPanel,
   } = useTrackingAttentionState();
   const liveTrackingGuard = useMissionLiveTrackingGuard();
-
-  useEffect(() => {
-    setDriverTrackingReadinessPanelVisible(showPedagogicalPanel);
-    return () => setDriverTrackingReadinessPanelVisible(false);
-  }, [showPedagogicalPanel]);
 
   const onOpenMission = useCallback(
     (missionId: number) =>
@@ -200,6 +196,8 @@ export default function DriverHomeScreen() {
     [activeMission, liveTrackingGuard, runMissionTransition]
   );
 
+  const missionSlotRef = useRef<View>(null);
+
   const onMissionReleaseFromDashboard = useCallback(() => {
     if (!activeMission) return;
     setReleaseMissionOpen(true);
@@ -236,26 +234,16 @@ export default function DriverHomeScreen() {
               isAvailable={isAvailable}
               onToggleAvailability={requestToggleAvailability}
               availabilityPending={availabilityPending}
+              renderStatusLine={(idleLabel) => (
+                <DriverStatusArea
+                  idleLabel={idleLabel}
+                  trackingNeedsAttention={showPedagogicalPanel}
+                  trackingOnboarded={trackingOnboarded}
+                  onTrackingReadyChange={onReadinessGateReady}
+                  onDismissTracking={dismissPedagogicalPanel}
+                />
+              )}
             />
-
-            <DriverStateBanners hideTrackingPrepDuplicates={showPedagogicalPanel} />
-
-            {showPedagogicalPanel ? (
-              <DriverTrackingReadinessGate
-                mode={trackingOnboarded ? "needs_attention" : "onboarding"}
-                onReadyChange={onReadinessGateReady}
-                onDismiss={dismissPedagogicalPanel}
-              />
-            ) : null}
-
-            {bootstrapPending ? (
-              <View style={styles.dashboardSection}>
-                <AppText variant="caption" style={styles.sectionHint}>
-                  Chargement de votre mission active…
-                </AppText>
-                <DashboardMissionListSkeleton />
-              </View>
-            ) : null}
 
             {missionsQuery.isError ? (
               <AppText variant="error">
@@ -263,8 +251,16 @@ export default function DriverHomeScreen() {
               </AppText>
             ) : null}
 
-            {!bootstrapPending && activeMission ? (
-              <View style={styles.missionActiveSection}>
+            <View
+              ref={missionSlotRef}
+              style={styles.missionSlot}
+              onLayout={() =>
+                measureDriverHubWindowEdge(missionSlotRef.current, "missionTop")
+              }
+            >
+              {primarySlot === "pending" ? (
+                <DashboardMissionSlotSkeleton />
+              ) : primarySlot === "mission" && activeMission ? (
                 <DashboardActiveMission
                   mission={activeMission}
                   pending={transitionMutation.isPending}
@@ -273,25 +269,37 @@ export default function DriverHomeScreen() {
                   onOpenDetails={() => onOpenMission(activeMission.id)}
                   onOpenChat={onChat}
                 />
-                {deferredMinimap ? (
-                  <DashboardMissionMap mission={activeMission} height={dashboardMapHeight} />
-                ) : (
-                  <View style={{ height: dashboardMapHeight }} />
-                )}
-              </View>
-            ) : !bootstrapPending ? (
-              <DriverIdleState
-                isAvailable={isAvailable}
-                todayMissions={todayMissions}
-              />
-            ) : null}
+              ) : (
+                <DriverIdleState
+                  isAvailable={isAvailable}
+                  todayMissions={todayMissions}
+                />
+              )}
+            </View>
+
+            <View style={[styles.mapSlot, { height: dashboardMapHeight }]}>
+              {primarySlot === "mission" && activeMission && deferredMinimap ? (
+                <DashboardMissionMap mission={activeMission} height={dashboardMapHeight} />
+              ) : (
+                <DashboardMapPlaceholder
+                  height={dashboardMapHeight}
+                  label={
+                    primarySlot === "mission"
+                      ? "Carte en cours…"
+                      : "Localisation en cours…"
+                  }
+                />
+              )}
+            </View>
 
             {!bootstrapPending ? (
-              <DriverUpcomingMissions
-                missions={upcomingMissions}
-                onOpenMission={onOpenMission}
-                onOpenAll={onAllMissions}
-              />
+              <View style={styles.upcomingSlot}>
+                <DriverUpcomingMissions
+                  missions={upcomingMissions}
+                  onOpenMission={onOpenMission}
+                  onOpenAll={onAllMissions}
+                />
+              </View>
             ) : null}
           </Screen>
           <ConfirmCompletionModal
@@ -355,22 +363,18 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingTop: 10,
     paddingBottom: 16,
-    gap: 10,
   },
-  dashboardSection: {
-    backgroundColor: C.cardBg,
-    borderRadius: D.controlRadius,
-    borderWidth: 1,
-    borderColor: C.border,
-    padding: 16,
-    ...dashboardSurfaceShadow,
-  },
-  sectionHint: {
-    marginBottom: 8,
-    color: C.textMuted,
-  },
-  missionActiveSection: {
+  missionSlot: {
     alignSelf: "stretch",
-    gap: 12,
+    marginTop: DRIVER_DASHBOARD_STATUS_TO_MISSION_GAP,
+    minHeight: DRIVER_DASHBOARD_MISSION_SLOT_MIN,
+  },
+  mapSlot: {
+    alignSelf: "stretch",
+    marginTop: 10,
+  },
+  upcomingSlot: {
+    alignSelf: "stretch",
+    marginTop: 10,
   },
 });

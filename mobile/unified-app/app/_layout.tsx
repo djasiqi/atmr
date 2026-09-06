@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SPLASH_BACKGROUND_COLOR } from "../src/core/boot/bootSurface";
 import { QueryProvider } from "../src/core/QueryProvider";
 import { PerfInstrumentationProvider } from "../src/core/observability/PerfInstrumentationProvider";
 import { markBootMilestone } from "../src/core/observability/bootMilestones";
@@ -40,9 +41,6 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded) {
       markBootMilestone("APP_JS_READY");
-      void SplashScreen.hideAsync().catch(() => {
-        // no-op
-      });
     }
   }, [fontsLoaded]);
 
@@ -112,13 +110,9 @@ export default function RootLayout() {
     };
   }, []);
 
-  if (!fontsLoaded) {
-    return null;
-  }
-
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-    <SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: SPLASH_BACKGROUND_COLOR }}>
+    <SafeAreaProvider style={{ flex: 1, backgroundColor: SPLASH_BACKGROUND_COLOR }}>
       <QueryProvider>
         <PerfInstrumentationProvider>
         <MonitoringProvider>
@@ -128,7 +122,12 @@ export default function RootLayout() {
                 <ExternalIntentProvider>
                   <NotificationsProvider>
                     <ChatLayoutKpisProvider>
-                      <Stack screenOptions={{ headerShown: false }}>
+                      <Stack
+                        screenOptions={{
+                          headerShown: false,
+                          contentStyle: { backgroundColor: SPLASH_BACKGROUND_COLOR },
+                        }}
+                      >
                         <Stack.Screen name="index" />
                         <Stack.Screen name="(public)" />
                         <Stack.Screen name="(app)" />

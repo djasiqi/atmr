@@ -10,6 +10,8 @@ type Props = {
   top?: number;
   bottom?: number;
   horizontalInset?: number;
+  /** `stack` : dans le chrome cockpit, pas un overlay flottant indépendant. */
+  placement?: "absolute" | "stack";
   onPressStat?: (key: DashboardCompactStat["key"]) => void;
 };
 
@@ -19,16 +21,23 @@ export function DashboardFloatingStatusBar({
   top,
   bottom,
   horizontalInset = FLEET_COCKPIT.sideGutter,
+  placement = "absolute",
   onPressStat,
 }: Props) {
-  const verticalAnchor =
-    top != null
+  const stacked = placement === "stack";
+  const verticalAnchor = stacked
+    ? null
+    : top != null
       ? ({ top } as const)
       : ({ bottom: bottom ?? 0 } as const);
 
   return (
     <View
-      style={[s.row, verticalAnchor, { left: horizontalInset, right: horizontalInset }]}
+      style={[
+        stacked ? s.rowStacked : s.row,
+        verticalAnchor,
+        stacked ? null : { left: horizontalInset, right: horizontalInset },
+      ]}
       pointerEvents="box-none"
     >
       <View style={[fleetGlassPanel(s.pillGlass), s.pillUnified]}>
@@ -61,6 +70,14 @@ const s = StyleSheet.create({
     zIndex: 35,
     flexDirection: "column",
     alignItems: "center",
+  },
+  rowStacked: {
+    position: "relative",
+    zIndex: 0,
+    alignSelf: "stretch",
+    width: "100%",
+    flexDirection: "column",
+    alignItems: "stretch",
   },
   pillUnified: {
     width: "100%",

@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { act, create } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useDriverRuntimeResume } from "./runtimeResume";
+import {
+  emitDriverProcessForegroundForTests,
+  resetDriverForegroundResumeAuthorityForTests,
+} from "./driverForegroundResumeAuthority";
 
 const mockAddEventListener = jest.fn();
 const mockRemoveAppStateListener = jest.fn();
-let appStateCallback: ((state: "active" | "inactive" | "background") => void) | null = null;
 
 const mockEmitTelemetry = jest.fn();
 const mockBootstrapSession = jest.fn();
@@ -22,7 +25,6 @@ jest.mock("react-native", () => ({
     currentState: "active",
     addEventListener: (event: string, callback: (next: "active" | "inactive" | "background") => void) => {
       mockAddEventListener(event, callback);
-      appStateCallback = callback;
       return { remove: mockRemoveAppStateListener };
     },
   },
@@ -43,6 +45,10 @@ jest.mock("../../core/api/client", () => ({
   refreshAuthTokenNow: () => mockRefreshAuthTokenNow(),
   setResumeAttemptCorrelationId: (value: string | null) =>
     mockSetResumeAttemptCorrelationId(value),
+}));
+
+jest.mock("../../core/auth/authTokenOrchestrator", () => ({
+  refreshAuthTokenSingleflight: () => mockRefreshAuthTokenNow(),
 }));
 
 jest.mock("../../core/realtime/realtimeManager", () => ({
@@ -82,6 +88,7 @@ function getResumeEvents() {
 
 describe("useDriverRuntimeResume", () => {
   beforeEach(() => {
+    resetDriverForegroundResumeAuthorityForTests();
     appStateCallback = null;
     mockAddEventListener.mockReset();
     mockRemoveAppStateListener.mockReset();
@@ -121,8 +128,8 @@ describe("useDriverRuntimeResume", () => {
     });
 
     await act(async () => {
-      appStateCallback?.("inactive");
-      appStateCallback?.("active");
+      emitDriverProcessForegroundForTests(false);
+      emitDriverProcessForegroundForTests(true);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -178,8 +185,8 @@ describe("useDriverRuntimeResume", () => {
     });
 
     await act(async () => {
-      appStateCallback?.("inactive");
-      appStateCallback?.("active");
+      emitDriverProcessForegroundForTests(false);
+      emitDriverProcessForegroundForTests(true);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -230,10 +237,10 @@ describe("useDriverRuntimeResume", () => {
     });
 
     await act(async () => {
-      appStateCallback?.("inactive");
-      appStateCallback?.("active");
-      appStateCallback?.("inactive");
-      appStateCallback?.("active");
+      emitDriverProcessForegroundForTests(false);
+      emitDriverProcessForegroundForTests(true);
+      emitDriverProcessForegroundForTests(false);
+      emitDriverProcessForegroundForTests(true);
       await Promise.resolve();
     });
 
@@ -265,15 +272,15 @@ describe("useDriverRuntimeResume", () => {
     });
 
     await act(async () => {
-      appStateCallback?.("inactive");
-      appStateCallback?.("active");
+      emitDriverProcessForegroundForTests(false);
+      emitDriverProcessForegroundForTests(true);
       await Promise.resolve();
       await Promise.resolve();
     });
 
     await act(async () => {
-      appStateCallback?.("inactive");
-      appStateCallback?.("active");
+      emitDriverProcessForegroundForTests(false);
+      emitDriverProcessForegroundForTests(true);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -315,8 +322,8 @@ describe("useDriverRuntimeResume", () => {
     });
 
     await act(async () => {
-      appStateCallback?.("inactive");
-      appStateCallback?.("active");
+      emitDriverProcessForegroundForTests(false);
+      emitDriverProcessForegroundForTests(true);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -361,15 +368,15 @@ describe("useDriverRuntimeResume", () => {
     });
 
     await act(async () => {
-      appStateCallback?.("inactive");
-      appStateCallback?.("active");
+      emitDriverProcessForegroundForTests(false);
+      emitDriverProcessForegroundForTests(true);
       await Promise.resolve();
       await Promise.resolve();
     });
 
     await act(async () => {
-      appStateCallback?.("inactive");
-      appStateCallback?.("active");
+      emitDriverProcessForegroundForTests(false);
+      emitDriverProcessForegroundForTests(true);
       await Promise.resolve();
       await Promise.resolve();
     });

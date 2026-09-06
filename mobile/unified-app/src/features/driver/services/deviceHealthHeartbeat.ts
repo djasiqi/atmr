@@ -18,6 +18,7 @@ import * as Location from "expo-location";
 import { AppState, AppStateStatus, Platform } from "react-native";
 
 import { resolveDeviceRuntimeMetadata } from "../../../core/device/deviceRuntimeMetadata";
+import { isDriverSessionNetworkReady } from "../../../core/network/driverSessionNetworkGate";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { getTrackingRuntimeSnapshot } from "./trackingRuntime";
 import {
@@ -672,6 +673,14 @@ function getApiClient(): ApiClientLike | null {
 }
 
 export async function sendDeviceHealth(payload: DeviceHealthRequestPayload): Promise<void> {
+  if (!isDriverSessionNetworkReady()) {
+    emitDriverTelemetry("tracking.device_health.send_skipped", {
+      source: "driver.device_health",
+      reason: "session_not_ready",
+      trigger_reason: payload.trigger_reason ?? null,
+    });
+    return;
+  }
   const now = Date.now();
   const triggerReason = payload.trigger_reason ?? null;
   const criticalSignal =

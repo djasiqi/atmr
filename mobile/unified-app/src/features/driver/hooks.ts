@@ -49,6 +49,8 @@ import { DriverMission, DriverMissionStatus, DriverTransitionStatus } from "./ty
 import { normalizeDriverMissionStatus } from "./statusDictionary";
 import { isTrackingActiveStatus } from "./domain/status";
 import { useDriverRuntimeResume } from "./runtimeResume";
+import { useDriverSessionNetworkReady } from "./sessionNetworkGate";
+import { wasDriverForegroundResumeRecent } from "./driverForegroundResumeAuthority";
 
 export function useActiveDriverContextId(): string | null {
   const { activeContext } = useSession();
@@ -56,12 +58,19 @@ export function useActiveDriverContextId(): string | null {
   return activeContext.context_id;
 }
 
+function useDriverNetworkQueriesEnabled(extra = true): boolean {
+  const contextId = useActiveDriverContextId();
+  const networkReady = useDriverSessionNetworkReady();
+  return Boolean(contextId) && networkReady && extra;
+}
+
 export function useDriverMissionsQuery() {
   const contextId = useActiveDriverContextId();
+  const networkReady = useDriverNetworkQueriesEnabled();
   return useQuery({
     queryKey: contextId ? driverQueryKeys.missions(contextId) : ["driver-missions", "disabled"],
     queryFn: getDriverMissions,
-    enabled: Boolean(contextId),
+    enabled: networkReady,
     staleTime: QUERY_STALE_TIME_MS.default,
   });
 }
@@ -75,12 +84,13 @@ function getLocalDayStartIso(): string {
 /** Missions modifiées depuis le début de journée locale (inclut statuts terminaux). */
 export function useDriverTodayMissionsQuery() {
   const contextId = useActiveDriverContextId();
+  const networkReady = useDriverNetworkQueriesEnabled();
   return useQuery({
     queryKey: contextId
       ? [...driverQueryKeys.missions(contextId), "today-since-local-day-start"]
       : ["driver-missions-today", "disabled"],
     queryFn: () => getDriverMissionsSince(getLocalDayStartIso()),
-    enabled: Boolean(contextId),
+    enabled: networkReady,
     staleTime: QUERY_STALE_TIME_MS.default,
   });
 }
@@ -88,25 +98,27 @@ export function useDriverTodayMissionsQuery() {
 /** Transports de l’entreprise prévus aujourd’hui (collègues inclus) — `/driver/me/company-bookings/today`. */
 export function useDriverCompanyBookingsTodayQuery() {
   const contextId = useActiveDriverContextId();
+  const networkReady = useDriverNetworkQueriesEnabled();
   return useQuery({
     queryKey: contextId
       ? driverQueryKeys.companyBookingsToday(contextId)
       : ["driver-company-bookings-today", "disabled"],
     queryFn: getDriverCompanyBookingsToday,
-    enabled: Boolean(contextId),
+    enabled: networkReady,
     staleTime: QUERY_STALE_TIME_MS.default,
   });
 }
 
 export function useDriverMissionDetailQuery(missionId: number | null) {
   const contextId = useActiveDriverContextId();
+  const networkReady = useDriverNetworkQueriesEnabled(Boolean(missionId));
   return useQuery({
     queryKey:
       contextId && missionId
         ? driverQueryKeys.missionDetail(contextId, missionId)
         : ["driver-mission-detail", "disabled", missionId ?? "none"],
     queryFn: () => getDriverMissionDetail(missionId as number),
-    enabled: Boolean(contextId && missionId),
+    enabled: networkReady,
     staleTime: QUERY_STALE_TIME_MS.default,
   });
 }
@@ -116,6 +128,7 @@ export function useDynamicEtaQuery(
   options?: { missionStatus?: string | null }
 ) {
   const contextId = useActiveDriverContextId();
+  const networkReady = useDriverNetworkQueriesEnabled(Boolean(missionId));
   return useQuery({
     queryKey:
       contextId && missionId
@@ -125,7 +138,7 @@ export function useDynamicEtaQuery(
       getDriverMissionEta(missionId as number, {
         missionStatus: options?.missionStatus ?? null,
       }),
-    enabled: Boolean(contextId && missionId),
+    enabled: networkReady,
     refetchInterval: () => {
       const status = String(options?.missionStatus ?? "").toUpperCase();
       if (
@@ -326,8 +339,10 @@ export function useDriverRealtimeSync() {
     void driverOfflineQueue.setActiveContext(contextId ?? null);
   }, [contextId]);
 
+  const networkReady = useDriverSessionNetworkReady();
+
   useEffect(() => {
-    if (!contextId) return;
+    if (!contextId || !networkReady) return;
     const dispose = startDriverRealtimeBridge(queryClient, contextId, {
       enableSocket,
       getMissionPresence,
@@ -343,7 +358,7 @@ export function useDriverRealtimeSync() {
         disposeSyncEngine();
       }
     };
-  }, [contextId, queryClient, enableSocket, getMissionPresence]);
+  }, [contextId, queryClient, enableSocket, getMissionPresence, networkReady]);
 
   useDriverRuntimeResume({
     contextId,
@@ -534,6 +549,7 @@ export function useDriverMissionsListFocusResync() {
   useFocusEffect(
     useCallback(() => {
       if (!contextId) return;
+      if (wasDriverForegroundResumeRecent(2500)) return;
       const now = Date.now();
       if (now < contextSwitchGraceUntilRef.current) return;
       // Anti-doublon : si on a déjà resync il y a < 1.5 s, on saute

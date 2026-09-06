@@ -3,6 +3,8 @@ import {
   getDriverTrackingBridgeSnapshot,
   hardStopDriverContextRuntime,
   requestTrackingStop,
+  setDriverMissionSnapshot,
+  setDriverMissionSnapshotResolved,
   setDriverTrackingPresenceContext,
   startDriverTrackingBridge,
   stopDriverTrackingBridge,
@@ -10,6 +12,8 @@ import {
   __getLifecycleGenerationForTests,
 } from "./driverTrackingBridge";
 import { driverTrackingQueue } from "./driverTrackingQueue";
+import { resetGpsAppStateControllerForTests } from "./gpsAppStateController";
+import { emitDriverProcessForegroundForTests } from "../driverForegroundResumeAuthority";
 import {
   markPresenceDisclosureAccepted,
   __resetLiveTrackingDisclosureSessionForTests,
@@ -52,7 +56,7 @@ const mockAsyncStorage = {
 // `var` : accessible dans la factory jest.mock (hoisting).
 // eslint-disable-next-line no-var
 var __appStateTest: {
-  handlers: Array<(state: "active" | "inactive" | "background") => void>;
+  handlers: ((state: "active" | "inactive" | "background") => void)[];
   currentState: "active" | "inactive" | "background";
 } = { handlers: [], currentState: "active" };
 
@@ -244,6 +248,9 @@ describe("driver tracking bridge", () => {
     mockWatchPositionAsync.mockResolvedValue({ remove: jest.fn() } as any);
     mockSendDriverLocation.mockResolvedValue({ ack_status: "accepted" });
     await stopDriverTrackingBridge();
+    resetGpsAppStateControllerForTests();
+    emitDriverProcessForegroundForTests(true);
+    setDriverMissionSnapshotResolved(true);
     markPresenceDisclosureAccepted();
     setDriverTrackingPresenceContext({ available: false, windowOpen: false });
   });
@@ -255,6 +262,7 @@ describe("driver tracking bridge", () => {
     bg.stopBackgroundLocationTask.mockReset();
     bg.stopBackgroundLocationTask.mockResolvedValue({ nativeStopped: true });
     await stopDriverTrackingBridge();
+    setDriverMissionSnapshotResolved(true);
     setDriverTrackingPresenceContext({ available: false, windowOpen: false });
     __resetLiveTrackingDisclosureSessionForTests();
     jest.useRealTimers();
@@ -382,6 +390,41 @@ describe("driver tracking bridge", () => {
   });
 
   describe("présence par en_service (contrat GPS v4) + transitions AppState", () => {
+    it("DRIVER-RUNTIME-01B : snapshot pending bloque aussi PRESENCE", async () => {
+      setDriverMissionSnapshotResolved(false);
+      markPresenceDisclosureAccepted();
+      setDriverTrackingPresenceContext({ available: true, windowOpen: true });
+      await jest.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+
+      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(false);
+      expect(mockEmitDriverTelemetry).toHaveBeenCalledWith(
+        "tracking.eligibility.hold",
+        expect.objectContaining({ reason: "mission_snapshot_pending" })
+      );
+
+      mockEmitDriverTelemetry.mockClear();
+      setDriverMissionSnapshotResolved(true);
+      await jest.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+
+      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
+    });
+
+    it("DRIVER-RUNTIME-01C-B : resolved_mission sans start bridge reste HOLD (pas PRESENCE)", async () => {
+      setDriverMissionSnapshot({ status: "resolved_mission", missionId: 45711 });
+      markPresenceDisclosureAccepted();
+      setDriverTrackingPresenceContext({ available: true, windowOpen: true });
+      await jest.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+
+      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(false);
+      expect(mockEmitDriverTelemetry).toHaveBeenCalledWith(
+        "tracking.eligibility.hold",
+        expect.objectContaining({ reason: "mission_snapshot_awaiting_start" })
+      );
+    });
+
     it("available + FG hors ancienne fenêtre + permissions => tracking ON", async () => {
       markPresenceDisclosureAccepted();
       setDriverTrackingPresenceContext({ available: true, windowOpen: false });
@@ -422,7 +465,7 @@ describe("driver tracking bridge", () => {
       expect(mockWatchPositionAsync).not.toHaveBeenCalled();
     });
 
-    it("dans la fenêtre FG → BG => reste ON et passe High → Balanced", async () => {
+    it("Android : AppState transitoire n’arrête pas le GPS ; High → Balanced seulement sur process BG", async () => {
       markPresenceDisclosureAccepted();
       setDriverTrackingPresenceContext({ available: true, windowOpen: true });
       await jest.advanceTimersByTimeAsync(0);
@@ -436,8 +479,54 @@ describe("driver tracking bridge", () => {
       await jest.advanceTimersByTimeAsync(0);
       await Promise.resolve();
       expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
+      expect(mockWatchPositionAsync).not.toHaveBeenCalled();
+
+      emitDriverProcessForegroundForTests(false);
+      await jest.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
       const bgOpts = mockWatchPositionAsync.mock.calls.at(-1)?.[0] as { accuracy?: string };
       expect(bgOpts?.accuracy).toBe("balanced");
+    });
+
+    it("DRIVER-COLD P0 : AppState ignored + awaiting_start = 0 start/stop GPS", async () => {
+      markPresenceDisclosureAccepted();
+      setDriverTrackingPresenceContext({ available: true, windowOpen: true });
+      await jest.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+      expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
+
+      const bg = require("./backgroundLocationTask") as {
+        ensureNativeTrackingWhileForeground: jest.Mock;
+        stopBackgroundLocationTask: jest.Mock;
+      };
+      setDriverMissionSnapshot({ status: "resolved_mission", missionId: 45711 });
+      await Promise.resolve();
+
+      bg.ensureNativeTrackingWhileForeground.mockClear();
+      bg.stopBackgroundLocationTask.mockClear();
+      mockEmitDriverTelemetry.mockClear();
+
+      for (let i = 0; i < 40; i += 1) {
+        emitAppState(i % 2 === 0 ? "background" : "active");
+      }
+      await Promise.resolve();
+
+      expect(bg.ensureNativeTrackingWhileForeground).not.toHaveBeenCalled();
+      expect(
+        bg.stopBackgroundLocationTask.mock.calls.filter(
+          (call: unknown[]) => call[0] === "ineligible_tracking_state"
+        )
+      ).toHaveLength(0);
+      expect(mockEmitDriverTelemetry).toHaveBeenCalledWith(
+        "tracking.gps.app_state_ignored",
+        expect.objectContaining({ reason: "android_app_state_ignored" })
+      );
+      expect(
+        bg.ensureNativeTrackingWhileForeground.mock.calls.some(
+          (call: unknown[]) => call[3] === "app_resume"
+        )
+      ).toBe(false);
     });
 
     it("available=false stoppe la présence même en FG", async () => {

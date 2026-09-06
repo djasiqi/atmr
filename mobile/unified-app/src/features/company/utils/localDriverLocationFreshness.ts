@@ -53,22 +53,28 @@ function ageToFreshStatus(age: number): "live" | "recent" | "stale" {
   return "stale";
 }
 
+export function lastSeenAtOf(driver: {
+  recorded_at?: string | null;
+  timestamp?: string | null;
+}): string | null {
+  return driver.recorded_at ?? driver.timestamp ?? null;
+}
+
 /**
- * Recalcule last_seen_seconds ; peut dégrader location_status live/recent.
+ * État fonctionnel live → recent → stale à partir de last_seen_at.
  * Ne promeut jamais stale/last_known/offline → live/recent.
- * Ne doit plus écraser tracking_display_status ni position_source.
+ * N’écrit pas last_seen_seconds.
  */
-export function applyLocalLocationFreshness<
-  T extends {
+export function resolveFunctionalLocationStatus(
+  driver: {
     recorded_at?: string | null;
     timestamp?: string | null;
     last_seen_seconds?: number | null;
     location_status?: string | null;
-    tracking_display_status?: string | null;
-    position_source?: string | null;
   },
->(driver: T, nowMs: number = Date.now()): T {
-  const recordedAt = driver.recorded_at ?? driver.timestamp ?? null;
+  nowMs: number = Date.now()
+): string | null | undefined {
+  const recordedAt = lastSeenAtOf(driver);
   const ageFromTs = localAgeSecondsFromRecordedAt(recordedAt, nowMs);
   const age =
     ageFromTs != null
@@ -80,28 +86,41 @@ export function applyLocalLocationFreshness<
         : null;
 
   const current = normalizeStatus(driver.location_status);
-  let nextLocationStatus: string | null | undefined = driver.location_status;
 
   if (current === "stale" || current === "last_known") {
-    nextLocationStatus = current;
-  } else if (current === "offline") {
-    nextLocationStatus = "last_known";
-  } else if (current === "live" || current === "recent") {
-    if (age != null) {
-      const fromAge = ageToFreshStatus(age);
-      if (current === "recent" && fromAge === "live") {
-        nextLocationStatus = "recent";
-      } else {
-        nextLocationStatus = fromAge;
-      }
-    }
-  } else if (!current && age != null) {
-    nextLocationStatus = ageToFreshStatus(age);
+    return current;
   }
+  if (current === "offline") {
+    return "last_known";
+  }
+  if (current === "live" || current === "recent") {
+    if (age == null) return driver.location_status;
+    const fromAge = ageToFreshStatus(age);
+    if (current === "recent" && fromAge === "live") return "recent";
+    return fromAge;
+  }
+  if (!current && age != null) return ageToFreshStatus(age);
+  return driver.location_status;
+}
 
+/**
+ * Dégrade location_status au franchissement d’état seulement.
+ * last_seen_at (recorded_at) et last_seen_seconds restent ceux de la source.
+ */
+export function applyLocalLocationFreshness<
+  T extends {
+    recorded_at?: string | null;
+    timestamp?: string | null;
+    last_seen_seconds?: number | null;
+    location_status?: string | null;
+    tracking_display_status?: string | null;
+    position_source?: string | null;
+  },
+>(driver: T, nowMs: number = Date.now()): T {
+  const nextLocationStatus = resolveFunctionalLocationStatus(driver, nowMs);
+  if (nextLocationStatus === driver.location_status) return driver;
   return {
     ...driver,
-    last_seen_seconds: age,
     location_status: nextLocationStatus as T["location_status"],
   };
 }

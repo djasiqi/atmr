@@ -31,6 +31,7 @@ import { resolveGoogleMapsNativeApiKey } from "../../../../config/googleMapsKeys
 
 import { FLEET_UI, fleetGlassPanel } from "./fleetMapUiTokens";
 import { DriverFocusPanelSections } from "./driverFocusPanelSections";
+import { resolveUpcomingRidesBottomOffset } from "../dashboard/companyFleetCockpitLayout";
 
 
 
@@ -146,8 +147,7 @@ export function DriverBottomSheet({
   const resolvedDriver = driver ?? peekDriver;
   const showPeek = compact && !driver && !!peekDriver;
   const hasUpcomingSource = upcomingMissions != null;
-  const peekBottomOffset =
-    bottomOffset > 0 ? Math.max(6, Math.min(14, bottomOffset)) : bottomOffset;
+  const peekBottomOffset = resolveUpcomingRidesBottomOffset(bottomOffset);
 
   if (compact && inlineTableOnly && hasUpcomingSource) {
     const selected = driver ?? null;

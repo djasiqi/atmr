@@ -216,6 +216,30 @@ function checkEasProduction() {
   checkGpsProductionReadiness(prodEnv);
 }
 
+function checkSplashNativeBranding() {
+  const appJsonPath = path.join(ROOT, "app.json");
+  if (!fs.existsSync(appJsonPath)) {
+    errors.push("❌ app.json introuvable — splash natif non vérifiable");
+    return;
+  }
+  const appJson = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
+  const splashPlugin = (appJson.expo?.plugins ?? []).find(
+    (entry) => Array.isArray(entry) && entry[0] === "expo-splash-screen"
+  );
+  const cfg = splashPlugin?.[1] ?? {};
+  const image = typeof cfg.image === "string" ? cfg.image : "";
+  const okColor = cfg.backgroundColor === "#EAF3F1";
+  const okImage = image.includes("lirie-logo-color.png");
+  const okWidth = cfg.imageWidth === 220;
+  if (okColor && okImage && okWidth) {
+    checks.push("✅ Splash natif Expo : #EAF3F1 + lirie-logo-color.png (imageWidth 220)");
+    return;
+  }
+  errors.push(
+    "❌ Splash natif Expo : attendu backgroundColor #EAF3F1, image lirie-logo-color.png, imageWidth 220"
+  );
+}
+
 function checkNativeDirsAbsentForEas() {
   for (const dir of ["android", "ios"]) {
     const fullPath = path.join(ROOT, dir);
@@ -235,9 +259,10 @@ checkDisplayName();
 checkGitTracked("assets/images/icon.png", "Icône store (512, icon.png)");
 checkGitTracked("assets/images/adaptive-foreground.png", "Adaptive Android (1024, zone sûre ~66 %, adaptive-foreground.png)");
 checkGitTracked("assets/images/apple-touch-icon.png", "Apple touch web (180, apple-touch-icon.png)");
-checkGitTracked("assets/images/splash-solid.png", "Splash couleur unie (#EAF3F1, splash-solid.png)");
+checkGitTracked("assets/images/splash-solid.png", "Ancienne plaque splash (#EAF3F1, splash-solid.png)");
 checkGitTracked("assets/images/favicon.png", "Favicon Expo web (96, favicon.png)");
-checkFile("assets/images/lirie-logo-color.png", "Logo UI (écrans login/signup, lirie-logo-color.png)", true);
+checkFile("assets/images/lirie-logo-color.png", "Logo splash natif + UI (lirie-logo-color.png)", true);
+checkSplashNativeBranding();
 checkFile("app.config.js", "app.config.js", true);
 checkFile("eas.json", "eas.json", true);
 

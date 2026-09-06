@@ -2,22 +2,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useChatVoiceRecorder } from "../../chat/services/audioAdapter";
-import {
-  invalidateDriverHubScope,
-  useDriverCompanyId,
-} from "../messages/hooks";
-import { MESSAGE_HUB_THREAD_TEAM } from "../messages/contracts";
-import { sendDriverHubVoiceMessage } from "../messages/sendDriverHubVoiceMessage";
+import { invalidateDriverHubScope, useDriverCompanyId } from "../messages/hooks";
+import { MESSAGE_HUB_THREAD_DISPATCH } from "../messages/contracts";
+import { sendBottomBarDispatchVoiceMessage } from "./bottomBarDispatchVoice";
 
 const MIN_VOICE_MS = 450;
 
-export type DriverTeamVoiceFeedback = {
+export type DriverDispatchVoiceFeedback = {
   message: string;
+  tone: "success" | "error";
   openSettings?: boolean;
+  onRetry?: () => void;
 };
 
-export function useDriverTeamVoiceBroadcast(options?: {
-  onFeedback?: (feedback: DriverTeamVoiceFeedback | null) => void;
+export function useDriverDispatchVoiceBroadcast(options?: {
+  onFeedback?: (feedback: DriverDispatchVoiceFeedback | null) => void;
 }) {
   const companyId = useDriverCompanyId();
   const queryClient = useQueryClient();
@@ -28,6 +27,7 @@ export function useDriverTeamVoiceBroadcast(options?: {
   const [voiceBusy, setVoiceBusy] = useState(false);
   const voiceInteractionEpochRef = useRef(0);
   const pressStartMsRef = useRef(0);
+  const retryUriRef = useRef<string | null>(null);
 
   const disabled = Platform.OS === "web";
 
@@ -38,9 +38,53 @@ export function useDriverTeamVoiceBroadcast(options?: {
     onFeedbackRef.current?.(null);
   }, []);
 
-  const reportError = useCallback((message: string, openSettings = false) => {
-    onFeedbackRef.current?.({ message, openSettings });
+  const reportError = useCallback((message: string, extras?: { openSettings?: boolean }) => {
+    onFeedbackRef.current?.({
+      message,
+      tone: "error",
+      openSettings: extras?.openSettings,
+    });
   }, []);
+
+  const publishDispatchVoice = useCallback(
+    async (localUri: string) => {
+      if (!companyId) {
+        reportError("Connexion indisponible. Réessayez.");
+        return;
+      }
+      try {
+        await sendBottomBarDispatchVoiceMessage(localUri, { companyId });
+        retryUriRef.current = null;
+        invalidateDriverHubScope(queryClient, companyId, {
+          threadId: MESSAGE_HUB_THREAD_DISPATCH,
+          includeMessages: true,
+        });
+        onFeedbackRef.current?.({
+          message: "✓ Audio envoyé dans Dispatch",
+          tone: "success",
+        });
+      } catch {
+        retryUriRef.current = localUri;
+        onFeedbackRef.current?.({
+          message: "Audio non envoyé. Réessayer",
+          tone: "error",
+          onRetry: () => {
+            const uri = retryUriRef.current;
+            if (!uri || voiceBusy) return;
+            void (async () => {
+              setVoiceBusy(true);
+              try {
+                await publishDispatchVoice(uri);
+              } finally {
+                setVoiceBusy(false);
+              }
+            })();
+          },
+        });
+      }
+    },
+    [companyId, queryClient, reportError, voiceBusy]
+  );
 
   const finalizeRecording = useCallback(async () => {
     if (voiceBusy || !companyId) return;
@@ -63,35 +107,11 @@ export function useDriverTeamVoiceBroadcast(options?: {
         reportError("Enregistrement trop court. Appuyez sur le micro et parlez.");
         return;
       }
-      await sendDriverHubVoiceMessage(result.data, { companyId });
-      invalidateDriverHubScope(queryClient, companyId, {
-        threadId: MESSAGE_HUB_THREAD_TEAM,
-        includeMessages: true,
-      });
-      clearFeedback();
-    } catch (err) {
-      const apiMessage =
-        err && typeof err === "object" && "response" in err
-          ? (err as { response?: { data?: { error?: string; message?: string } } })
-              .response?.data?.error
-            || (err as { response?: { data?: { error?: string; message?: string } } })
-              .response?.data?.message
-          : null;
-      const detail =
-        typeof apiMessage === "string" && apiMessage.trim()
-          ? apiMessage.trim()
-          : err instanceof Error && err.message
-            ? err.message
-            : null;
-      reportError(
-        detail
-          ? `Impossible d'envoyer le message vocal au canal équipe. ${detail}`
-          : "Impossible d'envoyer le message vocal au canal équipe.",
-      );
+      await publishDispatchVoice(result.data);
     } finally {
       setVoiceBusy(false);
     }
-  }, [clearFeedback, companyId, queryClient, reportError, stopRecording, voiceBusy]);
+  }, [companyId, publishDispatchVoice, reportError, stopRecording, voiceBusy]);
 
   const startRecordingSession = useCallback(
     async (attemptEpoch: number) => {
@@ -110,7 +130,7 @@ export function useDriverTeamVoiceBroadcast(options?: {
             void Linking.openSettings();
             reportError(
               "Activez le micro dans les réglages du téléphone pour envoyer des messages vocaux.",
-              true
+              { openSettings: true }
             );
           } else if (started.reason !== "aborted") {
             reportError("Impossible de démarrer l'enregistrement vocal.");

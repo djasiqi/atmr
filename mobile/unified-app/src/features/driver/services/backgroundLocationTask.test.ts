@@ -230,6 +230,9 @@ function sampleLocation(i: number) {
 
 describe("backgroundLocationTask", () => {
   beforeEach(() => {
+    const gps =
+      require("./gpsAppStateController") as typeof import("./gpsAppStateController");
+    gps.resetGpsAppStateControllerForTests();
     trackingRuntime.__resetTrackingRuntimeForTests();
     const registry =
       require("./trackingRuntimeRegistry") as typeof import("./trackingRuntimeRegistry");
@@ -317,6 +320,18 @@ describe("backgroundLocationTask", () => {
       })
     );
     expect(trackingRuntime.getTrackingRuntimeSnapshot().lastNativeStartError).toContain("test_start");
+  });
+
+  it("DRIVER-COLD P0 : app_resume ne démarre pas le service natif", async () => {
+    bgTask.initializeBackgroundLocationTask();
+    mockStart.mockClear();
+    await bgTask.ensureNativeTrackingWhileForeground(42, "EN_ROUTE", {}, "app_resume");
+    await bgTask.ensureNativeTrackingWhileForeground(42, "EN_ROUTE", {}, "app_resume_pending");
+    expect(mockStart).not.toHaveBeenCalled();
+    expect(mockEmit).toHaveBeenCalledWith(
+      "tracking.gps.resume_reconcile_only",
+      expect.objectContaining({ reason: "app_resume" })
+    );
   });
 
   it("passes killServiceOnDestroy false in foregroundService options", async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "../../../../core/sessionProvider";
 import type { CompanyDispatchMission, CompanyDriverLiveLocation } from "../../api/contracts";
 import { buildFleetDelayHeatmapPoints } from "./fleetMapGeo";
@@ -48,6 +48,10 @@ import {
 } from "./fleetMapFitPadding";
 import type { ImminentDeparturesResult } from "../../dashboard/cockpit/imminentDepartures";
 import { buildImminentDepartures } from "../../dashboard/cockpit/imminentDepartures";
+import {
+  measureCompanyDashboardPhase,
+  recordCompanyDashboardPhase,
+} from "../../observability/companyDashboardPhases";
 
 export type FleetMapController = {
   recenter: (mode?: FleetMapRecenterMode) => void;
@@ -76,10 +80,17 @@ type Options = {
   inlineDriverSelection?: boolean;
   /** Synchronise la sélection depuis le parent (ex. désélection via panneau ops). */
   syncSelectedDriverId?: number | null;
+  /** Focus explicite depuis la feuille couverture GPS — recentre + sélection visuelle. */
+  focusDriverRequest?: { driverId: number; nonce: number } | null;
   /** Avant recentrage explicite (bouton / sélection) — réautorise la caméra auto. */
   onBeforeExplicitRecenter?: () => void;
   /** Pan / zoom manuel sur la carte native. */
   onUserCameraGesture?: () => void;
+  /**
+   * false = écran monté hors focus : geler enrich / cluster / decay / recentrages auto.
+   * L’état (sélection, viewport) est conservé.
+   */
+  visualWorkEnabled?: boolean;
 };
 
 function computeMissionRouteFocusRegion(
@@ -139,8 +150,10 @@ export function useOperationalFleetMap({
   onMapSignalsChange,
   inlineDriverSelection = false,
   syncSelectedDriverId,
+  focusDriverRequest = null,
   onBeforeExplicitRecenter,
   onUserCameraGesture,
+  visualWorkEnabled = true,
 }: Options) {
   const cockpitMapPolicy: CockpitMapPolicy = {
     ...DEFAULT_COCKPIT_MAP_POLICY,
@@ -148,6 +161,8 @@ export function useOperationalFleetMap({
   };
   const { activeContext } = useSession();
   const organizationName = activeContext?.organization_name ?? null;
+  const renderStartedAtRef = useRef(Date.now());
+  renderStartedAtRef.current = Date.now();
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -160,6 +175,7 @@ export function useOperationalFleetMap({
       setSelectedMissionId(null);
     }
   }, [syncSelectedDriverId]);
+  const lastFocusNonceRef = useRef<number | null>(null);
   const [selectedMissionId, setSelectedMissionId] = useState<number | null>(null);
   const [sheetDriver, setSheetDriver] = useState<FleetDriverMapItem | null>(null);
   const [clusterPreview, setClusterPreview] = useState<FleetDriverMapItem[] | null>(null);
@@ -194,7 +210,7 @@ export function useOperationalFleetMap({
     const hasActiveDecay = [...decayUnfocusedAtRef.current.values()].some(
       (t) => now - t < FLEET_MISSION_MAP_POLICY.priorityDecayMs
     );
-    if (!hasActiveDecay) return;
+    if (!visualWorkEnabled || !hasActiveDecay) return;
     const timer = setInterval(() => {
       setVisualDecayTick((n) => n + 1);
       const cutoff = Date.now() - FLEET_MISSION_MAP_POLICY.priorityDecayMs;
@@ -203,7 +219,7 @@ export function useOperationalFleetMap({
       }
     }, 90);
     return () => clearInterval(timer);
-  }, [selectedMissionId, visualDecayTick]);
+  }, [selectedMissionId, visualDecayTick, visualWorkEnabled]);
 
   const missionIndex = useMemo(() => buildFleetMissionIndexMaps(missions), [missions]);
   const enrichedCacheRef = useRef<{
@@ -212,7 +228,14 @@ export function useOperationalFleetMap({
     enriched: ReturnType<typeof enrichFleetDrivers>;
   } | null>(null);
 
+  const frozenEnrichedRef = useRef<ReturnType<typeof enrichFleetDrivers> | null>(
+    null
+  );
+
   const enriched = useMemo(() => {
+    if (!visualWorkEnabled && frozenEnrichedRef.current) {
+      return frozenEnrichedRef.current;
+    }
     const prev = enrichedCacheRef.current;
     if (prev && prev.missions === missions) {
       const patched = patchEnrichedFleetDrivers(
@@ -224,13 +247,19 @@ export function useOperationalFleetMap({
       );
       if (patched) {
         enrichedCacheRef.current = { drivers, missions, enriched: patched };
+        frozenEnrichedRef.current = patched;
         return patched;
       }
     }
-    const next = enrichFleetDrivers(drivers, missions, organizationName);
+    const next = measureCompanyDashboardPhase(
+      "markers",
+      () => enrichFleetDrivers(drivers, missions, organizationName),
+      { kind: "enrich", driver_count: drivers.length, mission_count: missions.length }
+    );
     enrichedCacheRef.current = { drivers, missions, enriched: next };
+    frozenEnrichedRef.current = next;
     return next;
-  }, [drivers, missions, organizationName, missionIndex]);
+  }, [drivers, missions, organizationName, missionIndex, visualWorkEnabled]);
   const filtered = useMemo(() => filterFleetDrivers(enriched, filters), [enriched, filters]);
 
   /** Flotte complète (roster) — dénominateur T ; pas filtered. */
@@ -257,6 +286,29 @@ export function useOperationalFleetMap({
       null
     );
   }, [enriched, filtered, selectedDriverId, sheetDriver]);
+
+  useEffect(() => {
+    if (!focusDriverRequest) return;
+    if (lastFocusNonceRef.current === focusDriverRequest.nonce) return;
+    lastFocusNonceRef.current = focusDriverRequest.nonce;
+    const driver =
+      enriched.find((item) => item.driver_id === focusDriverRequest.driverId) ??
+      filtered.find((item) => item.driver_id === focusDriverRequest.driverId) ??
+      null;
+    setSelectedDriverId(focusDriverRequest.driverId);
+    setClusterPreview(null);
+    setPinnedClusterFocus(null);
+    if (driver) {
+      setSheetDriver(driver);
+      setSelectedMissionId(driver.enrichment.linkedMission?.mission_id ?? driver.mission_id ?? null);
+    }
+    onSelectedDriverIdChange?.(focusDriverRequest.driverId);
+    if (driver?.latitude != null && driver.longitude != null) {
+      setRecenterMode("selected");
+      recenterTokenRef.current += 1;
+      setRecenterToken(recenterTokenRef.current);
+    }
+  }, [enriched, filtered, focusDriverRequest, onSelectedDriverIdChange]);
 
   const primaryDriver = useMemo(() => pickPrimaryFleetDriver(enriched), [enriched]);
 
@@ -290,17 +342,22 @@ export function useOperationalFleetMap({
 
   const missionOverlays = useMemo(
     () =>
-      buildFleetMissionOverlays({
-        missions,
-        driversById,
-        selectedMissionId,
-        maxVisible:
-          layers.mission?.compactRoutes !== false
-            ? FLEET_MISSION_MAP_POLICY.maxVisibleMissionsCompact
-            : FLEET_MISSION_MAP_POLICY.maxVisibleMissionsExpanded,
-        routeCap,
-        decayUnfocusedAt: decayUnfocusedAtRef.current,
-      }),
+      measureCompanyDashboardPhase(
+        "overlays",
+        () =>
+          buildFleetMissionOverlays({
+            missions,
+            driversById,
+            selectedMissionId,
+            maxVisible:
+              layers.mission?.compactRoutes !== false
+                ? FLEET_MISSION_MAP_POLICY.maxVisibleMissionsCompact
+                : FLEET_MISSION_MAP_POLICY.maxVisibleMissionsExpanded,
+            routeCap,
+            decayUnfocusedAt: decayUnfocusedAtRef.current,
+          }),
+        { mission_count: missions.length }
+      ),
     [driversById, layers.mission?.compactRoutes, missions, routeCap, selectedMissionId]
   );
 
@@ -431,16 +488,32 @@ export function useOperationalFleetMap({
   );
 
   const markers = useMemo(() => {
-    if (!clusteringEnabled || spatialDrivers.length <= 1) {
-      return spatialDrivers.map((driver) => ({ kind: "driver" as const, driver }));
-    }
-    return clusterFleetMarkers(spatialDrivers, clusterCellDeg);
+    return measureCompanyDashboardPhase("markers", () => {
+      if (!clusteringEnabled || spatialDrivers.length <= 1) {
+        return spatialDrivers.map((driver) => ({ kind: "driver" as const, driver }));
+      }
+      return clusterFleetMarkers(spatialDrivers, clusterCellDeg);
+    }, { kind: "cluster", spatial_count: spatialDrivers.length });
   }, [clusterCellDeg, clusteringEnabled, spatialDrivers]);
 
   const heatmapPoints = useMemo(() => {
     if (layers.heatmapMode !== "delays") return [];
     return buildFleetDelayHeatmapPoints(enriched);
   }, [enriched, layers.heatmapMode]);
+
+  useLayoutEffect(() => {
+    recordCompanyDashboardPhase(
+      "react_commit",
+      Date.now() - renderStartedAtRef.current,
+      {
+        surface: "fleet_map",
+        driver_count: drivers.length,
+        spatial_count: spatialDrivers.length,
+        marker_count: markers.length,
+        overlay_count: visibleMissionOverlays.length,
+      }
+    );
+  });
 
   const onMapSignalsChangeRef = useRef(onMapSignalsChange);
   onMapSignalsChangeRef.current = onMapSignalsChange;
@@ -623,6 +696,7 @@ export function useOperationalFleetMap({
 
   const lastCameraPolicyRef = useRef<CameraPolicy | undefined>(undefined);
   useEffect(() => {
+    if (!visualWorkEnabled) return;
     const policy = cockpitMapPolicy.cameraPolicy;
     if (!policy || policy === "user_gesture_preserve") return;
     if (lastCameraPolicyRef.current === policy) return;
@@ -639,7 +713,13 @@ export function useOperationalFleetMap({
     if (policy === "incident_soft_attention") {
       recenter(urgentDriver ? "urgent" : "all");
     }
-  }, [cockpitMapPolicy.cameraPolicy, recenter, selectedDriverId, urgentDriver]);
+  }, [
+    cockpitMapPolicy.cameraPolicy,
+    recenter,
+    selectedDriverId,
+    urgentDriver,
+    visualWorkEnabled,
+  ]);
 
   const didInitialRecenterRef = useRef(false);
   useEffect(() => {
@@ -658,6 +738,7 @@ export function useOperationalFleetMap({
   );
   const lastAutoFitBoundsRef = useRef("");
   useEffect(() => {
+    if (!visualWorkEnabled) return;
     if (filtered.length === 0) return;
     if (selectedDriverId != null) return;
     if (userGestureActive) return;
@@ -689,6 +770,7 @@ export function useOperationalFleetMap({
     filtered.length,
     selectedDriverId,
     userGestureActive,
+    visualWorkEnabled,
   ]);
 
   const missionHasMapCoords = useCallback((mission: CompanyDispatchMission) => {

@@ -297,7 +297,7 @@ describe("P0-C-LEDGER-CLIENT — readiness gate + anti-HOL", () => {
     });
     // Injecter en tête mémoire (simule HOL historique)
     const queue = driverTrackingQueue as unknown as {
-      items: Array<Record<string, unknown>>;
+      items: Record<string, unknown>[];
     };
     queue.items.unshift({
       id: poisonId,

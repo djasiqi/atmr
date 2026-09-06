@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { brandPrimary, brandText, useAccessibilityScale, useResponsiveTokens } from "../../../../design/responsive";
 import { AppInput } from "../../../../design/ui/AppInput";
@@ -80,14 +80,16 @@ export function ClientSelector({
       resultsCount > 0 ||
       shouldShowCreateClient);
 
+  const visibilityChangeRef = useRef(onSuggestionsVisibilityChange);
+  visibilityChangeRef.current = onSuggestionsVisibilityChange;
   useEffect(() => {
-    onSuggestionsVisibilityChange?.(overlayOpen);
+    visibilityChangeRef.current?.(overlayOpen);
     return () => {
       if (overlayOpen) {
-        onSuggestionsVisibilityChange?.(false);
+        visibilityChangeRef.current?.(false);
       }
     };
-  }, [onSuggestionsVisibilityChange, overlayOpen]);
+  }, [overlayOpen]);
 
   const openStackStyle = overlayOpen ? suggestionFieldOpenStyle : null;
 

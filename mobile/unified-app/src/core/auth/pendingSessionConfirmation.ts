@@ -62,7 +62,8 @@ export async function flushPendingSessionConfirmation(): Promise<boolean> {
   const pending = await readPendingSessionConfirmation();
   if (!pending) return false;
   try {
-     
+    // Import différé : évite le cycle client ↔ confirmation de session.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { confirmDeviceSession } = require("../api/client") as {
       confirmDeviceSession: (sessionId: string) => Promise<void>;
     };

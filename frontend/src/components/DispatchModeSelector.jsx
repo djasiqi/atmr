@@ -5,11 +5,10 @@ import {
 } from 'react-icons/fi';
 import apiClient from '../utils/apiClient';
 import useShadowMode from '../hooks/useShadowMode';
-import { getAuthEnv, hasCompanyScopedAccessToken } from '../utils/webAuthSession';
+import { getAuthEnv, hasCompanyDispatchSession } from '../utils/webAuthSession';
 import './DispatchModeSelector.css';
 
-const hasCompanyToken = () =>
-  hasCompanyScopedAccessToken(getAuthEnv());
+const canCallCompanyDispatch = () => hasCompanyDispatchSession(getAuthEnv());
 
 /**
  * Composant amélioré de sélection du mode de dispatch autonome.
@@ -19,7 +18,7 @@ const hasCompanyToken = () =>
  * sur l'état du système d'IA et les recommandations.
  */
 const DispatchModeSelector = ({ onModeChange }) => {
-  const [currentMode, setCurrentMode] = useState('semi_auto');
+  const [currentMode, setCurrentMode] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -36,13 +35,15 @@ const DispatchModeSelector = ({ onModeChange }) => {
   } = useShadowMode({ autoRefresh: false }); // Charger une seule fois
 
   const fetchCurrentMode = useCallback(async () => {
-    if (!hasCompanyToken()) {
+    if (!canCallCompanyDispatch()) {
       setLoading(false);
       return;
     }
     try {
       const { data } = await apiClient.get('/company_dispatch/mode');
-      setCurrentMode(data.dispatch_mode);
+      if (data.dispatch_mode === 'manual' || data.dispatch_mode === 'semi_auto' || data.dispatch_mode === 'fully_auto') {
+        setCurrentMode(data.dispatch_mode);
+      }
     } catch (err) {
       console.error('Erreur chargement mode:', err);
       setError('Impossible de charger le mode actuel');
@@ -128,8 +129,13 @@ const DispatchModeSelector = ({ onModeChange }) => {
       alert(`Mode de dispatch changé : ${modeLabels[newMode]}`);
     } catch (err) {
       console.error('Erreur changement mode:', err);
-      setError('Erreur lors du changement de mode');
-      alert('Erreur lors du changement de mode');
+      const detail =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Erreur lors du changement de mode';
+      setError(detail);
+      alert(detail);
     } finally {
       setSaving(false);
     }

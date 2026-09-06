@@ -17,6 +17,7 @@ import {
   useCompanyInboxReadAllMutation,
   useCompanyInboxReadMutation,
 } from "../hooks";
+import { useCompanyBackgroundBootReady } from "../boot/companyColdStartPhase";
 import type { CompanyInboxNotification } from "../api/companyInboxApi";
 import { resolveCompanyInboxNavigation } from "../utils/companyNotificationNavigation";
 import { E } from "../theme/enterpriseOpsTheme";
@@ -39,14 +40,18 @@ function formatWhen(iso: string): string {
 export function CompanyInboxButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const { data, isLoading, isError, refetch } = useCompanyInboxQuery();
+  const backgroundReady = useCompanyBackgroundBootReady();
+  const { data, isLoading, isError, refetch } = useCompanyInboxQuery({
+    enabled: backgroundReady,
+  });
   const readOne = useCompanyInboxReadMutation();
   const readAll = useCompanyInboxReadAllMutation();
 
   useFocusEffect(
     useCallback(() => {
+      if (!backgroundReady) return;
       void refetch();
-    }, [refetch])
+    }, [backgroundReady, refetch])
   );
 
   const unread = data?.unread_count ?? 0;
@@ -161,7 +166,13 @@ export function CompanyInboxButton() {
 }
 
 const s = StyleSheet.create({
-  bellWrap: { position: "relative", padding: 2, alignItems: "center", justifyContent: "center" },
+  bellWrap: {
+    position: "relative",
+    padding: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
   pressed: { opacity: 0.8 },
   badge: {
     position: "absolute",

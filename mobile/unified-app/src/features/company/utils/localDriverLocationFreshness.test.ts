@@ -46,7 +46,19 @@ describe("localDriverLocationFreshness", () => {
     );
     expect(aged.location_status).toBe("recent");
     expect(aged.tracking_display_status).toBe("live");
-    expect(aged.last_seen_seconds).toBe(45);
+    expect(aged.last_seen_seconds).toBe(2);
+    expect(aged.recorded_at).toBe(new Date(now - 45_000).toISOString());
+  });
+
+  it("ne réalloue pas dans la même bande et n’injecte pas last_seen_seconds", () => {
+    const source = {
+      recorded_at: new Date(now - 10_000).toISOString(),
+      location_status: "live" as const,
+      last_seen_seconds: 2,
+    };
+    const aged = applyLocalLocationFreshness(source, now);
+    expect(aged).toBe(source);
+    expect(aged.last_seen_seconds).toBe(2);
   });
 
   it("ne promeut pas stale", () => {

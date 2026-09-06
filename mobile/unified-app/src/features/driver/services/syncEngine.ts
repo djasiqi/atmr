@@ -8,6 +8,10 @@ import { AppState, AppStateStatus } from "react-native";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { realtimeManager } from "../../../core/realtime/realtimeManager";
 import { shouldSkipMissionPolling } from "../../../core/realtime/transportAuthority";
+import {
+  subscribeDriverForegroundResume,
+  tryClaimDriverResumeWork,
+} from "../driverForegroundResumeAuthority";
 
 type RuntimeEngine = {
   timer: ReturnType<typeof setInterval> | null;
@@ -210,30 +214,46 @@ export function startDriverSyncEngine(
 ): () => void {
   const engine = getOrCreateEngine(contextId);
   if (!engine.stopAppStateSubscription) {
-    const subscription = AppState.addEventListener("change", (next) => {
-      const previous = engine.rawAppState;
-      engine.rawAppState = next;
-      engine.appStateChangedAtMs = Date.now();
-      if (previous !== "active" && next === "active") {
-        const now = Date.now();
-        if (now - engine.lastResumeResyncAtMs >= FOREGROUND_RESUME_RESYNC_GUARD_WINDOW_MS) {
-          engine.lastResumeResyncAtMs = now;
-          emitDriverTelemetry("driver.foreground.resume.resync", {
-            source: "driver.sync_engine",
-            context_id: contextId,
-            foreground_resume_resync_total: 1,
-          });
-          scheduleDriverMissionSync(queryClient, contextId, "foreground");
-        } else {
+    const stopResume = subscribeDriverForegroundResume((resumeEpoch) => {
+      // Laisse `runtimeResume` claim `resync` dans le même tick.
+      queueMicrotask(() => {
+        if (!tryClaimDriverResumeWork("resync", resumeEpoch)) {
           emitDriverTelemetry("driver.foreground.resume.resync.coalesced", {
             source: "driver.sync_engine",
             context_id: contextId,
             foreground_resume_resync_coalesced_total: 1,
+            resume_epoch: resumeEpoch,
           });
+          return;
         }
-      }
+        const now = Date.now();
+        if (now - engine.lastResumeResyncAtMs < FOREGROUND_RESUME_RESYNC_GUARD_WINDOW_MS) {
+          emitDriverTelemetry("driver.foreground.resume.resync.coalesced", {
+            source: "driver.sync_engine",
+            context_id: contextId,
+            foreground_resume_resync_coalesced_total: 1,
+            resume_epoch: resumeEpoch,
+          });
+          return;
+        }
+        engine.lastResumeResyncAtMs = now;
+        emitDriverTelemetry("driver.foreground.resume.resync", {
+          source: "driver.sync_engine",
+          context_id: contextId,
+          foreground_resume_resync_total: 1,
+          resume_epoch: resumeEpoch,
+        });
+        scheduleDriverMissionSync(queryClient, contextId, "foreground");
+      });
     });
-    engine.stopAppStateSubscription = () => subscription.remove();
+    const subscription = AppState.addEventListener("change", (next) => {
+      engine.rawAppState = next;
+      engine.appStateChangedAtMs = Date.now();
+    });
+    engine.stopAppStateSubscription = () => {
+      stopResume();
+      subscription.remove();
+    };
   }
   if (!engine.stopNetworkSubscription) {
     engine.stopNetworkSubscription = subscribeNetworkState((snapshot) => {

@@ -25,6 +25,11 @@ import { pickTrackingMission } from "../domain/pickTrackingMission";
 import { isTrackingActiveStatus } from "../domain/status";
 import { normalizeDriverMissionStatus } from "../statusDictionary";
 import { recordSocketBatchRateLimited } from "./socketBatchPacing";
+import {
+  getDriverResumeEpoch,
+  tryClaimDriverResumeWork,
+  wasDriverForegroundResumeRecent,
+} from "../driverForegroundResumeAuthority";
 
 type BridgeOptions = {
   enableSocket: boolean;
@@ -223,7 +228,13 @@ export function startDriverRealtimeBridge(
         return;
       }
       lastReconnectResyncAtMs = now;
-      scheduleDriverMissionSync(queryClient, contextId, "reconnect");
+      const resumeEpoch = getDriverResumeEpoch();
+      const skipMissionResync =
+        wasDriverForegroundResumeRecent(2500) ||
+        (resumeEpoch > 0 && !tryClaimDriverResumeWork("resync", resumeEpoch));
+      if (!skipMissionResync) {
+        scheduleDriverMissionSync(queryClient, contextId, "reconnect");
+      }
       if (isFeatureEnabled("tracking_resume_resync_enabled")) {
         // Q3-A : reconnect ≠ session_conflict. Conserver la session locale,
         // libérer les emits socket bloqués, flusher le backlog — jamais rotate.

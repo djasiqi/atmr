@@ -125,6 +125,7 @@ describe("resolveTrackingEligibility", () => {
     });
     expect(r.mode).toBe("OFF");
     expect(r.availabilityPending).toBe(true);
+    expect(r.hold).toBe(true);
     expect(r.trackingEligible).toBe(false);
     expect(r.blocked).toBe(false);
   });

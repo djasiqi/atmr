@@ -409,7 +409,6 @@ async function drainQueue(): Promise<void> {
   if (processing) return;
   processing = true;
   try {
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (pendingStop) {
         const op = pendingStop;

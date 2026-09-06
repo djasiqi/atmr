@@ -14,15 +14,9 @@ export function companyContextScope(contextId: string) {
 
 export const companyQueryKeys = {
   root: ["company", "dispatch"] as const,
-  missions: (contextId: string, date: string, search: string, status: string) =>
-    [
-      ...companyQueryKeys.root,
-      "missions",
-      companyContextScope(contextId),
-      date,
-      search,
-      status,
-    ] as const,
+  /** Une clé par jour — search / status sont des filtres locaux (PERF-07). */
+  missions: (contextId: string, date: string) =>
+    [...companyQueryKeys.root, "missions", companyContextScope(contextId), date] as const,
   /** Aligné vue web : GET `/company_dispatch/delays`. */
   dispatchDelays: (contextId: string, date: string) =>
     [...companyQueryKeys.root, "dispatch-delays", companyContextScope(contextId), date] as const,

@@ -9,6 +9,8 @@ import {
   getRealtimeMetricsSnapshot,
   resetRealtimeMetricsForTests,
 } from "../../../core/observability/realtimeMetrics";
+import { dispatchMissionsQueryKey } from "../utils/prefetchAdjacentDispatchMissions";
+import type { CompanyDispatchMissionListResponse } from "../api/contracts";
 
 describe("recovery trigger resolver (gate D3.2)", () => {
   it("maps stale event_type", () => {
@@ -30,26 +32,47 @@ describe("performCompanyRecoveryResync (gate D3.2)", () => {
     resetRealtimeMetricsForTests();
   });
 
-  it("invalidates dashboard + missions + inbox + delays + chat + institution offers + drivers locations for stale trigger", () => {
+  it("n’invalide plus la famille missions — J±1 survivent", () => {
     const queryClient = new QueryClient();
-    const spy = jest.spyOn(queryClient, "invalidateQueries");
+    const jKey = dispatchMissionsQueryKey("company:42", "2026-09-06");
+    const prevKey = dispatchMissionsQueryKey("company:42", "2026-09-05");
+    const nextKey = dispatchMissionsQueryKey("company:42", "2026-09-07");
+    const neighbor: CompanyDispatchMissionListResponse = {
+      context_id: "company:42",
+      date: "2026-09-05",
+      missions: [{ mission_id: 2, status: "pending" }],
+      refreshed_at: "2026-09-06T00:00:00.000Z",
+      total: 1,
+      page_size: 50,
+      loaded: 1,
+      is_complete: true,
+      next_page: 2,
+      pagination_error: false,
+    };
+    queryClient.setQueryData(jKey, { ...neighbor, date: "2026-09-06", missions: [{ mission_id: 1, status: "pending" }] });
+    queryClient.setQueryData(prevKey, neighbor);
+    queryClient.setQueryData(nextKey, { ...neighbor, date: "2026-09-07", missions: [{ mission_id: 3, status: "pending" }] });
 
+    const spy = jest.spyOn(queryClient, "invalidateQueries");
     performCompanyRecoveryResync(queryClient, "company:42", "stale");
 
-    expect(spy).toHaveBeenCalledTimes(7);
+    expect(spy).toHaveBeenCalledTimes(3);
     const keys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey);
+    expect(keys.some((k) => (k as unknown[]).includes("missions"))).toBe(false);
     expect(keys.some((k) => (k as unknown[]).includes("dashboard"))).toBe(true);
-    expect(keys.some((k) => (k as unknown[]).includes("missions"))).toBe(true);
-    expect(keys.some((k) => (k as unknown[]).includes("inbox"))).toBe(true);
+    expect(keys.some((k) => (k as unknown[]).includes("inbox"))).toBe(false);
     expect(keys.some((k) => (k as unknown[]).includes("dispatch-delays"))).toBe(true);
-    expect(keys.some((k) => (k as unknown[]).includes("chat"))).toBe(true);
-    expect(keys.some((k) => (k as unknown[]).includes("institution-offers"))).toBe(true);
+    expect(keys.some((k) => (k as unknown[]).includes("chat"))).toBe(false);
+    expect(keys.some((k) => (k as unknown[]).includes("institution-offers"))).toBe(false);
     expect(
       keys.some((k) => {
         const arr = k as unknown[];
         return arr.includes("drivers") && arr.includes("locations");
       })
     ).toBe(true);
+    expect(queryClient.getQueryState(prevKey)?.isInvalidated).toBeFalsy();
+    expect(queryClient.getQueryState(nextKey)?.isInvalidated).toBeFalsy();
+    expect(queryClient.getQueryData(prevKey)).toEqual(neighbor);
   });
 
   it("increments recovery_resync metric by trigger", () => {

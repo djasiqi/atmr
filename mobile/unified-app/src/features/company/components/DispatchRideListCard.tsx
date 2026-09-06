@@ -1,5 +1,4 @@
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import type { LayoutChangeEvent } from "react-native";
 import { AccessibilityInfo, Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -240,7 +239,7 @@ type DispatchRideListCardProps = {
   footer: ReactNode;
 };
 
-export function DispatchRideListCard({
+function DispatchRideListCardComponent({
   mission,
   bookingDelayPickupMinutes,
   bookingPickupEtaIso,
@@ -525,6 +524,8 @@ export function DispatchRideListCard({
     </View>
   );
 }
+
+export const DispatchRideListCard = memo(DispatchRideListCardComponent);
 
 const styles = StyleSheet.create({
   card: {

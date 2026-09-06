@@ -16,6 +16,9 @@ import {
   AppText,
   brandTextMuted,
   Screen,
+  computeCompanyFloatingBottomPad,
+  useAppViewport,
+  useFloatingBarClearance,
   useResponsiveTokens,
 } from "../../../src/design/responsive";
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
@@ -741,6 +744,11 @@ const READONLY_LIST_CARD_STACK_GAP = 4;
 /** Écran entreprise : clients et facturation (lecture seule selon flags). */
 export default function CompanyClientsAndBillingScreen() {
   const params = useLocalSearchParams<{ section?: string }>();
+  const { bottomInset } = useAppViewport();
+  const listBottomClearance = useFloatingBarClearance(
+    "company",
+    computeCompanyFloatingBottomPad(bottomInset)
+  );
   const requestedSection = params.section === "invoices" ? "invoices" : "clients";
   // Accès direct à l’écran existant : ne pas afficher l’état "à activer" ici.
   const clientsReadonlyEnabled = true;
@@ -870,7 +878,7 @@ export default function CompanyClientsAndBillingScreen() {
 
   const contentPad = {
     paddingTop: 12,
-    paddingBottom: 28,
+    paddingBottom: Math.max(28, listBottomClearance),
     gap: 16,
   };
 

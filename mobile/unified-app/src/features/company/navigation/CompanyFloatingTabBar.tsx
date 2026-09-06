@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import {
   BaseFloatingBar,
@@ -15,8 +15,13 @@ import { shouldShowCompanyDriverContextSwitch } from "../../../core/contextSwitc
 import { useSession } from "../../../core/sessionProvider";
 import { useCompanyMessageHubUnreadBadge } from "../messages/hooks";
 import { useInstitutionOffersPendingBadge } from "../hooks";
+import { useCompanyBackgroundBootReady } from "../boot/companyColdStartPhase";
 import { RadialActionMenu, type RadialAction } from "../../../components/RadialActionMenu";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
+import {
+  beginTapFeedback,
+  endTapNavigation,
+} from "../../../core/observability/perfResponsiveness";
 
 const C = {
   border: "rgba(148, 163, 184, 0.22)",
@@ -98,8 +103,10 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
   const canCreateRide = useCanCreateCompanyRide();
   const [switchPending, setSwitchPending] = useState(false);
   const [switchMessage, setSwitchMessage] = useState<string | null>(null);
-  const chatUnread = useCompanyMessageHubUnreadBadge();
-  const offersPending = useInstitutionOffersPendingBadge();
+  const backgroundReady = useCompanyBackgroundBootReady();
+  const chatUnread = useCompanyMessageHubUnreadBadge({ enabled: backgroundReady });
+  const offersPending = useInstitutionOffersPendingBadge({ enabled: backgroundReady });
+  const createTapIdRef = useRef(0);
   const current = useActiveRouteName(state);
   const onOffersRoute = current === "offers/index" || current.startsWith("offers/");
   const maxBarWidth = Math.min(480, usableWidth - 2 * horizontalPadding);
@@ -194,7 +201,7 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
   }, [canSwitchToDriver, changeContext, primaryDriverContext, router, switchPending]);
 
   return (
-    <>
+    <View style={styles.overlayRoot} pointerEvents="box-none">
     <BaseFloatingBar
       paddingBottom={bottomPad}
       maxBarWidth={maxBarWidth}
@@ -207,6 +214,7 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
           <BarTabButton
             label="Dashboard"
             icon="speedometer-outline"
+            action="tab.dashboard"
             active={current === "dashboard" && !focusedFromSheet}
             onPress={() => {
               navigation.navigate("dashboard" as never);
@@ -215,6 +223,7 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
           <BarTabButton
             label="Courses"
             icon="car-outline"
+            action="tab.rides"
             active={current === "rides" && !focusedFromSheet}
             onPress={() => {
               navigation.navigate("rides" as never);
@@ -222,10 +231,14 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
           />
           <View style={styles.barSlot}>
             <Pressable
+              onPressIn={() => {
+                createTapIdRef.current = beginTapFeedback("tab.create", "company.tabs");
+              }}
               onPress={() => {
                 if (canCreateRide) {
                   void router.push({ pathname: "/(app)/(company)/rides", params: { create: "1" } } as Href);
                 }
+                endTapNavigation(createTapIdRef.current);
               }}
               disabled={!canCreateRide}
               accessibilityLabel="Nouvelle course"
@@ -248,6 +261,7 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
           <BarTabButton
             label="Chat"
             icon="chatbubble-ellipses-outline"
+            action="tab.messages"
             active={current === "chat" && !focusedFromSheet}
             badgeCount={chatUnread}
             onPress={() => {
@@ -304,24 +318,27 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
           </AppText>
         </View>
       ) : null}
-    </>
+    </View>
   );
 }
 
 function BarTabButton({
   label,
   icon,
+  action,
   active,
   onPress,
   badgeCount = 0,
 }: {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
+  action: "tab.dashboard" | "tab.rides" | "tab.messages";
   active: boolean;
   onPress: () => void;
   /** Nombre de notifications (ex. messages reçus non lus). */
   badgeCount?: number;
 }) {
+  const tapIdRef = useRef(0);
   const a11y =
     badgeCount > 0
       ? `${label}, ${badgeCount} non lu${badgeCount > 1 ? "s" : ""}`
@@ -329,7 +346,13 @@ function BarTabButton({
   return (
     <View style={styles.barSlot}>
       <Pressable
-        onPress={onPress}
+        onPressIn={() => {
+          tapIdRef.current = beginTapFeedback(action, "company.tabs");
+        }}
+        onPress={() => {
+          onPress();
+          endTapNavigation(tapIdRef.current);
+        }}
         accessibilityLabel={a11y}
         accessibilityRole="tab"
         accessibilityState={{ selected: active }}
@@ -366,6 +389,14 @@ function BarTabButton({
 }
 
 const styles = StyleSheet.create({
+  /** Overlay : la nav n’ôte plus de hauteur à la scène (carte full-bleed). */
+  overlayRoot: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: "box-none",
+  },
   /** Cinq colonnes égales (Dashboard, Courses, FAB, Chat, menu). */
   barSlot: {
     flex: 1,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import MapView, { PROVIDER_GOOGLE, type LatLng, type Region } from "react-native-maps";
@@ -7,6 +7,11 @@ import { FleetMapLiriePointMarker } from "../../company/components/maps/FleetMap
 import type { FleetMissionAnchorStyle } from "../../company/components/maps/fleetMapMissionVisual";
 import { compactMissionMapLayerStyle } from "../../maps/lirieMapChrome";
 import { getNativeGoogleMapViewStyleProps } from "../../maps/nativeGoogleMapStyle";
+import {
+  isUsableMapRegion,
+  resolveColdStartCameraAction,
+  type DriverMapRegion,
+} from "../domain/driverMapCameraPolicy";
 import { extractMissionMapCoordInput } from "../domain/missionMapCoordUtils";
 import {
   isMissionMapLiveRouteStatus,
@@ -18,9 +23,15 @@ import {
   computeMissionMapFitRegion,
   resolveMissionMapFitPoints,
 } from "../domain/missionMapFit";
-import { useDriverLiveMapPosition } from "../hooks/useDriverLiveMapPosition";
+import { useDriverMapDisplayPosition } from "../hooks/useDriverLiveMapPosition";
 import { useMissionMapResolvedCoords } from "../hooks/useMissionMapResolvedCoords";
 import { useMissionRouteMetrics } from "../hooks/useMissionRouteMetrics";
+import {
+  hydrateDriverMapViewport,
+  peekDriverMapViewport,
+  viewportToRegion,
+  writeDriverMapViewport,
+} from "../services/driverMapViewportStore";
 import type { DriverMission } from "../types";
 import type { DriverEtaSnapshot } from "../api";
 import {
@@ -84,6 +95,9 @@ export function MissionMap(props: MissionMapProps) {
   const routeCoordsRef = useRef<LatLng[]>([]);
   const lastAutoFitAtRef = useRef(0);
   const lastDriverRef = useRef<LatLng | null>(null);
+  const coldStartAutoCenterConsumedRef = useRef(false);
+  const currentRegionRef = useRef<DriverMapRegion | null>(null);
+  const hadUsefulViewportRef = useRef(false);
   const height = props.height ?? MISSION_MAP_FALLBACK_HEIGHT;
   const mapInput = useMemo(() => extractMissionMapCoordInput(props.mission), [props.mission]);
 
@@ -93,8 +107,24 @@ export function MissionMap(props: MissionMapProps) {
   const { pickupCoord, dropoffCoord, fallbackCoord, resolving } =
     useMissionMapResolvedCoords(mapInput);
 
-  const liveDriverCoord = useDriverLiveMapPosition(mapInput.driverLat, mapInput.driverLng, true);
-  const driverCoord = liveDriverCoord ?? null;
+  const displayPosition = useDriverMapDisplayPosition(mapInput.driverLat, mapInput.driverLng, true);
+  const driverCoord = displayPosition.coord;
+  const gnssCoord = displayPosition.gnssCoord;
+
+  const [restoredViewport, setRestoredViewport] = useState(() => peekDriverMapViewport());
+  const [viewportHydrated, setViewportHydrated] = useState(() => peekDriverMapViewport() != null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void hydrateDriverMapViewport().then((viewport) => {
+      if (cancelled) return;
+      setRestoredViewport(viewport);
+      setViewportHydrated(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const routePlan = useMemo(
     () =>
@@ -178,8 +208,10 @@ export function MissionMap(props: MissionMapProps) {
 
   const mapFallbackCoord = driverCoord ?? pickupCoord ?? dropoffCoord ?? fallbackCoord;
   const directionsKey = `${routePlan.mode}-${routePlan.origin?.latitude}-${routePlan.destination?.latitude}`;
+  const restoredRegion = restoredViewport ? viewportToRegion(restoredViewport) : null;
 
   const region = useMemo<Region>(() => {
+    if (restoredRegion) return restoredRegion;
     if (!mapFallbackCoord) {
       return { latitude: 46.2044, longitude: 6.1432, latitudeDelta: 0.09, longitudeDelta: 0.09 };
     }
@@ -190,35 +222,75 @@ export function MissionMap(props: MissionMapProps) {
       latitudeDelta: r.latitudeDelta,
       longitudeDelta: r.longitudeDelta,
     };
-  }, [mapFallbackCoord, pickupCoord, dropoffCoord]);
+  }, [mapFallbackCoord, pickupCoord, dropoffCoord, restoredRegion]);
+
+  useEffect(() => {
+    if (restoredRegion) {
+      currentRegionRef.current = restoredRegion;
+      hadUsefulViewportRef.current = true;
+      return;
+    }
+    if (!currentRegionRef.current && isUsableMapRegion(region)) {
+      currentRegionRef.current = region;
+      hadUsefulViewportRef.current = true;
+    }
+  }, [region, restoredRegion]);
+
+  const persistCurrentRegion = useCallback((next: DriverMapRegion) => {
+    if (!isUsableMapRegion(next)) return;
+    currentRegionRef.current = next;
+    hadUsefulViewportRef.current = true;
+    void writeDriverMapViewport(next);
+  }, []);
 
   const fitKeyPoints = useCallback(() => {
     fitMissionViewport({ useRoute: true });
   }, [fitMissionViewport]);
 
-  const onDirectionsReady = useCallback(
-    (result: { coordinates: LatLng[] }) => {
-      routeCoordsRef.current = result.coordinates ?? [];
-      fitMissionViewport({ useRoute: true });
-    },
-    [fitMissionViewport]
-  );
+  const onDirectionsReady = useCallback((result: { coordinates: LatLng[] }) => {
+    routeCoordsRef.current = result.coordinates ?? [];
+  }, []);
 
   const onMapReady = useCallback(() => {
-    fitMissionViewport({ useRoute: routeCoordsRef.current.length > 0, animated: false });
-  }, [fitMissionViewport]);
+    if (restoredRegion) {
+      persistCurrentRegion(restoredRegion);
+      return;
+    }
+    if (isUsableMapRegion(region)) {
+      persistCurrentRegion(region);
+    }
+  }, [persistCurrentRegion, region, restoredRegion]);
+
+  const onRegionChangeComplete = useCallback(
+    (next: Region) => {
+      persistCurrentRegion(next);
+    },
+    [persistCurrentRegion]
+  );
 
   useEffect(() => {
     routeCoordsRef.current = [];
   }, [directionsKey]);
 
   useEffect(() => {
-    if (!mapFallbackCoord || resolving) return;
-    fitMissionViewport({ useRoute: routeCoordsRef.current.length > 0 });
-  }, [mapFallbackCoord, pickupCoord, dropoffCoord, resolving, routePlan.mode, fitMissionViewport]);
+    if (!viewportHydrated) return;
+    if (coldStartAutoCenterConsumedRef.current) return;
+    const decision = resolveColdStartCameraAction({
+      consumed: false,
+      gnssPoint: gnssCoord,
+      currentRegion: currentRegionRef.current,
+      hadUsefulViewport: hadUsefulViewportRef.current,
+    });
+    if (!decision.consume) return;
+    coldStartAutoCenterConsumedRef.current = true;
+    if (decision.action === "recenter") {
+      fitMissionViewport({ useRoute: routeCoordsRef.current.length > 0, animated: true });
+    }
+  }, [gnssCoord, fitMissionViewport, viewportHydrated]);
 
   useEffect(() => {
     if (!isLiveRoute || !driverCoord) return;
+    if (!coldStartAutoCenterConsumedRef.current) return;
     const moved =
       lastDriverRef.current != null && !coordsEqual(lastDriverRef.current, driverCoord);
     lastDriverRef.current = driverCoord;
@@ -231,6 +303,10 @@ export function MissionMap(props: MissionMapProps) {
   }, [driverCoord, isLiveRoute, fitKeyPoints]);
 
   const mapLayerStyle = useMemo(() => compactMissionMapLayerStyle(height), [height]);
+
+  if (!viewportHydrated) {
+    return <View style={{ width: "100%", height }} />;
+  }
 
   if (!mapFallbackCoord) {
     return (
@@ -255,6 +331,7 @@ export function MissionMap(props: MissionMapProps) {
         showsMyLocationButton={false}
         loadingEnabled={false}
         onMapReady={onMapReady}
+        onRegionChangeComplete={onRegionChangeComplete}
         {...mapStyleProps}
         {...Platform.select({
           ios: {
@@ -295,7 +372,7 @@ export function MissionMap(props: MissionMapProps) {
         prefix={routePlan.badgePrefix}
         distanceLabel={routeMetrics.distanceLabel}
         durationLabel={routeMetrics.durationLabel}
-        live={isLiveRoute && Boolean(driverCoord)}
+        live={isLiveRoute && displayPosition.source === "gnss"}
       />
 
       {props.showRecenterControl ? (

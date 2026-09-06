@@ -1,6 +1,6 @@
 /**
- * Durées stale TanStack Query — source unique pour l’app mobile (roadmap V2).
- * Voir docs/Mobile/unified-platform/tanstack-stale-time-v2.md
+ * Alias historiques (chauffeur / hors LIRIE).
+ * Les queries company / dispatch doivent utiliser `queryCachePolicy.ts` (OPT-05).
  */
 export const QUERY_STALE_TIME_MS = {
   /** Aligné sur QueryProvider (défaut global) */

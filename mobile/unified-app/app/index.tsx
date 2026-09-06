@@ -4,8 +4,18 @@ import { useSession } from "../src/core/sessionProvider";
 import { resolveInitialRoute } from "../src/core/navigation/resolveInitialRoute";
 import { brandSurfaceSoft, ResponsiveContainer, Screen } from "../src/design/responsive";
 import { FONT_SIZE } from "../src/design/responsive/typographyTokens";
+import { BootBrandSurface } from "../src/core/boot/BootBrandSurface";
+import { canEnterFromLocalSession } from "../src/core/auth/canEnterFromLocalSession";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ReactRuntime: any = require("react");
+
+function BootRedirect({ href }: { href: string }) {
+  return (
+    <BootBrandSurface>
+      <Redirect href={href as any} />
+    </BootBrandSurface>
+  );
+}
 
 export default function IndexScreen() {
   const {
@@ -15,6 +25,7 @@ export default function IndexScreen() {
     bootstrapSession,
     mobileSessionStatus,
     autoBootstrapAllowed,
+    activeContext,
   } = useSession();
 
   ReactRuntime.useEffect(() => {
@@ -29,11 +40,11 @@ export default function IndexScreen() {
     !autoBootstrapAllowed &&
     (mobileSessionStatus === "anonymous" || mobileSessionStatus === "logging_out")
   ) {
-    return <Redirect href={"/(public)/login" as any} />;
+    return <BootRedirect href={"/(public)/login"} />;
   }
 
   if (mobileSessionStatus === "revoked") {
-    return <Redirect href={"/(public)/login" as any} />;
+    return <BootRedirect href={"/(public)/login"} />;
   }
 
   if (status === "error") {
@@ -57,23 +68,19 @@ export default function IndexScreen() {
     );
   }
 
-  if (!bootstrap || status === "bootstrapping" || mobileSessionStatus === "logging_out") {
-    return (
-      <Screen backgroundColor={brandSurfaceSoft}>
-        <ResponsiveContainer>
-          <View style={styles.loadingWrap}>
-            <Text style={styles.loadingText}>
-              {mobileSessionStatus === "logging_out"
-                ? "Déconnexion…"
-                : "Chargement de la session…"}
-            </Text>
-          </View>
-        </ResponsiveContainer>
-      </Screen>
-    );
+  if (
+    bootstrap &&
+    mobileSessionStatus !== "logging_out" &&
+    canEnterFromLocalSession({ bootstrap, activeContext })
+  ) {
+    return <BootRedirect href={resolveInitialRoute(bootstrap)} />;
   }
 
-  return <Redirect href={resolveInitialRoute(bootstrap) as any} />;
+  if (!bootstrap || status === "bootstrapping" || mobileSessionStatus === "logging_out") {
+    return <BootBrandSurface />;
+  }
+
+  return <BootRedirect href={resolveInitialRoute(bootstrap)} />;
 }
 
 const styles = StyleSheet.create({
@@ -111,15 +118,5 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.px16,
     fontWeight: "600",
     color: "#0A8F7A",
-  },
-  loadingWrap: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    minHeight: 120,
-  },
-  loadingText: {
-    fontSize: FONT_SIZE.px15,
-    color: "#5F7369",
   },
 });

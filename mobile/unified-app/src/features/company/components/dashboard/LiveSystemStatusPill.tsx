@@ -32,6 +32,12 @@ import {
 } from "../../dashboard/cockpit/cockpitLiveStatus";
 import type { CompanyDataFreshness } from "../../realtime/companyRealtimeState";
 import { fleetGlassPanel } from "../maps/fleetMapUiTokens";
+import { E } from "../../theme/enterpriseOpsTheme";
+import {
+  formatGpsCoverageA11y,
+  formatGpsCoverageRatio,
+  type GpsCoverageCounts,
+} from "./liveGpsCoverage";
 
 
 
@@ -51,10 +57,14 @@ type Props = {
   onPress?: () => void;
   animationIntensity?: number;
   /**
-   * `header` : une ligne (LIVE seul), largeur contrainte par la rangée — hint uniquement en a11y.
+   * `header` : une ligne (LIVE + couverture GPS), largeur contrainte par la rangée — hint uniquement en a11y.
    * `default` : pilule autonome (ex. overlay bas de carte).
    */
   variant?: "default" | "header";
+  /** Couverture GPS N/T — même sujet que LIVE, jamais dans la barre opérationnelle. */
+  gpsCoverage?: GpsCoverageCounts | null;
+  /** false = roster pas encore résolu — on n’affiche pas 0/0. Une fois résolu, 0/T et T/T restent visibles. */
+  gpsCoverageResolved?: boolean;
 };
 
 
@@ -72,6 +82,8 @@ export function LiveSystemStatusPill({
   onPress,
   animationIntensity = 0.35,
   variant = "default",
+  gpsCoverage = null,
+  gpsCoverageResolved = false,
 }: Props) {
   const isHeader = variant === "header";
 
@@ -154,16 +166,25 @@ export function LiveSystemStatusPill({
 
 
 
-  const a11yLabel = activityHint
+  const showCoverage = gpsCoverageResolved && gpsCoverage != null;
+  const coverageA11y = showCoverage
+    ? formatGpsCoverageA11y(gpsCoverage.liveCount, gpsCoverage.totalCount)
+    : null;
 
-    ? `Statut temps réel : ${label}. ${activityHint}`
-
-    : `Statut temps réel : ${label}`;
-
-
+  const a11yLabel = [activityHint ? `Statut temps réel : ${label}. ${activityHint}` : `Statut temps réel : ${label}`, coverageA11y]
+    .filter(Boolean)
+    .join(". ");
 
   const body = (
-    <View style={[s.pill, isHeader && s.pillHeader, fleetGlassPanel(s.glass)]}>
+    <View
+      style={[
+        s.pill,
+        showCoverage && !isHeader && s.pillWithCoverage,
+        isHeader && s.pillHeader,
+        isHeader && showCoverage && s.pillHeaderCoverage,
+        fleetGlassPanel(s.glass),
+      ]}
+    >
       <View style={s.row}>
         <Animated.View style={[s.dot, { backgroundColor: dotColor }, dotStyle]} />
         <AppText
@@ -174,7 +195,22 @@ export function LiveSystemStatusPill({
         >
           {label}
         </AppText>
-        {!isHeader && activityHint ? (
+        {showCoverage && gpsCoverage ? (
+          <>
+            <View style={s.separator} accessibilityElementsHidden />
+            <View style={s.coverageCluster}>
+              <AppText variant="caption" style={s.coverageRatio} numberOfLines={1}>
+                {formatGpsCoverageRatio(gpsCoverage.liveCount, gpsCoverage.totalCount)}
+              </AppText>
+              {isHeader ? null : (
+                <AppText variant="caption" style={s.coverageHint} numberOfLines={1}>
+                  en direct
+                </AppText>
+              )}
+            </View>
+          </>
+        ) : null}
+        {!isHeader && !showCoverage && activityHint ? (
           <AppText variant="caption" style={s.hintInline} numberOfLines={1} ellipsizeMode="tail">
             · {activityHint}
           </AppText>
@@ -225,12 +261,19 @@ const s = StyleSheet.create({
     maxWidth: 168,
     overflow: "hidden",
   },
+  pillWithCoverage: {
+    maxWidth: 240,
+    paddingHorizontal: 12,
+  },
   pillHeader: {
     width: "100%",
     maxWidth: "100%",
     alignSelf: "stretch",
     flexShrink: 1,
     minWidth: 0,
+  },
+  pillHeaderCoverage: {
+    paddingHorizontal: 12,
   },
   pressableHeader: {
     width: "100%",
@@ -241,6 +284,7 @@ const s = StyleSheet.create({
 
   row: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
     gap: 6,
     minWidth: 0,
@@ -267,11 +311,13 @@ const s = StyleSheet.create({
     height: 8,
 
     borderRadius: 4,
+    flexShrink: 0,
 
   },
 
   label: {
-    flexShrink: 0,
+    flexShrink: 1,
+    minWidth: 0,
     fontWeight: "800",
     fontSize: FONT_SIZE.px11,
     letterSpacing: 0.6,
@@ -281,6 +327,38 @@ const s = StyleSheet.create({
     flex: 1,
     flexShrink: 1,
     minWidth: 0,
+  },
+  separator: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    minHeight: 12,
+    marginHorizontal: 2,
+    flexShrink: 0,
+    backgroundColor: "rgba(148, 163, 184, 0.42)",
+  },
+  coverageCluster: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 4,
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  coverageRatio: {
+    flexShrink: 0,
+    fontSize: FONT_SIZE.px12,
+    fontWeight: "700",
+    color: E.TEXT,
+    letterSpacing: 0.15,
+    textTransform: "none",
+  },
+  coverageHint: {
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: FONT_SIZE.px10,
+    fontWeight: "600",
+    color: E.TEXT_SEC,
+    letterSpacing: 0.1,
+    textTransform: "none",
   },
 
   hintInline: {

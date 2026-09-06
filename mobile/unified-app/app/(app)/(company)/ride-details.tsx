@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ActivityIndicator, RefreshControl, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
@@ -46,6 +47,16 @@ import {
 } from "../../../src/features/company/components/EnterpriseActionChip";
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { canMarkRideUrgent } from "../../../src/features/company/utils/pickupSentinel";
+import {
+  findMissionInDispatchCache,
+  getRideDetailOpenStartedAt,
+  peekRideDetailSnapshot,
+} from "../../../src/features/company/utils/rideDetailSnapshotStore";
+import { resolveRideDetailView } from "../../../src/features/company/utils/resolveRideDetailView";
+import {
+  recordMissionDetailsPhase,
+  recordScreenRender,
+} from "../../../src/core/observability/perfResponsiveness";
 import { getEnterpriseStatusColors } from "../../../src/features/company/theme/enterpriseStatusColors";
 import { createShadow } from "../../../src/styles/shadowStyles";
 import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
@@ -245,13 +256,24 @@ const backBtnShadow = createShadow({
 });
 
 export default function CompanyRideDetailsScreen() {
+  recordScreenRender("company.ride-details");
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { rideId } = useLocalSearchParams<{ rideId?: string }>();
   const { activeContext } = useSession();
   const date = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const contextId = useActiveCompanyContextId();
   const rideIdNumber = rideId ? Number.parseInt(String(rideId), 10) : null;
   const missionQuery = useCompanyRideDetailsQuery({ date, rideId: rideIdNumber });
+  const listSnapshot =
+    rideIdNumber != null
+      ? peekRideDetailSnapshot(rideIdNumber)?.mission ??
+        findMissionInDispatchCache(queryClient, rideIdNumber)
+      : null;
+  const detailView = resolveRideDetailView({
+    serverData: (missionQuery.data as Record<string, unknown> | null | undefined) ?? null,
+    snapshot: listSnapshot,
+  });
   const invoicesQuery = useCompanyInvoicesReadonlyQuery({
     q: rideIdNumber != null ? String(rideIdNumber) : undefined,
     limit: 50,
@@ -267,6 +289,9 @@ export default function CompanyRideDetailsScreen() {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const snapshotLoggedRef = useRef(false);
+  const reconciledRef = useRef(false);
+  const httpLoggedRef = useRef(false);
   const linkedInvoice = useMemo(() => {
     const rows = invoicesQuery.data ?? [];
     if (rideIdNumber == null) return null;
@@ -311,6 +336,35 @@ export default function CompanyRideDetailsScreen() {
       }
     });
   }, [activeContext, invalidate, rideIdNumber]);
+
+  useEffect(() => {
+    snapshotLoggedRef.current = false;
+    reconciledRef.current = false;
+    httpLoggedRef.current = false;
+  }, [rideIdNumber]);
+
+  useEffect(() => {
+    if (!detailView.data || snapshotLoggedRef.current) return;
+    snapshotLoggedRef.current = true;
+    const startedAt = rideIdNumber != null ? getRideDetailOpenStartedAt(rideIdNumber) : null;
+    recordMissionDetailsPhase(
+      "snapshot_render",
+      startedAt != null ? Math.max(0, Date.now() - startedAt) : 0
+    );
+  }, [detailView.data, rideIdNumber]);
+
+  useEffect(() => {
+    if (detailView.source !== "server" || reconciledRef.current) return;
+    reconciledRef.current = true;
+    recordMissionDetailsPhase("server_reconciled");
+  }, [detailView.source]);
+
+  useEffect(() => {
+    if (httpLoggedRef.current || missionQuery.isFetching || !missionQuery.isFetched) return;
+    if (!missionQuery.isSuccess && !missionQuery.isError) return;
+    httpLoggedRef.current = true;
+    recordMissionDetailsPhase("http_complete");
+  }, [missionQuery.isError, missionQuery.isFetched, missionQuery.isFetching, missionQuery.isSuccess]);
 
   const openAssignModal = async () => {
     if (!contextId || !rideIdNumber) return;
@@ -398,7 +452,8 @@ export default function CompanyRideDetailsScreen() {
     }
   };
 
-  const d = (missionQuery.data as Record<string, unknown> | null | undefined) ?? null;
+  const d = detailView.data;
+
   const statusStr = d ? String((d as { status?: string }).status ?? "pending") : "pending";
   const statusStyle = getEnterpriseStatusColors(statusStr);
   const clientTitle = d ? readPassengerLabel(d) : null;
@@ -437,10 +492,13 @@ export default function CompanyRideDetailsScreen() {
           scheduledIso,
           driverDisplay,
           billingSummary,
+          awaitingServer: detailView.awaitingServer,
         })
       : [];
 
-  if (missionQuery.isLoading && !d) {
+  const showFullPageLoad = detailView.source === "none" && missionQuery.isLoading && !d;
+
+  if (showFullPageLoad) {
     return (
       <PermissionGuard permission="company:rides:read">
         <View style={styles.loadWrap}>
@@ -462,7 +520,7 @@ export default function CompanyRideDetailsScreen() {
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
-            refreshing={missionQuery.isLoading}
+            refreshing={missionQuery.isFetching && detailView.source === "server"}
             onRefresh={() => void missionQuery.refetch()}
             tintColor={E.BRAND}
           />
@@ -470,6 +528,23 @@ export default function CompanyRideDetailsScreen() {
       >
         {d ? (
           <>
+            {missionQuery.isFetching ? (
+              <AppText variant="caption" style={styles.refreshHint} accessibilityLiveRegion="polite">
+                Actualisation…
+              </AppText>
+            ) : null}
+            {missionQuery.isError ? (
+              <View style={styles.refreshError} accessibilityRole="alert">
+                <AppText variant="caption" style={styles.refreshErrorText}>
+                  Impossible d’actualiser
+                </AppText>
+                <TouchableOpacity onPress={() => void missionQuery.refetch()} accessibilityRole="button">
+                  <AppText variant="label" style={styles.refreshErrorRetry}>
+                    Réessayer
+                  </AppText>
+                </TouchableOpacity>
+              </View>
+            ) : null}
             <View style={styles.header}>
               <TouchableOpacity style={styles.headerBack} onPress={() => router.back()} activeOpacity={0.85}>
                 <Ionicons name="chevron-back" size={20} color={E.TEXT_SEC} />
@@ -499,11 +574,24 @@ export default function CompanyRideDetailsScreen() {
               dropoff={drop}
               clinicalLine={destinationDetails?.clinicalLine ?? null}
             />
-            {destinationDetails ? (
+            {destinationDetails &&
+            (destinationDetails.establishment ||
+              destinationDetails.service ||
+              destinationDetails.doctor) ? (
               <RideDetailDestinationSection destination={destinationDetails} />
+            ) : detailView.awaitingServer ? (
+              <View style={styles.sectionSkeleton} accessibilityLabel="Destination, actualisation" />
             ) : null}
-            {billingSummary ? <RideDetailBillingSection billing={billingSummary} /> : null}
-            <RideDetailTimelineSection items={timelineItems} />
+            {detailView.source === "server" && billingSummary ? (
+              <RideDetailBillingSection billing={billingSummary} />
+            ) : detailView.awaitingServer ? (
+              <View style={styles.sectionSkeleton} accessibilityLabel="Facturation, actualisation" />
+            ) : null}
+            {timelineItems.length > 0 ? (
+              <RideDetailTimelineSection items={timelineItems} />
+            ) : detailView.awaitingServer ? (
+              <View style={styles.sectionSkeleton} accessibilityLabel="Historique, actualisation" />
+            ) : null}
             <View style={styles.section}>
               <AppText variant="sectionTitle" style={styles.sectionTitle}>
                 Actions
@@ -655,6 +743,33 @@ const styles = StyleSheet.create({
   loadWrap: { flex: 1, backgroundColor: E.BG, alignItems: "center", justifyContent: "center", padding: 24 },
   loadText: { marginTop: 10 },
   content: { paddingBottom: 48 },
+  refreshHint: {
+    color: E.TEXT_MUTED,
+    textAlign: "center",
+    paddingTop: 10,
+    paddingHorizontal: 16,
+  },
+  refreshError: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "rgba(185, 28, 28, 0.08)",
+  },
+  refreshErrorText: { color: "#B91C1C" },
+  refreshErrorRetry: { color: E.BRAND, fontWeight: "700" as const },
+  sectionSkeleton: {
+    height: 72,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    backgroundColor: "rgba(15, 23, 42, 0.05)",
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",

@@ -245,7 +245,7 @@ describe("nativeTrackingLifecycle (P0-A)", () => {
   });
 
   it("STOP concurrent pendant STARTING : jamais stop_in_flight=1 avec start_in_flight=1", async () => {
-    const observed: Array<{ start: 0 | 1; stop: 0 | 1 }> = [];
+    const observed: { start: 0 | 1; stop: 0 | 1 }[] = [];
     const startGate = defer<NativeStartRunResult>();
 
     const unsub = (() => {

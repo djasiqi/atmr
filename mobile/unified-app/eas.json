@@ -52,6 +52,19 @@
         "simulator": false
       }
     },
+    "battery-phase1-ios": {
+      "extends": "development",
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "channel": "development",
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_ENABLE_TRACKING_BATTERY_ENERGY_INSTR": "1"
+      }
+    },
     "staging-canary": {
       "extends": "development",
       "distribution": "internal",

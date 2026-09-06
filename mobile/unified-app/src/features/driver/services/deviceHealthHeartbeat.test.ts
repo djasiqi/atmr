@@ -114,6 +114,10 @@ jest.mock("../../../core/api/client", () => ({
   },
 }));
 
+jest.mock("../../../core/network/driverSessionNetworkGate", () => ({
+  isDriverSessionNetworkReady: () => true,
+}));
+
 jest.mock("../../../core/observability/driverTelemetry", () => ({
   emitDriverTelemetry: (...args: unknown[]) => mockEmit(...args),
 }));

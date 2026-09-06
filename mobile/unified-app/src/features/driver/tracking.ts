@@ -5,6 +5,8 @@ import {
   getDriverTrackingPresenceContext,
   getDriverTrackingPresenceWindowActive,
   getDriverTrackingQueueSnapshot,
+  setDriverMissionSnapshot,
+  setDriverMissionSnapshotResolved,
   setDriverTrackingPresenceContext,
   setDriverTrackingPresenceWindow,
   syncBridgeQueueDepthFromPersistence,
@@ -16,6 +18,8 @@ import {
 } from "./services/driverTrackingBridge";
 import { DriverMissionStatus, type DriverMission } from "./types";
 
+export { setDriverMissionSnapshot, setDriverMissionSnapshotResolved };
+export type { DriverMissionSnapshot } from "./tracking/resolveMissionSnapshotReady";
 export type { DriverPresenceContext };
 
 export type DriverMissionSchedulingContext = Pick<

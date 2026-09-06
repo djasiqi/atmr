@@ -398,9 +398,9 @@ describe("driverTrackingQueue", () => {
       ackStaleMs: 1,
       networkProfile: "normal",
     });
-    const socketPayload = mockSendDriverLocationBatch.mock.calls[0]?.[0] as Array<{
+    const socketPayload = mockSendDriverLocationBatch.mock.calls[0]?.[0] as {
       capture_id?: string | null;
-    }>;
+    }[];
     expect(socketPayload[0]?.capture_id).toBe("fix-stable-p3");
 
     mockSendDriverLocation.mockImplementation(async (payload: unknown) => {

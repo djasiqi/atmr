@@ -137,7 +137,7 @@ function areDriverMarkerPropsEqual(prev: Props, next: Props): boolean {
     prev.item.latitude === next.item.latitude &&
     prev.item.longitude === next.item.longitude &&
     prev.item.location_status === next.item.location_status &&
-    prev.item.last_seen_seconds === next.item.last_seen_seconds &&
+    isFleetDriverMarkerStale(prev.item) === isFleetDriverMarkerStale(next.item) &&
     prev.item.tracking_display_status === next.item.tracking_display_status &&
     prev.item.recorded_at === next.item.recorded_at &&
     prev.item.timestamp === next.item.timestamp &&

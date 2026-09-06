@@ -38,6 +38,18 @@ jest.mock("../telemetry/companyTelemetry", () => ({
   emitCompanyDispatchTelemetry: (...args: unknown[]) => mockEmitCompanyDispatchTelemetry(...args),
 }));
 
+jest.mock("../dispatch/dispatchModeLock", () => ({
+  SEMI_AUTO_DISPATCH_ENABLED: true,
+  OPTIMIZER_ENABLED: true,
+  FULLY_AUTO_DISPATCH_ENABLED: true,
+  shouldMountDispatchEngine: () => true,
+  assertSemiAutoDispatchEnabled: () => undefined,
+  assertOptimizerEnabled: () => undefined,
+  assertFullyAutoDispatchEnabled: () => undefined,
+  assertDispatchModeSwitchAllowed: () => undefined,
+  DispatchFeatureDisabledError: class DispatchFeatureDisabledError extends Error {},
+}));
+
 describe("company api normalization", () => {
   beforeEach(() => {
     mockGet.mockReset();
@@ -79,6 +91,36 @@ describe("company api normalization", () => {
       }),
     ]);
     expect(mockGet.mock.calls[0][0]).toEqual("/company_mobile/dispatch/v1/rides");
+    expect(mockGet.mock.calls[0][1]).toEqual(
+      expect.objectContaining({
+        params: expect.objectContaining({ page: 1, page_size: 50, date: "2026-01-01" }),
+      })
+    );
+    expect(result.total).toBe(1);
+    expect(result.loaded).toBe(1);
+    expect(result.page_size).toBe(50);
+    expect(result.is_complete).toBe(true);
+    expect(result.date).toBe("2026-01-01");
+  });
+
+  it("conserve total/page serveur pour une page partielle", async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        page: 1,
+        page_size: 50,
+        total: 87,
+        items: [{ booking_id: 1, status: "assigned" }],
+      },
+    });
+    const result = await getDispatchMissions({
+      contextId: "company:42",
+      date: "2026-09-06",
+      page: 1,
+    });
+    expect(result.total).toBe(87);
+    expect(result.loaded).toBe(1);
+    expect(result.is_complete).toBe(false);
+    expect(result.next_page).toBe(2);
   });
 
   it("normalizes partner_company_name from transfer payload", async () => {

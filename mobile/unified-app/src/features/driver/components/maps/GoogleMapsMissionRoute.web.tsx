@@ -15,7 +15,7 @@ import { LiriWebMapFrame, LiriWebMapFramePlaceholder } from "../../../maps/LiriW
 import { MissionMapUnavailable } from "../MissionMapUnavailable";
 import { MissionMapLiveBadge } from "../MissionMapLiveBadge";
 import { useMissionMapResolvedCoords } from "../../hooks/useMissionMapResolvedCoords";
-import { useDriverLiveMapPosition } from "../../hooks/useDriverLiveMapPosition";
+import { useDriverMapDisplayPosition } from "../../hooks/useDriverLiveMapPosition";
 import { useMissionRouteMetrics } from "../../hooks/useMissionRouteMetrics";
 import {
   isMissionMapLiveRouteStatus,
@@ -97,7 +97,8 @@ export function GoogleMapsMissionRoute(props: Props) {
     driverLng: props.driverLng,
   });
 
-  const liveDriverCoord = useDriverLiveMapPosition(props.driverLat, props.driverLng, true);
+  const displayPosition = useDriverMapDisplayPosition(props.driverLat, props.driverLng, true);
+  const liveDriverCoord = displayPosition.coord;
 
   const pickupLat = pickupCoord?.latitude ?? null;
   const pickupLng = pickupCoord?.longitude ?? null;
@@ -439,7 +440,7 @@ export function GoogleMapsMissionRoute(props: Props) {
         prefix={routePlan.badgePrefix}
         distanceLabel={routeMetrics.distanceLabel}
         durationLabel={routeMetrics.durationLabel}
-        live={isLiveRoute && driverLat != null}
+        live={isLiveRoute && displayPosition.source === "gnss"}
       />
     </View>
   );

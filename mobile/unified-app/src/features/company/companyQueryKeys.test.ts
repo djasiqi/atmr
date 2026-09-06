@@ -11,14 +11,16 @@ describe("company query keys", () => {
   });
 
   it("generates scoped query keys with context scope object", () => {
-    const missionsKey = companyQueryKeys.missions("company:42", "2026-01-01", "", "all");
+    const missionsKey = companyQueryKeys.missions("company:42", "2026-01-01");
     expect(missionsKey).toEqual(
       expect.arrayContaining([
         "company",
         "dispatch",
         "missions",
         expect.objectContaining({ context_id: "company:42", context_type: "company" }),
+        "2026-01-01",
       ])
     );
+    expect(missionsKey).toHaveLength(5);
   });
 });

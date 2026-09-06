@@ -41,6 +41,11 @@ export type TrackingEligibilityResult = {
   blocked: boolean;
   /** SoT pas encore hydratée : pas PRESENCE/LIVE, pas hors service. */
   availabilityPending: boolean;
+  /**
+   * DRIVER-RUNTIME-01 — état transitoire : ne pas START ni STOP.
+   * pending/unknown ≠ ineligible.
+   */
+  hold: boolean;
   mode: TrackingEligibilityMode;
 };
 
@@ -65,6 +70,7 @@ export function resolveTrackingEligibility(
     trackingEligible: false,
     blocked: false,
     availabilityPending,
+    hold: availabilityPending,
     mode: "OFF" as TrackingEligibilityMode,
   };
 
@@ -107,6 +113,7 @@ export function resolveTrackingEligibility(
     trackingEligible,
     blocked: false,
     availabilityPending: false,
+    hold: false,
     mode,
   };
 }

@@ -1,6 +1,10 @@
 import React from "react";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { act, create } from "react-test-renderer";
+import {
+  resetDriverSessionNetworkGateForTests,
+  setDriverSessionNetworkReady,
+} from "../network/driverSessionNetworkGate";
 import { NotificationsProvider } from "./NotificationsProvider";
 
 const mockRequestPermissionsAsync = jest.fn() as jest.Mock<any>;
@@ -149,6 +153,8 @@ jest.mock("../notifications/notificationDedupStore", () => ({
 
 describe("NotificationsProvider", () => {
   beforeEach(() => {
+    resetDriverSessionNetworkGateForTests();
+    setDriverSessionNetworkReady(true);
     onReceived = null;
     onResponse = null;
     notificationHandler = null;

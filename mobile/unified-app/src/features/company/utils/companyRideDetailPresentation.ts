@@ -6,6 +6,8 @@ export type RideDetailInfoRow = {
   label: string;
   value: string;
   tone?: "danger";
+  /** Champ inconnu du snapshot — skeleton, jamais « — » factice. */
+  pending?: boolean;
 };
 
 export type RideTimelineItem = {
@@ -319,6 +321,8 @@ export function buildRideDetailInfoRows(
     scheduledIso: string | null;
     driverDisplay: string;
     billingSummary: RideBillingSummary;
+    /** Snapshot liste : ne pas afficher les absences comme des vides métier. */
+    awaitingServer?: boolean;
   }
 ): RideDetailInfoRow[] {
   const rows: RideDetailInfoRow[] = [];
@@ -364,20 +368,32 @@ export function buildRideDetailInfoRows(
   const phone =
     readString(data, ["phone"]) ??
     readString(data.client as Record<string, unknown>, ["contact_phone", "phone"]);
-  if (phone) rows.push({ label: "Téléphone", value: phone });
+  if (phone) {
+    rows.push({ label: "Téléphone", value: phone });
+  } else if (options.awaitingServer) {
+    rows.push({ label: "Téléphone", value: "", pending: true });
+  }
 
   const birthDate = readRidePassengerBirthDate(data);
-  if (birthDate) rows.push({ label: "Date de naissance", value: birthDate });
+  if (birthDate) {
+    rows.push({ label: "Date de naissance", value: birthDate });
+  } else if (options.awaitingServer) {
+    rows.push({ label: "Date de naissance", value: "", pending: true });
+  }
 
   const externalRef =
     readString(data, ["external_reference"]) ??
     readString(data.passenger as Record<string, unknown>, ["external_reference"]) ??
     readString(metadataFrom(data), ["external_reference"]);
-  if (externalRef) rows.push({ label: "Réf. patient", value: externalRef });
+  if (externalRef) {
+    rows.push({ label: "Réf. patient", value: externalRef });
+  } else if (options.awaitingServer) {
+    rows.push({ label: "Réf. patient", value: "", pending: true });
+  }
 
   if (options.billingSummary.invoiceStatusLabel) {
     rows.push({ label: "Facture", value: options.billingSummary.invoiceStatusLabel });
-  } else {
+  } else if (!options.awaitingServer) {
     rows.push({ label: "Facturation", value: "Aucune facture liée" });
   }
 

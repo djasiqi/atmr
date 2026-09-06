@@ -824,6 +824,8 @@ export async function refreshAuthTokenNow(options?: EnsureRefreshTokenOptions): 
 
 type AtmrAxiosRequestConfig = InternalAxiosRequestConfig & {
   _skipBearerAuth?: boolean;
+  _perfStartedAt?: number;
+  _p1HarnessStartedAt?: number;
 };
 
 apiClient.interceptors.request.use(async (config) => {
@@ -833,6 +835,7 @@ apiClient.interceptors.request.use(async (config) => {
       recordHttpRequest: (url: string) => void;
     };
     recordHttpRequest(String(config.url ?? ""));
+    (config as AtmrAxiosRequestConfig)._perfStartedAt = Date.now();
   } catch {
     // optional perf instrumentation
   }
@@ -846,6 +849,36 @@ apiClient.interceptors.request.use(async (config) => {
     }
   }
   const requestUrl = String(config.url ?? "");
+  try {
+    const {
+      shouldBlockDriverRequestUntilSessionReady,
+    } = require("../network/driverSessionNetworkGate") as typeof import("../network/driverSessionNetworkGate");
+    if (shouldBlockDriverRequestUntilSessionReady(requestUrl, activeContextIdForApi)) {
+      throw new AxiosError(
+        `Driver network blocked until SESSION_READY: ${requestUrl}`,
+        "ERR_DRIVER_SESSION_NOT_READY",
+        config
+      );
+    }
+    const {
+      shouldBlockCompanyRequestUntilSessionReady,
+    } = require("../network/companySessionNetworkGate") as typeof import("../network/companySessionNetworkGate");
+    if (shouldBlockCompanyRequestUntilSessionReady(requestUrl, activeContextIdForApi)) {
+      throw new AxiosError(
+        `Company network blocked until SESSION_READY: ${requestUrl}`,
+        "ERR_COMPANY_SESSION_NOT_READY",
+        config
+      );
+    }
+  } catch (error) {
+    if (
+      error instanceof AxiosError &&
+      (error.code === "ERR_DRIVER_SESSION_NOT_READY" ||
+        error.code === "ERR_COMPANY_SESSION_NOT_READY")
+    ) {
+      throw error;
+    }
+  }
   if (
     isDriverSelfEndpoint(requestUrl) &&
     !(typeof activeContextIdForApi === "string" && activeContextIdForApi.startsWith("driver:"))
@@ -926,8 +959,18 @@ apiClient.interceptors.response.use(
   (response) => {
     try {
       const cfg = response.config as AtmrAxiosRequestConfig;
-      const started = cfg._p1HarnessStartedAt;
+      const started = cfg._p1HarnessStartedAt ?? cfg._perfStartedAt;
       const url = String(cfg.url ?? "");
+      if (cfg._perfStartedAt != null) {
+        try {
+          const { recordApiRoundtrip } = require("../observability/perfResponsiveness") as {
+            recordApiRoundtrip: (url: string, durationMs: number, status?: number) => void;
+          };
+          recordApiRoundtrip(url, Date.now() - cfg._perfStartedAt, response.status);
+        } catch {
+          // optional
+        }
+      }
       if (
         started &&
         (url.includes("/auth/") ||
@@ -951,6 +994,17 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error: AxiosError<{ error?: string; error_message?: string }>) => {
+    try {
+      const cfg = error.config as AtmrAxiosRequestConfig | undefined;
+      if (cfg?._perfStartedAt != null) {
+        const { recordApiRoundtrip } = require("../observability/perfResponsiveness") as {
+          recordApiRoundtrip: (url: string, durationMs: number, status?: number) => void;
+        };
+        recordApiRoundtrip(String(cfg.url ?? ""), Date.now() - cfg._perfStartedAt, error.response?.status);
+      }
+    } catch {
+      // optional
+    }
     const originalForAuthRetry = error.config as
       | (InternalAxiosRequestConfig & { _authRetried?: boolean })
       | undefined;

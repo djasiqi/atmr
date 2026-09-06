@@ -80,6 +80,17 @@ export type CompanyDispatchMissionListResponse = {
   context_id: string;
   missions: CompanyDispatchMission[];
   refreshed_at: string;
+  /** Date ISO demandée (`YYYY-MM-DD`) — garde-fou anti-contamination J. */
+  date?: string;
+  total: number;
+  page_size: number;
+  loaded: number;
+  is_complete: boolean;
+  /** Page 1-based qui vient d’être fusionnée. */
+  page?: number;
+  /** Prochaine page à demander (reprise après erreur). */
+  next_page: number;
+  pagination_error?: boolean;
 };
 
 export type CompanyDriverLiveLocation = {
@@ -88,6 +99,8 @@ export type CompanyDriverLiveLocation = {
   full_name?: string | null;
   first_name?: string | null;
   last_name?: string | null;
+  /** false = compte historique / désactivé — hors dénominateur T flotte active. */
+  is_active?: boolean | null;
   mission_id?: number | null;
   /** Coords optionnelles côté roster sans GPS — jamais placeholder 0,0. */
   latitude?: number | null;

@@ -122,3 +122,11 @@ export function computeFleetCockpitLayout(
     cameraInsets: getMapCameraInsets(),
   };
 }
+
+/**
+ * Offset overlay « Prochaines courses » : au-dessus de la nav flottante.
+ * La carte est full-bleed — ne pas plafonner à 14 px (héritage scène raccourcie).
+ */
+export function resolveUpcomingRidesBottomOffset(driverSheetBottom: number): number {
+  return Math.max(0, driverSheetBottom);
+}

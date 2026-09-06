@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { realtimeManager } from "../../../src/core/realtime/realtimeManager";
 import { Tabs } from "expo-router";
@@ -7,10 +7,19 @@ import { DriverUnifiedGateGuard } from "../../../src/core/guards";
 import { DriverFloatingTabBar } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 import {
   useActiveDriverContextId,
+  useDriverCompanyBookingsTodayQuery,
   useDriverMissionsQuery,
   useDriverRealtimeSync,
+  useDriverTodayMissionsQuery,
   useDriverTracking,
 } from "../../../src/features/driver/hooks";
+import { useDriverSessionNetworkReady } from "../../../src/features/driver/sessionNetworkGate";
+import { driverQueryKeys } from "../../../src/features/driver/queryKeys";
+import {
+  isMissionSourceSettledPostReady,
+  resolveDriverMissionSnapshot,
+} from "../../../src/features/driver/tracking/resolveMissionSnapshotReady";
+import { startDriverLifecycleAttribution } from "../../../src/features/driver/driverLifecycleAttribution";
 import { pickTrackingMission } from "../../../src/features/driver/domain/pickTrackingMission";
 import type { DriverMission } from "../../../src/features/driver/types";
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
@@ -19,7 +28,10 @@ import {
   getDriverAvailabilityActive,
   subscribeDriverAvailability,
 } from "../../../src/features/driver/services/driverAvailabilityBridge";
-import { setDriverPresenceContext } from "../../../src/features/driver/tracking";
+import {
+  setDriverMissionSnapshot,
+  setDriverPresenceContext,
+} from "../../../src/features/driver/tracking";
 import {
   startBackgroundTrackingHealthMonitor,
   stopBackgroundTrackingHealthMonitor,
@@ -40,6 +52,7 @@ import { useAppViewport } from "../../../src/design/responsive";
 import { AppFloatingBarMetricsProvider } from "../../../src/design/navigation/AppFloatingBarMetricsProvider";
 import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
 import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRouteTracking";
+import { hydrateDriverMapViewport } from "../../../src/features/driver/services/driverMapViewportStore";
 import { DriverPresenceDisclosureHost } from "../../../src/features/driver/components/DriverPresenceDisclosureHost";
 import { DriverNotificationDisclosureHost } from "../../../src/features/driver/components/DriverNotificationDisclosureHost";
 import { DriverTrackingBannerHost } from "../../../src/features/driver/components/DriverTrackingBannerHost";
@@ -71,12 +84,101 @@ function selectTrackingMission(missions: DriverMission[] | undefined): DriverMis
 function DriverTrackingHost() {
   const queryClient = useQueryClient();
   const contextId = useActiveDriverContextId();
+  const networkReady = useDriverSessionNetworkReady();
   const missionsQuery = useDriverMissionsQuery();
+  const todayMissionsQuery = useDriverTodayMissionsQuery();
+  const companyBookingsQuery = useDriverCompanyBookingsTodayQuery();
+  const networkReadyAtRef = useRef(0);
+  const networkReadyGenerationRef = useRef(0);
+  const postReadyRefetchDoneRef = useRef(false);
+  if (!networkReady) {
+    networkReadyAtRef.current = 0;
+    postReadyRefetchDoneRef.current = false;
+  } else if (networkReadyAtRef.current === 0) {
+    networkReadyAtRef.current = Date.now();
+    networkReadyGenerationRef.current += 1;
+  }
   const trackingMission = useMemo(
     () => selectTrackingMission(missionsQuery.data as DriverMission[] | undefined),
     [missionsQuery.data],
   );
-  useDriverTracking(trackingMission);
+  const todayTrackingMission = useMemo(
+    () => selectTrackingMission(todayMissionsQuery.data as DriverMission[] | undefined),
+    [todayMissionsQuery.data],
+  );
+  const missionSnapshot = useMemo(
+    () =>
+      resolveDriverMissionSnapshot({
+        networkReady,
+        networkReadyGeneration: networkReadyGenerationRef.current,
+        sources: [
+          {
+            id: "bookings",
+            settledPostReady: isMissionSourceSettledPostReady({
+              networkReady,
+              networkReadyAtMs: networkReadyAtRef.current,
+              status: missionsQuery.status,
+              fetchStatus: missionsQuery.fetchStatus,
+              dataUpdatedAt: missionsQuery.dataUpdatedAt,
+            }),
+            missionId: trackingMission?.id ?? null,
+          },
+          {
+            id: "today",
+            settledPostReady: isMissionSourceSettledPostReady({
+              networkReady,
+              networkReadyAtMs: networkReadyAtRef.current,
+              status: todayMissionsQuery.status,
+              fetchStatus: todayMissionsQuery.fetchStatus,
+              dataUpdatedAt: todayMissionsQuery.dataUpdatedAt,
+            }),
+            missionId: todayTrackingMission?.id ?? null,
+          },
+          {
+            id: "company-bookings",
+            settledPostReady: isMissionSourceSettledPostReady({
+              networkReady,
+              networkReadyAtMs: networkReadyAtRef.current,
+              status: companyBookingsQuery.status,
+              fetchStatus: companyBookingsQuery.fetchStatus,
+              dataUpdatedAt: companyBookingsQuery.dataUpdatedAt,
+            }),
+            missionId: null,
+          },
+        ],
+      }),
+    [
+      networkReady,
+      trackingMission?.id,
+      todayTrackingMission?.id,
+      missionsQuery.status,
+      missionsQuery.fetchStatus,
+      missionsQuery.dataUpdatedAt,
+      todayMissionsQuery.status,
+      todayMissionsQuery.fetchStatus,
+      todayMissionsQuery.dataUpdatedAt,
+      companyBookingsQuery.status,
+      companyBookingsQuery.fetchStatus,
+      companyBookingsQuery.dataUpdatedAt,
+    ],
+  );
+  const trackingMissionForBridge = trackingMission ?? todayTrackingMission;
+  useEffect(() => {
+    startDriverLifecycleAttribution();
+  }, []);
+  useEffect(() => {
+    if (!networkReady || !contextId || postReadyRefetchDoneRef.current) return;
+    postReadyRefetchDoneRef.current = true;
+    void queryClient.refetchQueries({ queryKey: driverQueryKeys.missions(contextId) });
+    void queryClient.refetchQueries({ queryKey: driverQueryKeys.companyBookingsToday(contextId) });
+  }, [networkReady, contextId, queryClient]);
+  useLayoutEffect(() => {
+    setDriverMissionSnapshot(missionSnapshot);
+  }, [missionSnapshot]);
+  useLayoutEffect(() => {
+    return () => setDriverMissionSnapshot({ status: "pending" });
+  }, []);
+  useDriverTracking(trackingMissionForBridge);
 
   // Canary D5-C3 / C4 : injects QA panel / production-apk uniquement.
   useEffect(() => {
@@ -147,6 +249,9 @@ function DriverRealtimeSyncHost() {
 /** Fond identique à `app/(app)/(company)/_layout.tsx`. */
 export default function DriverLayout() {
   usePerfRouteTracking("driver");
+  useEffect(() => {
+    void hydrateDriverMapViewport();
+  }, []);
   const { width } = useAppViewport();
   const reduceMotion = useReduceMotion();
   const tabScreenOptions = useMemo(

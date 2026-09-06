@@ -9,6 +9,10 @@ jest.mock("../../core/sessionProvider", () => ({
 
 jest.mock("./api/companyApi", () => ({
   getDispatchMissions: jest.fn(),
+  getCompanyRideDetail: jest.fn(),
+  normalizeDispatchMission: jest.fn((raw: { mission_id?: number } | null) =>
+    raw && typeof raw.mission_id === "number" ? raw : null
+  ),
   getDriversLocationsSnapshot: jest.fn(),
   getOptimizerStatus: jest.fn(),
   getRealtimeDashboard: jest.fn(),
@@ -39,7 +43,7 @@ describe("company query invalidation policy", () => {
     resetCompanyInvalidationDedupStateForTests();
   });
 
-  it("invalidates ride-details and dashboard for booking_updated with missionId", () => {
+  it("n’invalide que le dashboard pour booking_updated + missionId (patch, pas famille rides)", () => {
     const queryClient = new QueryClient();
     const spy = jest.spyOn(queryClient, "invalidateQueries");
 
@@ -48,20 +52,16 @@ describe("company query invalidation policy", () => {
       missionId: 101,
     });
 
-    expect(spy).toHaveBeenCalledTimes(2);
-    expect(spy.mock.calls.every((call) => (call[0] as { exact?: boolean })?.exact === true)).toBe(
-      true
-    );
+    expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
-        queryKey: expect.arrayContaining(["ctx", "company:42", "ride-details"]),
-      })
-    );
-    expect(spy.mock.calls[1]?.[0]).toEqual(
-      expect.objectContaining({
+        exact: true,
         queryKey: expect.arrayContaining(["ctx", "company:42", "dashboard"]),
       })
     );
+    const keys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey);
+    expect(keys.some((k) => (k as unknown[]).includes("missions"))).toBe(false);
+    expect(keys.some((k) => (k as unknown[]).includes("ride-details"))).toBe(false);
   });
 
   it("is idempotent for duplicated events received immediately", () => {
@@ -71,7 +71,7 @@ describe("company query invalidation policy", () => {
 
     invalidateCompanyQueriesForEvent(queryClient, "booking_updated", context);
     const firstPassCalls = spy.mock.calls.length;
-    expect(firstPassCalls).toBe(2);
+    expect(firstPassCalls).toBe(1);
     invalidateCompanyQueriesForEvent(queryClient, "booking_updated", context);
 
     // Doublon immédiat ignoré (dedup).
@@ -79,7 +79,7 @@ describe("company query invalidation policy", () => {
   });
 
   // Phase 2 PR B/C — gate D3.1
-  it("invalidates dashboard + missions for dispatch_assignment without missionId", () => {
+  it("n’invalide que le dashboard pour dispatch_assignment (J observé refetch, pas famille)", () => {
     const queryClient = new QueryClient();
     const spy = jest.spyOn(queryClient, "invalidateQueries");
 
@@ -87,13 +87,13 @@ describe("company query invalidation policy", () => {
       contextId: "company:42",
     });
 
-    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenCalledTimes(1);
     const keys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey);
     expect(keys.some((k) => (k as unknown[]).includes("dashboard"))).toBe(true);
-    expect(keys.some((k) => (k as unknown[]).includes("missions"))).toBe(true);
+    expect(keys.some((k) => (k as unknown[]).includes("missions"))).toBe(false);
   });
 
-  it("invalidates dashboard + missions + ride-details for dispatch_assignment with missionId", () => {
+  it("n’invalide pas ride-details ni la famille missions pour dispatch_assignment + missionId", () => {
     const queryClient = new QueryClient();
     const spy = jest.spyOn(queryClient, "invalidateQueries");
 
@@ -102,12 +102,25 @@ describe("company query invalidation policy", () => {
       missionId: 777,
     });
 
-    expect(spy).toHaveBeenCalledTimes(3);
+    expect(spy).toHaveBeenCalledTimes(1);
     const keys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey);
-    expect(keys.some((k) => (k as unknown[]).includes("ride-details"))).toBe(true);
+    expect(keys.some((k) => (k as unknown[]).includes("dashboard"))).toBe(true);
+    expect(keys.some((k) => (k as unknown[]).includes("ride-details"))).toBe(false);
+    expect(keys.some((k) => (k as unknown[]).includes("missions"))).toBe(false);
   });
 
-  it("invalidates dashboard + missions + dispatch-delays for dispatch_run_lifecycle", () => {
+  it("n'invalide pas l'optimizer tant que le LOCK est OFF", () => {
+    const queryClient = new QueryClient();
+    const spy = jest.spyOn(queryClient, "invalidateQueries");
+
+    invalidateCompanyQueriesForEvent(queryClient, "optimizer_status_changed", {
+      contextId: "company:42",
+    });
+
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("invalide dashboard + delays pour dispatch_run_lifecycle, pas la famille missions", () => {
     const queryClient = new QueryClient();
     const spy = jest.spyOn(queryClient, "invalidateQueries");
 
@@ -115,10 +128,10 @@ describe("company query invalidation policy", () => {
       contextId: "company:42",
     });
 
-    expect(spy).toHaveBeenCalledTimes(3);
+    expect(spy).toHaveBeenCalledTimes(2);
     const keys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey);
     expect(keys.some((k) => (k as unknown[]).includes("dashboard"))).toBe(true);
-    expect(keys.some((k) => (k as unknown[]).includes("missions"))).toBe(true);
+    expect(keys.some((k) => (k as unknown[]).includes("missions"))).toBe(false);
     expect(keys.some((k) => (k as unknown[]).includes("dispatch-delays"))).toBe(true);
   });
 });

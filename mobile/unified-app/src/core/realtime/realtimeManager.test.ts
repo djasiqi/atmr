@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import {
+  resetDriverSessionNetworkGateForTests,
+  setDriverSessionNetworkReady,
+} from "../network/driverSessionNetworkGate";
 import { realtimeManager } from "./realtimeManager";
 
 const mockHandlers = new Map<string, ((payload?: unknown) => void)[]>();
@@ -80,6 +84,8 @@ const IDLE_SNAPSHOT = {
 
 describe("realtime manager", () => {
   beforeEach(() => {
+    resetDriverSessionNetworkGateForTests();
+    setDriverSessionNetworkReady(true);
     mockHandlers.clear();
     mockIo.mockClear();
     mockSocket.on.mockClear();
@@ -142,6 +148,18 @@ describe("realtime manager", () => {
       reconnectWindowStartedAtMs: null,
       reconnectWindowAttempts: 0,
     });
+  });
+
+  it("bloque le socket chauffeur avant SESSION_READY", () => {
+    resetDriverSessionNetworkGateForTests();
+    process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver.example.test";
+    realtimeManager.connect("driver:42", { enableSocket: true });
+    expect(mockIo).not.toHaveBeenCalled();
+    expect(realtimeManager.getSnapshot().mode).toBe("idle");
+    expect(mockEmitDriverTelemetry).toHaveBeenCalledWith(
+      "realtime.connect.blocked_before_session_ready",
+      expect.objectContaining({ context_id: "driver:42" })
+    );
   });
 
   it("falls back to polling when socket url is not configured", () => {

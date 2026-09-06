@@ -61,6 +61,24 @@ describe("companyRideDetailPresentation", () => {
     expect(rows.some((r) => r.label === "Passager" && r.value.startsWith("M."))).toBe(true);
   });
 
+  it("en attente serveur : skeleton téléphone, pas de facture vide inventée", () => {
+    const listOnly = {
+      mission_id: 1,
+      client_name: "Sonia BAUER",
+      status: "assigned",
+    } as Record<string, unknown>;
+    const identity = buildIdentityFromMission(listOnly as CompanyDispatchMission);
+    const rows = buildRideDetailInfoRows(listOnly, identity, {
+      statusLabel: "Assignée",
+      scheduledIso: null,
+      driverDisplay: "Karim",
+      billingSummary: buildRideBillingSummary(listOnly, null),
+      awaitingServer: true,
+    });
+    expect(rows.find((r) => r.label === "Téléphone")?.pending).toBe(true);
+    expect(rows.some((r) => r.label === "Facturation")).toBe(false);
+  });
+
   it("construit l'historique opérationnel", () => {
     const timeline = buildRideTimeline(baseMission, "Emmenez Moi");
     expect(timeline[0]?.event).toContain("terminée");

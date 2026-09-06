@@ -15,22 +15,11 @@ describe("sendDriverHubVoiceMessage", () => {
     jest.clearAllMocks();
   });
 
-  it("upload puis envoie via REST avec audio_url (canal équipe)", async () => {
-    jest.mocked(uploadChatAttachment).mockResolvedValue("https://cdn.example/audio.m4a");
-    jest.mocked(sendHubMessage).mockResolvedValue({ id: 1 } as never);
-
-    await sendDriverHubVoiceMessage("file:///voice.m4a", { companyId: 42 });
-
-    expect(uploadChatAttachment).toHaveBeenCalledWith({ uri: "file:///voice.m4a" });
-    expect(sendHubMessage).toHaveBeenCalledWith(
-      42,
-      "team",
-      expect.objectContaining({
-        audio_url: "https://cdn.example/audio.m4a",
-        content: "Message vocal",
-        message_type: "audio",
-      })
-    );
+  it("refuse un threadId vide (pas de repli Équipe)", async () => {
+    await expect(
+      sendDriverHubVoiceMessage("file:///voice.m4a", { companyId: 42, threadId: "  " })
+    ).rejects.toThrow(/threadId/);
+    expect(sendHubMessage).not.toHaveBeenCalled();
   });
 
   it("respecte le threadId demandé", async () => {
@@ -47,6 +36,7 @@ describe("sendDriverHubVoiceMessage", () => {
       "dispatch",
       expect.objectContaining({
         audio_url: "https://cdn.example/audio.m4a",
+        message_type: "audio",
       })
     );
   });

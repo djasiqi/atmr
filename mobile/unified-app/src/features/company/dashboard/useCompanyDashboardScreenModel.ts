@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { isAxiosError } from "axios";
 import { useFocusEffect } from "@react-navigation/native";
+import { useQueryClient } from "@tanstack/react-query";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { useSession } from "../../../core/sessionProvider";
 import { contextRealtimeRouter } from "../../../core/realtime/contextRealtimeRouter";
@@ -20,8 +21,22 @@ import { useCompanyDriverLiveTracking } from "../realtime/useCompanyDriverLiveTr
 import { getDispatchApiErrorMessage } from "../api/companyApi";
 import { resolveDriverStatus } from "../utils/companyDriverMapStatus";
 import { emitCompanyDispatchTelemetry } from "../telemetry/companyTelemetry";
+import { setStickyRidesFetchReason } from "../utils/ridesFetchReason";
+import { useRetainDispatchQueryCache } from "../utils/dispatchQueryRetention";
 import { endPageLoad, startPageLoad } from "../../../core/observability/perfKpi";
 import { markBootMilestone } from "../../../core/observability/bootMilestones";
+import { isCompanySessionNetworkReady } from "../../../core/network/companySessionNetworkGate";
+import {
+  markCompanyScreenUsable,
+  measureCompanyDashboardPhase,
+  recordCompanyDashboardPhase,
+} from "../observability/companyDashboardPhases";
+import { useCompanyBackgroundBootReady } from "../boot/companyColdStartPhase";
+import {
+  applyCompanyColdStartSnapshot,
+  peekCompanyColdStartSnapshot,
+} from "../boot/companyColdStartSnapshot";
+import { usePersistCompanyColdStartSnapshot } from "../boot/usePersistCompanyColdStartSnapshot";
 import {
   buildDashboardPresentation,
   getDashboardModeConfig,
@@ -31,6 +46,7 @@ import {
 } from "./dispatchDashboardPresentation";
 import { buildCompanyDashboardUiModel } from "./companyDashboardViewModel";
 import { IN_FLIGHT_MISSION_STATUSES, missionHasConfirmedPickupTime, toEpoch } from "./companyDashboardMissionUi";
+import { OPTIMIZER_ENABLED } from "../dispatch/dispatchModeLock";
 
 const HEALTHY_FRESHNESS_WINDOW_MS = 30_000;
 const FOCUS_REFRESH_THROTTLE_MS = 3_000;
@@ -57,15 +73,30 @@ function resolveMissionIdFromEvent(payload: {
 export function useCompanyDashboardScreenModel() {
   const { activeContext } = useSession();
   const activeContextId = activeContext?.context_id ?? null;
+  const queryClient = useQueryClient();
+  const backgroundReady = useCompanyBackgroundBootReady();
 
   const [selectedDate, setSelectedDate] = useState(() => getTodayIsoDate());
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
 
+  const hydratedContextRef = useRef<string | null>(null);
+  if (activeContextId && hydratedContextRef.current !== activeContextId) {
+    const snapshot = peekCompanyColdStartSnapshot(activeContextId);
+    if (snapshot) {
+      applyCompanyColdStartSnapshot(queryClient, snapshot);
+      markBootMilestone("CACHE_READY", { source: "cold_start_snapshot" });
+    }
+    hydratedContextRef.current = activeContextId;
+  }
+  const renderStartedAtRef = useRef(Date.now());
+  renderStartedAtRef.current = Date.now();
+
+  useRetainDispatchQueryCache("cockpit", activeContextId, selectedDate);
   const missionsQuery = useCompanyDispatchMissionsQuery({ date: selectedDate });
   const dashboardQuery = useCompanyDashboardQuery(selectedDate);
   const dispatchStatusQuery = useCompanyDispatchStatusQuery(selectedDate);
   const optimizerQuery = useCompanyOptimizerStatusQuery();
-  const inboxQuery = useCompanyInboxQuery();
+  const inboxQuery = useCompanyInboxQuery({ enabled: backgroundReady });
   const liveDrivers = useCompanyDriverLiveTracking();
   const realtime = useCompanyRealtimeStatus();
   const { invalidate } = useCompanyRealtimeInvalidation();
@@ -79,10 +110,13 @@ export function useCompanyDashboardScreenModel() {
   const optimizerRefetch = optimizerQuery.refetch;
   const liveDriversRefetch = liveDrivers.refetch;
 
-  const refreshStaleOnly = useCallback(async () => {
+  const refreshStaleOnly = useCallback(async (options?: { includeMissions?: boolean }) => {
     const now = Date.now();
     const tasks: Promise<unknown>[] = [];
-    if (now - missionsQuery.dataUpdatedAt > STALE_DATA_MS) tasks.push(missionsRefetch());
+    // OPT-04E : focus / AppState ne refetch pas les rides (J±1 + double GET).
+    if (options?.includeMissions && now - missionsQuery.dataUpdatedAt > STALE_DATA_MS) {
+      tasks.push(missionsRefetch());
+    }
     if (now - dashboardQuery.dataUpdatedAt > STALE_DATA_MS) tasks.push(dashboardRefetch());
     if (now - dispatchStatusQuery.dataUpdatedAt > STALE_DATA_MS) {
       tasks.push(dispatchStatusRefetch());
@@ -108,26 +142,30 @@ export function useCompanyDashboardScreenModel() {
   ]);
 
   const refreshAll = useCallback(async () => {
-    const now = Date.now();
-    if (now - lastOptimizerStatusTelemetryAtRef.current >= 1500) {
-      lastOptimizerStatusTelemetryAtRef.current = now;
-      emitCompanyDispatchTelemetry(
-        "company.dispatch.optimizer_status_requested",
-        {
-          source: "company.dashboard.refresh",
-          context_type: "company",
-          context_id: activeContextId,
-        },
-        { allowWhenDisabled: true }
-      );
-    }
-    await Promise.all([
+    setStickyRidesFetchReason("manual");
+    const tasks: Promise<unknown>[] = [
       missionsRefetch(),
       dashboardRefetch(),
       dispatchStatusRefetch(),
-      optimizerRefetch(),
       liveDriversRefetch(),
-    ]);
+    ];
+    if (OPTIMIZER_ENABLED) {
+      const now = Date.now();
+      if (now - lastOptimizerStatusTelemetryAtRef.current >= 1500) {
+        lastOptimizerStatusTelemetryAtRef.current = now;
+        emitCompanyDispatchTelemetry(
+          "company.dispatch.optimizer_status_requested",
+          {
+            source: "company.dashboard.refresh",
+            context_type: "company",
+            context_id: activeContextId,
+          },
+          { allowWhenDisabled: true }
+        );
+      }
+      tasks.push(optimizerRefetch());
+    }
+    await Promise.all(tasks);
   }, [
     activeContextId,
     dashboardRefetch,
@@ -152,15 +190,59 @@ export function useCompanyDashboardScreenModel() {
   }, [activeContextId]);
 
   useEffect(() => {
-    if (!dashboardQuery.isSuccess || dashboardQuery.isFetching) return;
+    const firstScreenReady =
+      missionsQuery.data != null ||
+      dashboardQuery.data != null ||
+      liveDrivers.drivers.length > 0 ||
+      dashboardQuery.isSuccess ||
+      missionsQuery.isSuccess;
+    if (!firstScreenReady) return;
     endPageLoad("company.dashboard", "company.dashboard.data_ready");
-    markBootMilestone("DASHBOARD_DATA_READY");
-  }, [dashboardQuery.isFetching, dashboardQuery.isSuccess]);
+    markBootMilestone("DASHBOARD_DATA_READY", {
+      meaning: "cache_or_first_data",
+      interactive: false,
+    });
+  }, [
+    dashboardQuery.data,
+    dashboardQuery.isSuccess,
+    liveDrivers.drivers.length,
+    missionsQuery.data,
+    missionsQuery.isSuccess,
+  ]);
 
   useEffect(() => {
     if (realtime.transportStatus !== "healthy") return;
     markBootMilestone("SOCKET_HEALTHY", { transport_status: realtime.transportStatus });
   }, [realtime.transportStatus]);
+
+  useLayoutEffect(() => {
+    recordCompanyDashboardPhase(
+      "react_commit",
+      Date.now() - renderStartedAtRef.current,
+      {
+        surface: "dashboard_model",
+        driver_count: liveDrivers.drivers.length,
+        mission_count: missionsQuery.data?.missions?.length ?? 0,
+      }
+    );
+  });
+
+  useLayoutEffect(() => {
+    const firstScreenReady =
+      missionsQuery.data != null ||
+      dashboardQuery.data != null ||
+      liveDrivers.drivers.length > 0 ||
+      dashboardQuery.isSuccess ||
+      missionsQuery.isSuccess;
+    if (!firstScreenReady || !isCompanySessionNetworkReady()) return;
+    markCompanyScreenUsable("company.dashboard", { trigger: "model_commit" });
+  }, [
+    dashboardQuery.data,
+    dashboardQuery.isSuccess,
+    liveDrivers.drivers.length,
+    missionsQuery.data,
+    missionsQuery.isSuccess,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -171,7 +253,11 @@ export function useCompanyDashboardScreenModel() {
     }, [refreshStaleOnly])
   );
 
-  useCompanyFallbackPolling(refreshStaleOnly);
+  const pollWhenRealtimeDown = useCallback(
+    () => refreshStaleOnly({ includeMissions: true }),
+    [refreshStaleOnly]
+  );
+  useCompanyFallbackPolling(pollWhenRealtimeDown);
 
   useFocusEffect(
     useCallback(() => {
@@ -197,7 +283,9 @@ export function useCompanyDashboardScreenModel() {
         } else if (normalizedEventType === "driver_location_update") {
           invalidate("driver_location_update");
         } else if (normalizedEventType === "optimizer_status_changed") {
-          invalidate("optimizer_status_changed");
+          if (OPTIMIZER_ENABLED) {
+            invalidate("optimizer_status_changed");
+          }
         } else if (normalizedEventType === "delay_invalidated") {
           invalidate("delay_invalidated", missionId);
         } else if (normalizedEventType === "company_dispatch_update") {
@@ -232,18 +320,18 @@ export function useCompanyDashboardScreenModel() {
     previousRealtimeStatus.current = realtime.status;
   }, [activeContextId, realtime.connected, realtime.lastError, realtime.status]);
 
+  const hasUsableCockpitData =
+    missionsQuery.data != null ||
+    dashboardQuery.data != null ||
+    liveDrivers.drivers.length > 0;
+
   const loading =
-    missionsQuery.isLoading ||
-    dashboardQuery.isLoading ||
-    dispatchStatusQuery.isLoading ||
-    optimizerQuery.isLoading ||
-    liveDrivers.isLoading;
+    !hasUsableCockpitData &&
+    (missionsQuery.isLoading || dashboardQuery.isLoading || liveDrivers.isLoading);
 
   const error =
     missionsQuery.error ??
     dashboardQuery.error ??
-    dispatchStatusQuery.error ??
-    optimizerQuery.error ??
     liveDrivers.error;
 
   const errMsg = !error
@@ -368,6 +456,9 @@ export function useCompanyDashboardScreenModel() {
 
   const dispatchState = dispatchStatusQuery.data?.dispatch_state ?? "unknown";
   const optimizer: CompanyOptimizerRuntime = useMemo(() => {
+    if (!OPTIMIZER_ENABLED) {
+      return { optimizerEnabled: false, optimizerState: "idle" };
+    }
     const s = optimizerQuery.data?.status;
     const st = s?.optimizer_state;
     return {
@@ -444,15 +535,17 @@ export function useCompanyDashboardScreenModel() {
   const hasDispatchScreen = isFeatureEnabled("company_dispatch_screen_enabled");
   const presentationView = useMemo(
     () =>
-      buildDashboardPresentation({
-        config,
-        dispatchState: dispatchState as "idle" | "running" | "degraded" | "failed" | "unknown",
-        optimizer,
-        socketStatus: realtime.status,
-        connected: realtime.connected,
-        metrics: presentationMetrics,
-        hasDispatchScreen,
-      }),
+      measureCompanyDashboardPhase("presentation", () =>
+        buildDashboardPresentation({
+          config,
+          dispatchState: dispatchState as "idle" | "running" | "degraded" | "failed" | "unknown",
+          optimizer,
+          socketStatus: realtime.status,
+          connected: realtime.connected,
+          metrics: presentationMetrics,
+          hasDispatchScreen,
+        })
+      ),
     [
       config,
       dispatchState,
@@ -474,22 +567,37 @@ export function useCompanyDashboardScreenModel() {
     [presentationView.alertLines]
   );
 
+  usePersistCompanyColdStartSnapshot({
+    contextId: activeContextId,
+    date: selectedDate,
+    missions: missionsQuery.data,
+    dashboard: dashboardQuery.data,
+    drivers: liveDrivers.drivers,
+    driversRefreshedAt: liveDrivers.snapshotRefreshedAt,
+    dispatchStatus: dispatchStatusQuery.data,
+  });
+
   const uiModel = useMemo(
     () =>
-      buildCompanyDashboardUiModel({
-        isLive: realtimeHealthyData,
-        missions,
-        drivers: liveDrivers.drivers,
-        missionsPending,
-        missionsInProgress,
-        delayedBookings: presentationMetrics.delayedBookings,
-        driversAvailable: driversAvailableCount,
-        presentationView,
-        alertTexts,
-        inboxNotifications: inboxQuery.data?.notifications ?? [],
-        selectedDateIso: selectedDate,
-        loading,
-      }),
+      measureCompanyDashboardPhase(
+        "view_model",
+        () =>
+          buildCompanyDashboardUiModel({
+            isLive: realtimeHealthyData,
+            missions,
+            drivers: liveDrivers.drivers,
+            missionsPending,
+            missionsInProgress,
+            delayedBookings: presentationMetrics.delayedBookings,
+            driversAvailable: driversAvailableCount,
+            presentationView,
+            alertTexts,
+            inboxNotifications: inboxQuery.data?.notifications ?? [],
+            selectedDateIso: selectedDate,
+            loading,
+          }),
+        { driver_count: liveDrivers.drivers.length, mission_count: missions.length }
+      ),
     [
       alertTexts,
       driversAvailableCount,

@@ -1,9 +1,9 @@
 import { Platform, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  useDriverTeamVoiceBroadcast,
-  type DriverTeamVoiceFeedback,
-} from "./useDriverTeamVoiceBroadcast";
+  useDriverDispatchVoiceBroadcast,
+  type DriverDispatchVoiceFeedback,
+} from "./useDriverDispatchVoiceBroadcast";
 
 const C = {
   brand: "#00796B",
@@ -21,23 +21,23 @@ const PRESSABLE_WEB_SUPPRESS_SQUARE_HALO = Platform.select({
   default: undefined,
 });
 
-type DriverTeamVoiceFabProps = {
-  onFeedback?: (feedback: DriverTeamVoiceFeedback | null) => void;
+type DriverDispatchVoiceFabProps = {
+  onFeedback?: (feedback: DriverDispatchVoiceFeedback | null) => void;
 };
 
-/** Micro central : envoi vocal direct vers le canal équipe de l'entreprise. */
-export function DriverTeamVoiceFab({ onFeedback }: DriverTeamVoiceFabProps) {
-  const { disabled, isRecording, voiceBusy, handlePress } = useDriverTeamVoiceBroadcast({
+/** Micro central : enregistrement immédiat vers le canal Dispatch (jamais Équipe). */
+export function DriverDispatchVoiceFab({ onFeedback }: DriverDispatchVoiceFabProps) {
+  const { disabled, isRecording, voiceBusy, handlePress } = useDriverDispatchVoiceBroadcast({
     onFeedback,
   });
 
   const a11yLabel = disabled
     ? "Messages vocaux indisponibles sur le web"
     : voiceBusy
-      ? "Envoi du message vocal en cours"
+      ? "Envoi du message vocal Dispatch en cours"
       : isRecording
-        ? "Appuyez pour envoyer au canal équipe"
-        : "Appuyez pour enregistrer un message vocal pour le canal équipe";
+        ? "Appuyez pour envoyer l'audio dans Dispatch"
+        : "Appuyez pour enregistrer un audio Dispatch";
 
   return (
     <Pressable

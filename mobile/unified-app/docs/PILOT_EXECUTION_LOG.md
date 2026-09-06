@@ -3,11 +3,11 @@
 Ce fichier est mis à jour automatiquement par `npm run prefill-pilot-log` (CI et local) à partir des résultats lint, tests Jest, instrumentation et `no-legacy-imports`.
 
 ```yaml
-branch: __AUTO_BRANCH__
-commit: __AUTO_COMMIT__
-start_date: __AUTO_DATE__
-lint: __AUTO_LINT__
-jest_tests: __AUTO_TESTS__
-instrumentation_check: __AUTO_INSTRUMENTATION__
-boundary_checks: __AUTO_BOUNDARIES__
+branch: feat/cancel-billable-c1
+commit: c8e01091387d51c8757fffc0ef2d412273246dbc
+start_date: 2026-09-06
+lint: passed
+jest_tests: passed
+instrumentation_check: passed
+boundary_checks: passed
 ```

@@ -14,7 +14,12 @@ export type PerfMetricCategory =
   | "message_send"
   | "chat_cache_mismatch"
   | "thread_cache"
-  | "thread_runtime";
+  | "thread_runtime"
+  | "tap"
+  | "screen_render"
+  | "query_cache"
+  | "api_roundtrip"
+  | "mission_details";
 
 type BucketKey = string;
 

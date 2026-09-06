@@ -29,11 +29,39 @@ export function getLastFcmRegistrationSuccessKeyForTests(): string | null {
   return lastSuccessKey;
 }
 
+const acquireInFlight = new Map<string, Promise<boolean>>();
+
 export function resetFcmRegistrationGuardForTests(): void {
   inFlight = null;
   lastSuccessKey = null;
   lastFailureKey = null;
   lastFailureAtMs = 0;
+  acquireInFlight.clear();
+}
+
+/**
+ * Single-flight avant getToken : session_ready + app_foreground
+ * rejoignent la même Promise pour un ownerKey.
+ */
+export async function runFcmTokenAcquisitionOnce(
+  ownerKey: string,
+  acquire: () => Promise<boolean>
+): Promise<boolean> {
+  if (!ownerKey) return false;
+  if (hasSuccessfulFcmRegistrationForOwner(ownerKey)) {
+    return true;
+  }
+  const existing = acquireInFlight.get(ownerKey);
+  if (existing) return existing;
+  const promise = (async () => {
+    try {
+      return await acquire();
+    } finally {
+      acquireInFlight.delete(ownerKey);
+    }
+  })();
+  acquireInFlight.set(ownerKey, promise);
+  return promise;
 }
 
 /** Invalide le cache si l'owner change (logout / switch chauffeur). */
@@ -42,6 +70,11 @@ export function clearFcmRegistrationSuccessIfOwnerChanged(ownerKey: string): voi
   if (!lastSuccessKey.startsWith(`${ownerKey}::`)) {
     lastSuccessKey = null;
   }
+}
+
+/** True si cet owner a déjà un token FCM enregistré avec succès. */
+export function hasSuccessfulFcmRegistrationForOwner(ownerKey: string): boolean {
+  return Boolean(lastSuccessKey && lastSuccessKey.startsWith(`${ownerKey}::`));
 }
 
 /**

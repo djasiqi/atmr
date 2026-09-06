@@ -126,7 +126,7 @@ describe("driverTrackingQueue Q3 session ownership", () => {
     const before = await driverTrackingQueue.getSnapshot();
 
     mockRegisterTrackingSession.mockReset();
-    const pendingResolvers: Array<(v: unknown) => void> = [];
+    const pendingResolvers: ((v: unknown) => void)[] = [];
     mockRegisterTrackingSession.mockImplementation(
       () =>
         new Promise((resolve) => {

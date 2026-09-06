@@ -35,6 +35,8 @@ import {
   persistOfflineSnapshot,
   restoreOfflineSessionSnapshot,
 } from "./auth/authRecoveryCoordinator";
+import { canEnterFromLocalSession } from "./auth/canEnterFromLocalSession";
+import { flushPendingSessionConfirmation } from "./auth/pendingSessionConfirmation";
 import {
   getSessionGenerationId,
   isCurrentSessionGeneration,
@@ -64,6 +66,7 @@ import {
   type MobileSessionStatus,
 } from "./auth/mobileSessionStatus";
 import { realtimeManager } from "./realtime/realtimeManager";
+import { setDriverSessionNetworkReady } from "./network/driverSessionNetworkGate";
 import { contextRealtimeRouter } from "./realtime/contextRealtimeRouter";
 import { isFeatureEnabled, setRuntimeFeatureFlagOverrides } from "./featureFlags/registry";
 import { QUERY_STALE_TIME_MS } from "./queryStaleTimes";
@@ -73,6 +76,11 @@ import { emitDriverTelemetry } from "./observability/driverTelemetry";
 import { appendSessionJournalEvent, clearSessionJournal, hydrateSessionJournal } from "./observability/sessionJournal";
 import { purgeDriverProfileCache } from "../features/driver/services/driverProfileCache";
 import { setDriverAvailabilityActive } from "../features/driver/services/driverAvailabilityBridge";
+import {
+  armDriverForegroundResumeAfterSessionReady,
+  disarmDriverForegroundResumeAuthority,
+} from "../features/driver/driverForegroundResumeAuthority";
+import { startDriverLifecycleAttribution } from "../features/driver/driverLifecycleAttribution";
 import {
   companyDriverSwitchBlockedMessage,
   isCompanyDriverCrossContextSwitch,
@@ -279,38 +287,33 @@ export function SessionProvider({ children }: PropsWithChildren) {
     []
   );
 
-  const resumeSessionIfPossible = ReactRuntime.useCallback(async () => {
+  const resumeSessionIfPossible = ReactRuntime.useCallback(async (): Promise<{
+    localSessionReady: boolean;
+  }> => {
     const resumeGeneration = getSessionGenerationId();
+    let localSessionReady = false;
     void appendSessionJournalEvent("session.resume.start");
     setMobileSessionStatus("auth_recovering");
 
     // 1. Flush pending réseau (ne crée pas de preuve terminale)
     await flushPendingRevocationTombstone().catch(() => false);
-    try {
-       
-      const { flushPendingSessionConfirmation } = require("./auth/pendingSessionConfirmation") as {
-        flushPendingSessionConfirmation: () => Promise<boolean>;
-      };
-      // Best-effort : confirmation provisional post-login (nécessite access token si déjà en mémoire)
-      void flushPendingSessionConfirmation().catch(() => undefined);
-    } catch {
-      /* ignore */
-    }
+    // Best-effort : confirmation provisional post-login (nécessite access token si déjà en mémoire)
+    void flushPendingSessionConfirmation().catch(() => undefined);
 
     // 2. Restore offline snapshot
     const offline = await restoreOfflineSessionSnapshot();
-    if (!isCurrentSessionGeneration(resumeGeneration)) return;
+    if (!isCurrentSessionGeneration(resumeGeneration)) return { localSessionReady: false };
 
     if (offline.kind === "storage_locked") {
       setMobileSessionStatus("storage_locked");
       setError("Stockage sécurisé temporairement indisponible");
-      return;
+      return { localSessionReady: false };
     }
     if (offline.kind === "interrupted_logout") {
       await finishInterruptedExplicitLogout(offline.pending, {
         runQuarantine: runDriverQuarantine,
       });
-      if (!isCurrentSessionGeneration(resumeGeneration)) return;
+      if (!isCurrentSessionGeneration(resumeGeneration)) return { localSessionReady: false };
       setBootstrap(null);
       setActiveContext(null);
       activeContextRef.current = null;
@@ -319,13 +322,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
       contextRealtimeRouter.setActiveContext(null);
       setMobileSessionStatus("anonymous");
       setStatus("idle");
+      setDriverSessionNetworkReady(false);
+      disarmDriverForegroundResumeAuthority();
       setAutoBootstrapAllowedSync(false);
-      return;
+      return { localSessionReady: false };
     }
     if (offline.kind === "revoked") {
       setMobileSessionStatus("revoked");
       setAutoBootstrapAllowedSync(false);
-      return;
+      return { localSessionReady: false };
     }
     if (offline.kind === "restored") {
       markBootMilestone("SESSION_RESTORED");
@@ -334,38 +339,33 @@ export function SessionProvider({ children }: PropsWithChildren) {
       if (offline.activeContext) {
         setActiveContext(offline.activeContext);
         setActiveContextIdForApi(offline.activeContext.context_id ?? null);
+        if (offline.activeContext.context_type === "company") {
+          void import("../features/company/boot/companyColdStartSnapshot")
+            .then(({ preloadCompanyColdStartSnapshot }) =>
+              preloadCompanyColdStartSnapshot(offline.activeContext!.context_id)
+            )
+            .catch(() => undefined);
+        }
       }
+      localSessionReady = canEnterFromLocalSession({
+        bootstrap: offline.bootstrap,
+        activeContext: offline.activeContext,
+      });
     }
     if (hasAuthToken()) {
       void appendSessionJournalEvent("session.resume.skipped_has_access_token");
       setMobileSessionStatus("authenticated_online");
-      try {
-         
-        const { flushPendingSessionConfirmation } = require("./auth/pendingSessionConfirmation") as {
-          flushPendingSessionConfirmation: () => Promise<boolean>;
-        };
-        void flushPendingSessionConfirmation().catch(() => undefined);
-      } catch {
-        /* ignore */
-      }
-      return;
+      void flushPendingSessionConfirmation().catch(() => undefined);
+      return { localSessionReady };
     }
     // 3. Recovery REST (refresh puis session-resume) — capture génération, pas de bump
     const outcome = await attemptRestRecovery("cold_start");
-    if (!isCurrentSessionGeneration(resumeGeneration)) return;
+    if (!isCurrentSessionGeneration(resumeGeneration)) return { localSessionReady: false };
 
     if (outcome === "recovered") {
       setMobileSessionStatus("authenticated_online");
       void appendSessionJournalEvent("session.resume.success", { via: "coordinator" });
-      try {
-         
-        const { flushPendingSessionConfirmation } = require("./auth/pendingSessionConfirmation") as {
-          flushPendingSessionConfirmation: () => Promise<boolean>;
-        };
-        void flushPendingSessionConfirmation().catch(() => undefined);
-      } catch {
-        /* ignore */
-      }
+      void flushPendingSessionConfirmation().catch(() => undefined);
       try {
         const ctx = activeContextRef.current;
         if (ctx?.context_type === "driver") {
@@ -379,11 +379,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
       } catch {
         /* best-effort */
       }
-      return;
+      return { localSessionReady };
     }
     if (outcome === "keep_local" && offline.kind === "restored") {
       setMobileSessionStatus("authenticated_offline");
-      return;
+      return { localSessionReady };
     }
     if (outcome === "terminal") {
       await applyTerminalRevocationIfCurrent(
@@ -399,15 +399,18 @@ export function SessionProvider({ children }: PropsWithChildren) {
           contextRealtimeRouter.setActiveContext(null);
           setMobileSessionStatus("revoked");
           setStatus("idle");
+          setDriverSessionNetworkReady(false);
+      disarmDriverForegroundResumeAuthority();
           setAutoBootstrapAllowedSync(false);
           return true;
         }
       );
-      return;
+      return { localSessionReady: false };
     }
     if (offline.kind !== "restored") {
       setMobileSessionStatus("anonymous");
     }
+    return { localSessionReady };
   }, [runDriverQuarantine, setAutoBootstrapAllowedSync]);
 
   /* Avant les effets des écrans : en-têtes API alignés sur le contexte (driver + company, multi-rôles). */
@@ -431,6 +434,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     const cycle = (async () => {
       if (!isCurrentSessionGeneration(generation)) return;
       setStatus("bootstrapping");
+      startDriverLifecycleAttribution();
       setError(null);
       const bootstrapStartedAt = Date.now();
       void appendSessionJournalEvent(
@@ -438,9 +442,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
         { trigger },
         activeContextRef.current?.context_id ?? null
       );
+      let localSessionReady = false;
       try {
-        await resumeSessionIfPossible();
+        const resume = await resumeSessionIfPossible();
+        localSessionReady = resume.localSessionReady;
         if (!isCurrentSessionGeneration(generation)) return;
+        if (localSessionReady) {
+          // Peint le shell depuis le snapshot. SESSION_READY réseau = après bootstrap.
+          setStatus("ready");
+        }
         // Après logout interrompu / anonymous sans auto-bootstrap : ne pas fetcher
         if (!autoBootstrapAllowedRef.current && trigger === "cold_start_auto") {
           return;
@@ -547,6 +557,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
       contextRealtimeRouter.setActiveContext(resolved?.context_type ?? null);
       setStatus("ready");
       markBootMilestone("SESSION_READY");
+      setDriverSessionNetworkReady(true);
+      startDriverLifecycleAttribution();
+      armDriverForegroundResumeAfterSessionReady();
       setMobileSessionStatus(
         data.is_authenticated ? "authenticated_online" : "anonymous"
       );
@@ -642,8 +655,18 @@ export function SessionProvider({ children }: PropsWithChildren) {
       } catch (e) {
         if (!isCurrentSessionGeneration(generation)) return;
         const message = toUiErrorMessage(e, "Bootstrap failed");
+        if (localSessionReady) {
+          void appendSessionJournalEvent(
+            "session.bootstrap.error_background",
+            { message },
+            activeContextRef.current?.context_id ?? null
+          );
+          return;
+        }
         setError(message);
         setStatus("error");
+        setDriverSessionNetworkReady(false);
+      disarmDriverForegroundResumeAuthority();
         void appendSessionJournalEvent("session.bootstrap.error", { message }, activeContextRef.current?.context_id ?? null);
       }
     })();
@@ -1043,6 +1066,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
         setRuntimeFeatureFlagOverrides(null);
         contextRealtimeRouter.setActiveContext(null);
         setStatus("idle");
+        setDriverSessionNetworkReady(false);
+      disarmDriverForegroundResumeAuthority();
         setMobileSessionStatus("anonymous");
         setError(null);
         realtimeManager.disconnect();

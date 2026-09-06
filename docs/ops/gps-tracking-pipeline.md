@@ -573,10 +573,10 @@ Contrats :
 
 ### ✅ **Implémenté** : P0-F UI — Présence GPS flotte
 
-Machine d’état 5 états (`live` | `recent` | `stale` | `last_known` | `offline_unknown`), axes métier / GPS / device séparés, compteur `N/T en direct` sur roster complet, `spatialDrivers` pour la géométrie.
+Machine d’état 5 états (`live` | `recent` | `stale` | `last_known` | `offline_unknown`), axes métier / GPS / device séparés, compteur `N/T en direct` sur **flotte active** (cockpit LIRIE **LOCKED**), `spatialDrivers` pour la géométrie.
 
 - Spec + détail : [`docs/ops/gps-p0f-ui-fleet-presence.md`](./gps-p0f-ui-fleet-presence.md)
-- Mobile : `driverLocationPresence.ts`, badge OperationalFleetMap, filtres GPS distincts
+- Mobile : `driverLocationPresence.ts`, capsule LIVE cockpit (`N/T en direct`), badge OperationalFleetMap hors cockpit, filtres GPS distincts
 - Web : `fleetDriverLocationPresence.js`, libellé DriverLiveMap « en direct »
 - **Merge UI** uniquement après canary téléphone P0-F (Android → analyse → iOS → UI)
 
