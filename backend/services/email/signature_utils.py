@@ -236,10 +236,16 @@ def render_signature_html_template(
     # Sécurité supplémentaire: supprimer les balises dangereuses
     # (même si auto-escape est activé, on supprime <script> et <iframe> par précaution)
     rendered = re.sub(
-        r"<script[^>]*>.*?</script>", "", rendered, flags=re.IGNORECASE | re.DOTALL
+        r"<script[^>]*>.*?</script\s*>",
+        "",
+        rendered,
+        flags=re.IGNORECASE | re.DOTALL,
     )
     rendered = re.sub(
-        r"<iframe[^>]*>.*?</iframe>", "", rendered, flags=re.IGNORECASE | re.DOTALL
+        r"<iframe[^>]*>.*?</iframe\s*>",
+        "",
+        rendered,
+        flags=re.IGNORECASE | re.DOTALL,
     )
     # Supprimer onclick, onload, etc.
     return re.sub(r"on\w+\s*=", "", rendered, flags=re.IGNORECASE)

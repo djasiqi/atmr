@@ -90,6 +90,18 @@ class TestSanitizeString:
         """Test avec input None."""
         assert sanitize_string(None) is None
 
+    def test_script_end_tag_with_whitespace(self):
+        """Le filtre doit aussi retirer </script > (espace avant >)."""
+        result = sanitize_string(
+            "ok<script>alert(1)</script >suite",
+            strip_html=True,
+            escape_html_chars=False,
+        )
+        assert "script" not in result.lower()
+        assert "alert" not in result
+        assert "ok" in result
+        assert "suite" in result
+
 
 class TestSanitizeEmail:
     """Tests pour sanitize_email()."""

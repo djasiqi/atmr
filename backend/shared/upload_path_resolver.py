@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 from flask import Response, current_app
 from werkzeug.exceptions import NotFound
+from werkzeug.utils import safe_join
 
 PUBLIC_UPLOAD_PREFIXES = ("company_logos/", "institution_logos/")
 
@@ -41,8 +42,11 @@ def resolve_safe_upload_path(
         raise NotFound()
 
     base = Path(uploads_base).resolve()
+    joined = safe_join(str(base), relative)
+    if joined is None:
+        raise NotFound()
     try:
-        candidate = (base / relative).resolve()
+        candidate = Path(joined).resolve()
         candidate.relative_to(base)
     except (ValueError, RuntimeError, OSError) as exc:
         raise NotFound() from exc

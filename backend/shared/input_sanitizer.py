@@ -14,7 +14,9 @@ MAX_EMAIL_LENGTH = 254  # RFC 5321
 MAX_URL_LENGTH = 2048  # Limite raisonnable pour les URLs
 MIN_CONTROL_CHAR_CODE = 32  # Code ASCII minimum pour caractères non-contrôle (espace)
 HTML_TAG_PATTERN = re.compile(r"<[^>]+>", re.IGNORECASE)
-SCRIPT_TAG_PATTERN = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
+SCRIPT_TAG_PATTERN = re.compile(
+    r"<script[^>]*>.*?</script\s*>", re.IGNORECASE | re.DOTALL
+)
 
 
 def escape_html(text: str | None) -> str | None:

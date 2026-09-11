@@ -51,8 +51,12 @@ def is_email_provider_configured() -> tuple[bool, str | None]:
 
 def _html_to_text(html_content: str) -> str:
     """Convertit un HTML simple en texte brut pour améliorer la délivrabilité."""
-    no_style = re.sub(r"<style[\s\S]*?</style>", " ", html_content, flags=re.IGNORECASE)
-    no_script = re.sub(r"<script[\s\S]*?</script>", " ", no_style, flags=re.IGNORECASE)
+    no_style = re.sub(
+        r"<style[\s\S]*?</style\s*>", " ", html_content, flags=re.IGNORECASE
+    )
+    no_script = re.sub(
+        r"<script[\s\S]*?</script\s*>", " ", no_style, flags=re.IGNORECASE
+    )
     with_newlines = re.sub(
         r"</(p|div|br|li|h1|h2|h3|tr|table)>", "\n", no_script, flags=re.IGNORECASE
     )

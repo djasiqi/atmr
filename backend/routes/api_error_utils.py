@@ -21,10 +21,8 @@ Toutes les erreurs API suivent ce format :
 Voir docs/api/errors.md pour la liste complète des codes.
 """
 
-import traceback
+import logging
 from typing import Any, Dict, Tuple
-
-from flask import current_app  # pyright: ignore[reportMissingImports]
 
 # =============================================================================
 # ✅ NOUVEAU FORMAT STANDARD (v2) - À utiliser pour toutes les nouvelles erreurs
@@ -121,7 +119,7 @@ def create_error_response(
         error_code: Code d'erreur standardisé (ex: "validation_error", "not_found")
         details: Détails supplémentaires pour le debugging (dict)
         suggestion: Suggestion de résolution pour l'utilisateur
-        exception: Exception originale (pour extraire des détails en dev)
+        exception: Exception originale (journalisée, jamais renvoyée au client)
 
     Returns:
         Tuple (response_json, status_code) pour Flask
@@ -163,13 +161,12 @@ def create_error_response(
     if suggestion:
         response["suggestion"] = suggestion
 
-    # En mode développement, ajouter des détails de l'exception
-    if exception and current_app and current_app.config.get("DEBUG", False):
-        response["debug"] = {
-            "exception_type": type(exception).__name__,
-            "exception_message": str(exception),
-            "traceback": traceback.format_exc().split("\n"),
-        }
+    # Jamais de traceback / type d'exception dans la réponse HTTP
+    # (même en DEBUG) : journaliser côté serveur uniquement.
+    if exception is not None:
+        logging.getLogger(__name__).exception(
+            "Erreur API non exposée au client: %s", exception
+        )
 
     return response, status_code
 
