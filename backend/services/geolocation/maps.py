@@ -386,18 +386,14 @@ def geocode_address(
             ).hexdigest()
             redis_cache_key = f"geocoding:google:{cache_key_hash}"
             redis_client.setex(redis_cache_key, _GOOGLE_MAPS_CACHE_TTL, cache_value)
-            app_logger.debug(
-                "[Google Maps] L2 cache write (Redis) country=%s", country
-            )
+            app_logger.debug("[Google Maps] L2 cache write (Redis) country=%s", country)
         except Exception as e:
             app_logger.debug("[Google Maps] Failed to write to Redis cache: %s", e)
 
     # ✅ P1: Mettre en cache local (L1 cache)
     with _GOOGLE_MAPS_LOCAL_CACHE_LOCK:
         _GOOGLE_MAPS_LOCAL_CACHE[cache_key] = result
-        app_logger.debug(
-            "[Google Maps] L1 cache write (local LRU) country=%s", country
-        )
+        app_logger.debug("[Google Maps] L1 cache write (local LRU) country=%s", country)
 
     return result
 
@@ -592,9 +588,7 @@ def geocode_address_nominatim(
             }
 
     except requests.RequestException as e:
-        app_logger.error(
-            "Erreur Nominatim (après retries): %s", type(e).__name__
-        )
+        app_logger.error("Erreur Nominatim (après retries): %s", type(e).__name__)
         result = None
 
     # ✅ P1: Mettre en cache le résultat (même si None pour éviter requêtes répétées)
@@ -603,18 +597,14 @@ def geocode_address_nominatim(
         try:
             cache_value = json.dumps(result) if result else json.dumps(None)
             redis_client.setex(redis_cache_key, _NOMINATIM_CACHE_TTL, cache_value)
-            app_logger.debug(
-                "[Nominatim] L2 cache write (Redis)"
-            )
+            app_logger.debug("[Nominatim] L2 cache write (Redis)")
         except Exception as e:
             app_logger.debug("[Nominatim] Redis setex failed: %s", e)
 
     # ✅ P1: Mettre en cache local LRU (L1 cache) pour accès ultra-rapide
     with _NOMINATIM_LOCAL_CACHE_LOCK:
         _NOMINATIM_LOCAL_CACHE[cache_key_normalized] = result
-        app_logger.debug(
-            "[Nominatim] L1 cache write (local LRU)"
-        )
+        app_logger.debug("[Nominatim] L1 cache write (local LRU)")
 
     return result
 
