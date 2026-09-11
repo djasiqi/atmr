@@ -26,7 +26,10 @@ def test_connection():
 
     try:
         provider = BrevoEmailProvider()
-        print(f"✅ Provider initialisé avec clé : {provider.api_key[:10]}...")
+        print(
+            f"✅ Provider initialisé (api_key_present={bool(provider.api_key)}, "
+            f"len={len(provider.api_key or '')})"
+        )
 
         if provider.test_connection():
             print("✅ Connexion à l'API Brevo réussie !")

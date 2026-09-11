@@ -17,6 +17,7 @@ from services.demo.environment_guard import (
     build_demo_environment_snapshot,
     enforce_demo_environment_or_raise,
 )
+from shared.logging_utils import sanitize_url_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -615,8 +616,8 @@ def init_app(app: Flask) -> Celery:
 
     logger.info(
         "Celery initialized with broker=%s, backend=%s, timezone=%s",
-        CELERY_BROKER_URL,
-        CELERY_RESULT_BACKEND,
+        sanitize_url_for_log(CELERY_BROKER_URL),
+        sanitize_url_for_log(CELERY_RESULT_BACKEND),
         CELERY_TIMEZONE,
     )
 

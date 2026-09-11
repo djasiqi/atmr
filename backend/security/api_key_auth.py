@@ -34,9 +34,6 @@ LAST_USED_UPDATE_INTERVAL_SECONDS = int(
     os.getenv("API_KEY_LAST_USED_UPDATE_INTERVAL", "60")
 )
 
-# Constante pour le log de prefix de clé API
-API_KEY_PREFIX_LOG_LENGTH = 12
-
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -66,10 +63,8 @@ def authenticate_api_key() -> InstitutionApiKey | None:
     api_key = InstitutionApiKey.find_active_by_raw_key(raw_key)
     if not api_key:
         logger.warning(
-            "[API Key Auth] Clé invalide ou révoquée: prefix=%s",
-            raw_key[:API_KEY_PREFIX_LOG_LENGTH]
-            if len(raw_key) > API_KEY_PREFIX_LOG_LENGTH
-            else raw_key,
+            "[API Key Auth] Clé invalide ou révoquée (len=%s)",
+            len(raw_key),
         )
         return None
 

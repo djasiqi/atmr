@@ -109,5 +109,30 @@ def sanitize_log_data(data: Any) -> Any:
     return PIIMaskingService.mask_log_data(data)
 
 
+def redact_secret(_value: object | None = None) -> str:
+    """Remplace tout secret par un placeholder. Ne renvoie jamais l'entrée.
+
+    Coupe le flux de taint (CodeQL) : le résultat n'est pas dérivé de la valeur.
+    """
+    return "[REDACTED]"
+
+
+def sanitize_url_for_log(url: str | None) -> str:
+    """Conserve scheme/host/port/path. Retire userinfo et query (mots de passe, tokens)."""
+    if not url:
+        return ""
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    netloc = f"{host}:{parts.port}" if parts.port else host
+    return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+
+
+def exception_type_for_log(exc: BaseException | object) -> str:
+    """Type d'exception uniquement — jamais str(exc) (payload, SQL, PII)."""
+    return type(exc).__name__
+
+
 # ✅ Compatibilité rétroactive : Exposer PIIFilter depuis le service
 PIIFilter = _PIIFilter

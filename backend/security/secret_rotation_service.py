@@ -130,8 +130,9 @@ class SecretRotationService:
                     "[S3] ⚠️ Vault non disponible. Nouvelle clé JWT générée mais non enregistrée automatiquement."
                 )
             logger.warning(
-                "[S3] ⚠️ Nouvelle clé JWT (à enregistrer manuellement): %s...",
-                f"{new_secret[:20]!s}",
+                "[S3] Vault indisponible: clé JWT générée (len=%s) — "
+                "l'enregistrer via Vault, jamais dans les logs.",
+                len(new_secret),
             )
 
             # Enregistrer la rotation dans la base de données

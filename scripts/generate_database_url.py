@@ -4,11 +4,15 @@
 Usage:
     python scripts/generate_database_url.py USER PASSWORD HOST PORT DB
 
+Écrit l'URL dans database_url.env (mode 0600). N'affiche pas le mot de passe.
+
 Exemple:
     python scripts/generate_database_url.py atmr "VOTRE_MOT_DE_PASSE" postgres 5432 atmr
 """
 
+import contextlib
 import sys
+from pathlib import Path
 from urllib.parse import quote_plus
 
 
@@ -48,4 +52,11 @@ if __name__ == "__main__":
     db = sys.argv[5]
 
     url = generate_database_url(user, password, host, port, db)
-    print(url)
+    out_path = Path.cwd() / "database_url.env"
+    out_path.write_text(f"{url}\n", encoding="utf-8")
+    with contextlib.suppress(OSError):
+        out_path.chmod(0o600)
+    print(
+        f"URL écrite dans {out_path.resolve()} (mode 0600). "
+        "Ne pas journaliser ni coller ce fichier dans un ticket."
+    )

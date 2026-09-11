@@ -10,10 +10,13 @@ from shared.logging_utils import (
     KafkaSelectorNoiseFilter,
     PIIFilter,
     configure_kafka_log_noise,
+    exception_type_for_log,
     mask_email,
     mask_iban,
     mask_phone,
+    redact_secret,
     sanitize_log_data,
+    sanitize_url_for_log,
 )
 
 
@@ -147,3 +150,35 @@ def test_pii_filter():
 
     assert result is True
     assert "***" in record.msg
+
+
+def test_redact_secret_never_returns_input():
+    assert redact_secret("super-secret-jwt") == "[REDACTED]"
+    assert redact_secret("password123") == "[REDACTED]"
+    assert "super-secret" not in redact_secret("super-secret-jwt")
+
+
+def test_sanitize_url_for_log_strips_password_and_query():
+    raw = "redis://:hunter2@redis.internal:6379/0?token=abc"
+    cleaned = sanitize_url_for_log(raw)
+    assert "hunter2" not in cleaned
+    assert "token=" not in cleaned
+    assert cleaned.startswith("redis://")
+    assert "redis.internal" in cleaned
+    assert ":6379" in cleaned
+
+
+def test_sanitize_url_for_log_empty():
+    assert sanitize_url_for_log(None) == ""
+    assert sanitize_url_for_log("") == ""
+
+
+def test_exception_type_for_log_hides_payload():
+    class PayloadError(ValueError):
+        pass
+
+    exc = PayloadError("patient email=a@b.ch token=eyJ")
+    logged = exception_type_for_log(exc)
+    assert logged == "PayloadError"
+    assert "a@b.ch" not in logged
+    assert "eyJ" not in logged

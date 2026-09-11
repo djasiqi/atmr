@@ -7,6 +7,7 @@ Usage:
 Génère une nouvelle clé CSRF et affiche les instructions pour la mettre à jour.
 """
 
+import contextlib
 import secrets
 import sys
 from pathlib import Path
@@ -32,12 +33,16 @@ def main() -> None:
     print("=" * 80)
     print()
 
-    # Générer nouvelle clé
+    # Générer nouvelle clé — ne jamais l'imprimer (logs / historique shell).
     new_secret = generate_csrf_secret()
+    out_path = Path.cwd() / "csrf_secret.env"
+    out_path.write_text(f"CSRF_SECRET_KEY={new_secret}\n", encoding="utf-8")
+    with contextlib.suppress(OSError):
+        out_path.chmod(0o600)
 
-    print("✅ Nouvelle clé CSRF générée :")
-    print()
-    print(f"CSRF_SECRET_KEY={new_secret}")
+    print("✅ Nouvelle clé CSRF générée (non affichée).")
+    print(f"   Fichier : {out_path.resolve()} (mode 0600, longueur={len(new_secret)})")
+    print("   Importer via Vault / gestionnaire de secrets — ne pas coller dans un ticket.")
     print()
     print("=" * 80)
     print("INSTRUCTIONS :")

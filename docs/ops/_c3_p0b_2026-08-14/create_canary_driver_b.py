@@ -95,10 +95,8 @@ def main() -> None:
             {
                 "user_id": user.id,
                 "public_id": user.public_id,
-                "email": user.email,
                 "driver_id": driver.id,
                 "company_id": company_id,
-                "password": password,
             },
         )
 
