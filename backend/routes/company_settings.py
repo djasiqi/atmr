@@ -1033,15 +1033,13 @@ class BillingSettings(Resource):
                 logger.info(
                     (
                         "[BILLING_DEBUG] GET before to_dict: company_id=%s, billing_id=%s, "
-                        "_iban_raw=%s, iban decrypted=%s, _qr_iban_raw=%s, qr_iban decrypted=%s, esr_ref_base=%s"
+                        "iban_set=%s, qr_iban_set=%s, esr_ref_base_set=%s"
                     ),
                     company.id,
                     billing.id,
-                    getattr(billing, "_iban_raw", None),
-                    billing.iban,
-                    getattr(billing, "_qr_iban_raw", None),
-                    billing.qr_iban,
-                    billing.esr_ref_base,
+                    bool(billing.iban),
+                    bool(billing.qr_iban),
+                    bool(billing.esr_ref_base),
                 )
 
             result = billing.to_dict()
@@ -1054,17 +1052,17 @@ class BillingSettings(Resource):
                 logger.info(
                     (
                         "[BILLING_DEBUG] GET to_dict result: company_id=%s, "
-                        "iban in result=%s, iban value=%s, "
-                        "qr_iban in result=%s, qr_iban value=%s, "
-                        "esr_ref_base in result=%s, esr_ref_base value=%s"
+                        "iban_in_result=%s, iban_set=%s, "
+                        "qr_iban_in_result=%s, qr_iban_set=%s, "
+                        "esr_ref_base_in_result=%s, esr_ref_base_set=%s"
                     ),
                     company.id,
                     "iban" in result,
-                    result.get("iban"),
+                    bool(result.get("iban")),
                     "qr_iban" in result,
-                    result.get("qr_iban"),
+                    bool(result.get("qr_iban")),
                     "esr_ref_base" in result,
-                    result.get("esr_ref_base"),
+                    bool(result.get("esr_ref_base")),
                 )
 
             return result, 200
@@ -1154,9 +1152,8 @@ class BillingSettings(Resource):
                 value = data["iban"]
                 if BILLING_DEBUG:
                     logger.info(
-                        "[BILLING_DEBUG] PUT iban: company_id=%s, value=%s, type=%s, is_none=%s, is_empty=%s",
+                        "[BILLING_DEBUG] PUT iban: company_id=%s, type=%s, is_none=%s, is_empty=%s",
                         company.id,
-                        value,
                         type(value).__name__,
                         value is None,
                         value == "",
@@ -1167,18 +1164,17 @@ class BillingSettings(Resource):
                     billing.iban = value
                 if BILLING_DEBUG:
                     logger.info(
-                        "[BILLING_DEBUG] PUT iban after set: _iban_raw=%s, iban decrypted=%s",
-                        getattr(billing, "_iban_raw", None),
-                        billing.iban,
+                        "[BILLING_DEBUG] PUT iban after set: iban_set=%s, ciphertext_present=%s",
+                        bool(billing.iban),
+                        bool(getattr(billing, "_iban_raw", None)),
                     )
 
             if "qr_iban" in data:
                 value = data["qr_iban"]
                 if BILLING_DEBUG:
                     logger.info(
-                        "[BILLING_DEBUG] PUT qr_iban: company_id=%s, value=%s, type=%s, is_none=%s, is_empty=%s",
+                        "[BILLING_DEBUG] PUT qr_iban: company_id=%s, type=%s, is_none=%s, is_empty=%s",
                         company.id,
-                        value,
                         type(value).__name__,
                         value is None,
                         value == "",
@@ -1189,18 +1185,18 @@ class BillingSettings(Resource):
                     billing.qr_iban = value
                 if BILLING_DEBUG:
                     logger.info(
-                        "[BILLING_DEBUG] PUT qr_iban after set: _qr_iban_raw=%s, qr_iban decrypted=%s",
-                        getattr(billing, "_qr_iban_raw", None),
-                        billing.qr_iban,
+                        "[BILLING_DEBUG] PUT qr_iban after set: qr_iban_set=%s, ciphertext_present=%s",
+                        bool(billing.qr_iban),
+                        bool(getattr(billing, "_qr_iban_raw", None)),
                     )
 
             if "esr_ref_base" in data:
                 value = data["esr_ref_base"]
                 if BILLING_DEBUG:
                     logger.info(
-                        "[BILLING_DEBUG] PUT esr_ref_base: company_id=%s, value=%s, type=%s",
+                        "[BILLING_DEBUG] PUT esr_ref_base: company_id=%s, set=%s, type=%s",
                         company.id,
-                        value,
+                        bool(value),
                         type(value).__name__,
                     )
                 billing.esr_ref_base = value if (value and value != "") else None
@@ -1457,17 +1453,15 @@ class BillingSettings(Resource):
                     (
                         "[BILLING_DEBUG] PUT before commit: company_id=%s, billing_id=%s, "
                         "is_modified=%s, dirty=%s, "
-                        "_iban_raw=%s, iban decrypted=%s, _qr_iban_raw=%s, qr_iban decrypted=%s, esr_ref_base=%s"
+                        "iban_set=%s, qr_iban_set=%s, esr_ref_base_set=%s"
                     ),
                     company.id,
                     billing.id,
                     is_modified,
                     dirty,
-                    getattr(billing, "_iban_raw", None),
-                    billing.iban,
-                    getattr(billing, "_qr_iban_raw", None),
-                    billing.qr_iban,
-                    billing.esr_ref_base,
+                    bool(billing.iban),
+                    bool(billing.qr_iban),
+                    bool(billing.esr_ref_base),
                 )
                 # Si is_modified=False mais qu'on a modifié, forcer le flag (sécurité)
                 if not is_modified and (
@@ -1494,15 +1488,13 @@ class BillingSettings(Resource):
                 logger.info(
                     (
                         "[BILLING_DEBUG] PUT after commit (refreshed): company_id=%s, billing_id=%s, "
-                        "_iban_raw=%s, iban decrypted=%s, _qr_iban_raw=%s, qr_iban decrypted=%s, esr_ref_base=%s"
+                        "iban_set=%s, qr_iban_set=%s, esr_ref_base_set=%s"
                     ),
                     company.id,
                     billing.id,
-                    getattr(billing, "_iban_raw", None),
-                    billing.iban,
-                    getattr(billing, "_qr_iban_raw", None),
-                    billing.qr_iban,
-                    billing.esr_ref_base,
+                    bool(billing.iban),
+                    bool(billing.qr_iban),
+                    bool(billing.esr_ref_base),
                 )
 
             logger.info(
@@ -1519,17 +1511,17 @@ class BillingSettings(Resource):
                 logger.info(
                     (
                         "[BILLING_DEBUG] PUT to_dict result: company_id=%s, "
-                        "iban in result=%s, iban value=%s, "
-                        "qr_iban in result=%s, qr_iban value=%s, "
-                        "esr_ref_base in result=%s, esr_ref_base value=%s"
+                        "iban_in_result=%s, iban_set=%s, "
+                        "qr_iban_in_result=%s, qr_iban_set=%s, "
+                        "esr_ref_base_in_result=%s, esr_ref_base_set=%s"
                     ),
                     company.id,
                     "iban" in result_dict,
-                    result_dict.get("iban"),
+                    bool(result_dict.get("iban")),
                     "qr_iban" in result_dict,
-                    result_dict.get("qr_iban"),
+                    bool(result_dict.get("qr_iban")),
                     "esr_ref_base" in result_dict,
-                    result_dict.get("esr_ref_base"),
+                    bool(result_dict.get("esr_ref_base")),
                 )
 
             from shared.audit_helpers import audit_log

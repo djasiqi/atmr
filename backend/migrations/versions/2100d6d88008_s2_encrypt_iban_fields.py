@@ -157,7 +157,8 @@ def upgrade():
             except Exception as e:
                 # Logger l'erreur mais continuer avec les autres
                 print(
-                    f"⚠️ Erreur chiffrement IBAN billing_settings_id={setting_id}: {e}"
+                    f"Erreur chiffrement IBAN billing_settings_id={setting_id}: "
+                    f"{type(e).__name__}"
                 )
 
         print(

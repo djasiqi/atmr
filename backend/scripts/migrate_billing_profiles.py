@@ -182,17 +182,14 @@ def migrate_company_billing_profiles(dry_run: bool = False) -> dict[str, int]:
                 "is_address_validated": False,  # À valider manuellement
             }
 
-            logger.info("   📝 Données du profil:")
-            logger.info("      - Nom légal: %s", legal_name)
-            logger.info("      - UID: %s", uid_ide)
-            logger.info("      - Adresse: %s %s", street_name, building_number)
-            logger.info("      - Ville: %s %s", postal_code, city)
-            logger.info("      - Email: %s", billing_email)
-            logger.info("      - TVA: %s", "Oui" if vat_registered else "Non")
-            if len(iban) > 20:
-                logger.info("      - IBAN: %s...", iban[:20])
-            else:
-                logger.info("      - IBAN: %s", iban)
+            logger.info("   Données du profil (flags uniquement):")
+            logger.info("      - legal_name_set=%s", bool(legal_name))
+            logger.info("      - uid_set=%s", bool(uid_ide))
+            logger.info("      - address_set=%s", bool(street_name or building_number))
+            logger.info("      - city_set=%s", bool(city))
+            logger.info("      - email_set=%s", bool(billing_email))
+            logger.info("      - vat_registered=%s", bool(vat_registered))
+            logger.info("      - iban_set=%s iban_len=%s", bool(iban), len(iban or ""))
 
             if dry_run:
                 logger.info("   🧪 DRY-RUN: Profil non créé (simulation)")

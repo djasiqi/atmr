@@ -182,20 +182,31 @@ class QRBillService:
                         or len(qr_iban) < QRR_MIN_IBAN_LENGTH
                     ):
                         error_msg = (
-                            f"QR-IBAN invalide pour mode QRR: {qr_iban}. "
+                            f"QR-IBAN invalide pour mode QRR "
+                            f"(len={len(qr_iban)}, prefix_ok={qr_iban.startswith('CH')}). "
                             f"Un QR-IBAN doit commencer par 'CH' et avoir au moins 5 caractères. "
                             f"Veuillez configurer un QR-IBAN valide (format CH..3…)."
                         )
-                        app_logger.error("[QR-Bill] %s", error_msg)
+                        app_logger.error(
+                            "[QR-Bill] QR-IBAN invalide company_id=%s invoice=%s len=%s prefix_ok=%s",
+                            invoice.company_id,
+                            invoice.invoice_number,
+                            len(qr_iban),
+                            qr_iban.startswith("CH"),
+                        )
                         raise ValueError(error_msg)
 
                     if qr_iban[4:5] != "3":
                         error_msg = (
-                            f"QR-IBAN invalide pour mode QRR: {qr_iban}. "
-                            f"Le 5ème caractère doit être '3' (QR-IBAN requis). "
-                            f"Veuillez configurer un QR-IBAN valide (format CH..3…)."
+                            "QR-IBAN invalide pour mode QRR: "
+                            "Le 5ème caractère doit être '3' (QR-IBAN requis). "
+                            "Veuillez configurer un QR-IBAN valide (format CH..3…)."
                         )
-                        app_logger.error("[QR-Bill] %s", error_msg)
+                        app_logger.error(
+                            "[QR-Bill] QR-IBAN non-QRR company_id=%s invoice=%s",
+                            invoice.company_id,
+                            invoice.invoice_number,
+                        )
                         raise ValueError(error_msg)
 
                     # ✅ Générer référence QRR (27 chiffres numériques)

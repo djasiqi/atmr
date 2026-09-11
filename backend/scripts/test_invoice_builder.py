@@ -82,20 +82,15 @@ def test_invoice_data_extraction():
 
         # Émetteur
         logger.info("\n🏢 ÉMETTEUR:")
-        logger.info("   Nom: %s", invoice_data.emitter_name)
-        logger.info("   Adresse: %s", invoice_data.emitter_street)
-        logger.info("   Code postal: %s", invoice_data.emitter_postal_code)
-        logger.info("   Ville: %s", invoice_data.emitter_city)
+        logger.info("   Nom défini: %s", bool(invoice_data.emitter_name))
+        logger.info("   Adresse définie: %s", bool(invoice_data.emitter_street))
+        logger.info("   Code postal défini: %s", bool(invoice_data.emitter_postal_code))
+        logger.info("   Ville définie: %s", bool(invoice_data.emitter_city))
         logger.info("   Pays: %s", invoice_data.emitter_country)
-        logger.info("   UID: %s", invoice_data.emitter_uid)
-        logger.info("   Email: %s", invoice_data.emitter_email)
-        logger.info("   Téléphone: %s", invoice_data.emitter_phone)
-        logger.info(
-            "   IBAN: %s...",
-            invoice_data.emitter_iban[:20]
-            if len(invoice_data.emitter_iban) > 20
-            else invoice_data.emitter_iban,
-        )
+        logger.info("   UID défini: %s", bool(invoice_data.emitter_uid))
+        logger.info("   Email défini: %s", bool(invoice_data.emitter_email))
+        logger.info("   Téléphone défini: %s", bool(invoice_data.emitter_phone))
+        logger.info("   IBAN défini: %s", bool(invoice_data.emitter_iban))
 
         # TVA
         logger.info("\n💰 TVA:")

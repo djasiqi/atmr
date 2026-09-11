@@ -289,7 +289,11 @@ def print_results(title: str, results: list[dict], verbose: bool = False):
         print("-" * 80)
         for i, row in enumerate(results[:10], 1):
             # Formater proprement
-            row_str = ", ".join(f"{k}={v}" for k, v in row.items())
+            safe_row = {
+                k: ("[REDACTED]" if k in {"bp_name", "display_name", "iban"} else v)
+                for k, v in row.items()
+            }
+            row_str = ", ".join(f"{k}={v}" for k, v in safe_row.items())
             print(f"  {i}. {row_str}")
         if count > 10:
             print(f"  ... et {count - 10} autres")

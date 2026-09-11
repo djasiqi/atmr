@@ -107,10 +107,11 @@ class PaymentReferenceGenerator:
         # Standard ISO 11649 : max 25 caractères total (RF + 2 check + 21 data)
         if len(reference_base) > SCOR_MAX_DATA_LENGTH:
             logger.warning(
-                "Référence trop longue (%s > %s), truncation : %s",
+                "Référence trop longue (%s > %s), truncation invoice=%s company_id=%s",
                 len(reference_base),
                 SCOR_MAX_DATA_LENGTH,
-                reference_base,
+                invoice_number,
+                company_id,
             )
             reference_base = reference_base[:SCOR_MAX_DATA_LENGTH]
 
@@ -125,7 +126,11 @@ class PaymentReferenceGenerator:
             [scor_reference[i : i + 4] for i in range(0, len(scor_reference), 4)]
         )
 
-        logger.debug(f"SCOR générée : {formatted} (base: {reference_base})")
+        logger.debug(
+            "SCOR générée invoice=%s company_id=%s",
+            invoice_number,
+            company_id,
+        )
 
         return formatted
 
