@@ -665,7 +665,8 @@ def _company_latlon_optional(company: Company) -> tuple[float, float] | None:
             except Exception as e:
                 # Erreur inattendue : logger et retourner None
                 logger.debug(
-                    "Unexpected error converting coordinates (%s, %s): %s", lat, lon, e
+                    "Unexpected error converting company coordinates: %s",
+                    type(e).__name__,
                 )
                 return None
     return None
@@ -2090,9 +2091,8 @@ def build_problem_data(
     if company.latitude and company.longitude:
         problem["company_coords"] = (float(company.latitude), float(company.longitude))
         logger.debug(
-            "[Dispatch] Coordonnées bureau ajoutées: (%s, %s)",
-            company.latitude,
-            company.longitude,
+            "[Dispatch] Coordonnées bureau ajoutées company_id=%s",
+            company_id,
         )
     else:
         problem["company_coords"] = None

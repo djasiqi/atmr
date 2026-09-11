@@ -282,11 +282,21 @@ def _send_dunning_email(
         mailer = current_app.extensions.get("mail")
         if mailer is None:
             # Dev / tests : considérer accepté si adresse présente
-            logger.info("dunning_email_simulated to=%s subject=%s", email, subject)
-            return True, f"sim:{email}", None
+            logger.info(
+                "dunning_email_simulated company_id=%s to_present=%s subject_len=%s",
+                company.id,
+                True,
+                len(subject or ""),
+            )
+            return True, f"sim:company:{company.id}", None
         # Fallback générique — ne pas échouer le moteur si mail non configuré
-        logger.info("dunning_email_queued to=%s subject=%s", email, subject)
-        return True, f"queued:{email}", None
+        logger.info(
+            "dunning_email_queued company_id=%s to_present=%s subject_len=%s",
+            company.id,
+            True,
+            len(subject or ""),
+        )
+        return True, f"queued:company:{company.id}", None
     except Exception as exc:
         return False, None, str(exc)
 

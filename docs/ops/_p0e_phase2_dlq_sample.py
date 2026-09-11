@@ -53,8 +53,9 @@ def main() -> None:
         print(f"  session_generation={payload.get('session_generation')}")
         print(f"  tracking_session_id={payload.get('tracking_session_id')}")
         print(f"  capture_id={payload.get('capture_id')}")
-        print(f"  lat={payload.get('latitude') or payload.get('lat')}")
-        print(f"  lon={payload.get('longitude') or payload.get('lon')}")
+        print(
+            f"  coords_present={bool(payload.get('latitude') or payload.get('lat'))}"
+        )
         print(f"  recorded_at={payload.get('recorded_at')}")
         if n >= 12:
             break

@@ -395,7 +395,7 @@ class InstitutionPatientList(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            logger.error("[InstitutionPatients] GET error: %s", e)
+            logger.error("[InstitutionPatients] GET error: %s", type(e).__name__)
             return APIErrorHandler.handle_exception(e, logger)
 
     @institution_patients_ns.doc(
@@ -608,7 +608,7 @@ class InstitutionPatientList(Resource):
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            logger.error("[InstitutionPatients] POST error: %s", e)
+            logger.error("[InstitutionPatients] POST error: %s", type(e).__name__)
             return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -657,7 +657,11 @@ class InstitutionPatientDetail(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            logger.error("[InstitutionPatients] GET /%s error: %s", patient_id, e)
+            logger.error(
+                "[InstitutionPatients] GET /%s error: %s",
+                patient_id,
+                type(e).__name__,
+            )
             return APIErrorHandler.handle_exception(e, logger)
 
     @institution_patients_ns.doc(
@@ -914,7 +918,11 @@ class InstitutionPatientDetail(Resource):
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            logger.error("[InstitutionPatients] PUT /%s error: %s", patient_id, e)
+            logger.error(
+                "[InstitutionPatients] PUT /%s error: %s",
+                patient_id,
+                type(e).__name__,
+            )
             return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -952,7 +960,7 @@ class InstitutionPatientByReference(Resource):
             logger.error(
                 "[InstitutionPatients] GET /by-reference/%s error: %s",
                 external_reference,
-                e,
+                type(e).__name__,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1020,7 +1028,9 @@ class PatientIdentityInfo(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.error(
-                "[InstitutionPatients] GET /%s/identity error: %s", patient_id, e
+                "[InstitutionPatients] GET /%s/identity error: %s",
+                patient_id,
+                type(e).__name__,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1072,7 +1082,9 @@ class PatientMatches(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.error(
-                "[InstitutionPatients] GET /%s/matches error: %s", patient_id, e
+                "[InstitutionPatients] GET /%s/matches error: %s",
+                patient_id,
+                type(e).__name__,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1146,7 +1158,7 @@ class PatientMatchConfirm(Resource):
                 "[InstitutionPatients] POST /%s/matches/%s/confirm error: %s",
                 patient_id,
                 identity_id,
-                e,
+                type(e).__name__,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1208,7 +1220,7 @@ class PatientMatchReject(Resource):
                 "[InstitutionPatients] POST /%s/matches/%s/reject error: %s",
                 patient_id,
                 identity_id,
-                e,
+                type(e).__name__,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1277,7 +1289,7 @@ class PatientIdentityDetach(Resource):
             logger.error(
                 "[InstitutionPatients] PUT /%s/identity/detach error: %s",
                 patient_id,
-                e,
+                type(e).__name__,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1350,7 +1362,7 @@ class PatientSyncStatus(Resource):
             logger.error(
                 "[InstitutionPatients] GET /%s/sync-status error: %s",
                 patient_id,
-                e,
+                type(e).__name__,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1412,7 +1424,7 @@ class PatientLinkSuggestions(Resource):
             logger.error(
                 "[InstitutionPatients] GET /%s/suggestions error: %s",
                 patient_id,
-                e,
+                type(e).__name__,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1569,7 +1581,7 @@ class PatientLinkSuggestionConfirm(Resource):
                 "[InstitutionPatients] POST /%s/suggestions/%s/confirm error: %s",
                 patient_id,
                 suggestion_id,
-                e,
+                type(e).__name__,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1656,6 +1668,6 @@ class PatientLinkSuggestionReject(Resource):
                 "[InstitutionPatients] POST /%s/suggestions/%s/reject error: %s",
                 patient_id,
                 suggestion_id,
-                e,
+                type(e).__name__,
             )
             return APIErrorHandler.handle_exception(e, logger)

@@ -410,10 +410,8 @@ class SendPartnerInvoiceByEmailUseCase:
 
             # 10. Envoyer l'email via Brevo
             logger.info(
-                "[PARTNER INVOICE EMAIL] Envoi de la facture %s par email via Brevo à %s (depuis %s) avec %d attachement(s)",
+                "[PARTNER INVOICE EMAIL] Envoi facture %s via Brevo attachments=%s",
                 partner_invoice.invoice_number,
-                recipient_email,
-                from_email,
                 len(attachments),
             )
 
@@ -448,9 +446,8 @@ class SendPartnerInvoiceByEmailUseCase:
             db.session.commit()
 
             logger.info(
-                "✅ Facture partenaire %s envoyée avec succès via Brevo à %s (message_id: %s)",
+                "Facture partenaire %s envoyée via Brevo message_id=%s",
                 partner_invoice.invoice_number,
-                recipient_email,
                 email_result.message_id or "N/A",
             )
 

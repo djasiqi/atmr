@@ -179,5 +179,7 @@ class PatientTransportHistory(Resource):
         except Exception as e:
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            logger.exception("[Timeline] GET patient %s: %s", patient_id, e)
+            logger.exception(
+                "[Timeline] GET patient %s: %s", patient_id, type(e).__name__
+            )
             return {"error": "Erreur serveur"}, 500

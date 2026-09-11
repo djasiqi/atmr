@@ -2811,23 +2811,15 @@ class ClientsList(Resource):
                         new_client.billing_address = billing_address
                         new_client.billing_lat = coords.get("lat")
                         new_client.billing_lon = coords.get("lon")
-                        log_msg = (
-                            "✅ Adresse de facturation géocodée pour %s %s: %s "
-                            "-> (%s, %s)"
-                        )
                         logger.info(
-                            log_msg,
-                            data["first_name"],
-                            data["last_name"],
-                            billing_address,
-                            coords.get("lat"),
-                            coords.get("lon"),
+                            "Adresse de facturation géocodée client_id=%s geocoded=ok",
+                            getattr(new_client, "id", None),
                         )
                     else:
                         new_client.billing_address = billing_address
                         logger.warning(
-                            "⚠️ Impossible de géocoder l'adresse de facturation: %s",
-                            billing_address,
+                            "Impossible de géocoder l'adresse de facturation client_id=%s",
+                            getattr(new_client, "id", None),
                         )
                 except Exception as e:
                     new_client.billing_address = billing_address

@@ -882,15 +882,14 @@ class AcceptOfferUseCase:
         db.session.add(booking)
         db.session.flush()  # Pour obtenir l'ID
 
-        # Logger les metadata source (le modèle Booking n'a pas de colonne metadata_json)
-        source_meta = self._build_metadata(
-            transport_request,
-            proposed_pickup_time=proposed_pickup_time,
-        )
         logger.info(
-            "[AcceptOffer] Booking %s created from institution request. Meta: %s",
+            "[AcceptOffer] Booking %s created from institution request "
+            "request_id=%s institution_id=%s patient_id=%s billing_intent=%s",
             booking.id,
-            source_meta,
+            transport_request.id,
+            transport_request.institution_id,
+            getattr(getattr(transport_request, "patient", None), "id", None),
+            transport_request.billing_intent,
         )
 
         # ── Résolution BillingParty (P0.5: résolution complète intent→BP) ──

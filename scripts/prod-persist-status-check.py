@@ -28,4 +28,7 @@ with app.app_context():
         db.text("SELECT id, last_position_update, latitude, longitude FROM driver WHERE id=3")
     ).one_or_none()
     if j:
-        print(f"jozsef id=3 last_position_update={j.last_position_update} lat={j.latitude} lon={j.longitude}")
+        print(
+            f"driver id=3 last_position_update={j.last_position_update} "
+            f"coords_present={j.latitude is not None}"
+        )

@@ -2519,11 +2519,9 @@ def init_chat_socket(socketio: SocketIO):
             elapsed = time.perf_counter() - t0
             ws_metrics.on_driver_location_latency(elapsed)
             logger.info(
-                "📡 Loc -> company_%s (driver %s) %s,%s",
+                "Loc -> company_id=%s driver_id=%s",
                 company_id_val,
                 driver.id,
-                snapped_lat,
-                snapped_lon,
             )
 
         except Exception as e:

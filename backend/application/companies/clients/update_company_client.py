@@ -60,23 +60,23 @@ class UpdateCompanyClientUseCase:
 
         logger = logging.getLogger(__name__)
         logger.info(
-            "📝 [UpdateCompanyClientUseCase] Début mise à jour client ID=%s, données reçues: %s",
+            "[UpdateCompanyClientUseCase] Début mise à jour client_id=%s fields=%s",
             getattr(client, "id", "N/A"),
-            data,
+            sorted(data.keys()),
         )
 
         # Champs Client
         if "contact_email" in data:
             client.contact_email = data["contact_email"] or None
             logger.info(
-                "📝 [UpdateCompanyClientUseCase] contact_email mis à jour: %s",
-                client.contact_email,
+                "[UpdateCompanyClientUseCase] contact_email mis à jour client_id=%s",
+                getattr(client, "id", "N/A"),
             )
         if "contact_phone" in data:
             client.contact_phone = data["contact_phone"] or None
             logger.info(
-                "📝 [UpdateCompanyClientUseCase] contact_phone mis à jour: %s",
-                client.contact_phone,
+                "[UpdateCompanyClientUseCase] contact_phone mis à jour client_id=%s",
+                getattr(client, "id", "N/A"),
             )
         if "billing_address" in data:
             client.billing_address = data["billing_address"]
@@ -246,9 +246,9 @@ class UpdateCompanyClientUseCase:
             gender_value = data["gender"]
             old_gender = user.gender
             logger.info(
-                "📝 [UpdateCompanyClientUseCase] gender reçu: %s (ancien: %s)",
-                gender_value,
-                old_gender,
+                "[UpdateCompanyClientUseCase] gender reçu client_id=%s changed=%s",
+                getattr(client, "id", "N/A"),
+                gender_value != old_gender,
             )
             if gender_value:
                 # Convertir en GenderEnum
@@ -264,20 +264,20 @@ class UpdateCompanyClientUseCase:
                         if gender_str in {"male", "homme"}:
                             user.gender = GenderEnum.HOMME
                             logger.info(
-                                "📝 [UpdateCompanyClientUseCase] gender: %s -> HOMME",
-                                old_gender,
+                                "[UpdateCompanyClientUseCase] gender mapped=HOMME client_id=%s",
+                                getattr(client, "id", "N/A"),
                             )
                         elif gender_str in {"female", "femme"}:
                             user.gender = GenderEnum.FEMME
                             logger.info(
-                                "📝 [UpdateCompanyClientUseCase] gender: %s -> FEMME",
-                                old_gender,
+                                "[UpdateCompanyClientUseCase] gender mapped=FEMME client_id=%s",
+                                getattr(client, "id", "N/A"),
                             )
                         elif gender_str in {"autre", "other"}:
                             user.gender = GenderEnum.AUTRE
                             logger.info(
-                                "📝 [UpdateCompanyClientUseCase] gender: %s -> AUTRE",
-                                old_gender,
+                                "[UpdateCompanyClientUseCase] gender mapped=AUTRE client_id=%s",
+                                getattr(client, "id", "N/A"),
                             )
                         else:
                             # Essayer directement avec la valeur (si déjà au bon format)
@@ -306,8 +306,8 @@ class UpdateCompanyClientUseCase:
             else:
                 user.gender = None
                 logger.info(
-                    "📝 [UpdateCompanyClientUseCase] gender: %s -> None (vide)",
-                    old_gender,
+                    "[UpdateCompanyClientUseCase] gender cleared client_id=%s",
+                    getattr(client, "id", "N/A"),
                 )
 
         # ✅ Synchroniser la Company clinique si le client est une institution

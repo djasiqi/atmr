@@ -29,7 +29,7 @@ with app.app_context():
     print(f"  recorded_at={row['recorded_at']}")
     print(f"  created_at(persisted_at)={row['created_at']}")
     print(f"  location_mode={row['location_mode']}")
-    print(f"  lat={row['raw_latitude']} lon={row['raw_longitude']}")
+    print(f"  coords_present={row['raw_latitude'] is not None}")
 
     drv = db.session.execute(
         text(

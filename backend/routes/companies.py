@@ -5154,10 +5154,8 @@ class CompanyClients(Resource):
 
         # ✅ Log pour diagnostic (sans données sensibles)
         logger.info(
-            "[CreateClient] payload keys=%s gender=%r civility=%r",
+            "[CreateClient] payload keys=%s",
             list(data.keys()),
-            data.get("gender"),
-            data.get("civility"),
         )
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
@@ -5171,10 +5169,11 @@ class CompanyClients(Resource):
         except ValidationError as e:
             # ✅ Log détaillé des erreurs de validation
             logger.warning(
-                "[CreateClient] Validation error: %s, payload keys=%s, gender=%r",
-                str(e.messages),
+                "[CreateClient] Validation error fields=%s payload_keys=%s",
+                list((e.messages or {}).keys())
+                if isinstance(e.messages, dict)
+                else "messages",
                 list(data.keys()),
-                data.get("gender"),
             )
             return handle_validation_error(e)
 

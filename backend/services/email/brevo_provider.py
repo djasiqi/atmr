@@ -413,10 +413,9 @@ class BrevoEmailProvider:
 
             # Envoi via API Brevo
             logger.info(
-                ("Envoi email via Brevo : %s -> %s (sujet: %s)"),
-                from_email,
-                to_email,
-                subject,
+                "Envoi email via Brevo subject_len=%s attachments_ready=%s",
+                len(subject or ""),
+                True,
             )
 
             if EMAIL_SIGNATURE_DEBUG:

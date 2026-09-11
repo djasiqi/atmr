@@ -197,10 +197,9 @@ def resolve_billing_party_for_institution_booking(
             result["billing_party_name"] = bp.display_name
             resolution_source = source
             logger.info(
-                "[BillingResolver] intent=%s → bp_id=%s (%s) source=%s booking=%s",
+                "[BillingResolver] intent=%s → bp_id=%s source=%s booking=%s",
                 billing_intent,
                 bp.id,
-                bp.display_name,
                 source,
                 booking.id,
             )
@@ -213,28 +212,15 @@ def resolve_billing_party_for_institution_booking(
                 booking.id,
             )
 
-    # ── Metadata (loggé car Booking n'a pas de colonne metadata_json) ──
-    meta: dict[str, Any] = {}
-
-    # Billing resolution tracking
-    meta["billing_resolution_status"] = resolution_status
-    meta["billing_resolution_source"] = resolution_source
-    meta["billing_resolution_intent"] = billing_intent
-
-    # Snapshot billing_details (informatif, pour traçabilité)
     billing_details = transport_request.billing_details
-    if billing_details:
-        meta["institution_billing_details"] = billing_details
-
-    if institution:
-        meta["institution_name"] = institution.name
-        meta["institution_id"] = institution.id
-
-    # Logger les metadata au lieu de les stocker (Booking n'a pas metadata_json)
     logger.info(
-        "[BillingResolver] booking=%s billing_meta=%s",
+        "[BillingResolver] booking=%s status=%s source=%s intent=%s institution_id=%s details_present=%s",
         booking.id,
-        meta,
+        resolution_status,
+        resolution_source,
+        billing_intent,
+        getattr(institution, "id", None) if institution else None,
+        bool(billing_details),
     )
     result["billing_resolution_status"] = resolution_status
     result["billing_resolution_source"] = resolution_source
@@ -667,9 +653,8 @@ def _resolve_or_create_third_party_bp(
     db.session.flush()
 
     logger.info(
-        "[BillingResolver] Created third-party BillingParty id=%s (%s, type=%s, company=%s)",
+        "[BillingResolver] Created third-party BillingParty id=%s type=%s company=%s",
         bp.id,
-        payer_name,
         bp_type.value,
         company_id,
     )

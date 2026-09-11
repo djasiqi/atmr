@@ -233,8 +233,8 @@ def geocode_address(
         cached_result = _GOOGLE_MAPS_LOCAL_CACHE.get(cache_key)
         if cached_result is not None:
             app_logger.debug(
-                "[Google Maps] ✅ L1 cache hit (local LRU) for address: %s",
-                address[:50],
+                "[Google Maps] L1 cache hit (local LRU) country=%s",
+                country,
             )
             return cached_result
 
@@ -270,8 +270,8 @@ def geocode_address(
                             with _GOOGLE_MAPS_LOCAL_CACHE_LOCK:
                                 _GOOGLE_MAPS_LOCAL_CACHE[cache_key] = result
                             app_logger.debug(
-                                "[Google Maps] ✅ L2 cache hit (Redis) for address: %s",
-                                address[:50],
+                                "[Google Maps] L2 cache hit (Redis) country=%s",
+                                country,
                             )
                             return result
                         if cached_str == "null":
@@ -316,8 +316,7 @@ def geocode_address(
 
             if data.get("status") != "OK" or not data.get("results"):
                 app_logger.warning(
-                    "⚠️ Aucune coordonnée trouvée pour : '%s' (country=%s)",
-                    address,
+                    "Aucune coordonnée Google Maps (country=%s)",
                     country,
                 )
                 return None
@@ -338,27 +337,24 @@ def geocode_address(
         except requests.Timeout as e:
             # ✅ P2: Gestion spécifique des timeouts pour meilleure observabilité
             app_logger.warning(
-                "⏱️ Timeout API Google Maps Geocoding pour '%s' (country=%s, timeout=%ds): %s",
-                address,
+                "Timeout API Google Maps Geocoding (country=%s, timeout=%ds): %s",
                 country,
                 _GOOGLE_TIMEOUT,
-                e,
+                type(e).__name__,
             )
             raise
         except requests.ConnectionError as e:
             app_logger.warning(
-                "⚠️ Connexion interrompue API Google Maps pour '%s' (country=%s): %s",
-                address,
+                "Connexion interrompue API Google Maps (country=%s): %s",
                 country,
-                e,
+                type(e).__name__,
             )
             raise
         except requests.RequestException as e:
             app_logger.warning(
-                "⚠️ Erreur API Google Maps pour '%s' (country=%s): %s",
-                address,
+                "Erreur API Google Maps (country=%s): %s",
                 country,
-                e,
+                type(e).__name__,
             )
             raise
         except Exception:
@@ -375,7 +371,9 @@ def geocode_address(
         if str(e) != "google_maps_circuit_open":
             _google_maps_circuit_breaker.record_failure()
         app_logger.warning(
-            "[Google Maps] Échec géocodage après retries pour '%s': %s", address[:50], e
+            "[Google Maps] Échec géocodage après retries country=%s error=%s",
+            country,
+            type(e).__name__,
         )
         result = None
 
@@ -389,7 +387,7 @@ def geocode_address(
             redis_cache_key = f"geocoding:google:{cache_key_hash}"
             redis_client.setex(redis_cache_key, _GOOGLE_MAPS_CACHE_TTL, cache_value)
             app_logger.debug(
-                "[Google Maps] ✅ L2 cache write (Redis) for address: %s", address[:50]
+                "[Google Maps] L2 cache write (Redis) country=%s", country
             )
         except Exception as e:
             app_logger.debug("[Google Maps] Failed to write to Redis cache: %s", e)
@@ -398,7 +396,7 @@ def geocode_address(
     with _GOOGLE_MAPS_LOCAL_CACHE_LOCK:
         _GOOGLE_MAPS_LOCAL_CACHE[cache_key] = result
         app_logger.debug(
-            "[Google Maps] ✅ L1 cache write (local LRU) for address: %s", address[:50]
+            "[Google Maps] L1 cache write (local LRU) country=%s", country
         )
 
     return result
@@ -513,9 +511,7 @@ def geocode_address_nominatim(
     with _NOMINATIM_LOCAL_CACHE_LOCK:
         cached_result = _NOMINATIM_LOCAL_CACHE.get(cache_key_normalized)
         if cached_result is not None:
-            app_logger.debug(
-                "[Nominatim] ✅ L1 cache hit (local LRU) for address: %s", address[:50]
-            )
+            app_logger.debug("[Nominatim] L1 cache hit (local LRU)")
             return cached_result
 
     # ✅ P1: Vérifier cache Redis (L2 cache)
@@ -546,10 +542,7 @@ def geocode_address_nominatim(
                             # ✅ P1: Mettre en cache local LRU (L1 cache)
                             with _NOMINATIM_LOCAL_CACHE_LOCK:
                                 _NOMINATIM_LOCAL_CACHE[cache_key_normalized] = result
-                            app_logger.debug(
-                                "[Nominatim] ✅ L2 cache hit (Redis) for address: %s",
-                                address[:50],
-                            )
+                            app_logger.debug("[Nominatim] L2 cache hit (Redis)")
                             return result
                     except (json.JSONDecodeError, ValueError, KeyError, TypeError):
                         pass
@@ -589,9 +582,7 @@ def geocode_address_nominatim(
         data = resp.json()
 
         if not data or len(data) == 0:
-            app_logger.warning(
-                "⚠️ Nominatim: Aucune coordonnée trouvée pour '%s'", address
-            )
+            app_logger.warning("Nominatim: aucune coordonnée (cache miss)")
             result = None
         else:
             result_data = data[0]
@@ -602,7 +593,7 @@ def geocode_address_nominatim(
 
     except requests.RequestException as e:
         app_logger.error(
-            "❌ Erreur Nominatim pour '%s' (après retries): %s", address, e
+            "Erreur Nominatim (après retries): %s", type(e).__name__
         )
         result = None
 
@@ -613,7 +604,7 @@ def geocode_address_nominatim(
             cache_value = json.dumps(result) if result else json.dumps(None)
             redis_client.setex(redis_cache_key, _NOMINATIM_CACHE_TTL, cache_value)
             app_logger.debug(
-                "[Nominatim] ✅ L2 cache write (Redis) for address: %s", address[:50]
+                "[Nominatim] L2 cache write (Redis)"
             )
         except Exception as e:
             app_logger.debug("[Nominatim] Redis setex failed: %s", e)
@@ -622,7 +613,7 @@ def geocode_address_nominatim(
     with _NOMINATIM_LOCAL_CACHE_LOCK:
         _NOMINATIM_LOCAL_CACHE[cache_key_normalized] = result
         app_logger.debug(
-            "[Nominatim] ✅ L1 cache write (local LRU) for address: %s", address[:50]
+            "[Nominatim] L1 cache write (local LRU)"
         )
 
     return result
@@ -739,9 +730,8 @@ def geocode_addresses_batch(
             return (address, result)
         except Exception as e:
             app_logger.warning(
-                "[Batch Geocoding] ⚠️ Échec géocodage pour '%s': %s",
-                address[:50],
-                e,
+                "[Batch Geocoding] Échec géocodage: %s",
+                type(e).__name__,
             )
             return (address, None)
 

@@ -65,8 +65,6 @@ MAX_RETRY_DELAY = PUSH_RETRY_DELAYS_SEC[-1] if PUSH_RETRY_DELAYS_SEC else 600.0
 PUSH_RETRY_MAX_WALL_CLOCK_SEC = float(os.getenv("PUSH_RETRY_MAX_WALL_CLOCK_SEC", "900"))
 PUSH_RETRY_JITTER_RATIO = float(os.getenv("PUSH_RETRY_JITTER_RATIO", "0.2"))
 TOKEN_DISPLAY_LENGTH = 20  # Longueur du token à afficher dans les logs
-TOKEN_MASK_LENGTH = 10  # Longueur du token à garder pour masquage
-BODY_PREVIEW_LENGTH = 100  # Longueur du body à afficher dans les logs
 
 # Configuration rate limiting
 PUSH_RATE_LIMIT_PER_MINUTE = 10  # Max 10 pushes/minute par driver
@@ -981,22 +979,14 @@ def _persist_failed_push(
         error: Message d'erreur
         attempts: Nombre de tentatives effectuées
     """
-    # Masquer le token pour la sécurité (garder seulement les premiers caractères)
-    masked_token = (
-        token[:TOKEN_MASK_LENGTH] + "..." if len(token) > TOKEN_MASK_LENGTH else token
-    )
-
-    # Log structuré pour analyse
     app_logger.error(
         "[push] Dead letter queue entry - Push failed definitively",
         extra={
-            "token_preview": masked_token,
-            "title": title,
-            "body_preview": (
-                body[:BODY_PREVIEW_LENGTH] if len(body) > BODY_PREVIEW_LENGTH else body
-            ),
+            "token_present": bool(token),
+            "title_present": bool(title),
+            "body_len": len(body or ""),
             "data_type": data.get("type") if data else None,
-            "error": error,
+            "error_type": type(error).__name__ if not isinstance(error, str) else "str",
             "attempts": attempts,
             "timestamp": time.time(),
         },

@@ -434,7 +434,7 @@ class TestE2EInstitutionFlow:
         print(f"   - Request ID: {request_id} (external_ref: {external_ref})")
         print(f"   - Offer ID: {offer_id}")
         print(f"   - Booking ID: {booking_id}")
-        print(f"   - Company: {company.name} (ID: {company.id})")
+        print(f"   - Company ID: {company.id}")
 
     # =========================================================================
     # TEST OPTIONNEL: Annulation EN_ROUTE
