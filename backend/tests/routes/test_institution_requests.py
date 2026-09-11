@@ -15,7 +15,15 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from models import Institution, InstitutionPatient, TransportRequest, User, UserRole
+from models import (
+    Company,
+    Institution,
+    InstitutionPatient,
+    InstitutionTransportPreference,
+    TransportRequest,
+    User,
+    UserRole,
+)
 from models.enums import InstitutionRole, RequestStatus
 from models.institution_api_key import InstitutionApiKey, generate_api_key
 from tests.helpers.institution_auth import institution_bearer_headers
@@ -110,6 +118,29 @@ class TestTransportRequestsCRUD:
         req.pickup_time_confirmed = True
         if not getattr(req, "billing_intent", None):
             req.billing_intent = "patient"
+
+    def _configure_preferred_carrier(self, db, institution: Institution) -> Company:
+        """Attache un transporteur approuvé aux préférences d'envoi."""
+        user = User()
+        user.email = f"carrier_{uuid.uuid4().hex[:8]}@partenaire.ch"
+        user.username = user.email
+        user.password = "test"
+        user.role = UserRole.COMPANY.value
+        db.session.add(user)
+        db.session.flush()
+
+        company = Company()
+        company.name = f"Transport {uuid.uuid4().hex[:6]}"
+        company.user_id = user.id
+        company.is_approved = True
+        db.session.add(company)
+        db.session.flush()
+        InstitutionTransportPreference.set_preferences(
+            institution_id=institution.id,
+            company_ids=[company.id],
+        )
+        db.session.flush()
+        return company
 
     def test_create_request_jwt(
         self, client, db, admin_auth_headers, sample_institution, sample_patient
@@ -428,6 +459,7 @@ class TestTransportRequestsCRUD:
 
     def test_send_request(self, client, db, admin_auth_headers, sample_institution):
         """Test: envoi d'une demande DRAFT -> SENT."""
+        self._configure_preferred_carrier(db, sample_institution)
         req = TransportRequest()
         req.institution_id = sample_institution.id
         req.external_reference = f"SEND-{uuid.uuid4().hex[:8]}"
@@ -454,6 +486,7 @@ class TestTransportRequestsCRUD:
         self, client, db, admin_auth_headers, sample_institution
     ):
         """Test: renvoi d'une demande déjà SENT relance ou idempotent (200)."""
+        self._configure_preferred_carrier(db, sample_institution)
         req = TransportRequest()
         req.institution_id = sample_institution.id
         req.external_reference = f"ALREADY-SENT-{uuid.uuid4().hex[:8]}"

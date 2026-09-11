@@ -2200,9 +2200,7 @@ class CompanyReservations(Resource):
                     range_filters.append(Booking.scheduled_time >= start_local)
                 if end_local is not None:
                     range_filters.append(Booking.scheduled_time < end_local)
-            base_query = visible_bookings_query(
-                company_id, extra_filters=range_filters
-            )
+            base_query = visible_bookings_query(company_id, extra_filters=range_filters)
         else:
             base_query = Booking.query.filter(visibility_filter)
 
@@ -2589,7 +2587,7 @@ class CompanyReservations(Resource):
             )
             for b in reservations:
                 if use_dashboard_fields:
-                    setattr(b, "_list_projection", True)
+                    b._list_projection = True
                 serialized_reservations.append(serializer(b))
         except Exception:
             raise
@@ -3582,9 +3580,7 @@ class CompleteReservation(Resource):
                     field="billed_to_company_id",
                     logger_instance=logger,
                 )
-            return APIErrorHandler.handle_validation_error(
-                msg, logger_instance=logger
-            )
+            return APIErrorHandler.handle_validation_error(msg, logger_instance=logger)
         except Exception as e:
             # sentry_sdk.capture_exception(e)  # Si tu as Sentry
             db.session.rollback()
@@ -6046,8 +6042,7 @@ class SingleReservation(Resource):
             }, uc_result.status_code or 400
 
         schedule_updated = bool(
-            set(uc_result.updated_fields or [])
-            & {"scheduled_time", "time_confirmed"}
+            set(uc_result.updated_fields or []) & {"scheduled_time", "time_confirmed"}
         )
         if schedule_updated and getattr(booking, "time_confirmed", False):
             try:
@@ -6827,10 +6822,10 @@ class UpdateReservation(Resource):
                 "error": "Bad request"
             }, uc_result.status_code or 400
 
-        if (
-            set(uc_result.updated_fields or []) & {"scheduled_time", "time_confirmed"}
-            and getattr(booking, "time_confirmed", False)
-        ):
+        if set(uc_result.updated_fields or []) & {
+            "scheduled_time",
+            "time_confirmed",
+        } and getattr(booking, "time_confirmed", False):
             try:
                 from services.institutions.booking_change_service import (
                     record_company_pickup_reconfirmed,

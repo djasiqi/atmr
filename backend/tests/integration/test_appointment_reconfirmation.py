@@ -198,17 +198,14 @@ class TestAppointmentReconfirmation:
             "version": 1,
             "pickup_location": "Chemin des Courbes 9, 1247, Anières",
             "dropoff_location": (
-                "Hôpitaux Universitaires de Genève (HUG), "
-                "Rue Gabrielle-Perret-Gentil 4"
+                "Hôpitaux Universitaires de Genève (HUG), Rue Gabrielle-Perret-Gentil 4"
             ),
             "scheduled_time": "2026-09-12T13:15:00",
             "hospital_service": "Radiologie",
             "doctor_name": "",
             "destination_type": "medical",
             "appointment_time": "2026-09-12T13:00:00",
-            "leg_appointments": [
-                {"index": 0, "scheduled_time": "2026-09-12T13:00:00"}
-            ],
+            "leg_appointments": [{"index": 0, "scheduled_time": "2026-09-12T13:00:00"}],
             "return_appointment_time": None,
             "medical_facility": None,
             "pickup_floor": None,
@@ -293,9 +290,7 @@ class TestAppointmentReconfirmation:
             "doctor_name": None,
             "destination_type": "medical",
             "appointment_time": "2026-09-12T13:00:00",
-            "leg_appointments": [
-                {"index": 0, "scheduled_time": "2026-09-12T13:00:00"}
-            ],
+            "leg_appointments": [{"index": 0, "scheduled_time": "2026-09-12T13:00:00"}],
             "return_appointment_time": None,
         }
         response = client.patch(

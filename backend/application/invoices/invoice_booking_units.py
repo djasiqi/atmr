@@ -47,6 +47,7 @@ def is_invoice_billable_segment(booking: Any) -> bool:
     reason = getattr(booking, "billing_override_reason", None)
     return bool(reason and str(reason).strip())
 
+
 UnitKind = Literal["single", "round_trip"]
 
 

@@ -15,9 +15,7 @@ from marshmallow import ValidationError
 
 from models.enums import LocationType, MissionType
 
-MEDICAL_DESTINATION_OR_ERROR = (
-    "Veuillez renseigner au moins le service ou le médecin."
-)
+MEDICAL_DESTINATION_OR_ERROR = "Veuillez renseigner au moins le service ou le médecin."
 DESTINATION_TYPE_MEDICAL = "medical"
 VALID_DESTINATION_TYPES = (
     DESTINATION_TYPE_MEDICAL,
@@ -100,9 +98,7 @@ def validate_medical_destination(
         _raise_missing(field_name)
 
 
-def validate_medical_destination_details(
-    data: dict, *, partial: bool = False
-) -> None:
+def validate_medical_destination_details(data: dict, *, partial: bool = False) -> None:
     """Refuse une destination médicale sans service ni médecin.
 
     ``partial=True`` (PUT) : n'applique la règle que si le payload touche

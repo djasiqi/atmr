@@ -703,7 +703,9 @@ class TestCompaniesRoutes:
         }
         new_ids = {
             int(row[0])
-            for row in visible_bookings_query(company_id).with_entities(Booking.id).all()
+            for row in visible_bookings_query(company_id)
+            .with_entities(Booking.id)
+            .all()
         }
         assert new_ids == old_ids
         union_rows = [

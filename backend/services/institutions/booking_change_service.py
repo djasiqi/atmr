@@ -178,7 +178,9 @@ def _wall_clock_key(value: Any) -> str | None:
     """Clé comparable date+HH:MM (heure murale mission)."""
     if value is None or value == "":
         return None
-    parsed = value if isinstance(value, datetime) else normalize_mission_wall_clock(value)
+    parsed = (
+        value if isinstance(value, datetime) else normalize_mission_wall_clock(value)
+    )
     if parsed is None:
         return None
     return f"{parsed.date().isoformat()}T{parsed.hour:02d}:{parsed.minute:02d}"
@@ -241,7 +243,9 @@ def compute_appointment_diff(
 
     changed_dest_indices = [
         idx
-        for idx, (before, after) in enumerate(zip(dest_keys, desired_dest, strict=False))
+        for idx, (before, after) in enumerate(
+            zip(dest_keys, desired_dest, strict=False)
+        )
         if before != after
     ]
     return {
@@ -286,9 +290,7 @@ def invalidate_upstream_departure_confirmations(
                 other.time_confirmed = False
                 updated.append("leg[0].time_confirmed")
 
-    first_booking_id = (
-        getattr(dest_legs[0], "booking_id", None) if dest_legs else None
-    )
+    first_booking_id = getattr(dest_legs[0], "booking_id", None) if dest_legs else None
     for idx in changed_dest_indices:
         if idx <= 0 or idx >= len(dest_legs):
             continue
@@ -1616,9 +1618,13 @@ def update_institution_booking(
         ),
     )
     appointment_diff = compute_appointment_diff(
-        dest_keys=[_wall_clock_key(getattr(leg, "scheduled_time", None)) for leg in dest_legs],
+        dest_keys=[
+            _wall_clock_key(getattr(leg, "scheduled_time", None)) for leg in dest_legs
+        ],
         return_key=_wall_clock_key(
-            getattr(return_leg, "scheduled_time", None) if return_leg is not None else None
+            getattr(return_leg, "scheduled_time", None)
+            if return_leg is not None
+            else None
         ),
         payload=payload,
     )
@@ -1634,9 +1640,9 @@ def update_institution_booking(
     )
     pickup_wall_changed = False
     if "scheduled_time" in patch:
-        pickup_wall_changed = _wall_clock_key(booking.scheduled_time) != _wall_clock_key(
-            patch.get("scheduled_time")
-        )
+        pickup_wall_changed = _wall_clock_key(
+            booking.scheduled_time
+        ) != _wall_clock_key(patch.get("scheduled_time"))
         if not pickup_wall_changed:
             patch = {k: v for k, v in patch.items() if k != "scheduled_time"}
     patch = _strip_noop_operational_patch(booking, patch)

@@ -93,7 +93,9 @@ def visibility_branch_predicates(company_id: int) -> dict[str, ColumnElement[boo
     }
 
 
-def _apply_extra(where: Sequence[Any], extra_filters: Sequence[Any] | None) -> list[Any]:
+def _apply_extra(
+    where: Sequence[Any], extra_filters: Sequence[Any] | None
+) -> list[Any]:
     clauses = list(where)
     if extra_filters:
         clauses.extend(extra_filters)

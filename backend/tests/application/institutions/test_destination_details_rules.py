@@ -21,9 +21,11 @@ from schemas.institution_schemas import (
 
 
 def _future_iso() -> str:
-    return (datetime.now(UTC) + timedelta(days=2)).replace(
-        hour=10, minute=0, second=0, microsecond=0
-    ).isoformat()
+    return (
+        (datetime.now(UTC) + timedelta(days=2))
+        .replace(hour=10, minute=0, second=0, microsecond=0)
+        .isoformat()
+    )
 
 
 def _future_date() -> str:

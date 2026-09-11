@@ -91,9 +91,7 @@ def test_recipient_ready_french_five_digit_postal():
         billing_address="12 Rue de Genève\n74100 Annemasse",
     )
     assert (
-        resolve_recipient_status(
-            billing_party=bp, display_name="VUILLE Danielle"
-        )
+        resolve_recipient_status(billing_party=bp, display_name="VUILLE Danielle")
         == "ready"
     )
 

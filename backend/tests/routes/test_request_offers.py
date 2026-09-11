@@ -160,9 +160,7 @@ class TestSendWithOffers:
         assert sample_request.status == RequestStatus.DRAFT.value
         assert sample_request.sent_at is None
         assert (
-            RequestOffer.query.filter_by(
-                transport_request_id=sample_request.id
-            ).count()
+            RequestOffer.query.filter_by(transport_request_id=sample_request.id).count()
             == 0
         )
         assert (
@@ -325,9 +323,7 @@ class TestSendWithOffers:
         )
         assert retry.status_code == 200
         assert (
-            RequestOffer.query.filter_by(
-                transport_request_id=sample_request.id
-            ).count()
+            RequestOffer.query.filter_by(transport_request_id=sample_request.id).count()
             == 1
         )
 
@@ -1269,10 +1265,13 @@ class TestRejectOffer:
             ).count()
             == 1
         )
-        assert RequestOffer.query.filter_by(
-            transport_request_id=request.id,
-            company_id=company_c.id,
-        ).first() is None
+        assert (
+            RequestOffer.query.filter_by(
+                transport_request_id=request.id,
+                company_id=company_c.id,
+            ).first()
+            is None
+        )
 
         reject_b = client.post(
             f"/api/v1/company/request-offers/{offer_b.id}/reject",
@@ -1482,9 +1481,7 @@ class TestTransportPreferences:
         assert data["total"] == 1
         assert data["preferences"][0]["company_id"] == sample_companies[2].id
 
-    def test_get_eligible_companies(
-        self, client, db, sample_institution, auth_headers
-    ):
+    def test_get_eligible_companies(self, client, db, sample_institution, auth_headers):
         """GET eligible-companies : partenaire réel, pas les fixtures test."""
         from models.enums import DispatchMode
 
@@ -1608,9 +1605,7 @@ class TestTransportPreferences:
         by_id = {c["id"]: c for c in response.get_json()["companies"]}
 
         assert emmenez.id in by_id
-        assert by_id[emmenez.id]["address"] == (
-            "Route de Chevrens 145, 1247 Anières"
-        )
+        assert by_id[emmenez.id]["address"] == ("Route de Chevrens 145, 1247 Anières")
         assert inactive.id not in by_id
         assert not_accepted.id not in by_id
         assert already.id in by_id

@@ -930,9 +930,7 @@ def run_post_send_side_effects(
                 departure_at=get_effective_dispatch_time(transport_request),
             )
         except Exception as event_err:
-            logger.warning(
-                "[SendTransportRequest] Error emitting event: %s", event_err
-            )
+            logger.warning("[SendTransportRequest] Error emitting event: %s", event_err)
 
         if include_audit:
             SendTransportRequestUseCase._record_send_timeline(

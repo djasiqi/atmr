@@ -410,12 +410,16 @@ def test_list_projection_skips_timeline_and_passenger_brief():
 
     def boom_brief():
         calls["brief"] += 1
-        raise AssertionError("passenger brief ne doit pas être chargé en projection table")
+        raise AssertionError(
+            "passenger brief ne doit pas être chargé en projection table"
+        )
 
     class _ReturnTrip:
         def __bool__(self):
             calls["return_trip"] += 1
-            raise AssertionError("return_trip ne doit pas être lazy-loadé en projection table")
+            raise AssertionError(
+                "return_trip ne doit pas être lazy-loadé en projection table"
+            )
 
     client = SimpleNamespace(
         id=5,

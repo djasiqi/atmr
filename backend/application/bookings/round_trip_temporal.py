@@ -322,8 +322,8 @@ def invalidate_impossible_downstream_confirmations(
     Conserve ``scheduled_time`` pour l'audit / l'historique.
     """
     updated: list[str] = []
-    siblings = list(downstream) if downstream is not None else load_downstream_returns(
-        booking
+    siblings = (
+        list(downstream) if downstream is not None else load_downstream_returns(booking)
     )
     if not siblings:
         return updated
@@ -406,23 +406,17 @@ def audit_impossible_round_trips(
         "CANCELLED",
         "REJECTED",
     }
-    returns = (
-        Booking.query.filter(
-            Booking.is_return.is_(True),
-            Booking.parent_booking_id.isnot(None),
-            Booking.time_confirmed.is_(True),
-            Booking.scheduled_time.isnot(None),
-        )
-        .all()
-    )
-    grouped_legs = (
-        Booking.query.filter(
-            Booking.route_group_id.isnot(None),
-            Booking.time_confirmed.is_(True),
-            Booking.scheduled_time.isnot(None),
-        )
-        .all()
-    )
+    returns = Booking.query.filter(
+        Booking.is_return.is_(True),
+        Booking.parent_booking_id.isnot(None),
+        Booking.time_confirmed.is_(True),
+        Booking.scheduled_time.isnot(None),
+    ).all()
+    grouped_legs = Booking.query.filter(
+        Booking.route_group_id.isnot(None),
+        Booking.time_confirmed.is_(True),
+        Booking.scheduled_time.isnot(None),
+    ).all()
 
     candidates: list[tuple[Any, Any]] = []
     seen: set[int] = set()
@@ -456,7 +450,9 @@ def audit_impossible_round_trips(
     pairs: list[dict[str, Any]] = []
     repaired_ids: list[int] = []
     for outbound, ret in candidates:
-        status = getattr(getattr(ret, "status", None), "value", getattr(ret, "status", None))
+        status = getattr(
+            getattr(ret, "status", None), "value", getattr(ret, "status", None)
+        )
         if str(status or "").upper() in {str(item).upper() for item in excluded}:
             continue
         dest = resolve_destination_constraint(outbound)
