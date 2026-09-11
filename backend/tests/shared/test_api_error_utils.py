@@ -18,9 +18,7 @@ def test_create_error_response_never_includes_traceback():
 
 
 def test_create_internal_error_never_includes_traceback():
-    body, status = create_internal_error(
-        exception=ValueError("internal-detail")
-    )
+    body, status = create_internal_error(exception=ValueError("internal-detail"))
     assert status == 500
     assert "debug" not in body
     assert "internal-detail" not in str(body)
