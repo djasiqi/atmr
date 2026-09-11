@@ -51,6 +51,7 @@ from services.institutions.mission_report_pdf import (
     build_mission_audit_report_pdf,
     build_operational_voucher_pdf,
 )
+from shared.logging_utils import exception_type_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +195,11 @@ class PatientTransportExportPdf(Resource):
         except Exception as e:
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            logger.error("[Export] PDF patient %s: %s", patient_id, type(e).__name__)
+            logger.error(
+                "[Export] PDF patient %s: %s",
+                patient_id,
+                exception_type_for_log(e),
+            )
             return {"error": "Erreur serveur"}, 500
 
 
@@ -231,7 +236,7 @@ class DailyTransportExportPdf(Resource):
         except Exception as e:
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            logger.error("[Export] PDF journalier: %s", e)
+            logger.error("[Export] PDF journalier: %s", exception_type_for_log(e))
             return {"error": "Erreur serveur"}, 500
 
 
@@ -282,7 +287,9 @@ class DailyMissionReportsExportZip(Resource):
         except Exception as e:
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            logger.error("[Export] ZIP rapports journaliers: %s", e)
+            logger.error(
+                "[Export] ZIP rapports journaliers: %s", exception_type_for_log(e)
+            )
             return {"error": "Erreur serveur"}, 500
 
 
@@ -319,7 +326,7 @@ class DailyTransportExportCsv(Resource):
         except Exception as e:
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            logger.error("[Export] CSV journalier: %s", e)
+            logger.error("[Export] CSV journalier: %s", exception_type_for_log(e))
             return {"error": "Erreur serveur"}, 500
 
 
@@ -373,5 +380,9 @@ class RequestMissionExportPdf(Resource):
         except Exception as e:
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            logger.error("[Export] PDF demande %s: %s", request_id, e)
+            logger.error(
+                "[Export] PDF demande %s: %s",
+                request_id,
+                exception_type_for_log(e),
+            )
             return {"error": "Erreur serveur"}, 500
