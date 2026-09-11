@@ -882,12 +882,17 @@ class AcceptOfferUseCase:
         db.session.add(booking)
         db.session.flush()  # Pour obtenir l'ID
 
+        institution_id = getattr(transport_request, "institution_id", None)
+        if institution_id is None:
+            institution_id = getattr(
+                getattr(transport_request, "institution", None), "id", None
+            )
         logger.info(
             "[AcceptOffer] Booking %s created from institution request "
             "request_id=%s institution_id=%s patient_id=%s billing_intent=%s",
             booking.id,
             transport_request.id,
-            transport_request.institution_id,
+            institution_id,
             getattr(getattr(transport_request, "patient", None), "id", None),
             transport_request.billing_intent,
         )

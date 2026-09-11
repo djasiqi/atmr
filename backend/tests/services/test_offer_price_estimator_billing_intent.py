@@ -199,6 +199,7 @@ class _AcceptInstitution:
 @dataclass
 class _AcceptTransportRequest:
     id: int = 100
+    institution_id: int = 1
     billing_intent: str = "patient"
     institution: _AcceptInstitution = field(default_factory=_AcceptInstitution)
     patient: _AcceptPatient = field(default_factory=_AcceptPatient)
