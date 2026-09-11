@@ -196,8 +196,7 @@ class PatientTransportExportPdf(Resource):
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
             logger.error(
-                "[Export] PDF patient %s: %s",
-                patient_id,
+                "[Export] PDF patient failed error_type=%s",
                 exception_type_for_log(e),
             )
             return {"error": "Erreur serveur"}, 500
