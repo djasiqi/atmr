@@ -80,3 +80,34 @@ def institution_patient_billing_address(patient: Any) -> str:
     city = (getattr(patient, "city", None) or "").strip()
     postal_city = " ".join(part for part in (postal, city) if part)
     return ", ".join(part for part in (street, postal_city) if part)
+
+
+def invoice_residence_label(
+    *,
+    patient: Any | None = None,
+    client: Any | None = None,
+) -> str:
+    """Établissement de résidence (EMS, foyer) à coller sous le nom « Facturé à »."""
+    if patient is not None:
+        name = (getattr(patient, "residence_name", None) or "").strip()
+        if name:
+            return name
+    if client is not None:
+        return (getattr(client, "residence_facility", None) or "").strip()
+    return ""
+
+
+def append_residence_to_billed_to_name(
+    name: str,
+    residence: str,
+    *,
+    separator: str,
+) -> str:
+    """Ajoute la résidence sous le nom, sans doublon."""
+    base = (name or "").strip()
+    label = (residence or "").strip()
+    if not label:
+        return base
+    if label.casefold() in base.casefold():
+        return base
+    return f"{base}{separator}{label}"

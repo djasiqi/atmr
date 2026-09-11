@@ -2,7 +2,7 @@ import React from 'react';
 import { FiUsers, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import styles from './TopClients.module.css';
 
-const TopClients = ({ reservations, isOpen, onToggle }) => {
+const TopClients = ({ reservations, isOpen, onToggle, loading = false }) => {
   const clientStats = reservations.reduce((acc, reservation) => {
     const clientName =
       reservation.client_name || reservation.client?.full_name || 'Client anonyme';
@@ -38,7 +38,9 @@ const TopClients = ({ reservations, isOpen, onToggle }) => {
       </button>
 
       <div className={`${styles.topClientsBody} ${isOpen ? styles.bodyOpen : ''}`}>
-        {topClients.length === 0 ? (
+        {loading ? (
+          <div className={styles.noData}>Chargement…</div>
+        ) : topClients.length === 0 ? (
           <div className={styles.noData}>Aucune donnee disponible</div>
         ) : (
           <div className={styles.clientsList}>

@@ -63,6 +63,28 @@ class TestBuildTimelineLabel:
         )
         assert label == "Réservation confirmée — Emmenez Moi"
 
+    def test_appointment_change_label(self):
+        label = build_timeline_label(
+            _event(
+                "field_updated",
+                {
+                    "appointment_before": "14:00",
+                    "appointment_after": "13:00",
+                    "changed_fields": ["appointment_time"],
+                },
+            )
+        )
+        assert label == "Rendez-vous modifié — 14:00 → 13:00"
+
+    def test_pickup_reconfirmed_label(self):
+        label = build_timeline_label(
+            _event(
+                "field_updated",
+                {"pickup_reconfirmed": True, "pickup_time": "12:15"},
+            )
+        )
+        assert label == "Nouvel horaire de départ confirmé — 12:15"
+
     def test_route_legs_reorganized_etapes(self):
         label = build_timeline_label(
             _event(

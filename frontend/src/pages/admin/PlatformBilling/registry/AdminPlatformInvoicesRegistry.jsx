@@ -243,6 +243,13 @@ const AdminPlatformInvoicesRegistry = () => {
         invalidate();
         return;
       }
+      if (action === 'CLOSE_PERIOD' && row.period_id) {
+        await lockPlatformBillingPeriod(row.period_id);
+        toast.success('Période clôturée. Vous pouvez émettre la facture.');
+        invalidate();
+        openDossier(row.dossier_key);
+        return;
+      }
       if (action === 'ISSUE' && row.statement_id) {
         await issuePlatformBillingInvoice(row.statement_id);
         toast.success('Facture émise');
@@ -276,6 +283,12 @@ const AdminPlatformInvoicesRegistry = () => {
       if (action === 'RECALCULATE_DOSSIER') {
         await recalculatePlatformBillingCompany(row.period_id, row.company_id);
         toast.success('Dossier recalculé');
+        invalidate();
+        return;
+      }
+      if (action === 'CLOSE_PERIOD' && row.period_id) {
+        await lockPlatformBillingPeriod(row.period_id);
+        toast.success('Période clôturée. Vous pouvez émettre la facture.');
         invalidate();
         return;
       }

@@ -67,6 +67,35 @@ def _stale_transition_response(
     )
 
 
+def _billing_incomplete_completion_response(
+    booking: Any,
+) -> tuple[dict[str, Any], int] | None:
+    """422 si clôture chauffeur avec payeur clinique sans clinique cible."""
+    from domain.billing.errors import BillingValidationError
+    from services.billing.booking_billing_guard import (
+        assert_non_patient_billing_complete,
+        user_message_for_incomplete_billing,
+    )
+
+    try:
+        assert_non_patient_billing_complete(
+            booking,
+            context="clôture chauffeur",
+            require_billing_party_for_clinic=True,
+        )
+    except BillingValidationError as exc:
+        return (
+            {
+                "error": user_message_for_incomplete_billing(exc),
+                "error_code": "billing_validation_error",
+                "retryable": False,
+                "details": {"field": exc.field},
+            },
+            422,
+        )
+    return None
+
+
 def _is_stale_driver_transition(current_status: str, requested: str) -> bool:
     """True si `requested` est un retour en arrière vs l'état persisté."""
     if current_status in TERMINAL_BOOKING_STATUSES:
@@ -574,11 +603,17 @@ class UpdateDriverBookingStatusUseCase:
                             }
                             status_code = 400
                         else:
-                            _set_status(booking, "RETURN_COMPLETED")
-                            completed_at = self._now_utc()
-                            booking.completed_at = completed_at
-                            self._resolve_delays(booking.id, completed_at)
-                            should_commit = True
+                            billing_err = _billing_incomplete_completion_response(
+                                booking
+                            )
+                            if billing_err:
+                                response, status_code = billing_err
+                            else:
+                                _set_status(booking, "RETURN_COMPLETED")
+                                completed_at = self._now_utc()
+                                booking.completed_at = completed_at
+                                self._resolve_delays(booking.id, completed_at)
+                                should_commit = True
                     else:
                         status_val = _status_value(booking)
                         if status_val == BOOKING_STATUS_COMPLETED:
@@ -606,11 +641,17 @@ class UpdateDriverBookingStatusUseCase:
                             }
                             status_code = 400
                         else:
-                            _set_status(booking, "COMPLETED")
-                            completed_at = self._now_utc()
-                            booking.completed_at = completed_at
-                            self._resolve_delays(booking.id, completed_at)
-                            should_commit = True
+                            billing_err = _billing_incomplete_completion_response(
+                                booking
+                            )
+                            if billing_err:
+                                response, status_code = billing_err
+                            else:
+                                _set_status(booking, "COMPLETED")
+                                completed_at = self._now_utc()
+                                booking.completed_at = completed_at
+                                self._resolve_delays(booking.id, completed_at)
+                                should_commit = True
 
                 elif new_status_str == "return_completed":
                     status_val = _status_value(booking)
@@ -644,11 +685,15 @@ class UpdateDriverBookingStatusUseCase:
                         response = {"error": "Not a return trip"}
                         status_code = 400
                     else:
-                        _set_status(booking, "RETURN_COMPLETED")
-                        completed_at = self._now_utc()
-                        booking.completed_at = completed_at
-                        self._resolve_delays(booking.id, completed_at)
-                        should_commit = True
+                        billing_err = _billing_incomplete_completion_response(booking)
+                        if billing_err:
+                            response, status_code = billing_err
+                        else:
+                            _set_status(booking, "RETURN_COMPLETED")
+                            completed_at = self._now_utc()
+                            booking.completed_at = completed_at
+                            self._resolve_delays(booking.id, completed_at)
+                            should_commit = True
 
                 elif new_status_str == "canceled":
                     status_val = _status_value(booking)

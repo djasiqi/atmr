@@ -216,6 +216,7 @@ def init_namespaces(app):
     from routes.clients import clients_ns
     from routes.companies import companies_ns
     from routes.contact import contact_ns
+    from routes.admin_contact_requests import admin_contact_requests_ns
     from routes.demo_requests import (
         admin_demo_accesses_ns,
         admin_demo_requests_ns,
@@ -464,6 +465,7 @@ def init_namespaces(app):
     # Routes publiques (sans auth)
     api_v1.add_namespace(public_stats_ns, path="/public/platform-stats")
     api_v1.add_namespace(contact_ns, path="/contact")
+    api_v1.add_namespace(admin_contact_requests_ns, path="/admin/contact_requests")
     api_v1.add_namespace(demo_requests_ns, path="/demo-requests")
     api_v1.add_namespace(admin_demo_requests_ns, path="/admin/demo_requests")
     api_v1.add_namespace(admin_demo_accesses_ns, path="/admin/demo_accesses")
@@ -545,6 +547,9 @@ def init_namespaces(app):
         api_legacy.add_namespace(analytics_ns, path="/analytics")
         api_legacy.add_namespace(settings_ns, path="/company-settings")
         api_legacy.add_namespace(contact_ns, path="/contact")
+        api_legacy.add_namespace(
+            admin_contact_requests_ns, path="/admin/contact_requests"
+        )
         api_legacy.add_namespace(demo_requests_ns, path="/demo-requests")
         api_legacy.add_namespace(admin_demo_requests_ns, path="/admin/demo_requests")
         api_legacy.add_namespace(admin_demo_accesses_ns, path="/admin/demo_accesses")

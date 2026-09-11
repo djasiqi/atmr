@@ -84,6 +84,7 @@ export function buildMultiStopPayloadStops(validStops, missionDate) {
     if (service) entry.dropoff_service = service;
     const doctor = stop.dropoff_doctor?.trim();
     if (doctor) entry.dropoff_doctor = doctor;
+    if (stop.destination_type) entry.destination_type = stop.destination_type;
     if (stop.use_custom_billing) {
       entry.use_custom_billing = true;
       if (stop.destination_billing_override) {

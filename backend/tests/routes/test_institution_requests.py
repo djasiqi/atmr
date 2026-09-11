@@ -123,6 +123,7 @@ class TestTransportRequestsCRUD:
                 "scheduled_time": self._get_scheduled_time(),
                 "pickup_location": "Clinique ABC, 1 rue Test",
                 "dropoff_location": "Hôpital XYZ, 2 avenue Example",
+                "dropoff_service": "Consultation",
                 "billing_intent": "patient",
             },
             headers=admin_auth_headers,
@@ -135,6 +136,24 @@ class TestTransportRequestsCRUD:
         assert data["patient_id"] == sample_patient.id
         assert data["is_editable"] is True
 
+    def test_create_medical_destination_requires_service_or_doctor(
+        self, client, db, admin_auth_headers
+    ):
+        response = client.post(
+            "/api/v1/institutions/requests",
+            json={
+                "scheduled_time": self._get_scheduled_time(),
+                "pickup_location": "Clinique",
+                "dropoff_location": "HUG",
+                "destination_type": "medical",
+            },
+            headers=admin_auth_headers,
+        )
+        assert response.status_code == 400
+        body = response.get_json()
+        details = str(body.get("details") or body)
+        assert "service ou le médecin" in details
+
     def test_create_request_api_key(
         self, client, db, sample_api_key, sample_institution
     ):
@@ -146,6 +165,7 @@ class TestTransportRequestsCRUD:
                 "scheduled_time": self._get_scheduled_time(),
                 "pickup_location": "123 rue A",
                 "dropoff_location": "456 rue B",
+                "dropoff_service": "Consultation",
                 "mission_type": "patient_transport",
             },
             headers={"X-API-Key": sample_api_key._raw_key},
@@ -165,6 +185,7 @@ class TestTransportRequestsCRUD:
                 "scheduled_time": self._get_scheduled_time(),
                 "pickup_location": "123 rue A",
                 "dropoff_location": "456 rue B",
+                "dropoff_service": "Consultation",
                 "mission_type": "patient_transport",
             },
             headers=admin_auth_headers,
@@ -228,6 +249,7 @@ class TestTransportRequestsCRUD:
                 "scheduled_time": self._get_scheduled_time(),
                 "pickup_location": "A",
                 "dropoff_location": "B",
+                "dropoff_service": "Consultation",
             },
             headers=admin_auth_headers,
         )
@@ -241,6 +263,7 @@ class TestTransportRequestsCRUD:
                 "scheduled_time": self._get_scheduled_time(),
                 "pickup_location": "C",
                 "dropoff_location": "D",
+                "dropoff_service": "Consultation",
             },
             headers=admin_auth_headers,
         )
@@ -530,6 +553,7 @@ class TestTransportRequestsCRUD:
                 "scheduled_time": self._get_scheduled_time(),
                 "pickup_location": "A",
                 "dropoff_location": "B",
+                "dropoff_service": "Consultation",
             },
             headers=admin_auth_headers,
         )
@@ -549,6 +573,7 @@ class TestTransportRequestsCRUD:
                 "scheduled_time": self._get_scheduled_time(),
                 "pickup_location": "A",
                 "dropoff_location": "B",
+                "dropoff_service": "Consultation",
                 "mobility": {
                     "wheelchair": True,
                     "needs_assistance": True,
@@ -613,6 +638,7 @@ class TestTransportRequestsForcePasswordChange:
                 "scheduled_time": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
                 "pickup_location": "A",
                 "dropoff_location": "B",
+                "dropoff_service": "Consultation",
             },
             headers=headers,
         )
@@ -674,6 +700,7 @@ class TestRequesterBillingOnCreateAndUpdate:
                 "scheduled_time": self._future_iso(),
                 "pickup_location": "Clinique",
                 "dropoff_location": "HUG",
+                "dropoff_service": "Consultation",
                 "billing_intent": "institution",
             },
             headers=requester_auth_headers,
@@ -800,6 +827,7 @@ class TestRequesterBillingOnCreateAndUpdate:
                         "dropoff_location": "HUG",
                         "scheduled_time": hug_time,
                         "time_confirmed": True,
+                        "dropoff_service": "Radiologie",
                         "use_custom_billing": True,
                         "destination_billing_override": "patient",
                     }
@@ -841,6 +869,7 @@ class TestRequesterBillingOnCreateAndUpdate:
                         "dropoff_location": "HUG",
                         "scheduled_time": hug_time,
                         "time_confirmed": True,
+                        "dropoff_service": "Radiologie",
                     }
                 ],
                 "return_scheduled_time": return_time,

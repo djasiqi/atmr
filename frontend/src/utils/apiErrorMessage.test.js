@@ -77,6 +77,21 @@ describe('getApiErrorMessage', () => {
     expect(getApiErrorMessage(err, 'Défaut')).toBe('Détail interne');
   });
 
+  it('ne présente pas un refresh révoqué comme une erreur de permission', () => {
+    const err = {
+      message: 'Request failed with status code 401',
+      response: {
+        status: 401,
+        data: {
+          error: 'Refresh token révoqué',
+          error_code: 'permission_denied',
+          suggestion: 'Vérifiez que vous avez les permissions nécessaires pour effectuer cette action.',
+        },
+      },
+    };
+    expect(getApiErrorMessage(err, 'Défaut')).toBe('Session expirée. Veuillez vous reconnecter.');
+  });
+
   it('lit le texte dans error quand error_code est présent (format legacy)', () => {
     const err = {
       message: 'Request failed with status code 400',

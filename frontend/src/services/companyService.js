@@ -108,16 +108,23 @@ export const fetchCompanyReservationsPaginated = async ({
   search,
   sortOrder = 'desc',
   excludeCanceled = false,
+  includeStats = true,
+  statsOnly = false,
+  includeTotal = true,
+  fields,
   signal,
 } = {}) => {
   try {
     const params = {
       flat: true,
-      include_stats: true,
+      include_stats: includeStats !== false,
       page: Math.max(Number(page) || 1, 1),
       per_page: Math.min(Math.max(Number(perPage) || 25, 1), 100),
       sort_order: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : 'desc',
     };
+    if (statsOnly) params.stats_only = true;
+    if (includeTotal === false) params.include_total = false;
+    if (fields) params.fields = fields;
     if (date) params.date = date;
     if (startDate) params.start_date = startDate;
     if (endDate) params.end_date = endDate;
@@ -143,21 +150,7 @@ export const fetchCompanyReservationsPaginated = async ({
       console.error("Erreur d'authentification JWT");
     }
     console.error('fetchCompanyReservationsPaginated failed');
-    return {
-      reservations: [],
-      total: 0,
-      page,
-      per_page: perPage,
-      total_pages: 0,
-      stats: {
-        total: 0,
-        pending: 0,
-        inProgress: 0,
-        completed: 0,
-        canceled: 0,
-        revenue: 0,
-      },
-    };
+    throw e;
   }
 };
 
@@ -1747,6 +1740,12 @@ export const fetchRequestOffers = async (status) => {
     console.error('[CompanyService] Error fetching request offers:', error);
     return { offers: [], total: 0 };
   }
+};
+
+/** Détail d'une offre institution (arrivée temps réel). */
+export const fetchRequestOffer = async (offerId) => {
+  const { data } = await apiClient.get(`/company/request-offers/${offerId}`);
+  return data;
 };
 
 /**

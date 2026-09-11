@@ -48,6 +48,54 @@ def test_normalize_rejects_empty():
         normalize_editor_lines([])
 
 
+def test_normalize_unit_price_empty_label_is_support_hours():
+    lines = normalize_editor_lines(
+        [
+            {
+                "calculation_mode": "UNIT_PRICE",
+                "label": "",
+                "quantity": "49",
+                "unit_amount": "45",
+                "line_type": "ADJUSTMENT",
+            }
+        ]
+    )
+    assert lines[0]["line_type"] == "support_time"
+    assert lines[0]["label"] == "Support plateforme — 49 h à 45 CHF/h"
+    assert lines[0]["amount"] == "2205.00"
+
+
+def test_normalize_fixed_empty_label_rejected():
+    with pytest.raises(InvoiceReplaceError, match="libellé requis"):
+        normalize_editor_lines(
+            [
+                {
+                    "calculation_mode": "FIXED_AMOUNT",
+                    "label": "",
+                    "amount": "10.00",
+                    "line_type": "ADJUSTMENT",
+                }
+            ]
+        )
+
+
+def test_normalize_unit_price_keeps_custom_adjustment_label():
+    lines = normalize_editor_lines(
+        [
+            {
+                "calculation_mode": "UNIT_PRICE",
+                "label": "Forfait licences",
+                "quantity": "2",
+                "unit_amount": "50",
+                "line_type": "ADJUSTMENT",
+            }
+        ]
+    )
+    assert lines[0]["line_type"] == "ADJUSTMENT"
+    assert lines[0]["label"] == "Forfait licences"
+    assert lines[0]["amount"] == "100.00"
+
+
 def test_edit_action_when_a_envoyer_unpaid():
     class Inv:
         sent_at = None

@@ -18,6 +18,9 @@ class _BookingLike(Protocol):
     dropoff_lat: Any
     dropoff_lon: Any
     scheduled_time: Any
+    time_confirmed: Any
+    is_return: Any
+    parent_booking_id: Any
     medical_facility: Any
     doctor_name: Any
     hospital_service: Any
@@ -117,25 +120,51 @@ class UpdateCompanyReservationUseCase:
                         error={"error": "Heure planifiée invalide ou manquante."},
                         status_code=400,
                     )
+                intended_confirmed = None
+                if "time_confirmed" in validated_data:
+                    intended_confirmed = bool(validated_data["time_confirmed"])
+                else:
+                    is_sentinel_midnight = (
+                        scheduled_local.hour == 0
+                        and scheduled_local.minute == 0
+                        and scheduled_local.second == 0
+                    )
+                    intended_confirmed = not is_sentinel_midnight
+                conflict = _round_trip_conflict(
+                    booking,
+                    intended_pickup=scheduled_local,
+                    intended_confirmed=intended_confirmed,
+                )
+                if conflict is not None:
+                    return UpdateCompanyReservationResult(
+                        ok=False,
+                        error=conflict.to_error_dict(),
+                        status_code=422,
+                    )
                 booking.scheduled_time = scheduled_local
                 updated_fields.append("scheduled_time")
                 if hasattr(booking, "time_confirmed"):
-                    if "time_confirmed" in validated_data:
-                        booking.time_confirmed = bool(validated_data["time_confirmed"])
-                    else:
-                        is_sentinel_midnight = (
-                            scheduled_local.hour == 0
-                            and scheduled_local.minute == 0
-                            and scheduled_local.second == 0
-                        )
-                        booking.time_confirmed = not is_sentinel_midnight
+                    booking.time_confirmed = intended_confirmed
                     updated_fields.append("time_confirmed")
 
         if (
             "time_confirmed" in validated_data
             and "scheduled_time" not in validated_data
         ) and hasattr(booking, "time_confirmed"):
-            booking.time_confirmed = bool(validated_data["time_confirmed"])
+            intended_confirmed = bool(validated_data["time_confirmed"])
+            if intended_confirmed:
+                conflict = _round_trip_conflict(
+                    booking,
+                    intended_pickup=getattr(booking, "scheduled_time", None),
+                    intended_confirmed=True,
+                )
+                if conflict is not None:
+                    return UpdateCompanyReservationResult(
+                        ok=False,
+                        error=conflict.to_error_dict(),
+                        status_code=422,
+                    )
+            booking.time_confirmed = intended_confirmed
             updated_fields.append("time_confirmed")
 
         if "medical_facility" in validated_data:
@@ -186,9 +215,40 @@ class UpdateCompanyReservationUseCase:
                 status_code=400,
             )
 
+        if "scheduled_time" in updated_fields or "time_confirmed" in updated_fields:
+            from application.bookings.round_trip_temporal import (
+                invalidate_impossible_downstream_confirmations,
+            )
+            from services.institutions.mission_schedule import (
+                sync_request_departure_for_booking,
+            )
+
+            extra = invalidate_impossible_downstream_confirmations(booking)
+            updated_fields.extend(extra)
+
+            if getattr(booking, "time_confirmed", False) and getattr(
+                booking, "scheduled_time", None
+            ):
+                sync_request_departure_for_booking(booking)
+
         return UpdateCompanyReservationResult(
             ok=True,
             updated_fields=updated_fields,
             should_trigger_dispatch=True,
             trigger_reason="update",
         )
+
+
+def _round_trip_conflict(
+    booking: _BookingLike,
+    *,
+    intended_pickup: Any,
+    intended_confirmed: bool,
+):
+    from application.bookings.round_trip_temporal import apply_round_trip_schedule_rules
+
+    return apply_round_trip_schedule_rules(
+        booking,
+        intended_pickup=intended_pickup,
+        intended_confirmed=intended_confirmed,
+    )

@@ -166,6 +166,7 @@ describe('institutionRouteForm', () => {
         establishment: 'Clinique',
         service: 'Urgences',
         doctor: 'Dr. X',
+        destinationType: '',
       });
     });
   });

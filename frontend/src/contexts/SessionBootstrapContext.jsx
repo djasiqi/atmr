@@ -16,6 +16,7 @@ import {
   isLoginSessionInProgress,
   AUTH_LOGOUT_AT_KEY,
 } from '../utils/sessionLogoutState';
+import { fetchAuthMeSingleFlight } from '../utils/authMeSingleFlight';
 
 const SessionBootstrapContext = createContext({
   status: 'idle',
@@ -60,10 +61,10 @@ export function SessionBootstrapProvider({ children }) {
     }
 
     try {
-      const response = await apiClient.get('/auth/me', {
+      const response = await fetchAuthMeSingleFlight(() => apiClient.get('/auth/me', {
         skipAuthRedirect: false,
         skipFreshTokenLogout: true,
-      });
+      }));
       const payload = response?.data?.user || response?.data;
       if (payload) {
         if (skipSessionRestore) {

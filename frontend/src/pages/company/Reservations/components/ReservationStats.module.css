@@ -93,6 +93,11 @@
   white-space: nowrap;
 }
 
+.kpiValuePending {
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .statsGrid {

@@ -271,6 +271,7 @@ class TestE2EInstitutionFlow:
             "pickup_lat": 46.5197,
             "pickup_lng": 6.6323,
             "dropoff_location": "456 Avenue Arrivée, 1005 Lausanne",
+            "dropoff_service": "Consultation",
             "dropoff_lat": 46.5230,
             "dropoff_lng": 6.6400,
             "is_round_trip": False,

@@ -118,6 +118,7 @@ const UnifiedDispatchRefactored = () => {
 
   // Panel lateral de details
   const [selectedDispatch, setSelectedDispatch] = useState(null);
+  const pendingBookingOpenRef = useRef(null);
 
   // États pour les modals (conservé pour compatibilité, mais maintenant géré par assignModal)
   // const [selectedReservationForAssignment, setSelectedReservationForAssignment] = useState(null);
@@ -1173,10 +1174,12 @@ const UnifiedDispatchRefactored = () => {
   // Ouvrir le panneau latéral depuis ?booking= (ex. clic notification cloche)
   useEffect(() => {
     const bookingIdParam = searchParams.get('booking');
-    if (!bookingIdParam || dispatchListLoading) return undefined;
-
-    const bookingId = Number(bookingIdParam);
-    if (!bookingId) return undefined;
+    if (bookingIdParam) {
+      const parsed = Number(bookingIdParam);
+      if (parsed) pendingBookingOpenRef.current = parsed;
+    }
+    const bookingId = pendingBookingOpenRef.current;
+    if (!bookingId || dispatchListLoading) return undefined;
 
     const findInList = (list) => (list || []).find(
       (r) => Number(r.id ?? r.booking_id) === bookingId,
@@ -1185,6 +1188,7 @@ const UnifiedDispatchRefactored = () => {
     const found = findInList(dispatches);
     if (found) {
       setSelectedDispatch(found);
+      pendingBookingOpenRef.current = null;
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
         next.delete('booking');
@@ -1201,12 +1205,14 @@ const UnifiedDispatchRefactored = () => {
         const bookingDay = bookingDateFromReservation(match);
         if (bookingDay && bookingDay !== date) {
           setDate(bookingDay);
+          return;
         }
         setSelectedDispatch(match);
+        pendingBookingOpenRef.current = null;
       } catch (err) {
         console.error('[UnifiedDispatch] Auto-open booking error:', err);
       } finally {
-        if (!cancelled) {
+        if (!cancelled && !pendingBookingOpenRef.current) {
           setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
             next.delete('booking');
@@ -1392,6 +1398,7 @@ const UnifiedDispatchRefactored = () => {
             <Suspense fallback={null}>
               <ReservationDetailPanel
                 reservation={selectedDispatch}
+                linkedBookings={dispatches}
                 onClose={() => setSelectedDispatch(null)}
                 onSave={async (id, data) => {
                   await updateReservation(id, data);

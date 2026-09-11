@@ -8,6 +8,7 @@ import pytest
 
 from application.invoices.institution_patient_resolution import (
     _patient_ids_from_billing_parties,
+    _patient_ids_from_customer_names,
 )
 from models import BillingParty, BillingPartyType, Institution, InstitutionPatient
 
@@ -73,3 +74,35 @@ def test_ignores_reference_to_missing_patient(db, patient):
 
 def test_empty_input_does_not_query(db):
     assert _patient_ids_from_billing_parties(set()) == {}
+
+
+def test_resolves_unique_customer_name_on_shared_institution(db, institution, patient):
+    """Course compte partagé sans fiche liée → rattachement par nom unique."""
+    resolved = _patient_ids_from_customer_names(
+        {38244: "Ali EL SAHBI"},
+        {38244: institution.id},
+    )
+    assert resolved == {38244: patient.id}
+
+
+def test_resolves_last_name_first_customer_name(db, institution, patient):
+    resolved = _patient_ids_from_customer_names(
+        {38244: "EL SAHBI Ali"},
+        {38244: institution.id},
+    )
+    assert resolved == {38244: patient.id}
+
+
+def test_skips_ambiguous_last_name_only(db, institution, patient):
+    twin = InstitutionPatient()
+    twin.institution_id = institution.id
+    twin.first_name = "Samir"
+    twin.last_name = "EL SAHBI"
+    db.session.add(twin)
+    db.session.flush()
+
+    resolved = _patient_ids_from_customer_names(
+        {38244: "EL SAHBI"},
+        {38244: institution.id},
+    )
+    assert resolved == {}

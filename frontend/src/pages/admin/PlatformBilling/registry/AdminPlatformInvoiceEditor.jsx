@@ -7,6 +7,11 @@ import {
   replacePlatformIssuedInvoice,
 } from '../../../../services/adminService';
 import AdminActionDialog from '../../components/AdminActionDialog';
+import {
+  FALLBACK_SUPPORT_HOURLY_RATE,
+  SUPPORT_LINE_TYPE,
+  syncDerivedInvoiceLine,
+} from '../issuedInvoiceUi';
 import styles from './AdminPlatformInvoiceEditor.module.css';
 
 const apiErrorMessage = (e) =>
@@ -34,6 +39,16 @@ const emptyDiscount = () => ({
   discount_mode: 'AMOUNT', // AMOUNT (CHF) | PERCENT
   discount_value: '0',
 });
+
+const emptySupportLine = (hourlyRate) =>
+  syncDerivedInvoiceLine({
+    calculation_mode: 'UNIT_PRICE',
+    label: '',
+    quantity: '',
+    unit_amount: hourlyRate || FALLBACK_SUPPORT_HOURLY_RATE,
+    amount: '0.00',
+    line_type: SUPPORT_LINE_TYPE,
+  });
 
 const round2 = (n) => {
   const x = Number(n);
@@ -90,45 +105,14 @@ const mapBootstrapLine = (ln) => {
       discount_value: String(Math.abs(parseNum(ln.amount))),
     };
   }
-  return syncDerivedLabel(base);
+  return syncDerivedInvoiceLine(base);
 };
 
 const updateLine = (rows, idx, patch) =>
   rows.map((r, i) => (i === idx ? { ...r, ...patch } : r));
 
-/** Formate un nombre pour libellé (1, 1.5, 2.25…). */
-const fmtLabelNum = (v) => {
-  const n = parseNum(v);
-  if (!Number.isFinite(n)) return '0';
-  return String(round2(n)).replace(/\.?0+$/, '') || '0';
-};
-
-/** Resynchronise libellés auto (support X h) quand qté / tarif changent. */
-const syncDerivedLabel = (line) => {
-  const label = (line.label || '').trim();
-  const lt = (line.line_type || '').toLowerCase();
-  const isSupport = lt.includes('support') || /^support/i.test(label);
-  if (
-    isSupport &&
-    line.calculation_mode === 'UNIT_PRICE' &&
-    line.quantity !== '' &&
-    line.quantity != null
-  ) {
-    const hours = fmtLabelNum(line.quantity);
-    if (line.unit_amount !== '' && line.unit_amount != null) {
-      const rate = fmtLabelNum(line.unit_amount);
-      return {
-        ...line,
-        label: `Support plateforme — ${hours} h à ${rate} CHF/h`,
-      };
-    }
-    return { ...line, label: `Support plateforme — ${hours} h` };
-  }
-  return line;
-};
-
 const patchLine = (rows, idx, patch) =>
-  rows.map((r, i) => (i === idx ? syncDerivedLabel({ ...r, ...patch }) : r));
+  rows.map((r, i) => (i === idx ? syncDerivedInvoiceLine({ ...r, ...patch }) : r));
 
 const AdminPlatformInvoiceEditor = ({ issuedId, onClose, onReplaced }) => {
   const [loading, setLoading] = useState(true);
@@ -177,6 +161,8 @@ const AdminPlatformInvoiceEditor = ({ issuedId, onClose, onReplaced }) => {
   const mode = bootstrap?.mode;
   const title = mode === 'correct' ? 'Corriger la facture' : 'Éditer la facture';
   const hasStatementLines = (bootstrap?.statement_lines || []).length > 0;
+  const supportHourlyRate =
+    bootstrap?.support_hourly_rate_default || FALLBACK_SUPPORT_HOURLY_RATE;
 
   const buildPayload = () => ({
     idempotency_key:
@@ -202,12 +188,13 @@ const AdminPlatformInvoiceEditor = ({ issuedId, onClose, onReplaced }) => {
         };
       }
       if (ln.calculation_mode === 'UNIT_PRICE') {
+        const synced = syncDerivedInvoiceLine(ln);
         return {
           calculation_mode: 'UNIT_PRICE',
-          label: ln.label,
-          quantity: String(ln.quantity),
-          unit_amount: String(ln.unit_amount),
-          line_type: ln.line_type || 'ADJUSTMENT',
+          label: synced.label,
+          quantity: String(synced.quantity),
+          unit_amount: String(synced.unit_amount),
+          line_type: synced.line_type || SUPPORT_LINE_TYPE,
         };
       }
       return {
@@ -466,6 +453,16 @@ const AdminPlatformInvoiceEditor = ({ issuedId, onClose, onReplaced }) => {
                     <button
                       type="button"
                       className={styles.btnSm}
+                      onClick={() =>
+                        setLines((l) => [...l, emptySupportLine(supportHourlyRate)])
+                      }
+                    >
+                      <FiPlus size={14} aria-hidden />
+                      Support
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.btnSm}
                       onClick={() => setLines((l) => [...l, emptyDiscount()])}
                     >
                       <FiPlus size={14} aria-hidden />
@@ -520,7 +517,11 @@ const AdminPlatformInvoiceEditor = ({ issuedId, onClose, onReplaced }) => {
                                 )
                               }
                               placeholder={
-                                isDiscount ? 'Libellé de la remise' : 'Libellé de la ligne'
+                                isDiscount
+                                  ? 'Libellé de la remise'
+                                  : isUnit
+                                    ? 'Support plateforme — heures × tarif'
+                                    : 'Libellé de la ligne'
                               }
                             />
                           </label>
@@ -628,23 +629,23 @@ const AdminPlatformInvoiceEditor = ({ issuedId, onClose, onReplaced }) => {
                                       setLines((rows) =>
                                         patchLine(rows, idx, {
                                           calculation_mode: 'UNIT_PRICE',
-                                          quantity: rows[idx].quantity || '1',
+                                          line_type: SUPPORT_LINE_TYPE,
+                                          quantity: rows[idx].quantity || '',
                                           unit_amount:
                                             rows[idx].unit_amount ||
-                                            rows[idx].amount ||
-                                            '0',
+                                            supportHourlyRate,
                                         })
                                       )
                                     }
                                   >
-                                    Qté × prix
+                                    Heures × tarif
                                   </button>
                                 </div>
 
                                 {isUnit ? (
                                   <div className={styles.unitInputs}>
                                     <label className={styles.miniField}>
-                                      Qté
+                                      Heures
                                       <input
                                         inputMode="decimal"
                                         value={ln.quantity}
@@ -661,7 +662,7 @@ const AdminPlatformInvoiceEditor = ({ issuedId, onClose, onReplaced }) => {
                                       ×
                                     </span>
                                     <label className={styles.miniField}>
-                                      Prix
+                                      Tarif CHF/h
                                       <input
                                         inputMode="decimal"
                                         value={ln.unit_amount}

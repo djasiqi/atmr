@@ -14,6 +14,7 @@ import {
   createPlatformIssuedCreditNote,
   downloadPlatformIssuedInvoicePdf,
   validatePlatformBillingInvoice,
+  lockPlatformBillingPeriod,
 } from '../../../../services/adminService';
 import AdminActionDialog from '../../components/AdminActionDialog';
 import AdminPlatformInvoiceEditor from './AdminPlatformInvoiceEditor';
@@ -345,15 +346,64 @@ const AdminPlatformInvoiceSheet = ({
     Number(detail?.amount_paid || 0) <= 0 &&
     !flags.isReadOnly;
   const primaryKey = dossierRow?.primary_action || null;
-  const primaryIsWorkflow = ['MARK_SENT', 'ISSUE', 'REVIEW', 'RECORD_PAYMENT'].includes(
-    primaryKey
+  const canClosePeriod = Boolean(
+    dossierRow?.period_id
+    && !issuedId
+    && (
+      primaryKey === 'CLOSE_PERIOD'
+      || allowed.has('CLOSE_PERIOD')
+      || opStatus === 'PRETE_A_CLOTURER'
+    )
   );
+  const primaryIsWorkflow = [
+    'MARK_SENT',
+    'ISSUE',
+    'REVIEW',
+    'RECORD_PAYMENT',
+    'CLOSE_PERIOD',
+  ].includes(primaryKey) || canClosePeriod;
 
   const primaryBtn = (() => {
     if (primaryKey === 'MARK_SENT' && issuedId) {
       return (
         <button type="button" className={styles.btnPrimary} disabled={busy} onClick={handleSend}>
           Envoyer
+        </button>
+      );
+    }
+    if ((primaryKey === 'CLOSE_PERIOD' || canClosePeriod) && dossierRow?.period_id) {
+      return (
+        <button
+          type="button"
+          className={styles.btnPrimary}
+          disabled={busy}
+          onClick={() =>
+            setActionDialog({
+              title: 'Clôturer la période',
+              description: [
+                `Période : ${dossierRow?.period_label || 'sélectionnée'}`,
+                'Tous les relevés validés seront verrouillés.',
+                'Ensuite vous pourrez émettre la facture (numéro définitif).',
+              ].join('\n'),
+              confirmationLabel: 'Clôturer la période',
+              onConfirm: async () => {
+                try {
+                  await runAction(
+                    () => lockPlatformBillingPeriod(dossierRow.period_id),
+                    {
+                      successMessage:
+                        'Période clôturée. Vous pouvez maintenant émettre la facture.',
+                    }
+                  );
+                  setActionDialog(null);
+                } catch {
+                  /* runAction pose déjà l’erreur */
+                }
+              },
+            })
+          }
+        >
+          Clôturer la période
         </button>
       );
     }
@@ -421,6 +471,11 @@ const AdminPlatformInvoiceSheet = ({
   const actionBar = (
     <div className={styles.actionBar}>
       <div className={styles.actionBarStart}>
+        {canClosePeriod && (
+          <p className={styles.nextStepHint}>
+            Prochaine étape : clôturer la période pour préparer l’émission.
+          </p>
+        )}
         {issuedId && (canBillingCancel || allowed.has('CANCEL')) && flags.isIssuedNotSent && (
           <button
             type="button"

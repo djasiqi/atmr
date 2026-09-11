@@ -93,6 +93,7 @@ const AdminDashboard = () => {
     Number(priorities?.critical_attention_count ?? plat?.critical_attention_count) ||
     drift + platformActions;
   const demosOpen = Number(priorities?.demo_requests_open) || 0;
+  const contactFailed = Number(priorities?.contact_notifications_failed) || 0;
 
   const healthStatus = useMemo(() => {
     if (loading && !summary) return 'loading';
@@ -116,9 +117,14 @@ const AdminDashboard = () => {
         `${platformActions} action${platformActions > 1 ? 's' : ''} plateforme`
       );
     }
+    if (contactFailed > 0) {
+      parts.push(
+        `${contactFailed} notification${contactFailed > 1 ? 's' : ''} de contact en échec`
+      );
+    }
     if (parts.length === 0) return `${critical} élément${critical > 1 ? 's' : ''} à vérifier`;
     return parts.join(' · ');
-  }, [healthStatus, drift, platformActions, critical]);
+  }, [healthStatus, drift, platformActions, contactFailed, critical]);
 
   const criticalExplanation = useMemo(() => {
     if (critical === 0) return 'Situation normale';
@@ -133,8 +139,13 @@ const AdminDashboard = () => {
         `${platformActions} action${platformActions > 1 ? 's' : ''} plateforme`
       );
     }
+    if (contactFailed > 0) {
+      parts.push(
+        `${contactFailed} notification${contactFailed > 1 ? 's' : ''} de contact en échec`
+      );
+    }
     return parts.join(' · ') || `${critical} élément${critical > 1 ? 's' : ''} à vérifier`;
-  }, [critical, drift, platformActions]);
+  }, [critical, drift, platformActions, contactFailed]);
 
   const updatedLabel = formatUpdatedAt(summary?.generated_at);
   const fmt = (v) => {
@@ -255,6 +266,14 @@ const AdminDashboard = () => {
             <Link to={`${adminPaths.partnersDemoRequests(adminId)}?status=new`}>
               {demosOpen} nouvelle{demosOpen > 1 ? 's' : ''} demande
               {demosOpen > 1 ? 's' : ''} de démonstration
+            </Link>
+          </p>
+        ) : null}
+        {contactFailed > 0 ? (
+          <p className={styles.demoLine} data-testid="admin-dash-contact-line">
+            <Link to={`${adminPaths.partnersContactRequests(adminId)}?status=failed`}>
+              {contactFailed} notification{contactFailed > 1 ? 's' : ''} interne
+              {contactFailed > 1 ? 's' : ''} de contact en échec
             </Link>
           </p>
         ) : null}

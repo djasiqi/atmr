@@ -183,6 +183,7 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
   className = '',
   inputClassName = '',
   invalid = false,
+  describedBy,
   inputId,
   ariaLabel,
   title,
@@ -274,6 +275,7 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
       }
       return resolved;
     },
+    focus: () => inputRef.current?.focus(),
   }), [resolvePendingIso, value, onChange]);
 
   const handleInputChange = (e) => {
@@ -449,14 +451,15 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
           id={inputId}
           type="text"
           inputMode="numeric"
-          className={`form-input ${dp.input} ${inputClassName} ${inputError ? 'error' : ''}`.trim()}
+          className={`form-input ${dp.input} ${inputClassName} ${(invalid || inputError) ? 'error' : ''}`.trim()}
           value={masked || ''}
           onChange={handleInputChange}
           onBlur={handleInputBlur}
           onKeyDown={handleInputKeyDown}
           placeholder="__.__.____"
           maxLength={10}
-          aria-invalid={invalid || inputError}
+          aria-invalid={(invalid || inputError) || undefined}
+          aria-describedby={describedBy}
           aria-label={ariaLabel}
           title={title}
         />

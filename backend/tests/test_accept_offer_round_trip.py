@@ -182,6 +182,7 @@ class TestTransportRequestSchemaRoundTrip:
             "scheduled_time": _future_scheduled_iso(),
             "pickup_location": "A",
             "dropoff_location": "B",
+            "dropoff_service": "Consultation",
             "is_round_trip": True,
         }
         from marshmallow import ValidationError
@@ -200,6 +201,7 @@ class TestTransportRequestSchemaRoundTrip:
             "scheduled_time": _future_scheduled_iso(),
             "pickup_location": "A",
             "dropoff_location": "B",
+            "dropoff_service": "Consultation",
             "is_round_trip": True,
             "return_date": mission,
         }
@@ -216,6 +218,7 @@ class TestTransportRequestSchemaRoundTrip:
             "scheduled_time": _future_scheduled_iso(),
             "pickup_location": "A",
             "dropoff_location": "B",
+            "dropoff_service": "Consultation",
             "is_round_trip": True,
             "return_time": _future_scheduled_iso(hour=16, minute=0),
         }
@@ -230,6 +233,7 @@ class TestTransportRequestSchemaRoundTrip:
             "scheduled_time": _future_scheduled_iso(),
             "pickup_location": "A",
             "dropoff_location": "B",
+            "dropoff_service": "Consultation",
             "is_round_trip": False,
         }
         result = schema.load(data)
@@ -241,6 +245,7 @@ class TestTransportRequestSchemaRoundTrip:
             "scheduled_time": _future_scheduled_iso(),
             "pickup_location": "A",
             "dropoff_location": "B",
+            "dropoff_service": "Consultation",
             "is_round_trip": False,
         }
         result = schema.load(data)

@@ -24,6 +24,7 @@ from infrastructure.invoices.invoice_calculator import (
     round_to_5_cents,
 )
 from application.invoices.billable_amount import calculate_billable_booking_amount
+from application.invoices.booking_schedule import booking_schedule_sort_key
 from application.invoices.booking_status import booking_status_is_canceled
 from application.invoices.invoice_booking_units import (
     collect_explicit_peer_ids_to_load,
@@ -1007,13 +1008,7 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 )
                 is_delivery = mission_type == "material_delivery"
                 if unit.kind == "round_trip" and len(segments) >= 2:
-                    ordered = sorted(
-                        segments,
-                        key=lambda b: (
-                            b.scheduled_time or datetime.min.replace(tzinfo=UTC),
-                            int(b.id),
-                        ),
-                    )
+                    ordered = sorted(segments, key=booking_schedule_sort_key)
                     pri_desc = build_invoice_line_description_clinic_monthly(
                         ordered[0],
                         description_builder=self.description_builder,

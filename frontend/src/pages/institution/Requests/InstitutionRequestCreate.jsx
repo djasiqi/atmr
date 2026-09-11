@@ -35,6 +35,13 @@ import { canSetRequestBillingOnCreate } from '../../../utils/institutionPermissi
 import AddressAutocomplete from '../../../components/common/AddressAutocomplete';
 import PatientFormModal from '../Patients/PatientFormModal';
 import { toast } from 'sonner';
+import {
+  SEND_RETRY_TOAST,
+  institutionSubmitBusy,
+  institutionSubmitButtonLabel,
+  resolveCreatedRequestId,
+} from '../../../utils/institutionRequestSubmit';
+import { createInstitutionSubmitTrace } from '../../../utils/institutionSubmitTrace';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import ChipSelect from '../../../components/ui/ChipSelect';
 import styles from './InstitutionRequestForm.module.css';
@@ -44,6 +51,18 @@ import {
   filterValidMultiStopDestinations,
 } from '../../../utils/buildMultiStopLegsPreview';
 import DestinationBillingOverride from '../../../components/institution/DestinationBillingOverride';
+import MedicalDestinationDetails from '../../../components/institution/MedicalDestinationDetails';
+import {
+  DESTINATION_TYPE_MEDICAL,
+  suggestDestinationTypeFromPlace,
+} from '../../../utils/institutionDestinationDetails';
+import {
+  REQUIRED_FIELDS_TOAST,
+  collectInstitutionRequestFormErrors,
+  fieldErrorsMap,
+  formErrorId,
+  scrollToFirstFormError,
+} from '../../../utils/institutionRequestFormErrors';
 import RouteStepTimeField from '../../../components/institution/RouteStepTimeField';
 import ExternalCarrierFields, {
   EMPTY_EXTERNAL_CARRIER_FORM,
@@ -55,12 +74,9 @@ import {
   combineMissionDateTime,
   derivePickupTimeConfirmed,
   applyDepartureToPayload,
-  isInstantInPast,
-  isInstantBeforeLead,
   extractHHMM,
   formatLocalDateYMD,
   formatLocalTimeHM,
-  MIN_ARRIVAL_LEAD_MINUTES,
   sanitizeSchedulePayloadForApi,
 } from '../../../utils/missionScheduleForm';
 import {
@@ -137,6 +153,7 @@ const EMPTY_FORM = {
   dropoff_establishment: '',
   dropoff_service: '',
   dropoff_doctor: '',
+  destination_type: DESTINATION_TYPE_MEDICAL,
   floor_elevator_info: '',
   round_trip: false,
   requires_wheelchair: false,
@@ -174,6 +191,8 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
   const createMutation = useCreateRequest();
   const sendMutation = useSendRequest();
   const assignExternalMutation = useAssignExternalCarrier();
+  const [createdRequestId, setCreatedRequestId] = useState(null);
+  const [submitPhase, setSubmitPhase] = useState(null);
 
   const institutionRole = meData?.institution_role;
   const institutionType = meData?.institution_type;
@@ -202,6 +221,17 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
   // ── Multi-étapes : réorganisation par glisser-déposer ──
   const [dragIndex, setDragIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const destinationDetailsRef = useRef(null);
+
+  const clearFieldErrors = useCallback((...keys) => {
+    setFieldErrors((prev) => {
+      if (!keys.some((k) => prev[k])) return prev;
+      const next = { ...prev };
+      keys.forEach((k) => { delete next[k]; });
+      return next;
+    });
+  }, []);
 
   // Réordonne TOUS les points du parcours.
   // index 0 = Départ (origine), 1 = Destination, 2.. = étapes supplémentaires.
@@ -221,6 +251,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         establishment: prev.dropoff_establishment || '',
         service: prev.dropoff_service || '',
         doctor: prev.dropoff_doctor || '',
+        destination_type: prev.destination_type || DESTINATION_TYPE_MEDICAL,
       };
       const extras = (prev.intermediate_stops || []).map((s) => ({
         kind: 'extra',
@@ -230,6 +261,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         establishment: s.dropoff_establishment || '',
         service: s.dropoff_service || '',
         doctor: s.dropoff_doctor || '',
+        destination_type: s.destination_type || DESTINATION_TYPE_MEDICAL,
       }));
       const combined = [pickup, dropoff, ...extras];
       if (from === to || from < 0 || to < 0 || from >= combined.length || to >= combined.length) {
@@ -248,6 +280,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         dropoff_establishment: n1.establishment || '',
         dropoff_service: n1.service || '',
         dropoff_doctor: n1.doctor || '',
+        destination_type: n1.destination_type || DESTINATION_TYPE_MEDICAL,
         intermediate_stops: rest.map((r) => ({
           dropoff_location: r.address || '',
           scheduled_time: r.scheduled_time || '',
@@ -255,6 +288,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           dropoff_establishment: r.establishment || '',
           dropoff_service: r.service || '',
           dropoff_doctor: r.doctor || '',
+          destination_type: r.destination_type || DESTINATION_TYPE_MEDICAL,
         })),
       };
       // Si l'origine change de nature, elle devient une adresse libre.
@@ -317,6 +351,18 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
   const isLirieSendMode = executionMode === 'lirie';
   const isExternalMode = executionMode === 'external';
   const isDraftMode = executionMode === 'draft';
+  const submitBusy = institutionSubmitBusy(submitPhase, {
+    createPending: createMutation.isPending,
+    sendPending: sendMutation.isPending,
+    assignPending: assignExternalMutation.isPending,
+  });
+  const submitLabel = institutionSubmitButtonLabel({
+    phase: submitPhase,
+    busy: submitBusy,
+    isLirieSendMode,
+    isDraftMode,
+    hasCreatedRequest: Boolean(createdRequestId),
+  });
 
   // Selected patient object
   const selectedPatient = useMemo(() => {
@@ -473,6 +519,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
 
   const handlePatientChange = useCallback((patientId, patientObj) => {
     setFormData(prev => ({ ...prev, patient_id: patientId }));
+    clearFieldErrors('patient_id', 'pickup_location', 'dropoff_location');
     setPatientPrefilled(false);
     if (patientId) {
       const patient = patientObj || patients.find(p => String(p.id) === String(patientId));
@@ -488,10 +535,23 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         }
       }, 100);
     }
-  }, [patients, prefillFromPatient]);
+  }, [patients, prefillFromPatient, clearFieldErrors]);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    if (field === 'dropoff_service' || field === 'dropoff_doctor' || field === 'destination_type') {
+      clearFieldErrors('medical_principal');
+    }
+    if (field === 'mission_date') clearFieldErrors('mission_date');
+    if (field === 'pickup_time') clearFieldErrors('pickup_time', 'confirmed_time');
+    if (field === 'dropoff_time') clearFieldErrors('dropoff_time', 'confirmed_time');
+    if (field === 'return_time') clearFieldErrors('return_time', 'confirmed_time');
+    if (field === 'pickup_location') clearFieldErrors('pickup_location');
+    if (field === 'dropoff_location') clearFieldErrors('dropoff_location');
+    if (field === 'delivery_description') clearFieldErrors('delivery_description');
+    if (field === 'notes') clearFieldErrors('notes');
+    if (field === 'requires_assistance') clearFieldErrors('notes');
+    if (field === 'billing_intent') clearFieldErrors('billing');
   };
 
   // ── Champ « Départ » réutilisable (mode simple + carte parcours) ──
@@ -506,6 +566,8 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           readOnly
           className={`${inputClassName} ${styles.routeReadonly}`}
           placeholder={formData.pickup_type === 'domicile' && !formData.pickup_location ? 'Sélectionnez un patient' : ''}
+          aria-invalid={Boolean(fieldErrors.pickup_location) || undefined}
+          aria-describedby={fieldErrors.pickup_location ? formErrorId('pickup_location') : undefined}
         />
       );
     }
@@ -530,10 +592,13 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
             }
             return updates;
           });
+          clearFieldErrors('pickup_location');
         }}
         placeholder="Saisir ou choisir l'adresse"
         inputClassName={inputClassName}
         required
+        aria-invalid={Boolean(fieldErrors.pickup_location) || undefined}
+        aria-describedby={fieldErrors.pickup_location ? formErrorId('pickup_location') : undefined}
       />
     );
   };
@@ -549,6 +614,8 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           readOnly
           className={`${inputClassName} ${styles.routeReadonly}`}
           placeholder={formData.dropoff_type === 'domicile' && !formData.dropoff_location ? 'Sélectionnez un patient' : ''}
+          aria-invalid={Boolean(fieldErrors.dropoff_location) || undefined}
+          aria-describedby={fieldErrors.dropoff_location ? formErrorId('dropoff_location') : undefined}
         />
       );
     }
@@ -571,12 +638,18 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                 updates.dropoff_establishment = placeName;
               }
             }
+            const suggested = suggestDestinationTypeFromPlace(item)
+              || (isDoctorPattern.test(placeName) ? 'medical' : null);
+            if (suggested) updates.destination_type = suggested;
             return updates;
           });
+          clearFieldErrors('dropoff_location', 'medical_principal');
         }}
         placeholder="Adresse d'arrivée"
         inputClassName={inputClassName}
         required
+        aria-invalid={Boolean(fieldErrors.dropoff_location) || undefined}
+        aria-describedby={fieldErrors.dropoff_location ? formErrorId('dropoff_location') : undefined}
       />
     );
   };
@@ -589,6 +662,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       next[idx] = { ...next[idx], dropoff_location: nextValue };
       return { ...prev, intermediate_stops: next };
     });
+    clearFieldErrors(`medical_extra_${idx}`, `extra_stop_location_${idx}`);
   };
 
   // Met à jour un champ détail (establishment / service / doctor) d'une étape.
@@ -599,6 +673,9 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       next[idx] = { ...next[idx], [field]: nextValue };
       return { ...prev, intermediate_stops: next };
     });
+    if (field === 'dropoff_service' || field === 'dropoff_doctor' || field === 'destination_type') {
+      clearFieldErrors(`medical_extra_${idx}`);
+    }
   };
 
   const setStopTime = (idx, timeHHMM) => {
@@ -613,6 +690,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       };
       return { ...prev, intermediate_stops: next };
     });
+    clearFieldErrors(`extra_stop_time_${idx}`, 'confirmed_time');
   };
 
   // Sélection d'adresse pour une étape : auto-remplit établissement / médecin
@@ -636,9 +714,13 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           entry.dropoff_establishment = placeName;
         }
       }
+      const suggested = suggestDestinationTypeFromPlace(item)
+        || (isDoctorPattern.test(placeName) ? 'medical' : null);
+      if (suggested) entry.destination_type = suggested;
       next[idx] = entry;
       return { ...prev, intermediate_stops: next };
     });
+    clearFieldErrors(`extra_stop_location_${idx}`, `medical_extra_${idx}`);
   };
 
   const addExtraStop = () => {
@@ -653,6 +735,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           dropoff_establishment: '',
           dropoff_service: '',
           dropoff_doctor: '',
+          destination_type: DESTINATION_TYPE_MEDICAL,
           use_custom_billing: false,
           destination_billing_override: 'patient',
         },
@@ -682,6 +765,9 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         trip_type: tripTypeValue,
         pickup_type: def.pickupType,
         dropoff_type: def.dropoffType,
+        destination_type: def.dropoffType === 'other'
+          ? DESTINATION_TYPE_MEDICAL
+          : def.dropoffType,
       };
       // Retour domicile : facturation par défaut au patient, A/R décoché
       if (tripTypeValue === 'return_home') {
@@ -761,7 +847,8 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       is_urgent: minutesFromNow === 0,
       scheduled_time_type: 'departure',
     }));
-  }, []);
+    clearFieldErrors('mission_date', 'pickup_time', 'confirmed_time');
+  }, [clearFieldErrors]);
 
   const setTimeTomorrow9 = useCallback(() => {
     const d = new Date();
@@ -776,7 +863,8 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       scheduled_time: `${dateVal}T09:00`,
       scheduled_time_type: 'departure',
     }));
-  }, []);
+    clearFieldErrors('mission_date', 'pickup_time', 'confirmed_time');
+  }, [clearFieldErrors]);
 
   // ── Phone normalizer (accepts Swiss formats, cleans for storage) ──
   const cleanPhone = (raw) => {
@@ -789,13 +877,6 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
     }
     return cleaned;
   };
-
-  const hasConfirmedTime = useCallback((data, extraStops, returnEnabled) => {
-    if (derivePickupTimeConfirmed(data.pickup_time)) return true;
-    if (data.dropoff_time?.trim()) return true;
-    if (returnEnabled && data.return_time?.trim()) return true;
-    return extraStops.some((s) => s.scheduled_time?.trim());
-  }, []);
 
   /** Flush synchrone des pickers avant validation/payload (scénarios B/C sans blur). */
   const flushScheduleFields = useCallback(() => {
@@ -881,8 +962,18 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
     // Location types and entry points (direct columns on TransportRequest)
     payload.pickup_type = formData.pickup_type || null;
     payload.dropoff_type = formData.dropoff_type || null;
+    payload.destination_type = formData.destination_type || DESTINATION_TYPE_MEDICAL;
     payload.pickup_entry_point = formData.pickup_entry_point || null;
     payload.dropoff_entry_point = formData.dropoff_entry_point || null;
+    if (formData.dropoff_establishment?.trim()) {
+      payload.dropoff_establishment = formData.dropoff_establishment.trim();
+    }
+    if (formData.dropoff_service?.trim()) {
+      payload.dropoff_service = formData.dropoff_service.trim();
+    }
+    if (formData.dropoff_doctor?.trim()) {
+      payload.dropoff_doctor = formData.dropoff_doctor.trim();
+    }
 
     // Routing details also kept in billing_details.routing for rétrocompatibilité
     payload.billing_details = {
@@ -900,6 +991,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         dropoff_establishment: formData.dropoff_establishment || null,
         dropoff_service: formData.dropoff_service || null,
         dropoff_doctor: formData.dropoff_doctor || null,
+        destination_type: formData.destination_type || DESTINATION_TYPE_MEDICAL,
       },
     };
 
@@ -952,6 +1044,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         dropoff_establishment: formData.dropoff_establishment || '',
         dropoff_service: formData.dropoff_service || '',
         dropoff_doctor: formData.dropoff_doctor || '',
+        destination_type: formData.destination_type || DESTINATION_TYPE_MEDICAL,
         use_custom_billing: Boolean(formData.dropoff_use_custom_billing),
         destination_billing_override: formData.dropoff_destination_billing_override || 'patient',
       };
@@ -994,107 +1087,79 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (createMutation.isPending || sendMutation.isPending || assignExternalMutation.isPending) {
+    if (submitBusy) {
       return;
     }
 
-    // Flush synchrone des pickers (scénarios sans blur avant Envoyer)
+    const trace = createInstitutionSubmitTrace();
+    trace.mark('institution_submit_click', { execution_mode: executionMode });
+
     const flushedSchedule = flushScheduleFields();
-
-    // Validation — Enregistrer : date mission ; Envoyer : ≥1 heure confirmée
-    const missionDateForValidation = normalizeMissionDate(
-      flushedSchedule.mission_date
-        || (formData.scheduled_time ? formData.scheduled_time.split('T')[0] : ''),
-    );
-    if (!missionDateForValidation) {
-      toast.error('Date de mission requise');
-      return;
-    }
-    if (
-      derivePickupTimeConfirmed(flushedSchedule.pickup_time)
-      && !combineMissionDateTime(missionDateForValidation, flushedSchedule.pickup_time)
-    ) {
-      toast.error("Date de mission invalide pour l'heure de départ.");
-      return;
-    }
-    const extraValid = filterValidMultiStopDestinations(formData.intermediate_stops);
-    const returnEnabled = formData.return_to_institution === true;
-
-    // Validation temporelle — départ ≥ maintenant, rendez-vous ≥ maintenant + 1h.
-    const pickupIsoCheck = combineMissionDateTime(missionDateForValidation, flushedSchedule.pickup_time);
-    if (pickupIsoCheck && isInstantInPast(pickupIsoCheck)) {
-      toast.error('Le départ ne peut pas être dans le passé.');
-      return;
-    }
-    const dropoffIsoCheck = combineMissionDateTime(missionDateForValidation, flushedSchedule.dropoff_time);
-    if (dropoffIsoCheck && isInstantBeforeLead(dropoffIsoCheck)) {
-      toast.error(`Le rendez-vous doit être au minimum ${MIN_ARRIVAL_LEAD_MINUTES / 60}h après l'heure actuelle.`);
-      return;
-    }
-    const stopIncoherent = extraValid.some((stop) => {
-      const stopIso = combineMissionDateTime(missionDateForValidation, extractHHMM(stop.scheduled_time));
-      return stopIso && isInstantBeforeLead(stopIso);
+    const validationErrors = collectInstitutionRequestFormErrors({
+      formData,
+      flushedSchedule,
+      institutionAddress,
+      isLirieSendMode,
+      isExternalMode,
+      billingHasBlockingError: isLirieSendMode && billingWarnings.some((w) => w.level === 'error'),
+      externalCarrierError: isExternalMode
+        ? validateExternalCarrierForm(externalCarrierForm)
+        : null,
     });
-    if (stopIncoherent) {
-      toast.error(`Chaque rendez-vous doit être au minimum ${MIN_ARRIVAL_LEAD_MINUTES / 60}h après l'heure actuelle.`);
+    trace.mark('validation_end', { error_count: validationErrors.length });
+    if (validationErrors.length > 0) {
+      setFieldErrors(fieldErrorsMap(validationErrors));
+      toast.error(REQUIRED_FIELDS_TOAST);
+      scrollToFirstFormError(validationErrors, {
+        mission_date: () => missionDateRef.current?.focus?.(),
+        pickup_time: () => pickupTimeRef.current?.focus?.(),
+        confirmed_time: () => pickupTimeRef.current?.focus?.(),
+        dropoff_time: () => dropoffTimeRef.current?.focus?.(),
+        return_time: () => returnTimeRef.current?.focus?.(),
+        dropoff_service: () => {
+          destinationDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          document.getElementById('dropoff_service')?.focus?.({ preventScroll: true });
+        },
+      });
       return;
     }
-    if (returnEnabled) {
-      const returnIsoCheck = combineMissionDateTime(missionDateForValidation, flushedSchedule.return_time);
-      if (returnIsoCheck && isInstantBeforeLead(returnIsoCheck)) {
-        toast.error(`Le retour doit être au minimum ${MIN_ARRIVAL_LEAD_MINUTES / 60}h après l'heure actuelle.`);
-        return;
-      }
-    }
+    setFieldErrors({});
 
-    const validationData = { ...formData, ...flushedSchedule };
-    if (isLirieSendMode && !hasConfirmedTime(validationData, extraValid, returnEnabled)) {
-      toast.error('Pour envoyer aux transporteurs, confirmez au moins une heure (départ, rendez-vous ou retour).');
-      return;
-    }
-    const effectivePickup = formData.pickup_location || (formData.pickup_type === 'institution' ? institutionAddress : '');
-    if (!effectivePickup) {
-      toast.error('Adresse de départ requise');
-      return;
-    }
-    // La « Destination » principale est toujours requise (étapes supplémentaires optionnelles).
-    const effectiveDropoff = formData.dropoff_location || (formData.dropoff_type === 'institution' ? institutionAddress : '');
-    if (!effectiveDropoff) {
-      toast.error('Adresse d\'arrivée requise');
-      return;
-    }
-    if (formData.mission_type === 'material_delivery' && !formData.delivery_description) {
-      toast.error('Description de la livraison requise');
-      return;
-    }
-    if (formData.requires_assistance && !formData.notes?.trim()) {
-      toast.error('Décrivez le besoin d\'assistance (Pathologie / Difficultés)');
-      return;
-    }
-    // Billing validation: bloquer si erreur critique et envoi immédiat
-    if (isLirieSendMode && billingWarnings.some(w => w.level === 'error')) {
-      toast.error('Corrigez les problèmes de facturation avant d\'envoyer la demande.');
-      return;
-    }
-    if (isExternalMode) {
-      const externalValidationError = validateExternalCarrierForm(externalCarrierForm);
-      if (externalValidationError) {
-        toast.error(externalValidationError);
-        return;
-      }
-    }
-
+    let requestId = resolveCreatedRequestId(createdRequestId, null);
     try {
       const payload = sanitizeSchedulePayloadForApi(buildPayload(flushedSchedule));
-      const result = await createMutation.mutateAsync(payload);
+      let result = null;
+
+      if (!requestId) {
+        setSubmitPhase('create');
+        trace.mark('create_request_start');
+        result = await createMutation.mutateAsync(payload);
+        requestId = resolveCreatedRequestId(null, result);
+        if (requestId) setCreatedRequestId(requestId);
+        trace.mark('create_request_end', {
+          transport_request_id: requestId,
+          reused: false,
+        });
+      } else {
+        trace.mark('create_request_end', {
+          transport_request_id: requestId,
+          reused: true,
+        });
+      }
 
       if (isLirieSendMode) {
-        await sendMutation.mutateAsync({ requestId: result.id, options: {} });
+        if (!requestId) {
+          throw new Error('Demande créée sans identifiant — impossible d’envoyer.');
+        }
+        setSubmitPhase('send');
+        trace.mark('dispatch_start', { transport_request_id: requestId });
+        await sendMutation.mutateAsync({ requestId, options: {} });
+        trace.mark('dispatch_end', { transport_request_id: requestId });
         toast.success('Demande créée et envoyée');
       } else if (isExternalMode) {
         try {
           const assignResult = await assignExternalMutation.mutateAsync({
-            requestId: result.id,
+            requestId,
             data: buildExternalCarrierPayload(externalCarrierForm),
           });
           toast.success('Demande créée et transporteur externe affecté');
@@ -1104,7 +1169,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           const carrierEmail = (externalCarrierForm.email || '').trim();
           if (carrierEmail) {
             try {
-              await exportRequestMissionPdf(result.id, { variant: 'operational' });
+              await exportRequestMissionPdf(requestId, { variant: 'operational' });
               toast.success('Bon téléchargé — joignez-le à l\'e-mail');
             } catch (pdfErr) {
               toast.error(pdfErr?.message || 'Erreur lors de l\'export du bon');
@@ -1122,9 +1187,9 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               || 'La demande a été créée, mais le transporteur externe n\'a pas été affecté.',
           );
           if (isModal && onSuccess) {
-            onSuccess(result);
+            onSuccess(result || { id: requestId });
           } else {
-            navigate(`/dashboard/institution/${public_id}/requests/${result.id}`);
+            navigate(`/dashboard/institution/${public_id}/requests/${requestId}`);
           }
           return;
         }
@@ -1132,10 +1197,12 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         toast.success('Demande créée en brouillon');
       }
 
+      const done = result || { id: requestId };
+      trace.mark('submit_ui_complete', { transport_request_id: requestId });
       if (isModal && onSuccess) {
-        onSuccess(result);
+        onSuccess(done);
       } else {
-        navigate(`/dashboard/institution/${public_id}/requests/${result.id}`);
+        navigate(`/dashboard/institution/${public_id}/requests/${done.id}`);
       }
     } catch (err) {
       const data = err?.response?.data;
@@ -1143,12 +1210,23 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       const firstFieldError = fieldErrors && typeof fieldErrors === 'object'
         ? Object.values(fieldErrors).flat().find((msg) => typeof msg === 'string' && msg.trim())
         : null;
-      toast.error(
-        data?.message
-          || firstFieldError
-          || data?.error
-          || 'Erreur lors de la création',
-      );
+      trace.mark('submit_error', {
+        transport_request_id: requestId,
+        http_status: err?.response?.status,
+        error: data?.error || err?.message || 'unknown',
+      });
+      if (requestId) {
+        toast.error(data?.error || firstFieldError || SEND_RETRY_TOAST);
+      } else {
+        toast.error(
+          data?.message
+            || firstFieldError
+            || data?.error
+            || 'Erreur lors de la création',
+        );
+      }
+    } finally {
+      setSubmitPhase(null);
     }
   };
 
@@ -1264,6 +1342,8 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                 loadingMessage={() => 'Recherche…'}
                 isClearable
                 classNamePrefix="react-select"
+                aria-invalid={Boolean(fieldErrors.patient_id) || undefined}
+                aria-describedby={fieldErrors.patient_id ? formErrorId('patient-select') : undefined}
                 filterOption={() => true}
                 formatOptionLabel={(option, { context }) => {
                   if (option.__isNew__) return option.label;
@@ -1285,8 +1365,18 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                 }}
                 menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
                 menuPosition="fixed"
-                styles={{ menuPortal: (base) => ({ ...base, zIndex: 'var(--z-modal-popover)' }) }}
+                styles={{
+                  menuPortal: (base) => ({ ...base, zIndex: 'var(--z-modal-popover)' }),
+                  control: (base) => fieldErrors.patient_id
+                    ? { ...base, borderColor: 'var(--danger, #ef4444)', boxShadow: '0 0 0 1px var(--danger, #ef4444)' }
+                    : base,
+                }}
               />
+              {fieldErrors.patient_id && (
+                <p id={formErrorId('patient-select')} className={styles.fieldError} role="alert">
+                  {fieldErrors.patient_id}
+                </p>
+              )}
             </div>
 
             {/* Mission type segment (right side) */}
@@ -1340,6 +1430,8 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                   value={formData.mission_date || (formData.scheduled_time ? formData.scheduled_time.split('T')[0] : '')}
                   onChange={(dateVal) => handleChange('mission_date', dateVal)}
                   placeholder="Date"
+                  invalid={Boolean(fieldErrors.mission_date)}
+                  describedBy={fieldErrors.mission_date ? formErrorId('mission_date') : undefined}
                 />
               </div>
               <div className={styles.tripPills}>
@@ -1349,6 +1441,11 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                 <button type="button" className={styles.whenShortcut} onClick={setTimeTomorrow9} aria-label="Demain 9h">Demain 9h</button>
               </div>
             </div>
+            {fieldErrors.mission_date && (
+              <p id={formErrorId('mission_date')} className={styles.fieldError} role="alert">
+                {fieldErrors.mission_date}
+              </p>
+            )}
 
             {scheduleIncoherence && (
               <div className={styles.scheduleCoherenceWarning} role="status">
@@ -1394,6 +1491,12 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                   inputId="pickup_time"
                   label="Heure de départ"
                   timeValue={formData.pickup_time}
+                  invalid={Boolean(fieldErrors.pickup_time || fieldErrors.confirmed_time)}
+                  describedBy={
+                    (fieldErrors.pickup_time && formErrorId('pickup_time'))
+                    || (fieldErrors.confirmed_time && formErrorId('confirmed_time'))
+                    || undefined
+                  }
                   onTimeChange={(v) => {
                     handleChange('pickup_time', v);
                     handleChange('pickup_time_confirmed', derivePickupTimeConfirmed(v));
@@ -1401,6 +1504,15 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                 />
                 <span className={styles.routeStepRemoveSpacer} aria-hidden="true" />
               </div>
+              {(fieldErrors.pickup_location || fieldErrors.pickup_time) && (
+                <p
+                  id={formErrorId(fieldErrors.pickup_location ? 'pickup_location' : 'pickup_time')}
+                  className={`${styles.fieldError} ${styles.fieldErrorRoute}`}
+                  role="alert"
+                >
+                  {fieldErrors.pickup_location || fieldErrors.pickup_time}
+                </p>
+              )}
 
               {/* Destinations intermédiaires (rendues avant le domicile en mode Retour domicile). */}
               {(() => {
@@ -1445,17 +1557,34 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                         </span>
                         <AddressAutocomplete
                           name={`intermediate_stop_${idx}`}
+                          inputId={`intermediate_stop_${idx}`}
                           value={stop.dropoff_location || ''}
                           onChange={(e) => setStopAddress(idx, e)}
                           onSelect={(place) => setStopFromSelection(idx, place)}
                           placeholder={`Adresse destination ${destNumber}`}
                           inputClassName={styles.routeInput}
+                          aria-invalid={Boolean(
+                            fieldErrors[`extra_stop_location_${idx}`] || fieldErrors[`extra_stop_time_${idx}`],
+                          ) || undefined}
+                          aria-describedby={
+                            fieldErrors[`extra_stop_location_${idx}`]
+                              ? formErrorId(`intermediate_stop_${idx}`)
+                              : fieldErrors[`extra_stop_time_${idx}`]
+                                ? formErrorId(`intermediate_stop_time_${idx}`)
+                                : undefined
+                          }
                         />
                       <RouteStepTimeField
                         inputId={`intermediate_stop_time_${idx}`}
                         label={`Heure du rendez-vous ${destNumber}`}
                         timeValue={extractHHMM(stop.scheduled_time) || stop.scheduled_time?.split('T')[1]?.slice(0, 5) || ''}
                         timeConfirmed={Boolean(stop.time_confirmed)}
+                        invalid={Boolean(fieldErrors[`extra_stop_time_${idx}`] || fieldErrors.confirmed_time)}
+                        describedBy={fieldErrors[`extra_stop_time_${idx}`]
+                          ? formErrorId(`intermediate_stop_time_${idx}`)
+                          : fieldErrors.confirmed_time
+                            ? formErrorId('confirmed_time')
+                            : undefined}
                         onTimeChange={(v) => setStopTime(idx, v)}
                       />
                         <button
@@ -1468,6 +1597,19 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                           <FaTimes size={12} />
                         </button>
                       </div>
+                      {(fieldErrors[`extra_stop_location_${idx}`] || fieldErrors[`extra_stop_time_${idx}`]) && (
+                        <p
+                          id={formErrorId(
+                            fieldErrors[`extra_stop_location_${idx}`]
+                              ? `intermediate_stop_${idx}`
+                              : `intermediate_stop_time_${idx}`,
+                          )}
+                          className={`${styles.fieldError} ${styles.fieldErrorRoute}`}
+                          role="alert"
+                        >
+                          {fieldErrors[`extra_stop_location_${idx}`] || fieldErrors[`extra_stop_time_${idx}`]}
+                        </p>
+                      )}
                     </React.Fragment>
                   );
                 });
@@ -1510,6 +1652,12 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                         inputId="dropoff_time"
                         label={isReturnHome ? "Heure d'arrivée au domicile" : 'Heure du rendez-vous'}
                         timeValue={formData.dropoff_time}
+                        invalid={Boolean(fieldErrors.dropoff_time || fieldErrors.confirmed_time)}
+                        describedBy={
+                          (fieldErrors.dropoff_time && formErrorId('dropoff_time'))
+                          || (fieldErrors.confirmed_time && formErrorId('confirmed_time'))
+                          || undefined
+                        }
                         onTimeChange={(v) => {
                           handleChange('dropoff_time', v);
                           handleChange('dropoff_time_confirmed', Boolean(v?.trim()));
@@ -1517,6 +1665,15 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                       />
                       <span className={styles.routeStepRemoveSpacer} aria-hidden="true" />
                     </div>
+                    {(fieldErrors.dropoff_location || fieldErrors.dropoff_time) && (
+                      <p
+                        id={formErrorId(fieldErrors.dropoff_location ? 'dropoff_location' : 'dropoff_time')}
+                        className={`${styles.fieldError} ${styles.fieldErrorRoute}`}
+                        role="alert"
+                      >
+                        {fieldErrors.dropoff_location || fieldErrors.dropoff_time}
+                      </p>
+                    )}
                   </React.Fragment>
                 );
 
@@ -1548,6 +1705,12 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                       inputId="return_time"
                       label="Heure de retour"
                       timeValue={formData.return_time}
+                      invalid={Boolean(fieldErrors.return_time || fieldErrors.confirmed_time)}
+                      describedBy={
+                        (fieldErrors.return_time && formErrorId('return_time'))
+                        || (fieldErrors.confirmed_time && formErrorId('confirmed_time'))
+                        || undefined
+                      }
                       onTimeChange={(v) => {
                         handleChange('return_time', v);
                         handleChange('return_time_confirmed', Boolean(v?.trim()));
@@ -1563,9 +1726,22 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                       <FaTimes size={12} />
                     </button>
                   </div>
+                  {fieldErrors.return_time && (
+                    <p id={formErrorId('return_time')} className={`${styles.fieldError} ${styles.fieldErrorRoute}`} role="alert">
+                      {fieldErrors.return_time}
+                    </p>
+                  )}
                 </>
               )}
             </div>
+
+            {fieldErrors.confirmed_time && (
+              <div id="confirmed_time" className={styles.fieldErrorRouteTimes}>
+                <p id={formErrorId('confirmed_time')} className={styles.fieldError} role="alert">
+                  {fieldErrors.confirmed_time}
+                </p>
+              </div>
+            )}
 
             {/* Actions itinéraire : ajouter une destination / retour — sans changement de mode */}
             <div className={styles.routeActions}>
@@ -1597,6 +1773,11 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               disabled={!canSetBillingOnCreate}
             />
             {!canSetBillingOnCreate && <span className={styles.billingHint}>Géré par l'institution</span>}
+            {fieldErrors.billing && (
+              <p id={formErrorId('billing_intent')} className={styles.fieldError} role="alert">
+                {fieldErrors.billing}
+              </p>
+            )}
           </div>
 
           {/* Contact demandeur */}
@@ -1646,7 +1827,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
 
         {/* ═══ COLONNE DROITE — Détails & contexte ═══ */}
         <div className={styles.columnRight} data-tour-id="institution-request-form-tooltip">
-          <div className={styles.detailsPanel}>
+          <div className={styles.detailsPanel} ref={destinationDetailsRef}>
 
             {/* ═══ SECTION 1 — Infos départ ═══ */}
             <h2 className={styles.detailsPanelTitle}>📍 Départ</h2>
@@ -1727,27 +1908,22 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
 
             {/* Arrivée externe (destination standard) → Établissement / Service / Médecin */}
             {formData.dropoff_type === 'other' && (
-              <>
-                <div className={styles.detailsGroup}>
-                  <label htmlFor="dropoff_establishment" className={styles.detailsLabel}>Établissement / Lieu</label>
-                  <input type="text" id="dropoff_establishment" value={formData.dropoff_establishment || ''}
-                    onChange={(e) => handleChange('dropoff_establishment', e.target.value)}
-                    placeholder="Ex: HUG, Clinique des Grangettes" className={styles.detailsInput} />
-                </div>
-                <div className={styles.detailsGroup}>
-                  <label htmlFor="dropoff_service" className={styles.detailsLabel}>Service</label>
-                  <input type="text" id="dropoff_service" value={formData.dropoff_service || ''}
-                    onChange={(e) => handleChange('dropoff_service', e.target.value)}
-                    placeholder="Ex: Radiologie, Urgences, Cardiologie" className={styles.detailsInput} />
-                </div>
-                <div className={styles.detailsGroup}>
-                  <label htmlFor="dropoff_doctor" className={styles.detailsLabel}>Médecin</label>
-                  <input type="text" id="dropoff_doctor" value={formData.dropoff_doctor || ''}
-                    onChange={(e) => handleChange('dropoff_doctor', e.target.value)}
-                    placeholder="Ex: Dr. Martin, Prof. Dupont" className={styles.detailsInput} />
-                </div>
-              </>
-            )}
+              <MedicalDestinationDetails
+                establishmentId="dropoff_establishment"
+                serviceId="dropoff_service"
+                doctorId="dropoff_doctor"
+                establishment={formData.dropoff_establishment}
+                service={formData.dropoff_service}
+                doctor={formData.dropoff_doctor}
+                destinationType={formData.destination_type || DESTINATION_TYPE_MEDICAL}
+                onDestinationTypeChange={(value) => handleChange('destination_type', value)}
+                onEstablishmentChange={(e) => handleChange('dropoff_establishment', e.target.value)}
+                onServiceChange={(e) => handleChange('dropoff_service', e.target.value)}
+                onDoctorChange={(e) => handleChange('dropoff_doctor', e.target.value)}
+                  showError={Boolean(fieldErrors.medical_principal)}
+                  requireServiceOrDoctor={formData.mission_type !== 'material_delivery'}
+                />
+              )}
 
             {/* Arrivée domicile → Accès domicile */}
             {formData.dropoff_type === 'domicile' && (
@@ -1788,24 +1964,21 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               <React.Fragment key={`extra-details-${idx}`}>
                 <hr className={styles.detailsDivider} />
                 <h2 className={styles.detailsPanelTitle}>🏥 Destination {idx + 2}</h2>
-                <div className={styles.detailsGroup}>
-                  <label htmlFor={`stop_establishment_${idx}`} className={styles.detailsLabel}>Établissement / Lieu</label>
-                  <input type="text" id={`stop_establishment_${idx}`} value={stop.dropoff_establishment || ''}
-                    onChange={(e) => setStopField(idx, 'dropoff_establishment', e.target.value)}
-                    placeholder="Ex: HUG, Clinique des Grangettes" className={styles.detailsInput} />
-                </div>
-                <div className={styles.detailsGroup}>
-                  <label htmlFor={`stop_service_${idx}`} className={styles.detailsLabel}>Service</label>
-                  <input type="text" id={`stop_service_${idx}`} value={stop.dropoff_service || ''}
-                    onChange={(e) => setStopField(idx, 'dropoff_service', e.target.value)}
-                    placeholder="Ex: Radiologie, Urgences, Cardiologie" className={styles.detailsInput} />
-                </div>
-                <div className={styles.detailsGroup}>
-                  <label htmlFor={`stop_doctor_${idx}`} className={styles.detailsLabel}>Médecin</label>
-                  <input type="text" id={`stop_doctor_${idx}`} value={stop.dropoff_doctor || ''}
-                    onChange={(e) => setStopField(idx, 'dropoff_doctor', e.target.value)}
-                    placeholder="Ex: Dr. Martin, Prof. Dupont" className={styles.detailsInput} />
-                </div>
+                <MedicalDestinationDetails
+                  establishmentId={`stop_establishment_${idx}`}
+                  serviceId={`stop_service_${idx}`}
+                  doctorId={`stop_doctor_${idx}`}
+                  establishment={stop.dropoff_establishment}
+                  service={stop.dropoff_service}
+                  doctor={stop.dropoff_doctor}
+                  destinationType={stop.destination_type || DESTINATION_TYPE_MEDICAL}
+                  onDestinationTypeChange={(value) => setStopField(idx, 'destination_type', value)}
+                  onEstablishmentChange={(e) => setStopField(idx, 'dropoff_establishment', e.target.value)}
+                  onServiceChange={(e) => setStopField(idx, 'dropoff_service', e.target.value)}
+                  onDoctorChange={(e) => setStopField(idx, 'dropoff_doctor', e.target.value)}
+                  showError={Boolean(fieldErrors[`medical_extra_${idx}`])}
+                  requireServiceOrDoctor={formData.mission_type !== 'material_delivery'}
+                />
                 {canSetBillingOnCreate && (
                   <DestinationBillingOverride
                     idPrefix={`stop-billing-${idx}`}
@@ -1869,19 +2042,44 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
             {formData.mission_type === 'material_delivery' ? (
               <div className={styles.detailsGroup}>
                 <label htmlFor="delivery_description" className={styles.detailsLabel}>Description du matériel *</label>
-                <textarea id="delivery_description" value={formData.delivery_description} onChange={(e) => handleChange('delivery_description', e.target.value)}
-                  placeholder="Ex: lit médicalisé, fauteuil roulant" rows={2} required className={styles.detailsTextarea} />
+                <textarea
+                  id="delivery_description"
+                  value={formData.delivery_description}
+                  onChange={(e) => handleChange('delivery_description', e.target.value)}
+                  placeholder="Ex: lit médicalisé, fauteuil roulant"
+                  rows={2}
+                  required
+                  className={styles.detailsTextarea}
+                  aria-invalid={Boolean(fieldErrors.delivery_description) || undefined}
+                  aria-describedby={fieldErrors.delivery_description ? formErrorId('delivery_description') : undefined}
+                />
+                {fieldErrors.delivery_description && (
+                  <p id={formErrorId('delivery_description')} className={styles.fieldError} role="alert">
+                    {fieldErrors.delivery_description}
+                  </p>
+                )}
               </div>
             ) : (
               <div className={styles.detailsGroup}>
                 <label htmlFor="patient_notes" className={styles.detailsLabel}>
                   Pathologie / Difficultés {formData.requires_assistance && <span style={{ color: 'var(--danger, #e53935)', fontWeight: 600 }}>*</span>}
                 </label>
-                <textarea id="patient_notes" value={formData.notes} onChange={(e) => handleChange('notes', e.target.value)}
+                <textarea
+                  id="patient_notes"
+                  value={formData.notes}
+                  onChange={(e) => handleChange('notes', e.target.value)}
                   placeholder={formData.requires_assistance ? 'Obligatoire — décrivez le besoin d\'assistance…' : 'Ex: patient anxieux, mobilité réduite, sous perfusion…'}
-                  rows={2} className={styles.detailsTextarea}
+                  rows={2}
+                  className={styles.detailsTextarea}
                   required={formData.requires_assistance}
-                  style={formData.requires_assistance && !formData.notes ? { borderColor: 'var(--danger, #e53935)' } : undefined} />
+                  aria-invalid={Boolean(fieldErrors.notes) || undefined}
+                  aria-describedby={fieldErrors.notes ? formErrorId('patient_notes') : undefined}
+                />
+                {fieldErrors.notes && (
+                  <p id={formErrorId('patient_notes')} className={styles.fieldError} role="alert">
+                    {fieldErrors.notes}
+                  </p>
+                )}
               </div>
             )}
 
@@ -1898,12 +2096,20 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
 
         {/* Champs transporteur externe (au-dessus du footer) */}
         {isExternalMode && (
-          <div className={styles.externalFieldsWrap}>
+          <div className={styles.externalFieldsWrap} id="external-carrier">
             <ExternalCarrierFields
               value={externalCarrierForm}
-              onChange={setExternalCarrierForm}
+              onChange={(next) => {
+                setExternalCarrierForm(next);
+                clearFieldErrors('external_carrier');
+              }}
               idPrefix="create-external-carrier"
             />
+            {fieldErrors.external_carrier && (
+              <p id={formErrorId('external-carrier')} className={styles.fieldError} role="alert">
+                {fieldErrors.external_carrier}
+              </p>
+            )}
           </div>
         )}
 
@@ -1937,6 +2143,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                     name="execution_mode"
                     value="draft"
                     checked={isDraftMode}
+                    disabled={submitBusy}
                     onChange={() => setExecutionMode('draft')}
                   />
                   <span>Brouillon</span>
@@ -1947,6 +2154,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                     name="execution_mode"
                     value="lirie"
                     checked={isLirieSendMode}
+                    disabled={submitBusy}
                     onChange={() => setExecutionMode('lirie')}
                   />
                   <span>LIRIE</span>
@@ -1957,6 +2165,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                     name="execution_mode"
                     value="external"
                     checked={isExternalMode}
+                    disabled={submitBusy}
                     onChange={() => setExecutionMode('external')}
                   />
                   <span>Externe</span>
@@ -1965,12 +2174,14 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               <button
                 type="submit"
                 className={styles.btnPrimary}
-                disabled={createMutation.isPending || sendMutation.isPending || assignExternalMutation.isPending}
+                disabled={submitBusy}
                 data-tour-id="institution-request-submit"
               >
-                {isDraftMode && <><FaSave /> Créer le brouillon</>}
-                {isLirieSendMode && <><FaPaperPlane /> Envoyer aux transporteurs LIRIE</>}
-                {isExternalMode && 'Enregistrer'}
+                {submitLabel === 'Créer le brouillon' && <><FaSave /> Créer le brouillon</>}
+                {submitLabel !== 'Créer le brouillon' && submitLabel !== 'Enregistrer' && (
+                  <><FaPaperPlane /> {submitLabel}</>
+                )}
+                {submitLabel === 'Enregistrer' && submitLabel}
               </button>
             </div>
           </div>

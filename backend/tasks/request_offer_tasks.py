@@ -378,41 +378,18 @@ def _escalate_sequential_request(
 
 def _create_fallback_broadcast(transport_request: TransportRequest) -> None:
     """Crée des offres broadcast de fallback après épuisement des préférences."""
-    from models import Company
-    from services.demo.soft_delete_guard import filter_companies_for_institution
-
-    # Récupérer les IDs des entreprises déjà contactées
-    existing_offers = RequestOffer.query.filter_by(
-        transport_request_id=transport_request.id,
-    ).all()
-    contacted_company_ids = {o.company_id for o in existing_offers}
-
-    # Récupérer les entreprises éligibles non contactées
-    query = Company.query.filter(
-        Company.is_approved == True,  # noqa: E712
-        Company.dispatch_enabled == True,  # noqa: E712
-    )
-    if contacted_company_ids:
-        query = query.filter(Company.id.notin_(list(contacted_company_ids)))
-
-    eligible = filter_companies_for_institution(
-        query.all(), transport_request.institution
-    )
-    from services.platform_billing.capabilities import (
-        BillingCapability,
-        is_billing_capability_allowed,
+    from application.institutions.send_transport_request import (
+        create_fallback_broadcast_offers,
     )
 
-    eligible = [
-        c
-        for c in eligible
-        if is_billing_capability_allowed(
-            c.id, BillingCapability.RECEIVE_MARKETPLACE_OFFERS
-        )
-    ]
-
-    if not eligible:
-        # Aucune entreprise disponible -> request EXPIRED
+    existing_ids = {
+        offer.company_id
+        for offer in RequestOffer.query.filter_by(
+            transport_request_id=transport_request.id,
+        ).all()
+    }
+    offers_created = create_fallback_broadcast_offers(transport_request)
+    if not offers_created:
         _mark_request_expired(transport_request)
         logger.warning(
             "[RequestOfferTask] No eligible companies for fallback broadcast, request %s -> EXPIRED",
@@ -420,30 +397,17 @@ def _create_fallback_broadcast(transport_request: TransportRequest) -> None:
         )
         return
 
-    # Créer les offres broadcast
-    offers_created = 0
-    for company in eligible:
-        offer = RequestOffer(
+    new_offers = [
+        offer
+        for offer in RequestOffer.query.filter_by(
             transport_request_id=transport_request.id,
-            company_id=company.id,
-            mode=OfferMode.BROADCAST.value,
-            order=0,
             status=OfferStatus.PENDING.value,
-            expires_at=None,
-        )
-        db.session.add(offer)
-        offers_created += 1
-
-    db.session.flush()
-
-    for company in eligible:
-        fb_offer = RequestOffer.query.filter_by(
-            transport_request_id=transport_request.id,
-            company_id=company.id,
-        ).first()
-        _notify_company_new_offer(
-            transport_request, company.id, fb_offer.id if fb_offer else None
-        )
+            mode=OfferMode.BROADCAST.value,
+        ).all()
+        if offer.company_id not in existing_ids
+    ]
+    for offer in new_offers:
+        _notify_company_new_offer(transport_request, offer.company_id, offer.id)
 
     logger.info(
         "[RequestOfferTask] Fallback broadcast for request %s: %d offers created",
@@ -507,6 +471,43 @@ def _mark_request_expired(transport_request: TransportRequest) -> None:
                 "transport_request_id": transport_request.id,
             },
         )
+
+
+@celery.task(
+    name="tasks.request_offer_tasks.notify_transport_request_after_send",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=20,
+    autoretry_for=(Exception,),
+    queue="default",
+)
+def notify_transport_request_after_send(
+    _self: Any,
+    transport_request_id: int,
+    institution_id: int,
+    user_id: int | None,
+    mode: str | None,
+    offers_created: int,
+    is_relaunch: bool,
+    include_audit: bool,
+    timeout_minutes: int | None = None,
+) -> None:
+    """Notifications / timeline / audit après acceptation du dispatch (file durable)."""
+    from application.institutions.send_transport_request import (
+        run_post_send_side_effects,
+    )
+
+    run_post_send_side_effects(
+        transport_request_id,
+        institution_id,
+        user_id,
+        mode,
+        offers_created,
+        is_relaunch=is_relaunch,
+        include_audit=include_audit,
+        timeout_minutes=timeout_minutes,
+        remove_session=True,
+    )
 
 
 # =============================================================================

@@ -140,3 +140,24 @@ export function lirieInvalidateCompanyReservationLists(queryClient) {
     queryClient.invalidateQueries({ queryKey: [LIRIE_QK_PREFIX, 'company-reservations-stats'], exact: false }),
   ]);
 }
+
+/** Met à jour une ligne dans les caches listes sans tout retélécharger. */
+export function liriePatchCompanyReservationLists(queryClient, bookingId, patch) {
+  if (!queryClient?.setQueriesData || bookingId == null) return;
+  const apply = (old) => {
+    if (!old) return old;
+    const rows = Array.isArray(old.reservations) ? old.reservations : Array.isArray(old) ? old : null;
+    if (!rows) return old;
+    let found = false;
+    const nextRows = rows.map((row) => {
+      if (Number(row?.id) !== Number(bookingId)) return row;
+      found = true;
+      return typeof patch === 'function' ? patch(row) : { ...row, ...patch };
+    });
+    if (!found) return old;
+    if (Array.isArray(old.reservations)) return { ...old, reservations: nextRows };
+    return nextRows;
+  };
+  queryClient.setQueriesData({ queryKey: [LIRIE_QK_PREFIX, 'company-reservations-paginated'] }, apply);
+  queryClient.setQueriesData({ queryKey: [LIRIE_QK_PREFIX, 'company-reservations'] }, apply);
+}

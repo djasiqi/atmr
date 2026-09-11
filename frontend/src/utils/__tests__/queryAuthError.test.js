@@ -12,6 +12,11 @@ import {
 jest.mock('../apiClient', () => ({
   isAuthRefreshInProgress: jest.fn(() => false),
   isMissingTokenErrorPayload: jest.fn((data) => data?.error === 'missing_token'),
+  isRevokedRefreshErrorPayload: jest.fn((data) => (
+    data?.error === 'refresh_token_revoked'
+    || data?.error_code === 'session_expired'
+    || String(data?.error || '').toLowerCase().includes('refresh token')
+  )),
 }));
 
 const { isAuthRefreshInProgress } = require('../apiClient');
@@ -25,6 +30,24 @@ describe('queryAuthError', () => {
     const error = { code: AUTH_TOKEN_NOT_FRESH, isFreshTokenRequired: true };
     expect(isFreshTokenRequiredError(error)).toBe(true);
     expect(shouldShowQueryError(error)).toBe(false);
+  });
+
+  it('masque un refresh token révoqué (pas de toast permission)', () => {
+    const error = {
+      code: AUTH_SESSION_EXPIRED,
+      isSessionExpired: true,
+      meta: { suppressAuthError: true },
+      response: {
+        status: 401,
+        data: {
+          error: 'refresh_token_revoked',
+          error_code: 'session_expired',
+        },
+      },
+    };
+    expect(isSessionExpiredError(error)).toBe(true);
+    expect(shouldShowQueryError(error)).toBe(false);
+    expect(getQueryErrorMessage(error)).toBe('');
   });
 
   it('masque missing_token / session expirée (pas de toast UI)', () => {

@@ -15,10 +15,14 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload
 
 from application.invoices.billable_amount import calculate_billable_booking_amount
+from application.invoices.booking_schedule import booking_schedule_sort_key
 from application.invoices.institution_patient_resolution import (
     resolve_missing_institution_patient_ids,
 )
-from application.invoices.invoice_booking_units import resolve_invoice_booking_units
+from application.invoices.invoice_booking_units import (
+    is_invoice_billable_segment,
+    resolve_invoice_booking_units,
+)
 from application.invoices.period_invoice_preview import build_period_invoice_preview
 from application.invoices.subject_identity import resolve_subject_identity
 from ext import db
@@ -143,8 +147,8 @@ def _address_has_street_postal_city(address: str | None) -> bool:
     text = (address or "").strip()
     if not text:
         return False
-    # Au moins une ligne + un NPA (4 chiffres CH) et un mot ville
-    if not re.search(r"\b\d{4}\b", text):
+    # Au moins une ligne + un NPA (4 chiffres CH ou 5 chiffres FR) et un mot ville
+    if not re.search(r"\b\d{4,5}\b", text):
         return False
     lines = [ln.strip() for ln in text.replace("\r", "").split("\n") if ln.strip()]
     if len(lines) < 1:
@@ -432,6 +436,7 @@ def load_eligible_bookings_for_opportunity(
             Booking.parent_booking_id.in_(present),
             Booking.billed_to_type == "patient",
             Booking.invoice_line_id.is_(None),
+            or_status_billable(canceled_ok),
         ).all()
         for c in children:
             to_load.add(int(c.id))
@@ -440,7 +445,7 @@ def load_eligible_bookings_for_opportunity(
         resolve_missing_institution_patient_ids(extras)
         by_id = {int(b.id): b for b in bookings}
         for e in extras:
-            if e.invoice_line_id is None:
+            if e.invoice_line_id is None and is_invoice_billable_segment(e):
                 by_id[int(e.id)] = e
         bookings = list(by_id.values())
 
@@ -464,13 +469,7 @@ def load_eligible_bookings_for_opportunity(
     )
 
     out = filter_bookings_without_active_invoice_claim(out)
-    return sorted(
-        out,
-        key=lambda b: (
-            b.scheduled_time or datetime.min,
-            int(b.id),
-        ),
-    )
+    return sorted(out, key=booking_schedule_sort_key)
 
 
 def list_billing_opportunities(
@@ -612,13 +611,14 @@ def list_billing_opportunities(
                 Booking.parent_booking_id.in_(present),
                 Booking.billed_to_type == "patient",
                 Booking.invoice_line_id.is_(None),
+                or_status_billable(canceled_ok),
             ).all():
                 to_load.add(int(child.id))
         if to_load:
             extras = Booking.query.filter(Booking.id.in_(to_load)).all()
             resolve_missing_institution_patient_ids(extras)
             for extra in extras:
-                if extra.invoice_line_id is None:
+                if extra.invoice_line_id is None and is_invoice_billable_segment(extra):
                     if resolve_subject_identity(extra).key != subject_key:
                         continue
                     scope_by_id[int(extra.id)] = extra

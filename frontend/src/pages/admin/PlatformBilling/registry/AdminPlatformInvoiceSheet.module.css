@@ -453,6 +453,14 @@
   margin-left: auto;
 }
 
+.nextStepHint {
+  margin: 0;
+  max-width: 280px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--admin-text-muted, #5f716d);
+}
+
 .actionBarStart:empty,
 .actionBarEnd:empty {
   display: none;

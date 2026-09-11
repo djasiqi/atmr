@@ -4,10 +4,10 @@ Les bookings créés avant l'ajout de la colonne n'ont pas de patient institutio
 rattaché : chacun retombe alors sur la clé ``legacy-institution-booking:{id}``, ce qui
 produit une opportunité de facturation par transport au lieu d'une par patient.
 
-Ce module reconstruit le lien en quatre passes (demande directe, parent A/R,
-``route_group_id``, puis ``BillingParty.external_ref``) et peut le persister. Il est
-partagé par le script de backfill et par la lecture des opportunités, pour garantir
-une règle unique.
+Ce module reconstruit le lien en cinq passes (demande directe, parent A/R,
+``route_group_id``, ``BillingParty.external_ref``, puis nom unique dans
+l'institution) et peut le persister. Il est partagé par le script de backfill
+et par la lecture des opportunités, pour garantir une règle unique.
 """
 
 from __future__ import annotations
@@ -66,12 +66,89 @@ def _patient_ids_from_billing_parties(
     }
 
 
+def _normalize_person_name(value: str | None) -> str:
+    return " ".join((value or "").casefold().split())
+
+
+def _patient_name_keys(first_name: str | None, last_name: str | None) -> set[str]:
+    first = _normalize_person_name(first_name)
+    last = _normalize_person_name(last_name)
+    keys: set[str] = set()
+    if last and first:
+        keys.add(f"{last} {first}")
+        keys.add(f"{first} {last}")
+    if last:
+        keys.add(last)
+    return keys
+
+
+def _patient_ids_from_customer_names(
+    customer_name_by_booking: dict[int, str],
+    institution_id_by_booking: dict[int, int],
+) -> dict[int, int]:
+    """``booking_id -> institution_patient_id`` via nom unique dans l'institution.
+
+    Sert le cas compte partagé (ex. client #23) sans ``institution_patient_id``
+    alors que la fiche patient existe déjà.
+    """
+    from models.institution_patient import InstitutionPatient
+
+    if not customer_name_by_booking or not institution_id_by_booking:
+        return {}
+
+    institution_ids = {
+        institution_id_by_booking[bid]
+        for bid in customer_name_by_booking
+        if institution_id_by_booking.get(bid) is not None
+    }
+    if not institution_ids:
+        return {}
+
+    rows = (
+        InstitutionPatient.query.with_entities(
+            InstitutionPatient.id,
+            InstitutionPatient.institution_id,
+            InstitutionPatient.first_name,
+            InstitutionPatient.last_name,
+        )
+        .filter(InstitutionPatient.institution_id.in_(sorted(institution_ids)))
+        .all()
+    )
+    index: dict[int, dict[str, set[int]]] = defaultdict(lambda: defaultdict(set))
+    for patient_id, institution_id, first_name, last_name in rows:
+        for key in _patient_name_keys(first_name, last_name):
+            index[int(institution_id)][key].add(int(patient_id))
+
+    resolved: dict[int, int] = {}
+    for booking_id, customer_name in customer_name_by_booking.items():
+        institution_id = institution_id_by_booking.get(booking_id)
+        if institution_id is None:
+            continue
+        lookup = index.get(int(institution_id), {})
+        customer_key = _normalize_person_name(customer_name)
+        if not customer_key:
+            continue
+        matches = set(lookup.get(customer_key) or ())
+        if not matches:
+            # « LANCLUME Jean » vs fiche last=LANCLUME first=Jean déjà couvert
+            # par les clés composées. Dernier recours : nom de famille seul
+            # si le customer_name n'a qu'un token.
+            parts = customer_key.split()
+            if len(parts) == 1:
+                matches = set(lookup.get(parts[0]) or ())
+        if len(matches) == 1:
+            resolved[int(booking_id)] = next(iter(matches))
+    return resolved
+
+
 def build_institution_patient_mapping(
     booking_ids: Iterable[int],
     *,
     parent_ids_by_booking: dict[int, int] | None = None,
     route_group_by_booking: dict[int, str] | None = None,
     billing_party_by_booking: dict[int, int] | None = None,
+    customer_name_by_booking: dict[int, str] | None = None,
+    institution_id_by_booking: dict[int, int] | None = None,
 ) -> tuple[dict[int, int], set[int]]:
     """Construit ``booking_id -> institution_patient_id``.
 
@@ -163,6 +240,22 @@ def build_institution_patient_mapping(
             if found is not None:
                 candidates[booking_id].add(found)
 
+    # 4) Nom du patient sur le compte institution partagé (fiche déjà créée)
+    names = customer_name_by_booking or {}
+    institutions = institution_id_by_booking or {}
+    unresolved_named = {
+        bid: names[bid]
+        for bid in ids
+        if bid not in candidates and names.get(bid) and institutions.get(bid)
+    }
+    if unresolved_named:
+        patient_by_name = _patient_ids_from_customer_names(
+            unresolved_named,
+            {bid: institutions[bid] for bid in unresolved_named},
+        )
+        for booking_id, patient_id in patient_by_name.items():
+            candidates[booking_id].add(patient_id)
+
     resolved: dict[int, int] = {}
     ambiguous: set[int] = set()
     for booking_id, patient_ids in candidates.items():
@@ -206,12 +299,25 @@ def resolve_missing_institution_patient_ids(
         for b in targets
         if getattr(b, "billing_party_id", None) is not None
     }
+    customer_names = {
+        int(b.id): str(b.customer_name)
+        for b in targets
+        if (getattr(b, "customer_name", None) or "").strip()
+    }
+    institution_ids: dict[int, int] = {}
+    for b in targets:
+        client = getattr(b, "client", None)
+        inst_id = getattr(client, "linked_institution_id", None) if client else None
+        if inst_id is not None:
+            institution_ids[int(b.id)] = int(inst_id)
 
     resolved, ambiguous = build_institution_patient_mapping(
         [int(b.id) for b in targets],
         parent_ids_by_booking=parents,
         route_group_by_booking=groups,
         billing_party_by_booking=billing_parties,
+        customer_name_by_booking=customer_names,
+        institution_id_by_booking=institution_ids,
     )
     if ambiguous:
         logger.warning(

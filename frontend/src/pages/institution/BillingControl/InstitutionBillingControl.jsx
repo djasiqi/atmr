@@ -2,7 +2,7 @@
  * Contrôle facturation institution — présentation pure sur le contrat API (INSTITUTION-07).
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import Modal from '../../../components/common/Modal';
@@ -33,8 +33,23 @@ import {
   billingIntentFromPayerType,
   segmentTypeLabel,
   formatBookingDate,
+  applyOptimisticControlOverrides,
+  pruneSyncedControlOverrides,
+  normalizePayerType,
+  isCanceledApiError,
 } from '../../../utils/institutionBillingControlUi';
+import {
+  markBillingPayerChange,
+  markBillingPayerUiCommit,
+  markBillingValidateClick,
+  markBillingValidateUiCommit,
+} from '../../../utils/billingControlValidatePerf';
 import s from './InstitutionBillingControl.module.css';
+
+const VALIDATE_ERROR_MESSAGE = "La validation n'a pas pu être enregistrée. Réessayez.";
+const PAYER_ERROR_MESSAGE = "Le payeur n'a pas pu être modifié. Réessayez.";
+const REOPEN_ERROR_MESSAGE = "La réouverture n'a pas pu être enregistrée. Réessayez.";
+const ANOMALY_ERROR_MESSAGE = "L'anomalie n'a pas pu être enregistrée. Réessayez.";
 
 const STATUS_FILTER_OPTIONS = [
   { value: '', label: 'Tous' },
@@ -109,11 +124,10 @@ function BookingActions({
   onReopen,
   onAcceptEvidence,
   onRejectEvidence,
-  pendingId,
+  hideReopen,
 }) {
   if (isBookingLocked(item) || !isBookingEditable(item)) return null;
   const status = item?.control?.effective_status;
-  const busy = pendingId === item.booking_id;
 
   if (canDecideDispute(item)) {
     return (
@@ -121,7 +135,6 @@ function BookingActions({
         <button
           type="button"
           className={`${s.btn} ${s.btnPrimary}`}
-          disabled={busy}
           data-testid={`dispute-accept-${item.booking_id}`}
           onClick={() => onAcceptEvidence(item)}
         >
@@ -130,7 +143,6 @@ function BookingActions({
         <button
           type="button"
           className={s.btn}
-          disabled={busy}
           data-testid={`dispute-reject-${item.booking_id}`}
           onClick={() => onRejectEvidence(item)}
         >
@@ -141,13 +153,12 @@ function BookingActions({
   }
 
   if (status === 'anomaly' || status === 'validated') {
-    if (isFinanciallyFrozen(item)) return null;
+    if (hideReopen || isFinanciallyFrozen(item)) return null;
     return (
       <div className={s.actions}>
         <button
           type="button"
           className={s.btn}
-          disabled={busy}
           onClick={() => onReopen(item)}
         >
           Réouvrir
@@ -161,7 +172,6 @@ function BookingActions({
       <button
         type="button"
         className={`${s.btn} ${s.btnPrimary}`}
-        disabled={busy}
         onClick={() => onValidate(item)}
       >
         ✓ Valider
@@ -169,7 +179,6 @@ function BookingActions({
       <button
         type="button"
         className={`${s.btn} ${s.btnDanger}`}
-        disabled={busy}
         onClick={() => onAnomaly(item)}
       >
         ⚠ Signaler une anomalie
@@ -191,7 +200,11 @@ const InstitutionBillingControl = () => {
   const [page, setPage] = useState(1);
   const [anomalyTarget, setAnomalyTarget] = useState(null);
   const [anomalyReason, setAnomalyReason] = useState('');
-  const [pendingId, setPendingId] = useState(null);
+  const [rowOverrides, setRowOverrides] = useState({});
+  const inFlightValidateRef = useRef(new Set());
+  const inFlightReopenRef = useRef(new Set());
+  const payerGenerationRef = useRef({});
+  const payerAbortRef = useRef({});
 
   const queryParams = useMemo(
     () => buildBillingControlQueryParams({
@@ -211,8 +224,6 @@ const InstitutionBillingControl = () => {
     isLoading,
     isError,
     error,
-    refetch,
-    isFetching,
   } = useBillingControlBookings(queryParams, allowed);
 
   const { data: patientsData } = useInstitutionPatients({ per_page: 200 }, allowed);
@@ -223,8 +234,21 @@ const InstitutionBillingControl = () => {
   const reopenMutation = useReopenBillingControlBooking();
   const payerMutation = useChangeBillingControlPayer();
 
-  const items = useMemo(() => data?.items ?? [], [data?.items]);
-  const summary = data?.summary || {};
+  const serverItems = useMemo(() => data?.items ?? [], [data?.items]);
+
+  useEffect(() => {
+    setRowOverrides((prev) => pruneSyncedControlOverrides(prev, serverItems));
+  }, [serverItems]);
+
+  const displayData = useMemo(
+    () => applyOptimisticControlOverrides(
+      { items: serverItems, summary: data?.summary || {} },
+      rowOverrides,
+    ),
+    [serverItems, data?.summary, rowOverrides],
+  );
+  const items = displayData?.items ?? serverItems;
+  const summary = displayData?.summary || {};
   const pagination = data?.pagination || {};
   const groups = useMemo(() => groupBookingsForDisplay(items), [items]);
   const transportOptions = useMemo(
@@ -236,63 +260,174 @@ const InstitutionBillingControl = () => {
     toast.error(parseBillingControlApiError(err));
   }, []);
 
-  const runMutation = useCallback(async (bookingId, fn) => {
-    setPendingId(bookingId);
-    try {
-      await fn();
-      await refetch();
-    } catch (err) {
-      handleMutationError(err);
-    } finally {
-      setPendingId(null);
-    }
-  }, [refetch, handleMutationError]);
+  const runBackgroundMutation = useCallback((fn) => {
+    Promise.resolve()
+      .then(fn)
+      .catch(handleMutationError);
+  }, [handleMutationError]);
 
   const handlePayerChange = useCallback((item, newPayerType) => {
     if (!isBookingEditable(item)) return;
-    const current = String(item?.payer?.type || '').toLowerCase();
-    if (current === newPayerType) return;
-    runMutation(item.booking_id, () => payerMutation.mutateAsync({
-      bookingId: item.booking_id,
+    const bookingId = item.booking_id;
+    const nextPayer = normalizePayerType(newPayerType);
+    const current = normalizePayerType(item?.payer?.type);
+    if (current === nextPayer) return;
+
+    const generation = (payerGenerationRef.current[bookingId] || 0) + 1;
+    payerGenerationRef.current[bookingId] = generation;
+    payerAbortRef.current[bookingId]?.abort();
+    const abortController = typeof AbortController !== 'undefined'
+      ? new AbortController()
+      : null;
+    if (abortController) {
+      payerAbortRef.current[bookingId] = abortController;
+    }
+
+    const clickAt = markBillingPayerChange(bookingId);
+    const wasValidated = item?.control?.effective_status === 'validated';
+    setRowOverrides((prev) => ({
+      ...prev,
+      [bookingId]: {
+        ...prev[bookingId],
+        payer: nextPayer,
+        fromPayer: current,
+        payerGeneration: generation,
+        ...(wasValidated
+          ? { status: 'pending_review', fromStatus: 'validated', optimistic: false }
+          : {}),
+      },
+    }));
+    markBillingPayerUiCommit(bookingId, clickAt);
+
+    payerMutation.mutateAsync({
+      bookingId,
+      payerType: nextPayer,
+      generation,
+      clickAt,
+      signal: abortController?.signal,
       data: {
-        billing_intent: billingIntentFromPayerType(newPayerType),
+        billing_intent: billingIntentFromPayerType(nextPayer),
         billing_change_reason_code: 'ADMIN_CORRECTION',
         override_reason: 'Correction payeur — contrôle facturation',
       },
-    }).then(() => {
-      toast.success('Payeur mis à jour — statut repassé à « À vérifier »');
-    }));
-  }, [payerMutation, runMutation]);
+    }).catch((err) => {
+      if (isCanceledApiError(err)) return;
+      if (payerGenerationRef.current[bookingId] !== generation) return;
+      setRowOverrides((prev) => {
+        const currentOverride = prev[bookingId];
+        if (!currentOverride) return prev;
+        const next = { ...prev };
+        const restored = { ...currentOverride, payer: current };
+        delete restored.fromPayer;
+        delete restored.payerGeneration;
+        if (wasValidated) {
+          restored.status = 'validated';
+          delete restored.fromStatus;
+        }
+        if (!restored.status && !restored.payer) {
+          delete next[bookingId];
+        } else {
+          next[bookingId] = restored;
+        }
+        return next;
+      });
+      toast.error(PAYER_ERROR_MESSAGE);
+    });
+  }, [payerMutation]);
 
   const handleValidate = useCallback((item) => {
-    runMutation(item.booking_id, () => validateMutation.mutateAsync({
-      bookingId: item.booking_id,
+    const bookingId = item.booking_id;
+    const fromStatus = item?.control?.effective_status || 'pending_review';
+    if (fromStatus === 'validated') return;
+    if (inFlightValidateRef.current.has(bookingId)) return;
+
+    const clickAt = markBillingValidateClick(bookingId);
+    inFlightValidateRef.current.add(bookingId);
+    setRowOverrides((prev) => {
+      if (prev[bookingId]?.status === 'validated') return prev;
+      return {
+        ...prev,
+        [bookingId]: { status: 'validated', fromStatus, optimistic: true },
+      };
+    });
+    markBillingValidateUiCommit(bookingId, clickAt);
+
+    validateMutation.mutateAsync({
+      bookingId,
       data: {},
-    }).then(() => toast.success('Booking validé')));
-  }, [validateMutation, runMutation]);
+      clickAt,
+    }).catch(() => {
+      setRowOverrides((prev) => {
+        if (!prev[bookingId]) return prev;
+        const next = { ...prev };
+        delete next[bookingId];
+        return next;
+      });
+      toast.error(VALIDATE_ERROR_MESSAGE);
+    }).finally(() => {
+      inFlightValidateRef.current.delete(bookingId);
+    });
+  }, [validateMutation]);
 
   const handleReopen = useCallback((item) => {
-    runMutation(item.booking_id, () => reopenMutation.mutateAsync({
-      bookingId: item.booking_id,
+    const bookingId = item.booking_id;
+    const fromStatus = item?.control?.effective_status;
+    if (fromStatus !== 'validated' && fromStatus !== 'anomaly') return;
+    if (inFlightReopenRef.current.has(bookingId)) return;
+
+    inFlightReopenRef.current.add(bookingId);
+    setRowOverrides((prev) => ({
+      ...prev,
+      [bookingId]: {
+        ...prev[bookingId],
+        status: 'pending_review',
+        fromStatus,
+        optimistic: false,
+        controlPatch: {
+          validated_at: null,
+          validated_by_display_name: null,
+          anomaly_reason: null,
+        },
+      },
+    }));
+
+    reopenMutation.mutateAsync({
+      bookingId,
       data: {},
-    }).then(() => toast.success('Anomalie levée — à vérifier')));
-  }, [reopenMutation, runMutation]);
+    }).catch(() => {
+      setRowOverrides((prev) => {
+        const currentOverride = prev[bookingId];
+        if (!currentOverride) return prev;
+        const next = { ...prev };
+        next[bookingId] = {
+          ...currentOverride,
+          status: fromStatus,
+          fromStatus: undefined,
+          controlPatch: undefined,
+        };
+        return next;
+      });
+      toast.error(REOPEN_ERROR_MESSAGE);
+    }).finally(() => {
+      inFlightReopenRef.current.delete(bookingId);
+    });
+  }, [reopenMutation]);
 
   const handleAcceptEvidence = useCallback((item) => {
-    runMutation(item.booking_id, () =>
+    runBackgroundMutation(() =>
       institutionBillingControlService.decideBillingControlDispute(item.booking_id, {
         decision: 'accept_carrier',
       }).then(() => toast.success('Justificatif validé — prestation à nouveau facturable')),
     );
-  }, [runMutation]);
+  }, [runBackgroundMutation]);
 
   const handleRejectEvidence = useCallback((item) => {
-    runMutation(item.booking_id, () =>
+    runBackgroundMutation(() =>
       institutionBillingControlService.decideBillingControlDispute(item.booking_id, {
         decision: 'reject_evidence',
       }).then(() => toast.success('Justificatif refusé — le transporteur doit compléter')),
     );
-  }, [runMutation]);
+  }, [runBackgroundMutation]);
 
   const submitAnomaly = useCallback(() => {
     if (!anomalyTarget) return;
@@ -301,18 +436,42 @@ const InstitutionBillingControl = () => {
       toast.error('Indiquez un motif.');
       return;
     }
-    runMutation(anomalyTarget.booking_id, () => anomalyMutation.mutateAsync({
-      bookingId: anomalyTarget.booking_id,
+    const bookingId = anomalyTarget.booking_id;
+    const fromStatus = anomalyTarget?.control?.effective_status || 'pending_review';
+    setAnomalyTarget(null);
+    setAnomalyReason('');
+    setRowOverrides((prev) => ({
+      ...prev,
+      [bookingId]: {
+        ...prev[bookingId],
+        status: 'anomaly',
+        fromStatus,
+        optimistic: false,
+        controlPatch: { anomaly_reason: `OTHER: ${reason}` },
+      },
+    }));
+    anomalyMutation.mutateAsync({
+      bookingId,
       data: {
         anomaly_reason_code: 'OTHER',
         comment: reason,
       },
-    }).then(() => {
-      toast.success('Anomalie signalée');
-      setAnomalyTarget(null);
-      setAnomalyReason('');
-    }));
-  }, [anomalyTarget, anomalyReason, anomalyMutation, runMutation]);
+    }).catch(() => {
+      setRowOverrides((prev) => {
+        const currentOverride = prev[bookingId];
+        if (!currentOverride) return prev;
+        const next = { ...prev };
+        next[bookingId] = {
+          ...currentOverride,
+          status: fromStatus,
+          fromStatus: undefined,
+          controlPatch: undefined,
+        };
+        return next;
+      });
+      toast.error(ANOMALY_ERROR_MESSAGE);
+    });
+  }, [anomalyTarget, anomalyReason, anomalyMutation]);
 
   if (!allowed) {
     if (meData && !canAccessBillingControl(institutionRole)) {
@@ -491,8 +650,7 @@ const InstitutionBillingControl = () => {
                             <select
                               className={s.payerSelect}
                               data-testid={`payer-select-${item.booking_id}`}
-                              value={String(item.payer?.type || 'patient').toLowerCase() === 'clinic' ? 'clinic' : 'patient'}
-                              disabled={pendingId === item.booking_id || isFetching}
+                              value={normalizePayerType(item.payer?.type)}
                               onChange={(e) => handlePayerChange(item, e.target.value)}
                               aria-label={`Payeur booking ${item.booking_id}`}
                             >
@@ -509,7 +667,7 @@ const InstitutionBillingControl = () => {
                           <ControlStatusCell item={item} />
                           <BookingActions
                             item={item}
-                            pendingId={pendingId}
+                            hideReopen={Boolean(rowOverrides[item.booking_id]?.optimistic)}
                             onValidate={handleValidate}
                             onAnomaly={setAnomalyTarget}
                             onReopen={handleReopen}
@@ -572,7 +730,6 @@ const InstitutionBillingControl = () => {
                 type="button"
                 className={`${s.btn} ${s.btnDanger}`}
                 onClick={submitAnomaly}
-                disabled={pendingId === anomalyTarget.booking_id}
               >
                 Signaler
               </button>

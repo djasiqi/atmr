@@ -28,6 +28,7 @@ const baseSummary = {
   priorities: {
     bookings_pending_action: 0,
     demo_requests_open: 0,
+    contact_notifications_failed: 0,
     tenants_suspended: 0,
     platform_alerts_open: 0,
     billing_to_review: 0,
@@ -66,6 +67,7 @@ describe('AdminDashboard — page de décision', () => {
     expect(screen.getByTestId('admin-dash-attention')).toBeInTheDocument();
     expect(screen.getByText(/Plateforme opérationnelle/i)).toBeInTheDocument();
     expect(screen.queryByTestId('admin-dash-demo-line')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('admin-dash-contact-line')).not.toBeInTheDocument();
 
     const root = screen.getByTestId('admin-dashboard');
     const text = root.textContent || '';
@@ -81,7 +83,8 @@ describe('AdminDashboard — page de décision', () => {
       priorities: {
         ...baseSummary.priorities,
         demo_requests_open: 2,
-        critical_attention_count: 2,
+        contact_notifications_failed: 1,
+        critical_attention_count: 3,
         platform_alerts_open: 1,
         billing_to_review: 1,
         bookings_pending_action: 3,
@@ -91,7 +94,7 @@ describe('AdminDashboard — page de décision', () => {
         open_alerts: 1,
         runbooks_today: 0,
         tenants_in_drift: 1,
-        critical_attention_count: 2,
+        critical_attention_count: 3,
       },
     });
     renderDash();
@@ -100,6 +103,9 @@ describe('AdminDashboard — page de décision', () => {
     expect(screen.queryByText(/Plateforme opérationnelle/i)).not.toBeInTheDocument();
     expect(screen.getByTestId('admin-dash-demo-line')).toHaveTextContent(
       /2 nouvelles demandes de démonstration/i
+    );
+    expect(screen.getByTestId('admin-dash-contact-line')).toHaveTextContent(
+      /1 notification interne de contact en échec/i
     );
     expect(screen.getByText(/3 à traiter/i)).toBeInTheDocument();
     expect(screen.getByText(/1 à contrôler/i)).toBeInTheDocument();

@@ -1465,6 +1465,64 @@
   letter-spacing: 0.3px;
 }
 
+.fieldError {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--danger, #ef4444);
+  line-height: 1.35;
+}
+
+.fieldErrorRoute {
+  grid-column: 1 / -1;
+}
+
+/* Erreur d'horaire globale : sous tout l'itinéraire, alignée sur la colonne des heures */
+.fieldErrorRouteTimes {
+  display: flex;
+  justify-content: flex-end;
+  margin: 8px 36px 0 26px;
+}
+
+.fieldErrorRouteTimes .fieldError {
+  margin: 0;
+  text-align: right;
+  max-width: 280px;
+}
+
+@media (max-width: 600px) {
+  .fieldErrorRouteTimes {
+    justify-content: flex-start;
+    margin: 8px 0 0;
+  }
+
+  .fieldErrorRouteTimes .fieldError {
+    text-align: left;
+    max-width: none;
+  }
+}
+
+.formGroup :global(input[aria-invalid="true"]),
+.formGroup :global(textarea[aria-invalid="true"]),
+.detailsGroup :global(input[aria-invalid="true"]),
+.detailsGroup :global(textarea[aria-invalid="true"]),
+.detailsPanel :global(input[aria-invalid="true"]),
+.detailsPanel :global(textarea[aria-invalid="true"]),
+.externalFieldsWrap :global(input[aria-invalid="true"]) {
+  border-color: var(--danger, #ef4444) !important;
+}
+
+.formGroup :global(input[aria-invalid="true"]:focus),
+.formGroup :global(textarea[aria-invalid="true"]:focus),
+.detailsGroup :global(input[aria-invalid="true"]:focus),
+.detailsGroup :global(textarea[aria-invalid="true"]:focus),
+.detailsPanel :global(input[aria-invalid="true"]:focus),
+.detailsPanel :global(textarea[aria-invalid="true"]:focus),
+.externalFieldsWrap :global(input[aria-invalid="true"]:focus) {
+  border-color: var(--danger, #ef4444) !important;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+}
+
 /* ── Global input overrides inside formGroup (matches ManualBookingForm) ── */
 .formGroup :global(input:not([type='checkbox'])),
 .formGroup :global(textarea),

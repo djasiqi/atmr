@@ -179,3 +179,204 @@ export function isFinanciallyFrozen(item) {
     item?.control?.effective_status === 'anomaly' && billing !== 'not_billable'
   );
 }
+
+const SUMMARY_STATUS_KEYS = new Set(['pending_review', 'validated', 'anomaly']);
+
+export function normalizeControlStatus(status) {
+  const value = String(status || '').toLowerCase();
+  if (value === 'validated') return 'validated';
+  if (value === 'anomaly') return 'anomaly';
+  return 'pending_review';
+}
+
+export function sameBookingId(left, right) {
+  return String(left) === String(right);
+}
+
+export function adjustBillingControlSummary(summary = {}, fromStatus, toStatus) {
+  const from = normalizeControlStatus(fromStatus);
+  const to = normalizeControlStatus(toStatus);
+  const next = {
+    total: summary.total ?? 0,
+    payer_clinic: summary.payer_clinic ?? 0,
+    payer_patient: summary.payer_patient ?? 0,
+    validated: summary.validated ?? 0,
+    pending_review: summary.pending_review ?? 0,
+    anomaly: summary.anomaly ?? 0,
+  };
+  if (from === to) return next;
+  if (SUMMARY_STATUS_KEYS.has(from)) {
+    next[from] = Math.max(0, (next[from] ?? 0) - 1);
+  }
+  if (SUMMARY_STATUS_KEYS.has(to)) {
+    next[to] = (next[to] ?? 0) + 1;
+  }
+  return next;
+}
+
+export function applyOptimisticControlStatus(
+  listData,
+  bookingId,
+  nextStatus,
+  controlPatch = {},
+) {
+  if (!listData || !Array.isArray(listData.items)) return listData;
+  let fromStatus = null;
+  const items = listData.items.map((item) => {
+    if (!sameBookingId(item.booking_id, bookingId)) return item;
+    fromStatus = item?.control?.effective_status || 'pending_review';
+    return {
+      ...item,
+      control: {
+        ...item.control,
+        effective_status: nextStatus,
+        ...controlPatch,
+      },
+    };
+  });
+  if (fromStatus == null) return listData;
+  return {
+    ...listData,
+    items,
+    summary: adjustBillingControlSummary(listData.summary, fromStatus, nextStatus),
+  };
+}
+
+export function applyOptimisticControlOverrides(listData, overrides = {}) {
+  if (!listData || !overrides || Object.keys(overrides).length === 0) {
+    return listData;
+  }
+  return Object.entries(overrides).reduce((acc, [bookingId, override]) => {
+    if (!override) return acc;
+    let next = acc;
+    if (override.payer) {
+      next = applyOptimisticPayerChange(next, bookingId, override.payer);
+    }
+    if (override.status) {
+      next = applyOptimisticControlStatus(
+        next,
+        bookingId,
+        override.status,
+        override.controlPatch,
+      );
+    }
+    return next;
+  }, listData);
+}
+
+export function mergeBookingControlFromMutation(listData, bookingId, control) {
+  if (!control) return listData;
+  const nextStatus = normalizeControlStatus(
+    control.effective_status || control.control_status,
+  );
+  return applyOptimisticControlStatus(listData, bookingId, nextStatus, {
+    validated_at: control.validated_at,
+    validated_by_display_name: control.validated_by_display_name,
+    anomaly_reason: control.anomaly_reason ?? null,
+  });
+}
+
+export function pruneSyncedControlOverrides(overrides = {}, items = []) {
+  const next = { ...overrides };
+  let changed = false;
+  Object.keys(next).forEach((bookingId) => {
+    const item = items.find((candidate) => sameBookingId(candidate.booking_id, bookingId));
+    if (!item) {
+      delete next[bookingId];
+      changed = true;
+      return;
+    }
+    const override = next[bookingId] || {};
+    const statusSynced = !override.status
+      || item?.control?.effective_status === override.status;
+    const payerSynced = !override.payer
+      || normalizePayerType(item?.payer?.type) === override.payer;
+    if (statusSynced && payerSynced) {
+      delete next[bookingId];
+      changed = true;
+      return;
+    }
+    if (statusSynced || payerSynced) {
+      const cleaned = { ...override };
+      if (statusSynced) {
+        delete cleaned.status;
+        delete cleaned.fromStatus;
+        delete cleaned.optimistic;
+        delete cleaned.controlPatch;
+      }
+      if (payerSynced) {
+        delete cleaned.payer;
+        delete cleaned.fromPayer;
+        delete cleaned.payerGeneration;
+      }
+      next[bookingId] = cleaned;
+      changed = true;
+    }
+  });
+  return changed ? next : overrides;
+}
+
+export function normalizePayerType(payerType) {
+  return String(payerType || '').toLowerCase() === 'clinic' ? 'clinic' : 'patient';
+}
+
+export function adjustBillingControlPayerSummary(summary = {}, fromPayer, toPayer) {
+  const from = normalizePayerType(fromPayer);
+  const to = normalizePayerType(toPayer);
+  const next = {
+    total: summary.total ?? 0,
+    payer_clinic: summary.payer_clinic ?? 0,
+    payer_patient: summary.payer_patient ?? 0,
+    validated: summary.validated ?? 0,
+    pending_review: summary.pending_review ?? 0,
+    anomaly: summary.anomaly ?? 0,
+  };
+  if (from === to) return next;
+  if (from === 'clinic') next.payer_clinic = Math.max(0, (next.payer_clinic ?? 0) - 1);
+  if (from === 'patient') next.payer_patient = Math.max(0, (next.payer_patient ?? 0) - 1);
+  if (to === 'clinic') next.payer_clinic = (next.payer_clinic ?? 0) + 1;
+  if (to === 'patient') next.payer_patient = (next.payer_patient ?? 0) + 1;
+  return next;
+}
+
+export function applyOptimisticPayerChange(listData, bookingId, nextPayerType) {
+  if (!listData || !Array.isArray(listData.items)) return listData;
+  const nextPayer = normalizePayerType(nextPayerType);
+  let fromPayer = null;
+  const items = listData.items.map((item) => {
+    if (!sameBookingId(item.booking_id, bookingId)) return item;
+    fromPayer = normalizePayerType(item?.payer?.type);
+    return {
+      ...item,
+      payer: {
+        ...item.payer,
+        type: nextPayer,
+        display_name: payerTypeLabel(nextPayer),
+      },
+    };
+  });
+  if (fromPayer == null) return listData;
+  return {
+    ...listData,
+    items,
+    summary: adjustBillingControlPayerSummary(listData.summary, fromPayer, nextPayer),
+  };
+}
+
+export function applyOptimisticPayerMutation(listData, bookingId, nextPayerType) {
+  let next = applyOptimisticPayerChange(listData, bookingId, nextPayerType);
+  const item = next?.items?.find((candidate) => sameBookingId(candidate.booking_id, bookingId));
+  if (item?.control?.effective_status !== 'validated') return next;
+  return applyOptimisticControlStatus(next, bookingId, 'pending_review', {
+    validated_at: null,
+    validated_by_display_name: null,
+  });
+}
+
+export function isCanceledApiError(error) {
+  return Boolean(
+    error?.code === 'ERR_CANCELED'
+    || error?.name === 'CanceledError'
+    || error?.name === 'AbortError',
+  );
+}

@@ -6,6 +6,25 @@ describe('resolveCompanyNotificationLink', () => {
     companyPublicId: 'emmenex-moi',
   };
 
+  it('dirige vers les réservations pour confirmer le départ après changement de RDV', () => {
+    const link = resolveCompanyNotificationLink({
+      ...baseArgs,
+      notif: {
+        event_type: 'institution_appointment_changed',
+        metadata: {
+          booking_id: 45726,
+          mission_date: '2026-09-12',
+          pickup_reconfirmation_required: true,
+          appointment_before: '13:00',
+          appointment_after: '15:00',
+        },
+      },
+    });
+    expect(link).toBe(
+      '/dashboard/company/emmenex-moi/reservations?booking=45726&focus=schedule_reconfirm&date=2026-09-12&appt_from=13%3A00&appt_to=15%3A00',
+    );
+  });
+
   it('dirige vers le dispatch avec panneau ouvert pour institution_change_request', () => {
     const link = resolveCompanyNotificationLink({
       ...baseArgs,

@@ -10,9 +10,12 @@ Gère la création des RequestOffers selon les préférences de l'institution:
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TypedDict
+
+from flask import current_app
 
 from application.institutions.institution_settings_service import (
     calculate_timeout,
@@ -73,7 +76,7 @@ class SendTransportRequestUseCase:
            - Mode SEQUENTIAL: Envoyer uniquement à la première préférence
            - Timeout dynamique selon scheduled_time
         2. Sinon:
-           - Mode BROADCAST: Envoyer à toutes les entreprises éligibles
+           - 422 : aucun envoi automatique (pas de fan-out catalogue)
 
         Args:
             input_data: Données d'entrée
@@ -81,6 +84,7 @@ class SendTransportRequestUseCase:
         Returns:
             SendTransportRequestResult avec le statut de l'envoi
         """
+        started = time.perf_counter()
         try:
             # 1. Charger la demande
             transport_request = TransportRequest.query.get(
@@ -178,12 +182,22 @@ class SendTransportRequestUseCase:
                     if actionable_pending:
                         pending_count = len(actionable_pending)
                         logger.info(
-                            "[SendTransportRequest] Idempotent: request %s already SENT with %d pending offers",
+                            "[SendTransportRequest] Idempotent: request %s already SENT with %d pending offers (%.0fms)",
                             transport_request.id,
                             pending_count,
+                            (time.perf_counter() - started) * 1000,
                         )
 
                         mode = existing_pending.mode or OfferMode.BROADCAST.value
+                        schedule_post_send_side_effects(
+                            transport_request_id=transport_request.id,
+                            institution_id=input_data.institution_id,
+                            user_id=input_data.user_id,
+                            mode=mode,
+                            offers_created=pending_count,
+                            is_relaunch=False,
+                            include_audit=False,
+                        )
 
                         return SendTransportRequestResult(
                             success=True,
@@ -198,21 +212,39 @@ class SendTransportRequestUseCase:
                         len(pending_offers),
                     )
                 else:
-                    # DRAFT avec offres pending = état incohérent
-                    from services.metrics.institution_metrics import (
-                        track_transport_request_duplicate_blocked,
-                    )
-
-                    track_transport_request_duplicate_blocked(
+                    # DRAFT + offres pending : finaliser l'envoi, ne pas 409.
+                    pending_offers = RequestOffer.query.filter_by(
                         transport_request_id=transport_request.id,
-                        institution_id=input_data.institution_id,
-                    )
-                    return SendTransportRequestResult(
-                        success=False,
-                        transport_request_id=input_data.transport_request_id,
-                        error="Des offres sont déjà en attente pour cette demande",
-                        status_code=409,
-                    )
+                        status=OfferStatus.PENDING.value,
+                    ).all()
+                    actionable_pending = [o for o in pending_offers if not o.is_expired]
+                    if actionable_pending:
+                        if transport_request.status == RequestStatus.DRAFT.value:
+                            transport_request.status = RequestStatus.SENT.value
+                            transport_request.sent_at = datetime.now(UTC)
+                            db.session.commit()
+                        mode = existing_pending.mode or OfferMode.BROADCAST.value
+                        logger.info(
+                            "[SendTransportRequest] Idempotent DRAFT→SENT request %s (%d pending, %.0fms)",
+                            transport_request.id,
+                            len(actionable_pending),
+                            (time.perf_counter() - started) * 1000,
+                        )
+                        schedule_post_send_side_effects(
+                            transport_request_id=transport_request.id,
+                            institution_id=input_data.institution_id,
+                            user_id=input_data.user_id,
+                            mode=mode,
+                            offers_created=len(actionable_pending),
+                            is_relaunch=False,
+                            include_audit=True,
+                        )
+                        return SendTransportRequestResult(
+                            success=True,
+                            transport_request_id=transport_request.id,
+                            offers_created=len(actionable_pending),
+                            mode=mode,
+                        )
 
             # 5. Charger les settings institution + calculer le timeout
             settings = get_or_create_settings(input_data.institution_id)
@@ -242,6 +274,17 @@ class SendTransportRequestUseCase:
                 RequestStatus.SENT.value,
                 RequestStatus.EXPIRED.value,
             ]
+
+            if not preferences and not is_relaunch:
+                return SendTransportRequestResult(
+                    success=False,
+                    transport_request_id=transport_request.id,
+                    error=(
+                        "Aucun transporteur n'est configuré. Ajoutez au moins un "
+                        "transporteur dans les paramètres pour envoyer automatiquement."
+                    ),
+                    status_code=422,
+                )
 
             if is_relaunch:
                 if transport_request.status == RequestStatus.EXPIRED.value:
@@ -273,6 +316,7 @@ class SendTransportRequestUseCase:
                     transport_request=transport_request,
                     expires_at=None,
                     excluded_company_ids=[],
+                    only_company_ids=[p.company_id for p in preferences],
                 )
             elif preferences:
                 # Mode séquentiel: envoyer uniquement à la première préférence
@@ -300,12 +344,14 @@ class SendTransportRequestUseCase:
                 else:
                     offers_created = 0
             else:
-                # Pas de préférence: fallback broadcast
-                mode = OfferMode.BROADCAST.value
-                offers_created = self._create_broadcast_offers(
-                    transport_request=transport_request,
-                    expires_at=None,  # Pas d'expiration en broadcast (ou longue)
-                    excluded_company_ids=[],
+                return SendTransportRequestResult(
+                    success=False,
+                    transport_request_id=transport_request.id,
+                    error=(
+                        "Aucun transporteur n'est configuré. Ajoutez au moins un "
+                        "transporteur dans les paramètres pour envoyer automatiquement."
+                    ),
+                    status_code=422,
                 )
 
             # 7. Vérifier qu'au moins une offre a été créée
@@ -323,92 +369,26 @@ class SendTransportRequestUseCase:
                 transport_request.status = RequestStatus.SENT.value
                 transport_request.sent_at = now
 
-            # Timeline transport: request_sent + offer_sent par offre
-            self._record_send_timeline(
-                transport_request=transport_request,
-                user_id=input_data.user_id,
-            )
-
             db.session.commit()
 
-            # 8. Audit log
-            try:
-                AuditLogger.log_action(
-                    action_type="transport_request_sent",
-                    action_category="institution",
-                    user_id=input_data.user_id,
-                    user_type="institution" if input_data.user_id else "api_key",
-                    institution_id=input_data.institution_id,
-                    result_status="success",
-                    action_details={
-                        "transport_request_id": transport_request.id,
-                        "mode": mode,
-                        "offers_created": offers_created,
-                        "timeout_minutes": timeout_minutes,
-                    },
-                )
-            except Exception as audit_err:
-                logger.warning("Échec audit log: %s", audit_err)
-
             logger.info(
-                "[SendTransportRequest] Request %s sent: mode=%s, offers=%d",
+                "[SendTransportRequest] Request %s accepted: mode=%s, offers=%d (%.0fms)",
                 transport_request.id,
                 mode,
                 offers_created,
+                (time.perf_counter() - started) * 1000,
             )
 
-            # 9. Métriques métier (GO-LIVE)
-            try:
-                from services.metrics.institution_metrics import track_send_event
-
-                track_send_event(
-                    transport_request_id=transport_request.id,
-                    institution_id=input_data.institution_id,
-                    mode=mode,
-                    offers_created=offers_created,
-                )
-            except Exception as metric_err:
-                logger.warning(
-                    "[SendTransportRequest] Error tracking metric: %s", metric_err
-                )
-
-            # ÉTAPE 5: Émettre événement temps réel vers l'institution
-            try:
-                from services.events.institution_events import (
-                    emit_request_sent,
-                    format_institution_patient_bell_name,
-                )
-                from services.institutions.mission_schedule import (
-                    get_effective_dispatch_time,
-                )
-
-                patient = transport_request.patient
-                patient_label = (
-                    format_institution_patient_bell_name(
-                        first_name=getattr(patient, "first_name", None),
-                        last_name=getattr(patient, "last_name", None),
-                        gender=getattr(patient, "gender", None),
-                    )
-                    if patient is not None
-                    else None
-                )
-                emit_request_sent(
-                    institution_id=input_data.institution_id,
-                    request_id=transport_request.id,
-                    public_id=transport_request.public_id,
-                    external_reference=transport_request.external_reference,
-                    mode=mode,
-                    offers_created=offers_created,
-                    patient_name=patient_label,
-                    departure_at=get_effective_dispatch_time(transport_request),
-                )
-            except Exception as event_err:
-                logger.warning(
-                    "[SendTransportRequest] Error emitting event: %s", event_err
-                )
-
-            # ÉTAPE 6: Notifier les entreprises cibles (Socket + bell)
-            self._notify_target_companies(transport_request, is_relaunch=is_relaunch)
+            schedule_post_send_side_effects(
+                transport_request_id=transport_request.id,
+                institution_id=input_data.institution_id,
+                user_id=input_data.user_id,
+                mode=mode,
+                offers_created=offers_created,
+                is_relaunch=is_relaunch,
+                include_audit=True,
+                timeout_minutes=timeout_minutes,
+            )
 
             return SendTransportRequestResult(
                 success=True,
@@ -528,11 +508,13 @@ class SendTransportRequestUseCase:
         transport_request: TransportRequest,
         expires_at: datetime | None,
         excluded_company_ids: list[int],
+        only_company_ids: list[int] | None = None,
     ) -> int:
-        """Crée des offres broadcast pour toutes les entreprises éligibles."""
-        # Récupérer les entreprises éligibles (démo: uniquement entreprises démo)
+        """Crée des offres broadcast pour les entreprises éligibles (liste bornée)."""
         eligible_companies = self._get_eligible_companies(
-            excluded_company_ids, transport_request=transport_request
+            excluded_company_ids,
+            transport_request=transport_request,
+            only_company_ids=only_company_ids,
         )
 
         if not eligible_companies:
@@ -542,26 +524,28 @@ class SendTransportRequestUseCase:
             )
             return 0
 
+        existing_ids = {
+            company_id
+            for (company_id,) in db.session.query(RequestOffer.company_id)
+            .filter(RequestOffer.transport_request_id == transport_request.id)
+            .all()
+        }
+
         offers_created = 0
         for company in eligible_companies:
-            # Vérifier qu'il n'y a pas déjà une offre pour cette entreprise
-            existing = RequestOffer.query.filter_by(
-                transport_request_id=transport_request.id,
-                company_id=company.id,
-            ).first()
-
-            if existing:
+            if company.id in existing_ids:
                 continue
 
-            offer = RequestOffer(
-                transport_request_id=transport_request.id,
-                company_id=company.id,
-                mode=OfferMode.BROADCAST.value,
-                order=0,  # Pas d'ordre en broadcast
-                status=OfferStatus.PENDING.value,
-                expires_at=expires_at,
+            db.session.add(
+                RequestOffer(
+                    transport_request_id=transport_request.id,
+                    company_id=company.id,
+                    mode=OfferMode.BROADCAST.value,
+                    order=0,
+                    status=OfferStatus.PENDING.value,
+                    expires_at=expires_at,
+                )
             )
-            db.session.add(offer)
             offers_created += 1
 
         return offers_created
@@ -570,40 +554,24 @@ class SendTransportRequestUseCase:
         self,
         excluded_ids: list[int],
         transport_request: TransportRequest | None = None,
+        only_company_ids: list[int] | None = None,
     ) -> list[Company]:
-        """Récupère les entreprises éligibles pour recevoir des offres.
+        """Entreprises destinataires : liste configurée ou catalogue partenaire.
 
-        V1 simple: Toutes les entreprises approuvées et avec dispatch activé.
-        Si la demande vient d'une institution démo, seules les entreprises démo
-        sont éligibles (évite que des transporteurs réels voient des demandes démo).
+        `dispatch_enabled` n'est pas un critère (mode MANUAL légitime).
         """
-        from services.demo.soft_delete_guard import filter_companies_for_institution
-
-        query = Company.query.filter(
-            Company.is_approved == True,  # noqa: E712
-            Company.dispatch_enabled == True,  # noqa: E712
+        from application.institutions.eligible_carriers import (
+            companies_for_marketplace_dispatch,
         )
 
-        if excluded_ids:
-            query = query.filter(Company.id.notin_(excluded_ids))
-
-        companies = query.all()
-        if transport_request:
-            companies = filter_companies_for_institution(
-                companies, transport_request.institution
-            )
-        from services.platform_billing.capabilities import (
-            BillingCapability,
-            is_billing_capability_allowed,
+        institution = (
+            transport_request.institution if transport_request is not None else None
         )
-
-        return [
-            c
-            for c in companies
-            if is_billing_capability_allowed(
-                c.id, BillingCapability.RECEIVE_MARKETPLACE_OFFERS
-            )
-        ]
+        return companies_for_marketplace_dispatch(
+            institution=institution,
+            excluded_ids=excluded_ids or None,
+            only_company_ids=only_company_ids,
+        )
 
     @staticmethod
     def _reactivate_offer(
@@ -625,14 +593,13 @@ class SendTransportRequestUseCase:
         configured_mode: str,
         expires_at: datetime,
     ) -> _RelaunchOffersResult:
-        """Relance la diffusion : réactive les offres expirées et élargit à toutes les entreprises éligibles."""
-        del (
-            preferences,
-            configured_mode,
-        )  # Relance = broadcast élargi (nouveau délai pour tous)
+        """Relance la diffusion : réactive les offres expirées et complète la liste configurée."""
+        del configured_mode
+        only_company_ids = [p.company_id for p in preferences] if preferences else None
         offers_created = self._relaunch_broadcast_offers(
             transport_request=transport_request,
             expires_at=expires_at,
+            only_company_ids=only_company_ids,
         )
         return {
             "offers_created": offers_created,
@@ -708,6 +675,7 @@ class SendTransportRequestUseCase:
         *,
         transport_request: TransportRequest,
         expires_at: datetime | None,
+        only_company_ids: list[int] | None = None,
     ) -> int:
         """Relance broadcast : réactive les offres expirées + contacte les entreprises éligibles restantes."""
         offers = RequestOffer.query.filter_by(
@@ -733,6 +701,7 @@ class SendTransportRequestUseCase:
             transport_request=transport_request,
             expires_at=expires_at,
             excluded_company_ids=contacted_ids,
+            only_company_ids=only_company_ids,
         )
         return reactivated + new_created
 
@@ -870,6 +839,159 @@ class SendTransportRequestUseCase:
             logger.warning(
                 "[SendTransportRequest] Error notifying target companies: %s", e
             )
+
+
+def run_post_send_side_effects(
+    transport_request_id: int,
+    institution_id: int,
+    user_id: int | None,
+    mode: str | None,
+    offers_created: int,
+    *,
+    is_relaunch: bool,
+    include_audit: bool,
+    timeout_minutes: int | None = None,
+    remove_session: bool = True,
+) -> None:
+    """Notifications / audit / métriques après acceptation du dispatch."""
+    try:
+        transport_request = TransportRequest.query.get(transport_request_id)
+        if not transport_request:
+            logger.warning(
+                "[SendTransportRequest] Side effects skipped: request %s introuvable",
+                transport_request_id,
+            )
+            return
+
+        if include_audit:
+            try:
+                AuditLogger.log_action(
+                    action_type="transport_request_sent",
+                    action_category="institution",
+                    user_id=user_id,
+                    user_type="institution" if user_id else "api_key",
+                    institution_id=institution_id,
+                    result_status="success",
+                    action_details={
+                        "transport_request_id": transport_request_id,
+                        "mode": mode,
+                        "offers_created": offers_created,
+                        **(
+                            {"timeout_minutes": timeout_minutes}
+                            if timeout_minutes is not None
+                            else {}
+                        ),
+                    },
+                )
+            except Exception as audit_err:
+                logger.warning("Échec audit log: %s", audit_err)
+
+            try:
+                from services.metrics.institution_metrics import track_send_event
+
+                track_send_event(
+                    transport_request_id=transport_request_id,
+                    institution_id=institution_id,
+                    mode=mode,
+                    offers_created=offers_created,
+                )
+            except Exception as metric_err:
+                logger.warning(
+                    "[SendTransportRequest] Error tracking metric: %s", metric_err
+                )
+
+        try:
+            from services.events.institution_events import (
+                emit_request_sent,
+                format_institution_patient_bell_name,
+            )
+            from services.institutions.mission_schedule import (
+                get_effective_dispatch_time,
+            )
+
+            patient = transport_request.patient
+            patient_label = (
+                format_institution_patient_bell_name(
+                    first_name=getattr(patient, "first_name", None),
+                    last_name=getattr(patient, "last_name", None),
+                    gender=getattr(patient, "gender", None),
+                )
+                if patient is not None
+                else None
+            )
+            emit_request_sent(
+                institution_id=institution_id,
+                request_id=transport_request.id,
+                public_id=transport_request.public_id,
+                external_reference=transport_request.external_reference,
+                mode=mode,
+                offers_created=offers_created,
+                patient_name=patient_label,
+                departure_at=get_effective_dispatch_time(transport_request),
+            )
+        except Exception as event_err:
+            logger.warning(
+                "[SendTransportRequest] Error emitting event: %s", event_err
+            )
+
+        if include_audit:
+            SendTransportRequestUseCase._record_send_timeline(
+                transport_request=transport_request,
+                user_id=user_id,
+            )
+
+        SendTransportRequestUseCase()._notify_target_companies(
+            transport_request,
+            is_relaunch=is_relaunch,
+        )
+    except Exception:
+        logger.exception(
+            "[SendTransportRequest] Side effects failed for request %s",
+            transport_request_id,
+        )
+    finally:
+        if remove_session:
+            db.session.remove()
+
+
+def schedule_post_send_side_effects(
+    transport_request_id: int,
+    institution_id: int,
+    user_id: int | None,
+    mode: str | None,
+    offers_created: int,
+    *,
+    is_relaunch: bool,
+    include_audit: bool,
+    timeout_minutes: int | None = None,
+) -> None:
+    """Lance les effets secondaires sans bloquer la réponse HTTP (hors tests)."""
+    kwargs = {
+        "transport_request_id": transport_request_id,
+        "institution_id": institution_id,
+        "user_id": user_id,
+        "mode": mode,
+        "offers_created": offers_created,
+        "is_relaunch": is_relaunch,
+        "include_audit": include_audit,
+        "timeout_minutes": timeout_minutes,
+    }
+    if current_app.config.get("TESTING"):
+        run_post_send_side_effects(**kwargs, remove_session=False)
+        return
+
+    from tasks.request_offer_tasks import notify_transport_request_after_send
+
+    notify_transport_request_after_send.delay(
+        kwargs["transport_request_id"],
+        kwargs["institution_id"],
+        kwargs["user_id"],
+        kwargs["mode"],
+        kwargs["offers_created"],
+        kwargs["is_relaunch"],
+        kwargs["include_audit"],
+        kwargs["timeout_minutes"],
+    )
 
 
 def create_next_sequential_offer(

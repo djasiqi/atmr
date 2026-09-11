@@ -88,7 +88,7 @@ def shared_institution_client(db, company, institution):
     return client
 
 
-def _patient(db, institution, *, first, last, street, postal, city):
+def _patient(db, institution, *, first, last, street, postal, city, residence=None):
     patient = InstitutionPatient()
     patient.institution_id = institution.id
     patient.first_name = first
@@ -96,6 +96,7 @@ def _patient(db, institution, *, first, last, street, postal, city):
     patient.address = street
     patient.postal_code = postal
     patient.city = city
+    patient.residence_name = residence
     db.session.add(patient)
     db.session.flush()
     return patient
@@ -234,4 +235,34 @@ def test_fallback_without_billing_party_uses_invoice_patient(
 
     assert "CAMOLETTI" in name.upper()
     assert "Route de Thonon 14" in addr
+    assert "1222 Vésenaz" in addr
+
+
+def test_patient_payer_shows_residence_under_name(
+    db, company, shared_institution_client, institution
+):
+    """Payeur = patient : la résidence EMS figure sous le nom, pas seulement au fallback."""
+    patient = _patient(
+        db,
+        institution,
+        first="Pierre",
+        last="ALEXANDRE",
+        street="Chemin des Tattes 10",
+        postal="1222",
+        city="Vésenaz",
+        residence="EMS Fondation Butini",
+    )
+    bp = _patient_billing_party(
+        db, company, patient, billing_address="Chemin des Tattes 10\n1222 Vésenaz"
+    )
+    invoice = _invoice(
+        db, company, shared_institution_client, patient, billing_party=bp
+    )
+
+    name, addr = _get_billed_to(invoice)
+
+    assert "ALEXANDRE" in name.upper()
+    assert "EMS Fondation Butini" in name
+    assert name.index("ALEXANDRE") < name.index("EMS Fondation Butini")
+    assert "Chemin des Tattes 10" in addr
     assert "1222 Vésenaz" in addr

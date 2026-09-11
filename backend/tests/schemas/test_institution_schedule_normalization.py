@@ -38,7 +38,13 @@ def test_create_schema_accepts_payload_after_normalization():
         "dropoff_location": "HUG",
         "multi_stop": True,
         "return_to_institution": True,
-        "intermediate_stops": [{"dropoff_location": "HUG", "scheduled_time": ""}],
+        "intermediate_stops": [
+            {
+                "dropoff_location": "HUG",
+                "scheduled_time": "",
+                "dropoff_service": "Radiologie",
+            }
+        ],
         "return_time": "",
     }
     normalized = normalize_transport_request_schedule_payload(data)

@@ -10,29 +10,29 @@ function formatCompactRevenue(val) {
   return `${num.toFixed(2)} CHF`;
 }
 
-const ReservationStats = ({ stats }) => {
+const ReservationStats = ({ stats, loading = false }) => {
   const items = [
     {
       label: 'Total',
-      value: stats.total,
+      value: loading ? '—' : stats.total,
       icon: FiHash,
       accent: 'default',
     },
     {
       label: 'En cours',
-      value: stats.inProgress,
+      value: loading ? '—' : stats.inProgress,
       icon: FiActivity,
       accent: 'warning',
     },
     {
       label: 'Terminees',
-      value: stats.completed,
+      value: loading ? '—' : stats.completed,
       icon: FiCheckCircle,
       accent: 'success',
     },
     {
       label: 'Revenus',
-      value: formatCompactRevenue(stats.revenue),
+      value: loading ? '—' : formatCompactRevenue(stats.revenue),
       icon: FiDollarSign,
       accent: 'info',
     },
@@ -52,7 +52,7 @@ const ReservationStats = ({ stats }) => {
             </div>
             <div className={styles.kpiContent}>
               <span className={styles.kpiLabel}>{item.label}</span>
-              <span className={styles.kpiValue}>{item.value}</span>
+              <span className={`${styles.kpiValue} ${loading ? styles.kpiValuePending : ''}`}>{item.value}</span>
             </div>
           </div>
         );

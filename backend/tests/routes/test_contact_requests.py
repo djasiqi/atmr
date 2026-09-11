@@ -38,6 +38,7 @@ class _DummyContactRequest:
 
     def __init__(self, **kwargs):
         self.id = kwargs.pop("id", 1)
+        self.created_at = kwargs.pop("created_at", None)
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -215,3 +216,27 @@ def test_contact_request_concurrency_guard_suppresses_duplicate_email(
     response = client.post("/api/v1/contact/requests", json=_payload())
     assert response.status_code == 200
     assert called["count"] == 0
+
+
+def test_contact_request_persists_when_internal_notification_fails(client, monkeypatch):
+    store = _patch_db_layer(monkeypatch)
+    _patch_pipeline(monkeypatch)
+
+    def _send(payload):
+        _ = payload
+        return {
+            "ok": False,
+            "internal_ok": False,
+            "internal_error": "hard_bounce",
+            "auto_reply_ok": True,
+            "destination": "info@lirie.ch",
+        }
+
+    monkeypatch.setattr("routes.contact.send_contact_notification", _send)
+    response = client.post("/api/v1/contact/requests", json=_payload())
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+    assert store["last"].email_delivery_status == "failed"
+    assert store["last"].status == "new"
+    assert store["last"].assigned_channel == "info@lirie.ch"
+    assert store["last"].autoreply_delivery_status == "sent"

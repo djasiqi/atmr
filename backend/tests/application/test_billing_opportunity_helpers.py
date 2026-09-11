@@ -83,6 +83,30 @@ def test_recipient_ready_non_patient_billing_party():
     assert resolve_recipient_status(billing_party=bp) == "ready"
 
 
+def test_recipient_ready_french_five_digit_postal():
+    """Un NPA FR à 5 chiffres n'est plus traité comme adresse manquante."""
+    bp = SimpleNamespace(
+        type=BillingPartyType.PATIENT,
+        display_name="VUILLE Danielle",
+        billing_address="12 Rue de Genève\n74100 Annemasse",
+    )
+    assert (
+        resolve_recipient_status(
+            billing_party=bp, display_name="VUILLE Danielle"
+        )
+        == "ready"
+    )
+
+
+def test_recipient_ready_swiss_four_digit_postal_still_works():
+    bp = SimpleNamespace(
+        type=BillingPartyType.PATIENT,
+        display_name="HERRERO Nicolas",
+        billing_address="Chemin des Ramiers 9\n1222 Vésenaz",
+    )
+    assert resolve_recipient_status(billing_party=bp) == "ready"
+
+
 def test_recipient_missing_non_patient_empty_address():
     bp = SimpleNamespace(
         type=BillingPartyType.INSURANCE,

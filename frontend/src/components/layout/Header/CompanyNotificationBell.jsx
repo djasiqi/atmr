@@ -49,12 +49,14 @@ const EVENT_ICONS = {
   booking_message: FaCommentDots,
   new_request: FaAmbulance,
   institution_change_request: FaExchangeAlt,
+  institution_appointment_changed: FaExchangeAlt,
 };
 
 const EVENT_COLORS = {
   booking_message: '#0d9488',
   new_request: '#d97706',
   institution_change_request: '#0d9488',
+  institution_appointment_changed: '#0d9488',
 };
 
 const CANCEL_COLOR = '#ef4444';

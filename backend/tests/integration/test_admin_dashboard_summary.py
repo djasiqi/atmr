@@ -33,6 +33,7 @@ class TestAdminDashboardSummaryEndpoint:
         for key in (
             "bookings_pending_action",
             "demo_requests_open",
+            "contact_notifications_failed",
             "tenants_suspended",
             "platform_alerts_open",
             "billing_to_review",

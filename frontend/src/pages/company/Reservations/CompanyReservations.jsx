@@ -6,6 +6,7 @@ import { useLirieCompany } from '../../../hooks/useLirieCompany';
 import useUrlSearchSync from '../../../hooks/useUrlSearchSync';
 import {
   fetchCompanyReservationsPaginated,
+  fetchCompanyReservationById,
   deleteReservation,
   acceptReservation,
   rejectReservation,
@@ -13,13 +14,14 @@ import {
   dispatchNowForReservation,
   updateReservation,
   fetchRequestOffers,
-  acceptRequestOffer,
-  rejectRequestOffer,
 } from '../../../services/companyService';
 import { buildOfferIdentity } from '../../../utils/bookingIdentity';
 import { getConfirmedScheduleParts, formatSchedulePartLabel } from '../../../utils/formatLegTime';
 import { canRespondToInstitutionOffer, isInstitutionOfferExpired } from '../../../utils/institutionOfferResponse';
+import { reconcileInstitutionOffersResponse } from '../../../utils/institutionOffersCache';
+import { useInstitutionOfferMutations } from '../../../hooks/useInstitutionOfferMutations';
 import { computeAcceptNowPickupIso } from '../../../utils/institutionOfferActions';
+import { resolveReturnPickupConflict } from '../../../utils/roundTripTemporal';
 import ReservationTable from '../Dashboard/components/ReservationTable';
 import ReservationTableSkeleton from '../Dashboard/components/ReservationTableSkeleton';
 import ProposeOfferTimeModal from '../Dashboard/components/ProposeOfferTimeModal';
@@ -28,8 +30,14 @@ import ReservationFilters from './components/ReservationFilters';
 import TopClients from './components/TopClients';
 import Modal from '../../../components/common/Modal';
 import { toast } from 'sonner';
-import { isCompletedStatus } from '../../../utils/reservationStatusUtils';
-import { lirieKeys, lirieInvalidateCompanyReservationLists } from '../../../queryKeys/lirie';
+import { lirieKeys, LIRIE_QK_PREFIX, lirieInvalidateCompanyReservationLists, liriePatchCompanyReservationLists } from '../../../queryKeys/lirie';
+import { getAccessToken } from '../../../hooks/useAuthToken';
+import { getActiveUser } from '../../../utils/webAuthSession';
+import {
+  formatReservationsResultsLabel,
+  resolveReservationsStatsView,
+  shouldShowReservationsSkeleton,
+} from '../../../utils/companyReservationsPage';
 import styles from './CompanyReservations.module.css';
 
 // Lot 4 perf — jamais montés au premier rendu : carte, formulaire, panneaux de détail
@@ -113,23 +121,6 @@ const EMPTY_STATS = {
   canceled: 0,
   revenue: 0,
 };
-
-function computeStatsFromReservations(reservationsData) {
-  return {
-    total: reservationsData.length,
-    pending: reservationsData.filter((r) => r.status === 'pending').length,
-    inProgress: reservationsData.filter((r) =>
-      ['accepted', 'assigned', 'in_progress', 'en_route'].includes(
-        (r.status || '').toLowerCase()
-      )
-    ).length,
-    completed: reservationsData.filter((r) => isCompletedStatus(r.status)).length,
-    canceled: reservationsData.filter((r) => r.status === 'canceled').length,
-    revenue: reservationsData
-      .filter((r) => isCompletedStatus(r.status))
-      .reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
-  };
-}
 
 function normalizeApiStats(raw) {
   if (!raw || typeof raw !== 'object') return null;
@@ -279,16 +270,19 @@ const CompanyReservations = () => {
     [selectedDay, statusFilter, activeTab, debouncedSearchTerm, sortOrder]
   );
 
-  const canLoadReservations = Boolean(company?.id);
+  const canLoadReservations = Boolean(
+    company?.id || getActiveUser() || getAccessToken(),
+  );
 
   const {
     data: listPayload,
     isLoading: listInitialLoading,
+    isError: listIsError,
     isRefetching: listRefetching,
     refetch: refetchReservations,
   } = useQuery({
     queryKey: canLoadReservations
-      ? lirieKeys.companyReservationsPaginated(company.id, listQueryFilterScope)
+      ? lirieKeys.companyReservationsPaginated('me', listQueryFilterScope)
       : ['lirie', 'company-reservations-paginated', 'disabled'],
     enabled: canLoadReservations,
     queryFn: async ({ signal }) => {
@@ -317,21 +311,32 @@ const CompanyReservations = () => {
         search: debouncedSearchTerm || undefined,
         sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : 'desc',
         excludeCanceled: activeTab === 'all' && statusFilter !== 'canceled',
+        includeStats: false,
+        includeTotal: false,
+        fields: 'table',
         signal: mergedSignal,
       });
     },
     placeholderData: keepPreviousData,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
-  // KPI indépendants de la pagination — clé de cache SANS `page`, `per_page` minimal
-  // pour ne transférer aucune ligne de réservation (Lot 4 perf).
+  const hasListData = Array.isArray(listPayload?.reservations);
+  const showListSkeleton = shouldShowReservationsSkeleton({
+    listLoading: listInitialLoading || !canLoadReservations,
+    hasListData,
+  });
+
+  // KPI après les premières lignes — ne concurrence pas la requête critique.
   const statsAbortRef = useRef(null);
-  const { data: statsPayload } = useQuery({
+  const {
+    data: statsPayload,
+    isLoading: statsQueryLoading,
+  } = useQuery({
     queryKey: canLoadReservations
-      ? lirieKeys.companyReservationsStats(company.id, statsQueryScope)
+      ? lirieKeys.companyReservationsStats('me', statsQueryScope)
       : ['lirie', 'company-reservations-stats', 'disabled'],
-    enabled: canLoadReservations,
+    enabled: canLoadReservations && hasListData,
     queryFn: async ({ signal }) => {
       if (statsAbortRef.current) {
         try {
@@ -356,18 +361,19 @@ const CompanyReservations = () => {
         search: debouncedSearchTerm || undefined,
         sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : 'desc',
         excludeCanceled: activeTab === 'all' && statusFilter !== 'canceled',
+        includeStats: true,
+        statsOnly: true,
+        fields: 'table',
         signal: mergedSignal,
       });
     },
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
   const reservations = useMemo(
     () => (Array.isArray(listPayload?.reservations) ? listPayload.reservations : []),
     [listPayload]
   );
-  const totalReservations = listPayload?.total ?? 0;
-  const totalPages = listPayload?.total_pages ?? 0;
 
   // Garde le panneau ouvert aligné sur la liste (ex. après acceptation d'une modif)
   // sans remonter tout le panneau : fusion ciblée des champs opérationnels.
@@ -378,6 +384,7 @@ const CompanyReservations = () => {
     if (!fresh) return;
     const syncKeys = [
       'scheduled_time',
+      'time_confirmed',
       'pickup_location',
       'dropoff_location',
       'wheelchair_client_has',
@@ -392,6 +399,8 @@ const CompanyReservations = () => {
       'edit_version',
       'active_change_request',
       'active_change_request_id',
+      'institution_leg',
+      'scheduling',
     ];
     setSelectedReservation((prev) => {
       if (!prev || prev.id !== fresh.id) return prev;
@@ -415,9 +424,16 @@ const CompanyReservations = () => {
   const needsOfferDateResolution = Boolean(
     !isSpecificDay && (targetOfferIdParam || targetRequestIdParam)
   );
+  const { acceptOffer, rejectOffer } = useInstitutionOfferMutations({
+    dispatchDay: isSpecificDay ? selectedDay : null,
+    companyId: company?.id,
+  });
+
   const { data: pendingOffersData } = useQuery({
     queryKey: lirieKeys.institutionOffers(),
-    queryFn: () => fetchRequestOffers('PENDING'),
+    queryFn: async () => (
+      reconcileInstitutionOffersResponse(await fetchRequestOffers('PENDING'))
+    ),
     enabled: canLoadReservations && (isSpecificDay || needsOfferDateResolution),
     staleTime: 15_000,
   });
@@ -471,26 +487,15 @@ const CompanyReservations = () => {
 
   const acceptOfferById = useCallback(
     async (offerId, proposedPickupTime, offerForGuard = null) => {
-      if (offerForGuard && !canRespondToInstitutionOffer(offerForGuard)) {
-        toast.error('Offre expirée, vous ne pouvez plus répondre.');
-        return;
-      }
-
       try {
-        await acceptRequestOffer(offerId, proposedPickupTime);
-        toast.success(
-          proposedPickupTime
-            ? 'Offre planifiée — réservation créée'
-            : 'Offre validée — réservation créée'
-        );
-        queryClient.invalidateQueries({ queryKey: lirieKeys.institutionOffers() });
+        await acceptOffer(offerId, proposedPickupTime, offerForGuard);
         void lirieInvalidateCompanyReservationLists(queryClient);
         refetchReservations();
-      } catch (err) {
-        toast.error(err?.response?.data?.error || "Erreur lors de l'acceptation");
+      } catch (_err) {
+        // toast + rollback déjà gérés par le hook
       }
     },
-    [queryClient, refetchReservations]
+    [acceptOffer, queryClient, refetchReservations]
   );
 
   const handleValidateInstitutionOffer = useCallback(
@@ -523,35 +528,60 @@ const CompanyReservations = () => {
 
   const handleRejectInstitutionOffer = useCallback(
     async (offerId, offerForGuard = null) => {
-      if (offerForGuard && !canRespondToInstitutionOffer(offerForGuard)) {
-        toast.error('Offre expirée, vous ne pouvez plus répondre.');
-        return;
-      }
-
       try {
-        await rejectRequestOffer(offerId);
-        toast.success('Offre refusée');
-        queryClient.invalidateQueries({ queryKey: lirieKeys.institutionOffers() });
-      } catch (err) {
-        toast.error(err?.response?.data?.error || 'Erreur lors du refus');
+        await rejectOffer(offerId, offerForGuard);
+      } catch (_err) {
+        // toast + rollback déjà gérés par le hook
       }
     },
-    [queryClient]
+    [rejectOffer]
   );
 
   // KPI = agrégats API (même période / visibilité que le compteur total) — pas seulement la page courante.
   // Source primaire : query stats dédiée (clé sans page) ; repli sur les stats de la liste
   // (ex. premier rendu avant résolution de la query stats) puis calcul local.
-  const stats = useMemo(() => {
-    const fromStatsQuery = normalizeApiStats(statsPayload?.stats);
-    if (fromStatsQuery) return fromStatsQuery;
-    const fromApi = normalizeApiStats(listPayload?.stats);
-    if (fromApi) return fromApi;
-    if (!listPayload) return EMPTY_STATS;
-    return computeStatsFromReservations(
-      Array.isArray(listPayload.reservations) ? listPayload.reservations : []
-    );
-  }, [statsPayload, listPayload]);
+  const statsView = useMemo(
+    () => resolveReservationsStatsView({
+      statsFromQuery: normalizeApiStats(statsPayload?.stats),
+      statsFromList: normalizeApiStats(listPayload?.stats),
+      statsLoading: statsQueryLoading,
+      listLoading: listInitialLoading || !canLoadReservations,
+      hasListData,
+    }),
+    [
+      statsPayload,
+      listPayload,
+      statsQueryLoading,
+      listInitialLoading,
+      canLoadReservations,
+      hasListData,
+    ],
+  );
+  const stats = statsView.stats || EMPTY_STATS;
+  const statsLoading = statsView.stats == null;
+  const totalReservations = (
+    typeof listPayload?.total === 'number'
+      ? listPayload.total
+      : (statsView.stats
+        ? Math.max(0, (Number(statsView.stats.total) || 0) - (
+          activeTab === 'all' && statusFilter !== 'canceled'
+            ? (Number(statsView.stats.canceled) || 0)
+            : 0
+        ))
+        : reservations.length)
+  );
+  const computedPages = totalReservations > 0
+    ? Math.ceil(totalReservations / Math.max(reservationsPerPage, 1))
+    : 0;
+  const totalPages = (
+    typeof listPayload?.total_pages === 'number'
+      ? listPayload.total_pages
+      : (statsView.stats
+        ? computedPages
+        : (reservations.length >= reservationsPerPage
+          ? Math.max(currentPage + 1, computedPages)
+          : computedPages))
+  );
 
   // Force table mode for date ranges
   useEffect(() => {
@@ -613,7 +643,11 @@ const CompanyReservations = () => {
     void refetchReservations();
   }, [refetchReservations]);
 
-  const showListSkeleton = !canLoadReservations || listInitialLoading;
+  const resultsLabel = formatReservationsResultsLabel({
+    listLoading: listInitialLoading || !canLoadReservations,
+    hasListData,
+    total: hasListData ? totalReservations : listPayload?.total,
+  });
 
   // Applique ?date= puis nettoie l'URL (clic notification, y compris si la page est déjà montée).
   useEffect(() => {
@@ -635,27 +669,20 @@ const CompanyReservations = () => {
     const bookingId = Number(bookingIdParam);
     if (!bookingId) return;
 
-    // Try to find in current page first
     const found = reservations.find((r) => r.id === bookingId);
     if (found) {
       openReservationPanel(found);
       setSearchParams((prev) => {
-        prev.delete('booking');
-        return prev;
+        const next = new URLSearchParams(prev);
+        next.delete('booking');
+        return next;
       }, { replace: true });
       return;
     }
 
-    // If not in current page, fetch it via search
     const fetchAndOpen = async () => {
       try {
-        const data = await fetchCompanyReservationsPaginated({
-          search: String(bookingId),
-          page: 1,
-          perPage: 5,
-          sortOrder: 'desc',
-        });
-        const match = (data?.reservations || []).find((r) => r.id === bookingId);
+        const match = await fetchCompanyReservationById(bookingId);
         if (match) {
           openReservationPanel(match);
         }
@@ -663,8 +690,9 @@ const CompanyReservations = () => {
         console.error('[CompanyReservations] Auto-open booking error:', err);
       } finally {
         setSearchParams((prev) => {
-          prev.delete('booking');
-          return prev;
+          const next = new URLSearchParams(prev);
+          next.delete('booking');
+          return next;
         }, { replace: true });
       }
     };
@@ -810,8 +838,12 @@ const CompanyReservations = () => {
 
   const handleAccept = async (reservationId) => {
     try {
-      await acceptReservation(reservationId);
-      afterListMutation();
+      const result = await acceptReservation(reservationId);
+      const patch = result?.reservation || result || { status: 'accepted' };
+      liriePatchCompanyReservationLists(queryClient, reservationId, patch);
+      void queryClient.invalidateQueries({
+        queryKey: [LIRIE_QK_PREFIX, 'company-reservations-stats'],
+      });
     } catch (err) {
       console.error("Erreur lors de l'acceptation:", err);
     }
@@ -819,8 +851,12 @@ const CompanyReservations = () => {
 
   const handleReject = async (reservationId) => {
     try {
-      await rejectReservation(reservationId);
-      afterListMutation();
+      const result = await rejectReservation(reservationId);
+      const patch = result?.reservation || result || { status: 'canceled' };
+      liriePatchCompanyReservationLists(queryClient, reservationId, patch);
+      void queryClient.invalidateQueries({
+        queryKey: [LIRIE_QK_PREFIX, 'company-reservations-stats'],
+      });
     } catch (err) {
       console.error('Erreur lors du rejet:', err);
     }
@@ -870,6 +906,15 @@ const CompanyReservations = () => {
         isoDatetime = data.return_time.replace('T', ' ');
       } else {
         throw new Error('Format de date invalide');
+      }
+
+      const scheduleConflict = resolveReturnPickupConflict({
+        reservation: scheduleModalReservation,
+        linkedBookings: reservations,
+        returnPickupIso: String(isoDatetime).replace(' ', 'T'),
+      });
+      if (scheduleConflict) {
+        throw new Error(scheduleConflict);
       }
 
       await scheduleReservation(scheduleModalReservation.id, isoDatetime);
@@ -971,8 +1016,8 @@ const CompanyReservations = () => {
                 type="button"
                 className={styles.btnSecondary}
                 onClick={() => handleExport('operational')}
-                disabled={exporting || (totalReservations === 0 && showListSkeleton)}
-                title={totalReservations === 0 ? 'Aucune donnee a exporter' : 'Export operationnel (Passager + Origine)'}
+                disabled={exporting || showListSkeleton || (!showListSkeleton && totalReservations === 0)}
+                title={showListSkeleton ? 'Chargement…' : (totalReservations === 0 ? 'Aucune donnee a exporter' : 'Export operationnel (Passager + Origine)')}
               >
                 <FiDownload size={16} className={exporting ? styles.exportSpin : ''} />
                 {exporting ? 'Export...' : 'Exporter'}
@@ -981,8 +1026,8 @@ const CompanyReservations = () => {
                 type="button"
                 className={styles.btnSecondary}
                 onClick={() => handleExport('accounting')}
-                disabled={exporting || (totalReservations === 0 && showListSkeleton)}
-                title="Export comptable (amont, proprietaire, executant, payeur)"
+                disabled={exporting || showListSkeleton || (!showListSkeleton && totalReservations === 0)}
+                title={showListSkeleton ? 'Chargement…' : 'Export comptable (amont, proprietaire, executant, payeur)'}
               >
                 Export compta
               </button>
@@ -1003,13 +1048,13 @@ const CompanyReservations = () => {
             alertFilter={alertFilter}
             onClearAlertFilter={handleClearAlertFilter}
             onRefresh={refetchListOnly}
-            totalResults={totalReservations}
+            resultsLabel={resultsLabel}
             alerts={alerts}
             onFilterByAlert={handleFilterByAlert}
           />
 
           {/* ===== ZONE C - Resume ===== */}
-          <ReservationStats stats={stats} />
+          <ReservationStats stats={stats} loading={statsLoading} />
 
           {/* ===== ZONE D - Liste principale ===== */}
 
@@ -1023,7 +1068,7 @@ const CompanyReservations = () => {
                 onClick={() => handleTabChange(tab.id)}
               >
                 {tab.label}
-                <span className={styles.pillCount}>{tab.count}</span>
+                <span className={styles.pillCount}>{statsLoading ? '—' : tab.count}</span>
               </button>
             ))}
           </div>
@@ -1031,6 +1076,21 @@ const CompanyReservations = () => {
           {/* Main content : premier chargement = squelette tableau ; rechargements = contenu + barre d’activité */}
           {showListSkeleton ? (
             <ReservationTableSkeleton rowCount={Math.min(12, Math.max(6, reservationsPerPage))} />
+          ) : listIsError && !hasListData ? (
+            <div className={styles.emptyState}>
+              <FiInbox size={40} className={styles.emptyIcon} />
+              <h3 className={styles.emptyTitle}>Impossible de charger les réservations</h3>
+              <p className={styles.emptySubtitle}>
+                Vérifiez votre connexion puis réessayez.
+              </p>
+              <button
+                type="button"
+                className={styles.emptyCta}
+                onClick={() => refetchReservations()}
+              >
+                Réessayer
+              </button>
+            </div>
           ) : totalReservations === 0 && institutionOfferRows.length === 0 && !alertFilter ? (
             <div className={styles.emptyState}>
               <FiInbox size={40} className={styles.emptyIcon} />
@@ -1141,6 +1201,7 @@ const CompanyReservations = () => {
           <TopClients
             reservations={reservations}
             isOpen={topClientsOpen}
+            loading={showListSkeleton}
             onToggle={() => setTopClientsOpen((prev) => !prev)}
           />
 
@@ -1232,10 +1293,12 @@ const CompanyReservations = () => {
             <Suspense fallback={null}>
               <ReservationDetailPanel
                 reservation={selectedReservation}
+                linkedBookings={reservations}
                 onClose={() => setSelectedReservation(null)}
                 onSave={async (id, data) => {
-                  await updateReservation(id, data);
+                  const result = await updateReservation(id, data);
                   afterListMutation();
+                  return result?.reservation || result;
                 }}
                 onDelete={handleDeleteRequest}
                 onReservationUpdated={(updated) => {

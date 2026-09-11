@@ -69,6 +69,25 @@ class CompleteCompanyReservationUseCase:
                 status_code=400,
             )
 
+        from domain.billing.errors import BillingValidationError
+        from services.billing.booking_billing_guard import (
+            assert_non_patient_billing_complete,
+            user_message_for_incomplete_billing,
+        )
+
+        try:
+            assert_non_patient_billing_complete(
+                booking,
+                context="clôture de course",
+                require_billing_party_for_clinic=True,
+            )
+        except BillingValidationError as exc:
+            return CompleteCompanyReservationResult(
+                ok=False,
+                error={"error": user_message_for_incomplete_billing(exc)},
+                status_code=422,
+            )
+
         if bool(getattr(booking, "is_return", False)):
             set_status(booking, "status", "RETURN_COMPLETED")
         else:

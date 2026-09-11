@@ -167,6 +167,16 @@ export function getApiErrorMessage(error, fallback = 'Une erreur est survenue.')
     );
   }
 
+  const authBlob = `${d.error || ''} ${d.error_code || ''} ${d.message || ''}`.toLowerCase();
+  if (
+    d.error === 'refresh_token_revoked'
+    || d.error_code === 'session_expired'
+    || authBlob.includes('refresh token révoqué')
+    || authBlob.includes('refresh token revoque')
+  ) {
+    return 'Session expirée. Veuillez vous reconnecter.';
+  }
+
   // Réponses legacy : message utilisateur dans `error` + `error_code` (ex. validation 400)
   if (
     typeof d.error_code === 'string' &&
@@ -186,6 +196,8 @@ export function getApiErrorMessage(error, fallback = 'Une erreur est survenue.')
     const code = d.error.trim();
     const known = {
       missing_token: 'Session expirée. Veuillez vous reconnecter.',
+      refresh_token_revoked: 'Session expirée. Veuillez vous reconnecter.',
+      session_expired: 'Session expirée. Veuillez vous reconnecter.',
       payment_unavailable: 'Le paiement en ligne est temporairement indisponible.',
       saferpay_configuration: 'Configuration du prestataire de paiement (Saferpay) incomplète.',
       saferpay_initialize_failed:

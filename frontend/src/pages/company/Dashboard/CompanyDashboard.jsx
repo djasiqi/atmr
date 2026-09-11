@@ -36,8 +36,6 @@ import {
   triggerReturnBooking,
   fetchDispatchDelays,
   fetchRequestOffers,
-  acceptRequestOffer,
-  rejectRequestOffer,
   fetchCompanyReservationsPaginated,
   fetchCompanyReservations,
 } from '../../../services/companyService';
@@ -94,6 +92,8 @@ import {
   CONSTRAINED_IMMINENT_TOAST_ID,
 } from '../../../utils/companyDriverConstrainedBanner';
 import { filterVisibleInstitutionOffers } from '../../../utils/institutionOfferResponse';
+import { reconcileInstitutionOffersResponse } from '../../../utils/institutionOffersCache';
+import { useInstitutionOfferMutations } from '../../../hooks/useInstitutionOfferMutations';
 
 const DriverLiveMap = lazy(() => import('./components/DriverLiveMap'));
 const ReservationChart = lazy(() => import('./components/ReservationChart'));
@@ -200,6 +200,17 @@ const CompanyDashboard = () => {
     driversError,
     reservationsError,
   } = useCompanyData({ day: dispatchDay });
+
+  const {
+    rejectOffer,
+    acceptOffer,
+    applyRealtimeOfferEvent,
+    applyOfferUnavailable,
+  } = useInstitutionOfferMutations({
+    dispatchDay,
+    companyId: company?.id,
+    upsertReservation,
+  });
 
   const { driversForMap } = useCompanyDriversForMap(company?.id);
   const socketConnected = useSocketConnected();
@@ -632,7 +643,9 @@ const CompanyDashboard = () => {
     isLoading: loadingInstitutionOffers,
   } = useQuery({
     queryKey: lirieKeys.institutionOffers(),
-    queryFn: () => fetchRequestOffers('PENDING'),
+    queryFn: async () => (
+      reconcileInstitutionOffersResponse(await fetchRequestOffers('PENDING'))
+    ),
     staleTime: 15_000,
     refetchInterval: socketConnected ? false : 30_000,
     enabled: !!company?.id && deferredQueriesEnabled,
@@ -656,19 +669,7 @@ const CompanyDashboard = () => {
 
   const handleOfferUnavailable = useCallback(
     (payload) => {
-      const offerId = payload?.offer_id ?? payload?.metadata?.offer_id;
-      queryClient.setQueryData(lirieKeys.institutionOffers(), (old) => {
-        if (!old?.offers) return old;
-        const filtered = offerId
-          ? old.offers.filter((o) => o.id !== offerId)
-          : old.offers;
-        return {
-          ...old,
-          offers: filtered,
-          total: filtered.length,
-        };
-      });
-      refetchInstitutionOffers();
+      applyOfferUnavailable(payload);
       const institutionName =
         payload?.institution_name || payload?.metadata?.institution_name;
       toast.info(
@@ -677,7 +678,7 @@ const CompanyDashboard = () => {
           : 'Une demande institution n\'est plus disponible'
       );
     },
-    [queryClient, refetchInstitutionOffers]
+    [applyOfferUnavailable]
   );
 
   useEffect(() => {
@@ -689,12 +690,12 @@ const CompanyDashboard = () => {
   const handleInstitutionOfferUpdated = useCallback(
     (payload) => {
       if (!payload?.offer_id && !payload?.transport_request_id) return;
-      refetchInstitutionOffers();
+      void applyRealtimeOfferEvent(payload);
       if (payload?.is_relaunch) {
         toast.info('Demande institution relancée — nouvelle offre disponible');
       }
     },
-    [refetchInstitutionOffers]
+    [applyRealtimeOfferEvent]
   );
 
   useEffect(() => {
@@ -706,9 +707,9 @@ const CompanyDashboard = () => {
   const handleNewCompanyNotification = useCallback(
     (payload) => {
       if (payload?.event_type !== 'new_request') return;
-      refetchInstitutionOffers();
+      void applyRealtimeOfferEvent(payload);
     },
-    [refetchInstitutionOffers]
+    [applyRealtimeOfferEvent]
   );
 
   useEffect(() => {
@@ -941,36 +942,19 @@ const CompanyDashboard = () => {
     }
   };
 
-  const handleAcceptOffer = async (offerId, proposedPickupTime) => {
+  const handleAcceptOffer = async (offerId, proposedPickupTime, offer) => {
     try {
-      const result = await acceptRequestOffer(offerId, proposedPickupTime);
-      toast.success(
-        proposedPickupTime
-          ? 'Offre acceptée avec horaire proposé — réservation créée'
-          : 'Offre acceptée — réservation créée'
-      );
-      startTransition(() => {
-        refetchInstitutionOffers();
-        reloadReservations();
-        void lirieInvalidateCompanyReservationLists(queryClient);
-      });
-      return result;
+      return await acceptOffer(offerId, proposedPickupTime, offer);
     } catch (err) {
       console.error('[handleAcceptOffer] error:', err);
-      toast.error(err?.response?.data?.error || 'Erreur lors de l\'acceptation');
     }
   };
 
-  const handleRejectOffer = async (offerId) => {
+  const handleRejectOffer = async (offerId, offer) => {
     try {
-      await rejectRequestOffer(offerId);
-      toast.success('Offre refusée');
-      startTransition(() => {
-        refetchInstitutionOffers();
-      });
+      await rejectOffer(offerId, offer);
     } catch (err) {
       console.error('[handleRejectOffer] error:', err);
-      toast.error(err?.response?.data?.error || 'Erreur lors du refus');
     }
   };
 

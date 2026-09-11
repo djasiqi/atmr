@@ -3,9 +3,22 @@ export const AUTH_NAVIGATE_EVENT = 'lirie:navigate';
 
 export const requestAuthNavigate = (to, { replace = true } = {}) => {
   if (typeof window === 'undefined' || !to) return;
-  window.dispatchEvent(
-    new CustomEvent(AUTH_NAVIGATE_EVENT, {
-      detail: { to, replace },
-    })
-  );
+  const event = new CustomEvent(AUTH_NAVIGATE_EVENT, {
+    detail: { to, replace },
+    cancelable: true,
+  });
+  window.dispatchEvent(event);
+  if (!event.defaultPrevented) {
+    try {
+      if (replace && typeof window.location.replace === 'function') {
+        window.location.replace(to);
+      } else if (typeof window.location.assign === 'function') {
+        window.location.assign(to);
+      } else {
+        window.location.href = to;
+      }
+    } catch (_) {
+      // jsdom / tests sans Location API complète
+    }
+  }
 };

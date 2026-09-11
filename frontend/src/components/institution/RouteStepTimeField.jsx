@@ -14,6 +14,8 @@ const RouteStepTimeField = forwardRef(function RouteStepTimeField({
   inputId,
   disabled = false,
   label,
+  invalid = false,
+  describedBy,
 }, ref) {
   const handleTimeChange = (value) => {
     onTimeChange?.(value);
@@ -32,6 +34,8 @@ const RouteStepTimeField = forwardRef(function RouteStepTimeField({
           disabled={disabled}
           title={label}
           ariaLabel={label}
+          invalid={invalid}
+          describedBy={describedBy}
         />
       </div>
     </div>

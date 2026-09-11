@@ -40,8 +40,8 @@ export const reopenBillingControlBooking = async (bookingId, body = {}) => {
   return response.data;
 };
 
-export const changeBillingControlPayer = async (bookingId, data) => {
-  const response = await apiClient.put(`${BASE_PATH}/bookings/${bookingId}`, data);
+export const changeBillingControlPayer = async (bookingId, data, config = {}) => {
+  const response = await apiClient.put(`${BASE_PATH}/bookings/${bookingId}`, data, config);
   return response.data;
 };
 

@@ -4,8 +4,7 @@ import {
   FiX, FiTruck, FiMapPin, FiInfo, FiClock, FiFileText, FiUser, FiPhone,
   FiAlertCircle, FiEdit2, FiPackage, FiHome, FiTrash2,
 } from 'react-icons/fi';
-import { renderBookingDateTime } from '../../../../utils/formatDate';
-import { formatLegTime } from '../../../../utils/formatLegTime';
+import { buildScheduleDisplay, renderBookingDateTime } from '../../../../utils/formatDate';
 import {
   hasScheduledPickupTime,
 } from '../../../../utils/bookingScheduling';
@@ -17,7 +16,14 @@ import useCompanySocket from '../../../../hooks/useCompanySocket';
 import { toast } from 'sonner';
 import BookingChat from './BookingChat';
 import { isBookingChatClosed } from '../../../../utils/bookingChat';
-import { buildIdentityFromApi } from '../../../../utils/bookingIdentity';
+import { buildIdentityFromApi, isInstitutionCompanyBooking } from '../../../../utils/bookingIdentity';
+import { extractWallClockDate, extractWallClockTime } from '../../../../utils/missionTimeDisplay';
+import {
+  formatAppointmentShiftLead,
+  normalizeHhmm,
+  resolveAppointmentShift,
+} from '../../../../utils/institutionAppointmentShift';
+import { resolveReturnPickupConflict } from '../../../../utils/roundTripTemporal';
 import { resolveBookingDriverName } from '../../../../utils/bookingDriver';
 import { getBookingSourceMeta } from '../../../../constants/bookingSourceLabels';
 import {
@@ -62,6 +68,16 @@ const VOUCHER_STATUS_LABELS = {
 
 const VOUCHER_TYPE_LABELS = {
   clinic: 'Clinique', insurance: 'Assurance', other: 'Autre',
+};
+
+const INCOMPLETE_CLINIC_PAYER_MESSAGE =
+  'Facturation incomplète : cette course est facturée à une clinique, mais aucune clinique destinataire n’est sélectionnée. Choisissez la clinique cible puis validez.';
+
+const isClinicPayerMissingCompany = (btype, companyId) => {
+  const type = String(btype || '').toLowerCase();
+  if (type !== 'clinic' && type !== 'insurance') return false;
+  const n = parseInt(String(companyId ?? '').trim(), 10);
+  return !Number.isFinite(n) || n <= 0;
 };
 
 const INTENT_LABELS = {
@@ -279,12 +295,24 @@ function allowBillingAdjustByCreatedVia(res) {
   return v === 'dispatcher' || v === 'legacy' || v === 'institution_portal';
 }
 
-const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onReservationUpdated }) => {
+const ReservationDetailPanel = ({
+  reservation,
+  linkedBookings = [],
+  onClose,
+  onSave,
+  onDelete,
+  onReservationUpdated,
+}) => {
   const [vouchers, setVouchers] = useState([]);
   const [loadingVouchers, setLoadingVouchers] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const lastVoucherErrorRef = useRef(null);
   const changeRequestBannerRef = useRef(null);
+  const scheduleReconfirmBannerRef = useRef(null);
+  const [confirmingDeparture, setConfirmingDeparture] = useState(false);
+  const [reconfirmDepartureTime, setReconfirmDepartureTime] = useState(
+    () => extractWallClockTime(reservation?.scheduled_time) || '',
+  );
   const companySocket = useCompanySocket();
 
   const [editing, setEditing] = useState(false);
@@ -313,6 +341,14 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
     return !isNaN(combined.getTime()) && combined < new Date();
   }, [form.scheduled_date, form.scheduled_time, reservation]);
 
+  const returnPickupConflict = useMemo(() => resolveReturnPickupConflict({
+    reservation,
+    linkedBookings,
+    returnDate: form.scheduled_date,
+    returnTime: form.scheduled_time,
+    appointmentIso: reservation?.institution_leg_clinical?.appointment_time,
+  }), [reservation, linkedBookings, form.scheduled_date, form.scheduled_time]);
+
   const buildFormFromReservation = useCallback((r) => {
     if (!r) return {};
     const meta = r.metadata_json || {};
@@ -340,6 +376,10 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
       external_reference: meta.external_reference || r.external_reference || '',
     };
   }, []);
+
+  useEffect(() => {
+    setReconfirmDepartureTime(extractWallClockTime(reservation?.scheduled_time) || '');
+  }, [reservation?.id, reservation?.scheduled_time]);
 
   useEffect(() => {
     if (reservation) {
@@ -394,6 +434,22 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
     searchParams,
     setSearchParams,
   ]);
+
+  useEffect(() => {
+    if (searchParams.get('focus') !== 'schedule_reconfirm') return undefined;
+    if (reservation?.time_confirmed !== false) return undefined;
+
+    const timer = window.setTimeout(() => {
+      scheduleReconfirmBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('focus');
+        return next;
+      }, { replace: true });
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [reservation?.id, reservation?.time_confirmed, searchParams, setSearchParams]);
 
   const loadVouchers = useCallback(async () => {
     if (!reservation?.id) return;
@@ -450,8 +506,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
       setInstitutionChangeEvents([]);
       return;
     }
-    const meta = reservation.metadata_json || {};
-    const fromInstitution = !!meta.institution_id || !!reservation.institution_timeline;
+    const fromInstitution = isInstitutionCompanyBooking(reservation);
     if (!fromInstitution) {
       setInstitutionChangeEvents([]);
       return;
@@ -602,6 +657,10 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
       setSaveError("La date et l'heure de la course sont dans le passé. Ajustez l'horaire pour enregistrer.");
       return;
     }
+    if (returnPickupConflict) {
+      setSaveError(returnPickupConflict);
+      return;
+    }
     try {
       setSaving(true);
       setSaveError(null);
@@ -625,9 +684,11 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
       setEditing(false);
     } catch (err) {
       console.error('Erreur lors de la sauvegarde:', err);
-      const errData = err?.response?.data;
-      const message = errData?.message || errData?.error || 'Erreur lors de la sauvegarde';
-      setSaveError(message);
+      const errData = err?.response?.data || err;
+      const message = (typeof errData === 'object' && errData)
+        ? (errData.message || errData.error)
+        : null;
+      setSaveError(message || 'Erreur lors de la sauvegarde');
     } finally {
       setSaving(false);
     }
@@ -646,6 +707,17 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
       toast.error('Motif obligatoire pour clôturer une course en route.');
       return;
     }
+    const persistedType = reservation.billed_to_type || billingForm.billed_to_type;
+    if (isClinicPayerMissingCompany(persistedType, reservation.billed_to_company_id)) {
+      if (!isClinicPayerMissingCompany(billingForm.billed_to_type, billingForm.billed_to_company_id)) {
+        toast.error(
+          'Enregistrez d’abord l’ajustement de facturation (clinique cible + motif), puis validez la course.',
+        );
+        return;
+      }
+      toast.error(INCOMPLETE_CLINIC_PAYER_MESSAGE);
+      return;
+    }
     try {
       setSavingComplete(true);
       const data = await completeReservation(
@@ -656,7 +728,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
       onReservationUpdated?.(data?.reservation || data);
     } catch (e) {
       const err = e?.response?.data || e;
-      const msg = err?.error || err?.message || (typeof err === 'string' ? err : 'Échec de la clôture');
+      const msg = err?.message || err?.error || (typeof err === 'string' ? err : 'Échec de la clôture');
       toast.error(String(msg));
     } finally {
       setSavingComplete(false);
@@ -731,7 +803,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
     || null;
   const billingStatusVal = meta.billing_resolution_status;
   const isFailed = billingStatusVal && billingStatusVal.startsWith('failed');
-  const isInstitutionBooking = !!meta.institution_id || !!reservation.institution_timeline;
+  const isInstitutionBooking = isInstitutionCompanyBooking(reservation);
   const isTransferredBooking = !!reservation.is_transferred || !!reservation.active_transfer;
   const isDirectPortalClientBooking =
     !!reservation.client_id && !isInstitutionBooking && !isTransferredBooking;
@@ -783,6 +855,67 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
   const changeRequestExpiryLabel = formatChangeRequestExpiry(changeRequestSummary.expiresAt);
   const showChangeRequestBanner = isTransportActionPending(reservation.active_change_request)
     && isInstitutionBooking;
+  const showScheduleReconfirmBanner = isInstitutionBooking
+    && reservation.time_confirmed === false;
+  const appointmentShift = resolveAppointmentShift({
+    reservation,
+    events: institutionChangeEvents,
+    searchParams,
+  });
+  const appointmentShiftLead = formatAppointmentShiftLead(appointmentShift);
+  const proposedDepartureLabel = normalizeHhmm(reconfirmDepartureTime);
+  const handleConfirmProposedDeparture = async () => {
+    const hhmm = proposedDepartureLabel;
+    const missionDate = extractWallClockDate(reservation.scheduled_time)
+      || extractWallClockDate(reservation.scheduled_date)
+      || form.scheduled_date;
+    if (!onSave || !reservation?.id || !hhmm || !missionDate) {
+      toast.error('Heure de départ incomplète.');
+      return;
+    }
+    const confirmConflict = resolveReturnPickupConflict({
+      reservation,
+      linkedBookings,
+      returnDate: missionDate,
+      returnTime: hhmm,
+    });
+    if (confirmConflict) {
+      toast.error(confirmConflict);
+      return;
+    }
+    try {
+      setConfirmingDeparture(true);
+      const scheduledTime = `${missionDate}T${hhmm}:00`;
+      const saved = await onSave(reservation.id, {
+        scheduled_time: scheduledTime,
+        time_confirmed: true,
+      });
+      const scheduling = saved?.scheduling || buildScheduleDisplay({
+        scheduledTime,
+        timeConfirmed: true,
+      });
+      onReservationUpdated?.({
+        ...(saved || reservation),
+        scheduled_time: saved?.scheduled_time || scheduledTime,
+        time_confirmed: saved?.time_confirmed !== false,
+        scheduling,
+      });
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('focus');
+        next.delete('appt_from');
+        next.delete('appt_to');
+        next.delete('appointment_before');
+        next.delete('appointment_after');
+        return next;
+      }, { replace: true });
+      toast.success('Horaire de départ confirmé');
+    } catch (err) {
+      toast.error(err?.error || err?.response?.data?.error || 'Impossible de confirmer le départ.');
+    } finally {
+      setConfirmingDeparture(false);
+    }
+  };
   const isCancellationAction = reservation.active_change_request?.action_type === 'CANCELLATION';
   const respondUi = respondUiOverride
     || reservation.active_change_request?.respond_ui
@@ -946,6 +1079,48 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
 
       {/* Scrollable body */}
       <div className={s.panelBody}>
+
+        {showScheduleReconfirmBanner && (
+          <div
+            ref={scheduleReconfirmBannerRef}
+            className={s.changeRequestBanner}
+            data-testid="schedule-reconfirm-banner"
+          >
+            <p className={s.changeRequestTitle}>Rendez-vous décalé par l'institution</p>
+            <p className={s.changeRequestLead}>{appointmentShiftLead}</p>
+            <p className={s.changeRequestLead}>
+              Proposez puis confirmez votre heure de départ.
+            </p>
+            {onSave && (
+              <div className={s.reconfirmDepartureBlock}>
+                <label className={s.reconfirmDepartureLabel} htmlFor="reconfirm-departure-time">
+                  Heure de départ
+                </label>
+                <InlineTimePicker
+                  inputId="reconfirm-departure-time"
+                  value={reconfirmDepartureTime}
+                  onChange={setReconfirmDepartureTime}
+                  ariaLabel="Proposer l'heure de départ"
+                />
+                <div className={s.changeRequestActions}>
+                  <button
+                    type="button"
+                    className={s.changeRequestAcceptBtn}
+                    onClick={handleConfirmProposedDeparture}
+                    disabled={confirmingDeparture || !proposedDepartureLabel}
+                    data-testid="schedule-reconfirm-accept"
+                  >
+                    {confirmingDeparture
+                      ? 'Confirmation…'
+                      : proposedDepartureLabel
+                        ? `Confirmer le départ ${proposedDepartureLabel}`
+                        : 'Confirmer le départ'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {showChangeRequestBanner && (
           <div
@@ -1283,12 +1458,15 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                   <InlineTimePicker
                     value={form.scheduled_time}
                     onChange={(v) => handleChange('scheduled_time', v)}
-                    className={isDateTimeInPast ? s.fieldErrorInput : ''}
+                    className={(isDateTimeInPast || returnPickupConflict) ? s.fieldErrorInput : ''}
                   />
                 </div>
               </div>
               {isDateTimeInPast && (
                 <div className={s.fieldErrorHint}>La date et l'heure sont dans le passé</div>
+              )}
+              {returnPickupConflict && (
+                <div className={s.fieldErrorHint}>{returnPickupConflict}</div>
               )}
             </div>
 
@@ -1441,9 +1619,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                 <div className={s.summaryItem}>
                   <span className={s.summaryLabel}>Horaire</span>
                   <span className={s.summaryValue}>
-                    {reservation.time_confirmed === false
-                      ? formatLegTime({ scheduled_time: reservation.scheduled_time, time_confirmed: false })
-                      : renderBookingDateTime(reservation)}
+                    {renderBookingDateTime(reservation)}
                   </span>
                 </div>
                 <div className={s.summaryItem}>
@@ -1927,11 +2103,30 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                       style={{ marginBottom: 8 }}
                     />
                   )}
+                  {isClinicPayerMissingCompany(
+                    reservation.billed_to_type || billingForm.billed_to_type,
+                    reservation.billed_to_company_id,
+                  ) ? (
+                    <p className={s.saveErrorBanner} role="alert" style={{ marginBottom: 8 }}>
+                      {isClinicPayerMissingCompany(
+                        billingForm.billed_to_type,
+                        billingForm.billed_to_company_id,
+                      )
+                        ? INCOMPLETE_CLINIC_PAYER_MESSAGE
+                        : 'Enregistrez d’abord l’ajustement de facturation (clinique cible + motif), puis validez la course.'}
+                    </p>
+                  ) : null}
                   <button
                     type="button"
                     className={s.editSaveBtn}
                     onClick={handleManualComplete}
-                    disabled={savingComplete}
+                    disabled={
+                      savingComplete
+                      || isClinicPayerMissingCompany(
+                        reservation.billed_to_type || billingForm.billed_to_type,
+                        reservation.billed_to_company_id,
+                      )
+                    }
                   >
                     {savingComplete ? 'Validation…' : 'Valider la course'}
                   </button>

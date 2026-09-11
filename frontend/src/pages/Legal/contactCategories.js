@@ -9,7 +9,7 @@ export const CONTACT_CATEGORIES = [
   {
     key: 'institution',
     index: '02',
-    label: 'Institution / Integration',
+    label: 'Institution / Intégration',
     description: 'EMS, clinique, hôpital, curatelle : mise en place et intégration.',
     route: '/contact/institution',
   },

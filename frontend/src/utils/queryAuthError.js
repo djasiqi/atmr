@@ -3,7 +3,11 @@
  * et identifier les erreurs à ne jamais rejouer automatiquement.
  */
 
-import { isAuthRefreshInProgress, isMissingTokenErrorPayload } from './apiClient';
+import {
+  isAuthRefreshInProgress,
+  isMissingTokenErrorPayload,
+  isRevokedRefreshErrorPayload,
+} from './apiClient';
 
 export const AUTH_TOKEN_NOT_FRESH = 'AUTH_TOKEN_NOT_FRESH';
 export const AUTH_SESSION_EXPIRED = 'AUTH_SESSION_EXPIRED';
@@ -16,7 +20,16 @@ export const isSessionExpiredError = (error) => {
   if (error?.isSessionExpired || error?.code === AUTH_SESSION_EXPIRED) {
     return true;
   }
-  return isMissingTokenErrorPayload(error?.response?.data);
+  const data = error?.response?.data;
+  const missing = typeof isMissingTokenErrorPayload === 'function'
+    && isMissingTokenErrorPayload(data);
+  const revoked = typeof isRevokedRefreshErrorPayload === 'function'
+    ? isRevokedRefreshErrorPayload(data)
+    : Boolean(
+      data?.error === 'refresh_token_revoked'
+      || data?.error_code === 'session_expired'
+    );
+  return Boolean(missing || revoked);
 };
 
 export const isRecoverableAuthError = (error) => {

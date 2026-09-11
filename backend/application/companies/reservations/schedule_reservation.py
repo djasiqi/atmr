@@ -91,9 +91,8 @@ class ScheduleCompanyReservationUseCase:
                 status_code=400,
             )
 
-        booking.scheduled_time = sched_local
         if time_confirmed is not None:
-            booking.time_confirmed = bool(time_confirmed)
+            intended_confirmed = bool(time_confirmed)
         else:
             # Compat legacy : sentinelle 00:00 = heure à confirmer
             is_sentinel_midnight = (
@@ -101,7 +100,28 @@ class ScheduleCompanyReservationUseCase:
                 and sched_local.minute == 0
                 and sched_local.second == 0
             )
-            booking.time_confirmed = not is_sentinel_midnight
+            intended_confirmed = not is_sentinel_midnight
+
+        from application.bookings.round_trip_temporal import (
+            apply_round_trip_schedule_rules,
+            invalidate_impossible_downstream_confirmations,
+        )
+
+        conflict = apply_round_trip_schedule_rules(
+            booking,
+            intended_pickup=sched_local,
+            intended_confirmed=intended_confirmed,
+        )
+        if conflict is not None:
+            return ScheduleCompanyReservationResult(
+                ok=False,
+                error=conflict.to_error_dict(),
+                status_code=422,
+            )
+
+        booking.scheduled_time = sched_local
+        booking.time_confirmed = intended_confirmed
+        invalidate_impossible_downstream_confirmations(booking)
 
         if st == "pending":
             set_status(booking, "status", "ACCEPTED")

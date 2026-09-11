@@ -115,6 +115,10 @@ _FIELD_CHANGE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
                 "return_date",
                 "return_time_confirmed",
                 "return_scheduled_time",
+                "appointment_time",
+                "leg_appointments",
+                "return_appointment_time",
+                "time_confirmed",
             }
         ),
     ),
@@ -287,6 +291,15 @@ def build_timeline_label(event: TransportTimelineEvent) -> str:
         name = payload.get("driver_name") or ""
         return f"{base} — {name}".strip() if name else base
     if event.event_type == "field_updated":
+        before_appt = payload.get("appointment_before")
+        after_appt = payload.get("appointment_after")
+        if before_appt and after_appt:
+            return f"Rendez-vous modifié — {before_appt} → {after_appt}"
+        if payload.get("pickup_reconfirmed"):
+            pickup = payload.get("pickup_time") or ""
+            if pickup:
+                return f"Nouvel horaire de départ confirmé — {pickup}"
+            return "Nouvel horaire de départ confirmé"
         fields = payload.get("changed_fields") or []
         if isinstance(fields, dict):
             fields = list(fields.keys())

@@ -10,6 +10,7 @@ export default function AuthNavigationBridge() {
     const handler = (event) => {
       const { to, replace = true } = event?.detail || {};
       if (!to) return;
+      event.preventDefault();
       navigate(to, { replace });
     };
     window.addEventListener(AUTH_NAVIGATE_EVENT, handler);

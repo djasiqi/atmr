@@ -7,6 +7,7 @@ import BookingIdentityCell from '../../../../components/booking/BookingIdentityC
 import BookingTripBadges from '../../../../components/booking/BookingTripBadges';
 import BookingStatusBadge from '../../../../components/booking/BookingStatusBadge';
 import {
+  hasScheduledPickupTime,
   isReturnLegNeedingTime,
   needsTimeBeforeDriverAssign,
 } from '../../../../utils/bookingScheduling';
@@ -214,9 +215,11 @@ const DispatchTable = ({
             const hasActions = !noActionStatuses.includes(status);
 
             const needsTimeScheduling = needsTimeBeforeAssign;
-            const timeRequiredHintTitle = isReturnUnscheduled
-              ? "Definir l'heure de retour avant d'assigner"
-              : "Definir l'heure du trajet avant d'assigner";
+            const timeRequiredHintTitle = hasScheduledPickupTime(r)
+              ? "Confirmer l'heure de départ avant d'assigner"
+              : isReturnUnscheduled
+                ? "Definir l'heure de retour avant d'assigner"
+                : "Definir l'heure du trajet avant d'assigner";
             const timeToDefineTitle = isReturnUnscheduled
               ? 'Heure de retour a definir'
               : 'Heure du trajet a definir';
@@ -241,7 +244,7 @@ const DispatchTable = ({
 
                 {/* Colonne Heure + badge retard */}
                 <td className={styles.timeCell}>
-                  {needsTimeBeforeAssign ? (
+                  {needsTimeBeforeAssign && !hasScheduledPickupTime(r) ? (
                     <span className={styles.timeToDefine} title={timeToDefineTitle}>
                       <FiClock size={12} /> A definir
                     </span>
@@ -292,7 +295,7 @@ const DispatchTable = ({
                 >
                   {needsTimeBeforeAssign ? (
                     <span className={styles.timeRequiredHint} title={timeRequiredHintTitle}>
-                      <FiClock size={11} /> Heure requise
+                      <FiClock size={11} /> {hasScheduledPickupTime(r) ? 'À confirmer' : 'Heure requise'}
                     </span>
                   ) : onAssignDirect ? (
                     <DriverInlineSelect

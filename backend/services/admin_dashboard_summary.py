@@ -18,6 +18,7 @@ from ext import db
 from models import Booking, BookingStatus, User, UserRole
 from models.client import Client
 from models.company import Company
+from models.contact_request import ContactRequest
 from models.demo_request import DemoRequest
 from models.dispatch import DispatchRun
 from models.enums import (
@@ -119,6 +120,15 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
         db.session.scalar(
             select(func.count(DemoRequest.id)).where(
                 DemoRequest.status.in_(DEMO_OPEN_STATUSES)
+            )
+        )
+        or 0
+    )
+
+    contact_notifications_failed = (
+        db.session.scalar(
+            select(func.count(ContactRequest.id)).where(
+                ContactRequest.email_delivery_status == "failed"
             )
         )
         or 0
@@ -299,7 +309,9 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
     )
 
     open_governance = int(platform_alerts_open)
-    critical_attention_count = int(tenants_in_drift) + open_governance
+    critical_attention_count = (
+        int(tenants_in_drift) + open_governance + int(contact_notifications_failed)
+    )
     overall_status = "degraded" if critical_attention_count > 0 else "ok"
 
     # Déprécié : plus de requête mensuelle — clé conservée vide.
@@ -350,6 +362,7 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
         "priorities": {
             "bookings_pending_action": int(bookings_pending_action),
             "demo_requests_open": int(demo_requests_open),
+            "contact_notifications_failed": int(contact_notifications_failed),
             "tenants_suspended": int(tenants_suspended),
             "organizations_suspended": int(tenants_suspended),
             "platform_alerts_open": int(platform_alerts_open),

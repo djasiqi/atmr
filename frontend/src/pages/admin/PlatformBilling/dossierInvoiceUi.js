@@ -20,6 +20,7 @@ export const ACTION_LABELS = {
   VIEW: 'Consulter',
   RECALCULATE_DOSSIER: 'Calculer',
   REVIEW: 'Contrôler',
+  CLOSE_PERIOD: 'Clôturer la période',
   ISSUE: 'Émettre',
   MARK_SENT: 'Marquer comme envoyée',
   RECORD_PAYMENT: 'Enregistrer un paiement',
@@ -47,6 +48,7 @@ export const ACTION_GROUPS = [
       'EDIT_INVOICE',
       'VIEW_CREDIT_NOTE',
       'REVIEW',
+      'CLOSE_PERIOD',
       'ISSUE',
     ],
   },
@@ -101,6 +103,7 @@ export const operationalBadgeClass = (status, styleMap) => {
 export const ROW_MENU_ACTIONS = new Set([
   'DOWNLOAD_PDF',
   'RECALCULATE_DOSSIER',
+  'CLOSE_PERIOD',
   'ISSUE',
   'MARK_SENT',
 ]);

@@ -1,6 +1,6 @@
 /**
  * Résout la cible de navigation pour une notification entreprise.
- * Parcours validation modification : cloche → dispatch → panneau latéral ouvert.
+ * Parcours validation modification : cloche → dispatch / réservations → panneau ouvert.
  */
 export const resolveCompanyNotificationLink = ({
   notif,
@@ -20,6 +20,18 @@ export const resolveCompanyNotificationLink = ({
     if (bookingId) params.set('booking', String(bookingId));
     const query = params.toString();
     return query ? `${base}/reservations?${query}` : `${base}/reservations`;
+  }
+
+  if (
+    notif.event_type === 'institution_appointment_changed'
+    && bookingId
+  ) {
+    const params = new URLSearchParams({ booking: String(bookingId) });
+    params.set('focus', 'schedule_reconfirm');
+    if (meta.mission_date) params.set('date', String(meta.mission_date));
+    if (meta.appointment_before) params.set('appt_from', String(meta.appointment_before));
+    if (meta.appointment_after) params.set('appt_to', String(meta.appointment_after));
+    return `${base}/reservations?${params.toString()}`;
   }
 
   if (bookingId) {

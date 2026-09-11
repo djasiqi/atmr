@@ -1,4 +1,9 @@
-import { buildIdentityFromApi, buildOfferIdentity, matchesSearchIndex } from '../bookingIdentity';
+import {
+  buildIdentityFromApi,
+  buildOfferIdentity,
+  isInstitutionCompanyBooking,
+  matchesSearchIndex,
+} from '../bookingIdentity';
 
 describe('buildIdentityFromApi', () => {
   it('lit le bloc API identity', () => {
@@ -49,6 +54,21 @@ describe('buildOfferIdentity', () => {
     });
     expect(view.passengerLabel).toBe('HUG');
     expect(view.source.name).toBeNull();
+  });
+});
+
+describe('isInstitutionCompanyBooking', () => {
+  it('détecte une course institution via identity.source (payload liste)', () => {
+    expect(isInstitutionCompanyBooking({
+      identity: { source: { type: 'institution', name: "Clinique les Hauts d'Anières" } },
+      time_confirmed: false,
+    })).toBe(true);
+  });
+
+  it('ignore une course portefeuille propre', () => {
+    expect(isInstitutionCompanyBooking({
+      identity: { source: { type: 'company_client' } },
+    })).toBe(false);
   });
 });
 

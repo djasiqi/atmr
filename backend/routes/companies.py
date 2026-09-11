@@ -1,6 +1,7 @@
 # pyright: reportArgumentType=false
 import json
 import logging
+import time
 from contextlib import suppress
 from datetime import UTC, date, datetime, timedelta
 from http import HTTPStatus
@@ -2080,7 +2081,7 @@ class CompanyReservations(Resource):
 
         flat = request.args.get("flat", "false").lower() == "true"
         fields_mode = (request.args.get("fields") or "").strip().lower()
-        use_dashboard_fields = fields_mode == "dashboard"
+        use_dashboard_fields = fields_mode in ("dashboard", "table")
         day_str = (request.args.get("date") or "").strip()
         start_date = (request.args.get("start_date") or "").strip()
         end_date = (request.args.get("end_date") or "").strip()
@@ -2111,8 +2112,11 @@ class CompanyReservations(Resource):
         per_page = min(max(per_page, 1), 500)
 
         include_stats = request.args.get("include_stats", "true").lower() != "false"
+        stats_only = request.args.get("stats_only", "false").lower() == "true"
+        include_total = request.args.get("include_total", "true").lower() != "false"
 
         status_filter = request.args.get("status")
+        list_started = time.perf_counter()
 
         # Vérifier la plage de dates si spécifiée
         if day_str:
@@ -2174,10 +2178,36 @@ class CompanyReservations(Resource):
 
         booking_repo = BookingRepository()
         visibility_filter = booking_repo._company_visibility_filter(company_id)
+        use_union_visibility = not bool(search_term) and not bool(day_str)
+        range_filters: list = []
 
-        base_query = Booking.query.filter(visibility_filter)
+        from services.companies.booking_visibility import (
+            visible_booking_ids_topk,
+            visible_bookings_query,
+        )
 
-        # Appliquer filtre date (jour unique avec retours liés) ou plage
+        if use_union_visibility:
+            if start_date or end_date:
+                from shared.time_utils import day_local_bounds
+
+                start_local = None
+                end_local = None
+                if start_date:
+                    start_local, _ = day_local_bounds(start_date)
+                if end_date:
+                    _, end_local = day_local_bounds(end_date)
+                if start_local is not None:
+                    range_filters.append(Booking.scheduled_time >= start_local)
+                if end_local is not None:
+                    range_filters.append(Booking.scheduled_time < end_local)
+            base_query = visible_bookings_query(
+                company_id, extra_filters=range_filters
+            )
+        else:
+            base_query = Booking.query.filter(visibility_filter)
+
+        # RESERVATIONS-DATE-FILTER-PERF : ?date= garde l'OR (retours liés).
+        # Ne pas réécrire en UNION sans EXPLAIN ANALYZE dédié.
         if day_str:
             from shared.time_utils import day_local_bounds
 
@@ -2227,7 +2257,7 @@ class CompanyReservations(Resource):
                     (Booking.scheduled_time >= start_local)
                     & (Booking.scheduled_time < end_local)
                 )
-        elif start_date or end_date:
+        elif (start_date or end_date) and not use_union_visibility:
             from shared.time_utils import day_local_bounds
 
             start_local = None
@@ -2242,20 +2272,28 @@ class CompanyReservations(Resource):
                 base_query = base_query.filter(Booking.scheduled_time < end_local)
 
         stats = None
-        if include_stats:
+        if include_stats or stats_only:
             stats = _booking_stats_from_base_query(base_query)
 
+        if stats_only:
+            return {
+                "reservations": [],
+                "total": int((stats or {}).get("total") or 0),
+                "page": page,
+                "per_page": 0,
+                "total_pages": 0,
+                "stats": stats
+                or {
+                    "total": 0,
+                    "pending": 0,
+                    "inProgress": 0,
+                    "completed": 0,
+                    "canceled": 0,
+                    "revenue": 0,
+                },
+            }, 200
+
         query = base_query
-
-        from sqlalchemy.orm import joinedload
-
-        query = query.options(
-            joinedload(Booking.client).joinedload(Client.user),
-            joinedload(Booking.driver).joinedload(Driver.user),
-            joinedload(Booking.company),
-            joinedload(Booking.executing_company),
-            joinedload(Booking.billed_to_company),
-        )
 
         # Filtre par onglet
         if tab_filter:
@@ -2426,9 +2464,109 @@ class CompanyReservations(Resource):
             order_id,
         )
 
-        total = query.order_by(None).with_entities(Booking.id).count()
+        list_extras = list(range_filters)
+        if tab_filter == "pending":
+            list_extras.append(Booking.status == BookingStatus.PENDING)
+        elif tab_filter == "in_progress":
+            list_extras.append(
+                Booking.status.in_(
+                    [
+                        BookingStatus.ACCEPTED,
+                        BookingStatus.ASSIGNED,
+                        BookingStatus.EN_ROUTE,
+                        BookingStatus.IN_PROGRESS,
+                    ]
+                )
+            )
+        elif tab_filter == "completed":
+            list_extras.append(
+                Booking.status.in_(
+                    [
+                        BookingStatus.COMPLETED,
+                        BookingStatus.RETURN_COMPLETED,
+                    ]
+                )
+            )
+        elif tab_filter == "canceled":
+            list_extras.append(Booking.status == BookingStatus.CANCELED)
+        if status_filter and status_filter != "all":
+            status_key = status_filter.strip().upper()
+            if status_key == "COMPLETED":
+                list_extras.append(
+                    Booking.status.in_(
+                        [
+                            BookingStatus.COMPLETED,
+                            BookingStatus.RETURN_COMPLETED,
+                        ]
+                    )
+                )
+            else:
+                with suppress(Exception):
+                    list_extras.append(Booking.status == BookingStatus(status_key))
+        if exclude_canceled:
+            list_extras.append(Booking.status != BookingStatus.CANCELED)
 
-        reservations = query.offset((page - 1) * per_page).limit(per_page).all()
+        count_started = time.perf_counter()
+        total = None
+        if include_total:
+            if use_union_visibility:
+                total = (
+                    visible_bookings_query(company_id, extra_filters=list_extras)
+                    .order_by(None)
+                    .with_entities(func.count(Booking.id))
+                    .scalar()
+                    or 0
+                )
+            else:
+                total = (
+                    query.enable_eagerloads(False)
+                    .order_by(None)
+                    .with_entities(func.count(Booking.id))
+                    .scalar()
+                    or 0
+                )
+        count_ms = (time.perf_counter() - count_started) * 1000
+
+        fetch_started = time.perf_counter()
+        if use_union_visibility:
+            page_ids = visible_booking_ids_topk(
+                company_id,
+                extra_filters=list_extras,
+                sort_desc=sort_order != "asc",
+                offset=(page - 1) * per_page,
+                limit=per_page,
+            )
+        else:
+            page_ids = [
+                row[0]
+                for row in (
+                    query.enable_eagerloads(False)
+                    .with_entities(Booking.id)
+                    .offset((page - 1) * per_page)
+                    .limit(per_page)
+                    .all()
+                )
+            ]
+        reservations = []
+        if page_ids:
+            from sqlalchemy.orm import joinedload
+
+            loaded = (
+                Booking.query.filter(Booking.id.in_(page_ids))
+                .options(
+                    joinedload(Booking.client).joinedload(Client.user),
+                    joinedload(Booking.driver).joinedload(Driver.user),
+                    joinedload(Booking.company),
+                    joinedload(Booking.executing_company),
+                    joinedload(Booking.billed_to_company),
+                )
+                .all()
+            )
+            order_index = {bid: idx for idx, bid in enumerate(page_ids)}
+            reservations = sorted(
+                loaded, key=lambda booking: order_index.get(int(booking.id), 0)
+            )
+        fetch_ms = (time.perf_counter() - fetch_started) * 1000
 
         from services.companies.booking_transfer_cache import (
             attach_route_group_leg_counts_to_bookings,
@@ -2441,6 +2579,7 @@ class CompanyReservations(Resource):
         attach_serialize_context_to_bookings(reservations, company_id)
 
         # Retourner les données dans le format attendu par le frontend
+        serialize_started = time.perf_counter()
         try:
             serialized_reservations = []
             serializer = (
@@ -2449,15 +2588,36 @@ class CompanyReservations(Resource):
                 else (lambda b: b.serialize)
             )
             for b in reservations:
+                if use_dashboard_fields:
+                    setattr(b, "_list_projection", True)
                 serialized_reservations.append(serializer(b))
         except Exception:
             raise
+        serialize_ms = (time.perf_counter() - serialize_started) * 1000
+        logger.info(
+            "reservations_list company_id=%s page=%s per_page=%s rows=%s total=%s "
+            "count_ms=%.1f fetch_ms=%.1f serialize_ms=%.1f total_ms=%.1f list_proj=%s",
+            company_id,
+            page,
+            per_page,
+            len(serialized_reservations),
+            total,
+            count_ms,
+            fetch_ms,
+            serialize_ms,
+            (time.perf_counter() - list_started) * 1000,
+            use_dashboard_fields,
+        )
+        if total is None:
+            total_pages = None
+        else:
+            total_pages = (total + per_page - 1) // per_page if total > 0 else 0
         response_data = {
             "reservations": serialized_reservations,
             "total": total,
             "page": page,
             "per_page": per_page,
-            "total_pages": (total + per_page - 1) // per_page if total > 0 else 0,
+            "total_pages": total_pages,
         }
         if include_stats and stats is not None:
             response_data["stats"] = stats
@@ -2471,9 +2631,17 @@ class CompanyReservations(Resource):
             )
         except Exception:
             pass
+        timing_headers = {
+            "X-Lirie-Reservations-Count-Ms": f"{count_ms:.1f}",
+            "X-Lirie-Reservations-Fetch-Ms": f"{fetch_ms:.1f}",
+            "X-Lirie-Reservations-Serialize-Ms": f"{serialize_ms:.1f}",
+            "X-Lirie-Reservations-Total-Ms": f"{(time.perf_counter() - list_started) * 1000:.1f}",
+            "X-Lirie-Reservations-Rows": str(len(serialized_reservations)),
+            "X-Lirie-Reservations-Total": str(total),
+        }
         if flat:
-            return response_data, 200
-        return response_data, 200
+            return response_data, 200, timing_headers
+        return response_data, 200, timing_headers
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -3295,10 +3463,17 @@ class CompleteReservation(Resource):
         uc = CompleteCompanyReservationUseCase()
         uc_result = uc.execute(booking, reason=reason)
         if not uc_result.ok:
+            err_msg = (uc_result.error or {}).get(
+                "error", "Réservation introuvable ou pas en cours"
+            )
+            if uc_result.status_code == 422:
+                return APIErrorHandler.handle_billing_validation_error(
+                    err_msg,
+                    field="billed_to_company_id",
+                    logger_instance=logger,
+                )
             return APIErrorHandler.handle_validation_error(
-                (uc_result.error or {}).get(
-                    "error", "Réservation introuvable ou pas en cours"
-                ),
+                err_msg,
                 logger_instance=logger,
             )
 
@@ -3389,10 +3564,42 @@ class CompleteReservation(Resource):
                 "message": "Réservation complétée avec succès",
                 "reservation": booking.serialize,
             }, 200
+        except ValueError as commit_err:
+            db.session.rollback()
+            logger.warning(
+                "[CompleteReservation] commit refusé booking=%s: %s",
+                reservation_id,
+                commit_err,
+            )
+            from services.billing.booking_billing_guard import (
+                INCOMPLETE_CLINIC_PAYER_USER_MESSAGE,
+            )
+
+            msg = str(commit_err)
+            if "billed_to_company_id" in msg:
+                return APIErrorHandler.handle_billing_validation_error(
+                    INCOMPLETE_CLINIC_PAYER_USER_MESSAGE,
+                    field="billed_to_company_id",
+                    logger_instance=logger,
+                )
+            return APIErrorHandler.handle_validation_error(
+                msg, logger_instance=logger
+            )
         except Exception as e:
             # sentry_sdk.capture_exception(e)  # Si tu as Sentry
             db.session.rollback()
+            cause = str(e)
+            orig = str(getattr(e, "orig", "") or "")
+            if "billed_to_company_id" in cause or "billed_to_company_id" in orig:
+                from services.billing.booking_billing_guard import (
+                    INCOMPLETE_CLINIC_PAYER_USER_MESSAGE,
+                )
 
+                return APIErrorHandler.handle_billing_validation_error(
+                    INCOMPLETE_CLINIC_PAYER_USER_MESSAGE,
+                    field="billed_to_company_id",
+                    logger_instance=logger,
+                )
             return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -4535,6 +4742,33 @@ class TriggerReturnBooking(Resource):
                 and return_time.minute == 0
                 and return_time.second == 0
             )
+
+        if return_time_confirmed:
+            from application.bookings.round_trip_temporal import (
+                evaluate_return_chronology,
+                load_outbound,
+                resolve_destination_constraint,
+            )
+            from routes.api_error_utils import api_error
+
+            outbound_ref = (
+                load_outbound(booking)
+                if uc_result.decision.action == "modify_current"
+                else booking
+            )
+            if outbound_ref is not None:
+                conflict = evaluate_return_chronology(
+                    outbound_pickup=getattr(outbound_ref, "scheduled_time", None),
+                    return_pickup=return_time,
+                    appointment_dt=resolve_destination_constraint(outbound_ref),
+                )
+                if conflict is not None:
+                    return api_error(
+                        conflict.code,
+                        conflict.message,
+                        422,
+                        details=conflict.details,
+                    )
 
         # 3) Créer / mettre à jour le retour (toujours ACCEPTED ici)
         # P0-E : transition centralisée — un retour déjà démarré/terminé/annulé
@@ -5811,6 +6045,23 @@ class SingleReservation(Resource):
                 "error": "Bad request"
             }, uc_result.status_code or 400
 
+        schedule_updated = bool(
+            set(uc_result.updated_fields or [])
+            & {"scheduled_time", "time_confirmed"}
+        )
+        if schedule_updated and getattr(booking, "time_confirmed", False):
+            try:
+                from services.institutions.booking_change_service import (
+                    record_company_pickup_reconfirmed,
+                )
+
+                record_company_pickup_reconfirmed(booking)
+            except Exception as timeline_err:
+                logger.warning(
+                    "[UpdateReservation] pickup reconfirm timeline failed: %s",
+                    timeline_err,
+                )
+
         try:
             db.session.commit()
             logger.info(
@@ -5827,6 +6078,36 @@ class SingleReservation(Resource):
             invalidate_summary_cache_for_booking_after_day_change(
                 cid, booking, previous_summary_day
             )
+
+            if schedule_updated:
+                try:
+                    from models.transport_request import TransportRequest
+                    from services.events.institution_events import (
+                        emit_booking_status_updated,
+                    )
+
+                    linked_tr = TransportRequest.query.filter_by(
+                        booking_id=booking.id
+                    ).first()
+                    if linked_tr is not None and linked_tr.institution_id:
+                        status_now = (
+                            booking.status.value
+                            if hasattr(booking.status, "value")
+                            else str(booking.status)
+                        )
+                        emit_booking_status_updated(
+                            institution_id=int(linked_tr.institution_id),
+                            booking_id=int(booking.id),
+                            request_id=int(linked_tr.id),
+                            public_id=getattr(linked_tr, "public_id", None),
+                            old_status=status_now,
+                            new_status=status_now,
+                        )
+                except Exception as inst_emit_err:
+                    logger.warning(
+                        "[UpdateReservation] institution schedule emit failed: %s",
+                        inst_emit_err,
+                    )
 
             # Publier l'évènement domain pour fan-out temps réel (driver + company).
             # Sans ce publish, le chauffeur ne voit la modif (étage, code porte,
@@ -6546,6 +6827,22 @@ class UpdateReservation(Resource):
                 "error": "Bad request"
             }, uc_result.status_code or 400
 
+        if (
+            set(uc_result.updated_fields or []) & {"scheduled_time", "time_confirmed"}
+            and getattr(booking, "time_confirmed", False)
+        ):
+            try:
+                from services.institutions.booking_change_service import (
+                    record_company_pickup_reconfirmed,
+                )
+
+                record_company_pickup_reconfirmed(booking)
+            except Exception as timeline_err:
+                logger.warning(
+                    "[UpdateReservation] pickup reconfirm timeline failed: %s",
+                    timeline_err,
+                )
+
         try:
             db.session.commit()
             logger.info(
@@ -6686,6 +6983,15 @@ class ScheduleReservation(Resource):
             time_confirmed=data.get("time_confirmed"),
         )
         if not uc_result.ok:
+            if uc_result.status_code == 422:
+                from routes.api_error_utils import api_error
+
+                err = uc_result.error or {}
+                return api_error(
+                    err.get("error", "TEMPORAL_CONFLICT"),
+                    err.get("message") or err.get("error") or "Bad request",
+                    422,
+                )
             return APIErrorHandler.handle_validation_error(
                 (uc_result.error or {}).get("error", "Bad request"),
                 field="scheduled_time",

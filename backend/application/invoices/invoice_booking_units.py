@@ -17,10 +17,35 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
+from application.invoices.booking_schedule import comparable_scheduled_time
 from application.invoices.round_trip_booking_pairs import (
     normalize_address_for_round_trip_comparison,
 )
 from application.invoices.subject_identity import resolve_subject_identity
+
+
+def _status_value(booking: Any) -> str:
+    raw = getattr(booking, "status", None)
+    if raw is None:
+        return ""
+    if hasattr(raw, "value"):
+        return str(raw.value)
+    return str(raw)
+
+
+def is_invoice_billable_segment(booking: Any) -> bool:
+    """True si le segment peut entrer dans une opportunité / fusion A/R.
+
+    Un retour annulé non facturable (pas de frais, pas de motif) ne doit
+    jamais être rattaché automatiquement à l'aller.
+    """
+    status = _status_value(booking)
+    if status != "CANCELED":
+        return True
+    if bool(getattr(booking, "is_cancellation_billable", False)):
+        return True
+    reason = getattr(booking, "billing_override_reason", None)
+    return bool(reason and str(reason).strip())
 
 UnitKind = Literal["single", "round_trip"]
 
@@ -85,8 +110,11 @@ def _order_pair(a: Any, b: Any) -> tuple[Any, Any]:
     if b_ret and not a_ret:
         return a, b
     sa, sb = _sched(a), _sched(b)
-    if sa is not None and sb is not None and sa != sb:
-        return (a, b) if sa <= sb else (b, a)
+    if sa is not None and sb is not None:
+        sa_n = comparable_scheduled_time(sa)
+        sb_n = comparable_scheduled_time(sb)
+        if sa_n != sb_n:
+            return (a, b) if sa_n <= sb_n else (b, a)
     return (a, b) if _bid(a) <= _bid(b) else (b, a)
 
 
@@ -187,6 +215,7 @@ def resolve_invoice_booking_units(
         if expand_explicit_peers:
             work_ids = expand_explicit_peer_ids(work_ids, list(by_id.values()))
             work_ids &= set(by_id.keys())
+    work_ids = {bid for bid in work_ids if is_invoice_billable_segment(by_id[bid])}
 
     used: set[int] = set()
     units: list[BookingUnit] = []

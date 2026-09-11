@@ -2337,7 +2337,9 @@ def _validate_refresh_token(
                         refresh_token, user_id=user_model.id
                     ):
                         return None, {
-                            "error": "Refresh token révoqué ou absent du store"
+                            "error": "refresh_token_revoked",
+                            "error_code": "session_expired",
+                            "message": "Session expirée. Veuillez vous reconnecter.",
                         }
             except RefreshStoreUnavailableError:
                 return None, {
@@ -2359,11 +2361,11 @@ def _validate_refresh_token(
                     "Refresh token rejeté : token révoqué pour user %s",
                     user_public_id,
                 )
-                error_response, _ = APIErrorHandler.handle_permission_error(
-                    "Refresh token révoqué",
-                    logger_instance=logger,
-                )
-                return None, error_response
+                return None, {
+                    "error": "refresh_token_revoked",
+                    "error_code": "session_expired",
+                    "message": "Session expirée. Veuillez vous reconnecter.",
+                }
         except RefreshStoreUnavailableError:
             return None, {
                 "error": "service_unavailable",

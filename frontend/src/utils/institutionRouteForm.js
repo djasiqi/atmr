@@ -2,6 +2,8 @@
  * Initialisation parcours institution (demande / booking opérationnel).
  */
 
+import { inferDestinationType } from './institutionDestinationDetails';
+
 /** Types soins à domicile : départ au domicile patient (IMAD, curatelle). */
 export const HOME_CARE_INSTITUTION_TYPES = new Set(['imad', 'curatelle']);
 
@@ -26,6 +28,7 @@ export const routingDropoffDetails = (request) => {
     establishment: routing.dropoff_establishment || '',
     service: routing.dropoff_service || '',
     doctor: routing.dropoff_doctor || '',
+    destinationType: routing.destination_type || '',
   };
 };
 
@@ -40,26 +43,42 @@ export const buildInitialDestinations = (request, bookingSummary = null) => {
 
   if (legs.length > 0) {
     const destLegs = hasReturn ? legs.slice(0, -1) : legs;
-    return destLegs.map((leg) => ({
-      address: leg.dropoff_location || '',
-      establishment: leg.dropoff_establishment || textOrEmpty(bs.medical_facility) || '',
-      service: leg.dropoff_service || textOrEmpty(bs.hospital_service) || '',
-      doctor: leg.dropoff_doctor || textOrEmpty(bs.doctor_name) || '',
-      scheduled_time: leg.scheduled_time || '',
-      time_confirmed: Boolean(leg.time_confirmed),
-      booking_id: leg.booking_id || null,
-      leg_index: leg.sequence_index ?? null,
-      use_custom_billing: Boolean(leg.destination_billing_override),
-      destination_billing_override: leg.destination_billing_override || 'patient',
-    }));
+    return destLegs.map((leg) => {
+      const service = leg.dropoff_service || textOrEmpty(bs.hospital_service) || '';
+      const doctor = leg.dropoff_doctor || textOrEmpty(bs.doctor_name) || '';
+      return {
+        address: leg.dropoff_location || '',
+        establishment: leg.dropoff_establishment || textOrEmpty(bs.medical_facility) || '',
+        service,
+        doctor,
+        destinationType: inferDestinationType({
+          destinationType: leg.destination_type || routingDetails.destinationType,
+          service,
+          doctor,
+        }),
+        scheduled_time: leg.scheduled_time || '',
+        time_confirmed: Boolean(leg.time_confirmed),
+        booking_id: leg.booking_id || null,
+        leg_index: leg.sequence_index ?? null,
+        use_custom_billing: Boolean(leg.destination_billing_override),
+        destination_billing_override: leg.destination_billing_override || 'patient',
+      };
+    });
   }
 
   const arrivalOnRequest = request?.scheduled_time_type === 'arrival';
+  const service = textOrEmpty(bs.hospital_service) || routingDetails.service;
+  const doctor = textOrEmpty(bs.doctor_name) || routingDetails.doctor;
   return [{
     address: textOrEmpty(bs.dropoff_location || request?.dropoff_location),
     establishment: textOrEmpty(bs.medical_facility) || routingDetails.establishment,
-    service: textOrEmpty(bs.hospital_service) || routingDetails.service,
-    doctor: textOrEmpty(bs.doctor_name) || routingDetails.doctor,
+    service,
+    doctor,
+    destinationType: inferDestinationType({
+      destinationType: request?.destination_type || routingDetails.destinationType,
+      service,
+      doctor,
+    }),
     scheduled_time: arrivalOnRequest ? (request?.scheduled_time || '') : '',
     time_confirmed: arrivalOnRequest && Boolean(request?.scheduled_time),
     booking_id: bs.id || request?.booking_id || null,
@@ -98,6 +117,7 @@ export const mapDestinationsToIntermediateStops = (destinations) =>
     if (d.establishment) entry.dropoff_establishment = d.establishment;
     if (d.service) entry.dropoff_service = d.service;
     if (d.doctor) entry.dropoff_doctor = d.doctor;
+    if (d.destinationType) entry.destination_type = d.destinationType;
     if (d.use_custom_billing) {
       entry.use_custom_billing = true;
       entry.destination_billing_override = d.destination_billing_override || 'patient';

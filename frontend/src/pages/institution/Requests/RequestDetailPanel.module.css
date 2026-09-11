@@ -305,6 +305,14 @@
   color: var(--text-primary);
 }
 
+.scheduleReconfirmHint {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warning);
+}
+
 /* ── Action e-mail transporteur externe ── */
 .carrierEmailActions {
   display: flex;
@@ -1142,6 +1150,19 @@ button.needsChip:hover {
   line-height: 1.45;
   transition: border-color var(--transition), box-shadow var(--transition);
   box-sizing: border-box;
+}
+
+.fieldError {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--danger, #ef4444);
+  line-height: 1.35;
+}
+
+.editInputWrap :global(input[aria-invalid="true"]),
+.editField :global(input[aria-invalid="true"]) {
+  border-color: var(--danger, #ef4444) !important;
 }
 
 .editInputWrap { width: 100%; }

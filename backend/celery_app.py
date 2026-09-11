@@ -112,6 +112,7 @@ celery: Celery = Celery(
         "tasks.patient_sync_tasks",  # ✅ Curatelle: sync patient cross-plateforme
         "tasks.security_tasks",  # ✅ Security Tab V2: purge audit logs
         "tasks.demo_access_tasks",  # ✅ Demo 24h: expiration automatique des acces demo
+        "tasks.contact_tasks",  # Retry notifications internes de contact
         "tasks.platform_billing_tasks",  # Facturation plateforme LIRIE V1
         "tasks.saferpay_reconciliation_tasks",  # Paiements Saferpay PENDING (beat)
         "tasks.invoice_pdf_tasks",  # V2 : PDF facture transport async (file d'attente)
@@ -517,6 +518,15 @@ celery.conf.beat_schedule = {
         "options": {
             "expires": 6 * 3600,  # Expire après 6h
             "jitter": 1800,  # ✅ 2.6: Jitter jusqu'à 30 minutes
+        },
+    },
+    # Demandes de contact : retry notification interne (info@lirie.ch)
+    "retry-failed-contact-notifications": {
+        "task": "tasks.contact_tasks.retry_failed_contact_notifications",
+        "schedule": 300.0,
+        "options": {
+            "expires": 600,
+            "jitter": 30,
         },
     },
     # ✅ Demo 24h: expiration auto des acces toutes les 5 minutes

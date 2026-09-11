@@ -9,9 +9,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from marshmallow import ValidationError
+
 from application.bookings.cancellation_rules import (
     compute_cancellation_fee,
     get_cancellation_display_label,
+)
+from application.institutions.destination_details_rules import (
+    MEDICAL_DESTINATION_OR_ERROR,
+    validate_medical_destination,
 )
 from ext import db
 from models import (
@@ -168,6 +174,154 @@ def _status_value(status: Any) -> str:
     return str(getattr(status, "value", status)).upper()
 
 
+def _wall_clock_key(value: Any) -> str | None:
+    """Clé comparable date+HH:MM (heure murale mission)."""
+    if value is None or value == "":
+        return None
+    parsed = value if isinstance(value, datetime) else normalize_mission_wall_clock(value)
+    if parsed is None:
+        return None
+    return f"{parsed.date().isoformat()}T{parsed.hour:02d}:{parsed.minute:02d}"
+
+
+def _hhmm_label(value: Any) -> str:
+    key = value if isinstance(value, str) and "T" in value else _wall_clock_key(value)
+    if not key or "T" not in str(key):
+        return ""
+    return str(key).split("T", 1)[1][:5]
+
+
+def split_destination_and_return_legs(
+    legs: list[Any],
+    *,
+    return_to_institution: bool,
+) -> tuple[list[Any], Any | None]:
+    """Sépare les legs destination du leg retour institution."""
+    if return_to_institution and len(legs) > 1:
+        return list(legs[:-1]), legs[-1]
+    return list(legs), None
+
+
+def load_request_legs_ordered(transport_request: TransportRequest | None) -> list[Any]:
+    if transport_request is None or getattr(transport_request, "id", None) is None:
+        return []
+    from models.transport_request_leg import TransportRequestLeg
+
+    return (
+        TransportRequestLeg.query.filter_by(transport_request_id=transport_request.id)
+        .order_by(TransportRequestLeg.sequence_index.asc())
+        .all()
+    )
+
+
+def compute_appointment_diff(
+    *,
+    dest_keys: list[str | None],
+    return_key: str | None,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Compare les RDV demandés aux horaires persistés (identité d'index)."""
+    has_schedule_patch = any(key in payload for key in LEG_SCHEDULE_PATCH_FIELDS)
+    desired_dest = list(dest_keys)
+    desired_return = return_key
+    if has_schedule_patch:
+        leg_appointments = payload.get("leg_appointments")
+        if isinstance(leg_appointments, list):
+            for item in leg_appointments:
+                if not isinstance(item, dict):
+                    continue
+                idx = item.get("index")
+                if not isinstance(idx, int) or idx < 0 or idx >= len(desired_dest):
+                    continue
+                desired_dest[idx] = _wall_clock_key(item.get("scheduled_time"))
+        elif payload.get("appointment_time") is not None and desired_dest:
+            desired_dest[0] = _wall_clock_key(payload.get("appointment_time"))
+        if "return_appointment_time" in payload:
+            desired_return = _wall_clock_key(payload.get("return_appointment_time"))
+
+    changed_dest_indices = [
+        idx
+        for idx, (before, after) in enumerate(zip(dest_keys, desired_dest, strict=False))
+        if before != after
+    ]
+    return {
+        "changed_dest_indices": changed_dest_indices,
+        "return_changed": desired_return != return_key,
+        "before_dest": dest_keys,
+        "after_dest": desired_dest,
+        "before_return": return_key,
+        "after_return": desired_return,
+        "has_schedule_patch": has_schedule_patch,
+    }
+
+
+def invalidate_upstream_departure_confirmations(
+    transport_request: TransportRequest | None,
+    booking: Booking,
+    *,
+    changed_dest_indices: list[int],
+    dest_legs: list[Any],
+) -> list[str]:
+    """Invalide les confirmations de départ en amont d'un RDV modifié.
+
+    A→B→C : B change → départ A→B ; C change → départ B→C (booking distinct).
+    Ne touche pas les horaires indépendants en aval.
+    """
+    updated: list[str] = []
+    if transport_request is None or not changed_dest_indices:
+        return updated
+
+    if 0 in changed_dest_indices:
+        if getattr(transport_request, "pickup_time_confirmed", False):
+            transport_request.pickup_time_confirmed = False
+            updated.append("pickup_time_confirmed")
+        if getattr(booking, "time_confirmed", False):
+            booking.time_confirmed = False
+            updated.append("time_confirmed")
+        first_leg = dest_legs[0] if dest_legs else None
+        first_booking_id = getattr(first_leg, "booking_id", None) if first_leg else None
+        if first_booking_id and int(first_booking_id) != int(booking.id):
+            other = Booking.query.get(first_booking_id)
+            if other is not None and getattr(other, "time_confirmed", False):
+                other.time_confirmed = False
+                updated.append("leg[0].time_confirmed")
+
+    first_booking_id = (
+        getattr(dest_legs[0], "booking_id", None) if dest_legs else None
+    )
+    for idx in changed_dest_indices:
+        if idx <= 0 or idx >= len(dest_legs):
+            continue
+        dest_booking_id = getattr(dest_legs[idx], "booking_id", None)
+        if not dest_booking_id:
+            continue
+        if first_booking_id and int(dest_booking_id) == int(first_booking_id):
+            continue
+        if int(dest_booking_id) == int(booking.id):
+            continue
+        dest_booking = Booking.query.get(dest_booking_id)
+        if dest_booking is not None and getattr(dest_booking, "time_confirmed", False):
+            dest_booking.time_confirmed = False
+            updated.append(f"leg[{idx}].time_confirmed")
+    return updated
+
+
+def _invalidate_downstream_after_upstream_change(
+    booking: Booking,
+    *,
+    appointment_after: Any = None,
+) -> list[str]:
+    """Invalide les confirmations retour devenues impossibles après un changement amont."""
+    from application.bookings.round_trip_temporal import (
+        invalidate_impossible_downstream_confirmations,
+    )
+
+    return invalidate_impossible_downstream_confirmations(
+        booking,
+        appointment_dt=appointment_after,
+    )
+
+
 def _booking_operational_snapshot(booking: Booking) -> dict[str, Any]:
     st = booking.scheduled_time
     return {
@@ -209,6 +363,41 @@ def _billing_snapshot(booking: Booking) -> dict[str, Any]:
         "amount": float(booking.amount) if booking.amount is not None else None,
         "edit_version": int(booking.edit_version or 1),
     }
+
+
+def _normalize_operational_compare_value(key: str, value: Any) -> Any:
+    """Normalise une valeur opérationnelle pour le diff ("" ≡ None)."""
+    if key in ("wheelchair_client_has", "wheelchair_need"):
+        return bool(value)
+    if key == "scheduled_time":
+        return _wall_clock_key(value)
+    if value is None:
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+def _strip_noop_operational_patch(
+    booking: Booking, patch: dict[str, Any]
+) -> dict[str, Any]:
+    """Retire du patch les champs déjà identiques au booking persisté.
+
+    Le formulaire Enregistrer renvoie tout le snapshot (null / "").
+    Sans ce filtre, un RDV 14:00→13:00 déclenche une TransportAction
+    pour doctor_name="" vs NULL — alors que seul le RDV a changé.
+    """
+    before = _booking_operational_snapshot(booking)
+    cleaned: dict[str, Any] = {}
+    for key, value in patch.items():
+        if key not in INSTITUTION_OPERATIONAL_FIELDS:
+            continue
+        if _normalize_operational_compare_value(
+            key, before.get(key)
+        ) == _normalize_operational_compare_value(key, value):
+            continue
+        cleaned[key] = value
+    return cleaned
 
 
 def _changed_fields_map(
@@ -386,6 +575,15 @@ def record_change_event(
 
     # Dual-write timeline transport pour les modifications/annulations opérationnelles
     if action_type in ("field_updated", "cancelled"):
+        extra_timeline: dict[str, Any] = {}
+        if after_snapshot:
+            for key in (
+                "appointment_before",
+                "appointment_after",
+                "pickup_reconfirmation_required",
+            ):
+                if key in after_snapshot:
+                    extra_timeline[key] = after_snapshot[key]
         _record_change_timeline(
             booking=booking,
             transport_request=transport_request,
@@ -397,6 +595,7 @@ def record_change_event(
             changed_fields=changed_fields,
             reason=reason,
             correlation_id=event.correlation_id,
+            extra_payload=extra_timeline or None,
         )
 
     return event
@@ -414,6 +613,7 @@ def _record_change_timeline(
     changed_fields: dict[str, bool] | None,
     reason: str | None,
     correlation_id: str | None,
+    extra_payload: dict[str, Any] | None = None,
 ) -> None:
     """Réplique une modification/annulation booking dans la timeline transport."""
     try:
@@ -429,6 +629,8 @@ def _record_change_timeline(
             "reason": reason,
             "actor_name": actor_name,
         }
+        if extra_payload:
+            payload.update(extra_payload)
         if action_type == "cancelled":
             payload["cancellation_display_label"] = getattr(
                 booking, "cancellation_display_label", None
@@ -504,22 +706,23 @@ def sync_transport_request_leg_schedule(
     if transport_request is None:
         return []
 
-    from models.transport_request_leg import TransportRequestLeg
-
-    legs = (
-        TransportRequestLeg.query.filter_by(transport_request_id=transport_request.id)
-        .order_by(TransportRequestLeg.sequence_index.asc())
-        .all()
-    )
+    legs = load_request_legs_ordered(transport_request)
     if not legs:
         return []
 
     updated: list[str] = []
-    has_return = bool(getattr(transport_request, "return_to_institution", False))
-    dest_legs = legs[:-1] if has_return and len(legs) > 1 else legs
-    return_leg = legs[-1] if has_return and len(legs) > 1 else None
+    dest_legs, return_leg = split_destination_and_return_legs(
+        legs,
+        return_to_institution=bool(
+            getattr(transport_request, "return_to_institution", False)
+        ),
+    )
 
-    def _apply_leg_time(leg: TransportRequestLeg, iso: str | None, label: str) -> None:
+    def _apply_leg_time(leg: Any, iso: str | None, label: str) -> None:
+        new_key = _wall_clock_key(iso) if iso else None
+        old_key = _wall_clock_key(getattr(leg, "scheduled_time", None))
+        if new_key == old_key:
+            return
         if iso:
             # Règle d'architecture : écriture mission institution → normalize_mission_wall_clock.
             parsed = normalize_mission_wall_clock(iso)
@@ -603,7 +806,109 @@ def _simulate_after_snapshot(booking: Booking, patch: dict[str, Any]) -> dict[st
             after[key] = bool(value)
         else:
             after[key] = value
+    if "appointment_time" in patch:
+        after["appointment_time"] = _wall_clock_key(patch.get("appointment_time"))
+    if "leg_appointments" in patch:
+        after["leg_appointments"] = [
+            {
+                "index": item.get("index"),
+                "scheduled_time": _wall_clock_key(item.get("scheduled_time")),
+            }
+            for item in (patch.get("leg_appointments") or [])
+            if isinstance(item, dict)
+        ]
+    if "return_appointment_time" in patch:
+        after["return_appointment_time"] = _wall_clock_key(
+            patch.get("return_appointment_time")
+        )
     return after
+
+
+def record_company_pickup_reconfirmed(booking: Booking) -> None:
+    """Timeline institution : le transporteur a reconfirmé l'heure de départ."""
+    from services.institutions.transport_timeline_service import (
+        TimelineActor,
+        record_event,
+    )
+
+    transport_request = TransportRequest.query.filter_by(booking_id=booking.id).first()
+    if transport_request is None:
+        return
+    pickup_label = _hhmm_label(getattr(booking, "scheduled_time", None))
+    record_event(
+        "field_updated",
+        institution_id=transport_request.institution_id,
+        transport_request_id=transport_request.id,
+        booking_id=booking.id,
+        actor=TimelineActor(actor_type="company_user"),
+        payload={
+            "pickup_reconfirmed": True,
+            "pickup_time": pickup_label,
+            "changed_fields": ["scheduled_time", "pickup_time_confirmed"],
+        },
+        commit=False,
+    )
+
+
+def _notify_appointment_reconfirmation(
+    booking: Booking,
+    transport_request: TransportRequest | None,
+    *,
+    institution_id: int | None,
+    appointment_before: str,
+    appointment_after: str,
+) -> None:
+    """Notifie l'entreprise qu'un RDV a changé et que le départ est à reconfirmer."""
+    try:
+        from services.events.institution_events import persist_company_notification
+        from shared.notifications import notify_booking_update
+
+        company_id = booking.company_id or booking.executing_company_id
+        if not company_id:
+            return
+        patient = booking.customer_name or "Patient"
+        inst_name = "L'institution"
+        if institution_id:
+            from models import Institution
+
+            inst = Institution.query.get(institution_id)
+            if inst is not None and getattr(inst, "name", None):
+                inst_name = inst.name
+        title = "Horaire modifié par l'institution"
+        message = (
+            f"{inst_name} a modifié l'heure du rendez-vous de {patient} : "
+            f"{appointment_before or '—'} → {appointment_after or '—'}. "
+            "Veuillez confirmer le nouvel horaire de départ."
+        )
+        mission_date = None
+        st = getattr(booking, "scheduled_time", None)
+        if st is not None:
+            mission_date = st.date().isoformat()
+        persist_company_notification(
+            company_id=int(company_id),
+            event_type="institution_appointment_changed",
+            title=title,
+            message=message,
+            metadata={
+                "booking_id": booking.id,
+                "request_id": transport_request.id if transport_request else None,
+                "appointment_before": appointment_before,
+                "appointment_after": appointment_after,
+                "pickup_reconfirmation_required": True,
+                "mission_date": mission_date,
+                "focus": "schedule_reconfirm",
+            },
+            dedupe_key=f"inst_appt_{booking.id}_{appointment_before}_{appointment_after}",
+        )
+        notify_booking_update(
+            int(booking.driver_id or 0),
+            booking,
+            emit_to_driver=bool(booking.driver_id),
+        )
+    except Exception as notif_err:
+        logger.warning(
+            "[BookingChange] notify appointment reconfirm failed: %s", notif_err
+        )
 
 
 def supersede_pending_change_requests(
@@ -1175,6 +1480,76 @@ def cancel_institution_booking(
     }, 200
 
 
+def _persisted_destination_type(transport_request: object | None) -> str | None:
+    """Type sémantique persisté — jamais déduit de dropoff_type=other."""
+    if transport_request is None:
+        return None
+    explicit = getattr(transport_request, "destination_type", None)
+    if explicit:
+        return explicit
+    details = getattr(transport_request, "billing_details", None) or {}
+    if not isinstance(details, dict):
+        return None
+    routing = details.get("routing") or {}
+    if not isinstance(routing, dict):
+        return None
+    value = routing.get("destination_type")
+    return value if value else None
+
+
+def _medical_destination_patch_error(
+    ctx: InstitutionBookingContext, payload: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Refuse un PATCH qui vide service et médecin sur une dest. médicale.
+
+    Fusionne avec les valeurs déjà persistées : envoyer un seul des deux
+    champs ne doit pas effacer l'autre implicitement.
+    Le type sémantique vient du payload ou de ``billing_details.routing`` ;
+    ``dropoff_type=other`` n'est plus assimilé à médical.
+    """
+    if "hospital_service" not in payload and "doctor_name" not in payload:
+        return None
+
+    booking = ctx.booking
+    request = ctx.transport_request
+    service = (
+        payload["hospital_service"]
+        if "hospital_service" in payload
+        else getattr(booking, "hospital_service", None)
+    )
+    doctor = (
+        payload["doctor_name"]
+        if "doctor_name" in payload
+        else getattr(booking, "doctor_name", None)
+    )
+    mission_type = (
+        payload["mission_type"]
+        if "mission_type" in payload
+        else getattr(request, "mission_type", None)
+        or getattr(booking, "mission_type", None)
+    )
+    destination_type = (
+        payload["destination_type"]
+        if "destination_type" in payload
+        else _persisted_destination_type(request)
+    )
+
+    try:
+        validate_medical_destination(
+            service,
+            doctor,
+            destination_type=destination_type,
+            mission_type=mission_type,
+            field_name="hospital_service",
+        )
+    except ValidationError as exc:
+        details = getattr(exc, "messages", None) or {
+            "hospital_service": [MEDICAL_DESTINATION_OR_ERROR]
+        }
+        return {"error": "Données invalides", "details": details}
+    return None
+
+
 def update_institution_booking(
     ctx: InstitutionBookingContext,
     *,
@@ -1187,7 +1562,7 @@ def update_institution_booking(
     unknown = (
         set(payload.keys())
         - INSTITUTION_OPERATIONAL_FIELDS
-        - {"version", "reason"}
+        - {"version", "reason", "destination_type"}
         - LEG_SCHEDULE_PATCH_FIELDS
     )
     if unknown:
@@ -1195,6 +1570,10 @@ def update_institution_booking(
             "error": "Champs non autorisés.",
             "rejected_fields": sorted(unknown),
         }, 400
+
+    medical_err = _medical_destination_patch_error(ctx, payload)
+    if medical_err:
+        return medical_err, 400
 
     patch = {k: v for k, v in payload.items() if k in INSTITUTION_OPERATIONAL_FIELDS}
     leg_schedule_present = any(
@@ -1229,55 +1608,176 @@ def update_institution_booking(
             "error": f"Motif obligatoire (min. {MIN_CRITICAL_REASON_LEN} caractères) pour modification en route.",
         }, 400
 
+    legs = load_request_legs_ordered(ctx.transport_request)
+    dest_legs, return_leg = split_destination_and_return_legs(
+        legs,
+        return_to_institution=bool(
+            getattr(ctx.transport_request, "return_to_institution", False)
+        ),
+    )
+    appointment_diff = compute_appointment_diff(
+        dest_keys=[_wall_clock_key(getattr(leg, "scheduled_time", None)) for leg in dest_legs],
+        return_key=_wall_clock_key(
+            getattr(return_leg, "scheduled_time", None) if return_leg is not None else None
+        ),
+        payload=payload,
+    )
+    appointment_changed = bool(
+        appointment_diff["changed_dest_indices"] or appointment_diff["return_changed"]
+    )
+    logger.info(
+        "[BookingChange] appointment_diff booking=%s existing=%s incoming=%s changed=%s",
+        booking.id,
+        appointment_diff["before_dest"],
+        appointment_diff["after_dest"],
+        appointment_changed,
+    )
+    pickup_wall_changed = False
+    if "scheduled_time" in patch:
+        pickup_wall_changed = _wall_clock_key(booking.scheduled_time) != _wall_clock_key(
+            patch.get("scheduled_time")
+        )
+        if not pickup_wall_changed:
+            patch = {k: v for k, v in patch.items() if k != "scheduled_time"}
+    patch = _strip_noop_operational_patch(booking, patch)
+
     # Modèle strict V1.1 : toute modification opérationnelle post-engagement
     # → TransportAction (pas de patch direct).
+    # Exception : un changement de RDV s'applique immédiatement et invalide
+    # uniquement la confirmation de départ (le booking reste ACCEPTED).
     needs_revalidation = is_revalidation_enabled() and _company_is_committed(
         booking, status
     )
-    if needs_revalidation:
-        # Inclure les champs de planning legs dans le patch soumis à décision
-        full_patch = dict(patch)
-        for k in LEG_SCHEDULE_PATCH_FIELDS:
-            if payload.get(k) is not None:
-                full_patch[k] = payload.get(k)
-        return create_change_request(
-            ctx,
-            patch=full_patch or patch,
-            reason=reason or None,
-            actor_user_id=actor_user_id,
-            actor_role=actor_role,
-            actor_display_name=actor_display_name,
-        )
 
     before = _booking_operational_snapshot(booking)
+    first_before = (
+        appointment_diff["before_dest"][0] if appointment_diff["before_dest"] else None
+    )
+    before["appointment_time"] = first_before
+    updated_fields: list[str] = []
     try:
-        updated_fields = apply_operational_patch(booking, patch) if patch else []
-        leg_updated = sync_transport_request_leg_schedule(
-            ctx.transport_request,
-            booking,
-            appointment_time=payload.get("appointment_time"),
-            leg_appointments=payload.get("leg_appointments"),
-            return_appointment_time=payload.get("return_appointment_time"),
-        )
-        updated_fields.extend(leg_updated)
+        if appointment_changed:
+            updated_fields.extend(
+                sync_transport_request_leg_schedule(
+                    ctx.transport_request,
+                    booking,
+                    appointment_time=payload.get("appointment_time"),
+                    leg_appointments=payload.get("leg_appointments"),
+                    return_appointment_time=payload.get("return_appointment_time")
+                    if "return_appointment_time" in payload
+                    else None,
+                )
+            )
+            if _company_is_committed(booking, status):
+                updated_fields.extend(
+                    invalidate_upstream_departure_confirmations(
+                        ctx.transport_request,
+                        booking,
+                        changed_dest_indices=appointment_diff["changed_dest_indices"],
+                        dest_legs=dest_legs,
+                    )
+                )
+        if patch and not needs_revalidation:
+            updated_fields.extend(apply_operational_patch(booking, patch))
+            if (
+                appointment_changed
+                and 0 in appointment_diff["changed_dest_indices"]
+                and _company_is_committed(booking, status)
+            ):
+                # Un scheduled_time renvoyé par le formulaire ne doit pas
+                # reconfirmer implicitement l'ancien départ.
+                if getattr(booking, "time_confirmed", False):
+                    booking.time_confirmed = False
+                    updated_fields.append("time_confirmed")
+                if ctx.transport_request is not None and getattr(
+                    ctx.transport_request, "pickup_time_confirmed", False
+                ):
+                    ctx.transport_request.pickup_time_confirmed = False
+                    updated_fields.append("pickup_time_confirmed")
     except ValueError as e:
         return {"error": str(e)}, 400
+
+    if needs_revalidation:
+        remaining_after = _simulate_after_snapshot(booking, patch)
+        remaining_before = _booking_operational_snapshot(booking)
+        remaining_changed = _changed_fields_map(remaining_before, remaining_after)
+        logger.info(
+            "[BookingChange] remaining_diff booking=%s changed_keys=%s",
+            booking.id,
+            sorted(remaining_changed.keys()),
+        )
+        if remaining_changed:
+            body, code = create_change_request(
+                ctx,
+                patch=patch,
+                reason=reason or None,
+                actor_user_id=actor_user_id,
+                actor_role=actor_role,
+                actor_display_name=actor_display_name,
+            )
+            if appointment_changed and _company_is_committed(booking, status):
+                _notify_appointment_reconfirmation(
+                    booking,
+                    ctx.transport_request,
+                    institution_id=ctx.institution_id,
+                    appointment_before=_hhmm_label(first_before),
+                    appointment_after=_hhmm_label(
+                        appointment_diff["after_dest"][0]
+                        if appointment_diff["after_dest"]
+                        else None
+                    ),
+                )
+            updated_fields.extend(
+                _invalidate_downstream_after_upstream_change(
+                    booking,
+                    appointment_after=(
+                        appointment_diff["after_dest"][0]
+                        if appointment_diff.get("after_dest")
+                        else None
+                    ),
+                )
+            )
+            return body, code
+        if not appointment_changed:
+            return {"error": "Aucun champ modifié."}, 400
+
+    updated_fields.extend(
+        _invalidate_downstream_after_upstream_change(
+            booking,
+            appointment_after=(
+                appointment_diff["after_dest"][0]
+                if appointment_diff.get("after_dest")
+                else None
+            ),
+        )
+    )
 
     if not updated_fields:
         return {"error": "Aucun champ modifié."}, 400
 
+    classify_fields = set(updated_fields)
+    if appointment_changed:
+        classify_fields.add("appointment_time")
     change_class, severity, ack_required = classify_change(
-        set(updated_fields), is_en_route=is_en_route
+        classify_fields, is_en_route=is_en_route
     )
     impact = build_operational_impact(
         change_class=change_class,
         severity=severity,
         ack_required=ack_required,
         is_en_route=is_en_route,
-        changed_fields=set(updated_fields),
+        changed_fields=classify_fields,
     )
     bump_edit_version(booking)
     after = _booking_operational_snapshot(booking)
+    first_after = (
+        appointment_diff["after_dest"][0] if appointment_diff["after_dest"] else None
+    )
+    after["appointment_time"] = first_after
+    if appointment_changed:
+        after["appointment_before"] = _hhmm_label(first_before)
+        after["appointment_after"] = _hhmm_label(first_after)
+        after["pickup_reconfirmation_required"] = _company_is_committed(booking, status)
 
     event = record_change_event(
         booking=booking,
@@ -1304,11 +1804,22 @@ def update_institution_booking(
         fanout_critical_change(booking, event, ctx.transport_request)
 
     db.session.commit()
+    if appointment_changed and _company_is_committed(booking, status):
+        _notify_appointment_reconfirmation(
+            booking,
+            ctx.transport_request,
+            institution_id=ctx.institution_id,
+            appointment_before=_hhmm_label(first_before),
+            appointment_after=_hhmm_label(first_after),
+        )
     return {
         "success": True,
         "booking_id": booking.id,
         "updated_fields": updated_fields,
         "edit_version": booking.edit_version,
+        "pickup_reconfirmation_required": bool(
+            after.get("pickup_reconfirmation_required")
+        ),
         "change_event": event.serialize(),
     }, 200
 

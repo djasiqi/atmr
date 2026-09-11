@@ -139,6 +139,7 @@ function GoogleMapsRouteScope({ children }) {
 }
 const AdminSettings = lazy(() => import('./pages/admin/Settings/AdminSettings'));
 const AdminDemoRequests = lazy(() => import('./pages/admin/DemoRequests/AdminDemoRequests'));
+const AdminContactRequests = lazy(() => import('./pages/admin/ContactRequests/AdminContactRequests'));
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
 const PlatformLayout = lazy(() => import('./pages/admin/PlatformOps/PlatformLayout'));
 const PlatformOverviewPage = lazy(() => import('./pages/admin/PlatformOps/PlatformOverviewPage'));
@@ -619,6 +620,7 @@ const App = () => {
               />
               <Route path="partners/users" element={<AdminUsers />} />
               <Route path="partners/demo-requests" element={<AdminDemoRequests />} />
+              <Route path="partners/contact-requests" element={<AdminContactRequests />} />
 
               <Route path="finance" element={<AdminBillingHub />}>
                 <Route index element={<Navigate to="factures" replace />} />

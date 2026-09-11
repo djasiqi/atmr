@@ -72,6 +72,7 @@ const ReservationFilters = ({
   onClearAlertFilter,
   onRefresh,
   totalResults,
+  resultsLabel,
   alerts,
   onFilterByAlert,
 }) => {
@@ -298,9 +299,11 @@ const ReservationFilters = ({
 
       {/* Result count + Refresh */}
       <div className={styles.barMeta}>
-        {totalResults !== undefined && (
+        {(resultsLabel != null || totalResults !== undefined) && (
           <span className={styles.barResultCount}>
-            {totalResults} resultat{totalResults !== 1 ? 's' : ''}
+            {resultsLabel != null
+              ? resultsLabel
+              : `${totalResults} resultat${totalResults !== 1 ? 's' : ''}`}
           </span>
         )}
         {onRefresh && (

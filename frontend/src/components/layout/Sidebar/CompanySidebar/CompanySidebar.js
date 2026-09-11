@@ -27,6 +27,8 @@ import { useLirieCompany } from '../../../../hooks/useLirieCompany';
 import { logoutUser } from '../../../../utils/apiClient';
 import { getActiveUser, getAuthEnv } from '../../../../utils/webAuthSession';
 import { prefetchCompanyRouteChunk } from '../../CompanyEnterpriseLayout';
+import { prefetchCompanyReservationsList } from '../../../../utils/companyReservationsPrefetch';
+import { useQueryClient } from '@tanstack/react-query';
 import styles from './CompanySidebar.module.css';
 
 const ROUTE_CHUNK_LOADERS = {
@@ -42,7 +44,7 @@ const ROUTE_CHUNK_LOADERS = {
   planning: () => import('../../../../pages/company/Planning/CompanyPlanning'),
 };
 
-function prefetchForNavPath(path) {
+function prefetchForNavPath(path, queryClient) {
   if (!path || typeof path !== 'string') return;
   const segments = path.replace(/\/$/, '').split('/').filter(Boolean);
   const idx = segments.indexOf('company');
@@ -52,6 +54,9 @@ function prefetchForNavPath(path) {
     ROUTE_CHUNK_LOADERS[relative.split('/')[0]] ||
     (relative === '' ? ROUTE_CHUNK_LOADERS[''] : null);
   if (loader) prefetchCompanyRouteChunk(loader);
+  if (relative === 'reservations' || relative.split('/')[0] === 'reservations') {
+    void prefetchCompanyReservationsList(queryClient);
+  }
 }
 function getInitials(name = '') {
   const parts = name.trim().split(/\s+/).slice(0, 2);
@@ -70,6 +75,7 @@ function getSidebarWidth() {
 const CompanySidebar = () => {
   const params = useParams();
   const location = useLocation();
+  const queryClient = useQueryClient();
 
   const public_id =
     params.public_id ||
@@ -204,8 +210,8 @@ const CompanySidebar = () => {
               }
               aria-label={item.label}
               title={item.label}
-              onMouseEnter={() => prefetchForNavPath(item.path)}
-              onFocus={() => prefetchForNavPath(item.path)}
+              onMouseEnter={() => prefetchForNavPath(item.path, queryClient)}
+              onFocus={() => prefetchForNavPath(item.path, queryClient)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navText}>{item.label}</span>
@@ -235,8 +241,8 @@ const CompanySidebar = () => {
               }
               aria-label={item.label}
               title={item.label}
-              onMouseEnter={() => prefetchForNavPath(item.path)}
-              onFocus={() => prefetchForNavPath(item.path)}
+              onMouseEnter={() => prefetchForNavPath(item.path, queryClient)}
+              onFocus={() => prefetchForNavPath(item.path, queryClient)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navText}>{item.label}</span>
@@ -258,8 +264,8 @@ const CompanySidebar = () => {
               }
               aria-label={item.label}
               title={item.label}
-              onMouseEnter={() => prefetchForNavPath(item.path)}
-              onFocus={() => prefetchForNavPath(item.path)}
+              onMouseEnter={() => prefetchForNavPath(item.path, queryClient)}
+              onFocus={() => prefetchForNavPath(item.path, queryClient)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navText}>{item.label}</span>

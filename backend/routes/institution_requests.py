@@ -14,6 +14,7 @@ Endpoints:
 """
 
 import logging
+import time
 from datetime import UTC, date, datetime
 from typing import Any, cast
 
@@ -712,6 +713,7 @@ class TransportRequestList(Resource):
         Idempotence: Si external_reference est fournie et existe déjà, retourne 409.
         """
         try:
+            started = time.perf_counter()
             institution_id, user_id = get_institution_context()
 
             data = request.get_json() or {}
@@ -875,10 +877,11 @@ class TransportRequestList(Resource):
                 logger.warning("[TransportRequests] Audit log error: %s", audit_err)
 
             logger.info(
-                "[TransportRequests] Demande créée: id=%s, ext_ref=%s, institution=%s",
+                "[TransportRequests] Demande créée: id=%s, ext_ref=%s, institution=%s (%.0fms)",
                 transport_req.id,
                 ext_ref,
                 institution_id,
+                (time.perf_counter() - started) * 1000,
             )
 
             return transport_req.serialize, 201
@@ -1305,6 +1308,7 @@ class TransportRequestSend(Resource):
                 SendTransportRequestInput,
             )
 
+            started = time.perf_counter()
             institution_id, user_id = get_institution_context()
 
             # Utiliser le use case pour envoyer
@@ -1326,10 +1330,11 @@ class TransportRequestSend(Resource):
                 return {"error": "Demande non trouvée après envoi"}, 500
 
             logger.info(
-                "[TransportRequests] Demande envoyée: id=%s, mode=%s, offers=%d",
+                "[TransportRequests] Demande envoyée: id=%s, mode=%s, offers=%d (%.0fms)",
                 transport_req.id,
                 result.mode,
                 result.offers_created,
+                (time.perf_counter() - started) * 1000,
             )
 
             # Retourner avec infos sur les offres créées

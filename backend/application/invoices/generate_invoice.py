@@ -21,6 +21,7 @@ from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
     round_to_5_cents,
 )
+from application.invoices.booking_schedule import booking_schedule_sort_key
 from application.invoices.invoice_line_description import (
     build_merged_round_trip_invoice_line_description_from_segments,
 )
@@ -1161,13 +1162,7 @@ class GenerateInvoiceUseCase:
                 segs_b = [bookings_by_id[i] for i in comp if i in bookings_by_id]
                 if len(segs_b) != ROUND_TRIP_MERGE_EXACT_SEGMENTS:
                     continue
-                pri_b = min(
-                    segs_b,
-                    key=lambda b: (
-                        b.scheduled_time or datetime.min.replace(tzinfo=UTC),
-                        int(b.id),
-                    ),
-                )
+                pri_b = min(segs_b, key=booking_schedule_sort_key)
                 for sb in segs_b:
                     round_trip_primary_by_booking_id[int(sb.id)] = int(pri_b.id)
 
@@ -1226,13 +1221,7 @@ class GenerateInvoiceUseCase:
             def emit_merged_round_trip_group(segments: list[Booking]) -> None:
                 if len(segments) < ROUND_TRIP_MERGE_MIN_SEGMENTS:
                     return
-                ordered = sorted(
-                    segments,
-                    key=lambda b: (
-                        b.scheduled_time or datetime.min.replace(tzinfo=UTC),
-                        int(b.id),
-                    ),
-                )
+                ordered = sorted(segments, key=booking_schedule_sort_key)
                 primary = ordered[0]
                 d_pri = drafts[int(primary.id)]
                 base_total = round_to_5_cents(

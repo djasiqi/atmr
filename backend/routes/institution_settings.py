@@ -70,6 +70,7 @@ eligible_company_model = institution_settings_ns.model(
         "id": fields.Integer(description="ID de l'entreprise"),
         "name": fields.String(description="Nom de l'entreprise"),
         "address": fields.String(description="Adresse"),
+        "contact_email": fields.String(description="Email de contact"),
         "is_preferred": fields.Boolean(description="True si déjà dans les préférences"),
     },
 )
@@ -197,12 +198,23 @@ class TransportPreferences(Resource):
 
             # Vérifier que toutes les entreprises existent et sont éligibles
             if company_ids:
-                companies = Company.query.filter(
-                    Company.id.in_(company_ids),
-                    Company.is_approved == True,  # noqa: E712
-                ).all()
+                from sqlalchemy.orm import joinedload
 
-                found_ids = {c.id for c in companies}
+                from application.institutions.eligible_carriers import (
+                    explain_carrier_eligibility,
+                )
+
+                institution = Institution.query.get(institution_id)
+                companies = (
+                    Company.query.options(joinedload(Company.user))
+                    .filter(Company.id.in_(company_ids))
+                    .all()
+                )
+                found_ids = {
+                    company.id
+                    for company in companies
+                    if explain_carrier_eligibility(company, institution).eligible
+                }
                 missing_ids = set(company_ids) - found_ids
 
                 if missing_ids:
@@ -282,41 +294,44 @@ class EligibleCompanies(Resource):
 
         Auth: JWT institution_admin requis
 
-        Retourne uniquement les entreprises de transport approuvées,
-        en excluant toute Company liée à l'institution appelante.
+        Catalogue partenaire : approuvée (`is_approved` + `accepted_at`),
+        compte propriétaire actif, non suspendue, hors comptes test/démo.
+        `dispatch_enabled` n'est pas un critère (mode MANUAL légitime).
         """
         try:
+            import time
+
+            from application.institutions.eligible_carriers import (
+                list_eligible_transport_companies,
+            )
+
+            started = time.perf_counter()
             institution_id, _user_id = get_institution_context()
             institution = Institution.query.get(institution_id)
 
-            # Récupérer uniquement les entreprises de transport approuvées.
-            # Le filtre is_approved exclut déjà les institutions qui auraient
-            # un record Company non-approuvé (cas normal : seules les vraies
-            # entreprises de transport sont approuvées par l'admin).
-            companies = (
-                Company.query.filter(Company.is_approved.is_(True))
-                .order_by(Company.name)
-                .all()
-            )
-            from services.demo.soft_delete_guard import filter_companies_for_institution
+            companies = list_eligible_transport_companies(institution)
 
-            companies = filter_companies_for_institution(companies, institution)
-
-            # Récupérer les IDs déjà préférés
             preferred_ids = set(
                 InstitutionTransportPreference.get_company_ids_ordered(institution_id)
             )
 
-            result = []
-            for company in companies:
-                result.append(
-                    {
-                        "id": company.id,
-                        "name": company.name,
-                        "address": company.address,
-                        "is_preferred": company.id in preferred_ids,
-                    }
-                )
+            result = [
+                {
+                    "id": company.id,
+                    "name": company.name,
+                    "address": company.address,
+                    "contact_email": company.contact_email,
+                    "is_preferred": company.id in preferred_ids,
+                }
+                for company in companies
+            ]
+
+            logger.info(
+                "[InstitutionSettings] eligible-companies institution=%s total=%d (%.0fms)",
+                institution_id,
+                len(result),
+                (time.perf_counter() - started) * 1000,
+            )
 
             return {
                 "companies": result,

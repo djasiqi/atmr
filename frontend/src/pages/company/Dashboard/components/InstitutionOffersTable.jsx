@@ -244,10 +244,10 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
                     {canRespond && offerActions.canRespond ? (
                       <InstitutionOfferActions
                         offer={offer}
-                        onValidate={() => onAccept?.(offer.id)}
-                        onAcceptNow={() => onAccept?.(offer.id, computeAcceptNowPickupIso())}
+                        onValidate={() => onAccept?.(offer.id, undefined, offer)}
+                        onAcceptNow={() => onAccept?.(offer.id, computeAcceptNowPickupIso(), offer)}
                         onPlan={() => setPlanOffer(offer)}
-                        onReject={() => onReject?.(offer.id)}
+                        onReject={() => onReject?.(offer.id, offer)}
                       />
                     ) : (
                       <span style={{ color: 'var(--text-tertiary)', fontSize: '12px' }}>
@@ -332,10 +332,10 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
                 {canRespond && offerActions.canRespond ? (
                   <InstitutionOfferActions
                     offer={offer}
-                    onValidate={() => onAccept?.(offer.id)}
-                    onAcceptNow={() => onAccept?.(offer.id, computeAcceptNowPickupIso())}
+                    onValidate={() => onAccept?.(offer.id, undefined, offer)}
+                    onAcceptNow={() => onAccept?.(offer.id, computeAcceptNowPickupIso(), offer)}
                     onPlan={() => setPlanOffer(offer)}
-                    onReject={() => onReject?.(offer.id)}
+                    onReject={() => onReject?.(offer.id, offer)}
                   />
                 ) : (
                   <span className={styles.noActionLabel}>
@@ -355,7 +355,7 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
         <PlanOfferTimeModal
           offer={planOffer}
           onConfirm={(offerId, isoTime) => {
-            onAccept?.(offerId, isoTime);
+            onAccept?.(offerId, isoTime, planOffer);
             setPlanOffer(null);
           }}
           onClose={() => setPlanOffer(null)}

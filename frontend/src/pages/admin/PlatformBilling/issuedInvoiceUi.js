@@ -64,6 +64,9 @@ export const fmtDateTime = (iso) => {
   return `${day}.${month}.${d.getFullYear()} ${h}:${m}`;
 };
 
+export const SUPPORT_LINE_TYPE = 'support_time';
+export const FALLBACK_SUPPORT_HOURLY_RATE = '45';
+
 const _fmtLabelNum = (v) => {
   const n = Number(String(v ?? '').replace(',', '.'));
   if (!Number.isFinite(n)) return null;
@@ -71,17 +74,49 @@ const _fmtLabelNum = (v) => {
   return String(rounded).replace(/\.?0+$/, '') || '0';
 };
 
+export const formatSupportHoursLabel = (hours, rate) => {
+  const hoursTxt = _fmtLabelNum(hours);
+  if (hoursTxt == null) return '';
+  const rateTxt = _fmtLabelNum(rate);
+  if (rateTxt != null) return `Support plateforme — ${hoursTxt} h à ${rateTxt} CHF/h`;
+  return `Support plateforme — ${hoursTxt} h`;
+};
+
+/** Ligne d'heures de support (type métier, libellé, ou qté × prix sans libellé). */
+export const isSupportInvoiceLine = (line) => {
+  const lt = String(line?.line_type || '').toLowerCase();
+  const label = String(line?.label || '').trim();
+  const mode = String(line?.calculation_mode || '').toUpperCase();
+  if (lt.includes('support')) return true;
+  if (/^support/i.test(label)) return true;
+  if (mode === 'UNIT_PRICE' && !label) return true;
+  return false;
+};
+
+/**
+ * Resynchronise le libellé auto support et pose `support_time` si besoin.
+ */
+export const syncDerivedInvoiceLine = (line) => {
+  if (!line || String(line.calculation_mode || '').toUpperCase() !== 'UNIT_PRICE') {
+    return line;
+  }
+  if (!isSupportInvoiceLine(line)) return line;
+  const lt = String(line.line_type || '').trim();
+  const nextType =
+    !lt || lt.toUpperCase() === 'ADJUSTMENT' ? SUPPORT_LINE_TYPE : lt;
+  const derived = formatSupportHoursLabel(line.quantity, line.unit_amount);
+  if (!derived) return { ...line, line_type: nextType };
+  return { ...line, line_type: nextType, label: derived };
+};
+
 /**
  * Libellé d'affichage cohérent avec qté × prix (évite « 2 h » si qté = 1).
  */
 export const displayInvoiceLineLabel = (line) => {
   const raw = (line?.label || line?.line_type || 'Ligne').trim();
-  const lt = String(line?.line_type || '').toLowerCase();
-  const isSupport = lt.includes('support') || /^support/i.test(raw);
-  if (!isSupport) return raw || 'Ligne';
-  const hours = _fmtLabelNum(line?.quantity);
-  const rate = _fmtLabelNum(line?.unit_amount);
-  if (hours == null) return raw || 'Ligne';
-  if (rate != null) return `Support plateforme — ${hours} h à ${rate} CHF/h`;
-  return `Support plateforme — ${hours} h`;
+  if (!isSupportInvoiceLine(line) && !/^support/i.test(raw)) {
+    return raw || 'Ligne';
+  }
+  const derived = formatSupportHoursLabel(line?.quantity, line?.unit_amount);
+  return derived || raw || 'Ligne';
 };

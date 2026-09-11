@@ -89,6 +89,8 @@ def _passenger_name(booking: Any) -> str:
 
 
 def _get_institution_timeline(booking: Any) -> dict[str, Any] | None:
+    if getattr(booking, "_list_projection", False):
+        return None
     fn = getattr(booking, "_get_institution_timeline", None)
     if callable(fn):
         result = fn()
@@ -98,6 +100,10 @@ def _get_institution_timeline(booking: Any) -> dict[str, Any] | None:
 
 
 def _get_active_transfer(booking: Any) -> dict[str, Any] | None:
+    cache = getattr(booking, "_transfer_cache", None)
+    if isinstance(cache, dict):
+        result = cache.get("active_transfer")
+        return result if isinstance(result, dict) else None
     fn = getattr(booking, "_get_active_transfer_info", None)
     if callable(fn):
         result = fn()
@@ -107,14 +113,22 @@ def _get_active_transfer(booking: Any) -> dict[str, Any] | None:
 
 
 def _has_institution_origin(booking: Any) -> bool:
+    cli = getattr(booking, "client", None)
+    if cli and getattr(cli, "linked_institution_id", None):
+        return True
+    created_via = getattr(booking, "created_via", None)
+    created_via_val = (
+        created_via.value if hasattr(created_via, "value") else created_via
+    )
+    if str(created_via_val or "").lower() == "institution_portal":
+        return True
+    if getattr(booking, "_list_projection", False):
+        return False
     timeline = _get_institution_timeline(booking)
     if timeline and timeline.get("institution_name"):
         return True
     reqs = getattr(booking, "source_request", None)
-    if reqs:
-        return True
-    cli = getattr(booking, "client", None)
-    return bool(cli and getattr(cli, "linked_institution_id", None))
+    return bool(reqs)
 
 
 def _resolve_institution_ref(booking: Any) -> dict[str, Any] | None:
@@ -289,6 +303,8 @@ def resolve_booking_source(
 
 
 def _passenger_birth_date(booking: Any) -> str | None:
+    if getattr(booking, "_list_projection", False):
+        return None
     fn = getattr(booking, "_get_institution_passenger_brief", None)
     if callable(fn):
         brief = fn()
@@ -300,13 +316,14 @@ def _passenger_birth_date(booking: Any) -> str | None:
 
 
 def _passenger_gender(booking: Any) -> str | None:
-    fn = getattr(booking, "_get_institution_passenger_brief", None)
-    if callable(fn):
-        brief = fn()
-        if isinstance(brief, dict):
-            raw = brief.get("gender")
-            if raw:
-                return str(raw)
+    if not getattr(booking, "_list_projection", False):
+        fn = getattr(booking, "_get_institution_passenger_brief", None)
+        if callable(fn):
+            brief = fn()
+            if isinstance(brief, dict):
+                raw = brief.get("gender")
+                if raw:
+                    return str(raw)
     cli = getattr(booking, "client", None)
     cli_user = getattr(cli, "user", None) if cli is not None else None
     gender_raw = getattr(cli_user, "gender", None) if cli_user is not None else None
@@ -482,6 +499,9 @@ def build_booking_scheduling(booking: Any) -> dict[str, Any]:
 
     display_time = "À définir"
     display_datetime = "À définir"
+    is_return = bool(getattr(booking, "is_return", False)) or bool(
+        getattr(booking, "_is_return_leg_from_topology", False)
+    )
     if scheduled_dt is not None and time_scheduled:
         date_local, time_local = split_date_time_local(scheduled_dt)
         if time_defined and time_local:
@@ -490,6 +510,12 @@ def build_booking_scheduling(booking: Any) -> dict[str, Any]:
                 display_datetime = f"{date_local} • {time_local}"
             else:
                 display_datetime = time_local
+        elif time_local and is_return:
+            display_time = "À confirmer"
+            if date_local:
+                display_datetime = f"{date_local} • À confirmer"
+            else:
+                display_datetime = "À confirmer"
         elif time_local:
             display_time = f"{time_local} (non confirmé)"
             if date_local:
@@ -525,6 +551,8 @@ def _route_group_leg_count(booking: Any) -> int:
     group_id = getattr(booking, "route_group_id", None)
     if not group_id:
         return 1
+    if getattr(booking, "_list_projection", False):
+        return 1
     try:
         from models.booking import Booking
 
@@ -546,7 +574,10 @@ def build_booking_trip_flags(
         is_return_leg = is_return_classic
 
     is_round_trip = bool(getattr(booking, "is_round_trip", False))
-    has_return = getattr(booking, "return_trip", None) is not None
+    if getattr(booking, "_list_projection", False):
+        has_return = is_round_trip
+    else:
+        has_return = getattr(booking, "return_trip", None) is not None
     round_trip = (not is_return_leg) and (is_round_trip or has_return)
 
     leg_count = _route_group_leg_count(booking)
@@ -564,11 +595,14 @@ def build_booking_trip_flags(
         transferred = int(booking.executing_company_id) != int(booking.company_id)
 
     change_pending = False
-    acr = getattr(booking, "active_change_request", None)
-    if acr is not None:
-        st = getattr(acr, "status", None)
-        st_val = st.value if hasattr(st, "value") else str(st or "").lower()
-        change_pending = st_val in _CHANGE_REQUEST_PENDING_STATUSES
+    if getattr(booking, "_list_projection", False):
+        change_pending = getattr(booking, "active_change_request_id", None) is not None
+    else:
+        acr = getattr(booking, "active_change_request", None)
+        if acr is not None:
+            st = getattr(acr, "status", None)
+            st_val = st.value if hasattr(st, "value") else str(st or "").lower()
+            change_pending = st_val in _CHANGE_REQUEST_PENDING_STATUSES
 
     return {
         "round_trip": round_trip,

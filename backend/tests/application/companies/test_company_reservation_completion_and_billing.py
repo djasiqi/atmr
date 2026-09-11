@@ -28,6 +28,8 @@ def test_complete_accepted_ok(monkeypatch):
     b.status = "accepted"
     b.is_return = False
     b.completed_at = None
+    b.billed_to_type = "patient"
+    b.billed_to_company_id = None
     r = uc.execute(b, reason=None)
     assert r.ok is True
     assert r.from_en_route_manual is False
@@ -39,6 +41,8 @@ def test_complete_assigned_ok(monkeypatch):
     b.status = "assigned"
     b.is_return = False
     b.completed_at = None
+    b.billed_to_type = "patient"
+    b.billed_to_company_id = None
     r = uc.execute(b, reason=None)
     assert r.ok is True
     assert r.from_en_route_manual is False
@@ -50,9 +54,26 @@ def test_complete_in_progress_ok(monkeypatch):
     b.status = "in_progress"
     b.is_return = False
     b.completed_at = None
+    b.billed_to_type = "patient"
+    b.billed_to_company_id = None
     r = uc.execute(b, reason=None)
     assert r.ok is True
     assert r.from_en_route_manual is False
+
+
+def test_complete_rejects_clinic_without_company_id():
+    uc = CompleteCompanyReservationUseCase()
+    b = MagicMock()
+    b.status = "accepted"
+    b.is_return = False
+    b.id = 39523
+    b.billed_to_type = "clinic"
+    b.billed_to_company_id = None
+    b.billing_party_id = 11
+    r = uc.execute(b, reason=None)
+    assert r.ok is False
+    assert r.status_code == 422
+    assert "clinique" in (r.error or {}).get("error", "").lower()
 
 
 def test_complete_rejects_pending():
@@ -86,6 +107,8 @@ def test_complete_en_route_ok(monkeypatch):
     b.status = "en_route"
     b.is_return = False
     b.completed_at = None
+    b.billed_to_type = "patient"
+    b.billed_to_company_id = None
     r = uc.execute(b, reason="Chauffeur bloqué")
     assert r.ok is True
     assert r.from_en_route_manual is True

@@ -17,6 +17,7 @@ from typing import Any, cast
 
 from sqlalchemy.orm import joinedload
 
+from application.invoices.booking_schedule import booking_schedule_sort_key
 from ext import db
 from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
@@ -469,12 +470,7 @@ def _split_single_merged_round_trip_line(
     ordered = [by_id[i] for i in booking_ids if i in by_id]
     if len(ordered) < 2:
         return False
-    ordered.sort(
-        key=lambda b: (
-            getattr(b, "scheduled_time", None) or datetime.min.replace(tzinfo=UTC),
-            int(b.id),
-        )
-    )
+    ordered.sort(key=booking_schedule_sort_key)
     outbound_b = ordered[0]
     return_b = ordered[-1]
     keep_booking = outbound_b if keep_leg == "outbound" else return_b

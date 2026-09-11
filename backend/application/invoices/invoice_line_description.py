@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from application.bookings.cancellation_rules import get_cancellation_display_label
+from application.invoices.booking_schedule import booking_schedule_sort_key
 from application.invoices.booking_status import booking_status_is_canceled
 from infrastructure.invoices.invoice_description_builder import (
     InvoiceDescriptionBuilder,
@@ -162,13 +162,7 @@ def build_merged_round_trip_invoice_line_description_from_segments(
     if base:
         return base
     if segment_bookings:
-        ordered = sorted(
-            segment_bookings,
-            key=lambda b: (
-                b.scheduled_time or datetime.min,
-                int(b.id or 0),
-            ),
-        )
+        ordered = sorted(segment_bookings, key=booking_schedule_sort_key)
         first = ordered[0]
         pu = (getattr(first, "pickup_location", None) or "").strip()
         do = (getattr(first, "dropoff_location", None) or "").strip()

@@ -8,8 +8,11 @@ from .dispatcher import (
     CONTACT_CATEGORY_TO_ENV,
     build_contact_email_body,
     get_destination_email,
+    get_sender_email,
     send_contact_notification,
+    send_internal_contact_notification,
 )
+from .retry import retry_failed_internal_notifications
 from .scoring import compute_priority
 from .spam_guard import (
     CONTACT_RATE_LIMITS,
@@ -27,9 +30,12 @@ __all__ = [
     "current_window_bucket",
     "find_recent_duplicate",
     "get_destination_email",
+    "get_sender_email",
     "in_cooldown",
     "is_silent_spam",
     "minimal_spam_payload",
     "normalize_message",
+    "retry_failed_internal_notifications",
     "send_contact_notification",
+    "send_internal_contact_notification",
 ]

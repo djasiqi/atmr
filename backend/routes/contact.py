@@ -29,6 +29,7 @@ from services.contact.spam_guard import (
     is_silent_spam,
     minimal_spam_payload,
 )
+from services.contact.status import apply_contact_notification_result
 from services.demo.dispatcher import get_demo_destination_email
 from services.demo.scoring import compute_demo_score
 from shared.input_sanitizer import (
@@ -403,8 +404,9 @@ class ContactRequests(Resource):
                     "institution_id": auth_context["institution_id"],
                     "status": "spam",
                     "priority": "standard",
-                    "assigned_channel": get_destination_email(category),
+                    "assigned_channel": get_destination_email(),
                     "email_delivery_status": "suppressed_spam",
+                    "autoreply_delivery_status": "suppressed_spam",
                     "trace_id": spam_trace,
                 }
             )
@@ -417,7 +419,7 @@ class ContactRequests(Resource):
             return {"ok": True, "trace_id": duplicate.trace_id}, 200
 
         priority = compute_priority(sanitized_data)
-        destination_email = get_destination_email(category)
+        destination_email = get_destination_email()
         payload_json = {
             key: value
             for key, value in sanitized_data.items()
@@ -458,6 +460,8 @@ class ContactRequests(Resource):
                 "priority": priority,
                 "assigned_channel": destination_email,
                 "email_delivery_status": "pending",
+                "autoreply_delivery_status": "pending",
+                "notification_retry_count": 0,
                 "trace_id": trace_id,
             }
         )
@@ -470,6 +474,7 @@ class ContactRequests(Resource):
                 dedupe_hash, contact_request.id
             ) or not _acquire_email_send_lock(dedupe_hash, trace_id):
                 contact_request.email_delivery_status = "suppressed_duplicate"
+                contact_request.autoreply_delivery_status = "suppressed_duplicate"
                 contact_request.status = "triaged"
                 db.session.commit()
                 return {"ok": True, "trace_id": trace_id}, 200
@@ -478,7 +483,6 @@ class ContactRequests(Resource):
             if updated == 0:
                 return {"ok": True, "trace_id": trace_id}, 200
 
-            email_sent = False
             try:
                 email_result = send_contact_notification(
                     {
@@ -488,14 +492,21 @@ class ContactRequests(Resource):
                         "category": category,
                         "payload_json": payload_json,
                         "trace_id": trace_id,
+                        "created_at": getattr(contact_request, "created_at", None),
                     }
                 )
-                email_sent = bool(email_result.get("ok"))
-            except Exception:
+                apply_contact_notification_result(contact_request, email_result)
+            except Exception as exc:
                 logger.exception("contact_email_send_failed trace_id=%s", trace_id)
-
-            contact_request.email_delivery_status = "sent" if email_sent else "failed"
-            contact_request.status = "triaged" if email_sent else "new"
+                apply_contact_notification_result(
+                    contact_request,
+                    {
+                        "ok": False,
+                        "internal_ok": False,
+                        "internal_error": str(exc)[:512],
+                        "destination": destination_email,
+                    },
+                )
             db.session.commit()
         except Exception:
             db.session.rollback()

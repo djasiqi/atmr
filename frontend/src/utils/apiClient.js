@@ -412,6 +412,26 @@ export const isMissingTokenErrorPayload = (errorData = {}) => {
   );
 };
 
+/** Refresh token révoqué / session invalide (ne pas afficher comme erreur de permission). */
+export const isRevokedRefreshErrorPayload = (errorData = {}) => {
+  if (!errorData || typeof errorData !== 'object') {
+    return false;
+  }
+  const code = (errorData.error || '').toString().toLowerCase();
+  const errorCode = (errorData.error_code || '').toString().toLowerCase();
+  const msg = [
+    errorData.error,
+    errorData.message,
+    errorData.msg,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return (
+    code === 'refresh_token_revoked' ||
+    errorCode === 'session_expired' ||
+    msg.includes('refresh token révoqué') ||
+    msg.includes('refresh token revoque')
+  );
+};
+
 /** Échec de refresh réellement terminal (auth morte) — pas réseau / 5xx / 429. */
 export const isTerminalRefreshFailure = (error) => {
   const status = error?.response?.status;
@@ -425,7 +445,7 @@ export const isTerminalRefreshFailure = (error) => {
 };
 
 const requestTerminalSessionLogout = (cfg = {}) => {
-  if (cfg.skipFreshTokenLogout || cfg.skipAuthRedirect || isLoginSessionInProgress()) {
+  if (cfg.skipFreshTokenLogout || isLoginSessionInProgress()) {
     return;
   }
   void logoutUser({
@@ -580,7 +600,6 @@ const SESSION_EXPIRED_MESSAGE = 'Session expirée. Veuillez vous reconnecter.';
 const requestImmediateSessionLogout = (cfg = {}) => {
   if (
     cfg.skipFreshTokenLogout ||
-    cfg.skipAuthRedirect ||
     isLoginSessionInProgress() ||
     isExplicitLogoutInProgress()
   ) {
@@ -793,6 +812,18 @@ apiClient.interceptors.response.use(
     // Message sympa pour 429 (limiter)
     if (status === 429) {
       console.warn('Vous avez effectué trop de requêtes. Merci de patienter un peu.');
+    }
+
+    // Refresh mort : couper la session même si skipAuthRedirect (heartbeat, autocomplete…).
+    if (
+      status === 401
+      && (requestUrl.includes('/auth/refresh-token') || requestUrl.includes('/auth/refresh'))
+      && !requestUrl.includes('/auth/refresh-session')
+    ) {
+      if (isRevokedRefreshErrorPayload(error?.response?.data) || isTerminalRefreshFailure(error)) {
+        expireCurrentWebSession({ reason: 'session_expired' });
+      }
+      return Promise.reject(error);
     }
 
     // ✅ Gestion 401 avec refresh automatique

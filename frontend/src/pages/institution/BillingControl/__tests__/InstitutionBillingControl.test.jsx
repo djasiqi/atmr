@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import InstitutionBillingControl from '../InstitutionBillingControl';
+import { toast } from 'sonner';
 
 const mockRefetch = jest.fn();
 
@@ -152,34 +153,167 @@ describe('InstitutionBillingControl — U05–U16', () => {
     expect(screen.getByText('Retour')).toBeInTheDocument();
   });
 
-  it('U09/U10 — changement payeur déclenche mutation serveur', async () => {
+  it('U09/U10 — changement payeur affiche la valeur immédiatement sans refetch', async () => {
     const user = userEvent.setup();
-    const mutateAsync = jest.fn().mockResolvedValue({ success: true });
+    let resolveMut;
+    const mutateAsync = jest.fn().mockImplementation(
+      () => new Promise((resolve) => { resolveMut = resolve; }),
+    );
     hooks.useChangeBillingControlPayer.mockReturnValue({ mutateAsync });
     renderPage();
-    await user.selectOptions(screen.getByTestId('payer-select-101'), 'patient');
+    const select = screen.getByTestId('payer-select-101');
+    expect(select).toHaveValue('clinic');
+    await user.selectOptions(select, 'patient');
+    expect(select).toHaveValue('patient');
+    expect(screen.getByTestId('billing-control-summary').textContent.replace(/\s+/g, ' '))
+      .toMatch(/0 Clinique/);
+    expect(screen.getByTestId('billing-control-summary').textContent.replace(/\s+/g, ' '))
+      .toMatch(/2 Patient/);
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bookingId: 101,
+        payerType: 'patient',
+        data: expect.objectContaining({ billing_intent: 'patient' }),
+      }),
+    );
+    expect(mockRefetch).not.toHaveBeenCalled();
+    resolveMut({ success: true });
     await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({
-          bookingId: 101,
-          data: expect.objectContaining({ billing_intent: 'patient' }),
-        }),
-      );
+      expect(mutateAsync).toHaveBeenCalledTimes(1);
     });
-    expect(mockRefetch).toHaveBeenCalled();
+    expect(mockRefetch).not.toHaveBeenCalled();
   });
 
-  it('U11 — Valider déclenche mutation', async () => {
+  it('U09b — échec payeur : rollback + message', async () => {
     const user = userEvent.setup();
-    const mutateAsync = jest.fn().mockResolvedValue({ success: true });
-    hooks.useValidateBillingControlBooking.mockReturnValue({ mutateAsync });
+    const mutateAsync = jest.fn().mockRejectedValue(new Error('réseau'));
+    hooks.useChangeBillingControlPayer.mockReturnValue({ mutateAsync });
     renderPage();
-    await user.click(screen.getByRole('button', { name: /Valider/i }));
+    const select = screen.getByTestId('payer-select-101');
+    await user.selectOptions(select, 'patient');
     await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ bookingId: 101 }),
+      expect(toast.error).toHaveBeenCalledWith(
+        "Le payeur n'a pas pu être modifié. Réessayez.",
       );
     });
+    expect(select).toHaveValue('clinic');
+    expect(screen.getByTestId('billing-control-summary').textContent.replace(/\s+/g, ' '))
+      .toMatch(/1 Clinique/);
+  });
+
+  it('U09c — changement rapide : une réponse stale n’écrase pas le dernier choix', async () => {
+    const user = userEvent.setup();
+    const pending = [];
+    const mutateAsync = jest.fn().mockImplementation(
+      () => new Promise((resolve, reject) => { pending.push({ resolve, reject }); }),
+    );
+    hooks.useChangeBillingControlPayer.mockReturnValue({ mutateAsync });
+    renderPage();
+    const select = screen.getByTestId('payer-select-101');
+    await user.selectOptions(select, 'patient');
+    await user.selectOptions(select, 'clinic');
+    expect(select).toHaveValue('clinic');
+    expect(mutateAsync).toHaveBeenCalledTimes(2);
+    pending[0].reject(new Error('stale'));
+    await waitFor(() => {
+      expect(select).toHaveValue('clinic');
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+    pending[1].resolve({ success: true });
+  });
+
+  it('U11 — Valider affiche Validé immédiatement sans refetch', async () => {
+    const user = userEvent.setup();
+    let resolveMut;
+    const mutateAsync = jest.fn().mockImplementation(
+      () => new Promise((resolve) => { resolveMut = resolve; }),
+    );
+    hooks.useValidateBillingControlBooking.mockReturnValue({ mutateAsync });
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /✓ Valider/i }));
+
+    const row = document.querySelector('[data-booking-id="101"]');
+    expect(row).toHaveTextContent('✓ Validé');
+    expect(row).not.toHaveTextContent('À vérifier');
+    expect(screen.queryByRole('button', { name: /✓ Valider/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Signaler une anomalie/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('billing-control-summary').textContent.replace(/\s+/g, ' '))
+      .toMatch(/2 Validés/);
+    expect(screen.getByTestId('billing-control-summary').textContent.replace(/\s+/g, ' '))
+      .toMatch(/0 À vérifier/);
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ bookingId: 101 }),
+    );
+    expect(mockRefetch).not.toHaveBeenCalled();
+
+    resolveMut({ success: true, control: { control_status: 'validated' } });
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledTimes(1);
+    });
+    expect(mockRefetch).not.toHaveBeenCalled();
+  });
+
+  it('U11b — échec validation : rollback ligne + compteurs + message', async () => {
+    const user = userEvent.setup();
+    const mutateAsync = jest.fn().mockRejectedValue(new Error('réseau'));
+    hooks.useValidateBillingControlBooking.mockReturnValue({ mutateAsync });
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /✓ Valider/i }));
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        "La validation n'a pas pu être enregistrée. Réessayez.",
+      );
+    });
+    const row = document.querySelector('[data-booking-id="101"]');
+    expect(row).toHaveTextContent('À vérifier');
+    expect(screen.getByRole('button', { name: /✓ Valider/i })).toBeInTheDocument();
+    expect(screen.getByTestId('billing-control-summary').textContent.replace(/\s+/g, ' '))
+      .toMatch(/1 Validés/);
+    expect(screen.getByTestId('billing-control-summary').textContent.replace(/\s+/g, ' '))
+      .toMatch(/1 À vérifier/);
+  });
+
+  it('U11c — validations en série indépendantes', async () => {
+    const user = userEvent.setup();
+    const pendingCalls = [];
+    const mutateAsync = jest.fn().mockImplementation(({ bookingId }) => (
+      new Promise((resolve) => {
+        pendingCalls.push({ bookingId, resolve });
+      })
+    ));
+    hooks.useValidateBillingControlBooking.mockReturnValue({ mutateAsync });
+    hooks.useBillingControlBookings.mockReturnValue({
+      data: {
+        ...listPayload,
+        items: [
+          listPayload.items[0],
+          {
+            ...listPayload.items[0],
+            booking_id: 103,
+            segment_type: 'return',
+          },
+        ],
+        summary: {
+          ...listPayload.summary,
+          total: 2,
+          validated: 0,
+          pending_review: 2,
+        },
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: mockRefetch,
+      isFetching: false,
+    });
+    renderPage();
+    await user.click(screen.getAllByRole('button', { name: /✓ Valider/i })[0]);
+    await user.click(screen.getAllByRole('button', { name: /✓ Valider/i })[0]);
+    expect(mutateAsync).toHaveBeenCalledTimes(2);
+    expect(document.querySelector('[data-booking-id="101"]')).toHaveTextContent('✓ Validé');
+    expect(document.querySelector('[data-booking-id="103"]')).toHaveTextContent('✓ Validé');
+    expect(mockRefetch).not.toHaveBeenCalled();
+    pendingCalls.forEach(({ resolve }) => resolve({ success: true }));
   });
 
   it('U12 — Anomalie ouvre modal et envoie motif', async () => {
@@ -250,15 +384,66 @@ describe('InstitutionBillingControl — U05–U16', () => {
       isFetching: false,
     });
     const user = userEvent.setup();
-    const mutateAsync = jest.fn().mockResolvedValue({ success: true });
+    let resolveMut;
+    const mutateAsync = jest.fn().mockImplementation(
+      () => new Promise((resolve) => { resolveMut = resolve; }),
+    );
+    hooks.useReopenBillingControlBooking.mockReturnValue({ mutateAsync });
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /Réouvrir/i }));
+    const row = document.querySelector('[data-booking-id="202"]');
+    expect(row).toHaveTextContent('À vérifier');
+    expect(row).not.toHaveTextContent('✓ Validé');
+    expect(screen.queryByRole('button', { name: /Réouvrir/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /✓ Valider/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Signaler une anomalie/i })).toBeInTheDocument();
+    expect(screen.getByTestId('billing-control-summary').textContent.replace(/\s+/g, ' '))
+      .toMatch(/0 Validés/);
+    expect(screen.getByTestId('billing-control-summary').textContent.replace(/\s+/g, ' '))
+      .toMatch(/1 À vérifier/);
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ bookingId }),
+    );
+    expect(mockRefetch).not.toHaveBeenCalled();
+    resolveMut({ success: true });
+  });
+
+  it('U13b — échec réouverture : rollback + message', async () => {
+    const bookingId = 202;
+    hooks.useBillingControlBookings.mockReturnValue({
+      data: {
+        items: [{
+          booking_id: bookingId,
+          scheduled_time: '2026-09-02T10:00:00',
+          patient: { display_name: 'Val' },
+          segment_type: 'outbound',
+          payer: { type: 'patient' },
+          control: {
+            effective_status: 'validated',
+            validated_by_display_name: 'Marc',
+          },
+          billing: { editable: true, locked: false, invoiced: false },
+        }],
+        summary: { total: 1, validated: 1, pending_review: 0 },
+        pagination: { page: 1, total_pages: 1, total: 1 },
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mockRefetch,
+      isFetching: false,
+    });
+    const user = userEvent.setup();
+    const mutateAsync = jest.fn().mockRejectedValue(new Error('réseau'));
     hooks.useReopenBillingControlBooking.mockReturnValue({ mutateAsync });
     renderPage();
     await user.click(screen.getByRole('button', { name: /Réouvrir/i }));
     await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ bookingId }),
+      expect(toast.error).toHaveBeenCalledWith(
+        "La réouverture n'a pas pu être enregistrée. Réessayez.",
       );
     });
+    expect(document.querySelector('[data-booking-id="202"]')).toHaveTextContent('✓ Validé');
+    expect(screen.getByRole('button', { name: /Réouvrir/i })).toBeInTheDocument();
   });
 
   it('affiche Valider le justificatif quand une preuve est soumise', async () => {

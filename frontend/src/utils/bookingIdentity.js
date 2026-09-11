@@ -162,6 +162,19 @@ export function buildOfferIdentity(offer) {
   };
 }
 
+/** Course issue d'une institution — y compris payload liste (identity.source). */
+export function isInstitutionCompanyBooking(booking) {
+  if (!booking) return false;
+  if (booking.metadata_json?.institution_id) return true;
+  if (booking.institution_timeline) return true;
+  if (booking.created_via === 'institution_portal') return true;
+  if (booking.client?.linked_institution_id) return true;
+  const sourceType = booking.identity?.source?.type
+    || booking.identity?.source_type
+    || '';
+  return String(sourceType).toLowerCase() === 'institution';
+}
+
 export function matchesSearchIndex(booking, query) {
   const q = String(query || '').trim().toLowerCase();
   if (!q) return true;

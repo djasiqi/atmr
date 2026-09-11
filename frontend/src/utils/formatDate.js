@@ -1,5 +1,7 @@
 // src/utils/formatDate.js (mode local naïf)
 
+import { extractWallClockDate, extractWallClockTime } from './missionTimeDisplay';
+
 /**
  * Formate une chaîne datetime **naïve locale** sans conversions.
  * Accepte:
@@ -53,14 +55,69 @@ function formatDateOnly(value) {
   return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
 }
 
+function formatSwissDateFromYmd(ymd) {
+  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return '';
+  const [y, m, d] = ymd.split('-');
+  return `${d}.${m}.${y}`;
+}
+
+/** Libellé horaire à partir de l'heure murale + confirmation (évite un scheduling périmé). */
+export function buildScheduleDisplay({
+  scheduledTime,
+  timeConfirmed,
+  isReturn = false,
+} = {}) {
+  const ymd = extractWallClockDate(scheduledTime);
+  const hhmm = extractWallClockTime(scheduledTime);
+  const dateLabel = formatSwissDateFromYmd(ymd);
+  const confirmed = timeConfirmed === true;
+  if (!hhmm) {
+    return {
+      scheduled_time: scheduledTime || null,
+      time_confirmed: confirmed,
+      time_defined: confirmed,
+      time_scheduled: false,
+      display_time: 'À définir',
+      display_datetime: dateLabel || 'À définir',
+    };
+  }
+  let displayTime = hhmm;
+  if (timeConfirmed === false) {
+    displayTime = isReturn ? 'À confirmer' : `${hhmm} (non confirmé)`;
+  }
+  return {
+    scheduled_time: scheduledTime,
+    time_confirmed: timeConfirmed !== false,
+    time_defined: timeConfirmed !== false,
+    time_scheduled: true,
+    display_time: displayTime,
+    display_datetime: dateLabel ? `${dateLabel} • ${displayTime}` : displayTime,
+  };
+}
+
 /**
- * Formate la date d'une réservation, en utilisant les champs pré-formatés
- * du backend si disponibles, sinon en forçant le fuseau horaire de Zurich.
+ * Formate la date d'une réservation.
+ * `time_confirmed` + `scheduled_time` priment sur `scheduling.display_datetime`
+ * (souvent périmé après une reconfirmation de départ).
  * @param {object} booking - L'objet réservation du backend.
  * @returns {string}
  */
 export function renderBookingDateTime(booking) {
   if (!booking) return 'Non spécifié';
+
+  const timeConfirmed = booking.time_confirmed;
+  const iso = booking.scheduled_time || booking.scheduling?.scheduled_time;
+  if (timeConfirmed === true || timeConfirmed === false) {
+    return buildScheduleDisplay({
+      scheduledTime: iso,
+      timeConfirmed,
+      isReturn: Boolean(
+        booking.is_return
+        || booking.trip_flags?.return_leg
+        || Number(booking.route_sequence_number) > 1
+      ),
+    }).display_datetime;
+  }
 
   const scheduling = booking.scheduling;
   if (scheduling?.display_datetime) {
@@ -70,8 +127,7 @@ export function renderBookingDateTime(booking) {
     return scheduling.display_time || 'À définir';
   }
 
-  const timeConfirmed = booking.time_confirmed;
-  if (timeConfirmed === false) {
+  if (!iso) {
     const returnDateLabel =
       formatDateOnly(booking.return_date) ||
       formatDateOnly(booking.scheduled_date) ||
@@ -80,11 +136,7 @@ export function renderBookingDateTime(booking) {
     return returnDateLabel ? `${returnDateLabel} • À définir` : 'À définir';
   }
 
-  if (!booking.scheduled_time) {
-    return 'À définir';
-  }
-
-  return formatLocalNaive(booking.scheduled_time);
+  return formatLocalNaive(iso);
 }
 
 export { formatLocalNaive };

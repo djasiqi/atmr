@@ -16,6 +16,7 @@ from models.platform_billing import (
     PlatformInvoice,
     PlatformIssuedInvoice,
 )
+from services.platform_billing.contracts import effective_config_for_period
 from services.platform_billing.decimal_json import decimal_to_str
 from services.platform_billing.invoice_pdf import (
     build_platform_qrr_reference,
@@ -62,18 +63,38 @@ def _fmt_qty_label(value: Decimal) -> str:
     return s or "0"
 
 
+def _support_hourly_rate_default(inv: PlatformIssuedInvoice) -> str | None:
+    if not inv.company_id or not inv.billing_year or not inv.billing_month:
+        return None
+    period_start = datetime(
+        int(inv.billing_year), int(inv.billing_month), 1, tzinfo=UTC
+    )
+    cfg = effective_config_for_period(int(inv.company_id), period_start)
+    if cfg is None or cfg.support_hourly_rate_default is None:
+        return None
+    return decimal_to_str(cfg.support_hourly_rate_default)
+
+
+def _is_support_editor_line(line_type: str, label: str, mode: str) -> bool:
+    lt = (line_type or "").lower()
+    lab = (label or "").strip()
+    if "support" in lt or lab.lower().startswith("support"):
+        return True
+    return mode == CALC_UNIT and not lab
+
+
 def sync_derived_line_label(
     *,
     label: str,
     line_type: str,
     quantity: Decimal | None,
     unit_amount: Decimal | None,
+    calculation_mode: str | None = None,
 ) -> str:
     """Resynchronise les libellés auto (ex. support X h) avec qté / prix unitaires."""
     lab = (label or "").strip()
-    lt = (line_type or "").lower()
-    is_support = "support" in lt or lab.lower().startswith("support")
-    if is_support and quantity is not None:
+    mode = (calculation_mode or "").strip().upper()
+    if _is_support_editor_line(line_type, lab, mode) and quantity is not None:
         hours_s = _fmt_qty_label(Decimal(str(quantity)))
         if unit_amount is not None:
             rate_s = _fmt_qty_label(Decimal(str(unit_amount)))
@@ -93,8 +114,6 @@ def normalize_editor_lines(
         if not isinstance(raw, dict):
             raise InvoiceReplaceError(f"Ligne {idx + 1} invalide")
         label = (raw.get("label") or "").strip()
-        if not label:
-            raise InvoiceReplaceError(f"Ligne {idx + 1} : libellé requis")
         mode = (raw.get("calculation_mode") or CALC_FIXED).strip().upper()
         line_type = (raw.get("line_type") or "ADJUSTMENT").strip() or "ADJUSTMENT"
         try:
@@ -102,16 +121,22 @@ def normalize_editor_lines(
                 qty = Decimal(str(raw.get("quantity")))
                 unit = Decimal(str(raw.get("unit_amount")))
                 amount = money_round_chf(qty * unit)
-                synced = sync_derived_line_label(
-                    label=label,
-                    line_type=line_type,
-                    quantity=qty,
-                    unit_amount=unit,
-                )
+                if _is_support_editor_line(line_type, label, mode):
+                    if line_type.upper() in ("ADJUSTMENT", ""):
+                        line_type = "support_time"
+                    label = sync_derived_line_label(
+                        label=label,
+                        line_type=line_type,
+                        quantity=qty,
+                        unit_amount=unit,
+                        calculation_mode=mode,
+                    )
+                if not label:
+                    raise InvoiceReplaceError(f"Ligne {idx + 1} : libellé requis")
                 normalized.append(
                     {
                         "calculation_mode": CALC_UNIT,
-                        "label": synced[:255],
+                        "label": label[:255],
                         "line_type": line_type[:32],
                         "quantity": str(qty),
                         "unit_amount": str(unit),
@@ -119,12 +144,15 @@ def normalize_editor_lines(
                     }
                 )
             elif mode == CALC_FIXED:
+                if not label:
+                    raise InvoiceReplaceError(f"Ligne {idx + 1} : libellé requis")
                 amount = money_round_chf(Decimal(str(raw.get("amount"))))
                 synced = sync_derived_line_label(
                     label=label,
                     line_type=line_type,
                     quantity=None,
                     unit_amount=None,
+                    calculation_mode=mode,
                 )
                 normalized.append(
                     {
@@ -140,6 +168,8 @@ def normalize_editor_lines(
                 raise InvoiceReplaceError(
                     f"Ligne {idx + 1} : calculation_mode invalide ({mode})"
                 )
+        except InvoiceReplaceError:
+            raise
         except (InvalidOperation, TypeError, ValueError) as exc:
             raise InvoiceReplaceError(f"Ligne {idx + 1} : montants invalides") from exc
     return normalized
@@ -224,6 +254,7 @@ def get_editor_bootstrap(issued_id: int) -> dict[str, Any]:
         "billing_month": inv.billing_month,
         "company_id": inv.company_id,
         "statement_id": inv.statement_id,
+        "support_hourly_rate_default": _support_hourly_rate_default(inv),
         "totals": {
             "subtotal_amount": decimal_to_str(inv.subtotal_amount),
             "tax_amount": decimal_to_str(inv.tax_amount),

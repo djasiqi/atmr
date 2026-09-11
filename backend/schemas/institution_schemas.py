@@ -21,6 +21,10 @@ from marshmallow import (
     validates_schema,
 )
 
+from application.institutions.destination_details_rules import (
+    VALID_DESTINATION_TYPES,
+    validate_medical_destination_details,
+)
 from application.institutions.patient_identity_rules import (
     validate_domicile_triplet,
     validate_patient_dob,
@@ -713,6 +717,42 @@ class BillingDetailsSchema(Schema):
     insurance_number = fields.Str(validate=validate.Length(max=50))
     reference = fields.Str(validate=validate.Length(max=100))
     notes = fields.Str(validate=validate.Length(max=500))
+    routing = fields.Dict(allow_none=True)
+
+
+class IntermediateStopInputSchema(Schema):
+    """Arrêt intermédiaire — destination_type requis par l'UI multi-stop."""
+
+    class Meta:
+        unknown = EXCLUDE
+
+    dropoff_location = fields.Str(
+        required=True, validate=validate.Length(min=1, max=255)
+    )
+    dropoff_lat = fields.Float(
+        validate=validate.Range(min=-90, max=90), allow_none=True
+    )
+    dropoff_lng = fields.Float(
+        validate=validate.Range(min=-180, max=180), allow_none=True
+    )
+    sequence = fields.Int(allow_none=True)
+    scheduled_time = fields.Str(allow_none=True)
+    time_confirmed = fields.Bool(load_default=False, allow_none=True)
+    dropoff_establishment = fields.Str(
+        allow_none=True, validate=validate.Length(max=255)
+    )
+    dropoff_service = fields.Str(allow_none=True, validate=validate.Length(max=255))
+    dropoff_doctor = fields.Str(allow_none=True, validate=validate.Length(max=255))
+    destination_type = fields.Str(
+        allow_none=True,
+        validate=validate.OneOf(VALID_DESTINATION_TYPES),
+    )
+    use_custom_billing = fields.Bool(load_default=False, allow_none=True)
+    destination_billing_override = fields.Str(
+        allow_none=True,
+        validate=validate.OneOf(VALID_DESTINATION_BILLING_OVERRIDES),
+    )
+    is_return_stop = fields.Bool(load_default=False, allow_none=True)
 
 
 class TransportRequestCreateSchema(Schema):
@@ -817,6 +857,21 @@ class TransportRequestCreateSchema(Schema):
     )
     dropoff_floor = fields.Str(validate=validate.Length(max=50), allow_none=True)
     dropoff_door_code = fields.Str(validate=validate.Length(max=50), allow_none=True)
+    dropoff_establishment = fields.Str(
+        validate=validate.Length(max=255), allow_none=True
+    )
+    dropoff_service = fields.Str(validate=validate.Length(max=255), allow_none=True)
+    dropoff_doctor = fields.Str(validate=validate.Length(max=255), allow_none=True)
+    destination_type = fields.Str(
+        validate=validate.OneOf(VALID_DESTINATION_TYPES),
+        allow_none=True,
+        metadata={
+            "description": (
+                "Type sémantique de destination: medical | other | "
+                "domicile | institution. Seul medical exige service OU médecin."
+            )
+        },
+    )
 
     # Type de lieu (optionnel, nullable pour rétrocompatibilité)
     pickup_type = fields.Str(
@@ -901,42 +956,7 @@ class TransportRequestCreateSchema(Schema):
     multi_stop = fields.Bool(load_default=False)
     return_to_institution = fields.Bool(load_default=True)
     intermediate_stops = fields.List(
-        fields.Nested(
-            Schema.from_dict(
-                {
-                    "dropoff_location": fields.Str(
-                        required=True, validate=validate.Length(min=1, max=255)
-                    ),
-                    "dropoff_lat": fields.Float(
-                        validate=validate.Range(min=-90, max=90), allow_none=True
-                    ),
-                    "dropoff_lng": fields.Float(
-                        validate=validate.Range(min=-180, max=180), allow_none=True
-                    ),
-                    "sequence": fields.Int(allow_none=True),
-                    "scheduled_time": fields.Str(allow_none=True),
-                    "time_confirmed": fields.Bool(load_default=False, allow_none=True),
-                    "dropoff_establishment": fields.Str(
-                        allow_none=True, validate=validate.Length(max=255)
-                    ),
-                    "dropoff_service": fields.Str(
-                        allow_none=True, validate=validate.Length(max=255)
-                    ),
-                    "dropoff_doctor": fields.Str(
-                        allow_none=True, validate=validate.Length(max=255)
-                    ),
-                    "use_custom_billing": fields.Bool(
-                        load_default=False, allow_none=True
-                    ),
-                    "destination_billing_override": fields.Str(
-                        allow_none=True,
-                        validate=validate.OneOf(VALID_DESTINATION_BILLING_OVERRIDES),
-                    ),
-                    "is_return_stop": fields.Bool(load_default=False, allow_none=True),
-                },
-                name="IntermediateStopInput",
-            )
-        ),
+        fields.Nested(IntermediateStopInputSchema),
         load_default=list,
     )
     return_stop = fields.Nested(
@@ -1064,6 +1084,36 @@ class TransportRequestCreateSchema(Schema):
                 "delivery_description est requis pour mission_type=material_delivery",
                 field_name="delivery_description",
             )
+
+    @validates_schema
+    def validate_destination_service_or_doctor(self, data, **_kwargs):
+        """Seul destination_type=medical exige service OU médecin."""
+        validate_medical_destination_details(data, partial=False)
+
+    @pre_load
+    def _promote_routing_dropoff_details(self, data, **_kwargs):
+        """Remonte billing_details.routing.dropoff_* au niveau racine si vide."""
+        if not isinstance(data, dict):
+            return data
+        routing = (data.get("billing_details") or {}).get("routing")
+        if not isinstance(routing, dict):
+            return data
+        raw = dict(data)
+        for key in (
+            "dropoff_establishment",
+            "dropoff_service",
+            "dropoff_doctor",
+            "destination_type",
+        ):
+            top = raw.get(key)
+            if isinstance(top, str) and top.strip():
+                continue
+            if top not in (None, ""):
+                continue
+            routed = routing.get(key)
+            if isinstance(routed, str) and routed.strip():
+                raw[key] = routed
+        return raw
 
     @pre_load
     def _normalize_schedule_fields(self, data, **_kwargs):
@@ -1203,6 +1253,10 @@ class TransportRequestUpdateSchema(Schema):
     )
     dropoff_service = fields.Str(validate=validate.Length(max=255), allow_none=True)
     dropoff_doctor = fields.Str(validate=validate.Length(max=255), allow_none=True)
+    destination_type = fields.Str(
+        validate=validate.OneOf(VALID_DESTINATION_TYPES),
+        allow_none=True,
+    )
 
     # Type de lieu
     pickup_type = fields.Str(
@@ -1262,44 +1316,7 @@ class TransportRequestUpdateSchema(Schema):
     multi_stop = fields.Bool(allow_none=True)
     return_to_institution = fields.Bool()
     acknowledge_carrier_impact = fields.Bool(allow_none=True)
-    intermediate_stops = fields.List(
-        fields.Nested(
-            Schema.from_dict(
-                {
-                    "dropoff_location": fields.Str(
-                        required=True, validate=validate.Length(min=1, max=255)
-                    ),
-                    "dropoff_lat": fields.Float(
-                        validate=validate.Range(min=-90, max=90), allow_none=True
-                    ),
-                    "dropoff_lng": fields.Float(
-                        validate=validate.Range(min=-180, max=180), allow_none=True
-                    ),
-                    "sequence": fields.Int(allow_none=True),
-                    "scheduled_time": fields.Str(allow_none=True),
-                    "time_confirmed": fields.Bool(allow_none=True),
-                    "dropoff_establishment": fields.Str(
-                        allow_none=True, validate=validate.Length(max=255)
-                    ),
-                    "dropoff_service": fields.Str(
-                        allow_none=True, validate=validate.Length(max=255)
-                    ),
-                    "dropoff_doctor": fields.Str(
-                        allow_none=True, validate=validate.Length(max=255)
-                    ),
-                    "use_custom_billing": fields.Bool(
-                        load_default=False, allow_none=True
-                    ),
-                    "destination_billing_override": fields.Str(
-                        allow_none=True,
-                        validate=validate.OneOf(VALID_DESTINATION_BILLING_OVERRIDES),
-                    ),
-                    "is_return_stop": fields.Bool(load_default=False, allow_none=True),
-                },
-                name="IntermediateStopUpdateInput",
-            )
-        )
-    )
+    intermediate_stops = fields.List(fields.Nested(IntermediateStopInputSchema))
     return_stop = fields.Nested(
         Schema.from_dict(
             {
@@ -1376,6 +1393,11 @@ class TransportRequestUpdateSchema(Schema):
                 "multi_stop est incompatible avec is_round_trip (utiliser return_to_institution).",
                 field_name="is_round_trip",
             )
+
+    @validates_schema
+    def validate_destination_service_or_doctor_update(self, data, **_kwargs):
+        """Destination médicale : service OU médecin (chaque étape concernée)."""
+        validate_medical_destination_details(data, partial=True)
 
 
 class TransportRequestQuerySchema(Schema):

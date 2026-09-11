@@ -17,6 +17,7 @@ function parseTime(val) {
 
 const InlineTimePicker = forwardRef(function InlineTimePicker({
   value, onChange, placeholder: _placeholder, className, inputId, onSelectNow, title, ariaLabel,
+  invalid = false, describedBy,
 }, ref) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
@@ -69,6 +70,7 @@ const InlineTimePicker = forwardRef(function InlineTimePicker({
       }
       return resolved;
     },
+    focus: () => inputRef.current?.focus(),
   }), [resolvePendingTime, value, onChange]);
 
   const handleInputChange = (e) => {
@@ -176,7 +178,7 @@ const InlineTimePicker = forwardRef(function InlineTimePicker({
           id={inputId}
           type="text"
           inputMode="numeric"
-          className={`form-input ${tp.input} ${showUndefinedLabel ? tp.inputUndefined : ''} ${className || ''}`}
+          className={`form-input ${tp.input} ${showUndefinedLabel ? tp.inputUndefined : ''} ${invalid ? 'error' : ''} ${className || ''}`.trim()}
           value={masked}
           onChange={handleInputChange}
           onFocus={handleInputFocus}
@@ -186,6 +188,8 @@ const InlineTimePicker = forwardRef(function InlineTimePicker({
           maxLength={5}
           title={title}
           aria-label={ariaLabel}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
         />
         <button
           type="button"

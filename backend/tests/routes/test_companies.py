@@ -684,3 +684,50 @@ class TestCompaniesRoutes:
         )
         resp = client.get("/api/v1/companies/", headers=headers)
         assert resp.status_code in (403, 401)
+
+    def test_union_visibility_matches_or_filter(self, db, companies_world):
+        from repositories.booking_repository import BookingRepository
+        from services.companies.booking_visibility import (
+            visible_booking_id_union,
+            visible_bookings_query,
+        )
+
+        company_id = companies_world["company"].id
+        old_ids = {
+            int(row[0])
+            for row in Booking.query.filter(
+                BookingRepository._company_visibility_filter(company_id)
+            )
+            .with_entities(Booking.id)
+            .all()
+        }
+        new_ids = {
+            int(row[0])
+            for row in visible_bookings_query(company_id).with_entities(Booking.id).all()
+        }
+        assert new_ids == old_ids
+        union_rows = [
+            int(row[0])
+            for row in db.session.execute(visible_booking_id_union(company_id)).all()
+        ]
+        assert len(union_rows) == len(set(union_rows))
+        assert set(union_rows) == old_ids
+
+    def test_union_visibility_topk_subset(self, db, companies_world):
+        from repositories.booking_repository import BookingRepository
+        from services.companies.booking_visibility import visible_booking_ids_topk
+
+        company_id = companies_world["company"].id
+        page = visible_booking_ids_topk(
+            company_id, extra_filters=None, sort_desc=True, offset=0, limit=25
+        )
+        all_ids = {
+            int(row[0])
+            for row in Booking.query.filter(
+                BookingRepository._company_visibility_filter(company_id)
+            )
+            .with_entities(Booking.id)
+            .all()
+        }
+        assert set(page) <= all_ids
+        assert len(page) == len(set(page))

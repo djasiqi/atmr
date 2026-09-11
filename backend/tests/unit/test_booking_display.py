@@ -171,6 +171,18 @@ def test_scheduling_unconfirmed_1330_has_time_scheduled():
     assert booking_has_confirmed_pickup_time(b) is False
 
 
+def test_scheduling_unconfirmed_return_hides_stale_time():
+    b = _booking(
+        scheduled_time=datetime(2026, 9, 12, 12, 15),
+        time_confirmed=False,
+        is_return=True,
+    )
+    scheduling = build_booking_scheduling(b)
+    assert scheduling["time_defined"] is False
+    assert scheduling["display_time"] == "À confirmer"
+    assert "12:15" not in scheduling["display_datetime"]
+
+
 def test_legacy_midnight_sentinel_vs_real_midnight():
     legacy = datetime(2026, 6, 12, 0, 0)
     assert is_legacy_midnight_pickup_sentinel(legacy, time_confirmed=False) is True
@@ -387,3 +399,51 @@ def test_trip_flags_classic_return_without_topology():
     classic = _booking(is_return=True)
     flags = build_booking_display_blocks(classic, viewer_company_id=10)["trip_flags"]
     assert flags["return_leg"] is True
+
+
+def test_list_projection_skips_timeline_and_passenger_brief():
+    calls = {"timeline": 0, "brief": 0, "return_trip": 0}
+
+    def boom_timeline():
+        calls["timeline"] += 1
+        raise AssertionError("timeline ne doit pas être chargé en projection table")
+
+    def boom_brief():
+        calls["brief"] += 1
+        raise AssertionError("passenger brief ne doit pas être chargé en projection table")
+
+    class _ReturnTrip:
+        def __bool__(self):
+            calls["return_trip"] += 1
+            raise AssertionError("return_trip ne doit pas être lazy-loadé en projection table")
+
+    client = SimpleNamespace(
+        id=5,
+        is_institution=True,
+        institution_name="Clinique LHA",
+        linked_institution_id=251,
+        client_type=ClientType.TRANSPORT,
+        user=None,
+    )
+    b = _booking(
+        client=client,
+        created_via=BookingCreatedVia.INSTITUTION_PORTAL,
+        is_round_trip=True,
+        _get_institution_timeline=boom_timeline,
+        _get_institution_passenger_brief=boom_brief,
+    )
+    b._list_projection = True
+    b.return_trip = _ReturnTrip()
+    b.active_change_request_id = 99
+    b.active_change_request = SimpleNamespace(status="pending")
+    b._route_group_leg_count = 2
+    b.route_group_id = "grp-1"
+
+    blocks = build_booking_display_blocks(b, viewer_company_id=10)
+    assert calls["timeline"] == 0
+    assert calls["brief"] == 0
+    assert calls["return_trip"] == 0
+    assert blocks["identity"]["source"]["type"] == SOURCE_TYPE_INSTITUTION
+    assert blocks["identity"]["passenger"]["birth_date"] is None
+    assert blocks["trip_flags"]["round_trip"] is True
+    assert blocks["trip_flags"]["change_request_pending"] is True

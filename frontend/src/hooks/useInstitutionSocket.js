@@ -76,6 +76,9 @@ export function useInstitutionSocket(institutionId) {
       queryClient.invalidateQueries({
         queryKey: institutionQueryKeys.requestDetail(data.request_id),
       });
+      queryClient.invalidateQueries({
+        queryKey: institutionQueryKeys.requestTimeline(data.request_id),
+      });
     }
   }, [queryClient]);
 

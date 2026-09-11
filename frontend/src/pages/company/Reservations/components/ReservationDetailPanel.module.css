@@ -96,6 +96,25 @@
   line-height: 1.4;
 }
 
+.reconfirmDepartureBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.reconfirmDepartureLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.reconfirmDepartureBlock .changeRequestActions {
+  margin-top: 4px;
+}
+
 .changeRequestList {
   margin: 8px 0 0;
   padding: 0;

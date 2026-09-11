@@ -6,6 +6,26 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import institutionService from '../services/institutionService';
 import institutionBillingControlService from '../services/institutionBillingControlService';
+import {
+  applyOptimisticControlStatus,
+  applyOptimisticPayerMutation,
+  mergeBookingControlFromMutation,
+} from '../utils/institutionBillingControlUi';
+import {
+  markBillingPayerRequestEnd,
+  markBillingPayerRequestStart,
+  markBillingValidateRequestEnd,
+  markBillingValidateRequestStart,
+} from '../utils/billingControlValidatePerf';
+import {
+  applyOperationalBookingPatchToRequest,
+  upsertInstitutionRequestInLists,
+} from '../utils/institutionRequestCache';
+import {
+  ELIGIBLE_CARRIERS_STALE_MS,
+  ELIGIBLE_CARRIERS_TIMEOUT_MS,
+  shouldRetryEligibleCarriers,
+} from '../utils/institutionEligibleCarriers';
 
 // ============================================================================
 // Query Keys (centralisés pour invalidation cohérente)
@@ -88,13 +108,36 @@ export function useInstitutionRequest(requestId) {
   });
 }
 
+function markInstitutionRequestsStale(queryClient, requestId) {
+  queryClient.invalidateQueries({
+    queryKey: institutionQueryKeys.requests(),
+    refetchType: 'none',
+  });
+  if (requestId != null) {
+    queryClient.invalidateQueries({
+      queryKey: institutionQueryKeys.requestDetail(requestId),
+      refetchType: 'none',
+    });
+  }
+}
+
+function writeInstitutionRequestCache(queryClient, request) {
+  if (!request?.id) return;
+  queryClient.setQueryData(institutionQueryKeys.requestDetail(request.id), request);
+  queryClient.setQueriesData(
+    { queryKey: [...institutionQueryKeys.requests(), 'list'] },
+    (old) => upsertInstitutionRequestInLists(old, request),
+  );
+}
+
 export function useCreateRequest() {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: institutionService.createRequest,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
+    onSuccess: (created) => {
+      writeInstitutionRequestCache(queryClient, created);
+      markInstitutionRequestsStale(queryClient, created?.id);
     },
   });
 }
@@ -116,9 +159,9 @@ export function useSendRequest() {
   
   return useMutation({
     mutationFn: ({ requestId, options }) => institutionService.sendRequest(requestId, options),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestDetail(variables.requestId) });
-      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
+    onSuccess: (sent, variables) => {
+      writeInstitutionRequestCache(queryClient, sent);
+      markInstitutionRequestsStale(queryClient, variables?.requestId || sent?.id);
     },
   });
 }
@@ -245,11 +288,17 @@ export function useTransportPreferences() {
   });
 }
 
-export function useEligibleCompanies() {
+export function useEligibleCompanies({ enabled = true } = {}) {
   return useQuery({
     queryKey: institutionQueryKeys.eligibleCompanies(),
-    queryFn: institutionService.getEligibleCompanies,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    queryFn: ({ signal }) => institutionService.getEligibleCompanies({
+      signal,
+      timeout: ELIGIBLE_CARRIERS_TIMEOUT_MS,
+    }),
+    staleTime: ELIGIBLE_CARRIERS_STALE_MS,
+    gcTime: 30 * 60 * 1000,
+    enabled,
+    retry: shouldRetryEligibleCarriers,
   });
 }
 
@@ -330,11 +379,38 @@ export function usePatchInstitutionBooking() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ bookingId, data }) => institutionService.patchInstitutionBooking(bookingId, data),
-    onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
+    onSuccess: (data, vars) => {
       if (vars.requestId) {
+        queryClient.setQueryData(
+          institutionQueryKeys.requestDetail(vars.requestId),
+          (old) => applyOperationalBookingPatchToRequest(old, vars.data, data),
+        );
+        const patched = queryClient.getQueryData(
+          institutionQueryKeys.requestDetail(vars.requestId),
+        );
+        if (patched) {
+          queryClient.setQueriesData(
+            { queryKey: [...institutionQueryKeys.requests(), 'list'] },
+            (old) => upsertInstitutionRequestInLists(old, patched),
+          );
+        }
         queryClient.invalidateQueries({
           queryKey: institutionQueryKeys.requestDetail(vars.requestId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: institutionQueryKeys.requestTimeline(vars.requestId),
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
+    },
+    onError: (err, vars) => {
+      const unchanged = err?.response?.data?.error === 'Aucun champ modifié.';
+      if (unchanged && vars.requestId) {
+        queryClient.invalidateQueries({
+          queryKey: institutionQueryKeys.requestDetail(vars.requestId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: institutionQueryKeys.requestTimeline(vars.requestId),
         });
       }
     },
@@ -793,38 +869,161 @@ function invalidateBillingControlQueries(queryClient) {
   queryClient.invalidateQueries({ queryKey: institutionQueryKeys.billingControl() });
 }
 
-export function useValidateBillingControlBooking() {
+function restoreBillingControlSnapshots(queryClient, snapshots) {
+  snapshots?.forEach(([key, data]) => {
+    queryClient.setQueryData(key, data);
+  });
+}
+
+function invalidateBillingControlWhenIdle(queryClient, mutationKey) {
+  const inflight = queryClient.isMutating({ mutationKey });
+  if (inflight === 0) {
+    invalidateBillingControlQueries(queryClient);
+  }
+}
+
+function useBillingControlStatusMutation({
+  mutationKey,
+  requestFn,
+  nextStatus,
+  controlPatchFromVariables,
+}) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ bookingId, data }) =>
-      institutionBillingControlService.validateBillingControlBooking(bookingId, data),
-    onSuccess: () => invalidateBillingControlQueries(queryClient),
+    mutationKey,
+    mutationFn: async (variables) => {
+      const { bookingId, data, clickAt } = variables;
+      const requestStartAt = markBillingValidateRequestStart(bookingId);
+      try {
+        const result = await requestFn(bookingId, data);
+        markBillingValidateRequestEnd(bookingId, { clickAt, requestStartAt, ok: true });
+        return result;
+      } catch (error) {
+        markBillingValidateRequestEnd(bookingId, { clickAt, requestStartAt, ok: false });
+        throw error;
+      }
+    },
+    onMutate: async (variables) => {
+      const { bookingId } = variables;
+      await queryClient.cancelQueries({ queryKey: institutionQueryKeys.billingControl() });
+      const snapshots = queryClient.getQueriesData({
+        queryKey: institutionQueryKeys.billingControl(),
+      });
+      const controlPatch = controlPatchFromVariables?.(variables) || {};
+      queryClient.setQueriesData(
+        { queryKey: institutionQueryKeys.billingControl() },
+        (old) => applyOptimisticControlStatus(old, bookingId, nextStatus, controlPatch),
+      );
+      return { snapshots };
+    },
+    onError: (_error, _variables, context) => {
+      restoreBillingControlSnapshots(queryClient, context?.snapshots);
+    },
+    onSuccess: (result, { bookingId }) => {
+      if (result?.control) {
+        queryClient.setQueriesData(
+          { queryKey: institutionQueryKeys.billingControl() },
+          (old) => mergeBookingControlFromMutation(old, bookingId, result.control),
+        );
+      }
+    },
+    onSettled: () => {
+      invalidateBillingControlWhenIdle(queryClient, mutationKey);
+    },
+  });
+}
+
+const VALIDATE_MUTATION_KEY = ['institution', 'billing-control', 'validate'];
+const REOPEN_MUTATION_KEY = ['institution', 'billing-control', 'reopen'];
+const ANOMALY_MUTATION_KEY = ['institution', 'billing-control', 'anomaly'];
+
+export function useValidateBillingControlBooking() {
+  return useBillingControlStatusMutation({
+    mutationKey: VALIDATE_MUTATION_KEY,
+    requestFn: institutionBillingControlService.validateBillingControlBooking,
+    nextStatus: 'validated',
   });
 }
 
 export function useMarkBillingControlAnomaly() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ bookingId, data }) =>
-      institutionBillingControlService.markBillingControlAnomaly(bookingId, data),
-    onSuccess: () => invalidateBillingControlQueries(queryClient),
+  return useBillingControlStatusMutation({
+    mutationKey: ANOMALY_MUTATION_KEY,
+    requestFn: institutionBillingControlService.markBillingControlAnomaly,
+    nextStatus: 'anomaly',
+    controlPatchFromVariables: ({ data } = {}) => ({
+      anomaly_reason: data?.comment
+        ? `${data.anomaly_reason_code || 'OTHER'}: ${data.comment}`
+        : null,
+    }),
   });
 }
 
 export function useReopenBillingControlBooking() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ bookingId, data }) =>
-      institutionBillingControlService.reopenBillingControlBooking(bookingId, data),
-    onSuccess: () => invalidateBillingControlQueries(queryClient),
+  return useBillingControlStatusMutation({
+    mutationKey: REOPEN_MUTATION_KEY,
+    requestFn: institutionBillingControlService.reopenBillingControlBooking,
+    nextStatus: 'pending_review',
+    controlPatchFromVariables: () => ({
+      validated_at: null,
+      validated_by_display_name: null,
+      anomaly_reason: null,
+    }),
   });
 }
+
+const PAYER_MUTATION_KEY = ['institution', 'billing-control', 'payer'];
+const latestPayerGeneration = new Map();
 
 export function useChangeBillingControlPayer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ bookingId, data }) =>
-      institutionBillingControlService.changeBillingControlPayer(bookingId, data),
-    onSuccess: () => invalidateBillingControlQueries(queryClient),
+    mutationKey: PAYER_MUTATION_KEY,
+    mutationFn: async ({ bookingId, data, clickAt, signal, generation }) => {
+      if (generation != null) {
+        latestPayerGeneration.set(String(bookingId), generation);
+      }
+      const requestStartAt = markBillingPayerRequestStart(bookingId);
+      try {
+        const result = await institutionBillingControlService.changeBillingControlPayer(
+          bookingId,
+          data,
+          signal ? { signal } : {},
+        );
+        markBillingPayerRequestEnd(bookingId, { clickAt, requestStartAt, ok: true });
+        return result;
+      } catch (error) {
+        markBillingPayerRequestEnd(bookingId, { clickAt, requestStartAt, ok: false });
+        throw error;
+      }
+    },
+    onMutate: async ({ bookingId, payerType }) => {
+      await queryClient.cancelQueries({ queryKey: institutionQueryKeys.billingControl() });
+      const snapshots = queryClient.getQueriesData({
+        queryKey: institutionQueryKeys.billingControl(),
+      });
+      queryClient.setQueriesData(
+        { queryKey: institutionQueryKeys.billingControl() },
+        (old) => applyOptimisticPayerMutation(old, bookingId, payerType),
+      );
+      return { snapshots };
+    },
+    onError: (_error, variables, context) => {
+      if (
+        variables?.generation != null
+        && latestPayerGeneration.get(String(variables.bookingId)) !== variables.generation
+      ) {
+        return;
+      }
+      restoreBillingControlSnapshots(queryClient, context?.snapshots);
+    },
+    onSettled: (_result, _error, variables) => {
+      if (
+        variables?.generation != null
+        && latestPayerGeneration.get(String(variables.bookingId)) !== variables.generation
+      ) {
+        return;
+      }
+      invalidateBillingControlWhenIdle(queryClient, PAYER_MUTATION_KEY);
+    },
   });
 }

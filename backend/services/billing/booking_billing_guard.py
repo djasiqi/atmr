@@ -11,6 +11,18 @@ from domain.billing.errors import BillingValidationError
 
 _COMPANY_ID_ZERO = 0
 
+INCOMPLETE_CLINIC_PAYER_USER_MESSAGE = (
+    "Facturation incomplète : cette course est facturée à une clinique, "
+    "mais aucune clinique destinataire n’est sélectionnée. "
+    "Choisissez la clinique cible puis validez."
+)
+
+
+def user_message_for_incomplete_billing(exc: BillingValidationError) -> str:
+    if getattr(exc, "field", None) == "billed_to_company_id":
+        return INCOMPLETE_CLINIC_PAYER_USER_MESSAGE
+    return str(exc)
+
 
 def _as_str(value: Any) -> str | None:
     if value is None:

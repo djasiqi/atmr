@@ -21,7 +21,9 @@ from sqlalchemy.orm import joinedload, selectinload
 from infrastructure.invoices.invoice_calculator import round_to_5_cents
 from models import Client, CompanyBillingSettings, Invoice, InvoiceLine, InvoiceLineType
 from services.documents.invoice_recipient import (
+    append_residence_to_billed_to_name,
     institution_patient_billing_address,
+    invoice_residence_label,
     iter_invoice_bookings,
     resolve_invoice_institution_patient,
 )
@@ -2322,14 +2324,14 @@ def _get_billed_to(
 
         if use_billing_party and bp:
             raw = bp.billing_address or ""
+            _ip = None
             if _is_patient_party:
                 # Facturation au patient : son domicile légal fait foi, le snapshot
                 # du BillingParty peut être vide ou périmé.
-                _domicile = institution_patient_billing_address(
-                    resolve_invoice_institution_patient(
-                        invoice, bookings_by_id=bookings_by_id
-                    )
+                _ip = resolve_invoice_institution_patient(
+                    invoice, bookings_by_id=bookings_by_id
                 )
+                _domicile = institution_patient_billing_address(_ip)
                 if _domicile:
                     raw = _domicile
             raw = raw or "Adresse non renseignée"
@@ -2363,6 +2365,14 @@ def _get_billed_to(
                     name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
             else:
                 name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
+            if _is_patient_party:
+                name = append_residence_to_billed_to_name(
+                    name,
+                    invoice_residence_label(
+                        patient=_ip, client=getattr(invoice, "client", None)
+                    ),
+                    separator="\n",
+                )
             if (
                 _client_id is not None
                 and _bp_id is not None
@@ -2433,6 +2443,7 @@ def _get_billed_to(
         # Chercher le nom du patient depuis le premier booking de la facture
         _patient_name = None
         _patient_address = None
+        _ip = None
         for _bk in iter_invoice_bookings(invoice, bookings_by_id=bookings_by_id):
             if getattr(_bk, "customer_name", None):
                 _patient_name = _bk.customer_name
@@ -2454,6 +2465,11 @@ def _get_billed_to(
 
         if _patient_name:
             p_name = _name_with_uppercase_last_name(_patient_name)
+            p_name = append_residence_to_billed_to_name(
+                p_name,
+                invoice_residence_label(patient=_ip, client=client),
+                separator="\n",
+            )
             p_raw = _patient_address or "Adresse non renseignée"
             p_raw = _sanitize_billed_to_address(p_name, p_raw)
             return (

@@ -869,7 +869,11 @@ class Booking(db.Model):
                 "is_return": _as_bool(self.is_return),
                 "is_round_trip": _as_bool(self.is_round_trip),
                 "parent_booking_id": self.parent_booking_id,
-                "has_return": self.return_trip is not None,
+                "has_return": (
+                    _as_bool(self.is_round_trip)
+                    if getattr(self, "_list_projection", False)
+                    else self.return_trip is not None
+                ),
                 "time_confirmed": _as_bool(self.time_confirmed),
                 "created_via": _created_via_value(self),
                 "booking_type": _as_str(getattr(self, "booking_type", None))
@@ -882,13 +886,25 @@ class Booking(db.Model):
                 "billed_to_company_id": self.billed_to_company_id,
                 "route_group_id": getattr(self, "route_group_id", None),
                 "route_sequence_number": getattr(self, "route_sequence_number", None),
-                "institution_timeline": self._get_institution_timeline(),
-                "route_journey": self._get_route_journey(),
+                "institution_timeline": (
+                    None
+                    if getattr(self, "_list_projection", False)
+                    else self._get_institution_timeline()
+                ),
+                "route_journey": (
+                    None
+                    if getattr(self, "_list_projection", False)
+                    else self._get_route_journey()
+                ),
                 "active_change_request_id": self.active_change_request_id,
                 "active_change_request": (
-                    self.active_change_request.serialize()
-                    if getattr(self, "active_change_request", None)
-                    else None
+                    None
+                    if getattr(self, "_list_projection", False)
+                    else (
+                        self.active_change_request.serialize()
+                        if getattr(self, "active_change_request", None)
+                        else None
+                    )
                 ),
                 **self._canonical_display_payload(),
             }

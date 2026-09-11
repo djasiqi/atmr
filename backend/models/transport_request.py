@@ -777,6 +777,7 @@ class TransportRequest(db.Model):
             "id": booking.id,
             "status": status_str,
             "scheduled_time": mission_scheduled_to_api_iso(booking.scheduled_time),
+            "time_confirmed": bool(getattr(booking, "time_confirmed", True)),
             "edit_version": int(getattr(booking, "edit_version", None) or 1),
             "amount": float(booking.amount) if booking.amount else None,
             "customer_name": booking.customer_name,

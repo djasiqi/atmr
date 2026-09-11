@@ -58,6 +58,17 @@ describe('formatDepartureTime', () => {
     })).toMatch(/19:00/);
   });
 
+  it('affiche À confirmer si le booking n\'est plus confirmé', () => {
+    expect(formatDepartureTime({
+      pickup_time_confirmed: false,
+      scheduled_time: '2026-09-12T13:15:00',
+      booking_summary: {
+        scheduled_time: '2026-09-12T13:15:00',
+        time_confirmed: false,
+      },
+    })).toBe('À confirmer');
+  });
+
   it('priorise booking_summary si request.scheduled_time diverge', () => {
     expect(formatDepartureTime({
       pickup_time_confirmed: true,
@@ -154,6 +165,26 @@ describe('formatMissionScheduleListLabel', () => {
     expect(label).toMatch(/RDV 20:00/);
   });
 
+  it('n\'affiche pas un départ booking non confirmé', () => {
+    const label = formatMissionScheduleListLabel({
+      mission_date: '2026-09-12',
+      pickup_time_confirmed: false,
+      booking_summary: {
+        scheduled_time: '2026-09-12T13:15:00',
+        time_confirmed: false,
+      },
+      legs: [
+        {
+          sequence_index: 0,
+          scheduled_time: '2026-09-12T13:00:00',
+          time_confirmed: true,
+        },
+      ],
+    });
+    expect(label).toMatch(/RDV 13:00/);
+    expect(label).not.toMatch(/13:15/);
+  });
+
   it('affiche le départ depuis booking_summary si la request n\'a pas pickup_time_confirmed', () => {
     const label = formatMissionScheduleListLabel({
       mission_date: '2026-06-15',
@@ -244,6 +275,22 @@ describe('formatRouteStopTime', () => {
         },
       }),
     ).toBe('Départ 19:00');
+  });
+
+  it('affiche Départ à confirmer après invalidation transporteur', () => {
+    expect(
+      formatRouteStopTime({
+        kind: 'start',
+        request: {
+          pickup_time_confirmed: false,
+          scheduled_time: '2026-09-12T13:15:00',
+          booking_summary: {
+            scheduled_time: '2026-09-12T13:15:00',
+            time_confirmed: false,
+          },
+        },
+      }),
+    ).toBe('Départ · À confirmer');
   });
 
   it('préfixe RDV sur une destination sans heure', () => {

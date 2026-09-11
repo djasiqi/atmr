@@ -60,6 +60,18 @@ class ContactRequest(db.Model):
     email_delivery_status: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default="pending"
     )
+    autoreply_delivery_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="pending"
+    )
+    notification_retry_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    notification_last_error: Mapped[str | None] = mapped_column(
+        String(512), nullable=True
+    )
+    notification_last_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     trace_id: Mapped[str] = mapped_column(String(64), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -88,6 +100,11 @@ class ContactRequest(db.Model):
             "priority": self.priority,
             "assigned_channel": self.assigned_channel,
             "email_delivery_status": self.email_delivery_status,
+            "contact_notification_status": self.email_delivery_status,
+            "autoreply_delivery_status": self.autoreply_delivery_status,
+            "notification_retry_count": self.notification_retry_count,
+            "notification_last_error": self.notification_last_error,
+            "notification_last_attempt_at": _iso(self.notification_last_attempt_at),
             "trace_id": self.trace_id,
             "created_at": _iso(self.created_at),
         }

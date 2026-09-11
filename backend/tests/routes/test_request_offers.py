@@ -20,6 +20,7 @@ from flask_jwt_extended import create_access_token
 from models import (
     Booking,
     Company,
+    CompanyNotification,
     Institution,
     InstitutionPatient,
     InstitutionTransportPreference,
@@ -75,8 +76,8 @@ class TestSendWithOffers:
         )
 
     @pytest.fixture
-    def sample_company(self, db):
-        """Crée une entreprise de test éligible."""
+    def sample_company(self, db, sample_institution):
+        """Crée une entreprise de test éligible (et la configure comme préférence)."""
         user = User()
         user.email = f"company_{uuid.uuid4().hex[:8]}@test.com"
         user.username = user.email
@@ -91,6 +92,11 @@ class TestSendWithOffers:
         company.is_approved = True
         company.dispatch_enabled = True
         db.session.add(company)
+        db.session.flush()
+        InstitutionTransportPreference.set_preferences(
+            institution_id=sample_institution.id,
+            company_ids=[company.id],
+        )
         db.session.flush()
         return company
 
@@ -127,49 +133,46 @@ class TestSendWithOffers:
         request.scheduled_time = scheduled
         request.pickup_time_confirmed = True
         request.status = RequestStatus.DRAFT.value
+        request.created_by_display_name = "Admin Test"
         db.session.add(request)
         db.session.flush()
         return request
 
-    def test_send_without_preferences_creates_broadcast(
+    def test_send_without_preferences_is_rejected(
         self,
         client,
         db,
         sample_institution,
         auth_headers,
         sample_request,
-        sample_company,
     ):
-        """Test: Sans préférences, send crée des offres broadcast."""
-        # Vérifier pas de préférences
+        """Sans transporteur configuré, send refuse (pas de fan-out global)."""
         assert not InstitutionTransportPreference.has_preferences(sample_institution.id)
 
-        # Envoyer la demande
         response = client.post(
             f"/api/v1/institutions/requests/{sample_request.id}/send",
             headers=auth_headers,
         )
 
-        assert response.status_code == 200, response.get_json()
-        data = response.get_json()
-
-        # Vérifier les infos d'envoi
-        assert "send_info" in data
-        assert data["send_info"]["mode"] == OfferMode.BROADCAST.value
-        assert data["send_info"]["offers_created"] >= 1
-
-        # Vérifier la demande
+        assert response.status_code == 422, response.get_json()
+        assert "transporteur" in (response.get_json().get("error") or "").lower()
         db.session.refresh(sample_request)
-        assert sample_request.status == RequestStatus.SENT.value
-        assert sample_request.sent_at is not None
-
-        # Vérifier l'offre créée
-        offers = RequestOffer.query.filter_by(
-            transport_request_id=sample_request.id
-        ).all()
-        assert len(offers) >= 1
-        assert all(o.mode == OfferMode.BROADCAST.value for o in offers)
-        assert all(o.status == OfferStatus.PENDING.value for o in offers)
+        assert sample_request.status == RequestStatus.DRAFT.value
+        assert sample_request.sent_at is None
+        assert (
+            RequestOffer.query.filter_by(
+                transport_request_id=sample_request.id
+            ).count()
+            == 0
+        )
+        assert (
+            CompanyNotification.query.filter(
+                CompanyNotification.dedupe_key.like(
+                    f"new_request:{sample_request.id}:%"
+                )
+            ).count()
+            == 0
+        )
 
     def test_send_with_preferences_creates_sequential(
         self,
@@ -212,6 +215,42 @@ class TestSendWithOffers:
         assert offers[0].order == 1
         assert offers[0].expires_at is not None
 
+    def test_send_broadcast_uses_configured_preferences_only(
+        self,
+        client,
+        db,
+        sample_institution,
+        auth_headers,
+        sample_request,
+        sample_company,
+        sample_company_2,
+    ):
+        """Broadcast = tous les transporteurs de la liste, pas tout le catalogue."""
+        from application.institutions.institution_settings_service import (
+            get_or_create_settings,
+        )
+
+        settings = get_or_create_settings(sample_institution.id)
+        settings.offer_dispatch_mode = OfferMode.BROADCAST.value
+        InstitutionTransportPreference.set_preferences(
+            institution_id=sample_institution.id,
+            company_ids=[sample_company.id],
+        )
+        db.session.commit()
+
+        response = client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200, response.get_json()
+        assert response.get_json()["send_info"]["mode"] == OfferMode.BROADCAST.value
+        offers = RequestOffer.query.filter_by(
+            transport_request_id=sample_request.id
+        ).all()
+        assert len(offers) == 1
+        assert offers[0].company_id == sample_company.id
+        assert offers[0].company_id != sample_company_2.id
+
     def test_send_already_sent_is_idempotent(
         self,
         client,
@@ -245,6 +284,53 @@ class TestSendWithOffers:
             "Idempotent send should return same offer count"
         )
 
+    def test_send_draft_with_pending_offers_finalizes_sent(
+        self,
+        client,
+        db,
+        sample_institution,
+        auth_headers,
+        sample_request,
+        sample_company,
+    ):
+        """DRAFT + offres PENDING : finalise SENT sans recréer d'offres."""
+        offer = RequestOffer()
+        offer.transport_request_id = sample_request.id
+        offer.company_id = sample_company.id
+        offer.status = OfferStatus.PENDING.value
+        offer.mode = OfferMode.BROADCAST.value
+        offer.sent_at = datetime.now(UTC)
+        db.session.add(offer)
+        db.session.commit()
+        assert sample_request.status == RequestStatus.DRAFT.value
+
+        response = client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200, response.get_json()
+
+        db.session.refresh(sample_request)
+        assert sample_request.status == RequestStatus.SENT.value
+        assert sample_request.sent_at is not None
+
+        offers = RequestOffer.query.filter_by(
+            transport_request_id=sample_request.id
+        ).all()
+        assert len(offers) == 1
+
+        retry = client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+        assert retry.status_code == 200
+        assert (
+            RequestOffer.query.filter_by(
+                transport_request_id=sample_request.id
+            ).count()
+            == 1
+        )
+
     def test_send_reactivates_time_expired_pending_offers(
         self,
         client,
@@ -255,13 +341,6 @@ class TestSendWithOffers:
         sample_company,
     ):
         """Relance : offres PENDING expirées dans le temps sont réactivées avec un nouveau délai."""
-        pref = InstitutionTransportPreference()
-        pref.institution_id = sample_institution.id
-        pref.company_id = sample_company.id
-        pref.order = 1
-        db.session.add(pref)
-        db.session.commit()
-
         response = client.post(
             f"/api/v1/institutions/requests/{sample_request.id}/send",
             headers=auth_headers,
@@ -304,13 +383,6 @@ class TestSendWithOffers:
     ):
         """Relance : notification in-app entreprise persistée (cloche)."""
         from models import CompanyNotification
-
-        pref = InstitutionTransportPreference()
-        pref.institution_id = sample_institution.id
-        pref.company_id = sample_company.id
-        pref.order = 1
-        db.session.add(pref)
-        db.session.commit()
 
         client.post(
             f"/api/v1/institutions/requests/{sample_request.id}/send",
@@ -363,13 +435,6 @@ class TestSendWithOffers:
         sample_company,
     ):
         """Liste institution : relance possible si seules des offres PENDING expirées existent."""
-        pref = InstitutionTransportPreference()
-        pref.institution_id = sample_institution.id
-        pref.company_id = sample_company.id
-        pref.order = 1
-        db.session.add(pref)
-        db.session.commit()
-
         response = client.post(
             f"/api/v1/institutions/requests/{sample_request.id}/send",
             headers=auth_headers,
@@ -410,12 +475,6 @@ class TestSendWithOffers:
     ):
         """Relance : notification entreprise avec clé de déduplication distincte."""
         mock_notify.return_value = {"id": 1}
-        pref = InstitutionTransportPreference()
-        pref.institution_id = sample_institution.id
-        pref.company_id = sample_company.id
-        pref.order = 1
-        db.session.add(pref)
-        db.session.commit()
 
         client.post(
             f"/api/v1/institutions/requests/{sample_request.id}/send",
@@ -1135,6 +1194,166 @@ class TestRejectOffer:
         assert new_offer.order == 2
         assert new_offer.status == OfferStatus.PENDING.value
 
+    def test_reject_sequential_escalates_a_then_b_then_c(
+        self, client, db, sample_institution, sample_companies
+    ):
+        """Séquentiel : A puis B puis C — jamais 3 offres PENDING à la fois."""
+        company_a, user_a = sample_companies[0]
+        company_b, user_b = sample_companies[1]
+        company_c, _user_c = sample_companies[2]
+
+        InstitutionTransportPreference.set_preferences(
+            institution_id=sample_institution.id,
+            company_ids=[company_a.id, company_b.id, company_c.id],
+        )
+
+        request = TransportRequest()
+        request.institution_id = sample_institution.id
+        request.external_reference = f"ESC-{uuid.uuid4().hex[:8]}"
+        request.pickup_location = "A"
+        request.dropoff_location = "B"
+        scheduled = datetime.now(UTC) + timedelta(days=2)
+        request.mission_date = scheduled.date()
+        request.scheduled_time = scheduled
+        request.pickup_time_confirmed = True
+        request.status = RequestStatus.SENT.value
+        request.sent_at = datetime.now(UTC)
+        request.created_by_display_name = "Admin Test"
+        db.session.add(request)
+        db.session.flush()
+
+        offer_a = RequestOffer(
+            transport_request_id=request.id,
+            company_id=company_a.id,
+            mode=OfferMode.SEQUENTIAL.value,
+            order=1,
+            status=OfferStatus.PENDING.value,
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+        db.session.add(offer_a)
+        db.session.commit()
+
+        assert (
+            RequestOffer.query.filter_by(
+                transport_request_id=request.id,
+                status=OfferStatus.PENDING.value,
+            ).count()
+            == 1
+        )
+
+        def _company_headers(user, company):
+            token = create_access_token(
+                identity=str(user.public_id),
+                additional_claims={
+                    "role": UserRole.COMPANY.value,
+                    "aud": "atmr-api",
+                    "user_id": user.id,
+                    "company_id": company.id,
+                },
+            )
+            return {"Authorization": f"Bearer {token}"}
+
+        reject_a = client.post(
+            f"/api/v1/company/request-offers/{offer_a.id}/reject",
+            headers=_company_headers(user_a, company_a),
+            json={"reason": "A indisponible"},
+        )
+        assert reject_a.status_code == 200, reject_a.get_json()
+        offer_b = RequestOffer.query.get(reject_a.get_json()["next_offer_id"])
+        assert offer_b.company_id == company_b.id
+        assert offer_b.status == OfferStatus.PENDING.value
+        assert (
+            RequestOffer.query.filter_by(
+                transport_request_id=request.id,
+                status=OfferStatus.PENDING.value,
+            ).count()
+            == 1
+        )
+        assert RequestOffer.query.filter_by(
+            transport_request_id=request.id,
+            company_id=company_c.id,
+        ).first() is None
+
+        reject_b = client.post(
+            f"/api/v1/company/request-offers/{offer_b.id}/reject",
+            headers=_company_headers(user_b, company_b),
+            json={"reason": "B indisponible"},
+        )
+        assert reject_b.status_code == 200, reject_b.get_json()
+        offer_c = RequestOffer.query.get(reject_b.get_json()["next_offer_id"])
+        assert offer_c is not None
+        assert offer_c.company_id == company_c.id
+        assert offer_c.status == OfferStatus.PENDING.value
+        assert (
+            RequestOffer.query.filter_by(
+                transport_request_id=request.id,
+                status=OfferStatus.PENDING.value,
+            ).count()
+            == 1
+        )
+        db.session.refresh(offer_a)
+        db.session.refresh(offer_b)
+        assert offer_a.status == OfferStatus.REJECTED.value
+        assert offer_b.status == OfferStatus.REJECTED.value
+
+    def test_expire_sequential_escalates_only_to_next(
+        self, db, sample_institution, sample_companies
+    ):
+        """Expiration de A crée uniquement l'offre B, pas C."""
+        from tasks.request_offer_tasks import _process_single_expired_offer
+
+        company_a, _user_a = sample_companies[0]
+        company_b, _user_b = sample_companies[1]
+        company_c, _user_c = sample_companies[2]
+
+        InstitutionTransportPreference.set_preferences(
+            institution_id=sample_institution.id,
+            company_ids=[company_a.id, company_b.id, company_c.id],
+        )
+
+        request = TransportRequest()
+        request.institution_id = sample_institution.id
+        request.external_reference = f"EXP-{uuid.uuid4().hex[:8]}"
+        request.pickup_location = "A"
+        request.dropoff_location = "B"
+        scheduled = datetime.now(UTC) + timedelta(days=2)
+        request.mission_date = scheduled.date()
+        request.scheduled_time = scheduled
+        request.pickup_time_confirmed = True
+        request.status = RequestStatus.SENT.value
+        request.sent_at = datetime.now(UTC)
+        request.created_by_display_name = "Admin Test"
+        db.session.add(request)
+        db.session.flush()
+
+        offer_a = RequestOffer(
+            transport_request_id=request.id,
+            company_id=company_a.id,
+            mode=OfferMode.SEQUENTIAL.value,
+            order=1,
+            status=OfferStatus.PENDING.value,
+            expires_at=datetime.now(UTC) - timedelta(minutes=1),
+        )
+        db.session.add(offer_a)
+        db.session.commit()
+
+        _process_single_expired_offer(offer_a, datetime.now(UTC), set())
+        db.session.commit()
+
+        pending = RequestOffer.query.filter_by(
+            transport_request_id=request.id,
+            status=OfferStatus.PENDING.value,
+        ).all()
+        assert len(pending) == 1
+        assert pending[0].company_id == company_b.id
+        assert (
+            RequestOffer.query.filter_by(
+                transport_request_id=request.id,
+                company_id=company_c.id,
+            ).first()
+            is None
+        )
+
 
 class TestTransportPreferences:
     """Tests pour la gestion des préférences de transport."""
@@ -1176,11 +1395,13 @@ class TestTransportPreferences:
 
     @pytest.fixture
     def sample_companies(self, db):
-        """Crée des entreprises de test."""
+        """Crée des entreprises partenaires éligibles au sélecteur."""
+        from models.enums import DispatchMode
+
         companies = []
         for i in range(3):
             user = User()
-            user.email = f"company{i}_{uuid.uuid4().hex[:8]}@test.com"
+            user.email = f"company{i}_{uuid.uuid4().hex[:8]}@partenaire.ch"
             user.username = user.email
             user.password = "test"
             user.role = UserRole.COMPANY.value
@@ -1190,8 +1411,11 @@ class TestTransportPreferences:
             company = Company()
             company.name = f"Transport Pref Test {i}"
             company.user_id = user.id
+            company.contact_email = user.email
             company.is_approved = True
-            company.dispatch_enabled = True
+            company.accepted_at = datetime.now(UTC)
+            company.dispatch_enabled = False
+            company.dispatch_mode = DispatchMode.MANUAL
             db.session.add(company)
             db.session.flush()
 
@@ -1259,9 +1483,48 @@ class TestTransportPreferences:
         assert data["preferences"][0]["company_id"] == sample_companies[2].id
 
     def test_get_eligible_companies(
-        self, client, db, sample_institution, auth_headers, sample_companies
+        self, client, db, sample_institution, auth_headers
     ):
-        """Test: GET eligible-companies retourne les entreprises éligibles."""
+        """GET eligible-companies : partenaire réel, pas les fixtures test."""
+        from models.enums import DispatchMode
+
+        real_owner = User()
+        real_owner.email = f"ops_{uuid.uuid4().hex[:8]}@partenaire.ch"
+        real_owner.username = real_owner.email
+        real_owner.password = "test"
+        real_owner.role = UserRole.COMPANY.value
+        db.session.add(real_owner)
+        db.session.flush()
+
+        real_company = Company()
+        real_company.name = "Transport Pref Reel"
+        real_company.user_id = real_owner.id
+        real_company.address = "1 Rue Partenaire"
+        real_company.contact_email = real_owner.email
+        real_company.is_approved = True
+        real_company.accepted_at = datetime.now(UTC)
+        real_company.dispatch_enabled = False
+        real_company.dispatch_mode = DispatchMode.MANUAL
+        db.session.add(real_company)
+        db.session.flush()
+
+        fixture_owner = User()
+        fixture_owner.email = f"co_{uuid.uuid4().hex[:8]}@test.com"
+        fixture_owner.username = fixture_owner.email
+        fixture_owner.password = "test"
+        fixture_owner.role = UserRole.COMPANY.value
+        db.session.add(fixture_owner)
+        db.session.flush()
+
+        fixture_company = Company()
+        fixture_company.name = "Co 104582"
+        fixture_company.user_id = fixture_owner.id
+        fixture_company.is_approved = True
+        fixture_company.accepted_at = datetime.now(UTC)
+        fixture_company.dispatch_enabled = True
+        db.session.add(fixture_company)
+        db.session.commit()
+
         response = client.get(
             "/api/v1/institutions/settings/eligible-companies",
             headers=auth_headers,
@@ -1269,6 +1532,86 @@ class TestTransportPreferences:
 
         assert response.status_code == 200
         data = response.get_json()
-
-        assert data["total"] >= len(sample_companies)
+        ids = {c["id"] for c in data["companies"]}
+        assert real_company.id in ids
+        assert fixture_company.id not in ids
         assert all("is_preferred" in c for c in data["companies"])
+
+    def test_eligible_companies_contract_regression(
+        self, client, db, sample_institution, auth_headers
+    ):
+        """Réel MANUAL apparaît ; inactif / non accepté / déjà choisi gérés."""
+        from models.enums import DispatchMode
+
+        def _carrier(*, name, email, **kwargs):
+            owner = User()
+            owner.email = email
+            owner.username = email
+            owner.password = "test"
+            owner.role = UserRole.COMPANY.value
+            if kwargs.get("owner_disabled"):
+                owner.disabled_at = datetime.now(UTC)
+                owner.account_status = "disabled"
+            db.session.add(owner)
+            db.session.flush()
+            company = Company()
+            company.name = name
+            company.user_id = owner.id
+            company.address = kwargs.get("address")
+            company.contact_email = email
+            company.is_approved = kwargs.get("approved", True)
+            company.accepted_at = (
+                datetime.now(UTC) if kwargs.get("accepted", True) else None
+            )
+            company.dispatch_enabled = kwargs.get("dispatch_enabled", False)
+            company.dispatch_mode = (
+                DispatchMode.FULLY_AUTO
+                if company.dispatch_enabled
+                else DispatchMode.MANUAL
+            )
+            db.session.add(company)
+            db.session.flush()
+            return company
+
+        emmenez = _carrier(
+            name="Emmenez-moi",
+            email=f"info+{uuid.uuid4().hex[:8]}@emmenez-moi.ch",
+            address="Route de Chevrens 145, 1247 Anières",
+            dispatch_enabled=False,
+        )
+        inactive = _carrier(
+            name="Transport Inactif",
+            email=f"off_{uuid.uuid4().hex[:8]}@partenaire.ch",
+            owner_disabled=True,
+        )
+        not_accepted = _carrier(
+            name="Transport Non Accepte",
+            email=f"wait_{uuid.uuid4().hex[:8]}@partenaire.ch",
+            accepted=False,
+            dispatch_enabled=True,
+        )
+        already = _carrier(
+            name="Deja Selectionne",
+            email=f"pref_{uuid.uuid4().hex[:8]}@partenaire.ch",
+        )
+        InstitutionTransportPreference.set_preferences(
+            institution_id=sample_institution.id,
+            company_ids=[already.id],
+        )
+        db.session.commit()
+
+        response = client.get(
+            "/api/v1/institutions/settings/eligible-companies",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        by_id = {c["id"]: c for c in response.get_json()["companies"]}
+
+        assert emmenez.id in by_id
+        assert by_id[emmenez.id]["address"] == (
+            "Route de Chevrens 145, 1247 Anières"
+        )
+        assert inactive.id not in by_id
+        assert not_accepted.id not in by_id
+        assert already.id in by_id
+        assert by_id[already.id]["is_preferred"] is True

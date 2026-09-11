@@ -31,8 +31,8 @@ export const isReturnLegIndex = (request, legs, index) =>
 /** Préfixe systématique Départ / RDV devant l'heure ou « À définir ». */
 export function prefixScheduleTimeLabel(prefix, rawTime) {
   const p = String(prefix || '').trim();
-  if (!rawTime || rawTime === 'À définir') {
-    return `${p} · À définir`;
+  if (!rawTime || rawTime === 'À définir' || rawTime === 'À confirmer') {
+    return `${p} · ${rawTime || 'À définir'}`;
   }
   if (String(rawTime).includes('(non confirmé)')) {
     const base = String(rawTime).replace(' (non confirmé)', '').trim();
@@ -75,8 +75,14 @@ export function formatLegTime(leg) {
 export function getBookingDepartureTime(request) {
   const bs = request?.booking_summary;
   if (!bs?.scheduled_time) return null;
+  if (bs.time_confirmed === false) return null;
   const time = fmtTime(bs.scheduled_time);
   return time || null;
+}
+
+/** Départ caduc : le transporteur doit reconfirmer après un changement de RDV. */
+export function isDepartureAwaitingCarrierConfirmation(request) {
+  return request?.booking_summary?.time_confirmed === false;
 }
 
 /**
@@ -103,6 +109,9 @@ export function getEffectiveDepartureScheduleIso(request) {
 /** Départ mission (pickup_time_confirmed ou booking converti). */
 export function formatDepartureTime(request) {
   if (!request) return 'À définir';
+  if (isDepartureAwaitingCarrierConfirmation(request)) {
+    return 'À confirmer';
+  }
 
   const bookingDep = getBookingDepartureTime(request);
   if (bookingDep) return bookingDep;
@@ -284,7 +293,8 @@ export function formatLegScheduleSummary(request) {
   const parts = [];
 
   const dep = formatDepartureTime(request);
-  if (dep !== 'À définir') parts.push(`${dep} Départ`);
+  if (dep === 'À confirmer') parts.push('Départ · À confirmer');
+  else if (dep !== 'À définir') parts.push(`${dep} Départ`);
 
   const legs = Array.isArray(request.legs)
     ? [...request.legs].sort((a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0))

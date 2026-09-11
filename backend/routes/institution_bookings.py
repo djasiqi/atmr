@@ -10,9 +10,12 @@ import sentry_sdk
 from flask import request
 from flask_jwt_extended import get_jwt, get_jwt_identity, verify_jwt_in_request
 from flask_restx import Namespace, Resource, fields
-from marshmallow import EXCLUDE, Schema, ValidationError, validate
+from marshmallow import EXCLUDE, Schema, ValidationError, validate, validates_schema
 from marshmallow import fields as ma_fields
 
+from application.institutions.destination_details_rules import (
+    validate_medical_destination,
+)
 from ext import db
 from models.enums import InstitutionRole
 from routes.api_error_models import (
@@ -58,6 +61,9 @@ booking_patch_model = institution_bookings_ns.model(
         "medical_facility": fields.String(),
         "hospital_service": fields.String(),
         "doctor_name": fields.String(),
+        "destination_type": fields.String(
+            description="medical | other | domicile | institution"
+        ),
         "pickup_floor": fields.String(),
         "pickup_door_code": fields.String(),
         "dropoff_floor": fields.String(),
@@ -119,6 +125,7 @@ class InstitutionBookingPatchSchema(Schema):
     wheelchair_client_has = ma_fields.Boolean(required=False)
     wheelchair_need = ma_fields.Boolean(required=False)
     mission_type = ma_fields.String(required=False)
+    destination_type = ma_fields.String(required=False, allow_none=True)
     delivery_description = ma_fields.String(required=False, allow_none=True)
     appointment_time = ma_fields.String(required=False, allow_none=True)
     return_appointment_time = ma_fields.String(required=False, allow_none=True)
@@ -127,6 +134,24 @@ class InstitutionBookingPatchSchema(Schema):
         required=False,
         allow_none=True,
     )
+
+    @validates_schema
+    def validate_destination_service_or_doctor(self, data, **_kwargs):
+        """Même invariant que POST/PUT demandes : service OU médecin.
+
+        Appliqué dès que le client envoie les deux champs (cas UI opérationnelle
+        et tests API). Un PATCH d'un seul champ est tranché dans le service,
+        après fusion avec les valeurs déjà persistées.
+        """
+        if "hospital_service" not in data or "doctor_name" not in data:
+            return
+        validate_medical_destination(
+            data.get("hospital_service"),
+            data.get("doctor_name"),
+            destination_type=data.get("destination_type"),
+            mission_type=data.get("mission_type"),
+            field_name="hospital_service",
+        )
 
 
 class InstitutionBookingCancelSchema(Schema):

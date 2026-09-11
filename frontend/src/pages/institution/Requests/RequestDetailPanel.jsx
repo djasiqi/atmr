@@ -1346,7 +1346,11 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
               <div className={s.summaryGrid}>
                 <div className={s.summaryItem}>
                   <span className={s.summaryLabel}>Horaire</span>
-                  <span className={s.summaryValue}>{fmtMissionSchedule(bs.scheduled_time)}</span>
+                  <span className={s.summaryValue}>
+                    {bs.time_confirmed === false
+                      ? 'À confirmer'
+                      : fmtMissionSchedule(bs.scheduled_time)}
+                  </span>
                 </div>
                 <div className={s.summaryItem}>
                   <span className={s.summaryLabel}>Patient</span>
@@ -1356,6 +1360,9 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
                   <span className={s.summaryLabel}>Statut</span>
                   <span className={s.summaryValue}>
                     {BOOKING_STATUS_LABELS[resolveBookingStatusKey(bs)] || 'En cours'}
+                    {bs.time_confirmed === false && (
+                      <span className={s.scheduleReconfirmHint}>Horaire à reconfirmer</span>
+                    )}
                   </span>
                 </div>
                 {canViewAmounts && bs.amount != null && (
@@ -1442,7 +1449,9 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           <div className={s.infoRow}>
             <span className={s.infoLabel}>Date et heure</span>
             <span className={s.infoValue}>
-              {fmtMissionSchedule(getEffectiveDepartureScheduleIso(request))}
+              {bs?.time_confirmed === false
+                ? 'À confirmer par le transporteur'
+                : fmtMissionSchedule(getEffectiveDepartureScheduleIso(request))}
             </span>
           </div>
           <div className={s.infoRow}>

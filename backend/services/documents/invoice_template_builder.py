@@ -14,7 +14,9 @@ from typing import Any
 
 from services.billing import BillingProfileService
 from services.documents.invoice_recipient import (
+    append_residence_to_billed_to_name,
     institution_patient_billing_address,
+    invoice_residence_label,
     resolve_invoice_institution_patient,
 )
 
@@ -332,12 +334,12 @@ class InvoiceTemplateBuilder:
             if bp is not None:
                 bp_name = (getattr(bp, "display_name", None) or "Payeur").strip()
                 addr = (getattr(bp, "billing_address", None) or "").strip()
+                patient = None
                 if is_patient_party:
                     # Facturation au patient : son domicile légal fait foi, le
                     # snapshot du BillingParty peut être vide ou périmé.
-                    domicile = institution_patient_billing_address(
-                        resolve_invoice_institution_patient(invoice)
-                    )
+                    patient = resolve_invoice_institution_patient(invoice)
+                    domicile = institution_patient_billing_address(patient)
                     if domicile:
                         addr = domicile
                 if addr:
@@ -380,6 +382,15 @@ class InvoiceTemplateBuilder:
                         if client_name.strip():
                             name = f"{client_name}<br/>c/o {bp_name}"
                 # Si le tiers payeur est SPC : ajouter le numéro SPC après l'adresse (2 sauts de ligne)
+                if is_patient_party:
+                    name = append_residence_to_billed_to_name(
+                        name,
+                        invoice_residence_label(
+                            patient=patient,
+                            client=getattr(invoice, "client", None),
+                        ),
+                        separator="<br/>",
+                    )
                 if (bp_name or "").upper().find("SPC") >= 0:
                     from models.billing_party import ClientBillingParty
 

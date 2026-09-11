@@ -54,9 +54,35 @@ export const deleteInstitutionLogo = async () => {
 /**
  * Récupère les entreprises éligibles pour les préférences transport
  */
-export const getEligibleCompanies = async () => {
-  const response = await apiClient.get(`${BASE_PATH}/settings/eligible-companies`);
-  return response.data;
+export const getEligibleCompanies = async (options = {}) => {
+  const started = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  console.info('[eligible_carriers]', { stage: 'carriers_fetch_start' });
+  try {
+    const response = await apiClient.get(`${BASE_PATH}/settings/eligible-companies`, {
+      signal: options.signal,
+      timeout: options.timeout,
+    });
+    const companies = response.data?.companies || [];
+    console.info('[eligible_carriers]', {
+      stage: 'carriers_fetch_end',
+      duration_ms: Math.round(
+        (typeof performance !== 'undefined' ? performance.now() : Date.now()) - started
+      ),
+      http_status: response.status,
+      total: companies.length,
+    });
+    return response.data;
+  } catch (error) {
+    console.info('[eligible_carriers]', {
+      stage: 'carriers_fetch_error',
+      duration_ms: Math.round(
+        (typeof performance !== 'undefined' ? performance.now() : Date.now()) - started
+      ),
+      http_status: error?.response?.status,
+      error: error?.response?.data?.error || error?.message,
+    });
+    throw error;
+  }
 };
 
 // ============================================================================

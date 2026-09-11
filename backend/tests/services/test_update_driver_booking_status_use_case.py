@@ -45,6 +45,9 @@ class _Booking:
     cancellation_reason_text: str | None = None
     is_cancellation_billable: bool | None = None
     cancellation_display_label: str | None = None
+    billed_to_type: str = "patient"
+    billed_to_company_id: int | None = None
+    billing_party_id: int | None = None
 
 
 class _BookingRepo:
@@ -781,3 +784,25 @@ def test_completed_success_returns_lifecycle_identity() -> None:
     assert res.response.get("mission_revision", 0) >= 1
     assert assignment.status == AssignmentStatus.COMPLETED
     assert db.commits == 1
+
+
+def test_completed_rejects_clinic_without_company_id() -> None:
+    booking = _Booking(
+        id=39523,
+        company_id=1,
+        driver_id=10,
+        status=BookingStatus.IN_PROGRESS,
+        billed_to_type="clinic",
+        billed_to_company_id=None,
+        billing_party_id=11,
+    )
+    uc, db = _make_uc(booking)
+    res = uc.execute(
+        UpdateDriverBookingStatusCommand(
+            booking_id=39523, driver_id=10, payload={"status": "completed"}
+        )
+    )
+    assert res.status_code == 422
+    assert res.response.get("error_code") == "billing_validation_error"
+    assert booking.status == BookingStatus.IN_PROGRESS
+    assert db.commits == 0

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FaPlus, FaTrash, FaRoute } from 'react-icons/fa';
+import { toast } from 'sonner';
 import AddressAutocomplete from '../../../components/common/AddressAutocomplete';
 import { useUpdateRequest } from '../../../hooks/useInstitutionData';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
@@ -7,6 +8,19 @@ import RouteStepTimeField from '../../../components/institution/RouteStepTimeFie
 import ConfirmRequestEditModal from './ConfirmRequestEditModal';
 import { combineMissionDateTime, extractHHMM } from '../../../utils/missionScheduleForm';
 import { extractWallClockDate } from '../../../utils/missionTimeDisplay';
+import MedicalDestinationDetails from '../../../components/institution/MedicalDestinationDetails';
+import {
+  DESTINATION_TYPE_MEDICAL,
+  DESTINATION_TYPE_OTHER,
+  suggestDestinationTypeFromPlace,
+} from '../../../utils/institutionDestinationDetails';
+import {
+  REQUIRED_FIELDS_TOAST,
+  collectInstitutionRequestFormErrors,
+  fieldErrorsMap,
+  formErrorId,
+  scrollToFirstFormError,
+} from '../../../utils/institutionRequestFormErrors';
 import {
   buildInitialDestinations,
   buildInitialReturnBilling,
@@ -55,6 +69,31 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
     needs_assistance: Boolean(request.requires_assistance || initialMobility.needs_assistance),
   }));
   const [assistanceType, setAssistanceType] = useState(initialMobility.assistance_type || '');
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const clearFieldErrors = (...keys) => {
+    setFieldErrors((prev) => {
+      if (!keys.some((k) => prev[k])) return prev;
+      const next = { ...prev };
+      keys.forEach((k) => { delete next[k]; });
+      return next;
+    });
+  };
+
+  const remapEditErrorIds = (errors) => (errors || []).map((err) => {
+    if (err.key === 'mission_date') return { ...err, fieldId: 'edit-mission-date' };
+    if (err.key === 'pickup_location') return { ...err, fieldId: 'edit-pickup-location' };
+    if (err.key === 'pickup_time') return { ...err, fieldId: 'edit-pickup-time' };
+    if (err.key === 'dropoff_location') return { ...err, fieldId: 'edit-dest-address-0' };
+    if (err.key === 'medical_principal') return { ...err, fieldId: 'edit-dest-service-0' };
+    const loc = /^extra_stop_location_(\d+)$/.exec(err.key);
+    if (loc) return { ...err, fieldId: `edit-dest-address-${Number(loc[1]) + 1}` };
+    const time = /^extra_stop_time_(\d+)$/.exec(err.key);
+    if (time) return { ...err, fieldId: `edit-dest-time-${Number(time[1]) + 1}` };
+    const med = /^medical_extra_(\d+)$/.exec(err.key);
+    if (med) return { ...err, fieldId: `edit-dest-service-${Number(med[1]) + 1}` };
+    return err;
+  });
 
   const toggleMobility = (key) => {
     setMobility((prev) => {
@@ -71,6 +110,12 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
     setDestinations((prev) =>
       prev.map((d, i) => (i === index ? { ...d, [field]: value } : d)),
     );
+    if (field === 'service' || field === 'doctor' || field === 'destinationType') {
+      clearFieldErrors(index === 0 ? 'medical_principal' : `medical_extra_${index - 1}`);
+    }
+    if (field === 'address') {
+      clearFieldErrors(index === 0 ? 'dropoff_location' : `extra_stop_location_${index - 1}`);
+    }
   };
 
   const setDestinationTime = (index, timeHHMM) => {
@@ -86,6 +131,7 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
         establishment: '',
         service: '',
         doctor: '',
+        destinationType: DESTINATION_TYPE_MEDICAL,
         scheduled_time: '',
         time_confirmed: false,
         use_custom_billing: false,
@@ -101,6 +147,8 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
   const setDestinationFromSelection = (index, item) => {
     const address = extractAddressFromPlace(item);
     const { establishment, doctor } = extractPlaceDetails(item);
+    const suggested = suggestDestinationTypeFromPlace(item)
+      || (doctor ? 'medical' : null);
     setDestinations((prev) =>
       prev.map((dest, i) => (
         i === index
@@ -109,25 +157,54 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
             address,
             establishment,
             doctor,
+            ...(suggested ? { destinationType: suggested } : {}),
           }
           : dest
       )),
     );
+    clearFieldErrors(
+      index === 0 ? 'dropoff_location' : `extra_stop_location_${index - 1}`,
+      index === 0 ? 'medical_principal' : `medical_extra_${index - 1}`,
+    );
   };
 
   const buildPayload = () => {
+    const extraStops = destinations.slice(1).map((d) => ({
+      dropoff_location: d.address,
+      destination_type: d.destinationType,
+      dropoff_service: d.service,
+      dropoff_doctor: d.doctor,
+      dropoff_establishment: d.establishment,
+      scheduled_time: d.scheduled_time,
+    }));
+    const validationErrors = remapEditErrorIds(collectInstitutionRequestFormErrors({
+      formData: {
+        mission_type: request.mission_type || 'patient_transport',
+        mission_date: missionDate,
+        pickup_location: pickupLocation,
+        pickup_type: 'other',
+        dropoff_location: destinations[0]?.address,
+        dropoff_type: 'other',
+        destination_type: destinations[0]?.destinationType,
+        dropoff_service: destinations[0]?.service,
+        dropoff_doctor: destinations[0]?.doctor,
+        pickup_time: pickupTime,
+        return_to_institution: returnToInstitution,
+        return_time: returnTime,
+        intermediate_stops: extraStops,
+      },
+    }));
+    if (validationErrors.length > 0) {
+      setFieldErrors(fieldErrorsMap(validationErrors));
+      toast.error(REQUIRED_FIELDS_TOAST);
+      scrollToFirstFormError(validationErrors);
+      return null;
+    }
+    setFieldErrors({});
+
     const cleanedDestinations = destinations
       .map((d) => ({ ...d, address: (d.address || '').trim() }))
       .filter((d) => d.address);
-
-    if (!pickupLocation.trim() || cleanedDestinations.length === 0) {
-      window.alert('Le départ et au moins une destination sont obligatoires.');
-      return null;
-    }
-    if (!missionDate) {
-      window.alert('La date de mission est obligatoire.');
-      return null;
-    }
 
     const payload = {
       mission_date: missionDate,
@@ -166,9 +243,11 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
     } else {
       const dest = cleanedDestinations[0];
       payload.dropoff_location = dest.address;
+      payload.dropoff_type = 'other';
+      payload.destination_type = dest.destinationType || DESTINATION_TYPE_OTHER;
       if (dest.establishment) payload.dropoff_establishment = dest.establishment;
-      if (dest.service) payload.dropoff_service = dest.service;
-      if (dest.doctor) payload.dropoff_doctor = dest.doctor;
+      payload.dropoff_service = dest.service?.trim() || null;
+      payload.dropoff_doctor = dest.doctor?.trim() || null;
 
       const pickupIso = combineMissionDateTime(missionDate, pickupTime);
       if (pickupIso) {
@@ -214,7 +293,7 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
             setShowConfirmModal(true);
             return;
           }
-          window.alert(dataErr?.error || 'Erreur lors de la modification.');
+          toast.error(dataErr?.error || 'Erreur lors de la modification.');
         },
       },
     );
@@ -260,9 +339,17 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
                   name="pickup_location"
                   inputId="edit-pickup-location"
                   value={pickupLocation}
-                  onChange={(e) => setPickupLocation(e?.target?.value ?? e ?? '')}
-                  onSelect={(item) => setPickupLocation(extractAddressFromPlace(item))}
+                  onChange={(e) => {
+                    setPickupLocation(e?.target?.value ?? e ?? '');
+                    clearFieldErrors('pickup_location');
+                  }}
+                  onSelect={(item) => {
+                    setPickupLocation(extractAddressFromPlace(item));
+                    clearFieldErrors('pickup_location');
+                  }}
                   placeholder="Adresse de départ"
+                  aria-invalid={Boolean(fieldErrors.pickup_location) || undefined}
+                  aria-describedby={fieldErrors.pickup_location ? formErrorId('edit-pickup-location') : undefined}
                 />
               </div>
               <RouteStepTimeField
@@ -273,6 +360,11 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
                 onConfirmedChange={setPickupTimeConfirmed}
               />
             </div>
+            {fieldErrors.pickup_location && (
+              <p id={formErrorId('edit-pickup-location')} className={s.fieldError} role="alert">
+                {fieldErrors.pickup_location}
+              </p>
+            )}
           </div>
         </div>
 
@@ -309,6 +401,17 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
                     )}
                     onSelect={(item) => setDestinationFromSelection(index, item)}
                     placeholder="Adresse de destination"
+                    aria-invalid={Boolean(
+                      index === 0
+                        ? fieldErrors.dropoff_location
+                        : fieldErrors[`extra_stop_location_${index - 1}`],
+                    ) || undefined}
+                    aria-describedby={
+                      (index === 0 && fieldErrors.dropoff_location && formErrorId(`edit-dest-address-${index}`))
+                      || (index > 0 && fieldErrors[`extra_stop_location_${index - 1}`]
+                        && formErrorId(`edit-dest-address-${index}`))
+                      || undefined
+                    }
                   />
                 </div>
                 <RouteStepTimeField
@@ -319,24 +422,30 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
                   onConfirmedChange={(v) => setDestinationField(index, 'time_confirmed', v)}
                 />
               </div>
+              {(index === 0 ? fieldErrors.dropoff_location : fieldErrors[`extra_stop_location_${index - 1}`]) && (
+                <p id={formErrorId(`edit-dest-address-${index}`)} className={s.fieldError} role="alert">
+                  {index === 0 ? fieldErrors.dropoff_location : fieldErrors[`extra_stop_location_${index - 1}`]}
+                </p>
+              )}
               <div className={s.routeEditDetails}>
-                <input
-                  className={s.editInput}
-                  value={dest.establishment}
-                  onChange={(e) => setDestinationField(index, 'establishment', e.target.value)}
-                  placeholder="Établissement / Lieu"
-                />
-                <input
-                  className={s.editInput}
-                  value={dest.service}
-                  onChange={(e) => setDestinationField(index, 'service', e.target.value)}
-                  placeholder="Service"
-                />
-                <input
-                  className={s.editInput}
-                  value={dest.doctor}
-                  onChange={(e) => setDestinationField(index, 'doctor', e.target.value)}
-                  placeholder="Médecin"
+                <MedicalDestinationDetails
+                  compact
+                  establishmentId={`edit-dest-establishment-${index}`}
+                  serviceId={`edit-dest-service-${index}`}
+                  doctorId={`edit-dest-doctor-${index}`}
+                  establishment={dest.establishment}
+                  service={dest.service}
+                  doctor={dest.doctor}
+                  destinationType={dest.destinationType || DESTINATION_TYPE_OTHER}
+                  onDestinationTypeChange={(value) => setDestinationField(index, 'destinationType', value)}
+                  onEstablishmentChange={(e) => setDestinationField(index, 'establishment', e.target.value)}
+                  onServiceChange={(e) => setDestinationField(index, 'service', e.target.value)}
+                  onDoctorChange={(e) => setDestinationField(index, 'doctor', e.target.value)}
+                  showError={Boolean(
+                    index === 0
+                      ? fieldErrors.medical_principal
+                      : fieldErrors[`medical_extra_${index - 1}`],
+                  )}
                 />
               </div>
             </div>
@@ -388,9 +497,19 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
           <InlineDatePicker
             inputId="edit-mission-date"
             value={missionDate}
-            onChange={(v) => setMissionDate(v)}
+            onChange={(v) => {
+              setMissionDate(v);
+              clearFieldErrors('mission_date');
+            }}
             placeholder="Date"
+            invalid={Boolean(fieldErrors.mission_date)}
+            describedBy={fieldErrors.mission_date ? formErrorId('edit-mission-date') : undefined}
           />
+          {fieldErrors.mission_date && (
+            <p id={formErrorId('edit-mission-date')} className={s.fieldError} role="alert">
+              {fieldErrors.mission_date}
+            </p>
+          )}
         </div>
       </div>
 

@@ -64,11 +64,8 @@ def validate_booking_control(
 
     effective = effective_control_status(booking)
     if effective == InstitutionBillingControlStatus.VALIDATED.value:
-        return ControlMutationResult(
-            ok=False,
-            error="Booking déjà validé.",
-            status_code=409,
-        )
+        after = control_status_snapshot(booking)
+        return ControlMutationResult(ok=True, before=after, after=after)
     if effective == InstitutionBillingControlStatus.ANOMALY.value:
         return ControlMutationResult(
             ok=False,

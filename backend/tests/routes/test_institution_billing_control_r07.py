@@ -184,6 +184,7 @@ def _converted_booking(
     transport_req = TransportRequest()
     transport_req.public_id = str(uuid.uuid4())
     transport_req.institution_id = institution.id
+    transport_req.created_by_display_name = "Contrôle facturation test"
     transport_req.patient_id = patient.id
     transport_req.external_reference = f"CTRL-{suffix}"
     transport_req.pickup_location = booking.pickup_location
@@ -492,6 +493,37 @@ class TestBillingControlWorkflow:
             booking.institution_control_status
             == InstitutionBillingControlStatus.VALIDATED
         )
+
+    def test_c11b_validate_already_validated_is_idempotent(
+        self, db, control_institution, control_booking
+    ):
+        booking = control_booking["booking"]
+        tr = control_booking["transport_request"]
+        first = validate_booking_control(
+            booking,
+            transport_request=tr,
+            institution_id=control_institution.id,
+            actor_user_id=1,
+            actor_role="institution_admin",
+            actor_display_name="Validateur Test",
+        )
+        assert first.ok is True
+        db.session.commit()
+        second = validate_booking_control(
+            booking,
+            transport_request=tr,
+            institution_id=control_institution.id,
+            actor_user_id=1,
+            actor_role="institution_admin",
+            actor_display_name="Validateur Test",
+        )
+        assert second.ok is True
+        assert second.after["control_status"] == "validated"
+        events = BookingChangeEvent.query.filter_by(
+            booking_id=booking.id,
+            action_type="billing_control_validated",
+        ).all()
+        assert len(events) == 1
 
     def test_c12_audit_validated_by_exact(
         self, db, control_institution, control_booking

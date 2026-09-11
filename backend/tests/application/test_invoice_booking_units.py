@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from application.invoices.invoice_booking_units import resolve_invoice_booking_units
+from application.invoices.booking_schedule import (
+    booking_schedule_sort_key,
+    comparable_scheduled_time,
+)
+from application.invoices.invoice_booking_units import (
+    _order_pair,
+    resolve_invoice_booking_units,
+)
 from application.invoices.subject_identity import resolve_subject_identity
 
 
@@ -26,6 +33,9 @@ def _bk(
     billed_to_type: str = "patient",
     created_via: str | None = None,
     is_institution_client: bool = False,
+    status: str = "COMPLETED",
+    is_cancellation_billable: bool = False,
+    billing_override_reason: str | None = None,
 ) -> SimpleNamespace:
     client = None
     if is_institution_client:
@@ -47,7 +57,9 @@ def _bk(
         billed_to_type=billed_to_type,
         created_via=created_via,
         client=client,
-        status="COMPLETED",
+        status=status,
+        is_cancellation_billable=is_cancellation_billable,
+        billing_override_reason=billing_override_reason,
         _resolve_source_transport_request=lambda: None,
     )
 
@@ -213,3 +225,57 @@ def test_segments_vs_units_four_segments_two_round_trips():
     )
     assert len(units) == 2
     assert sum(len(u.booking_ids) for u in units) == 4
+
+
+def test_canceled_non_billable_return_is_excluded_from_round_trip():
+    """Retour annulé non facturable lié par parent : l'aller reste seul."""
+    aller = _bk(37750, institution_patient_id=458, amount="135.00")
+    retour = _bk(
+        37751,
+        institution_patient_id=458,
+        amount="0.00",
+        pickup="Rue B 2, 1227 Carouge",
+        dropoff="Rue A 1, 1200 Genève",
+        scheduled=None,
+        parent_booking_id=37750,
+        is_return=True,
+        status="CANCELED",
+        is_cancellation_billable=False,
+    )
+    retour.scheduled_time = None
+    units = resolve_invoice_booking_units(
+        selected_ids={37750},
+        scope_bookings=[aller, retour],
+        subject_key_fn=lambda b: resolve_subject_identity(b).key,
+        amount_ht_fn=lambda b: Decimal(str(b.amount)),
+    )
+    assert len(units) == 1
+    assert units[0].kind == "single"
+    assert units[0].booking_ids == (37750,)
+
+
+def test_comparable_scheduled_time_mixes_naive_aware_and_empty():
+    naive = datetime(2026, 8, 12, 9, 0, 0)
+    aware = datetime(2026, 8, 12, 16, 0, 0, tzinfo=UTC)
+    assert comparable_scheduled_time(naive) == naive
+    assert comparable_scheduled_time(aware) == datetime(2026, 8, 12, 16, 0, 0)
+    assert comparable_scheduled_time(None) == datetime.min
+    items = [
+        _bk(37751, scheduled=None, is_return=True),
+        _bk(37750, scheduled=naive),
+    ]
+    items[0].scheduled_time = None
+    ordered = sorted(items, key=booking_schedule_sort_key)
+    assert [b.id for b in ordered] == [37751, 37750]
+
+
+def test_order_pair_does_not_raise_on_naive_vs_aware():
+    aller = _bk(1, scheduled=datetime(2026, 8, 12, 9, 0, 0))
+    retour = _bk(
+        2,
+        scheduled=datetime(2026, 8, 12, 16, 0, 0, tzinfo=UTC),
+        is_return=True,
+    )
+    primary, secondary = _order_pair(aller, retour)
+    assert primary.id == 1
+    assert secondary.id == 2

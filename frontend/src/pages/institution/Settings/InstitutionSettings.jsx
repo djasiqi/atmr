@@ -13,7 +13,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { FaKey, FaTruck, FaPlus, FaTimes, FaCopy, FaArrowUp, FaArrowDown, FaSave, FaBuilding, FaTrash, FaFileInvoiceDollar, FaBell, FaUsersCog, FaUserCircle, FaUsers } from 'react-icons/fa';
-import { useTransportPreferences, useUpdateTransportPreferences, useApiKeys, useCreateApiKey, useRevokeApiKey, useInstitutionMe, useInstitutionSettings, useUpdateInstitutionSettings } from '../../../hooks/useInstitutionData';
+import { useTransportPreferences, useUpdateTransportPreferences, useApiKeys, useCreateApiKey, useRevokeApiKey, useInstitutionMe, useInstitutionSettings, useUpdateInstitutionSettings, useEligibleCompanies } from '../../../hooks/useInstitutionData';
 import { formatDurationLabel } from '../../../utils/durationInput';
 import { isAdmin, canEditBilling } from '../../../utils/institutionPermissions';
 import { toast } from 'sonner';
@@ -52,7 +52,8 @@ const InstitutionSettings = () => {
   const isCuratelle = (institutionType || '').toLowerCase() === 'curatelle';
   
   const [activeTab, setActiveTab] = useState(isBillingRole ? 'myprofile' : 'profile');
-  
+  useEligibleCompanies({ enabled: canAdmin && activeTab === 'preferences' });
+
   // Le rôle billing accède à Mon profil + Facturation → forcer au chargement
   useEffect(() => {
     if (isBillingRole && activeTab !== 'billing' && activeTab !== 'myprofile') {
@@ -348,7 +349,7 @@ const InstitutionSettings = () => {
             <p className={styles.allocationModeDescription}>
               {isSequentialDispatch
                 ? "Les demandes sont envoyées successivement aux transporteurs selon l'ordre défini. En cas de non-réponse dans le délai imparti, la demande est automatiquement proposée au transporteur suivant."
-                : 'Les demandes sont envoyées en parallèle à tous les transporteurs éligibles. Le premier à accepter remporte la demande.'}
+                : 'Les demandes sont envoyées en parallèle à tous les transporteurs de votre liste. Le premier à accepter remporte la demande.'}
             </p>
             <div className={styles.allocationModeBadges} role="status" aria-live="polite">
               <span className={`${styles.allocationBadge} ${styles.allocationBadgePrimary}`}>

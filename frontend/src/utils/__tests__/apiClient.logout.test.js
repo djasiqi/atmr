@@ -25,7 +25,7 @@ describe('logoutUser', () => {
     postSpy = jest.spyOn(apiClient, 'post').mockResolvedValue({ status: 200 });
     deleteSpy = jest.spyOn(apiClient, 'delete').mockResolvedValue({ status: 204 });
     authChangedHandler = jest.fn();
-    navigateHandler = jest.fn();
+    navigateHandler = jest.fn((event) => event.preventDefault());
     window.addEventListener('auth-changed', authChangedHandler);
     window.addEventListener(AUTH_NAVIGATE_EVENT, navigateHandler);
     localStorage.setItem('app_user', JSON.stringify({ public_id: 'u-1', role: 'admin' }));

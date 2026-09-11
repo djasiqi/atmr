@@ -13,6 +13,7 @@ from models.enums import (
     PlatformStatementStatus,
 )
 from services.platform_billing.dossier_status import (
+    ACTION_CLOSE_PERIOD,
     ACTION_ISSUE,
     ACTION_RECALCULATE_DOSSIER,
     ACTION_VIEW,
@@ -199,7 +200,8 @@ class TestActions:
             issuer_errors=["Période non verrouillée"],
             caps=set(),
         )
-        assert out["primary_action"] == ACTION_VIEW
+        assert out["primary_action"] == ACTION_CLOSE_PERIOD
+        assert ACTION_CLOSE_PERIOD in out["allowed_actions"]
         assert ACTION_ISSUE not in out["allowed_actions"]
         assert ACTION_ISSUE in out["blocked_actions"]
 

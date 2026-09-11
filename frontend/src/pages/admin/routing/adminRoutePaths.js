@@ -31,6 +31,7 @@ export const adminPaths = {
   partnersOrganizations: (publicId) => join(publicId, 'partners', 'organizations'),
   partnersUsers: (publicId) => join(publicId, 'partners', 'users'),
   partnersDemoRequests: (publicId) => join(publicId, 'partners', 'demo-requests'),
+  partnersContactRequests: (publicId) => join(publicId, 'partners', 'contact-requests'),
 
   finance: (publicId) => join(publicId, 'finance'),
   financeFactures: (publicId) => join(publicId, 'finance', 'factures'),
