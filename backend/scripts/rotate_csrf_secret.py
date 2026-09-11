@@ -42,7 +42,9 @@ def main() -> None:
 
     print("✅ Nouvelle clé CSRF générée (non affichée).")
     print(f"   Fichier : {out_path.resolve()} (mode 0600, longueur={len(new_secret)})")
-    print("   Importer via Vault / gestionnaire de secrets — ne pas coller dans un ticket.")
+    print(
+        "   Importer via Vault / gestionnaire de secrets — ne pas coller dans un ticket."
+    )
     print()
     print("=" * 80)
     print("INSTRUCTIONS :")
