@@ -465,10 +465,12 @@ class TestTriggerReturnLegTopology:
             client=world["client"],
         )
 
+        # L'aller est dans 2 jours : un retour « urgent » now+30min
+        # violerait l'invariant ROUND-TRIP-TEMPORAL (422).
         resp = client.post(
             f"/api/v1/companies/me/reservations/{topo['outbound'].id}/trigger-return",
             headers=company_headers,
-            json={"urgent": True, "minutes_offset": 30},
+            json={"return_time": _future_return_time(12), "time_confirmed": True},
         )
         assert resp.status_code == 200, resp.get_json()
         returned = resp.get_json()["return_booking"]

@@ -31,7 +31,9 @@ export function institutionSubmitButtonLabel({
   isDraftMode,
   hasCreatedRequest,
 }) {
-  if (isLirieSendMode && busy) return 'Envoi…';
+  if (isLirieSendMode && busy) {
+    return phase === 'create' ? 'Enregistrement…' : 'Envoi…';
+  }
   if (isLirieSendMode && hasCreatedRequest) return "Réessayer l'envoi LIRIE";
   if (isDraftMode) return 'Créer le brouillon';
   if (isLirieSendMode) return 'Envoyer aux transporteurs LIRIE';

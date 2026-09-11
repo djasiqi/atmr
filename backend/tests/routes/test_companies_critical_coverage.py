@@ -523,10 +523,13 @@ class TestCompaniesCriticalCoverage:
         )
         assert dispatch.status_code in (200, 400, 409), dispatch.get_json()
 
+        # Retour après l'aller (now+6h) : un trigger implicite now+15min
+        # violerait l'invariant ROUND-TRIP-TEMPORAL (422).
+        return_after_outbound = (datetime.now(UTC) + timedelta(hours=8)).isoformat()
         trigger = client.post(
             f"/api/v1/companies/me/reservations/{booking_id}/trigger-return",
             headers=company_headers,
-            json={},
+            json={"return_time": return_after_outbound, "time_confirmed": True},
         )
         assert trigger.status_code in (200, 201, 400), trigger.get_json()
 

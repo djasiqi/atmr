@@ -528,7 +528,7 @@ const ReservationDetailPanel = ({
         if (!cancelled) setInstitutionChangeEvents([]);
       });
     return () => { cancelled = true; };
-  }, [reservation?.id, reservation?.institution_timeline, reservation?.metadata_json]);
+  }, [reservation]);
 
   const allowBillingAdjustByOrigin = useMemo(
     () => (reservation ? allowBillingAdjustByCreatedVia(reservation) : false),

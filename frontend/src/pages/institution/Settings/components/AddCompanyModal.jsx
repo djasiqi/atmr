@@ -24,7 +24,10 @@ const AddCompanyModal = ({ currentPreferences, onAdd, onClose }) => {
   } = useEligibleCompanies();
   const [search, setSearch] = useState('');
 
-  const companies = eligibleData?.companies || [];
+  const companies = useMemo(
+    () => eligibleData?.companies || [],
+    [eligibleData],
+  );
   const currentIds = useMemo(
     () => new Set((currentPreferences || []).map((p) => p.company_id)),
     [currentPreferences],

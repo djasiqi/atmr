@@ -22,6 +22,12 @@ describe('institutionRequestSubmit', () => {
     expect(institutionSubmitButtonLabel({
       isLirieSendMode: true,
       busy: true,
+      phase: 'create',
+    })).toBe('Enregistrement…');
+    expect(institutionSubmitButtonLabel({
+      isLirieSendMode: true,
+      busy: true,
+      phase: 'send',
     })).toBe('Envoi…');
     expect(institutionSubmitButtonLabel({
       isLirieSendMode: true,
