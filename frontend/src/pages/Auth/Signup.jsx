@@ -48,23 +48,23 @@ const Signup = () => {
     const { username, email, password, phone } = formData;
 
     if (!username.trim() || !email.trim() || !password) {
-      setErrorMessage(‘Tous les champs obligatoires doivent être remplis.’);
+      setErrorMessage('Tous les champs obligatoires doivent être remplis.');
       return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setErrorMessage(‘Veuillez entrer une adresse email valide.’);
+      setErrorMessage('Veuillez entrer une adresse email valide.');
       return false;
     }
 
     if (password.length < 8) {
-      setErrorMessage(‘Le mot de passe doit contenir au moins 8 caractères.’);
+      setErrorMessage('Le mot de passe doit contenir au moins 8 caractères.');
       return false;
     }
 
     if (!phone.trim() || phone.trim().length < 7) {
-      setErrorMessage(‘Un numéro de téléphone valide est requis.’);
+      setErrorMessage('Un numéro de téléphone valide est requis.');
       return false;
     }
 
@@ -78,7 +78,7 @@ const Signup = () => {
     if (!validateForm()) return;
 
     try {
-      const response = await apiClient.post(‘/auth/register’, {
+      const response = await apiClient.post('/auth/register', {
         username: formData.username.trim(),
         email: formData.email.trim(),
         password: formData.password,
@@ -98,8 +98,8 @@ const Signup = () => {
         {
           replace: true,
           state: {
-            maskedEmail: masked_email ?? ‘’,
-            maskedPhone: masked_phone ?? ‘’,
+            maskedEmail: masked_email ?? '',
+            maskedPhone: masked_phone ?? '',
             prefillEmail: formData.email.trim(),
           },
         }
