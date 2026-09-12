@@ -37,6 +37,15 @@
 | **CodeQL** (`.github/workflows/codeql.yml`) | Job `if: false` — mort ; alertes via Dependabot / Security tab |
 | **Check Broad Exceptions** (`backend/.github/workflows/`) | Doublon de `Backend Tests` → `detect_broad_exceptions.py` |
 
+## Docker Hub + runtime Node 24 (Actions)
+
+- **Ne pas** poser `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true` : ça réactiverait Node 20, déjà déprécié sur les runners.
+- `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` reste en place (filet pour les actions JS encore en runtime Node 20).
+- Actions Docker alignées **v4** (runtime Node 24 natif) : `setup-qemu-action`, `setup-buildx-action`.
+- Login Docker Hub : `scripts/ci/dockerhub-login.sh` (CLI + retry). `docker/login-action@v3` n’a **aucun retry** — un `connection reset by peer` vers `auth.docker.io` (Cloudflare) faisait échouer tout le job.
+
+✅ **Implémenté** : retry 5 tentatives / backoff 8s×n sur RST/EOF/timeout ; 401/403 fatals tout de suite. Workflows : `deploy.yml`, `build-and-deploy-rl.yml`, `deploy-kafka-p0.yml`.
+
 ## Hors Actions (GitHub natif)
 
 - **Dependabot Updates** — PR hebdo deps (`.github/dependabot.yml`)

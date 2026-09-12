@@ -105,7 +105,7 @@ jobs:
         if: ${{ github.event.inputs.dry_run == 'true' }}
         run: |
           set -euo pipefail
-          echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+          bash scripts/ci/dockerhub-login.sh
           docker manifest inspect "${DOCKER_IMAGE}@${IMAGE_DIGEST}" >/dev/null
           echo "OK manifest ${DOCKER_IMAGE}@${IMAGE_DIGEST}"
           {
@@ -207,7 +207,18 @@ jobs:
             cd /srv/atmr
             export ATMR_DEPLOY_ROOT=/srv/atmr
             eval "$(./scripts/kafka-env-effective.sh)"
-            echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+            MAX_ATTEMPTS=5
+            for i in $(seq 1 "${MAX_ATTEMPTS}"); do
+              if echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin; then
+                break
+              fi
+              if [ "${i}" -eq "${MAX_ATTEMPTS}" ]; then
+                echo "Login Docker Hub serveur impossible après ${MAX_ATTEMPTS} tentatives"
+                exit 1
+              fi
+              echo "Reset/timeout Docker Hub, nouvelle tentative dans $((i * 8))s..."
+              sleep $((i * 8))
+            done
             export DOCKER_IMAGE DOCKER_TAG SOURCE_SHA IMAGE_DIGEST
             export GIT_SHA="${SOURCE_SHA}"
             export SENTRY_RELEASE="${SOURCE_SHA}"
