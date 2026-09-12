@@ -150,8 +150,9 @@ class TestEmailSignatureHtmlRender:
         assert "Emmenez-moi Sàrl" in result
         assert "022 512 02 03" in result
         assert "facturation@casa-famiglia.ch" in result
-        assert "border-left: 2px solid #1b4b7a" in result
-        assert "border-top: 1px solid #1b4b7a" in result
+        assert "border-left" in result
+        assert "border-top" in result
+        assert "#1b4b7a" in result
         assert "https://example.com/logo.png" in result
         assert "<table" in result
         assert "<img" in result

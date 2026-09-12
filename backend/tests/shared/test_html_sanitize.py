@@ -1,4 +1,4 @@
-"""Tests du sanitizer de signatures : allowlist bleach, pas de regex XSS."""
+"""Tests du sanitizer de signatures : allowlist nh3, pas de regex XSS."""
 
 from shared.html_sanitize import sanitize_email_signature_html
 

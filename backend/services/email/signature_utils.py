@@ -163,7 +163,7 @@ def render_signature_html_template(
     Sécurité:
     - SandboxedEnvironment (pas d'imports, pas d'appels arbitraires)
     - Auto-escape activé
-    - Sanitizer HTML à allowlist (bleach) après render
+    - Sanitizer HTML à allowlist (nh3) après render
 
     Args:
         template_str: Template Jinja2 (HTML)

@@ -14,6 +14,8 @@ freezegun>=1.2.0  # Mock du temps pour tests déterministes
 pypdf>=4.0.0  # Extraction texte PDF pour STOP GATE S2 (HEADER/LINES)
 pdfminer.six>=20221105  # Analyse bbox pied de page facture
 defusedxml>=0.7.1  # Parsing sûr de coverage.xml (check_coverage.py / Semgrep)
+# Oracle de parité uniquement (Bleach EOL depuis 2026-06-05, ne plus utiliser en prod)
+bleach[css]==6.4.0
 
 # Outils de développement (optionnel, peut être dans requirements.txt si utilisé en prod)
 # factory-boy>=3.3.0  # Déjà dans requirements.base.txt car utilisé en production
