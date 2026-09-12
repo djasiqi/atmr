@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from flask import Flask, g, request
+from flask import Flask, g, jsonify, request
 from sqlalchemy import text
 
 from middleware import metrics
@@ -24,7 +24,7 @@ def mini_app():
 
     @app.route("/api/bookings/<int:booking_id>")
     def booking_detail(booking_id):
-        return {"id": booking_id}, 200
+        return jsonify({"id": booking_id}), 200
 
     return app
 

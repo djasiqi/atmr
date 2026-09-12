@@ -12,13 +12,14 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
-from flask import current_app, make_response
+from flask import current_app
 from flask_jwt_extended import create_access_token, create_refresh_token
 
 from ext import db
 from models import User
 from security.refresh_token_service import store_refresh_token
 from services.security.authentication import RefreshTokenService
+from shared.response_helpers import json_response
 
 logger = logging.getLogger(__name__)
 
@@ -296,7 +297,7 @@ def create_web_handoff_session_response(
     }
     response_data.update(_access_expiry_metadata(access_expires_delta))
 
-    response = make_response(response_data, 200)
+    response = json_response(response_data, 200)
     _clear_web_auth_cookies(response)
     response.set_cookie(
         current_app.config["COOKIE_ACCESS_TOKEN_NAME"],

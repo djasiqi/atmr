@@ -6,6 +6,20 @@ dans toutes les routes, améliorant la cohérence et la maintenabilité.
 
 from typing import Any
 
+from flask import Response, jsonify, make_response
+
+
+def json_response(
+    payload: dict[str, Any] | list[Any],
+    status_code: int = 200,
+) -> Response:
+    """Réponse HTTP JSON explicite (application/json).
+
+    À utiliser à la place de ``make_response(dict)`` lorsqu'on doit encore
+    poser des cookies ou des en-têtes sur l'objet Response.
+    """
+    return make_response(jsonify(payload), status_code)
+
 
 def success_response(
     data: dict[str, Any] | list[Any] | None = None,

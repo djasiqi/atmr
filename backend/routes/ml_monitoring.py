@@ -48,13 +48,14 @@ def get_metrics():
         if hours < HOURS_ONE or hours > 24 * 30:  # Max 30 jours
             from shared.error_handlers import APIErrorHandler
 
-            return APIErrorHandler.handle_validation_error(
+            payload, status = APIErrorHandler.handle_validation_error(
                 "hours must be between 1 and 720",
                 field="hours",
                 provided_value=hours,
                 expected_format="1-720",
                 logger_instance=logger,
             )
+            return jsonify(payload), status
 
         metrics = MLMonitoringService.get_metrics(hours=hours)
 
@@ -63,7 +64,8 @@ def get_metrics():
     except Exception as e:
         from shared.error_handlers import APIErrorHandler
 
-        return APIErrorHandler.handle_exception(e, logger)
+        payload, status = APIErrorHandler.handle_exception(e, logger)
+        return jsonify(payload), status
 
 
 @ml_monitoring_bp.route("/daily", methods=["GET"])
@@ -78,13 +80,14 @@ def get_daily_metrics():
         if days < DAYS_ONE or days > MAX_DAYS_LIMIT:
             from shared.error_handlers import APIErrorHandler
 
-            return APIErrorHandler.handle_validation_error(
+            payload, status = APIErrorHandler.handle_validation_error(
                 "days must be between 1 and 30",
                 field="days",
                 provided_value=days,
                 expected_format="1-30",
                 logger_instance=logger,
             )
+            return jsonify(payload), status
 
         daily_metrics = MLMonitoringService.get_daily_metrics(days=days)
 
@@ -98,7 +101,8 @@ def get_daily_metrics():
     except Exception as e:
         from shared.error_handlers import APIErrorHandler
 
-        return APIErrorHandler.handle_exception(e, logger)
+        payload, status = APIErrorHandler.handle_exception(e, logger)
+        return jsonify(payload), status
 
 
 @ml_monitoring_bp.route("/predictions", methods=["GET"])
@@ -113,13 +117,14 @@ def get_recent_predictions():
         if limit < LIMIT_ONE or limit > LIMIT_THRESHOLD:
             from shared.error_handlers import APIErrorHandler
 
-            return APIErrorHandler.handle_validation_error(
+            payload, status = APIErrorHandler.handle_validation_error(
                 "limit must be between 1 and 1000",
                 field="limit",
                 provided_value=limit,
                 expected_format="1-1000",
                 logger_instance=logger,
             )
+            return jsonify(payload), status
 
         predictions = MLMonitoringService.get_recent_predictions(limit=limit)
 
@@ -134,7 +139,8 @@ def get_recent_predictions():
     except Exception as e:
         from shared.error_handlers import APIErrorHandler
 
-        return APIErrorHandler.handle_exception(e, logger)
+        payload, status = APIErrorHandler.handle_exception(e, logger)
+        return jsonify(payload), status
 
 
 @ml_monitoring_bp.route("/anomalies", methods=["GET"])
@@ -159,7 +165,8 @@ def get_anomalies():
     except Exception as e:
         from shared.error_handlers import APIErrorHandler
 
-        return APIErrorHandler.handle_exception(e, logger)
+        payload, status = APIErrorHandler.handle_exception(e, logger)
+        return jsonify(payload), status
 
 
 @ml_monitoring_bp.route("/summary", methods=["GET"])
@@ -176,4 +183,5 @@ def get_summary():
     except Exception as e:
         from shared.error_handlers import APIErrorHandler
 
-        return APIErrorHandler.handle_exception(e, logger)
+        payload, status = APIErrorHandler.handle_exception(e, logger)
+        return jsonify(payload), status

@@ -135,6 +135,7 @@ from shared.driver_surface_contracts import (
 )
 from shared.error_handlers import APIErrorHandler
 from shared.logging_utils import mask_email
+from shared.response_helpers import json_response
 
 logger = logging.getLogger(__name__)
 
@@ -1641,7 +1642,7 @@ def _login_post_body():
         )
 
     # Créer la réponse avec make_response pour pouvoir définir les cookies
-    response = make_response(response_data, 200)
+    response = json_response(response_data, 200)
 
     # ✅ Définir cookies httpOnly pour web (pas pour mobile)
     if not is_mobile_request:
@@ -3210,7 +3211,7 @@ class RefreshToken(Resource):
                     response_data.update(auth_capabilities())
 
             # Créer la réponse avec make_response pour pouvoir définir les cookies
-            response = make_response(response_data, 200)
+            response = json_response(response_data, 200)
 
             # ✅ Définir cookies httpOnly pour web (pas pour mobile)
             if not is_mobile_request and refresh_token_from_cookie:
@@ -3349,7 +3350,7 @@ class FreshToken(Resource):
             # Si on utilise des cookies, mettre à jour le cookie
             is_mobile_request = request.headers.get("X-Requested-With") == "Expo"
             if not is_mobile_request:
-                response = make_response(response_data)
+                response = json_response(response_data)
                 response.set_cookie(
                     current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
                     fresh_token,
@@ -3472,7 +3473,7 @@ class Logout(Resource):
                 if session_id:
                     if not _has_logout_session_proof(str(session_id)):
                         # Ne pas révéler l'existence du session_id
-                        response = make_response(
+                        response = json_response(
                             {
                                 "error": "preuve_requise",
                                 "error_code": "logout_proof_required",
@@ -3487,7 +3488,7 @@ class Logout(Resource):
                     if mds is not None:
                         # La preuve lie session_id ; vérifier cohérence user si connu
                         if user is not None and mds.user_id != user.id:
-                            response = make_response(
+                            response = json_response(
                                 {
                                     "error": "preuve_requise",
                                     "error_code": "logout_proof_required",
@@ -3702,7 +3703,7 @@ class Logout(Resource):
             payload = {"message": "Déconnexion réussie", "ok": True}
             if already_revoked:
                 payload["already_revoked"] = True
-            response = make_response(payload, 200)
+            response = json_response(payload, 200)
             if not is_mobile_request:
                 _clear_web_auth_cookies(response)
             return response
@@ -3711,7 +3712,7 @@ class Logout(Resource):
             sentry_sdk.capture_exception(e)
             # Même en erreur : tenter d'effacer les cookies web (pas de session fantôme).
             if not is_mobile_request:
-                err_response = make_response(
+                err_response = json_response(
                     {"message": "Déconnexion réussie", "warning": "partial"},
                     200,
                 )
@@ -6561,7 +6562,7 @@ class TOTPChallenge(Resource):
 
             audit_log("user_login", "security", user=user)
 
-            resp = make_response(
+            resp = json_response(
                 {
                     "message": "2FA validée",
                     "user": {

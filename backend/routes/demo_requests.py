@@ -5,7 +5,7 @@ import time
 import uuid
 from typing import Any
 
-from flask import current_app, make_response, request
+from flask import current_app, request
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -43,6 +43,7 @@ from shared.input_sanitizer import (
     sanitize_string,
     strip_control_characters,
 )
+from shared.response_helpers import json_response
 
 demo_requests_ns = Namespace("demo_requests", description="Demandes de demonstration")
 admin_demo_requests_ns = Namespace(
@@ -633,7 +634,7 @@ class ConsumeDemoMagicLink(Resource):
                 "force_password_change": bool(demo_user.force_password_change),
             },
         }
-        response = make_response(response_data, 200)
+        response = json_response(response_data, 200)
         response.set_cookie(
             current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
             access_token,
@@ -762,7 +763,7 @@ class SetDemoPassword(Resource):
                 "force_password_change": False,
             },
         }
-        response = make_response(response_data, 200)
+        response = json_response(response_data, 200)
         response.set_cookie(
             current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
             access_token,

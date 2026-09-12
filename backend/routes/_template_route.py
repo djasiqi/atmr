@@ -14,7 +14,7 @@ Note: Ce fichier est un template de référence, ne pas l'importer directement.
 
 import logging
 
-from flask import Blueprint, request  # pyright: ignore[reportMissingImports]
+from flask import Blueprint, jsonify, request  # pyright: ignore[reportMissingImports]
 from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
 from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
 
@@ -285,10 +285,12 @@ def get_example(example_id: int):
         # return success_response(data=result.example.to_dict())
 
         # Exemple de réponse (à remplacer par le code ci-dessus)
-        return success_response(data={"id": example_id, "name": "Example"})
+        payload, status = success_response(data={"id": example_id, "name": "Example"})
+        return jsonify(payload), status
 
     except Exception as e:
-        return APIErrorHandler.handle_exception(e, logger)
+        payload, status = APIErrorHandler.handle_exception(e, logger)
+        return jsonify(payload), status
 
 
 # ============================================================================
@@ -334,13 +336,15 @@ def create_example():
         # )
 
         # Exemple de réponse (à remplacer par le code ci-dessus)
-        return created_response(
+        payload, status = created_response(
             data={"id": 1, "name": json_data.get("name", "Example")},
             location="/api/examples/1",
         )
+        return jsonify(payload), status
 
     except Exception as e:
-        return APIErrorHandler.handle_exception(e, logger)
+        payload, status = APIErrorHandler.handle_exception(e, logger)
+        return jsonify(payload), status
 
 
 # ============================================================================
@@ -417,7 +421,9 @@ def get_legacy_example(example_id: int):
         # return success_response(data=example.to_dict())
 
         # Exemple de réponse (à remplacer par le code ci-dessus)
-        return success_response(data={"id": example_id, "name": "Example"})
+        payload, status = success_response(data={"id": example_id, "name": "Example"})
+        return jsonify(payload), status
 
     except Exception as e:
-        return APIErrorHandler.handle_exception(e, logger)
+        payload, status = APIErrorHandler.handle_exception(e, logger)
+        return jsonify(payload), status

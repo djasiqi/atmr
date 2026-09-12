@@ -1872,7 +1872,7 @@ class DriverLocation(Resource):
                                 check_http_driver_location_rate_limit(driver.id)
                             )
                             if not allowed_rl:
-                                from flask import make_response
+                                from shared.response_helpers import json_response
 
                                 body_429 = {
                                     "error": "rate_limit_exceeded",
@@ -1880,7 +1880,7 @@ class DriverLocation(Resource):
                                     "retry_after_seconds": retry_rl,
                                     "rate_limit_reason": rl_reason,
                                 }
-                                resp = make_response(body_429, 429)
+                                resp = json_response(body_429, 429)
                                 if retry_rl:
                                     resp.headers["Retry-After"] = str(int(retry_rl))
                                 return resp
