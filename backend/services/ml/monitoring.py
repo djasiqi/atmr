@@ -93,7 +93,10 @@ class MLMonitoringService:
             return prediction
 
         except Exception as e:
-            logger.error("[MLMonitoring] Failed to log prediction: %s", e)
+            logger.error(
+                "[MLMonitoring] Failed to log prediction error_type=%s",
+                type(e).__name__,
+            )
             db.session.rollback()
             raise
 
@@ -134,7 +137,10 @@ class MLMonitoringService:
                 )
 
         except Exception as e:
-            logger.error("[MLMonitoring] Failed to update actual delay: %s", e)
+            logger.error(
+                "[MLMonitoring] Failed to update actual delay error_type=%s",
+                type(e).__name__,
+            )
             db.session.rollback()
 
     @staticmethod
@@ -206,8 +212,11 @@ class MLMonitoringService:
             }
 
         except Exception as e:
-            logger.error("[MLMonitoring] Failed to calculate metrics: %s", e)
-            return {"error": str(e)}
+            logger.error(
+                "[MLMonitoring] Failed to calculate metrics error_type=%s",
+                type(e).__name__,
+            )
+            return {"error": "metrics_unavailable"}
 
     @staticmethod
     def get_daily_metrics(days: int = 7) -> list[dict[str, Any]]:
@@ -276,7 +285,10 @@ class MLMonitoringService:
             return daily_metrics
 
         except Exception as e:
-            logger.error("[MLMonitoring] Failed to calculate daily metrics: %s", e)
+            logger.error(
+                "[MLMonitoring] Failed to calculate daily metrics error_type=%s",
+                type(e).__name__,
+            )
             return []
 
     @staticmethod
@@ -300,7 +312,10 @@ class MLMonitoringService:
             return [p.to_dict() for p in predictions]
 
         except Exception as e:
-            logger.error("[MLMonitoring] Failed to get recent predictions: %s", e)
+            logger.error(
+                "[MLMonitoring] Failed to get recent predictions error_type=%s",
+                type(e).__name__,
+            )
             return []
 
     @staticmethod
@@ -336,7 +351,10 @@ class MLMonitoringService:
             ]
 
         except Exception as e:
-            logger.error("[MLMonitoring] Failed to detect anomalies: %s", e)
+            logger.error(
+                "[MLMonitoring] Failed to detect anomalies error_type=%s",
+                type(e).__name__,
+            )
             return []
 
     @staticmethod
@@ -373,5 +391,8 @@ class MLMonitoringService:
             }
 
         except Exception as e:
-            logger.error("[MLMonitoring] Failed to get summary: %s", e)
-            return {"error": str(e)}
+            logger.error(
+                "[MLMonitoring] Failed to get summary error_type=%s",
+                type(e).__name__,
+            )
+            return {"error": "summary_unavailable"}
