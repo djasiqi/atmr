@@ -137,7 +137,7 @@ class Services(Resource):
             q = (validated_args.get("q") or "").strip()
         except ValidationError as e:
             return handle_validation_error(e)
-        except Exception as fallback_err:
+        except Exception:
             # Fallback sur reqparse si validation échoue
             try:
                 args = services_parser.parse_args(strict=True)
@@ -147,7 +147,7 @@ class Services(Resource):
                 # Si reqparse échoue aussi, retourner 400
                 return {
                     "error": "establishment_id is required",
-                    "message": str(fallback_err),
+                    "message": "Paramètres invalides",
                 }, 400
 
         query = db.session.query(MedicalService).filter(

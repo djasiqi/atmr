@@ -27,7 +27,7 @@ def rl_suggestion_generator_status() -> dict[str, Any]:
             "available": False,
             "loaded": False,
             "model_path": None,
-            "message": str(e),
+            "message": "generator_unavailable",
         }
 
 

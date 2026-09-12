@@ -208,10 +208,10 @@ class AnalyticsInsights(Resource):
 
             return {"success": True, "data": patterns}
 
-        except Exception as e:
+        except Exception:
             return {
                 "success": False,
-                "error": f"Failed to generate insights: {e!s}",
+                "error": "Failed to generate insights",
             }, 500
 
 
@@ -281,10 +281,10 @@ class WeeklySummary(Resource):
 
             return {"success": True, "data": summary}
 
-        except Exception as e:
+        except Exception:
             return {
                 "success": False,
-                "error": f"Failed to fetch weekly summary: {e!s}",
+                "error": "Failed to fetch weekly summary",
             }, 500
 
 
@@ -402,10 +402,10 @@ class ExportAnalytics(Resource):
                 return response
             return {"success": True, "data": analytics}
 
-        except Exception as e:
+        except Exception:
             return {
                 "success": False,
-                "error": f"Failed to export analytics: {e!s}",
+                "error": "Failed to export analytics",
             }, 500
 
 

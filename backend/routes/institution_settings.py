@@ -154,7 +154,7 @@ class TransportPreferences(Resource):
                 "[InstitutionSettings] Erreur GET transport-preferences: %s",
                 e,
             )
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
     @institution_settings_ns.doc(
         description="Définit les préférences de transporteurs de l'institution",
@@ -265,7 +265,7 @@ class TransportPreferences(Resource):
                 "[InstitutionSettings] Erreur PUT transport-preferences: %s",
                 e,
             )
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @institution_settings_ns.route("/eligible-companies")
@@ -344,4 +344,4 @@ class EligibleCompanies(Resource):
                 "[InstitutionSettings] Erreur GET eligible-companies: %s",
                 e,
             )
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500

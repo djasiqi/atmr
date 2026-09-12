@@ -284,7 +284,7 @@ class InstitutionBookingUpdate(Resource):
             db.session.rollback()
             sentry_sdk.capture_exception(e)
             logger.exception("[InstitutionBookings] PATCH %s: %s", booking_id, e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @institution_bookings_ns.route("/<int:booking_id>/cancel")
@@ -332,7 +332,7 @@ class InstitutionBookingCancel(Resource):
         except Exception as e:
             db.session.rollback()
             sentry_sdk.capture_exception(e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @institution_bookings_ns.route("/<int:booking_id>/change-events")
@@ -434,4 +434,4 @@ class InstitutionBookingReleaseForRedispatch(Resource):
                 booking_id,
                 e,
             )
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500

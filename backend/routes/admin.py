@@ -2263,7 +2263,7 @@ class RateLimitFlush(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("[ADMIN] Failed to flush rate limits: %s", e)
             return {
-                "error": f"Failed to flush rate limits: {e!s}",
+                "error": "Failed to flush rate limits",
                 "status": "error",
             }, 500
 
@@ -2328,7 +2328,7 @@ class RateLimitStats(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("[ADMIN] Failed to get rate limit stats: %s", e)
             return {
-                "error": f"Failed to get rate limit stats: {e!s}",
+                "error": "Failed to get rate limit stats",
                 "status": "error",
             }, 500
 
@@ -2369,7 +2369,7 @@ class RedisInfo(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("[ADMIN] Failed to get Redis info: %s", e)
             return {
-                "error": f"Failed to get Redis info: {e!s}",
+                "error": "Failed to get Redis info",
                 "status": "error",
             }, 500
 
@@ -2414,7 +2414,7 @@ class RateLimitConfig(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("[ADMIN] Failed to get rate limit config: %s", e)
             return {
-                "error": f"Failed to get rate limit config: {e!s}",
+                "error": "Failed to get rate limit config",
                 "status": "error",
             }, 500
 

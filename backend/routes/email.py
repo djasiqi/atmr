@@ -452,15 +452,14 @@ class EmailDomainDiagnostic(Resource):
 
             return {
                 "success": False,
-                "error": f"Erreur API Brevo: {response.status_code}",
-                "details": response.text,
+                "error": "Erreur API Brevo",
             }, 200
 
         except Exception as e:
             logger.exception("🔍 [DIAGNOSTIC] Erreur: %s", e)
             return {
                 "success": False,
-                "error": f"Erreur lors du diagnostic: {e!s}",
+                "error": "Erreur lors du diagnostic",
             }, 500
 
 

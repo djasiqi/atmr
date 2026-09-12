@@ -133,3 +133,26 @@ def test_handle_validation_error_allows_controlled_message():
     )
     assert status == 400
     assert "Departure time must be in the future." in str(body)
+
+
+def test_invalid_jwt_does_not_echo_parser_details(client):
+    response = client.get(
+        "/api/v1/companies/me",
+        headers={"Authorization": f"Bearer {SENTINEL}"},
+    )
+    body = response.get_json() or {}
+    dumped = f"{body}{response.headers}"
+    assert SENTINEL not in dumped
+    assert "Not enough segments" not in dumped
+    assert body.get("error") == "invalid_token"
+    assert body.get("message") == "Token invalide"
+
+
+def test_missing_jwt_uses_controlled_message(client):
+    response = client.get("/api/v1/companies/me")
+    body = response.get_json() or {}
+    dumped = str(body)
+    assert "Missing Authorization Header" not in dumped
+    assert "access_token" not in dumped
+    assert body.get("error") == "missing_token"
+    assert body.get("message") == "Authentification requise"

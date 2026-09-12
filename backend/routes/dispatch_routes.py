@@ -4079,9 +4079,9 @@ class RLDispatchSuggestions(Resource):
         except ValueError:
             result = {"error": "Format date invalide (attendu: YYYY-MM-DD)"}
             status_code = 400
-        except Exception as e:
+        except Exception:
             logger.exception("[RL] Failed to get RL suggestions")
-            result = {"error": f"Échec récupération suggestions RL: {e}"}
+            result = {"error": "Échec récupération suggestions RL"}
             status_code = 500
 
         return result, status_code
@@ -4769,12 +4769,12 @@ class PerformanceMetricsResource(Resource):
                                 },
                                 200,
                             )
-                    except Exception as e:
+                    except Exception:
                         logger.exception(
                             "[Dispatch] Failed to extract performance metrics"
                         )
                         error_response = (
-                            {"error": f"Erreur lors de l'extraction: {e}"},
+                            {"error": "Erreur lors de l'extraction"},
                             500,
                         )
 
@@ -4987,9 +4987,9 @@ class PrometheusMetricsResource(Resource):
                 )
                 prometheus_text = metrics.to_prometheus_format()
                 response = (Response(prometheus_text, mimetype="text/plain"), 200)
-            except Exception as e:
+            except Exception:
                 logger.exception("[Dispatch] Failed to convert to Prometheus format")
-                error_response = ({"error": f"Erreur lors de la conversion: {e}"}, 500)
+                error_response = ({"error": "Erreur lors de la conversion"}, 500)
 
         if error_response:
             return error_response

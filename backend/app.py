@@ -2103,12 +2103,19 @@ def create_app(config_name: str | None = None):
             ), 401
 
         @jwt.invalid_token_loader
-        def invalid_token_callback(error):  # pyright: ignore[reportUnusedFunction]
-            return jsonify({"error": "invalid_token", "message": str(error)}), 422
+        def invalid_token_callback(_error):  # pyright: ignore[reportUnusedFunction]
+            return jsonify(
+                {"error": "invalid_token", "message": "Token invalide"}
+            ), 422
 
         @jwt.unauthorized_loader
-        def missing_token_callback(error):  # pyright: ignore[reportUnusedFunction]
-            return jsonify({"error": "missing_token", "message": str(error)}), 401
+        def missing_token_callback(_error):  # pyright: ignore[reportUnusedFunction]
+            return jsonify(
+                {
+                    "error": "missing_token",
+                    "message": "Authentification requise",
+                }
+            ), 401
 
         @app.errorhandler(BadRequest)
         def handle_bad_request(e: BadRequest):  # pyright: ignore

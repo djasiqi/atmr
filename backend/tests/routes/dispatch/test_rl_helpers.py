@@ -38,7 +38,7 @@ class TestRlSuggestionGeneratorStatus:
         assert status["available"] is False
         assert status["loaded"] is False
         assert status["model_path"] is None
-        assert "torch missing" in (status["message"] or "")
+        assert status["message"] == "generator_unavailable"
 
 
 class TestSuggestionsObservabilityMeta:

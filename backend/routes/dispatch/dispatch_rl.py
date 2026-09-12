@@ -302,9 +302,9 @@ class RLDispatchSuggestions(Resource):
         except ValueError:
             result = {"error": "Format date invalide (attendu: YYYY-MM-DD)"}
             status_code = HTTPStatus.BAD_REQUEST
-        except Exception as e:
+        except Exception:
             logger.exception("[RL] Failed to get RL suggestions")
-            result = {"error": f"Échec récupération suggestions RL: {e}"}
+            result = {"error": "Échec récupération suggestions RL"}
             status_code = HTTPStatus.INTERNAL_SERVER_ERROR
 
         return result, status_code

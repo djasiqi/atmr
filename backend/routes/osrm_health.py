@@ -105,5 +105,5 @@ class OsrmHealth(Resource):
             logger.exception("[OsrmHealth] Erreur récupération health: %s", e)
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "osrm_health_unavailable",
             }, 500

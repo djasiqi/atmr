@@ -196,7 +196,7 @@ class RequestOffersList(Resource):
                 type(e).__name__,
                 e,
             )
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @company_offers_ns.route("/<int:offer_id>")
@@ -237,7 +237,7 @@ class RequestOfferDetail(Resource):
                 offer_id,
                 e,
             )
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @company_offers_ns.route("/<int:offer_id>/travel-estimate")
@@ -275,7 +275,7 @@ class OfferTravelEstimate(Resource):
                 offer_id,
                 e,
             )
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @company_offers_ns.route("/<int:offer_id>/accept")
@@ -393,7 +393,7 @@ class AcceptOffer(Resource):
                 offer_id,
                 e,
             )
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @company_offers_ns.route("/<int:offer_id>/reject")
@@ -476,4 +476,4 @@ class RejectOffer(Resource):
                 offer_id,
                 e,
             )
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500

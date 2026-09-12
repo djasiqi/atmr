@@ -4329,8 +4329,11 @@ class PublicGuestSaferpayInitialize(Resource):
             if msg == "guest_booking_consumed":
                 return {"error": "guest_booking_consumed"}, 409
             return {"error": "validation_error", "error_message": msg}, 400
-        except RuntimeError as e:
-            return {"error": "saferpay_initialize_failed", "error_message": str(e)}, 503
+        except RuntimeError:
+            return {
+                "error": "saferpay_initialize_failed",
+                "error_message": "Paiement indisponible.",
+            }, 503
 
         return out, 200
 

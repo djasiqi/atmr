@@ -267,7 +267,7 @@ class RequestBillingUpdate(Resource):
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
             logger.error("[InstitutionBilling] PUT request/%s error: %s", request_id, e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @institution_billing_ns.route("/bookings/<int:booking_id>")
@@ -462,7 +462,7 @@ class BookingBillingUpdate(Resource):
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
             logger.error("[InstitutionBilling] PUT booking/%s error: %s", booking_id, e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 # ── Contrôle facturation institution (INSTITUTION-07) ─────────────────────
@@ -546,7 +546,7 @@ class BillingControlList(Resource):
         except Exception as e:
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @institution_billing_ns.route("/control/bookings/<int:booking_id>")
@@ -574,7 +574,7 @@ class BillingControlDetail(Resource):
         except Exception as e:
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @institution_billing_ns.route("/control/bookings/<int:booking_id>/validate")
@@ -614,7 +614,7 @@ class BillingControlValidate(Resource):
             db.session.rollback()
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @institution_billing_ns.route("/control/bookings/<int:booking_id>/anomaly")
@@ -656,7 +656,7 @@ class BillingControlAnomaly(Resource):
             db.session.rollback()
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500
 
 
 @institution_billing_ns.route("/control/bookings/<int:booking_id>/reopen")
@@ -696,4 +696,4 @@ class BillingControlReopen(Resource):
             db.session.rollback()
             _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            return {"error": "Erreur serveur"}, 500

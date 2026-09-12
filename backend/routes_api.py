@@ -111,7 +111,7 @@ def handle_jwt_errors_v1(error):
     if isinstance(error, ExpiredSignatureError):
         return {"error": "token_expired", "message": "Signature has expired"}, 401
     if isinstance(error, InvalidTokenError):
-        return {"error": "invalid_token", "message": str(error)}, 422
+        return {"error": "invalid_token", "message": "Token invalide"}, 422
     if isinstance(error, BillingValidationError):
         from shared.error_handlers import APIErrorHandler
 
@@ -134,7 +134,7 @@ def handle_jwt_errors_v2(error):
     if isinstance(error, ExpiredSignatureError):
         return {"error": "token_expired", "message": "Signature has expired"}, 401
     if isinstance(error, InvalidTokenError):
-        return {"error": "invalid_token", "message": str(error)}, 422
+        return {"error": "invalid_token", "message": "Token invalide"}, 422
     if isinstance(error, BillingValidationError):
         from shared.error_handlers import APIErrorHandler
 

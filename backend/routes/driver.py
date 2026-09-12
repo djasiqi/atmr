@@ -2766,7 +2766,7 @@ class DriverLocation(Resource):
             sentry_sdk.capture_exception(e)
             logger.exception("❌ Unexpected error in location update: %s", e)
             logger.error("❌ Request data: %s", request.get_data())
-            result = {"error": f"Internal error: {e!s}"}
+            result = {"error": "Internal error"}
             status_code = 500
 
         if status_code == HTTP_STATUS_OK and result.get("ok") is True:
@@ -3253,7 +3253,7 @@ class ReportAccident(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ Erreur lors du signalement d'accident: %s", e)
-            return {"error": f"Erreur interne: {e!s}", "ok": False}, 500
+            return {"error": "Erreur interne", "ok": False}, 500
 
 
 @driver_ns.route("/me/medical-emergency")
@@ -3322,7 +3322,7 @@ class ReportMedicalEmergency(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ Erreur lors du signalement d'urgence médicale: %s", e)
-            return {"error": f"Erreur interne: {e!s}", "ok": False}, 500
+            return {"error": "Erreur interne", "ok": False}, 500
 
 
 @driver_ns.route("/me/security-zone")
@@ -3394,7 +3394,7 @@ class ReportSecurityZone(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ Erreur lors du signalement de zone dangereuse: %s", e)
-            return {"error": f"Erreur interne: {e!s}", "ok": False}, 500
+            return {"error": "Erreur interne", "ok": False}, 500
 
 
 @driver_ns.route("/me/bookings/<int:booking_id>")
@@ -4544,9 +4544,9 @@ class NightModeStatus(Resource):
 
             status = get_night_mode_status()
             return status, 200
-        except Exception as e:
+        except Exception:
             logger.exception("❌ Erreur récupération statut mode nuit")
-            return {"error": str(e)}, 500
+            return {"error": "Erreur interne"}, 500
 
 
 @driver_ns.route("/me/bookings/<int:booking_id>/quick-accept")

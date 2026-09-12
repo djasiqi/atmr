@@ -617,7 +617,7 @@ def register_jwt_error_handlers(app):
     def handle_invalid_token(e):  # pyright: ignore[reportUnusedFunction]
         """Convertit InvalidTokenError en 422 au lieu de 500."""
         app_logger.warning("[JWT] Token invalide intercepté : %s", str(e))
-        return jsonify({"error": "invalid_token", "message": str(e)}), 422
+        return jsonify({"error": "invalid_token", "message": "Token invalide"}), 422
 
 
 # ✅ Phase 3: Callback pour vérifier la blacklist des tokens

@@ -462,7 +462,7 @@ def _issue_from_snapshot_no_commit(
         try:
             render_swiss_qr_bill(payload)
         except Exception as e:
-            raise InvoiceReplaceError(f"Émission QR impossible: {e}") from e
+            raise InvoiceReplaceError("Émission QR impossible") from e
 
     statement = (
         db.session.get(PlatformInvoice, inv.statement_id) if inv.statement_id else None

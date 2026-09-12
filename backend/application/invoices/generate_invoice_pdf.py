@@ -53,9 +53,9 @@ class GenerateInvoicePdfUseCase:
                 error={"error": "Impossible de générer le PDF"},
                 status_code=500,
             )
-        except Exception as e:
+        except Exception:
             return GenerateInvoicePdfResult(
                 ok=False,
-                error={"error": f"Erreur lors de la génération du PDF: {e!s}"},
+                error={"error": "Erreur lors de la génération du PDF"},
                 status_code=500,
             )

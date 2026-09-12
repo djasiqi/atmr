@@ -96,9 +96,9 @@ class GetCurrentCompanyUseCase:
                 )
 
             return GetCurrentCompanyResult(found=True, company=company)
-        except Exception as e:
+        except Exception:
             return GetCurrentCompanyResult(
                 found=False,
-                error={"error": f"Erreur lors de la récupération: {e!s}"},
+                error={"error": "Erreur lors de la récupération"},
                 status_code=500,
             )

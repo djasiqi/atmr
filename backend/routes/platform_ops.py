@@ -88,7 +88,10 @@ class PlatformStatusResource(Resource):
             payload = build_platform_status_payload(current_app.config)
         except Exception as e:
             logger.exception("[platform/status] agrégation: %s", e)
-            return {"error": "aggregation_failed", "message": str(e)}, 500
+            return {
+                "error": "aggregation_failed",
+                "message": "Agrégation indisponible.",
+            }, 500
 
         try:
             current_user = get_current_user_via_use_case()
@@ -123,7 +126,10 @@ class PlatformRuntimeResource(Resource):
             payload = build_platform_runtime_payload()
         except Exception as e:
             logger.exception("[platform/runtime] agrégation: %s", e)
-            return {"error": "aggregation_failed", "message": str(e)}, 500
+            return {
+                "error": "aggregation_failed",
+                "message": "Agrégation indisponible.",
+            }, 500
         return payload, 200
 
 

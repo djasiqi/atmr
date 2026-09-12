@@ -93,12 +93,12 @@ class PerformanceMetricsResource(Resource):
                                 },
                                 HTTPStatus.OK,
                             )
-                    except Exception as e:
+                    except Exception:
                         logger.exception(
                             "[Dispatch] Failed to extract performance metrics"
                         )
                         error_response = (
-                            {"error": f"Erreur lors de l'extraction: {e}"},
+                            {"error": "Erreur lors de l'extraction"},
                             HTTPStatus.INTERNAL_SERVER_ERROR,
                         )
 
@@ -303,10 +303,10 @@ class PrometheusMetricsResource(Resource):
                     Response(prometheus_text, mimetype="text/plain"),
                     HTTPStatus.OK,
                 )
-            except Exception as e:
+            except Exception:
                 logger.exception("[Dispatch] Failed to convert to Prometheus format")
                 error_response = (
-                    {"error": f"Erreur lors de la conversion: {e}"},
+                    {"error": "Erreur lors de la conversion"},
                     HTTPStatus.INTERNAL_SERVER_ERROR,
                 )
 
