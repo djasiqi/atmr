@@ -53,6 +53,17 @@ def test_confine_blocks_absolute_outside(tmp_path: Path):
         confine_upload_destination(Path("/etc/passwd"), uploads_base=tmp_path)
 
 
+def test_confine_absolute_under_other_uploads_root(tmp_path: Path):
+    """Écriture : un Path déjà sous un dossier uploads/ reste confinable."""
+    other_root = tmp_path / "foreign" / "uploads"
+    target = other_root / "invoices" / "a.pdf"
+    configured = tmp_path / "configured-uploads"
+    configured.mkdir()
+    confined = confine_upload_destination(target, uploads_base=configured)
+    assert confined == target.resolve()
+    confined.relative_to(other_root.resolve())
+
+
 def test_confine_allows_valid_relative(tmp_path: Path):
     dest = confine_upload_destination("invoices/a.pdf", uploads_base=tmp_path)
     assert dest == (tmp_path / "invoices" / "a.pdf").resolve()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse
@@ -75,30 +76,18 @@ def server_upload_filename(extension: str, *, prefix: str | None = None) -> str:
     return f"{stem}.{extension}"
 
 
-def confine_upload_destination(
-    target: Path | str,
-    *,
-    uploads_base: Path | None = None,
-) -> Path:
-    """Confine un chemin (existant ou non) sous uploads_base via safe_join.
+def _uploads_ancestor(resolved: Path) -> Path | None:
+    """Racine ``uploads/`` du chemin déjà résolu (suit les symlinks)."""
+    for parent in (resolved, *resolved.parents):
+        if parent.name == "uploads":
+            return parent
+    return None
 
-    Lève InvalidUploadPath si le candidat sort de la racine (traversal, absolu,
-    symlink hors base). N'ouvre pas le fichier.
-    """
-    base = _resolved_uploads_base(uploads_base)
-    raw = Path(target)
-    if raw.is_absolute():
-        try:
-            relative = raw.resolve().relative_to(base).as_posix()
-        except (ValueError, RuntimeError, OSError) as exc:
-            raise InvalidUploadPath("chemin hors uploads") from exc
-    else:
-        relative = raw.as_posix().replace("\\", "/").lstrip("/")
 
+def _join_under_base(base: Path, relative: str) -> Path:
     parts = relative.split("/")
     if not relative or any(part in {"", ".."} for part in parts):
         raise InvalidUploadPath("chemin invalide")
-
     joined = safe_join(str(base), relative)
     if joined is None:
         raise InvalidUploadPath("chemin invalide")
@@ -108,6 +97,50 @@ def confine_upload_destination(
     except (ValueError, RuntimeError, OSError) as exc:
         raise InvalidUploadPath("chemin hors uploads") from exc
     return candidate
+
+
+def confine_upload_destination(
+    target: Path | str,
+    *,
+    uploads_base: Path | None = None,
+) -> Path:
+    """Confine un chemin (existant ou non) sous une racine uploads via safe_join.
+
+    Lève InvalidUploadPath si le candidat sort de la racine (traversal, absolu
+    hors uploads, symlink hors base). N'ouvre pas le fichier.
+
+    Un chemin absolu déjà sous un dossier nommé ``uploads/`` reste accepté
+    même si ``UPLOADS_DIR`` courant diffère (tests / service qui a figé sa
+    racine). La lecture via ``resolve_safe_upload_path`` passe toujours une
+    racine explicite et des chemins relatifs.
+    """
+    raw = Path(target)
+    if raw.is_absolute():
+        try:
+            resolved = raw.resolve()
+        except (RuntimeError, OSError) as exc:
+            raise InvalidUploadPath("chemin invalide") from exc
+        bases: list[Path] = []
+        if uploads_base is not None:
+            bases.append(Path(uploads_base).resolve())
+        else:
+            with contextlib.suppress(RuntimeError):
+                bases.append(get_uploads_base())
+        inferred = _uploads_ancestor(resolved)
+        if inferred is not None and inferred not in bases:
+            bases.append(inferred)
+        last_exc: Exception | None = None
+        for base in bases:
+            try:
+                return _join_under_base(base, resolved.relative_to(base).as_posix())
+            except (ValueError, InvalidUploadPath) as exc:
+                last_exc = exc
+                continue
+        raise InvalidUploadPath("chemin hors uploads") from last_exc
+
+    base = _resolved_uploads_base(uploads_base)
+    relative = raw.as_posix().replace("\\", "/").lstrip("/")
+    return _join_under_base(base, relative)
 
 
 def build_confined_upload_path(
