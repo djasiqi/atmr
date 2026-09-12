@@ -29,3 +29,21 @@ export function pathFromNextQueryParam(nextParam) {
     return null;
   }
 }
+
+const COMPANY_RETURN_PATH_PREFIXES = Object.freeze([
+  '/dashboard/company/',
+  '/company/',
+]);
+
+/**
+ * Interprète ?returnTo= pour les écrans entreprise (chemin interne, préfixes autorisés).
+ * @param {string|null} returnToParam — valeur brute du query param
+ * @returns {string|null}
+ */
+export function pathFromCompanyReturnTo(returnToParam) {
+  const path = pathFromNextQueryParam(returnToParam);
+  if (!path) return null;
+  const pathname = path.split('?')[0];
+  const allowed = COMPANY_RETURN_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  return allowed ? path : null;
+}

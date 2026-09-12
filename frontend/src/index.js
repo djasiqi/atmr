@@ -116,7 +116,8 @@ window.addEventListener(
       return false;
     }
 
-    // Socket.IO : rejet sans data.message (python-socketio #590) — on masque seulement si ça vient bien du transport
+    // Socket.IO : rejet sans data.message (python-socketio #590) — on masque seulement si ça vient bien du transport.
+    // Filtre de texte de diagnostic (stack / message runtime), pas une validation d'URL.
     const fromSocketTransport =
       stack.includes('socket.io') || stack.includes('engine.io') || message.includes('socket.io') || message.includes('engine.io');
     const isSocketRejection =
@@ -159,7 +160,8 @@ window.addEventListener('unhandledrejection', (event) => {
     return;
   }
 
-  // Socket.IO : rejet sans data.message (python-socketio #590) — uniquement si stack/raison indique socket/engine
+  // Socket.IO : rejet sans data.message (python-socketio #590) — uniquement si stack/raison indique socket/engine.
+  // Filtre de texte de diagnostic (stack / message runtime), pas une validation d'URL.
   const reasonStack = (event.reason?.stack || '').toString();
   const fromSocket = reasonStack.includes('socket.io') || reasonStack.includes('engine.io')
     || reasonMessage.includes('socket.io') || reasonMessage.includes('engine.io');

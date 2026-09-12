@@ -18,6 +18,7 @@ import ClientStaysSection from './ClientStaysSection';
 import ClientBillingPartiesSection from './ClientBillingPartiesSection';
 import { fetchClientReservations } from '../../../../services/companyService';
 import { renderBookingDateTime } from '../../../../utils/formatDate';
+import { pathFromCompanyReturnTo } from '../../../../utils/safeReturnPath';
 import styles from './ClientReadView.module.css';
 
 const ClientReadView = ({ client, onEdit, onClose, loading }) => {
@@ -25,22 +26,10 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
   const [reservationsLoading, setReservationsLoading] = useState(false);
   const [reservationsError, setReservationsError] = useState(null);
   const [searchParams] = useSearchParams();
-  const returnTo = useMemo(() => {
-    const raw = searchParams.get('returnTo');
-    if (!raw) return null;
-    try {
-      const decoded = decodeURIComponent(raw);
-      if (
-        decoded.startsWith('/dashboard/company/')
-        || decoded.startsWith('/company/')
-      ) {
-        return decoded;
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }, [searchParams]);
+  const returnTo = useMemo(
+    () => pathFromCompanyReturnTo(searchParams.get('returnTo')),
+    [searchParams]
+  );
 
   const formatDate = (dateString) => {
     if (!dateString) return null;

@@ -42,6 +42,7 @@ import {
 import {
   isTransportActionPending,
 } from '../../../../utils/transportActionPending';
+import { pathFromCompanyReturnTo } from '../../../../utils/safeReturnPath';
 import {
   formatNameWithCivility,
   resolvePassengerGender,
@@ -402,15 +403,10 @@ const ReservationDetailPanel = ({
     }
   }, [reservation, buildFormFromReservation]);
 
-  const returnTo = useMemo(() => {
-    const raw = searchParams.get('returnTo');
-    if (!raw) return null;
-    try {
-      const decoded = decodeURIComponent(raw);
-      if (decoded.startsWith('/dashboard/company/') || decoded.startsWith('/company/')) return decoded;
-      return null;
-    } catch { return null; }
-  }, [searchParams]);
+  const returnTo = useMemo(
+    () => pathFromCompanyReturnTo(searchParams.get('returnTo')),
+    [searchParams]
+  );
 
   useEffect(() => {
     if (searchParams.get('focus') !== 'change_request') return undefined;

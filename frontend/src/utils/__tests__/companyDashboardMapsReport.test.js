@@ -1,4 +1,4 @@
-import { buildMapsReport } from '../companyDashboardMapsReport';
+import { buildMapsReport, isGoogleMapsApiResourceName } from '../companyDashboardMapsReport';
 
 jest.mock('../companyDashboardPerfInstrumentation', () => ({
   isCompanyDashboardPerfEnabled: () => true,
@@ -40,6 +40,12 @@ describe('companyDashboardMapsReport', () => {
     expect(report.markerCount).toBe(12);
     expect(report.sdkNetworkMs === null || Number.isFinite(report.sdkNetworkMs)).toBe(true);
     expect(report.interpretation).toBeInstanceOf(Array);
+  });
+
+  it('classifie le SDK Maps par hostname, pas par substring', () => {
+    expect(isGoogleMapsApiResourceName('https://maps.googleapis.com/maps/api/js')).toBe(true);
+    expect(isGoogleMapsApiResourceName('https://evil.example/maps.googleapis.com')).toBe(false);
+    expect(isGoogleMapsApiResourceName('https://maps.googleapis.com.evil.example/js')).toBe(false);
   });
 
   it('retourne null pour deltas si marks absents', () => {

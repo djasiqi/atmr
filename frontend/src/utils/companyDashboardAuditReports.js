@@ -9,7 +9,7 @@ import {
 import { runDashboardPerfMeasures, getCompanyDashboardWebVitalsSnapshot } from './companyDashboardWebPerf';
 import { getCompanyDashboardApiTimingSnapshot } from './companyDashboardApiTiming';
 import { publishBundleReport } from './companyDashboardBundleReport';
-import { publishMapsReport } from './companyDashboardMapsReport';
+import { isGoogleMapsApiResourceName, publishMapsReport } from './companyDashboardMapsReport';
 import { publishDuplicationReport } from './companyDashboardDuplicationReport';
 
 export const ENDPOINT_BUDGET_MS = {
@@ -175,8 +175,8 @@ export function buildAuditReport5() {
     .sort((a, b) => b.transferSize - a.transferSize)
     .slice(0, 15);
 
-  const gmaps = nav.filter((e) => e.name.includes('maps.googleapis.com'));
-  const chunks = nav.filter((e) => e.name.includes('.js') && !e.name.includes('maps.googleapis'));
+  const gmaps = nav.filter((e) => isGoogleMapsApiResourceName(e.name));
+  const chunks = nav.filter((e) => e.name.includes('.js') && !isGoogleMapsApiResourceName(e.name));
 
   return {
     title: 'Rapport 5 — Bundle JavaScript dashboard',

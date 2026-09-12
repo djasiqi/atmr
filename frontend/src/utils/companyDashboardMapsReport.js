@@ -19,13 +19,28 @@ function deltaMs(a, b) {
   return Number.isFinite(d) ? Math.round(d) : null;
 }
 
+/**
+ * Classifie une resource Performance Timeline comme SDK Maps.
+ * Ce n'est pas une frontière de confiance : hostname exact, sans décision d'autorisation.
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isGoogleMapsApiResourceName(name) {
+  if (typeof name !== 'string' || name.length === 0) return false;
+  try {
+    return new URL(name).hostname === 'maps.googleapis.com';
+  } catch {
+    return false;
+  }
+}
+
 function findMapsSdkResource() {
   if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') {
     return null;
   }
   const entries = performance
     .getEntriesByType('resource')
-    .filter((e) => e.name && e.name.includes('maps.googleapis.com'));
+    .filter((e) => isGoogleMapsApiResourceName(e.name));
   if (!entries.length) return null;
   const last = entries[entries.length - 1];
   return {

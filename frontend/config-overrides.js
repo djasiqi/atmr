@@ -196,6 +196,7 @@ module.exports = {
 
       // ✅ Ne pas afficher l'overlay pour le rejet Socket.IO uniquement (python-socketio #590)
       // Condition stricte : message "Connection rejected" ET stack/message indique socket.io ou engine.io
+      // Filtre de texte de diagnostic (stack / message webpack), pas une validation d'URL.
       config.client = config.client || {};
       const baseOverlay = typeof config.client.overlay === 'object' ? config.client.overlay : {};
       config.client.overlay = {

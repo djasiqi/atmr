@@ -45,6 +45,26 @@ function countMatches(html, re) {
   return (html.match(re) || []).length;
 }
 
+/**
+ * Canonical SEO = https://www.lirie.ch (hostname exact, aligné sur SEO_BASE_URL).
+ * Input = HTML de notre build prerender, pas une URL HTTP runtime.
+ * @param {string} value
+ * @returns {boolean}
+ */
+export function isWwwLirieCanonicalHref(value) {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:') return false;
+    if (parsed.hostname !== 'www.lirie.ch') return false;
+    if (parsed.username || parsed.password) return false;
+    if (parsed.port && parsed.port !== '443') return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function assertOne(html, label, re) {
   const n = countMatches(html, re);
   if (n !== 1) {
@@ -121,7 +141,7 @@ export function validatePrerenderedHtml(html, route) {
     /<link[^>]*href=["']([^"']+)["'][^>]*rel=["']canonical["'][^>]*>/i
   );
   const canonical = canonicalMatch?.[1] || '';
-  if (!canonical.startsWith('https://www.lirie.ch')) {
+  if (!isWwwLirieCanonicalHref(canonical)) {
     throw new Error(`[seo-validate] Canonical invalide sur ${route}: ${canonical}`);
   }
   if (route !== '/' && canonical.endsWith('/')) {
