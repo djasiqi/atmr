@@ -5,6 +5,7 @@
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import type { AuthContext, BootstrapResponse } from "../contracts/auth";
+import { createSecureRandomId } from "../crypto/secureRandomId";
 
 /**
  * Clés SecureStore : uniquement [A-Za-z0-9._-] (regex expo-secure-store /^[\w.-]+$/).
@@ -218,7 +219,15 @@ export async function createAndPersistInstallationId(): Promise<SecureCredential
   if (existing.status === "found") return existing;
   if (existing.status === "temporarily_unavailable") return existing;
 
-  const generated = `atmr-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  let generated: string;
+  try {
+    generated = createSecureRandomId("atmr-");
+  } catch {
+    return {
+      status: "temporarily_unavailable",
+      cause: "secure_random_unavailable",
+    };
+  }
   const written = await nativeSet(INSTALLATION_KEY, generated);
   if (written.status !== "ok") {
     return {
