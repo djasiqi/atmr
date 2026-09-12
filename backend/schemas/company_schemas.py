@@ -2,8 +2,11 @@
 
 from marshmallow import (
     Schema,
+    ValidationError,
     fields,
+    post_load,
     validate,
+    validates,
     validates_schema,
 )
 
@@ -275,6 +278,25 @@ class CompanyUpdateSchema(Schema):
     )
 
     logo_url = fields.Str(validate=validate.Length(max=500), allow_none=True)
+
+    @validates("logo_url")
+    def validate_logo_url(self, value, **kwargs):  # noqa: ARG002
+        if value is None or value == "":
+            return
+        from shared.logo_url_policy import InvalidLogoUrl, normalize_persisted_logo_url
+
+        try:
+            normalize_persisted_logo_url(value)
+        except InvalidLogoUrl as exc:
+            raise ValidationError("URL de logo non autorisée") from exc
+
+    @post_load
+    def normalize_logo_url(self, data, **kwargs):  # noqa: ARG002
+        if "logo_url" in data:
+            from shared.logo_url_policy import normalize_persisted_logo_url
+
+            data["logo_url"] = normalize_persisted_logo_url(data.get("logo_url"))
+        return data
 
     class Meta:
         unknown = "INCLUDE"  # Permettre des champs supplémentaires

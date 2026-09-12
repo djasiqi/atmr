@@ -139,21 +139,26 @@ export function resolveCompanyLogoUrl(
 ): string | null {
   const trimmed = logoUrl?.trim();
   if (!trimmed) return null;
-  if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//") || /[\r\n\0]/.test(trimmed)) return null;
 
-  const normalized = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-  const apiRoot = apiBaseUrl.replace(/\/$/, "");
-  const origin = apiRoot.replace(/\/api\/v1$/, "");
-
-  if (normalized.startsWith("/uploads/")) {
-    return `${origin}${normalized}`;
+  if (trimmed.startsWith("/")) {
+    const path = trimmed.split("?")[0].split("#")[0];
+    if (path.includes("..") || path.includes("//")) return null;
+    if (!/^\/uploads\/[A-Za-z0-9._/-]+$/.test(path)) return null;
+    const apiRoot = apiBaseUrl.replace(/\/$/, "");
+    const origin = apiRoot.replace(/\/api\/v1$/, "");
+    return `${origin}${path}`;
   }
 
-  if (normalized.startsWith("/api/")) {
-    return `${origin}${normalized}`;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:") return null;
+    if (parsed.username || parsed.password) return null;
+    if (!parsed.hostname) return null;
+    return `https://${parsed.host}${parsed.pathname}${parsed.search}`;
+  } catch {
+    return null;
   }
-
-  return `${apiRoot}${normalized}`;
 }
 
 const SERVICE_AREA_TYPE_LABELS: Record<string, string> = {

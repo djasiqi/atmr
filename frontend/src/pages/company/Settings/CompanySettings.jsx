@@ -17,6 +17,7 @@ import styles from './CompanySettings.module.css';
 import { useLirieCompany } from '../../../hooks/useLirieCompany';
 import { updateCompanyInfo, uploadCompanyLogo } from '../../../services/companyService';
 import resolveLogoUrl from '../../../utils/resolveLogoUrl';
+import { LOGO_URL_DENIED_MESSAGE, validatePersistedLogoUrl } from '../../../utils/logoUrlPolicy';
 
 // Onglets chargés à la demande (Lot 7 perf) — chunk importé seulement au premier
 // affichage réel de chaque onglet, jamais les 7 au chargement initial de la page.
@@ -97,6 +98,14 @@ export default function CompanySettings() {
     const resolved = resolveLogoUrl(company?.logo_url);
     setLogoPreview(resolved || null);
   }, [company?.logo_url]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof logoPreview === 'string' && logoPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(logoPreview);
+      }
+    };
+  }, [logoPreview]);
 
   // -------- Form principal (Général) --------
   const [form, setForm] = useState({
@@ -355,7 +364,7 @@ export default function CompanySettings() {
     }
 
     const localUrl = URL.createObjectURL(file);
-    setLogoPreview(localUrl);
+    setLogoPreview(resolveLogoUrl(localUrl, { allowPreview: true }) || null);
 
     setLogoBusy(true);
     setError('');
@@ -396,14 +405,19 @@ export default function CompanySettings() {
       setError('Veuillez saisir une URL valide.');
       return;
     }
+    const persisted = validatePersistedLogoUrl(logoUrlInput);
+    if (!persisted.ok || !persisted.value) {
+      setError(LOGO_URL_DENIED_MESSAGE);
+      return;
+    }
     setLogoBusy(true);
     setError('');
     setMessage('');
     try {
-      await updateCompanyInfo({ logo_url: logoUrlInput.trim() });
+      await updateCompanyInfo({ logo_url: persisted.value });
 
       // Mettre à jour le preview avec la nouvelle URL
-      const resolved = resolveLogoUrl(logoUrlInput.trim());
+      const resolved = resolveLogoUrl(persisted.value);
       setLogoPreview(resolved || null);
 
       await reloadCompany?.();

@@ -80,6 +80,14 @@ const InstitutionProfileTab = () => {
     setLogoPreview(resolved || null);
   }, [meData]);
 
+  useEffect(() => {
+    return () => {
+      if (typeof logoPreview === 'string' && logoPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(logoPreview);
+      }
+    };
+  }, [logoPreview]);
+
   // Dirty state : détecter si des champs ont changé
   const isDirty = useMemo(() => {
     if (!meData) return false;
@@ -146,7 +154,7 @@ const InstitutionProfileTab = () => {
     }
 
     const localUrl = URL.createObjectURL(file);
-    setLogoPreview(localUrl);
+    setLogoPreview(resolveLogoUrl(localUrl, { allowPreview: true }) || null);
     setLogoBusy(true);
 
     try {

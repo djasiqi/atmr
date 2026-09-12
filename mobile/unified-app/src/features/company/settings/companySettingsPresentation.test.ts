@@ -4,6 +4,7 @@ import {
   COMPANY_DISPATCH_MODE_OPTIONS,
   formatDispatchModeFr,
   formatServiceAreaLabel,
+  resolveCompanyLogoUrl,
   resolveCompanyRealtimeLabel,
   resolveUserDisplayName,
 } from "./companySettingsPresentation";
@@ -53,6 +54,23 @@ describe("companySettingsPresentation", () => {
     expect(resolveUserDisplayName({ full_name: "Jean Dupont", email: "j@lirie.ch" })).toBe(
       "Jean Dupont"
     );
+  });
+
+  it("refuse les URL de logo dangereuses", () => {
+    expect(resolveCompanyLogoUrl("javascript:alert(1)", "https://api.lirie.ch/api/v1")).toBeNull();
+    expect(
+      resolveCompanyLogoUrl("data:text/html,<script>1</script>", "https://api.lirie.ch/api/v1")
+    ).toBeNull();
+    expect(resolveCompanyLogoUrl("//evil.example/x.png", "https://api.lirie.ch/api/v1")).toBeNull();
+  });
+
+  it("accepte un logo https et un upload", () => {
+    expect(resolveCompanyLogoUrl("https://cdn.example.com/logo.png", "https://api.lirie.ch/api/v1")).toBe(
+      "https://cdn.example.com/logo.png"
+    );
+    expect(
+      resolveCompanyLogoUrl("/uploads/company_logos/logo.png", "https://api.lirie.ch/api/v1")
+    ).toBe("https://api.lirie.ch/uploads/company_logos/logo.png");
   });
 
   it("résout le statut temps réel", () => {

@@ -63,7 +63,7 @@ const CompanyHeader = () => {
   const logoSrc = useMemo(() => {
     const abs = resolveLogoUrl(company?.logo_url);
     if (!abs) return '';
-    if (abs && !abs.startsWith('http') && !abs.startsWith('data:') && !abs.startsWith('blob:')) {
+    if (!abs.startsWith('https://') && !abs.startsWith('http://')) {
       return '';
     }
     return abs;

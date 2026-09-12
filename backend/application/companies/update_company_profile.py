@@ -90,6 +90,13 @@ class UpdateCompanyProfileUseCase:
             ]
         )
 
+        if "logo_url" in validated_data:
+            from shared.logo_url_policy import normalize_persisted_logo_url
+
+            validated_data["logo_url"] = normalize_persisted_logo_url(
+                validated_data.get("logo_url")
+            )
+
         for k, v in validated_data.items():
             if k in self._ALLOWED_FIELDS:
                 setattr(company, k, v)
