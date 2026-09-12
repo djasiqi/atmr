@@ -232,9 +232,9 @@ def _fmt_ide(uid_ide: str | None) -> str:
 
 def _normalize_street(value: str) -> str:
     """Corrige « Ernest- Pictet » → « Ernest-Pictet »."""
-    text = (value or "").strip()
-    text = re.sub(r"\s*-\s*", "-", text)
-    return re.sub(r"\s+", " ", text)
+    from shared.street_text import normalize_street_name
+
+    return normalize_street_name(value)
 
 
 def _fmt_address(party: dict[str, Any]) -> str:

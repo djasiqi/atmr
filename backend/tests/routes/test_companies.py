@@ -593,6 +593,49 @@ class TestCompaniesRoutes:
         )
         assert resp.status_code == 400
 
+    def test_create_client_plain_name_not_html_rejected(
+        self, client, app, companies_world
+    ):
+        world = companies_world
+        headers = _auth_headers(
+            app, world["company_user"], role="company", company_id=world["company"].id
+        )
+        resp = client.post(
+            "/api/v1/companies/me/clients",
+            json={
+                "management_mode": "MANAGED",
+                "gender": "female",
+                "first_name": "O'Connor",
+                "last_name": "Müller",
+                "address": "Rue du Rhône 12",
+            },
+            headers=headers,
+        )
+        body = resp.get_json() or {}
+        assert "balises HTML" not in str(body)
+        assert resp.status_code != 500
+
+    def test_create_client_long_unterminated_markup_is_validation(
+        self, client, app, companies_world
+    ):
+        world = companies_world
+        headers = _auth_headers(
+            app, world["company_user"], role="company", company_id=world["company"].id
+        )
+        resp = client.post(
+            "/api/v1/companies/me/clients",
+            json={
+                "management_mode": "MANAGED",
+                "gender": "male",
+                "first_name": "<" + ("a" * 200),
+                "last_name": "Safe",
+                "address": "Rue 1",
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 400
+        assert resp.status_code != 500
+
     def test_assign_reservation_missing(self, client, app, companies_world):
         world = companies_world
         headers = _auth_headers(

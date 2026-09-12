@@ -1,6 +1,53 @@
 """Tests du contrat texte : extraction HTML via parseur, pas via blacklist."""
 
-from shared.html_text import html_to_plain_text, strip_html_to_text
+import re
+
+from shared.html_text import contains_html_tag, html_to_plain_text, strip_html_to_text
+
+_LEGACY_TAG_RE = re.compile(r"<[^>]+>", re.IGNORECASE)
+
+
+class TestContainsHtmlTag:
+    def test_allows_plain_identity_text(self):
+        for value in (
+            "Jean Dupont",
+            "Rue du Rhône 12",
+            "O'Connor",
+            "D'Amico",
+            "José",
+            "Müller",
+            "1 < 2",
+            "Jean > Paul",
+        ):
+            assert contains_html_tag(value) is False
+
+    def test_rejects_markup(self):
+        for value in (
+            "<script>alert(1)</script>",
+            "<img src=x onerror=alert(1)>",
+            "<b>Jean</b>",
+            "<div>Rue</div>",
+        ):
+            assert contains_html_tag(value) is True
+
+    def test_matches_legacy_tag_regex_contract(self):
+        samples = (
+            "",
+            "<>",
+            "< >",
+            "<a>",
+            "<<" + "a" * 200,
+            "<" * 200,
+            ">" * 200,
+            "<" + "a" * 200 + ">",
+            "foo < bar > baz",
+        )
+        for value in samples:
+            assert contains_html_tag(value) is bool(_LEGACY_TAG_RE.search(value))
+
+    def test_long_unterminated_prefix_finishes(self):
+        payload = "<" + ("a" * 10_000)
+        assert contains_html_tag(payload) is False
 
 
 class TestStripHtmlToText:

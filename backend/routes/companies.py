@@ -5165,13 +5165,13 @@ class CompanyClients(Resource):
             )
 
         data = request.get_json() or {}
-        from shared.input_sanitizer import HTML_TAG_PATTERN
+        from shared.html_text import contains_html_tag
 
         # Les champs d'identité et d'adresse sont du texte brut : refuser le
         # HTML plutôt que de stocker une charge XSS potentiellement réexposée.
         for field in ("first_name", "last_name", "address"):
             value = data.get(field)
-            if isinstance(value, str) and HTML_TAG_PATTERN.search(value):
+            if isinstance(value, str) and contains_html_tag(value):
                 return APIErrorHandler.handle_validation_error(
                     "Les balises HTML ne sont pas autorisées",
                     field=field,

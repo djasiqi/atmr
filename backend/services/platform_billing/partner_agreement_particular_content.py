@@ -182,8 +182,9 @@ def _pct(rate: Any) -> str:
 
 
 def _normalize_street(value: str) -> str:
-    text = re.sub(r"\s*-\s*", "-", (value or "").strip())
-    return re.sub(r"\s+", " ", text)
+    from shared.street_text import normalize_street_name
+
+    return normalize_street_name(value)
 
 
 def _fmt_address(party: dict[str, Any]) -> str:

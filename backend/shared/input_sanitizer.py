@@ -15,8 +15,6 @@ MAX_STRING_LENGTH = 10000  # Longueur maximale par défaut pour les strings
 MAX_EMAIL_LENGTH = 254  # RFC 5321
 MAX_URL_LENGTH = 2048  # Limite raisonnable pour les URLs
 MIN_CONTROL_CHAR_CODE = 32  # Code ASCII minimum pour caractères non-contrôle (espace)
-# Détection de balises (rejet, pas sanitation XSS). Conservé pour companies.py.
-HTML_TAG_PATTERN = re.compile(r"<[^>]+>", re.IGNORECASE)
 
 
 def escape_html(text: str | None) -> str | None:

@@ -47,6 +47,28 @@ class _HtmlTextParser(HTMLParser):
             self.parts.append(data)
 
 
+def contains_html_tag(value: str) -> bool:
+    """True s'il existe une sous-chaîne ``<...>`` (au moins un caractère entre).
+
+    Même contrat que l'ancien ``<[^>]+>`` : « 1 < 2 » et « Jean > Paul »
+    restent du texte. Ce n'est pas un sanitizer XSS.
+    Parcours linéaire, sans backtracking.
+    """
+    if not value:
+        return False
+    start = 0
+    while True:
+        open_at = value.find("<", start)
+        if open_at == -1:
+            return False
+        close_at = value.find(">", open_at + 1)
+        if close_at == -1:
+            return False
+        if close_at > open_at + 1:
+            return True
+        start = open_at + 1
+
+
 def strip_html_to_text(value: str) -> str:
     """Retire le balisage et ignore le contenu script/style."""
     parser = _HtmlTextParser(keep_block_breaks=False)

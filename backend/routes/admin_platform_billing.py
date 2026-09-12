@@ -1570,11 +1570,9 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             # Typographie adresses (ex. Ernest- Pictet → Ernest-Pictet)
             if "street_name" in data and data.get("street_name"):
-                import re as _re
+                from shared.street_text import collapse_hyphen_spaces
 
-                data["street_name"] = _re.sub(
-                    r"\s*-\s*", "-", str(data["street_name"]).strip()
-                )
+                data["street_name"] = collapse_hyphen_spaces(str(data["street_name"]))
             c = PlatformBillingCreditor.query.filter_by(is_active=True).first()
             if not c:
                 c = PlatformBillingCreditor(
