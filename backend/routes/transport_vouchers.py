@@ -2,8 +2,6 @@
 
 import contextlib
 import logging
-from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from flask import current_app, request
@@ -14,7 +12,6 @@ from flask_restx import (  # pyright: ignore[reportMissingImports]
     fields,
 )
 from sqlalchemy.orm import joinedload
-from werkzeug.utils import secure_filename
 
 from ext import db, role_required
 from models import BillingParty, Booking, Client, TransportVoucher, TransportVoucherFile
@@ -55,11 +52,17 @@ MAX_FILES_PER_VOUCHER = 10  # Limite: 10 fichiers par bon
 
 
 def _allowed_file(filename: str) -> bool:
-    """Vérifie si l'extension du fichier est autorisée."""
-    if "." not in filename:
+    """Vérifie si l'extension du fichier est autorisée (pas de sous-chemin)."""
+    from shared.upload_path_resolver import (
+        InvalidUploadPath,
+        canonical_upload_extension,
+    )
+
+    try:
+        canonical_upload_extension(filename, ALLOWED_EXT)
+    except InvalidUploadPath:
         return False
-    ext = filename.rsplit(".", 1)[1].lower()
-    return ext in ALLOWED_EXT
+    return True
 
 
 transport_vouchers_ns = Namespace(
@@ -691,23 +694,25 @@ class TransportVoucherFiles(Resource):
                 logger_instance=logger,
             )
 
-        # Créer le dossier de stockage
-        upload_root = current_app.config.get(
-            "UPLOADS_DIR", str(Path(current_app.root_path) / "uploads")
+        from shared.upload_path_resolver import (
+            InvalidUploadPath,
+            build_confined_upload_path,
+            canonical_upload_extension,
+            confine_upload_destination,
+            server_upload_filename,
         )
-        vouchers_dir = Path(upload_root) / "transport_vouchers"
-        vouchers_dir.mkdir(parents=True, exist_ok=True)
+        from shared.upload_write import write_upload_bytes
 
-        # Générer un nom de fichier unique
-        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
-        ext = filename.rsplit(".", 1)[1].lower()
-        safe_name = secure_filename(filename)
-        base_name = safe_name.rsplit(".", 1)[0] if "." in safe_name else safe_name
-        fname = f"voucher_{voucher_id}_{timestamp}_{base_name}.{ext}"
-        fpath = vouchers_dir / fname
-
-        # Sauvegarder le fichier
-        file.save(fpath)
+        try:
+            ext = canonical_upload_extension(filename, ALLOWED_EXT)
+            fname = server_upload_filename(ext, prefix=f"voucher_{voucher_id}")
+            fpath = build_confined_upload_path("transport_vouchers", fname)
+            write_upload_bytes(fpath, file_bytes)
+        except InvalidUploadPath:
+            return APIErrorHandler.handle_validation_error(
+                "Chemin de fichier invalide.",
+                logger_instance=logger,
+            )
 
         # Construire l'URL publique
         public_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")
@@ -717,7 +722,7 @@ class TransportVoucherFiles(Resource):
         voucher_file = TransportVoucherFile()
         voucher_file.voucher_id = voucher.id
         voucher_file.file_url = public_url
-        voucher_file.filename = filename
+        voucher_file.filename = filename.replace("\\", "/").rsplit("/", 1)[-1][:180]
         voucher_file.mime_type = mime_type
         voucher_file.created_at = now_utc()
 
@@ -726,18 +731,21 @@ class TransportVoucherFiles(Resource):
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            # Supprimer le fichier en cas d'erreur
-            with contextlib.suppress(Exception):
-                fpath.unlink()
-            logger.exception("Erreur création TransportVoucherFile: %s", e)
+            with contextlib.suppress(OSError, InvalidUploadPath):
+                confine_upload_destination(fpath).unlink(missing_ok=True)
+            from shared.logging_utils import exception_type_for_log
+
+            logger.exception(
+                "Erreur création TransportVoucherFile error_type=%s voucher_id=%s",
+                exception_type_for_log(e),
+                voucher_id,
+            )
             return APIErrorHandler.handle_exception(e, logger)
 
         logger.info(
-            "📎 Fichier uploadé pour bon %s: %s (%s bytes) -> %s",
+            "Fichier uploadé pour bon voucher_id=%s size_bytes=%s",
             voucher_id,
-            filename,
             size_bytes,
-            public_url,
         )
 
         return {
@@ -786,25 +794,38 @@ class TransportVoucherFiles(Resource):
                 "TransportVoucherFile", file_id, logger
             )
 
-        # Supprimer le fichier physique
         try:
-            from urllib.parse import urlparse
+            from werkzeug.exceptions import NotFound as WzNotFound
 
-            parsed_url = urlparse(voucher_file.file_url)
-            file_path = Path(
-                current_app.config.get("UPLOADS_DIR", "/app/uploads")
-            ) / parsed_url.path.lstrip("/")
-            if file_path.exists():
-                file_path.unlink()
-        except Exception as e:
-            logger.warning("Impossible de supprimer le fichier physique: %s", e)
+            from shared.logging_utils import exception_type_for_log
+            from shared.upload_path_resolver import (
+                InvalidUploadPath,
+                get_uploads_base,
+                resolve_safe_upload_path,
+            )
+
+            if voucher_file.file_url:
+                candidate = resolve_safe_upload_path(
+                    voucher_file.file_url, uploads_base=get_uploads_base()
+                )
+                candidate.unlink()
+        except (WzNotFound, InvalidUploadPath, OSError) as exc:
+            logger.warning(
+                "Impossible de supprimer le fichier physique error_type=%s",
+                exception_type_for_log(exc),
+            )
 
         try:
             db.session.delete(voucher_file)
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            logger.exception("Erreur suppression TransportVoucherFile: %s", e)
+            from shared.logging_utils import exception_type_for_log
+
+            logger.exception(
+                "Erreur suppression TransportVoucherFile error_type=%s",
+                exception_type_for_log(e),
+            )
             return APIErrorHandler.handle_exception(e, logger)
 
         return {"success": True, "message": "Fichier supprimé avec succès"}, 200

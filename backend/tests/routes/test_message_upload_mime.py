@@ -23,3 +23,11 @@ def test_validate_upload_accepts_m4a_with_empty_mime(monkeypatch):
     err, code = _validate_file_upload(file, "voice.m4a", b"\x00\x01\x02\x03")
     assert err is None
     assert code == 0
+
+
+def test_validate_upload_rejects_path_in_filename(monkeypatch):
+    monkeypatch.setattr("routes.messages.scan_bytes", lambda _b: (True, None))
+    file = SimpleNamespace(content_type="application/pdf")
+    err, code = _validate_file_upload(file, "foo.pdf/../../evil", b"%PDF-1.4")
+    assert err is not None
+    assert code == 400

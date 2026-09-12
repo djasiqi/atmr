@@ -77,7 +77,7 @@ from services.platform_billing.subscription_pricing_resolver import (
     ensure_contract_pricing_grid,
     resolve_subscription_pricing,
 )
-from shared.upload_path_resolver import get_uploads_base
+from shared.upload_path_resolver import confine_upload_destination, get_uploads_base
 from shared.upload_write import ensure_writable_dir
 
 logger = logging.getLogger(__name__)
@@ -110,6 +110,7 @@ class PartnerAgreementError(Exception):
 
 def write_upload_bytes_atomic(filepath: Path, data: bytes) -> None:
     """Écriture atomique (temp + os.replace) sous le dossier cible."""
+    filepath = confine_upload_destination(filepath)
     ensure_writable_dir(filepath.parent)
     fd, tmp_name = tempfile.mkstemp(
         prefix=".tmp_", suffix=filepath.suffix, dir=str(filepath.parent)

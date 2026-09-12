@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 from flask import current_app, request  # pyright: ignore[reportMissingImports]
@@ -11,7 +10,6 @@ from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
     jwt_required,
 )
 from flask_restx import Namespace, Resource  # pyright: ignore[reportMissingImports]
-from werkzeug.utils import secure_filename  # pyright: ignore[reportMissingImports]
 
 from models import UserRole
 from repositories.company_repository import CompanyRepository
@@ -108,11 +106,17 @@ MAX_FILES_PER_MESSAGE = 1  # Limite: 1 fichier par message
 
 
 def _allowed_file(filename: str) -> bool:
-    """Vérifie si l'extension du fichier est autorisée."""
-    if "." not in filename:
+    """Vérifie si l'extension du fichier est autorisée (pas de sous-chemin)."""
+    from shared.upload_path_resolver import (
+        InvalidUploadPath,
+        canonical_upload_extension,
+    )
+
+    try:
+        canonical_upload_extension(filename, ALLOWED_EXT)
+    except InvalidUploadPath:
         return False
-    ext = filename.rsplit(".", 1)[1].lower()
-    return ext in ALLOWED_EXT
+    return True
 
 
 def _is_image(filename: str) -> bool:
@@ -482,31 +486,23 @@ class MessageUpload(Resource):
         is_pdf_file = _is_pdf(filename) and mime_type in ALLOWED_PDF_MIME
         is_audio_file = _is_audio(filename) and mime_type in ALLOWED_AUDIO_MIME
 
-        # Créer le dossier de stockage
-        from shared.upload_write import ensure_writable_dir, write_upload_bytes
-
-        upload_root = current_app.config.get(
-            "UPLOADS_DIR", str(Path(current_app.root_path) / "uploads")
+        from shared.upload_path_resolver import (
+            InvalidUploadPath,
+            build_confined_upload_path,
+            canonical_upload_extension,
+            server_upload_filename,
         )
-        chat_dir = Path(upload_root) / "chat"
-        try:
-            ensure_writable_dir(chat_dir)
-        except OSError:
-            chat_dir.mkdir(parents=True, exist_ok=True)
+        from shared.upload_write import write_upload_bytes
 
-        # Générer un nom de fichier unique (timestamp + nom original sécurisé)
-        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
-        ext = (file.filename or "").rsplit(".", 1)[1].lower()
-        safe_name = secure_filename(file.filename or "file")
-        base_name = safe_name.rsplit(".", 1)[0] if "." in safe_name else safe_name
-        fname = f"{timestamp}_{base_name}.{ext}"
-        fpath = chat_dir / fname
-
-        # Sauvegarder le fichier (best-effort permissions volumes Docker)
         try:
+            ext = canonical_upload_extension(filename, ALLOWED_EXT)
+            fname = server_upload_filename(ext)
+            fpath = build_confined_upload_path("chat", fname)
             write_upload_bytes(fpath, file_bytes)
+        except InvalidUploadPath:
+            return {"error": "Chemin de fichier invalide."}, 400
         except PermissionError:
-            logger.exception("Upload chat: permission denied path=%s", fpath)
+            logger.exception("Upload chat: permission denied")
             return {
                 "error": (
                     "Impossible d'enregistrer le fichier (permissions uploads). "

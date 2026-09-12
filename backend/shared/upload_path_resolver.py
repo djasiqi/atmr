@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -10,6 +11,10 @@ from werkzeug.exceptions import NotFound
 from werkzeug.utils import safe_join
 
 PUBLIC_UPLOAD_PREFIXES = ("company_logos/", "institution_logos/")
+
+
+class InvalidUploadPath(ValueError):
+    """Chemin hors de la racine uploads ou segment non confinable."""
 
 
 def extract_upload_relative_path(stored_url: str) -> str:
@@ -28,27 +33,124 @@ def extract_upload_relative_path(stored_url: str) -> str:
     return path.lstrip("/")
 
 
+def _resolved_uploads_base(uploads_base: Path | None = None) -> Path:
+    if uploads_base is not None:
+        return Path(uploads_base).resolve()
+    return get_uploads_base()
+
+
+def canonical_upload_extension(
+    filename: str, allowed: set[str] | frozenset[str]
+) -> str:
+    """Extension whitelistée du dernier segment. Jamais un sous-chemin."""
+    if not filename or not str(filename).strip():
+        raise InvalidUploadPath("nom de fichier manquant")
+    name = str(filename).replace("\\", "/").rsplit("/", 1)[-1]
+    if name in {".", ".."} or "." not in name:
+        raise InvalidUploadPath("extension manquante")
+    ext = name.rsplit(".", 1)[1].lower()
+    if not ext.isalnum():
+        raise InvalidUploadPath("extension invalide")
+    allowed_map = {item: item for item in allowed}
+    canonical = allowed_map.get(ext)
+    if canonical is None:
+        raise InvalidUploadPath("extension non autorisée")
+    return canonical
+
+
+def server_upload_filename(extension: str, *, prefix: str | None = None) -> str:
+    """Nom serveur : UUID + extension canonique. Aucune entrée utilisateur."""
+    if (
+        not extension
+        or not extension.isalnum()
+        or "/" in extension
+        or "\\" in extension
+    ):
+        raise InvalidUploadPath("extension invalide")
+    stem = uuid.uuid4().hex
+    if prefix:
+        if "/" in prefix or "\\" in prefix or ".." in prefix:
+            raise InvalidUploadPath("préfixe invalide")
+        return f"{prefix}_{stem}.{extension}"
+    return f"{stem}.{extension}"
+
+
+def confine_upload_destination(
+    target: Path | str,
+    *,
+    uploads_base: Path | None = None,
+) -> Path:
+    """Confine un chemin (existant ou non) sous uploads_base via safe_join.
+
+    Lève InvalidUploadPath si le candidat sort de la racine (traversal, absolu,
+    symlink hors base). N'ouvre pas le fichier.
+    """
+    base = _resolved_uploads_base(uploads_base)
+    raw = Path(target)
+    if raw.is_absolute():
+        try:
+            relative = raw.resolve().relative_to(base).as_posix()
+        except (ValueError, RuntimeError, OSError) as exc:
+            raise InvalidUploadPath("chemin hors uploads") from exc
+    else:
+        relative = raw.as_posix().replace("\\", "/").lstrip("/")
+
+    parts = relative.split("/")
+    if not relative or any(part in {"", ".."} for part in parts):
+        raise InvalidUploadPath("chemin invalide")
+
+    joined = safe_join(str(base), relative)
+    if joined is None:
+        raise InvalidUploadPath("chemin invalide")
+    try:
+        candidate = Path(joined).resolve()
+        candidate.relative_to(base)
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise InvalidUploadPath("chemin hors uploads") from exc
+    return candidate
+
+
+def build_confined_upload_path(
+    *parts: str,
+    uploads_base: Path | None = None,
+) -> Path:
+    """Construit un chemin sous uploads à partir de segments sans séparateur."""
+    if not parts:
+        raise InvalidUploadPath("segments requis")
+    for part in parts:
+        if (
+            not part
+            or part in {".", ".."}
+            or "/" in part
+            or "\\" in part
+            or ".." in part
+        ):
+            raise InvalidUploadPath("segment invalide")
+    base = _resolved_uploads_base(uploads_base)
+    joined = safe_join(str(base), *parts)
+    if joined is None:
+        raise InvalidUploadPath("chemin invalide")
+    try:
+        candidate = Path(joined).resolve()
+        candidate.relative_to(base)
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise InvalidUploadPath("chemin hors uploads") from exc
+    return candidate
+
+
 def resolve_safe_upload_path(
     stored_url: str,
     *,
     uploads_base: Path,
 ) -> Path:
-    """Résout un chemin fichier sous uploads_base après résolution des symlinks.
+    """Résout un fichier existant sous uploads_base après résolution des symlinks.
 
-    Lève NotFound si le chemin sort du répertoire autorisé.
+    Lève NotFound si le chemin sort du répertoire autorisé ou n'existe pas.
     """
     relative = extract_upload_relative_path(stored_url)
-    if not relative or ".." in relative.split("/"):
-        raise NotFound()
-
-    base = Path(uploads_base).resolve()
-    joined = safe_join(str(base), relative)
-    if joined is None:
-        raise NotFound()
     try:
-        candidate = Path(joined).resolve()
-        candidate.relative_to(base)
-    except (ValueError, RuntimeError, OSError) as exc:
+        candidate = confine_upload_destination(relative, uploads_base=uploads_base)
+    except InvalidUploadPath as exc:
         raise NotFound() from exc
 
     if not candidate.is_file():
