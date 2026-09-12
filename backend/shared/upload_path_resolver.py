@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import os
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse
@@ -76,12 +77,18 @@ def server_upload_filename(extension: str, *, prefix: str | None = None) -> str:
     return f"{stem}.{extension}"
 
 
-def _uploads_ancestor(resolved: Path) -> Path | None:
-    """Racine ``uploads/`` du chemin déjà résolu (suit les symlinks)."""
-    for parent in (resolved, *resolved.parents):
-        if parent.name == "uploads":
-            return parent
-    return None
+def _norm_path(path: Path) -> Path:
+    """Normalise lexically sans suivre les symlinks (pas de Path.resolve)."""
+    return Path(os.path.normpath(os.fspath(path)))
+
+
+def _uploads_ancestor(normalized: Path) -> Path | None:
+    """Dernier segment ``uploads`` d'un chemin déjà normalisé lexicalement."""
+    parts = normalized.parts
+    indexes = [i for i, part in enumerate(parts) if part == "uploads"]
+    if not indexes:
+        return None
+    return Path(*parts[: indexes[-1] + 1])
 
 
 def _join_under_base(base: Path, relative: str) -> Path:
@@ -116,23 +123,21 @@ def confine_upload_destination(
     """
     raw = Path(target)
     if raw.is_absolute():
-        try:
-            resolved = raw.resolve()
-        except (RuntimeError, OSError) as exc:
-            raise InvalidUploadPath("chemin invalide") from exc
+        lexical = _norm_path(raw)
         bases: list[Path] = []
         if uploads_base is not None:
             bases.append(Path(uploads_base).resolve())
         else:
             with contextlib.suppress(RuntimeError):
                 bases.append(get_uploads_base())
-        inferred = _uploads_ancestor(resolved)
+        inferred = _uploads_ancestor(lexical)
         if inferred is not None and inferred not in bases:
             bases.append(inferred)
         last_exc: Exception | None = None
         for base in bases:
             try:
-                return _join_under_base(base, resolved.relative_to(base).as_posix())
+                relative = lexical.relative_to(_norm_path(base)).as_posix()
+                return _join_under_base(base, relative)
             except (ValueError, InvalidUploadPath) as exc:
                 last_exc = exc
                 continue
