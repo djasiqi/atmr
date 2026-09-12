@@ -117,7 +117,7 @@ def validate_metrics_format(content: str) -> List[str]:
     for metric_line in metric_lines:
         # Format attendu: metric_name{labels} value ou metric_name value
         if not re.match(
-            r"^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})?\s+[0-9.+-eE]+", metric_line
+            r"^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})?\s+[0-9.+eE-]+", metric_line
         ):
             errors.append(f"Ligne de métrique mal formatée: {metric_line[:100]}")
 

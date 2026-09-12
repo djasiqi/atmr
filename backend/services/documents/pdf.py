@@ -982,7 +982,7 @@ def _inset_swiss_qrbill_svg_text(
     receipt_xs: list[float] = []
     for m in re.finditer(r"<text\b([^>]*)>", raw):
         attrs = m.group(1)
-        xm = re.search(r'\bx="([0-9.+-eE]+)"', attrs)
+        xm = re.search(r'\bx="([0-9.+eE-]+)"', attrs)
         if not xm:
             continue
         x = float(xm.group(1))
@@ -1002,7 +1002,7 @@ def _inset_swiss_qrbill_svg_text(
 
     def _rewrite_text_tag(match: re.Match[str]) -> str:
         attrs = match.group(1)
-        xm = re.search(r'\bx="([0-9.+-eE]+)"', attrs)
+        xm = re.search(r'\bx="([0-9.+eE-]+)"', attrs)
         if not xm:
             return match.group(0)
         x = float(xm.group(1))
@@ -1026,7 +1026,7 @@ def _inset_swiss_qrbill_svg_text(
         if abs(new_x - x) < 0.01:
             return match.group(0)
         new_attrs = re.sub(
-            r'\bx="[0-9.+-eE]+"',
+            r'\bx="[0-9.+eE-]+"',
             f'x="{new_x:.5f}"',
             attrs,
             count=1,

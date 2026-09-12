@@ -101,7 +101,7 @@ def test_metrics_format_valid(authenticated_client):
     ]
     for metric_line in metric_lines[:10]:  # Limiter à 10 pour performance
         assert re.match(
-            r"^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})?\s+[0-9.+-eE]+", metric_line
+            r"^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})?\s+[0-9.+eE-]+", metric_line
         ), f"Ligne mal formatée: {metric_line}"
 
 
@@ -212,7 +212,7 @@ def test_osrm_metrics_present(authenticated_client):
         )
 
         # ✅ FIX: Accepter aussi les métriques avec valeur 0.0 ou déclarées sans valeur
-        pattern = rf"^{metric}(\{{[^}}]*\}})?\s+[0-9.+-eE]+"
+        pattern = rf"^{metric}(\{{[^}}]*\}})?\s+[0-9.+eE-]+"
         match = re.search(pattern, content, re.MULTILINE)
 
         # Si pas de match, vérifier qu'au moins HELP/TYPE sont présents
@@ -282,7 +282,7 @@ def test_osrm_metrics_initialized(authenticated_client):
     # ✅ FIX: Vérifier qu'elles ont une valeur (même 0.0)
     # Les métriques avec labels peuvent avoir plusieurs lignes,
     # on cherche au moins une avec valeur
-    hits_pattern = r"^osrm_cache_hits_total(\{[^}]*\})?\s+([0-9.+-eE]+)"
+    hits_pattern = r"^osrm_cache_hits_total(\{[^}]*\})?\s+([0-9.+eE-]+)"
     hits_match = re.search(hits_pattern, content, re.MULTILINE)
     if hits_match:
         # Si une valeur est trouvée, vérifier qu'elle est >= 0
@@ -304,7 +304,7 @@ def test_osrm_metrics_initialized(authenticated_client):
         "osrm_cache_misses_total doit être de type counter"
     )
 
-    misses_pattern = r"^osrm_cache_misses_total(\{[^}]*\})?\s+([0-9.+-eE]+)"
+    misses_pattern = r"^osrm_cache_misses_total(\{[^}]*\})?\s+([0-9.+eE-]+)"
     misses_match = re.search(misses_pattern, content, re.MULTILINE)
     if misses_match:
         value = float(misses_match.group(2))
@@ -320,7 +320,7 @@ def test_osrm_metrics_initialized(authenticated_client):
         "osrm_cache_hit_rate doit être de type gauge"
     )
 
-    hit_rate_pattern = r"^osrm_cache_hit_rate\s+([0-9.+-eE]+)"
+    hit_rate_pattern = r"^osrm_cache_hit_rate\s+([0-9.+eE-]+)"
     hit_rate_match = re.search(hit_rate_pattern, content, re.MULTILINE)
     if hit_rate_match:
         value = float(hit_rate_match.group(1))
