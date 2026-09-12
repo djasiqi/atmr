@@ -37,6 +37,17 @@ _HTTP_STATUS_MESSAGES: dict[int, tuple[str, str]] = {
     429: ("too_many_requests", "Trop de requêtes"),
 }
 
+_CONTROLLED_HTTP_PAYLOADS: dict[str, tuple[dict[str, Any], int]] = {
+    "password_change_required": (
+        {
+            "error": "password_change_required",
+            "message": "Vous devez modifier votre mot de passe avant de continuer.",
+            "redirect_to": "/force-reset-password",
+        },
+        403,
+    ),
+}
+
 
 def _log_error_type(
     log: logging.Logger, event: str, exception: Exception, level: int = logging.WARNING
@@ -55,12 +66,24 @@ class APIErrorHandler:
     ) -> tuple[dict[str, Any], int]:
         """Convertit une exception en réponse HTTP sans fuite technique.
 
-        HTTPException est relancée pour le handler Flask (status + message stables).
+        HTTPException : payload métier allowlisté, sinon message constant par status.
         """
         log = logger_instance or logger
 
         if isinstance(exception, HTTPException):
-            raise exception
+            custom_response = getattr(exception, "response", None)
+            if custom_response is not None:
+                payload = custom_response.get_json(silent=True)
+                if isinstance(payload, dict):
+                    controlled = _CONTROLLED_HTTP_PAYLOADS.get(str(payload.get("error")))
+                    if controlled is not None:
+                        body, status = controlled
+                        return dict(body), status
+            status = int(exception.code or 500)
+            error_code, message = _HTTP_STATUS_MESSAGES.get(
+                status, ("http_error", "Erreur HTTP")
+            )
+            return {"error": error_code, "message": message}, status
 
         if isinstance(exception, ValidationError):
             _log_error_type(log, "api_validation_error", exception)

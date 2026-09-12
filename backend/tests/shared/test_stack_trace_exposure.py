@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from marshmallow import ValidationError
 from sqlalchemy.exc import IntegrityError
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, Forbidden
 
 from routes.api_error_utils import create_error_response, create_internal_error
 from routes.companies import _safe_company_value_error
@@ -50,12 +50,35 @@ def test_handle_exception_marshmallow_is_generic():
     _assert_no_sentinel(body)
 
 
-def test_handle_exception_reraises_http_exception():
-    try:
-        APIErrorHandler.handle_exception(BadRequest(SENTINEL))
-    except BadRequest:
-        return
-    raise AssertionError("HTTPException doit être relancée")
+def test_handle_exception_http_exception_uses_controlled_message():
+    body, status = APIErrorHandler.handle_exception(BadRequest(SENTINEL))
+    assert status == 400
+    _assert_no_sentinel(body)
+    assert body["error"] == "bad_request"
+    assert body["message"] == "Requête invalide"
+
+
+def test_handle_exception_password_change_required_is_controlled():
+    class _Resp:
+        status_code = 403
+
+        def get_json(self, silent=True):
+            return {
+                "error": "password_change_required",
+                "message": SENTINEL,
+                "redirect_to": SENTINEL,
+            }
+
+    forbidden = Forbidden()
+    forbidden.response = _Resp()
+    body, status = APIErrorHandler.handle_exception(forbidden)
+    assert status == 403
+    assert body == {
+        "error": "password_change_required",
+        "message": "Vous devez modifier votre mot de passe avant de continuer.",
+        "redirect_to": "/force-reset-password",
+    }
+    _assert_no_sentinel(body)
 
 
 def test_handle_exception_file_not_found_is_internal():
