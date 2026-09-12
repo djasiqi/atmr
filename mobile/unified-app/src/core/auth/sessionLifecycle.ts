@@ -3,6 +3,7 @@
  * Orthogonal au status UI legacy ("idle" | "bootstrapping" | …).
  */
 import type { MobileSessionStatus } from "./mobileSessionStatus";
+import { createSecureRandomId } from "../crypto/secureRandomId";
 
 export type SessionLifecycleEvent =
   | "explicit_logout_claimed"
@@ -148,5 +149,5 @@ export function shouldAcceptBootstrapTrigger(
 }
 
 export function newLifecycleOperationId(): string {
-  return `op-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  return createSecureRandomId("op-");
 }

@@ -3,6 +3,7 @@
  * Aucun token stocké — AsyncStorage uniquement.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createSecureRandomId } from "../crypto/secureRandomId";
 
 const PENDING_REFRESH_KEY = "@atmr/auth/pending_refresh_operation";
 
@@ -53,7 +54,7 @@ export async function ensurePendingRefreshOperation(params: {
     return existing;
   }
   const op: PendingRefreshOperation = {
-    operationId: `ref-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+    operationId: createSecureRandomId("ref-"),
     sessionId: params.sessionId,
     sourceRefreshGeneration: params.sourceRefreshGeneration,
     createdAt: new Date().toISOString(),
