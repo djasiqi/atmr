@@ -27,8 +27,8 @@ def readiness():
     try:
         db.session.execute(text("SELECT 1")).fetchone()
         checks["database"] = "ok"
-    except Exception as e:
-        checks["database"] = f"error: {e!s}"
+    except Exception:
+        checks["database"] = "error"
         ready = False
 
     # Check Redis (critique pour readiness)
@@ -39,8 +39,8 @@ def readiness():
         else:
             checks["redis"] = "not_configured"
             ready = False  # Redis doit être configuré pour être "ready"
-    except Exception as e:
-        checks["redis"] = f"error: {e!s}"
+    except Exception:
+        checks["redis"] = "error"
         ready = False
 
     status_code = 200 if ready else 503
@@ -63,8 +63,8 @@ def detailed_health():
     try:
         db.session.execute(text("SELECT 1")).fetchone()
         status["components"]["database"] = "ok"
-    except Exception as e:
-        status["components"]["database"] = f"error: {e!s}"
+    except Exception:
+        status["components"]["database"] = "error"
         status["status"] = "degraded"
 
     # Check Redis
@@ -74,9 +74,8 @@ def detailed_health():
             status["components"]["redis"] = "ok"
         else:
             status["components"]["redis"] = "not_configured"
-    except Exception as e:
-        status["components"]["redis"] = f"warning: {e!s}"
-        # Redis n'est pas critique - on ne dégrade pas le statut
+    except Exception:
+        status["components"]["redis"] = "error"
 
     http_code = 200 if status["status"] == "ok" else 503
     return jsonify(status), http_code
@@ -100,13 +99,12 @@ def websocket_health():
         # 200 si OK, 503 si dégradé ou erreur
         http_code = 200 if status == "ok" else 503
         return jsonify(health_data), http_code
-    except Exception as e:
-        # En cas d'erreur inattendue, retourner 503
+    except Exception:
         return (
             jsonify(
                 {
                     "status": "error",
-                    "error": str(e),
+                    "error": "websocket_health_unavailable",
                     "last_check": None,
                 }
             ),

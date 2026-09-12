@@ -96,7 +96,10 @@ def check_delay_risk():
         )
 
     except Exception as e:
-        logger.error("[ProactiveAlerts] Erreur endpoint delay-risk: %s", e)
+        logger.error(
+            "[ProactiveAlerts] Erreur endpoint delay-risk error_type=%s",
+            type(e).__name__,
+        )
         return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -202,7 +205,10 @@ def analyze_multiple_delay_risks():
         )
 
     except Exception as e:
-        logger.error("[ProactiveAlerts] Erreur endpoint batch delay-risk: %s", e)
+        logger.error(
+            "[ProactiveAlerts] Erreur endpoint batch delay-risk error_type=%s",
+            type(e).__name__,
+        )
         return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -264,7 +270,10 @@ def explain_rl_decision():
         )
 
     except Exception as e:
-        logger.error("[ProactiveAlerts] Erreur endpoint explain-decision: %s", e)
+        logger.error(
+            "[ProactiveAlerts] Erreur endpoint explain-decision error_type=%s",
+            type(e).__name__,
+        )
         return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -344,7 +353,10 @@ def send_proactive_alert():
         )
 
     except Exception as e:
-        logger.error("[ProactiveAlerts] Erreur endpoint send-alert: %s", e)
+        logger.error(
+            "[ProactiveAlerts] Erreur endpoint send-alert error_type=%s",
+            type(e).__name__,
+        )
         return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -372,7 +384,10 @@ def get_alert_statistics():
         )
 
     except Exception as e:
-        logger.error("[ProactiveAlerts] Erreur endpoint statistics: %s", e)
+        logger.error(
+            "[ProactiveAlerts] Erreur endpoint statistics error_type=%s",
+            type(e).__name__,
+        )
         return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -427,7 +442,10 @@ def clear_alert_history():
         )
 
     except Exception as e:
-        logger.error("[ProactiveAlerts] Erreur endpoint clear-history: %s", e)
+        logger.error(
+            "[ProactiveAlerts] Erreur endpoint clear-history error_type=%s",
+            type(e).__name__,
+        )
         return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -473,12 +491,15 @@ def health_check():
         return jsonify(health_status)
 
     except Exception as e:
-        logger.error("[ProactiveAlerts] Erreur health check: %s", e)
+        logger.error(
+            "[ProactiveAlerts] Erreur health check error_type=%s",
+            type(e).__name__,
+        )
         return jsonify(
             {
                 "service": "proactive_alerts",
                 "status": "unhealthy",
-                "error": str(e),
+                "error": "internal_error",
                 "timestamp": datetime.now(UTC).isoformat(),
             }
         ), 500

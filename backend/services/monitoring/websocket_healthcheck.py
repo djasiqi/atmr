@@ -64,10 +64,13 @@ def check_websocket_health() -> Dict[str, Any]:
         result["ping_latency_ms"] = ping_latency
 
     except Exception as e:
-        logger.warning("Erreur lors du test Socket.IO: %s", e, exc_info=True)
+        logger.warning(
+            "Erreur lors du test Socket.IO error_type=%s",
+            type(e).__name__,
+        )
         handlers_ok = False
         result["handlers_ok"] = False
-        result["error"] = str(e)
+        result["error"] = "socket_handlers_unavailable"
 
     # 5. Vérifier Redis (si disponible)
     redis_status = "ok"
@@ -78,8 +81,11 @@ def check_websocket_health() -> Dict[str, Any]:
         else:
             redis_status = "not_configured"
     except Exception as e:
-        logger.warning("Erreur Redis lors du health check: %s", e)
-        redis_status = f"error: {e!s}"
+        logger.warning(
+            "Erreur Redis lors du health check error_type=%s",
+            type(e).__name__,
+        )
+        redis_status = "error"
 
     result["redis_queue"] = redis_status
 
