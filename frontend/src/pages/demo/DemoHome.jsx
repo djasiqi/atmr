@@ -5,7 +5,7 @@ import useAuthToken from '../../hooks/useAuthToken';
 import { trackDemoEvent } from '../../services/demoAnalyticsService';
 import { setDemoPassword } from '../../services/demoAccessService';
 import { setCurrentAuthEnv } from '../../utils/apiClient';
-import { getAuthEnv, writeAuthSession } from '../../utils/webAuthSession';
+import { getAuthEnv, getEnvUser, writeAuthSession } from '../../utils/webAuthSession';
 import styles from './DemoHome.module.css';
 
 const normalizeDemoRole = (rawRole) => {
@@ -91,23 +91,14 @@ const DemoHome = () => {
 
     try {
       setSavingPassword(true);
-      const result = await setDemoPassword(password);
-      const env = setCurrentAuthEnv(result?.target_env || 'demo');
-      const rawUser = result?.user || null;
-      const role = normalizeDemoRole(rawUser?.role);
-      const sessionUser = rawUser
-        ? { ...rawUser, role, force_password_change: false }
-        : null;
-      const accessToken = result?.token || result?.access_token || null;
-      const refreshToken = result?.refresh_token || null;
-
-      if (sessionUser) {
+      await setDemoPassword(password);
+      const env = setCurrentAuthEnv('demo');
+      const existingUser = getEnvUser(env) || user;
+      if (existingUser) {
         writeAuthSession({
           env,
-          user: sessionUser,
-          role,
-          accessToken,
-          refreshToken,
+          user: { ...existingUser, force_password_change: false },
+          role: normalizeDemoRole(existingUser.role),
         });
       }
       window.dispatchEvent(new Event('auth-changed'));

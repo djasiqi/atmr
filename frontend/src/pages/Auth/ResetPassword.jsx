@@ -97,7 +97,7 @@ const ResetPassword = ({ resetMode } = {}) => {
         { email: identifier, password: newPassword },
         { skipCsrf: true }
       );
-      const { token, user, refresh_token, target_env, redirect_to } = loginResponse.data;
+      const { token, user, target_env, redirect_to } = loginResponse.data;
 
       if (!user || !user.role || !user.public_id) {
         throw new Error('Aucune information utilisateur reçue.');
@@ -119,8 +119,6 @@ const ResetPassword = ({ resetMode } = {}) => {
         env: authEnv,
         user,
         role: roleSegment,
-        accessToken: token,
-        refreshToken: refresh_token,
       });
       try {
         const { resumeSessionKeepAlive } = await import('../../utils/sessionKeepAlive');

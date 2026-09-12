@@ -376,7 +376,7 @@ const Login = () => {
         },
         { skipCsrf: true },
       );
-      const { token, user, refresh_token, target_env, redirect_to, access_expires_at, access_expires_in, expires_in } =
+      const { token, user, target_env, redirect_to, access_expires_at, access_expires_in, expires_in } =
         response.data;
 
       if (!user || !user.role || !user.public_id) {
@@ -425,8 +425,6 @@ const Login = () => {
         env: target_env,
         user,
         role: roleSegment,
-        accessToken: token,
-        refreshToken: refresh_token,
       });
       try {
         const { noteAccessExpiryFromResponse } = await import('../../utils/accessExpiry');

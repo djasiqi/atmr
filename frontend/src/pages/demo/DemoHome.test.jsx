@@ -6,6 +6,8 @@ import userEvent from '@testing-library/user-event';
 import DemoHome from './DemoHome';
 import useAuthToken from '../../hooks/useAuthToken';
 import { trackDemoEvent } from '../../services/demoAnalyticsService';
+import { setDemoPassword } from '../../services/demoAccessService';
+import { writeAuthSession } from '../../utils/webAuthSession';
 
 const mockNavigate = jest.fn();
 
@@ -13,6 +15,16 @@ jest.mock('../../hooks/useAuthToken');
 jest.mock('../../services/demoAnalyticsService', () => ({
   trackDemoEvent: jest.fn(),
 }));
+jest.mock('../../services/demoAccessService', () => ({
+  setDemoPassword: jest.fn(),
+}));
+jest.mock('../../utils/webAuthSession', () => {
+  const actual = jest.requireActual('../../utils/webAuthSession');
+  return {
+    ...actual,
+    writeAuthSession: jest.fn((...args) => actual.writeAuthSession(...args)),
+  };
+});
 jest.mock('react-router-dom', () => {
   const actual = jest.requireActual('react-router-dom');
   return {
@@ -84,5 +96,40 @@ describe('DemoHome', () => {
     await user.click(screen.getByRole('button', { name: /Explorer/i }));
 
     expect(mockNavigate).toHaveBeenCalledWith('/demo/dashboard/institution/inst_demo_1');
+  });
+
+  it('après setDemoPassword, ne persiste aucun JWT de la réponse', async () => {
+    const user = userEvent.setup();
+    useAuthToken.mockReturnValue({
+      role: 'company',
+      public_id: 'cmp_demo_1',
+      force_password_change: true,
+    });
+    localStorage.setItem(
+      'demo_user',
+      JSON.stringify({ role: 'company', public_id: 'cmp_demo_1', force_password_change: true })
+    );
+    localStorage.setItem('lirie_auth_env', 'demo');
+    setDemoPassword.mockResolvedValue({
+      token: 'jwt-from-set-demo-password',
+      refresh_token: 'refresh-from-set-demo-password',
+      user: { public_id: 'cmp_demo_1', role: 'company', token: 'nested-jwt' },
+    });
+
+    renderDemoHome();
+    await user.type(screen.getByLabelText(/Nouveau mot de passe/i), 'password1');
+    await user.type(screen.getByLabelText(/Confirmer le mot de passe/i), 'password1');
+    await user.click(screen.getByRole('button', { name: /Demarrer la demo/i }));
+
+    expect(setDemoPassword).toHaveBeenCalledWith('password1');
+    expect(writeAuthSession).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        accessToken: expect.anything(),
+        refreshToken: expect.anything(),
+      })
+    );
+    expect(localStorage.getItem('demo_access_token')).toBeNull();
+    expect(localStorage.getItem('authToken')).toBeNull();
+    expect(localStorage.getItem('demo_user')).not.toMatch(/jwt-from-set-demo-password/);
   });
 });

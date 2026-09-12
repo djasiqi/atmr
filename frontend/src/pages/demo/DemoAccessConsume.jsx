@@ -137,15 +137,11 @@ const DemoAccessConsume = () => {
         const user = rawUser ? { ...rawUser, role } : null;
         const recommendedJourney =
           String(result?.recommended_journey || '').trim().toLowerCase() || 'generic';
-        const accessToken = result?.token || result?.access_token || null;
-        const refreshToken = result?.refresh_token || null;
         if (user) {
           writeAuthSession({
             env: nextEnv,
             user,
             role,
-            accessToken,
-            refreshToken,
           });
         }
         setDemoRecommendedJourney(recommendedJourney, nextEnv);

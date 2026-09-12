@@ -29,8 +29,6 @@ describe('webAuthSession — aucune persistance JWT navigateur', () => {
       env: 'app',
       user: { public_id: 'u-1', role: 'company', email: 'c@example.com' },
       role: 'company',
-      accessToken: 'jwt-access-should-not-persist',
-      refreshToken: 'jwt-refresh-should-not-persist',
     });
 
     expect(JSON.parse(localStorage.getItem('app_user')).public_id).toBe('u-1');

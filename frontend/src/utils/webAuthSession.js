@@ -95,19 +95,6 @@ export const purgePersistedAuthSecrets = () => {
   AUTH_SECRET_STORAGE_KEYS.forEach((key) => safeRemove(key));
 };
 
-const setEnvAccessToken = (_token, env = getAuthEnv(), { mirrorLegacy = true } = {}) => {
-  // Web : cookies HttpOnly uniquement. Ne jamais persister un JWT en localStorage.
-  safeRemove(`${env}_access_token`);
-  if (mirrorLegacy) safeRemove('authToken');
-  return null;
-};
-
-const setEnvRefreshToken = (_token, env = getAuthEnv(), { mirrorLegacy = true } = {}) => {
-  safeRemove(`${env}_refresh_token`);
-  if (mirrorLegacy) safeRemove('refreshToken');
-  return null;
-};
-
 export const getEnvAccessToken = (env = getAuthEnv(), { allowLegacy = true } = {}) => {
   const scoped = safeGet(`${env}_access_token`);
   if (scoped) return scoped;
@@ -236,8 +223,6 @@ export const writeAuthSession = ({
   env = getAuthEnv(),
   user = null,
   role = null,
-  accessToken = null,
-  refreshToken = null,
 } = {}) => {
   const normalizedEnv = env === DEMO_ENV_KEY ? DEMO_ENV_KEY : APP_ENV_KEY;
   setAuthEnv(normalizedEnv);
@@ -250,8 +235,6 @@ export const writeAuthSession = ({
 
   setEnvUser(userPayload, normalizedEnv, { mirrorLegacy: true });
   setEnvPublicId(userPayload?.public_id ?? null, normalizedEnv, { mirrorLegacy: true });
-  setEnvAccessToken(accessToken, normalizedEnv, { mirrorLegacy: true });
-  setEnvRefreshToken(refreshToken, normalizedEnv, { mirrorLegacy: true });
 
   ['admin', 'company', 'driver', 'institution']
     .filter((scope) => scope !== resolvedScope)
@@ -260,8 +243,6 @@ export const writeAuthSession = ({
   if (resolvedScope) {
     setEnvUser(userPayload, resolvedScope, { mirrorLegacy: false });
     setEnvPublicId(userPayload?.public_id ?? null, resolvedScope, { mirrorLegacy: false });
-    setEnvAccessToken(accessToken, resolvedScope, { mirrorLegacy: false });
-    setEnvRefreshToken(refreshToken, resolvedScope, { mirrorLegacy: false });
   }
 
   purgePersistedAuthSecrets();
