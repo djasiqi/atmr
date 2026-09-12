@@ -6,10 +6,10 @@ import os
 from urllib.parse import urlsplit
 
 from services.saferpay.config import ensure_saferpay_loopback_env_from_repo
-
-
-def _strip_slash(url: str) -> str:
-    return url.strip().rstrip("/")
+from shared.return_url_policy import (
+    http_return_matches_allowed_base,
+    strip_return_url_base,
+)
 
 
 def allowed_saferpay_return_prefixes() -> list[str]:
@@ -22,11 +22,11 @@ def allowed_saferpay_return_prefixes() -> list[str]:
     ):
         v = (os.getenv(key) or "").strip()
         if v:
-            prefixes.append(_strip_slash(v))
+            prefixes.append(strip_return_url_base(v))
     raw = (os.getenv("SAFERPAY_ALLOWED_RETURN_URL_PREFIXES") or "").strip()
     if raw:
         for part in raw.split(","):
-            p = _strip_slash(part)
+            p = strip_return_url_base(part)
             if p:
                 prefixes.append(p)
     # Deep link app mobile — retour Saferpay parcours invité.
@@ -44,47 +44,6 @@ def allowed_saferpay_return_prefixes() -> list[str]:
             seen.add(p)
             out.append(p)
     return out
-
-
-def _effective_http_port(parsed) -> int | None:
-    if parsed.port is not None:
-        return parsed.port
-    if parsed.scheme == "https":
-        return 443
-    if parsed.scheme == "http":
-        return 80
-    return None
-
-
-def _normalize_hostname(host: str | None) -> str:
-    return (host or "").lower().rstrip(".")
-
-
-def _http_return_matches_allowed_base(url: str, base: str) -> bool:
-    """Même origine (scheme + host + port) et chemin sous le base Saferpay."""
-    candidate = urlsplit(url)
-    allowed = urlsplit(base)
-    if candidate.scheme not in {"http", "https"}:
-        return False
-    if allowed.scheme not in {"http", "https"}:
-        return False
-    if candidate.scheme != allowed.scheme:
-        return False
-    if candidate.username or candidate.password:
-        return False
-    if _normalize_hostname(candidate.hostname) != _normalize_hostname(allowed.hostname):
-        return False
-    if not candidate.hostname or not allowed.hostname:
-        return False
-    if _effective_http_port(candidate) != _effective_http_port(allowed):
-        return False
-    allowed_path = (allowed.path or "").rstrip("/")
-    candidate_path = candidate.path or ""
-    if not allowed_path:
-        return True
-    return candidate_path == allowed_path or candidate_path.startswith(
-        allowed_path + "/"
-    )
 
 
 def _custom_scheme_return_matches(url: str, prefix: str) -> bool:
@@ -115,7 +74,7 @@ def _url_matches_prefix(url: str, prefix: str) -> bool:
     if parsed_prefix.scheme and parsed_prefix.scheme not in {"http", "https"}:
         return _custom_scheme_return_matches(raw_url, raw_prefix)
     if parsed_prefix.scheme in {"http", "https"}:
-        return _http_return_matches_allowed_base(raw_url, _strip_slash(raw_prefix))
+        return http_return_matches_allowed_base(raw_url, raw_prefix)
     return False
 
 

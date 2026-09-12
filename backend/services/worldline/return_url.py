@@ -3,24 +3,25 @@
 from __future__ import annotations
 
 import os
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 
-
-def _strip_slash(url: str) -> str:
-    return url.strip().rstrip("/")
+from shared.return_url_policy import (
+    http_return_matches_allowed_base,
+    strip_return_url_base,
+)
 
 
 def allowed_return_url_prefixes() -> list[str]:
-    """Préfixes autorisés pour un `return_url` fourni par le client (JSON body)."""
+    """Bases autorisées pour un `return_url` fourni par le client (JSON body)."""
     prefixes: list[str] = []
     for key in ("CLIENT_WEB_BASE_URL", "PUBLIC_BASE_URL"):
         v = (os.getenv(key) or "").strip()
         if v:
-            prefixes.append(_strip_slash(v))
+            prefixes.append(strip_return_url_base(v))
     raw = (os.getenv("WORLDLINE_ALLOWED_RETURN_URL_PREFIXES") or "").strip()
     if raw:
         for part in raw.split(","):
-            p = _strip_slash(part)
+            p = strip_return_url_base(part)
             if p:
                 prefixes.append(p)
     seen: set[str] = set()
@@ -32,25 +33,21 @@ def allowed_return_url_prefixes() -> list[str]:
     return out
 
 
-def _url_matches_prefix(url: str, prefix: str) -> bool:
-    u = _strip_slash(url)
-    p = _strip_slash(prefix)
-    return u == p or u.startswith(p + "/") or u.startswith(p + "?")
-
-
 def validate_return_url_override(url: str) -> str:
     """Vérifie qu'une URL de retour explicite est autorisée.
 
     Raises:
-        ValueError: schéma invalide, https requis, ou préfixe non autorisé.
+        ValueError: schéma invalide, https requis, ou origine non autorisée.
     """
     u = (url or "").strip()
     if not u:
         raise ValueError("return_url ne peut pas être vide")
 
-    parsed = urlparse(u)
+    parsed = urlsplit(u)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError("return_url doit être une URL absolue (http/https)")
+    if parsed.username or parsed.password:
+        raise ValueError("return_url non autorisée par la configuration serveur")
 
     require_https = (
         os.getenv("WORLDLINE_RETURN_URL_REQUIRE_HTTPS") or ""
@@ -70,7 +67,7 @@ def validate_return_url_override(url: str) -> str:
             "PUBLIC_BASE_URL ou WORLDLINE_ALLOWED_RETURN_URL_PREFIXES"
         )
 
-    if not any(_url_matches_prefix(u, pr) for pr in prefixes):
+    if not any(http_return_matches_allowed_base(u, base) for base in prefixes):
         raise ValueError("return_url non autorisée par la configuration serveur")
 
     return u
