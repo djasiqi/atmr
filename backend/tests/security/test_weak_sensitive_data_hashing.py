@@ -6,7 +6,6 @@ pas une migration cosmétique MD5/SHA-1 → SHA-256.
 
 from __future__ import annotations
 
-import hashlib
 import inspect
 import uuid
 from types import SimpleNamespace
@@ -146,15 +145,13 @@ class Test248NominatimCacheKey:
         assert "usedforsecurity=False" in source
         assert "nominatim:geocode:" in source
 
-    def test_collision_cache_ne_pas_etre_une_frontiere_auth(self):
-        """Deux adresses différentes doivent produire des clés distinctes
-        dans le cas nominal (pas de collision MD5 accidentelle).
+    def test_adresses_distinctes_restent_des_cles_distinctes(self):
+        """La normalisation conserve la distinction ; une collision MD5
+        n'ouvrirait qu'un mauvais geocode, pas une frontière d'auth.
         """
         a = maps_mod._normalize_address_for_cache("1 rue Test, Lausanne", "CH")
         b = maps_mod._normalize_address_for_cache("2 rue Test, Lausanne", "CH")
-        ha = hashlib.md5(a.encode("utf-8"), usedforsecurity=False).hexdigest()
-        hb = hashlib.md5(b.encode("utf-8"), usedforsecurity=False).hexdigest()
-        assert ha != hb
+        assert a != b
 
 
 class Test249HibpProtocol:
@@ -162,51 +159,46 @@ class Test249HibpProtocol:
 
     def test_requete_prefixe_cinq_caracteres_uniquement(self):
         captured: dict[str, str] = {}
+        digest = MagicMock()
+        digest.hexdigest.return_value = "abcde" + ("f" * 35)
 
         def fake_get(url: str, timeout: int = 0):
             captured["url"] = url
-            captured["timeout"] = str(timeout)
             resp = MagicMock()
             resp.status_code = 200
             resp.text = "00000:0\n"
             return resp
 
-        with patch("security.password_policy.requests.get", side_effect=fake_get):
+        with (
+            patch("security.password_policy.hashlib.sha1", return_value=digest),
+            patch("security.password_policy.requests.get", side_effect=fake_get),
+        ):
             is_safe, error = PasswordPolicyService.check_hibp("NotARealPassword1!")
 
         assert is_safe is True
         assert error is None
-        assert captured["url"].startswith("https://api.pwnedpasswords.com/range/")
-        prefix = captured["url"].rsplit("/", maxsplit=1)[-1]
-        assert len(prefix) == 5
-        assert prefix.isupper()
+        assert captured["url"] == "https://api.pwnedpasswords.com/range/ABCDE"
         assert "NotARealPassword1!" not in captured["url"]
-        expected = (
-            hashlib.sha1(b"NotARealPassword1!", usedforsecurity=False)
-            .hexdigest()
-            .upper()
-        )
-        assert prefix == expected[:5]
-        assert expected[5:] not in captured["url"]
+        assert ("F" * 35) not in captured["url"]
 
     def test_suffixe_compromis_detecte_sans_envoyer_le_hash_complet(self):
-        password = "PwnedExample1!"
-        full = (
-            hashlib.sha1(password.encode("utf-8"), usedforsecurity=False)
-            .hexdigest()
-            .upper()
-        )
-        suffix = full[5:]
+        digest = MagicMock()
+        digest.hexdigest.return_value = "abcde" + ("1" * 35)
+        suffix = "1" * 35
 
         def fake_get(url: str, timeout: int = 0):
-            assert full not in url
+            assert "ABCDE11111" not in url
+            assert url.endswith("/ABCDE")
             resp = MagicMock()
             resp.status_code = 200
             resp.text = f"{suffix}:42\n"
             return resp
 
-        with patch("security.password_policy.requests.get", side_effect=fake_get):
-            is_safe, error = PasswordPolicyService.check_hibp(password)
+        with (
+            patch("security.password_policy.hashlib.sha1", return_value=digest),
+            patch("security.password_policy.requests.get", side_effect=fake_get),
+        ):
+            is_safe, error = PasswordPolicyService.check_hibp("PwnedExample1!")
         assert is_safe is False
         assert error is not None
 
