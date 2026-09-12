@@ -86,6 +86,24 @@ def test_api_unknown_route_is_json(client):
     assert response.status_code == 404
 
 
+def test_login_html_trace_id_header_is_not_reflected(client):
+    """X-Trace-Id utilisateur ne doit pas ressortir tel quel (JSON ni header)."""
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "nobody@example.com", "password": "x"},
+        headers={"X-Trace-Id": SENTINEL},
+    )
+    _assert_json_api(response)
+    text = response.get_data(as_text=True)
+    assert SENTINEL not in text
+    header = response.headers.get("X-Trace-Id") or ""
+    assert "<" not in header
+    body = response.get_json() or {}
+    reflected = body.get("trace_id") or (body.get("details") or {}).get("trace_id")
+    if reflected:
+        assert "<" not in reflected
+
+
 def test_ml_monitoring_invalid_hours_is_json(client, admin_headers):
     response = client.get(
         "/api/ml-monitoring/metrics?hours=9999",

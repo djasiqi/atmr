@@ -14,7 +14,27 @@ from middleware.trace_id import (
     get_trace_id,
     get_trace_id_for_logging,
     inject_trace_id_middleware,
+    sanitize_client_trace_id,
 )
+
+
+class TestSanitizeClientTraceId:
+    """Allowlist des identifiants de corrélation envoyés par le client."""
+
+    def test_accepts_hex_and_mobile_formats(self):
+        hex_id = "a" * 32
+        assert sanitize_client_trace_id(hex_id) == hex_id
+        assert sanitize_client_trace_id("mob_m3k8x2_a1b2c3d4") == "mob_m3k8x2_a1b2c3d4"
+        assert sanitize_client_trace_id("e2e-trace-abc123") == "e2e-trace-abc123"
+        assert (
+            sanitize_client_trace_id("custom-trace-id-12345") == "custom-trace-id-12345"
+        )
+
+    def test_rejects_html_and_crlf(self):
+        assert sanitize_client_trace_id("<script>alert(1)</script>") is None
+        assert sanitize_client_trace_id("<img src=x onerror=alert(1)>") is None
+        assert sanitize_client_trace_id("ok\r\nSet-Cookie: a=b") is None
+        assert sanitize_client_trace_id('"><svg onload=alert(1)>') is None
 
 
 class TestTraceIdGeneration:
@@ -153,3 +173,13 @@ class TestTraceIdIntegration:
             trace_id = get_trace_id()
 
             assert trace_id == "x-trace-id-value"
+
+    def test_rejects_html_header_and_regenerates(self, trace_app):
+        with trace_app.test_request_context(
+            headers={"X-Trace-Id": "<script>alert(1)</script>"}
+        ):
+            trace_id = get_trace_id()
+
+            assert trace_id != "<script>alert(1)</script>"
+            assert "<" not in trace_id
+            assert len(trace_id) == 32
