@@ -167,7 +167,12 @@ class TestBrevoEmailProvider:
         assert result.verified is True
         assert result.domain == "test.ch"
         assert result.spf_record is not None
-        assert "spf.brevo.com" in result.spf_record
+        spf_value = next(
+            line.split(":", 1)[1].strip()
+            for line in result.spf_record.splitlines()
+            if line.startswith("Valeur:")
+        )
+        assert spf_value == "v=spf1 include:spf.brevo.com ~all"
         assert result.dkim_record is not None
         assert "k=rsa" in result.dkim_record
 
@@ -244,7 +249,12 @@ class TestBrevoEmailProvider:
         assert dns_records is not None
         assert "spf" in dns_records
         assert "dkim" in dns_records
-        assert "spf.brevo.com" in dns_records["spf"]
+        spf_value = next(
+            line.split(":", 1)[1].strip()
+            for line in dns_records["spf"].splitlines()
+            if line.startswith("Valeur:")
+        )
+        assert spf_value == "v=spf1 include:spf.brevo.com ~all"
 
     @patch("services.email.brevo_provider.requests.get")
     def test_test_connection_success(self, mock_get):

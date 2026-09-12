@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 import pytest
 
 from services.saferpay import return_urls as ru
@@ -13,7 +15,11 @@ def test_validate_return_url_override_ok(monkeypatch):
         "SAFERPAY_ALLOWED_RETURN_URL_PREFIXES", "https://legacy.example.org"
     )
     u = ru.validate_return_url_override("https://legacy.example.org/cb?x=1")
-    assert u.startswith("https://legacy.example.org")
+    parts = urlsplit(u)
+    assert parts.scheme == "https"
+    assert parts.hostname == "legacy.example.org"
+    assert parts.path == "/cb"
+    assert parts.username is None
 
 
 def test_validate_return_url_override_rejects_unknown(monkeypatch):
@@ -102,3 +108,61 @@ def test_return_url_override_preserves_existing_query():
     s, _, _ = _return_urls_with_outcome_override(base, booking_id=1, payment_id=2)
     assert "foo=1" in s
     assert "outcome=success" in s
+
+
+def _isolate_legacy_prefix(monkeypatch) -> None:
+    for key in (
+        "SAFERPAY_CHECKOUT_PUBLIC_BASE_URL",
+        "WORLDLINE_CHECKOUT_PUBLIC_BASE_URL",
+        "CLIENT_WEB_BASE_URL",
+        "PUBLIC_BASE_URL",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv(
+        "SAFERPAY_ALLOWED_RETURN_URL_PREFIXES", "https://legacy.example.org"
+    )
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        "https://legacy.example.org",
+        "https://legacy.example.org/cb?x=1",
+        "https://LEGACY.EXAMPLE.ORG/cb",
+        "https://legacy.example.org:443/cb",
+        "https://legacy.example.org./cb",
+    ],
+)
+def test_validate_return_url_accepts_same_origin(monkeypatch, candidate):
+    _isolate_legacy_prefix(monkeypatch)
+    accepted = ru.validate_return_url_override(candidate)
+    parts = urlsplit(accepted)
+    assert parts.scheme == "https"
+    assert parts.hostname.rstrip(".") == "legacy.example.org"
+    assert parts.username is None
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        "",
+        "not-a-url",
+        "https://sub.legacy.example.org/cb",
+        "https://evil-legacy.example.org/cb",
+        "https://legacy.example.org.evil.com/cb",
+        "https://evil.com/legacy.example.org",
+        "https://legacy.example.org@evil.com/cb",
+        "https://evil.com@legacy.example.org/cb",
+        "//evil.com",
+        "http://legacy.example.org/cb",
+        "https://legacy.example.org:444/cb",
+        "javascript:https://legacy.example.org",
+        "data:text/plain,legacy.example.org",
+        "https://legacy.example.org%40evil.com/cb",
+        "https://legacy.example.org.evil.com/",
+    ],
+)
+def test_validate_return_url_rejects_lookalikes(monkeypatch, candidate):
+    _isolate_legacy_prefix(monkeypatch)
+    with pytest.raises(ValueError, match="return_url"):
+        ru.validate_return_url_override(candidate)

@@ -1,6 +1,23 @@
 """Tests du sanitizer de signatures : allowlist nh3, pas de regex XSS."""
 
+from html.parser import HTMLParser
+from urllib.parse import urlsplit
+
 from shared.html_sanitize import sanitize_email_signature_html
+
+
+class _HrefSrcParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.hrefs: list[str] = []
+        self.srcs: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        found = {key: value for key, value in attrs if value is not None}
+        if tag == "a" and "href" in found:
+            self.hrefs.append(found["href"])
+        if tag == "img" and "src" in found:
+            self.srcs.append(found["src"])
 
 
 class TestSanitizeEmailSignatureHtml:
@@ -49,9 +66,21 @@ class TestSanitizeEmailSignatureHtml:
             '<img src="cid:company_logo" alt="Logo">'
         )
         result = sanitize_email_signature_html(html)
-        assert "https://example.com" in result
-        assert "mailto:a@b.c" in result
-        assert "cid:company_logo" in result
+        parsed = _HrefSrcParser()
+        parsed.feed(result)
+        https_hrefs = [
+            href for href in parsed.hrefs if urlsplit(href).scheme == "https"
+        ]
+        assert len(https_hrefs) == 1
+        https_parts = urlsplit(https_hrefs[0])
+        assert https_parts.hostname == "example.com"
+        assert https_parts.scheme == "https"
+        assert https_parts.username is None
+        mailto_hrefs = [
+            href for href in parsed.hrefs if urlsplit(href).scheme == "mailto"
+        ]
+        assert mailto_hrefs == ["mailto:a@b.c"]
+        assert parsed.srcs == ["cid:company_logo"]
 
     def test_strips_iframe_and_malformed_nesting(self):
         result = sanitize_email_signature_html(

@@ -1,8 +1,30 @@
 """Tests pour la validation et normalisation des champs dans generate_signature_html_from_form."""
 
+from html.parser import HTMLParser
+from urllib.parse import urlsplit
+
 import pytest
 
 from services.email.signature_utils import generate_signature_html_from_form
+
+
+class _HrefParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.hrefs: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+        for key, value in attrs:
+            if key == "href" and value:
+                self.hrefs.append(value)
+
+
+def _https_hrefs(html: str) -> list[str]:
+    parser = _HrefParser()
+    parser.feed(html)
+    return [href for href in parser.hrefs if urlsplit(href).scheme == "https"]
 
 
 class TestEmailSignatureFormValidation:
@@ -50,8 +72,11 @@ class TestEmailSignatureFormValidation:
         website_with_spaces = "  www.example.com  "
         result = generate_signature_html_from_form(website=website_with_spaces)
 
-        # Le website doit être strippé
-        assert "www.example.com" in result
+        hrefs = _https_hrefs(result)
+        assert len(hrefs) == 1
+        parts = urlsplit(hrefs[0])
+        assert parts.hostname == "www.example.com"
+        assert parts.scheme == "https"
         assert "  www.example.com  " not in result
 
     def test_normalize_website_adds_https(self):
@@ -59,10 +84,12 @@ class TestEmailSignatureFormValidation:
         website_no_protocol = "www.example.com"
         result = generate_signature_html_from_form(website=website_no_protocol)
 
-        # Le lien doit avoir https://
-        assert 'href="https://www.example.com"' in result
-        # Mais l'affichage ne doit pas avoir https://
-        assert "www.example.com" in result
+        hrefs = _https_hrefs(result)
+        assert len(hrefs) == 1
+        parts = urlsplit(hrefs[0])
+        assert parts.scheme == "https"
+        assert parts.hostname == "www.example.com"
+        assert parts.username is None
 
     def test_normalize_website_preserves_https(self):
         """Test que https:// existant est préservé."""
