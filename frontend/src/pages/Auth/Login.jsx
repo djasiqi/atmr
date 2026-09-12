@@ -582,8 +582,6 @@ const Login = () => {
           needsWalkingAid: signupFormData.needsWalkingAid,
           needsDoorToDoorAssistance: signupFormData.needsDoorToDoorAssistance,
           assistanceLevel: signupFormData.assistanceLevel,
-          emergencyContact: signupFormData.emergencyContact,
-          notes: signupFormData.mobilityNotes,
         });
       }
       const params = new URLSearchParams();

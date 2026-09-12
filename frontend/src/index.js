@@ -7,6 +7,7 @@ import { startSessionKeepAlive } from './utils/sessionKeepAlive';
 import App from './App';
 import './styles/globals.css';
 import reportWebVitals from './reportWebVitals';
+import { purgePersistedAuthSecrets } from './utils/webAuthSession';
 import { registerPwaServiceWorker } from './utils/registerPwaServiceWorker';
 import * as Sentry from '@sentry/react';
 import { onCLS, onINP, onFCP, onLCP, onTTFB } from 'web-vitals';
@@ -193,6 +194,7 @@ const SentryErrorBoundary = Sentry.ErrorBoundary;
 const root = ReactDOM.createRoot(document.getElementById('root'));
 const isDev = ENVIRONMENT === 'development';
 
+purgePersistedAuthSecrets();
 startUserActivityTracking();
 initDeferredSessionLogout();
 startSessionKeepAlive();

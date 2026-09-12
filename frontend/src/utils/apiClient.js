@@ -6,10 +6,10 @@ import {
   getCompanyScopedAccessToken,
   getAuthEnv as getSessionAuthEnv,
   getEnvAccessToken,
-  getEnvRefreshToken,
   getEnvUser,
   hasCompanyDispatchSession,
   normalizeAuthRole,
+  purgePersistedAuthSecrets,
   removeLegacyGlobalTokens,
   setAuthEnv as setSessionAuthEnv,
 } from './webAuthSession';
@@ -110,9 +110,6 @@ export const setCurrentAuthEnv = (env) => {
 
 const getStorageTokenByEnv = (env) =>
   getEnvAccessToken(env, { allowLegacy: false });
-
-const _getStorageRefreshByEnv = (env) =>
-  getEnvRefreshToken(env, { allowLegacy: false });
 
 const getStoredRoleFromEnv = (env) => {
   try {
@@ -295,8 +292,7 @@ const addAuthHeader = async (cfg = {}) => {
   return cfg;
 };
 
-// ✅ Garde anti-régression dashboard company : company_dispatch/* => uniquement company_access_token (jamais driver_access_token)
-const COMPANY_ACCESS_TOKEN_KEY = 'company_access_token';
+// ✅ Garde anti-régression dashboard company : company_dispatch/* sans JWT chauffeur.
 export const COMPANY_DISPATCH_MISSING_TOKEN =
   'Session entreprise manquante pour le dispatch. Reconnectez-vous (Support LIRIE : 022 512 02 03 · info@lirie.ch).';
 
@@ -320,13 +316,6 @@ apiRest.interceptors.request.use((config) => {
       const envToken = getStorageTokenByEnv(env);
       if ((role === 'company' || role === 'admin') && envToken) {
         companyToken = envToken;
-        try {
-          if (env === APP_ENV_KEY) {
-            localStorage.setItem(COMPANY_ACCESS_TOKEN_KEY, envToken);
-          }
-        } catch (_) {
-          // no-op
-        }
       }
     }
     if (companyToken) {
@@ -513,7 +502,6 @@ export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
 
     isRefreshing = true;
     try {
-      const refreshToken = getEnvRefreshToken(targetEnv, { allowLegacy: true });
       const refreshBase = isUnifiedGatewayHost()
         ? targetEnv === DEMO_ENV_KEY
           ? API_BASES.demo
@@ -522,7 +510,7 @@ export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
 
       const refreshResponse = await apiClient.post(
         '/auth/refresh-token',
-        refreshToken ? { refresh_token: refreshToken } : {},
+        {},
         {
           skipAuthRedirect: true,
           _targetEnv: targetEnv,
@@ -531,8 +519,6 @@ export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
       );
 
       const refreshed = refreshResponse?.data || {};
-      const nextAccessToken = refreshed.access_token || refreshed.token;
-      const nextRefreshToken = refreshed.refresh_token;
       if (!isExplicitLogoutInProgress()) {
         try {
           const { noteAccessExpiryFromResponse } = require('./accessExpiry');
@@ -547,32 +533,8 @@ export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
         } catch (_) {
           // ignore
         }
-        if (nextAccessToken) {
-          if (targetEnv === DEMO_ENV_KEY) {
-            localStorage.setItem('demo_access_token', nextAccessToken);
-          } else {
-            localStorage.setItem('app_access_token', nextAccessToken);
-          }
-          // Miroir handshake company (Socket.IO / company_dispatch) si session entreprise.
-          try {
-            const hasCompanyMirror =
-              Boolean(localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY)) ||
-              Boolean(localStorage.getItem('company_authToken')) ||
-              Boolean(localStorage.getItem('company_user'));
-            if (hasCompanyMirror) {
-              localStorage.setItem(COMPANY_ACCESS_TOKEN_KEY, nextAccessToken);
-            }
-          } catch (_) {
-            // no-op (mode privé, quota…)
-          }
-        }
-        if (nextRefreshToken) {
-          if (targetEnv === DEMO_ENV_KEY) {
-            localStorage.setItem('demo_refresh_token', nextRefreshToken);
-          } else {
-            localStorage.setItem('app_refresh_token', nextRefreshToken);
-          }
-        }
+        // Cookies HttpOnly portent access/refresh. Ne jamais réécrire de JWT JS.
+        purgePersistedAuthSecrets();
         removeLegacyGlobalTokens();
       }
       processQueue(null, null);

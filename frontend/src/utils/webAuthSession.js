@@ -65,36 +65,47 @@ export const setEnvPublicId = (
   return normalized;
 };
 
-const setEnvAccessToken = (
-  token,
-  env = getAuthEnv(),
-  { mirrorLegacy = true } = {}
-) => {
-  if (!token) {
-    safeRemove(`${env}_access_token`);
-    if (mirrorLegacy) safeRemove('authToken');
-    return null;
-  }
-  const normalized = String(token);
-  safeSet(`${env}_access_token`, normalized);
-  if (mirrorLegacy) safeSet('authToken', normalized);
-  return normalized;
+/** Clés JWT / refresh historiques — jamais relues pour réauthentifier. */
+export const AUTH_SECRET_STORAGE_KEYS = [
+  'app_access_token',
+  'app_refresh_token',
+  'demo_access_token',
+  'demo_refresh_token',
+  'authToken',
+  'refreshToken',
+  'company_access_token',
+  'company_authToken',
+  'company_refresh_token',
+  'company_refreshToken',
+  'driver_access_token',
+  'driver_authToken',
+  'driver_refresh_token',
+  'driver_refreshToken',
+  'institution_access_token',
+  'institution_refresh_token',
+  'admin_access_token',
+  'admin_refresh_token',
+];
+
+/**
+ * Supprime les secrets d'auth persistés dans le navigateur.
+ * Ne relit jamais la valeur : un XSS ne doit pas pouvoir voler un JWT durable.
+ */
+export const purgePersistedAuthSecrets = () => {
+  AUTH_SECRET_STORAGE_KEYS.forEach((key) => safeRemove(key));
 };
 
-const setEnvRefreshToken = (
-  token,
-  env = getAuthEnv(),
-  { mirrorLegacy = true } = {}
-) => {
-  if (!token) {
-    safeRemove(`${env}_refresh_token`);
-    if (mirrorLegacy) safeRemove('refreshToken');
-    return null;
-  }
-  const normalized = String(token);
-  safeSet(`${env}_refresh_token`, normalized);
-  if (mirrorLegacy) safeSet('refreshToken', normalized);
-  return normalized;
+const setEnvAccessToken = (_token, env = getAuthEnv(), { mirrorLegacy = true } = {}) => {
+  // Web : cookies HttpOnly uniquement. Ne jamais persister un JWT en localStorage.
+  safeRemove(`${env}_access_token`);
+  if (mirrorLegacy) safeRemove('authToken');
+  return null;
+};
+
+const setEnvRefreshToken = (_token, env = getAuthEnv(), { mirrorLegacy = true } = {}) => {
+  safeRemove(`${env}_refresh_token`);
+  if (mirrorLegacy) safeRemove('refreshToken');
+  return null;
 };
 
 export const getEnvAccessToken = (env = getAuthEnv(), { allowLegacy = true } = {}) => {
@@ -253,6 +264,8 @@ export const writeAuthSession = ({
     setEnvRefreshToken(refreshToken, resolvedScope, { mirrorLegacy: false });
   }
 
+  purgePersistedAuthSecrets();
+
   return { env: normalizedEnv, roleScope: resolvedScope, user: userPayload };
 };
 
@@ -267,12 +280,7 @@ export const setDemoRecommendedJourney = (
 };
 
 export const removeLegacyGlobalTokens = () => {
-  try {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('refreshToken');
-  } catch (_) {
-    // no-op
-  }
+  purgePersistedAuthSecrets();
 };
 
 export const hasCompanyScopedAccessToken = (env = getAuthEnv()) => {

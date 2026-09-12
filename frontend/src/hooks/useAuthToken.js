@@ -123,8 +123,7 @@ export function getAccessToken() {
   if (isTokenUsable(envToken)) {
     return envToken;
   }
-  // Fallback company : writeAuthSession pose aussi company_access_token.
-  // Sans ça, le socket company démarre avec has_token=0 juste après login.
+  // Legacy uniquement : la session web actuelle repose sur les cookies HttpOnly.
   const companyToken = getCompanyScopedAccessToken(env);
   if (isTokenUsable(companyToken)) {
     return companyToken;

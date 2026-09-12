@@ -17,21 +17,6 @@ const COMPANY_USER = {
   force_password_change: false,
 };
 
-function fakeCompanyJwt() {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString(
-    'base64url'
-  );
-  const body = Buffer.from(
-    JSON.stringify({
-      exp: Math.floor(Date.now() / 1000) + 86400,
-      role: 'company',
-      sub: '1',
-      public_id: COMPANY_PUBLIC_ID,
-    })
-  ).toString('base64url');
-  return `${header}.${body}.g3`;
-}
-
 function pendingRow(bookingId, day) {
   return {
     booking_id: bookingId,
@@ -200,9 +185,8 @@ async function installApiMocks(page) {
 }
 
 async function injectCompanySession(page) {
-  const token = fakeCompanyJwt();
   await page.addInitScript(
-    ({ user, token: accessToken, publicId }) => {
+    ({ user, publicId }) => {
       const serialized = JSON.stringify(user);
       localStorage.setItem('lirie_auth_env', 'app');
       localStorage.setItem('app_user', serialized);
@@ -211,11 +195,8 @@ async function injectCompanySession(page) {
       localStorage.setItem('app_public_id', publicId);
       localStorage.setItem('public_id', publicId);
       localStorage.setItem('company_public_id', publicId);
-      localStorage.setItem('app_access_token', accessToken);
-      localStorage.setItem('authToken', accessToken);
-      localStorage.setItem('company_access_token', accessToken);
     },
-    { user: COMPANY_USER, token, publicId: COMPANY_PUBLIC_ID }
+    { user: COMPANY_USER, publicId: COMPANY_PUBLIC_ID }
   );
 }
 

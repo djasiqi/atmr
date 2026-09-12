@@ -25,6 +25,28 @@ describe('useAuthToken', () => {
     expect(result.current).toBeNull();
   });
 
+  it('restaure la session cookie-only depuis le user persisté (sans JWT JS)', () => {
+    localStorage.setItem(
+      'app_user',
+      JSON.stringify({
+        public_id: 'u-cookie',
+        role: 'company',
+        company_id: 7,
+        id: 'u-cookie',
+      })
+    );
+
+    const { result } = renderHook(() => useAuthToken());
+
+    expect(jwtDecode).not.toHaveBeenCalled();
+    expect(result.current).toMatchObject({
+      public_id: 'u-cookie',
+      role: 'company',
+      isCompany: true,
+      companyId: 7,
+    });
+  });
+
   it('devrait décoder le token et retourner les infos utilisateur', () => {
     const mockToken = 'fake.jwt.token';
     const mockDecoded = {
