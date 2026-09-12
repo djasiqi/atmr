@@ -232,9 +232,9 @@ def get_daily_report(company_id: int):
         )
         report = get_shadow_manager().build_daily_report(company_key, date)
         return jsonify(report), 200
-    except ValueError as e:
+    except ValueError:
         return APIErrorHandler.handle_validation_error(
-            f"Format de date invalide: {e}",
+            "Format de date invalide",
             field="date",
             logger_instance=logger,
         )
@@ -295,9 +295,9 @@ def get_company_summary_route(company_id: int):
         days = int(request.args.get("days", 7))
         summary = get_shadow_manager().get_company_summary(company_key, days)
         return jsonify(summary), 200
-    except ValueError as e:
+    except ValueError:
         return APIErrorHandler.handle_validation_error(
-            f"Paramètre invalide: {e}",
+            "Paramètre invalide",
             logger_instance=logger,
         )
     except Exception as e:
@@ -359,9 +359,9 @@ def get_kpi_metrics(company_id: int):
                 "available_metrics": list(get_shadow_manager().kpi_metrics.keys()),
             }
         ), 200
-    except ValueError as e:
+    except ValueError:
         return APIErrorHandler.handle_validation_error(
-            f"Paramètre invalide: {e}",
+            "Paramètre invalide",
             logger_instance=logger,
         )
     except Exception as e:
@@ -446,9 +446,9 @@ def export_company_data(company_id: int):
                 "message": "Données exportées en JSON",
             }
         ), 200
-    except ValueError as e:
+    except ValueError:
         return APIErrorHandler.handle_validation_error(
-            f"Paramètre invalide: {e}",
+            "Paramètre invalide",
             logger_instance=logger,
         )
     except Exception as e:
@@ -492,10 +492,8 @@ def list_companies():
         return jsonify(
             {"companies": company_stats, "total_companies": len(companies)}
         ), 200
-    except Exception as e:
-        return jsonify(
-            {"error": f"Erreur lors de la récupération des entreprises: {e}"}
-        ), 500
+    except Exception:
+        return jsonify({"error": "internal_error"}), 500
 
 
 def register_shadow_mode_routes(app):

@@ -362,10 +362,10 @@ def tracking_ingest():
             client_batch_id=str(client_batch_id) if client_batch_id else None,
         )
     except ValueError as exc:
-        code = str(exc)
-        if code == "batch_id_mismatch":
+        raw = str(exc)
+        if raw == "batch_id_mismatch":
             return jsonify({"error": "batch_id_mismatch"}), 400
-        return jsonify({"error": code}), 400
+        return jsonify({"error": "invalid_batch"}), 400
     except PayloadHashError as exc:
         return jsonify({"error": exc.code}), 400
 
@@ -395,11 +395,23 @@ def tracking_ingest():
     except ValueError as exc:
         for eid, nonce in reserved:
             release_pending(driver_id=driver_id, location_event_id=eid, nonce=nonce)
-        return jsonify({"error": str(exc)}), 403
-    except Exception:
+        persist_codes = {
+            "driver_not_found",
+            "driver_inactive",
+            "company_not_approved",
+        }
+        raw = str(exc)
+        for safe in persist_codes:
+            if raw == safe:
+                return jsonify({"error": safe}), 403
+        return jsonify({"error": "forbidden"}), 403
+    except Exception as persist_exc:
         for eid, nonce in reserved:
             release_pending(driver_id=driver_id, location_event_id=eid, nonce=nonce)
-        logger.exception("[internal_tracking] persist failed")
+        logger.error(
+            "[internal_tracking] persist failed error_type=%s",
+            type(persist_exc).__name__,
+        )
         return jsonify({"error": "ingest_persistence_failed"}), 503
 
     # Post-commit best-effort

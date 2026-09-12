@@ -705,6 +705,32 @@ def _driver_trigger(company: Company, action: str) -> None:
     uc.execute_for_driver_change(company, action=action)
 
 
+_COMPANY_VALUE_ERROR_MESSAGES = (
+    ("Format d'email invalide", "Format d'email invalide."),
+    ("Numéro de téléphone invalide", "Numéro de téléphone invalide."),
+    ("IBAN invalide", "IBAN invalide."),
+    ("IDE/UID suisse invalide", "IDE/UID suisse invalide."),
+    (
+        "Le nom de l'entreprise ne peut pas être vide",
+        "Le nom de l'entreprise ne peut pas être vide.",
+    ),
+    (
+        "Le nom de l'entreprise ne peut pas dépasser",
+        "Le nom de l'entreprise est trop long.",
+    ),
+    ("ID utilisateur invalide", "ID utilisateur invalide."),
+)
+
+
+def _safe_company_value_error(exc: ValueError) -> str:
+    """Message métier contrôlé — jamais le texte brut d'une exception interne."""
+    raw = str(exc)
+    for prefix, message in _COMPANY_VALUE_ERROR_MESSAGES:
+        if raw.startswith(prefix):
+            return message
+    return "Données invalides"
+
+
 @companies_ns.route("/me")
 class CompanyMe(Resource):
     @jwt_required()
@@ -801,7 +827,7 @@ class CompanyMe(Resource):
                     status_code = 404
             except ValueError as e:
                 db.session.rollback()
-                result = {"error": str(e)}
+                result = {"error": _safe_company_value_error(e)}
                 status_code = 400
             except IntegrityError as e:
                 db.session.rollback()

@@ -96,7 +96,12 @@ def enable_ml() -> tuple[dict[str, Any], int]:
     except BadRequest as e:
         from shared.error_handlers import APIErrorHandler
 
-        return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
+        required_msg = "'percentage' field required in request body"
+        range_msg = "Percentage must be an integer between 0 and 100"
+        message = required_msg if e.description == required_msg else range_msg
+        return APIErrorHandler.handle_validation_error(
+            message, field="percentage", logger_instance=logger
+        )
     except Exception as e:
         from shared.error_handlers import APIErrorHandler
 
@@ -164,7 +169,12 @@ def set_percentage() -> tuple[dict[str, Any], int]:
     except BadRequest as e:
         from shared.error_handlers import APIErrorHandler
 
-        return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
+        required_msg = "'percentage' field required in request body"
+        range_msg = "Percentage must be an integer between 0 and 100"
+        message = required_msg if e.description == required_msg else range_msg
+        return APIErrorHandler.handle_validation_error(
+            message, field="percentage", logger_instance=logger
+        )
     except Exception as e:
         from shared.error_handlers import APIErrorHandler
 
