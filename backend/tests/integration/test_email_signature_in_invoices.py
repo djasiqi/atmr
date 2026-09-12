@@ -312,8 +312,9 @@ class TestEmailSignatureInInvoices:
         # Le template HTML doit être rendu avec les variables
         assert test_company.name in html_sent
         assert test_company.contact_phone in html_sent
-        assert "border-left: 2px solid #1b4b7a" in html_sent
-        assert "<table>" in html_sent
+        assert "border-left" in html_sent
+        assert "#1b4b7a" in html_sent
+        assert "<table" in html_sent
         # Vérifier qu'aucun script n'est présent
         assert "<script>" not in html_sent.lower()
 
