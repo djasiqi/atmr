@@ -162,10 +162,13 @@ def create_error_response(
         response["suggestion"] = suggestion
 
     # Jamais de traceback / type d'exception dans la réponse HTTP
-    # (même en DEBUG) : journaliser côté serveur uniquement.
+    # (même en DEBUG) : journaliser le type uniquement.
     if exception is not None:
-        logging.getLogger(__name__).exception(
-            "Erreur API non exposée au client: %s", exception
+        from shared.logging_utils import exception_type_for_log
+
+        logging.getLogger(__name__).error(
+            "api_error_not_exposed error_type=%s",
+            exception_type_for_log(exception),
         )
 
     return response, status_code

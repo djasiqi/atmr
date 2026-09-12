@@ -2242,7 +2242,7 @@ def create_app(config_name: str | None = None):
             )
 
             if isinstance(e, ExpiredSignatureError):
-                app.logger.warning("Token JWT expiré intercepté: %s", str(e))
+                app.logger.warning("Token JWT expiré intercepté")
                 return jsonify(
                     {
                         "error": "token_expired",
@@ -2250,38 +2250,38 @@ def create_app(config_name: str | None = None):
                     }
                 ), 401
             if isinstance(e, InvalidTokenError):
-                app.logger.warning("Token JWT invalide intercepté: %s", str(e))
-                return jsonify({"error": "invalid_token", "message": str(e)}), 422
+                app.logger.warning("Token JWT invalide intercepté")
+                return jsonify(
+                    {
+                        "error": "invalid_token",
+                        "message": "Token invalide",
+                    }
+                ), 422
 
             from domain.billing.errors import BillingValidationError
 
             if isinstance(e, BillingValidationError):
-                app.logger.warning("BillingValidationError interceptée: %s", str(e))
+                app.logger.warning("BillingValidationError interceptée")
                 from shared.error_handlers import APIErrorHandler
 
                 payload, status = APIErrorHandler.handle_billing_validation_error(
-                    str(e), field=e.field
+                    "Facturation invalide",
+                    field=getattr(e, "field", None),
                 )
                 return jsonify(payload), status
 
-            # ✅ S1: Réduire les détails dans les stack traces en production
-            # En production, ne jamais exposer les détails de l'exception
-            is_production = config_name == "production"
-            is_debug = app.config.get("DEBUG", False)
+            from shared.logging_utils import exception_type_for_log
 
-            # Logger l'exception complète (pour Sentry/logs serveur)
-            app.logger.exception("Unhandled server error")
-
-            # Message pour le client : générique en production,
-            # détaillé seulement en dev
-            if is_production or not is_debug:
-                # Production ou non-DEBUG : message générique
-                msg = "Une erreur interne est survenue."
-            else:
-                # Développement avec DEBUG : message détaillé (pour debugging)
-                msg = str(e)
-
-            return jsonify({"error": "server_error", "message": msg}), 500
+            app.logger.error(
+                "unhandled_server_error error_type=%s",
+                exception_type_for_log(e),
+            )
+            return jsonify(
+                {
+                    "error": "server_error",
+                    "message": "Une erreur interne est survenue.",
+                }
+            ), 500
 
     # Note: handler disconnect géré dans sockets/chat.py (pas de doublon)
 

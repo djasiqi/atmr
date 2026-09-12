@@ -1,7 +1,7 @@
 """Handler centralisé pour la gestion des erreurs API.
 
-Ce module fournit un handler unifié pour gérer les exceptions dans les routes,
-améliorant la cohérence des réponses d'erreur et simplifiant la maintenance.
+Les exceptions techniques ne sont jamais renvoyées au client (ni str, ni type,
+ni traceback). Les messages HTTP sont des constantes contrôlées.
 """
 
 import logging
@@ -22,8 +22,26 @@ from routes.api_error_utils import (
     create_validation_error,
 )
 from routes.db_error_utils import format_integrity_error
+from shared.logging_utils import exception_type_for_log
 
 logger = logging.getLogger(__name__)
+
+_HTTP_STATUS_MESSAGES: dict[int, tuple[str, str]] = {
+    400: ("bad_request", "Requête invalide"),
+    401: ("unauthorized", "Authentification requise"),
+    403: ("forbidden", "Permission refusée"),
+    404: ("not_found", "Ressource introuvable"),
+    405: ("method_not_allowed", "Méthode non autorisée"),
+    409: ("conflict", "Conflit"),
+    422: ("unprocessable_entity", "Données invalides"),
+    429: ("too_many_requests", "Trop de requêtes"),
+}
+
+
+def _log_error_type(
+    log: logging.Logger, event: str, exception: Exception, level: int = logging.WARNING
+) -> None:
+    log.log(level, "%s error_type=%s", event, exception_type_for_log(exception))
 
 
 class APIErrorHandler:
@@ -35,108 +53,45 @@ class APIErrorHandler:
         logger_instance: logging.Logger | None = None,
         default_message: str = "Une erreur interne s'est produite",
     ) -> tuple[dict[str, Any], int]:
-        """Gère une exception et retourne une réponse d'erreur standardisée.
+        """Convertit une exception en réponse HTTP sans fuite technique.
 
-        Args:
-            exception: Exception à gérer
-            logger_instance: Logger à utiliser (défaut: logger du module)
-            default_message: Message par défaut si l'exception n'est pas reconnue
-
-        Returns:
-            Tuple (response_json, status_code) pour Flask
-
-        Examples:
-            # Dans une route
-            try:
-                # ...
-            except Exception as e:
-                return APIErrorHandler.handle_exception(e, app_logger)
+        HTTPException est relancée pour le handler Flask (status + message stables).
         """
         log = logger_instance or logger
-        result: tuple[dict[str, Any], int] | None = None
 
-        # HTTPException (from Flask abort()) — propager le bon status code
         if isinstance(exception, HTTPException):
-            custom_response = getattr(exception, "response", None)
-            if custom_response is not None:
-                payload = custom_response.get_json(silent=True)
-                if isinstance(payload, dict):
-                    status_code = custom_response.status_code or exception.code or 500
-                    log.warning(
-                        "HTTPException interceptée: %s %s",
-                        status_code,
-                        payload.get("error") or exception.description,
-                    )
-                    return payload, status_code
-            log.warning(
-                "HTTPException interceptée: %s %s",
-                exception.code,
-                exception.description,
-            )
-            return (
-                {"error": exception.description or str(exception)},
-                exception.code or 500,
-            )
+            raise exception
 
-        # ValidationError (Marshmallow)
         if isinstance(exception, ValidationError):
-            log.warning("Erreur de validation: %s", exception.messages)
-            # Extraire le premier message d'erreur
-            error_messages = exception.messages
-            if isinstance(error_messages, dict):
-                # Prendre le premier champ en erreur
-                first_field = next(iter(error_messages.keys()))
-                first_error = error_messages[first_field]
-                if isinstance(first_error, list) and first_error:
-                    message = f"{first_field}: {first_error[0]}"
-                else:
-                    message = str(first_error)
-            else:
-                message = str(error_messages)
-            result = create_validation_error(message)
+            _log_error_type(log, "api_validation_error", exception)
+            return create_validation_error("Données invalides")
 
-        # IntegrityError (SQLAlchemy)
-        elif isinstance(exception, IntegrityError):
-            log.warning("Erreur d'intégrité DB: %s", exception)
-            result = format_integrity_error(exception)
+        if isinstance(exception, IntegrityError):
+            _log_error_type(log, "api_integrity_error", exception)
+            return format_integrity_error(exception)
 
-        # ValueError (généralement erreur de validation)
-        elif isinstance(exception, ValueError):
-            log.warning("Erreur de valeur: %s", exception)
-            result = create_validation_error(str(exception))
+        if isinstance(exception, ValueError):
+            _log_error_type(log, "api_value_error", exception)
+            return create_validation_error("Données invalides")
 
-        # KeyError (clé manquante dans dict)
-        elif isinstance(exception, KeyError):
-            log.warning("Clé manquante: %s", exception)
-            result = create_validation_error(
-                f"Champ manquant: {exception}", field=str(exception)
-            )
+        if isinstance(exception, KeyError):
+            _log_error_type(log, "api_key_error", exception)
+            return create_validation_error("Champ manquant")
 
-        # AttributeError (attribut manquant)
-        elif isinstance(exception, AttributeError):
-            log.warning("Attribut manquant: %s", exception)
-            result = create_validation_error(f"Attribut manquant: {exception}")
+        _log_error_type(log, "unhandled_api_error", exception, level=logging.ERROR)
+        return create_internal_error(
+            default_message,
+            exception=exception,
+            operation="opération API",
+        )
 
-        # FileNotFoundError
-        elif isinstance(exception, FileNotFoundError):
-            log.warning("Fichier non trouvé: %s", exception)
-            result = create_not_found_error("Fichier", str(exception))
-
-        # PermissionError
-        elif isinstance(exception, PermissionError):
-            log.warning("Permission refusée: %s", exception)
-            result = create_permission_error(str(exception))
-
-        # Erreur générique - logger l'exception complète
-        if result is None:
-            log.exception("Erreur serveur non gérée: %s", exception)
-            result = create_internal_error(
-                default_message,
-                exception=exception,
-                operation="opération API",
-            )
-
-        return result
+    @staticmethod
+    def handle_http_status(status_code: int) -> tuple[dict[str, Any], int]:
+        """Message HTTP stable (sans description Werkzeug / path)."""
+        error_code, message = _HTTP_STATUS_MESSAGES.get(
+            status_code, ("http_error", "Erreur HTTP")
+        )
+        return {"error": error_code, "message": message}, status_code
 
     @staticmethod
     def handle_not_found(
@@ -144,16 +99,6 @@ class APIErrorHandler:
         resource_id: Any | None = None,
         logger_instance: logging.Logger | None = None,
     ) -> tuple[dict[str, Any], int]:
-        """Gère une erreur 404 (ressource non trouvée).
-
-        Args:
-            resource_type: Type de ressource (ex: "Entreprise", "Réservation")
-            resource_id: ID de la ressource recherchée (optionnel)
-            logger_instance: Logger à utiliser (défaut: logger du module)
-
-        Returns:
-            Tuple (response_json, status_code) pour Flask
-        """
         log = logger_instance or logger
         log.warning(
             "%s non trouvé%s",
@@ -167,17 +112,8 @@ class APIErrorHandler:
         message: str,
         logger_instance: logging.Logger | None = None,
     ) -> tuple[dict[str, Any], int]:
-        """Gère une erreur 404 avec message personnalisé.
-
-        Args:
-            message: Message d'erreur (ex: "Booking 10 non trouvé")
-            logger_instance: Logger à utiliser (défaut: logger du module)
-
-        Returns:
-            Tuple (response_json, status_code) pour Flask
-        """
         log = logger_instance or logger
-        log.warning("Not found: %s", message)
+        log.warning("Not found")
         return create_error_response(message, 404, error_code="not_found")
 
     @staticmethod
@@ -188,20 +124,8 @@ class APIErrorHandler:
         expected_format: str | None = None,
         logger_instance: logging.Logger | None = None,
     ) -> tuple[dict[str, Any], int]:
-        """Gère une erreur de validation.
-
-        Args:
-            message: Message d'erreur principal
-            field: Nom du champ en erreur (optionnel)
-            provided_value: Valeur fournie (optionnel)
-            expected_format: Format attendu (optionnel)
-            logger_instance: Logger à utiliser (défaut: logger du module)
-
-        Returns:
-            Tuple (response_json, status_code) pour Flask
-        """
         log = logger_instance or logger
-        log.warning("Erreur de validation: %s (champ: %s)", message, field)
+        log.warning("Erreur de validation field=%s", field)
         return create_validation_error(
             message,
             field=field,
@@ -215,9 +139,8 @@ class APIErrorHandler:
         field: str | None = None,
         logger_instance: logging.Logger | None = None,
     ) -> tuple[dict[str, Any], int]:
-        """Erreur métier facturation incomplète (422)."""
         log = logger_instance or logger
-        log.warning("Facturation invalide: %s (champ: %s)", message, field)
+        log.warning("Facturation invalide field=%s", field)
         return create_billing_validation_error(message, field=field)
 
     @staticmethod
@@ -226,18 +149,8 @@ class APIErrorHandler:
         required_permission: str | None = None,
         logger_instance: logging.Logger | None = None,
     ) -> tuple[dict[str, Any], int]:
-        """Gère une erreur de permission (403).
-
-        Args:
-            message: Message d'erreur principal
-            required_permission: Permission requise (optionnel)
-            logger_instance: Logger à utiliser (défaut: logger du module)
-
-        Returns:
-            Tuple (response_json, status_code) pour Flask
-        """
         log = logger_instance or logger
-        log.warning("Permission refusée: %s", message)
+        log.warning("Permission refusée")
         return create_permission_error(message, required_permission=required_permission)
 
     @staticmethod
@@ -247,25 +160,8 @@ class APIErrorHandler:
         resource_id: Any | None = None,
         logger_instance: logging.Logger | None = None,
     ) -> tuple[dict[str, Any], int]:
-        """Gère une erreur de conflit (409).
-
-        Args:
-            message: Message d'erreur principal
-            resource_type: Type de ressource en conflit (optionnel)
-            resource_id: ID de la ressource en conflit (optionnel)
-            logger_instance: Logger à utiliser (défaut: logger du module)
-
-        Returns:
-            Tuple (response_json, status_code) pour Flask
-        """
         log = logger_instance or logger
-        log.warning(
-            "Conflit détecté: %s%s",
-            message,
-            f" (ressource: {resource_type}, ID: {resource_id})"
-            if resource_type
-            else "",
-        )
+        log.warning("Conflit détecté resource_type=%s", resource_type)
         return create_conflict_error(
             message, resource_type=resource_type, resource_id=resource_id
         )
@@ -277,19 +173,8 @@ class APIErrorHandler:
         details: dict[str, Any] | None = None,
         logger_instance: logging.Logger | None = None,
     ) -> tuple[dict[str, Any], int]:
-        """Gère une erreur 503 (dépendance critique indisponible : DB, Redis...).
-
-        Args:
-            message: Message d'erreur principal
-            error_code: Code machine (snake_case, défaut "service_unavailable")
-            details: Détails supplémentaires (optionnel)
-            logger_instance: Logger à utiliser (défaut: logger du module)
-
-        Returns:
-            Tuple (response_json, status_code) pour Flask
-        """
         log = logger_instance or logger
-        log.error("Service indisponible: %s", message)
+        log.error("Service indisponible error_code=%s", error_code)
         return create_service_unavailable_error(
             message, error_code=error_code, details=details
         )
