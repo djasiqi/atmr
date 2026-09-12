@@ -2104,9 +2104,7 @@ def create_app(config_name: str | None = None):
 
         @jwt.invalid_token_loader
         def invalid_token_callback(_error):  # pyright: ignore[reportUnusedFunction]
-            return jsonify(
-                {"error": "invalid_token", "message": "Token invalide"}
-            ), 422
+            return jsonify({"error": "invalid_token", "message": "Token invalide"}), 422
 
         @jwt.unauthorized_loader
         def missing_token_callback(_error):  # pyright: ignore[reportUnusedFunction]

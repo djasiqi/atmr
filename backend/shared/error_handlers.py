@@ -75,7 +75,9 @@ class APIErrorHandler:
             if custom_response is not None:
                 payload = custom_response.get_json(silent=True)
                 if isinstance(payload, dict):
-                    controlled = _CONTROLLED_HTTP_PAYLOADS.get(str(payload.get("error")))
+                    controlled = _CONTROLLED_HTTP_PAYLOADS.get(
+                        str(payload.get("error"))
+                    )
                     if controlled is not None:
                         body, status = controlled
                         return dict(body), status
