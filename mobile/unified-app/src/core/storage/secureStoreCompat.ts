@@ -2,7 +2,7 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 const WEB_STORAGE_PREFIX = "unified_secure_store:";
-const memoryFallback = new Map<string, string>();
+const memoryStore = new Map<string, string>();
 
 function buildWebKey(key: string): string {
   return `${WEB_STORAGE_PREFIX}${key}`;
@@ -12,34 +12,27 @@ function canUseLocalStorage(): boolean {
   return typeof globalThis !== "undefined" && typeof globalThis.localStorage !== "undefined";
 }
 
-function readWebFallback(key: string): string | null {
-  const mem = memoryFallback.get(key);
-  if (typeof mem === "string") return mem;
-  if (!canUseLocalStorage()) return null;
-  try {
-    return globalThis.localStorage.getItem(buildWebKey(key));
-  } catch {
-    return null;
-  }
-}
-
-function writeWebFallback(key: string, value: string): void {
-  memoryFallback.set(key, value);
+/**
+ * Supprime les secrets éventuellement persistés en clair (legacy web).
+ * Ne relit jamais la valeur pour la réinjecter.
+ */
+function purgeLegacyWebPersistence(key?: string): void {
   if (!canUseLocalStorage()) return;
   try {
-    globalThis.localStorage.setItem(buildWebKey(key), value);
+    if (key) {
+      globalThis.localStorage.removeItem(buildWebKey(key));
+      return;
+    }
+    const toRemove: string[] = [];
+    for (let i = 0; i < globalThis.localStorage.length; i += 1) {
+      const storedKey = globalThis.localStorage.key(i);
+      if (storedKey && storedKey.startsWith(WEB_STORAGE_PREFIX)) {
+        toRemove.push(storedKey);
+      }
+    }
+    toRemove.forEach((storedKey) => globalThis.localStorage.removeItem(storedKey));
   } catch {
-    // no-op: best effort fallback only
-  }
-}
-
-function deleteWebFallback(key: string): void {
-  memoryFallback.delete(key);
-  if (!canUseLocalStorage()) return;
-  try {
-    globalThis.localStorage.removeItem(buildWebKey(key));
-  } catch {
-    // no-op: best effort fallback only
+    // no-op
   }
 }
 
@@ -52,47 +45,50 @@ function hasNativeSecureStore(): boolean {
 }
 
 export async function getItemAsync(key: string): Promise<string | null> {
+  purgeLegacyWebPersistence(key);
   if (Platform.OS === "web") {
-    return readWebFallback(key);
+    return memoryStore.get(key) ?? null;
   }
   if (!hasNativeSecureStore()) {
-    return readWebFallback(key);
+    return memoryStore.get(key) ?? null;
   }
   try {
     return await SecureStore.getItemAsync(key);
   } catch {
-    return readWebFallback(key);
+    return memoryStore.get(key) ?? null;
   }
 }
 
 export async function setItemAsync(key: string, value: string): Promise<void> {
+  purgeLegacyWebPersistence(key);
   if (Platform.OS === "web") {
-    writeWebFallback(key, value);
+    memoryStore.set(key, value);
     return;
   }
   if (!hasNativeSecureStore()) {
-    writeWebFallback(key, value);
+    memoryStore.set(key, value);
     return;
   }
   try {
     await SecureStore.setItemAsync(key, value);
+    memoryStore.delete(key);
   } catch {
-    writeWebFallback(key, value);
+    // Native only : mémoire de session, jamais localStorage / AsyncStorage.
+    memoryStore.set(key, value);
   }
 }
 
 export async function deleteItemAsync(key: string): Promise<void> {
-  if (Platform.OS === "web") {
-    deleteWebFallback(key);
-    return;
-  }
-  if (!hasNativeSecureStore()) {
-    deleteWebFallback(key);
+  memoryStore.delete(key);
+  purgeLegacyWebPersistence(key);
+  if (Platform.OS === "web" || !hasNativeSecureStore()) {
     return;
   }
   try {
     await SecureStore.deleteItemAsync(key);
   } catch {
-    deleteWebFallback(key);
+    // déjà retiré de la mémoire
   }
 }
+
+purgeLegacyWebPersistence();
