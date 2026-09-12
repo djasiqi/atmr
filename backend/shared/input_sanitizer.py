@@ -8,15 +8,15 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
+from shared.html_text import strip_html_to_text
+
 # Constantes de sécurité
 MAX_STRING_LENGTH = 10000  # Longueur maximale par défaut pour les strings
 MAX_EMAIL_LENGTH = 254  # RFC 5321
 MAX_URL_LENGTH = 2048  # Limite raisonnable pour les URLs
 MIN_CONTROL_CHAR_CODE = 32  # Code ASCII minimum pour caractères non-contrôle (espace)
+# Détection de balises (rejet, pas sanitation XSS). Conservé pour companies.py.
 HTML_TAG_PATTERN = re.compile(r"<[^>]+>", re.IGNORECASE)
-SCRIPT_TAG_PATTERN = re.compile(
-    r"<script[^>]*>.*?</script\s*>", re.IGNORECASE | re.DOTALL
-)
 
 
 def escape_html(text: str | None) -> str | None:
@@ -84,10 +84,9 @@ def sanitize_string(
     if len(text_str) > max_len:
         text_str = text_str[:max_len]
 
-    # Supprimer les balises HTML/script si demandé
+    # Extraire le texte : le HTML n'est pas un contrat de ces champs.
     if strip_html:
-        text_str = SCRIPT_TAG_PATTERN.sub("", text_str)
-        text_str = HTML_TAG_PATTERN.sub("", text_str)
+        text_str = strip_html_to_text(text_str)
 
     # Échapper les caractères HTML si demandé
     if escape_html_chars:

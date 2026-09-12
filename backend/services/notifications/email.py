@@ -7,16 +7,15 @@ L'envoi Brevo délègue à BrevoEmailProvider (chemin unique).
 
 from __future__ import annotations
 
-import html as html_lib
 import logging
 import os
-import re
 from typing import Any, Dict
 
 from services.notifications.email_errors import (
     EmailPermanentError,
     EmailRetryableError,
 )
+from shared.html_text import html_to_plain_text
 
 logger = logging.getLogger(__name__)
 
@@ -50,20 +49,8 @@ def is_email_provider_configured() -> tuple[bool, str | None]:
 
 
 def _html_to_text(html_content: str) -> str:
-    """Convertit un HTML simple en texte brut pour améliorer la délivrabilité."""
-    no_style = re.sub(
-        r"<style[\s\S]*?</style\s*>", " ", html_content, flags=re.IGNORECASE
-    )
-    no_script = re.sub(
-        r"<script[\s\S]*?</script\s*>", " ", no_style, flags=re.IGNORECASE
-    )
-    with_newlines = re.sub(
-        r"</(p|div|br|li|h1|h2|h3|tr|table)>", "\n", no_script, flags=re.IGNORECASE
-    )
-    no_tags = re.sub(r"<[^>]+>", " ", with_newlines)
-    normalized = re.sub(r"[ \t\r\f\v]+", " ", no_tags)
-    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
-    return html_lib.unescape(normalized).strip()
+    """Convertit un HTML simple en texte brut (partie MIME text/plain)."""
+    return html_to_plain_text(html_content)
 
 
 def send_email_notification(

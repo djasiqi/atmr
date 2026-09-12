@@ -95,16 +95,14 @@ class TestEmailSignatureHtmlRender:
         assert result2 == ""
 
     def test_render_blocks_script_tags(self, mock_company):
-        """Test que les balises <script> sont supprimées (sécurité XSS)."""
+        """Les balises script et handlers ne survivent pas au sanitizer."""
         template = (
             "{{ name }}<script>alert('xss')</script><img src='x' onerror='alert(1)'>"
         )
         result = render_signature_html_template(template, mock_company)
 
         assert "Emmenez-moi Sàrl" in result
-        assert "<script>" not in result
-        assert "alert('xss')" not in result
-        # Les attributs onclick/onerror sont supprimés
+        assert "<script" not in result.lower()
         assert "onerror" not in result
 
     def test_render_blocks_iframe_tags(self, mock_company):
@@ -157,6 +155,27 @@ class TestEmailSignatureHtmlRender:
         assert "https://example.com/logo.png" in result
         assert "<table" in result
         assert "<img" in result
+
+    def test_render_blocks_javascript_href_and_svg(self, mock_company):
+        """Protocoles et tags hors allowlist sont retirés."""
+        template = (
+            '{{ name }}<svg onload=alert(1)></svg><a href="javascript:alert(1)">x</a>'
+        )
+        result = render_signature_html_template(template, mock_company)
+
+        assert "Emmenez-moi Sàrl" in result
+        assert "<svg" not in result.lower()
+        assert "javascript:" not in result.lower()
+        assert "onload" not in result
+
+    def test_render_escapes_html_in_address_parts(self, mock_company):
+        """L'adresse company n'est pas interprétée comme HTML brut."""
+        mock_company.domicile_address_line1 = "<img src=x onerror=alert(1)>Rue"
+        result = render_signature_html_template("{{ address }}", mock_company)
+
+        assert "<img" not in result.lower()
+        assert "&lt;img" in result
+        assert "Rue" in result
 
     def test_render_invalid_template_returns_empty(self, mock_company):
         """Test qu'un template invalide (syntaxe Jinja2) retourne chaîne vide."""

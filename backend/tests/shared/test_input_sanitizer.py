@@ -60,12 +60,7 @@ class TestSanitizeString:
 
     def test_strip_html(self):
         """Test suppression balises HTML."""
-        # strip_html=True supprime les balises, mais escape_html_chars=True
-        # par défaut échappe aussi le reste. Il faut passer
-        # escape_html_chars=False pour garder le texte brut
-        # Note: SCRIPT_TAG_PATTERN supprime tout le contenu entre <script>
-        # et </script>, donc on utilise un exemple avec une balise simple
-        # qui ne supprime pas le contenu
+        # strip_html extrait le texte (parseur), sans interpréter le HTML.
         result = sanitize_string(
             "<p>Hello World</p>", strip_html=True, escape_html_chars=False
         )
@@ -91,7 +86,7 @@ class TestSanitizeString:
         assert sanitize_string(None) is None
 
     def test_script_end_tag_with_whitespace(self):
-        """Le filtre doit aussi retirer </script > (espace avant >)."""
+        """Le contenu script n'est pas conservé, y compris </script >."""
         result = sanitize_string(
             "ok<script>alert(1)</script >suite",
             strip_html=True,
@@ -101,6 +96,25 @@ class TestSanitizeString:
         assert "alert" not in result
         assert "ok" in result
         assert "suite" in result
+
+    def test_adversarial_markup_is_treated_as_text(self):
+        """Les champs sanitizés restent du texte, pas du HTML exécutable."""
+        payloads = (
+            "<script>alert(1)</script>",
+            "<ScRiPt>alert(1)</ScRiPt>",
+            "<script src=x>",
+            "<img src=x onerror=alert(1)>",
+            "<svg onload=alert(1)>",
+            '<a href="javascript:alert(1)">x</a>',
+            '<div style="color:red">z</div>',
+        )
+        for payload in payloads:
+            result = sanitize_string(payload, strip_html=True, escape_html_chars=True)
+            assert "<script" not in result.lower()
+            assert "<img" not in result.lower()
+            assert "<svg" not in result.lower()
+            assert "onerror" not in result
+            assert "onload" not in result
 
 
 class TestSanitizeEmail:

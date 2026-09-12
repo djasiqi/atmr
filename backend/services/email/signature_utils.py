@@ -12,6 +12,8 @@ from jinja2 import select_autoescape
 from jinja2.sandbox import SandboxedEnvironment
 from markupsafe import Markup
 
+from shared.html_sanitize import sanitize_email_signature_html
+
 logger = logging.getLogger(__name__)
 
 
@@ -161,7 +163,7 @@ def render_signature_html_template(
     Sécurité:
     - SandboxedEnvironment (pas d'imports, pas d'appels arbitraires)
     - Auto-escape activé
-    - Suppression des balises <script> et <iframe> après render
+    - Sanitizer HTML à allowlist (bleach) après render
 
     Args:
         template_str: Template Jinja2 (HTML)
@@ -192,8 +194,12 @@ def render_signature_html_template(
             address_parts.append(f"{company.domicile_zip} {company.domicile_city}")
     elif hasattr(company, "address") and company.address:
         address_parts.append(company.address)
-    # Markup : conserver les <br> dans l'adresse malgré l'auto-escape Jinja2
-    address = Markup("<br>".join(address_parts)) if address_parts else ""
+    # Markup : conserver les <br> malgré l'auto-escape, après échappement du texte.
+    address = (
+        Markup("<br>".join(html.escape(str(part)) for part in address_parts))
+        if address_parts
+        else ""
+    )
 
     # Variables whitelistées uniquement
     context = {
@@ -233,22 +239,7 @@ def render_signature_html_template(
         )
         return ""
 
-    # Sécurité supplémentaire: supprimer les balises dangereuses
-    # (même si auto-escape est activé, on supprime <script> et <iframe> par précaution)
-    rendered = re.sub(
-        r"<script[^>]*>.*?</script\s*>",
-        "",
-        rendered,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    rendered = re.sub(
-        r"<iframe[^>]*>.*?</iframe\s*>",
-        "",
-        rendered,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    # Supprimer onclick, onload, etc.
-    return re.sub(r"on\w+\s*=", "", rendered, flags=re.IGNORECASE)
+    return sanitize_email_signature_html(rendered)
 
 
 def generate_signature_html_from_form(
