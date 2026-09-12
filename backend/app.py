@@ -1978,25 +1978,26 @@ def create_app(config_name: str | None = None):
         # Compat: accès direct au login
         # (certains environnements/proxy peuvent rater la déclaration RESTX)
         from routes.auth import Login, LoginTest  # Import au niveau module
+        from shared.response_helpers import rewrap_as_json_response
 
         @app.route("/api/auth/login", methods=["POST", "OPTIONS"])
         def _compat_auth_login():  # pyright: ignore
             if request.method == "OPTIONS":
                 return make_response("", 204)
             # Laisse passer les réponses normales (200/4xx)
-            return Login().post()
+            return rewrap_as_json_response(Login().post())
 
         @app.route("/auth/login", methods=["POST", "OPTIONS"])
         def _compat_auth_login_root():  # pyright: ignore[reportUnusedFunction]
             if request.method == "OPTIONS":
                 return make_response("", 204)
-            return Login().post()
+            return rewrap_as_json_response(Login().post())
 
         @app.route("/api/v<int:version>/auth/login", methods=["POST", "OPTIONS"])
         def _compat_auth_login_v(version: int):  # pyright: ignore  # noqa: ARG001
             if request.method == "OPTIONS":
                 return make_response("", 204)
-            return Login().post()
+            return rewrap_as_json_response(Login().post())
 
         # Compat: accès direct au login-test (pour tests de charge)
         @app.route("/api/auth/login-test", methods=["POST", "OPTIONS"])

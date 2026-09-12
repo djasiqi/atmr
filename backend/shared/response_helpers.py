@@ -21,6 +21,35 @@ def json_response(
     return make_response(jsonify(payload), status_code)
 
 
+def rewrap_as_json_response(inner: Any) -> Any:
+    """Reconstruit une Response Flask via jsonify, en recopiant les cookies.
+
+    Sert aux wrappers compat qui délèguent à une Resource RESTX : le contrat
+    HTTP reste identique, le Content-Type est explicitement application/json.
+    """
+    if isinstance(inner, tuple):
+        body = inner[0]
+        status = int(inner[1]) if len(inner) > 1 else 200
+        if isinstance(body, (dict, list)):
+            return json_response(body, status)
+        return inner
+
+    payload = None
+    get_json = getattr(inner, "get_json", None)
+    if callable(get_json):
+        payload = get_json(silent=True)
+    if not isinstance(payload, (dict, list)):
+        return inner
+
+    status = int(getattr(inner, "status_code", 200) or 200)
+    out = json_response(payload, status)
+    headers = getattr(inner, "headers", None)
+    if headers is not None and hasattr(headers, "getlist"):
+        for cookie_header in headers.getlist("Set-Cookie"):
+            out.headers.add("Set-Cookie", cookie_header)
+    return out
+
+
 def success_response(
     data: dict[str, Any] | list[Any] | None = None,
     status_code: int = 200,

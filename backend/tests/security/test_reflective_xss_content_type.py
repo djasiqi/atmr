@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from flask import make_response
 
-from shared.response_helpers import json_response
+from shared.response_helpers import json_response, rewrap_as_json_response
 
 SENTINEL = "<script>alert(1)</script>"
 IMG_SENTINEL = "<img src=x onerror=alert(1)>"
@@ -26,6 +26,16 @@ def test_flask_make_response_dict_is_already_json(app):
         assert response.get_json() == {"x": SENTINEL}
 
 
+def test_rewrap_as_json_response_copies_cookies(app):
+    with app.app_context():
+        inner = json_response({"user": SENTINEL}, 200)
+        inner.set_cookie("access_token", "tok")
+        out = rewrap_as_json_response(inner)
+        assert out.content_type.startswith("application/json")
+        assert out.get_json() == {"user": SENTINEL}
+        assert "access_token=" in (out.headers.get("Set-Cookie") or "")
+
+
 def test_json_response_helper_is_explicit_json(app):
     with app.app_context():
         response = json_response({"x": SENTINEL}, 400)
@@ -44,12 +54,13 @@ def test_login_xss_sentinel_stays_json(client):
 
 
 def test_compat_auth_login_xss_stays_json(client):
-    response = client.post(
-        "/api/auth/login",
-        json={"email": SENTINEL, "password": "x"},
-    )
-    _assert_json_api(response)
-    assert response.status_code in {400, 401}
+    for path in ("/api/auth/login", "/auth/login", "/api/v1/auth/login"):
+        response = client.post(
+            path,
+            json={"email": SENTINEL, "password": "x"},
+        )
+        _assert_json_api(response)
+        assert response.status_code in {400, 401}
 
 
 def test_api_missing_token_is_json(client):
