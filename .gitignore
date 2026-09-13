@@ -21,7 +21,7 @@ backend/venv/
 coverage/
 htmlcov/
 
-# ===== DonnÈes/app backend ‡ ne PAS suivre =====
+# ===== Donn?es/app backend ? ne PAS suivre =====
 backend/uploads/
 backend/invoices/
 backend/static/qrcodes/
@@ -47,7 +47,7 @@ backend/node_modules/
 frontend/node_modules/
 mobile/**/node_modules/
 
-# ===== Clients API gÈnÈrÈs (optionnel - peut Ítre commitÈ) =====
+# ===== Clients API g?n?r?s (optionnel - peut ?tre commit?) =====
 # frontend/src/generated/
 # mobile/unified-app/src/generated/
 
@@ -84,11 +84,11 @@ frontend/.env.*.local
 **/.env.production.local
 scripts/env.production.local.fragment
 
-# DÈploiement : secrets díinventaire (hÙte SSH, etc.)
+# D?ploiement : secrets d?inventaire (h?te SSH, etc.)
 .local.deploy.env
 .local.deploy.env.*
 
-# Gabarits / fragments env ó non versionnÈs (copie locale uniquement)
+# Gabarits / fragments env ? non versionn?s (copie locale uniquement)
 **/env.example
 **/.env.example
 **/.env.production.example
@@ -122,22 +122,22 @@ scripts/env.production.local.fragment
 .DS_Store
 Thumbs.db
 
-# ===== SpÈcifique projet =====
+# ===== Sp?cifique projet =====
 atmr-project/
 
-# ===== Bases de donnÈes =====
+# ===== Bases de donn?es =====
 backend/instance/*.db
 *.sqlite
 *.sqlite3
 devdb/
 backup_*.sql
 
-# ===== Celery (schedules gÈnÈrÈs) =====
+# ===== Celery (schedules g?n?r?s) =====
 celerybeat-schedule*
 backend/celerybeat-schedule*
 
 # ===== Documentation temporaire / Audits =====
-# Uniquement la doc ‡ la racine : le motif global `docs/` empÍchait de versionner le runbook ops.
+# Uniquement la doc ? la racine : le motif global `docs/` emp?chait de versionner le runbook ops.
 /docs/**
 !/docs/ops/
 !/docs/ops/**
@@ -147,6 +147,8 @@ backend/celerybeat-schedule*
 !/docs/contracts/**
 !/docs/operations/
 !/docs/operations/**
+!/docs/security/
+!/docs/security/**
 !/docs/development/
 !/docs/development/**
 !/docs/backend/
@@ -176,7 +178,7 @@ backend/celerybeat-schedule*
 ROLLBACK.md
 safety_report.txt
 patches/
-# Exception : les patches patch-package du mobile doivent Ítre versionnÈs (requis par EAS Build / postinstall).
+# Exception : les patches patch-package du mobile doivent ?tre versionn?s (requis par EAS Build / postinstall).
 !mobile/unified-app/patches/
 !mobile/unified-app/patches/**
 
@@ -203,7 +205,7 @@ tmp-preview.apk
 tmp-preview.zip
 # Dumps manifest bruts (contiennent souvent com.google.android.geo.API_KEY)
 mobile/unified-app/ops-readiness/evidence/**/manifest-dump.raw.txt
-# Logcat bruts (IPv4 publiques) ó versionner uniquement apres redaction
+# Logcat bruts (IPv4 publiques) ? versionner uniquement apres redaction
 mobile/unified-app/ops-readiness/evidence/**/*-logcat.raw.txt
 backend/docs/openapi.baseline.json
 backend/docs/openapi.json
@@ -211,6 +213,14 @@ api_logs_snapshot.txt
 schema_now.sql
 comparison_output.txt
 evaluation_best_model.txt
+# Rapports pytest locaux commit?s par erreur (pas de valeur produit)
+/ci-before-fix*
+/ci-after-fix*
+/ci-failure-lists.txt
+/ci-test-logs.zip
+# Logcat evidence bruts (dumps device, pas de valeur produit)
+mobile/unified-app/ops-readiness/evidence/**/diag-fgs-logcat*.txt
+mobile/unified-app/ops-readiness/evidence/**/*logcat*.txt
 
 # ===== Tests - Artifacts uniquement (garder les fichiers de tests) =====
 # Cache pytest
@@ -221,7 +231,7 @@ evaluation_best_model.txt
 htmlcov/
 coverage/
 
-# Cypress artifacts (vidÈos/screenshots gÈnÈrÈs)
+# Cypress artifacts (vid?os/screenshots g?n?r?s)
 **/cypress/videos/
 **/cypress/screenshots/
 
@@ -235,10 +245,10 @@ backend/.cursor-server/
 **/.cursor/
 **/.cursor-server/
 
-# ===== Claude Code (worktrees locaux, non versionnÈs ó Èvite erreurs submodule sur Vercel/CI) =====
+# ===== Claude Code (worktrees locaux, non versionn?s ? ?vite erreurs submodule sur Vercel/CI) =====
 .claude/
 
-# ===== Fichiers systËme et locaux =====
+# ===== Fichiers syst?me et locaux =====
 backend/.local/
 backend/.bash_history
 backend/.gitconfig
@@ -251,11 +261,11 @@ tmp_traefik*.txt
 .tmp_wl_sdk/
 scripts/output/
 data/kafka-dlq/
-# DonnÈes cluster PostgreSQL locales (docker volume)
+# Donn?es cluster PostgreSQL locales (docker volume)
 postgres/
 backend/.gunicorn/
 
-# Windows reserved device names (entrùes fantùmes untracked)
+# Windows reserved device names (entr?es fant?mes untracked)
 **/NUL
 **/nul
 
@@ -302,7 +312,7 @@ docs/ops/_p0e_build_136_diag/
 
 
 # ===== INTERDICTION commit : binaires / dumps ops lourds =====
-# (apres !/docs/ops/** ‚Äî ces motifs re-ignorent explicitement)
+# (apres !/docs/ops/** ? ces motifs re-ignorent explicitement)
 *.apk
 *.aab
 *.apks

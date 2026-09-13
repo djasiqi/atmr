@@ -6,6 +6,8 @@ name: Build & Deploy
 #   - manuel : workflow_dispatch
 #   - automatique : Phase 1 Gates PASS sur release/gps-pilot-5-drivers-20260823
 #     (job trigger-backend-deploy dans phase1-gates.yml)
+# Précondition : Security Gate réutilisable sur EXACT GITHUB_SHA (pas un ancien run).
+# Ordre : security-gate → build → deploy. Gate rouge = pas d'image, pas de deploy.
 on:
   workflow_dispatch:
     inputs:
@@ -30,11 +32,22 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
+  security-events: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  security-gate:
+    name: Security Gate (SHA exact)
+    uses: ./.github/workflows/security-gate.yml
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    secrets: inherit
+
   gps-mobile-critical:
     name: GPS mobile critical (preflight)
     runs-on: ubuntu-latest
@@ -54,7 +67,7 @@ jobs:
 
   build-and-push:
     name: Build & Push Production Image
-    needs: [gps-mobile-critical]
+    needs: [security-gate, gps-mobile-critical]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -353,7 +366,7 @@ jobs:
 
   deploy:
     name: Deploy Production Environment
-    needs: [build-and-push]
+    needs: [security-gate, gps-mobile-critical, build-and-push]
     if: |
       github.event.inputs.skip_deploy != 'true' &&
       needs.build-and-push.outputs.push_success == 'true'

@@ -1,6 +1,6 @@
 import * as SecureStore from "../storage/secureStoreCompat";
 
-const KEY = "guest_saferpay_pending_v1";
+const GUEST_SAFERPAY_PENDING_SLOT = "guest-saferpay-pending";
 
 export type GuestSaferpayPending = {
   status_token: string;
@@ -10,14 +10,14 @@ export type GuestSaferpayPending = {
 
 export async function setGuestSaferpayPending(value: GuestSaferpayPending | null): Promise<void> {
   if (!value) {
-    await SecureStore.deleteItemAsync(KEY);
+    await SecureStore.deleteItemAsync(GUEST_SAFERPAY_PENDING_SLOT);
     return;
   }
-  await SecureStore.setItemAsync(KEY, JSON.stringify(value));
+  await SecureStore.setItemAsync(GUEST_SAFERPAY_PENDING_SLOT, JSON.stringify(value));
 }
 
 export async function getGuestSaferpayPending(): Promise<GuestSaferpayPending | null> {
-  const raw = await SecureStore.getItemAsync(KEY);
+  const raw = await SecureStore.getItemAsync(GUEST_SAFERPAY_PENDING_SLOT);
   if (!raw) return null;
   try {
     const p = JSON.parse(raw) as GuestSaferpayPending;

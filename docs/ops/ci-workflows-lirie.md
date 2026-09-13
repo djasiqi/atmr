@@ -6,7 +6,8 @@
 
 | Workflow | Déclenchement | Rôle |
 |---|---|---|
-| **Build & Deploy** | Manuel | Deploy app prod |
+| **Security Gate** ([`security-gate.yml`](../../.github/workflows/security-gate.yml)) | PR, push `main`, `workflow_call`, manuel | Précondition bloquante : CodeQL, Bandit/Semgrep, pip-audit, Gitleaks HEAD, Trivy fs/IaC, tests tenant, integrity |
+| **Build & Deploy** | Manuel | Deploy app prod — **appelle le Security Gate sur le SHA exact avant le build** |
 | **Deploy Kafka (production)** | Manuel | Stack Kafka prod |
 | **Backend Tests** | Push/PR `backend/**` | Lint, pytest, migrations, pip-audit |
 | **Mobile unified-app** | Push `main` + PR mobile | Lint, Jest, boundaries |
@@ -34,7 +35,7 @@
 
 | Workflow | Raison |
 |---|---|
-| **CodeQL** (`.github/workflows/codeql.yml`) | Job `if: false` — mort ; alertes via Dependabot / Security tab |
+| **CodeQL** (ancien `.github/workflows/codeql.yml`) | Remplacé par le job `sast-codeql` du Security Gate |
 | **Check Broad Exceptions** (`backend/.github/workflows/`) | Doublon de `Backend Tests` → `detect_broad_exceptions.py` |
 
 ## Docker Hub + runtime Node 24 (Actions)
@@ -55,4 +56,4 @@
 
 - Réactiver **Frontend Tests** en auto sur `frontend/**` quand DriverLiveMap prod stabilisé
 - Réactiver **E2E Demo** en auto si `/demo` redevient critique
-- Réintroduire **CodeQL** actif si besoin SAST au-delà de Dependabot + Semgrep
+- ~~Réintroduire CodeQL~~ : fait dans le Security Gate (`sast-codeql`)

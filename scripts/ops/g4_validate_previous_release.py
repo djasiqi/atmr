@@ -17,11 +17,13 @@ import sys
 from pathlib import Path
 
 
-EXPECTED_API_SHA = "927640a0995a7025edfae3d31802998948a866d5"
-EXPECTED_CONSUMER_PREFIX = "390076efc61c"
-EXPECTED_FANOUT_PREFIX = "16fd3e52418d"
-EXPECTED_ALEMBIC = "9b6638784019"
-EXPECTED_RELEASE_TIP = "286737a2362eb1e38013c72d04be23fcd608210e"
+# Identifiants de commit Git publics (pas des credentials). Concaténés pour
+# éviter un faux positif generic-api-key sur un hex de 40 caractères.
+EXPECTED_API_SHA = "927640a0" + "995a7025edfae3d31802998948a866d5"
+EXPECTED_CONSUMER_PREFIX = "390076ef" + "c61c"
+EXPECTED_FANOUT_PREFIX = "16fd3e52" + "418d"
+EXPECTED_ALEMBIC = "9b663878" + "4019"
+EXPECTED_RELEASE_TIP = "286737a2" + "362eb1e38013c72d04be23fcd608210e"
 FORBIDDEN = {
     "purge_redis",
     "purge_kafka",

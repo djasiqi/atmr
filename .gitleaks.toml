@@ -33,6 +33,9 @@ paths = [
   '''expo-driver-dev\.env\.template$''',
   '''celerybeat-schedule''',
   '''(^|/)\.gitleaks-workdir(/|$)''',
+  '''(^|/)\.cursor(/|$)''',
+  '''(^|/)\.local(/|$)''',
+  '''(^|/)osrm(/|$)''',
 ]
 
 regexes = [

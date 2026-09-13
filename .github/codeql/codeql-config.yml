@@ -1,0 +1,15 @@
+name: LIRIE Security Gate
+disable-default-queries: false
+queries:
+  - uses: security-extended
+paths-ignore:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/coverage/**"
+  - "**/htmlcov/**"
+  - "backend/tests/**"
+  - "backend/migrations/**"
+  - "osrm/**"
+  - "**/*.min.js"
+  - "**/vendor/**"
