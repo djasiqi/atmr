@@ -62,8 +62,14 @@ Le dépôt `djasiqi/atmr` est **privé**. L’activation `advanced_security` via
 - Login : `totp_enabled=true` → `202` + `temp_token` `2fa_challenge`, aucun JWT métier
 - Privilegié sans TOTP → `202` + `temp_token` `mfa_enroll` ([`docs/security/privileged-access.md`](privileged-access.md))
 - `/totp/challenge` réutilise le même chemin de session que le login
+  (`issue_business_access_token` / `build_business_access_claims` dans
+  [`backend/routes/auth.py`](../../backend/routes/auth.py))
 - `/totp/disable` interdit pour un compte privilegié ; break-glass `/totp/admin-disable`
 - `SECURITY_2FA_ENABLED=true` en production
+- Tests tenant (`test_tenant_isolation_p0.py`) : session métier via
+  `_business_session_headers` → `issue_business_access_token` (pas de login
+  password-only, pas de temp_token). Les tests MFA/login restent sur
+  `/auth/login` + challenge.
 
 ## Checklist manuelle (hors CI)
 

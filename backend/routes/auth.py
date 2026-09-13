@@ -1451,31 +1451,21 @@ def _complete_authenticated_session(user: User, *, remember_me: bool = False):
                 remember_me=remember_me,
             )
 
-    # Création du token avec le rôle dans additional_claims
-    # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
-    claims = {
-        "role": user.role.value,
-        "company_id": _resolve_company_id(user),
-        "driver_id": getattr(user, "driver_id", None),
-        "institution_id": getattr(user, "institution_id", None),
-        "institution_role": getattr(user, "institution_role", None),
-        "aud": "atmr-api",  # Audience claim pour sécurité
-        "token_version": _user_token_version(user),
-    }
+    extra_claims: dict[str, object] = {}
     if mobile_session is not None:
-        claims["session_id"] = str(mobile_session.session_id)
-        claims["session_epoch"] = int(getattr(mobile_session, "session_epoch", 1) or 1)
-        # Compat clients legacy
-        claims["session_generation"] = claims["session_epoch"]
+        extra_claims["session_id"] = str(mobile_session.session_id)
+        extra_claims["session_epoch"] = int(
+            getattr(mobile_session, "session_epoch", 1) or 1
+        )
+        extra_claims["session_generation"] = extra_claims["session_epoch"]
     if web_session is not None:
-        claims["sid"] = str(web_session.id)
+        extra_claims["sid"] = str(web_session.id)
     access_expires_delta = _resolve_access_token_expires(is_mobile_request, user)
-    access_token = create_access_token(
-        identity=str(user.public_id),
-        # ⚠️ ID numérique attendu par dispatch_routes
-        additional_claims=claims,
+    access_token = issue_business_access_token(
+        user,
+        is_mobile_request=is_mobile_request,
+        extra_claims=extra_claims or None,
         expires_delta=access_expires_delta,
-        fresh=True,  # ✅ Token fresh lors de la connexion initiale
     )
 
     # Création du refresh token
@@ -1773,6 +1763,42 @@ def _resolve_company_id(user: User) -> int | None:
         return None
     company = getattr(user, "company", None)
     return company.id if company else None
+
+
+def build_business_access_claims(
+    user: User, *, extra: dict[str, object] | None = None
+) -> dict[str, object]:
+    """Claims d'un access token métier (post-login ou post-/totp/challenge)."""
+    role = user.role.value if hasattr(user.role, "value") else str(user.role)
+    claims: dict[str, object] = {
+        "role": role,
+        "company_id": _resolve_company_id(user),
+        "driver_id": getattr(user, "driver_id", None),
+        "institution_id": getattr(user, "institution_id", None),
+        "institution_role": getattr(user, "institution_role", None),
+        "aud": "atmr-api",
+        "token_version": _user_token_version(user),
+    }
+    if extra:
+        claims.update(extra)
+    return claims
+
+
+def issue_business_access_token(
+    user: User,
+    *,
+    is_mobile_request: bool = False,
+    extra_claims: dict[str, object] | None = None,
+    expires_delta: timedelta | None = None,
+) -> str:
+    """Émet le JWT métier utilisé après authentification complète."""
+    return create_access_token(
+        identity=str(user.public_id),
+        additional_claims=build_business_access_claims(user, extra=extra_claims),
+        expires_delta=expires_delta
+        or _resolve_access_token_expires(is_mobile_request, user),
+        fresh=True,
+    )
 
 
 # ========================
