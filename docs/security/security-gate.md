@@ -26,7 +26,7 @@ Aucun `continue-on-error` sur un job du gate.
 
 | Job | Contrôle | Seuil bloquant |
 |-----|----------|----------------|
-| `sast-codeql` | CodeQL Python + JS/TS | SARIF `error` ou `security-severity >= 7.0` |
+| `sast-codeql` | CodeQL Python + JS/TS (SARIF local) | SARIF `error` ou `security-severity >= 7.0`. Upload GitHub code scanning **désactivé** : dépôt privé, Code Security non acheté (API 422). |
 | `sast-static` | Bandit + Semgrep `p/ci` + `p/security-audit` | Bandit HIGH+ ; Semgrep `--error` |
 | `sca` | pip-audit `backend/requirements.prod.txt` | Toute vulnérabilité |
 | `secrets` | Gitleaks HEAD (arbre courant) | Tout secret |
@@ -37,6 +37,16 @@ Aucun `continue-on-error` sur un job du gate.
 | `security-gate` (`Security Gate verdict`) | Agrégateur — **check requis** | Tous les jobs ci-dessus = `success` |
 
 Scan image Docker post-build (Trivy CRITICAL) : reste dans [`deploy.yml`](../../.github/workflows/deploy.yml) **après** le build, car l’image n’existe pas avant.
+
+## CodeQL / Code Security
+
+Le dépôt `djasiqi/atmr` est **privé**. L’activation `advanced_security` via l’API GitHub retourne **422 : Advanced security has not been purchased**. LIRIE n’est pas rendu public pour obtenir CodeQL. Le job `sast-codeql` analyse toujours le SHA et bloque sur le SARIF local (`upload: never`).
+
+## Triage secrets HEAD (P0-01)
+
+- Artefacts pytest `ci-before-fix*` / `ci-after-fix*` et logcats `ops-readiness/evidence` : retirés du HEAD (pas de valeur produit). Historique : P0-04.
+- Script de purge : plus aucune clé en dur ; la valeur vient de `EXPOSED_KEY_TO_PURGE`. Ancienne clé OpenWeatherMap dans ce script : **considérée compromise** — révoquer côté fournisseur si encore active. Valeur non reproduite ici.
+- Fixtures JWT / tokens / SHA Git : remplacées ou concaténées pour rester clairement non-credentials. Aucune allowlist globale ajoutée.
 
 ## Checklist manuelle (hors CI)
 

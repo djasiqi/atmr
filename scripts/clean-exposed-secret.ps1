@@ -1,7 +1,11 @@
 # Script de nettoyage de clé API exposée dans Git
 # Usage: .\scripts\clean-exposed-secret.ps1
 
-$EXPOSED_KEY = "68700f6462b4c098e4d1a10c041378c6"
+# Ne jamais coder une vraie clé ici. La valeur à purger vient uniquement de l'environnement.
+$EXPOSED_KEY = $env:EXPOSED_KEY_TO_PURGE
+if (-not $EXPOSED_KEY) {
+    throw "Definir EXPOSED_KEY_TO_PURGE (cle a rechercher). Ne pas la commiter."
+}
 $ENV_FILE = "backend/.env"
 
 Write-Host "🔒 Nettoyage de clé API exposée dans Git" -ForegroundColor Yellow

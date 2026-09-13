@@ -44,7 +44,7 @@ describe('useCompanyAuthToken', () => {
   });
 
   it('user + token valide → isCompanyAuthReady=true', async () => {
-    const fakeToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjk5OTk5OTk5OTl9.x';
+    const fakeToken = 'test-jwt-fixture.not-a-secret.signature';
     localStorage.setItem(COMPANY_ACCESS_TOKEN_KEY, fakeToken);
     localStorage.setItem(COMPANY_USER_KEY, JSON.stringify(mockStoredUser));
     jwtDecode.mockReturnValue(mockDecodedToken);

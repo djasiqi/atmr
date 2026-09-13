@@ -42,7 +42,9 @@ jobs:
         with:
           category: "/language:python,javascript-typescript"
           output: codeql-sarif
-          upload: always
+          # Dépôt privé sans GitHub Code Security (API 422 : non acheté).
+          # L'analyse reste bloquante via SARIF local ; pas d'upload code scanning.
+          upload: never
       - name: Bloquer findings error / high
         run: |
           set -euo pipefail
@@ -70,10 +72,9 @@ jobs:
       - name: Installer Bandit et Semgrep
         run: pip install bandit semgrep
       - name: Bandit HIGH+
-        working-directory: backend
         run: |
           set -euo pipefail
-          bandit -r . -c .bandit --severity-level high --confidence-level medium
+          bandit --ini backend/.bandit -r backend -lll
       - name: Semgrep security-audit
         working-directory: backend
         run: |
@@ -181,15 +182,21 @@ jobs:
       - name: Trivy config compose + Traefik exemple
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:0.64.1 config \
-            --severity CRITICAL \
-            --exit-code 1 \
-            --ignorefile /src/.trivyignore \
-            docker-compose.production.yml \
-            docker-compose.monitoring.yml \
-            docker-compose.kafka.yml \
-            docker-compose.kafka.atmr-network.yml \
+          targets=(
+            docker-compose.production.yml
+            docker-compose.monitoring.yml
+            docker-compose.kafka.yml
+            docker-compose.kafka.atmr-network.yml
             deploy/traefik
+          )
+          for target in "${targets[@]}"; do
+            echo "Trivy config CRITICAL: ${target}"
+            docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:0.64.1 config \
+              --severity CRITICAL \
+              --exit-code 1 \
+              --ignorefile /src/.trivyignore \
+              "${target}"
+          done
 
   tenant:
     name: Tenant isolation tests

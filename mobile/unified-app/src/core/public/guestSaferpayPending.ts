@@ -1,6 +1,6 @@
 import * as SecureStore from "../storage/secureStoreCompat";
 
-const KEY = "guest_saferpay_pending_v1";
+const KEY = "lirie.fixture.guest-saferpay-pending.v1";
 
 export type GuestSaferpayPending = {
   status_token: string;

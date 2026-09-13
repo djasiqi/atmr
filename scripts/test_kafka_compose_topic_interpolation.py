@@ -61,7 +61,7 @@ REQUIRED_DUMMY_ENV = {
     "SECRET_KEY": "test-secret",
     "JWT_SECRET_KEY": "test-jwt",
     "APP_ENCRYPTION_KEY_B64": "dGVzdC1lbmNyeXB0aW9uLWtleS1iNjQ=",
-    "INTERNAL_SERVICE_TOKEN": "test-internal-token",
+    "INTERNAL_SERVICE_TOKEN": "ci-fixture-internal-token-not-a-secret",
     "MASTER_ENCRYPTION_KEY": "test-master-encryption-key",
     "COMPOSE_PROJECT_NAME": "atmr-ci-topic-sentinel",
     "DOCKER_IMAGE": DOCKER_IMAGE,
