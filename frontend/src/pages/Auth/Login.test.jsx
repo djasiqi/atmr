@@ -130,6 +130,33 @@ describe('Login Page', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/app/dashboard/company/user-123', { replace: true });
   });
 
+  it('affiche le challenge MFA sans ouvrir de session', async () => {
+    apiClient.post.mockResolvedValue({
+      data: {
+        mfa_required: true,
+        mfa_purpose: '2fa_challenge',
+        temp_token: 'temp-mfa',
+        user: { public_id: 'u1', role: 'client' },
+      },
+    });
+
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'test@test.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/entrez votre mot de passe/i), {
+      target: { value: 'password123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /se connecter/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/code à 6 chiffres/i)).toBeInTheDocument();
+    });
+    expect(mockHydrateFromLogin).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
   it('redirige vers ?next= après connexion (chemin interne)', async () => {
     const mockToken = 'fake-jwt-token';
     const mockUser = {

@@ -27,6 +27,7 @@ import AddressAutocomplete from '../../components/common/AddressAutocomplete';
 import styles from './Login.module.css';
 import institutionStyles from '../institution/Requests/InstitutionRequestForm.module.css';
 import { getApiErrorMessage } from '../../utils/apiErrorMessage';
+import { challengeTotp, setupTotp, verifyTotp } from '../../services/securityService';
 
 const REMEMBER_KEY = 'lirie_remember_me';
 const SIGNUP_DISABLED =
@@ -126,6 +127,11 @@ const Login = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [mfaPurpose, setMfaPurpose] = useState('');
+  const [mfaTempToken, setMfaTempToken] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaQr, setMfaQr] = useState('');
+  const [mfaRecoveryCodes, setMfaRecoveryCodes] = useState([]);
   const { hydrateFromLogin } = useSessionBootstrap();
   const navigate = useNavigate();
   const civilityDropdownRef = useRef(null);
@@ -358,26 +364,9 @@ const Login = () => {
     return true;
   };
 
-  const handleLoginSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!validateLoginForm()) return;
-
-    setIsLoading(true);
-    beginLoginSession();
-    let loginSucceeded = false;
-    try {
-      const response = await apiClient.post(
-        '/auth/login',
-        {
-          email: loginFormData.email,
-          password: loginFormData.password,
-          remember_me: rememberMe,
-        },
-        { skipCsrf: true },
-      );
+  const finalizeSuccessfulLogin = async (responseData) => {
       const { token, user, target_env, redirect_to, access_expires_at, access_expires_in, expires_in } =
-        response.data;
+        responseData;
 
       if (!user || !user.role || !user.public_id) {
         throw new Error('Aucune information utilisateur reçue.');
@@ -453,8 +442,6 @@ const Login = () => {
 
       window.dispatchEvent(new Event('auth-changed'));
 
-      loginSucceeded = true;
-
       if (user.force_password_change) {
         navigate('/force-reset-password', { replace: true });
       } else {
@@ -469,6 +456,100 @@ const Login = () => {
           `/dashboard/${roleSegment}/${user.public_id}`;
         navigate(destination, { replace: true });
       }
+  };
+
+  const startMfaFlow = async (payload) => {
+    const purpose = payload?.mfa_purpose || '';
+    const tempToken = payload?.temp_token || '';
+    setMfaPurpose(purpose);
+    setMfaTempToken(tempToken);
+    setMfaCode('');
+    setMfaQr('');
+    setMfaRecoveryCodes([]);
+    setErrorMessage('');
+    if (purpose === 'mfa_enroll' && tempToken) {
+      const setup = await setupTotp(tempToken);
+      setMfaQr(setup.data?.qr_code_base64 || '');
+    }
+  };
+
+  const handleMfaSubmit = async (e) => {
+    e.preventDefault();
+    if (!mfaTempToken || !mfaCode.trim()) {
+      setErrorMessage('Saisissez le code à 6 chiffres.');
+      return;
+    }
+    setIsLoading(true);
+    beginLoginSession();
+    let loginSucceeded = false;
+    try {
+      if (mfaPurpose === 'mfa_enroll') {
+        const verify = await verifyTotp(mfaCode.trim(), mfaTempToken);
+        const nextToken = verify.data?.temp_token;
+        const codes = verify.data?.recovery_codes || [];
+        setMfaRecoveryCodes(codes);
+        if (!nextToken) {
+          throw new Error('Enrollment incomplet : challenge manquant.');
+        }
+        setMfaPurpose('2fa_challenge');
+        setMfaTempToken(nextToken);
+        setMfaCode('');
+        setSuccessMessage(
+          codes.length
+            ? 'Conservez vos codes de secours, puis saisissez un code de votre application.'
+            : 'Saisissez un code de votre application.',
+        );
+        return;
+      }
+      const response = await challengeTotp(mfaTempToken, mfaCode.trim());
+      loginSucceeded = true;
+      setMfaPurpose('');
+      setMfaTempToken('');
+      await finalizeSuccessfulLogin(response.data);
+    } catch (error) {
+      const status = error?.response?.status;
+      if (status === 401) {
+        setErrorMessage('Code invalide.');
+        return;
+      }
+      setErrorMessage(getApiErrorMessage(error, 'Impossible de valider le code.'));
+    } finally {
+      if (!loginSucceeded) {
+        endLoginSession();
+      }
+      setIsLoading(false);
+    }
+  };
+
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+
+    if (mfaPurpose) {
+      await handleMfaSubmit(e);
+      return;
+    }
+
+    if (!validateLoginForm()) return;
+
+    setIsLoading(true);
+    beginLoginSession();
+    let loginSucceeded = false;
+    try {
+      const response = await apiClient.post(
+        '/auth/login',
+        {
+          email: loginFormData.email,
+          password: loginFormData.password,
+          remember_me: rememberMe,
+        },
+        { skipCsrf: true },
+      );
+      if (response.data?.mfa_required) {
+        await startMfaFlow(response.data);
+        return;
+      }
+      await finalizeSuccessfulLogin(response.data);
+      loginSucceeded = true;
     } catch (error) {
       const responseData = error?.response?.data;
       const status = error?.response?.status;
@@ -729,6 +810,45 @@ const Login = () => {
             </p>
           ) : (
             <>
+              {mfaPurpose && !isSignupMode ? (
+                <div className={styles.inputGroup}>
+                  <p className={styles.fieldHint}>
+                    {mfaPurpose === 'mfa_enroll'
+                      ? 'Scannez le QR code avec votre application d’authentification, puis saisissez le code à 6 chiffres.'
+                      : 'Saisissez le code de validation en deux étapes (ou un code de secours).'}
+                  </p>
+                  {mfaQr ? (
+                    <img
+                      src={mfaQr}
+                      alt="QR code de configuration 2FA"
+                      style={{ maxWidth: 180, margin: '8px auto', display: 'block' }}
+                    />
+                  ) : null}
+                  {mfaRecoveryCodes.length ? (
+                    <p className={styles.fieldHint} role="status">
+                      Codes de secours : {mfaRecoveryCodes.join(' · ')}
+                    </p>
+                  ) : null}
+                  <label htmlFor="mfaCode" className={styles.label}>
+                    Code à 6 chiffres
+                  </label>
+                  <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
+                    <input
+                      type="text"
+                      name="mfaCode"
+                      id="mfaCode"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      className={styles.input}
+                      placeholder="000000"
+                      value={mfaCode}
+                      onChange={(ev) => setMfaCode(ev.target.value.replace(/\D/g, '').slice(0, 8))}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+              ) : null}
               {isSignupMode ? (
                 <fieldset className={`${styles.inputGroup} ${styles.identityFieldset}`}>
                   <legend className={styles.label}>
@@ -1093,8 +1213,8 @@ const Login = () => {
           >
             {isLoading && <span className={styles.spinner} />}
             {isLoading
-              ? (isSignupMode ? 'Inscription en cours...' : 'Connexion en cours...')
-              : (isSignupMode ? "Créer mon compte" : 'Se connecter')}
+              ? (isSignupMode ? 'Inscription en cours...' : (mfaPurpose ? 'Validation…' : 'Connexion en cours...'))
+              : (isSignupMode ? "Créer mon compte" : (mfaPurpose ? 'Valider le code' : 'Se connecter'))}
           </button>
         </form>
 

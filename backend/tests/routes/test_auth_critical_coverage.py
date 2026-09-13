@@ -28,7 +28,6 @@ def test_routes_totp_desactivees(client, app, sample_user, monkeypatch):
         ("post", "/api/v1/auth/totp/verify", {"code": "123456"}),
         ("post", "/api/v1/auth/totp/disable", {"password": "password123"}),
         ("post", "/api/v1/auth/totp/recovery-codes", {"code": "123456"}),
-        ("post", "/api/v1/auth/totp/challenge", {"temp_token": "x", "code": "123456"}),
     ]
     for method, url, payload in calls:
         response = getattr(client, method)(url, json=payload, headers=headers)

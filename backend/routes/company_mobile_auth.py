@@ -681,6 +681,44 @@ class EnterpriseMobileLogin(Resource):
             )
             result = ({"error": "Format device_id invalide."}, 400)
         else:
+            from security.mfa_login import (
+                PURPOSE_2FA_CHALLENGE,
+                evaluate_login_mfa,
+            )
+            from security.totp_service import verify_totp_code
+
+            user_mfa_purpose = evaluate_login_mfa(user)
+            if user_mfa_purpose == PURPOSE_2FA_CHALLENGE:
+                if not mfa_code:
+                    return (
+                        {
+                            "message": "MFA requis",
+                            "mfa_required": True,
+                            "mfa_purpose": PURPOSE_2FA_CHALLENGE,
+                            "error_code": "mfa_challenge_required",
+                            "methods": ["totp"],
+                        },
+                        202,
+                    )
+                if not user.totp_secret_encrypted or not verify_totp_code(
+                    user.totp_secret_encrypted, str(mfa_code)
+                ):
+                    return ({"error": "Code MFA invalide."}, 401)
+            elif user_mfa_purpose is not None:
+                return (
+                    {
+                        "error": "mfa_enroll_required",
+                        "error_code": "mfa_enroll_required",
+                        "mfa_required": True,
+                        "mfa_purpose": user_mfa_purpose,
+                        "message": (
+                            "Activez la validation en deux étapes sur le web "
+                            "avant d'utiliser l'application entreprise."
+                        ),
+                    },
+                    403,
+                )
+
             requires_mfa = _company_requires_mfa(company)
             if requires_mfa:
                 if mfa_code:

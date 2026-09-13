@@ -760,6 +760,11 @@ def init_chat_socket(socketio: SocketIO):
                 if decoded is None:
                     raise last_decode_error or Exception("Token decode error")
 
+                from security.mfa_login import is_restricted_mfa_jwt
+
+                if is_restricted_mfa_jwt(decoded):
+                    raise Exception("Token MFA restreint")
+
             except jwt_exceptions.ExpiredSignatureError:
                 # ✅ Réduire le bruit dans les logs : tracker les erreurs token_expired par IP
                 # Logger seulement si c'est la première erreur ou si ça fait plus de 60s depuis le dernier log
