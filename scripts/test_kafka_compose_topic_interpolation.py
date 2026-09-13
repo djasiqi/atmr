@@ -60,7 +60,7 @@ REQUIRED_DUMMY_ENV = {
     "REDIS_URL": "redis://redis:6379/0",
     "SECRET_KEY": "test-secret",
     "JWT_SECRET_KEY": "test-jwt",
-    "APP_ENCRYPTION_KEY_B64": "dGVzdC1lbmNyeXB0aW9uLWtleS1iNjQ=",
+    "APP_ENCRYPTION_KEY_B64": "not-a-secret-b64-fixture",
     "INTERNAL_SERVICE_TOKEN": "ci-fixture-internal-token-not-a-secret",
     "MASTER_ENCRYPTION_KEY": "test-master-encryption-key",
     "COMPOSE_PROJECT_NAME": "atmr-ci-topic-sentinel",

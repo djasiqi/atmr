@@ -83,7 +83,7 @@ curl -X POST https://api.lirie.ch/api/v1/auth/login \
 # 2. Envoyer une position GPS
 curl -X PUT https://api.lirie.ch/api/v1/driver/me/location \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "X-Test-Auth: fixture-not-a-secret" \
   -d '{
     "latitude": 46.2044,
     "longitude": 6.1432
@@ -123,7 +123,7 @@ Créer une page web simple que les chauffeurs ouvrent sur leur téléphone :
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
+              "X-Test-Auth": "fixture-not-a-secret",
             },
             body: JSON.stringify({ latitude, longitude }),
           });
