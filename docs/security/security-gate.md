@@ -1,0 +1,55 @@
+# Security Gate LIRIE
+
+Précondition bloquante de tout build et déploiement production. Un contrôle P0 rouge arrête le pipeline : **pas d’image, pas de deploy**.
+
+## Modèle
+
+```text
+PR
+ └─ .github/workflows/security-gate.yml
+       └─ GREEN sinon la PR ne doit pas merger
+
+deploy.yml
+ └─ 1. security-gate.yml via workflow_call sur EXACT GITHUB_SHA
+ └─ 2. gps-mobile-critical (parallèle au gate)
+ └─ 3. build  (needs : gate + gps-mobile-critical)
+ └─ 4. deploy (needs : gate + gps-mobile-critical + build)
+
+Check GitHub stable (protection de branche) : `Security Gate / Security Gate verdict`.
+```
+
+Le deploy **n’interroge jamais** le statut d’un ancien run GitHub. Il réexécute le workflow réutilisable sur le SHA déployé.
+
+Aucun `continue-on-error` sur un job du gate.
+
+## Contrôles CI (automatiques)
+
+| Job | Contrôle | Seuil bloquant |
+|-----|----------|----------------|
+| `sast-codeql` | CodeQL Python + JS/TS | SARIF `error` ou `security-severity >= 7.0` |
+| `sast-static` | Bandit + Semgrep `p/ci` + `p/security-audit` | Bandit HIGH+ ; Semgrep `--error` |
+| `sca` | pip-audit `backend/requirements.prod.txt` | Toute vulnérabilité |
+| `secrets` | Gitleaks HEAD (arbre courant) | Tout secret |
+| `docker-fs` | Trivy fs backend / ws-service / frontend | CRITICAL |
+| `iac` | Trivy config compose prod + Traefik exemple | CRITICAL |
+| `tenant` | `test_tenant_isolation_p0.py` | Tout test en échec |
+| `integrity` | scripts anti-fuites / sentinelles / Kafka | Tout échec |
+| `security-gate` (`Security Gate verdict`) | Agrégateur — **check requis** | Tous les jobs ci-dessus = `success` |
+
+Scan image Docker post-build (Trivy CRITICAL) : reste dans [`deploy.yml`](../../.github/workflows/deploy.yml) **après** le build, car l’image n’existe pas avant.
+
+## Checklist manuelle (hors CI)
+
+Ces preuves ne peuvent pas être établies par GitHub Actions. À valider avant un GO prod (P0-06 / P0-07) :
+
+- [ ] Dernier backup writer-only frais
+- [ ] Dernier restore drill < 90 jours, RPO/RTO mesurés
+- [ ] Clé prod : `delete` / `prune` des backups **refusé**
+- [ ] MFA privileged enforced (P0-03)
+- [ ] Secrets historiques scannés / rotatés (P0-04)
+
+## Règles
+
+- Pas de contournement CI pour faire passer un lot.
+- Toute vulnérabilité réelle découverte est corrigée avant de poursuivre.
+- Deploy uniquement après Security Gate GREEN sur le SHA exact.

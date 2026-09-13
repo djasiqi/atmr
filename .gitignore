@@ -147,6 +147,8 @@ backend/celerybeat-schedule*
 !/docs/contracts/**
 !/docs/operations/
 !/docs/operations/**
+!/docs/security/
+!/docs/security/**
 !/docs/development/
 !/docs/development/**
 !/docs/backend/

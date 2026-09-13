@@ -1,0 +1,345 @@
+# Security Gate LIRIE — précondition bloquante PR + deploy.
+# Réutilisable : deploy.yml l'appelle via workflow_call sur EXACT GITHUB_SHA.
+# Interdit : consulter le statut d'un ancien run, continue-on-error sur un contrôle P0.
+name: Security Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+concurrency:
+  group: security-gate-${{ github.event_name }}-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  sast-codeql:
+    name: SAST CodeQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout SHA exact
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: python, javascript-typescript
+          config-file: .github/codeql/codeql-config.yml
+      - name: Analyze CodeQL
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:python,javascript-typescript"
+          output: codeql-sarif
+          upload: always
+      - name: Bloquer findings error / high
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(codeql-sarif/*.sarif)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "Aucun SARIF CodeQL produit"
+            exit 1
+          fi
+          python3 scripts/security/assert_sarif_blocking.py "${files[@]}"
+
+  sast-static:
+    name: SAST Bandit + Semgrep
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout SHA exact
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Installer Bandit et Semgrep
+        run: pip install bandit semgrep
+      - name: Bandit HIGH+
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          bandit -r . -c .bandit --severity-level high --confidence-level medium
+      - name: Semgrep security-audit
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          semgrep --config p/ci --config p/security-audit --error .
+
+  sca:
+    name: SCA pip-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout SHA exact
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Installer pip-audit
+        run: pip install "pip-audit>=2.7.0"
+      - name: Scanner requirements prod
+        run: |
+          set -euo pipefail
+          pip-audit \
+            --requirement backend/requirements.prod.txt \
+            --format json \
+            --output pip-audit-prod.json \
+            --desc
+          python3 scripts/security/assert_pip_audit_clean.py pip-audit-prod.json
+
+  secrets:
+    name: Secrets Gitleaks HEAD
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout SHA exact
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Gitleaks arbre courant
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:v8.21.2 detect \
+            --source=/repo \
+            --config=/repo/.gitleaks.toml \
+            --no-git \
+            --no-banner \
+            --redact \
+            --exit-code 1 \
+            --verbose
+
+  docker-fs:
+    name: Docker / filesystem Trivy CRITICAL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout SHA exact
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Trivy fs backend
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: ./backend
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          scanners: vuln
+          trivyignores: .trivyignore
+      - name: Trivy fs ws-service
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: ./services/ws-service
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          scanners: vuln
+          trivyignores: .trivyignore
+      - name: Trivy fs frontend
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: ./frontend
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: library
+          scanners: vuln
+          trivyignores: .trivyignore
+
+  iac:
+    name: IaC Trivy config CRITICAL
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout SHA exact
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Trivy config compose + Traefik exemple
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:0.64.1 config \
+            --severity CRITICAL \
+            --exit-code 1 \
+            --ignorefile /src/.trivyignore \
+            docker-compose.production.yml \
+            docker-compose.monitoring.yml \
+            docker-compose.kafka.yml \
+            docker-compose.kafka.atmr-network.yml \
+            deploy/traefik
+
+  tenant:
+    name: Tenant isolation tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: test
+      PGPASSWORD: test
+      PGDATABASE: atmr_test
+      REDIS_URL: redis://localhost:6379/0
+      FLASK_CONFIG: testing
+      SECRET_KEY: test-secret-key
+      JWT_SECRET_KEY: test-jwt-secret
+      APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+      API_LEGACY_ENABLED: "false"
+      PYTHONPATH: ${{ github.workspace }}
+      SOCKETIO_ASYNC_MODE: threading
+      SKIP_SOCKETIO: "true"
+      SKIP_ROUTES_INIT: "false"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: atmr_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d atmr_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout SHA exact
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements-dev.txt
+            backend/requirements.base.txt
+            backend/requirements.prod.txt
+      - name: Installer dépendances système
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libcairo2-dev libffi-dev pkg-config postgresql-client
+      - name: Installer dépendances Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements-dev.txt
+      - name: Attendre PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' >/dev/null 2>&1 && break
+            sleep 1
+          done
+          PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1'
+      - name: Migrations
+        env:
+          FLASK_APP: backend.wsgi
+          DISABLE_EVENTLET: "1"
+        run: |
+          cd backend
+          flask db upgrade heads
+      - name: Pytest isolation tenant
+        run: |
+          pytest backend/tests/security/test_tenant_isolation_p0.py -q --tb=short
+
+  integrity:
+    name: Repository integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout SHA exact
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Pas d'IPv4 publique versionnée
+        run: python3 scripts/check_no_production_leaks.py
+      - name: Sentinelle lectures
+        run: python3 scripts/check_no_sentinel_heuristics.py
+      - name: Kafka compose interpolation
+        run: python3 scripts/test_kafka_compose_topic_interpolation.py
+
+  security-gate:
+    name: Security Gate verdict
+    if: always()
+    needs:
+      - sast-codeql
+      - sast-static
+      - sca
+      - secrets
+      - docker-fs
+      - iac
+      - tenant
+      - integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Exiger tous les contrôles verts sur ce SHA
+        env:
+          GATE_SHA: ${{ github.sha }}
+          SAST_CODEQL: ${{ needs.sast-codeql.result }}
+          SAST_STATIC: ${{ needs.sast-static.result }}
+          SCA: ${{ needs.sca.result }}
+          SECRETS: ${{ needs.secrets.result }}
+          DOCKER_FS: ${{ needs.docker-fs.result }}
+          IAC: ${{ needs.iac.result }}
+          TENANT: ${{ needs.tenant.result }}
+          INTEGRITY: ${{ needs.integrity.result }}
+        run: |
+          set -euo pipefail
+          echo "Security Gate SHA=${GATE_SHA}"
+          failed=""
+          for name_result in \
+            "sast-codeql=${SAST_CODEQL}" \
+            "sast-static=${SAST_STATIC}" \
+            "sca=${SCA}" \
+            "secrets=${SECRETS}" \
+            "docker-fs=${DOCKER_FS}" \
+            "iac=${IAC}" \
+            "tenant=${TENANT}" \
+            "integrity=${INTEGRITY}"
+          do
+            name="${name_result%%=*}"
+            result="${name_result#*=}"
+            echo "  ${name}: ${result}"
+            if [ "${result}" != "success" ]; then
+              failed="${failed} ${name}"
+            fi
+          done
+          if [ -n "${failed}" ]; then
+            echo "Security Gate RED — contrôles non verts:${failed}"
+            exit 1
+          fi
+          echo "Security Gate GREEN — SHA=${GATE_SHA}"
