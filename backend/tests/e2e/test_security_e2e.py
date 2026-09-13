@@ -16,12 +16,13 @@ from tests.e2e.helpers.e2e_helpers import (
     create_test_company,
     create_test_driver,
 )
+from tests.security.mfa_session import complete_password_totp_login
 
 
 class TestRBACCompanyIsolation:
     """Tests : Isolation RBAC entre companies."""
 
-    def test_e2e_rbac_company_isolation(self, e2e_client, db):
+    def test_e2e_rbac_company_isolation(self, e2e_client, db, monkeypatch):
         """Test : Company A crée booking → Company B tente accès → 403."""
         # Setup : Créer 2 companies distinctes
         company_a = create_test_company(db)
@@ -37,10 +38,8 @@ class TestRBACCompanyIsolation:
         # Créer un booking pour company A
         booking = create_test_booking(db, client=client_a)
 
-        # Login en tant que company A
-        login_response = e2e_client.post(
-            "/api/v1/auth/login",
-            json={"email": user_a.email, "password": "testpassword123"},
+        login_response = complete_password_totp_login(
+            e2e_client, user_a, "testpassword123", monkeypatch, db
         )
         assert login_response.status_code == 200
 
@@ -54,9 +53,8 @@ class TestRBACCompanyIsolation:
         user_b.set_password("testpassword123", force_change=False)
         db.session.commit()
 
-        login_response_b = e2e_client.post(
-            "/api/v1/auth/login",
-            json={"email": user_b.email, "password": "testpassword123"},
+        login_response_b = complete_password_totp_login(
+            e2e_client, user_b, "testpassword123", monkeypatch, db
         )
         assert login_response_b.status_code == 200
 

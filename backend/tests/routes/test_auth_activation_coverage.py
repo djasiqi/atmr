@@ -1621,6 +1621,15 @@ def test_totp_challenge_gardes_supplementaires(client, sample_user, monkeypatch)
     monkeypatch.setattr(
         "security.totp_service.consume_2fa_challenge_jti", lambda _jti: True
     )
+    monkeypatch.setattr(
+        auth,
+        "decode_token",
+        lambda _token: {
+            "purpose": "2fa_challenge",
+            "jti": "jti-absent",
+            "sub": "00000000-0000-4000-8000-000000000099",
+        },
+    )
     monkeypatch.setattr(auth.user_repo, "find_by_public_id", lambda _pid: None)
     missing = client.post(
         "/api/v1/auth/totp/challenge",
@@ -1628,6 +1637,15 @@ def test_totp_challenge_gardes_supplementaires(client, sample_user, monkeypatch)
     )
     assert missing.status_code == 404
 
+    monkeypatch.setattr(
+        auth,
+        "decode_token",
+        lambda _token: {
+            "purpose": "2fa_challenge",
+            "jti": "jti",
+            "sub": sample_user.public_id,
+        },
+    )
     monkeypatch.setattr(auth.user_repo, "find_by_public_id", lambda _pid: sample_user)
     monkeypatch.setattr("security.totp_service.check_2fa_lockout", lambda _uid: True)
     locked = client.post(
@@ -2448,6 +2466,12 @@ def test_gestionnaires_exceptions_routes_authentifiees(
         )
     headers = {"Authorization": f"Bearer {token}"}
     monkeypatch.setenv("SECURITY_2FA_ENABLED", "true")
+
+    class _BoomQuery:
+        def filter_by(self, **_kwargs):
+            raise RuntimeError("dépôt")
+
+    monkeypatch.setattr(auth.User, "query", _BoomQuery())
     monkeypatch.setattr(
         auth.user_repo,
         "find_by_public_id",
@@ -2671,7 +2695,6 @@ def test_exceptions_fresh_me_sessions_et_mots_de_passe(
 def test_gardes_totp_sessions_et_echec_challenge(client, app, sample_user, monkeypatch):
     headers = _fresh_auth_headers(app, sample_user)
     monkeypatch.setenv("SECURITY_2FA_ENABLED", "true")
-    monkeypatch.setattr(auth.user_repo, "find_by_public_id", lambda _pid: None)
     cases = [
         ("post", "/api/v1/auth/totp/setup", {}),
         ("post", "/api/v1/auth/totp/verify", {"code": "123456"}),
@@ -2681,9 +2704,12 @@ def test_gardes_totp_sessions_et_echec_challenge(client, app, sample_user, monke
         ("get", "/api/v1/auth/sessions", None),
         ("post", "/api/v1/auth/sessions/revoke-others", {}),
     ]
-    for method, url, payload in cases:
-        response = getattr(client, method)(url, json=payload, headers=headers)
-        assert response.status_code == 404
+    with monkeypatch.context() as mp:
+        mp.setattr(auth.User, "query", _Query(None))
+        mp.setattr(auth.user_repo, "find_by_public_id", lambda _pid: None)
+        for method, url, payload in cases:
+            response = getattr(client, method)(url, json=payload, headers=headers)
+            assert response.status_code == 404
 
     sample_user.totp_enabled = True
     sample_user.totp_secret_encrypted = "secret"

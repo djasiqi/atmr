@@ -32,6 +32,13 @@ def _make_user(db, *, role, totp_enabled=False, institution_role=None, suffix="u
     return user
 
 
+def test_pyotp_is_available_for_totp_service():
+    """Régression : setup/challenge ne doivent pas 500 faute de pyotp."""
+    import pyotp
+
+    assert hasattr(pyotp, "TOTP")
+
+
 def test_totp_enabled_client_gets_challenge_not_jwt(client, db):
     user = _make_user(db, role=UserRole.CLIENT, totp_enabled=True, suffix="cli")
     resp = _login(client, user)

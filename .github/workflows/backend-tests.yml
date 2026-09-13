@@ -666,13 +666,13 @@ jobs:
           cd backend
           # Utiliser la configuration .bandit pour exclusions
           # Générer rapport JSON pour artefacts (ne bloque pas)
-          bandit -r . -c .bandit -f json -o ../artifacts/bandit.json || true
+          bandit -r . --ini .bandit -f json -o ../artifacts/bandit.json || true
           # Générer rapport HTML pour visualisation (ne bloque pas)
-          bandit -r . -c .bandit -f html -o ../artifacts/bandit.html || true
+          bandit -r . --ini .bandit -f html -o ../artifacts/bandit.html || true
           # Vérifier vulnérabilités high/critical (bloque si trouvées)
           # Warning si vulnérabilité MEDIUM détectée, Fail si HIGH/CRITICAL
           echo "🔍 Exécution de Bandit avec configuration .bandit..."
-          bandit -r . -c .bandit --severity-level high --confidence-level medium -v || {
+          bandit -r . --ini .bandit --severity-level high --confidence-level medium -v || {
             echo "❌ Vulnérabilités HIGH ou CRITICAL détectées par Bandit"
             exit 1
           }

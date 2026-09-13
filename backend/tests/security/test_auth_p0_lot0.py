@@ -95,15 +95,9 @@ class TestChangePasswordTokenVersion:
         db.session.add(Company(name=f"TV Co {suffix}", user_id=user.id))
         db.session.commit()
 
-        login = client.post(
-            "/api/v1/auth/login",
-            json={"email": user.email, "password": "OldSecurePass1!"},
-            headers={"X-Requested-With": "Expo"},
-        )
-        assert login.status_code == 200, login.get_json()
-        token = login.get_json().get("access_token") or login.get_json().get("token")
-        assert token
-        headers = {"Authorization": f"Bearer {token}"}
+        from tests.security.mfa_session import business_session_headers
+
+        headers = business_session_headers(client.application, user)
 
         # Sanity: le token force-reset peut appeler change-password
         change = client.post(

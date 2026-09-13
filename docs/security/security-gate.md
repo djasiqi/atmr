@@ -57,7 +57,8 @@ Le dépôt `djasiqi/atmr` est **privé**. L’activation `advanced_security` via
 
 ## P0-03 — MFA
 
-✅ **Implémenté** (branche `security/p0-03-mfa`, à merger après Security Gate GREEN) :
+✅ **Implémenté** (branche `security/p0-03-mfa`, à merger seulement si
+**Security Gate GREEN et Backend Tests GREEN**) :
 
 - Login : `totp_enabled=true` → `202` + `temp_token` `2fa_challenge`, aucun JWT métier
 - Privilegié sans TOTP → `202` + `temp_token` `mfa_enroll` ([`docs/security/privileged-access.md`](privileged-access.md))
