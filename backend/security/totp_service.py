@@ -23,6 +23,44 @@ _RECOVERY_CODE_COUNT = 10
 _MAX_2FA_FAILURES = 10
 _LOCKOUT_TTL_SECONDS = 1800
 _CHALLENGE_JTI_TTL_SECONDS = 300
+_ENROLL_JTI_TTL_SECONDS = 900
+_memory_jtis: dict[str, float] = {}
+
+
+def _testing() -> bool:
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return True
+    try:
+        from flask import current_app
+
+        return bool(current_app.config.get("TESTING"))
+    except Exception:
+        return False
+
+
+def _store_jti_memory(key: str, ttl_seconds: int) -> None:
+    import time
+
+    _memory_jtis[key] = time.time() + ttl_seconds
+
+
+def _consume_jti_memory(key: str) -> bool:
+    import time
+
+    expires = _memory_jtis.pop(key, None)
+    return expires is not None and expires >= time.time()
+
+
+def _has_jti_memory(key: str) -> bool:
+    import time
+
+    expires = _memory_jtis.get(key)
+    if expires is None:
+        return False
+    if expires < time.time():
+        _memory_jtis.pop(key, None)
+        return False
+    return True
 
 
 def _get_cipher_key() -> bytes:
@@ -165,23 +203,75 @@ def reset_2fa_failures(user_id: int) -> None:
 
 def store_2fa_challenge_jti(jti: str) -> None:
     """Stocke un JTI de temp_token dans Redis (usage unique, 5min TTL)."""
+    key = f"2fa_challenge:{jti}"
     rc = _get_redis()
     if rc is None:
+        if _testing():
+            _store_jti_memory(key, _CHALLENGE_JTI_TTL_SECONDS)
+            return
         logger.warning("Failed to store 2FA challenge JTI: Redis unavailable")
         return
     try:
-        rc.set(f"2fa_challenge:{jti}", "1", ex=_CHALLENGE_JTI_TTL_SECONDS)
+        rc.set(key, "1", ex=_CHALLENGE_JTI_TTL_SECONDS)
     except Exception:
+        if _testing():
+            _store_jti_memory(key, _CHALLENGE_JTI_TTL_SECONDS)
+            return
         logger.warning("Failed to store 2FA challenge JTI in Redis")
 
 
 def consume_2fa_challenge_jti(jti: str) -> bool:
     """Consomme un JTI (supprime de Redis). Retourne True si valide."""
+    key = f"2fa_challenge:{jti}"
     rc = _get_redis()
     if rc is None:
-        return False
+        return _consume_jti_memory(key) if _testing() else False
     try:
-        raw = rc.delete(f"2fa_challenge:{jti}")
+        raw = rc.delete(key)
         return int(raw) > 0  # type: ignore[arg-type]
     except Exception:
-        return False
+        return _consume_jti_memory(key) if _testing() else False
+
+
+def store_mfa_enroll_jti(jti: str) -> None:
+    """Stocke un JTI d'enrollment (réutilisable setup+verify, 15 min)."""
+    key = f"mfa_enroll:{jti}"
+    rc = _get_redis()
+    if rc is None:
+        if _testing():
+            _store_jti_memory(key, _ENROLL_JTI_TTL_SECONDS)
+            return
+        logger.warning("Failed to store MFA enroll JTI: Redis unavailable")
+        return
+    try:
+        rc.set(key, "1", ex=_ENROLL_JTI_TTL_SECONDS)
+    except Exception:
+        if _testing():
+            _store_jti_memory(key, _ENROLL_JTI_TTL_SECONDS)
+            return
+        logger.warning("Failed to store MFA enroll JTI in Redis")
+
+
+def has_mfa_enroll_jti(jti: str) -> bool:
+    """Vérifie qu'un JTI d'enrollment est encore valide (sans le consommer)."""
+    key = f"mfa_enroll:{jti}"
+    rc = _get_redis()
+    if rc is None:
+        return _has_jti_memory(key) if _testing() else False
+    try:
+        return bool(rc.exists(key))
+    except Exception:
+        return _has_jti_memory(key) if _testing() else False
+
+
+def consume_mfa_enroll_jti(jti: str) -> bool:
+    """Consomme le JTI d'enrollment après verify réussi."""
+    key = f"mfa_enroll:{jti}"
+    rc = _get_redis()
+    if rc is None:
+        return _consume_jti_memory(key) if _testing() else False
+    try:
+        raw = rc.delete(key)
+        return int(raw) > 0  # type: ignore[arg-type]
+    except Exception:
+        return _consume_jti_memory(key) if _testing() else False

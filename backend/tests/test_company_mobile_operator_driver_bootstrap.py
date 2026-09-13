@@ -8,6 +8,7 @@ import pytest
 
 from models import Company, Driver, User
 from models.enums import UserRole
+from tests.security.mfa_session import accept_any_totp_code, enable_totp_for_login
 
 
 def _create_dispatch_company_user(db) -> User:
@@ -32,25 +33,19 @@ def _create_dispatch_company_user(db) -> User:
 
 
 @pytest.mark.unit
-def test_company_mobile_login_provisions_operator_driver_once(client, db):
+def test_company_mobile_login_provisions_operator_driver_once(client, db, monkeypatch):
     user = _create_dispatch_company_user(db)
+    enable_totp_for_login(user, db)
+    accept_any_totp_code(monkeypatch)
+    payload = {
+        "method": "password",
+        "email": user.email,
+        "password": "Password123!",
+        "mfa_code": "123456",
+    }
 
-    first = client.post(
-        "/api/v1/company_mobile/auth/login",
-        json={
-            "method": "password",
-            "email": user.email,
-            "password": "Password123!",
-        },
-    )
-    second = client.post(
-        "/api/v1/company_mobile/auth/login",
-        json={
-            "method": "password",
-            "email": user.email,
-            "password": "Password123!",
-        },
-    )
+    first = client.post("/api/v1/company_mobile/auth/login", json=payload)
+    second = client.post("/api/v1/company_mobile/auth/login", json=payload)
 
     assert first.status_code == 200
     assert second.status_code == 200
@@ -61,16 +56,22 @@ def test_company_mobile_login_provisions_operator_driver_once(client, db):
 
 
 @pytest.mark.unit
-def test_company_mobile_driver_account_endpoint_provisions_before_lookup(client, db):
+def test_company_mobile_driver_account_endpoint_provisions_before_lookup(
+    client, db, monkeypatch
+):
     user = _create_dispatch_company_user(db)
+    enable_totp_for_login(user, db)
+    accept_any_totp_code(monkeypatch)
     login = client.post(
         "/api/v1/company_mobile/auth/login",
         json={
             "method": "password",
             "email": user.email,
             "password": "Password123!",
+            "mfa_code": "123456",
         },
     )
+    assert login.status_code == 200, login.get_json()
     token = login.get_json()["token"]
     Driver.query.filter_by(user_id=user.id).delete()
     db.session.commit()

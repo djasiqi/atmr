@@ -90,6 +90,9 @@ export default function LoginScreen() {
   );
   const [resolutionToken, setResolutionToken] = ReactRuntime.useState(null as string | null);
   const [replacingSessionId, setReplacingSessionId] = ReactRuntime.useState(null as string | null);
+  const [mfaTempToken, setMfaTempToken] = ReactRuntime.useState(null as string | null);
+  const [mfaPurpose, setMfaPurpose] = ReactRuntime.useState(null as string | null);
+  const [mfaCode, setMfaCode] = ReactRuntime.useState("");
   const [preferencesLoaded, setPreferencesLoaded] = ReactRuntime.useState(false);
   const [biometricLoginAvailable, setBiometricLoginAvailable] = ReactRuntime.useState(false);
   const [biometricPending, setBiometricPending] = ReactRuntime.useState(false);
@@ -217,11 +220,48 @@ export default function LoginScreen() {
     }
     setSubmitting(true);
     try {
-      await login(email, password);
+      if (mfaTempToken) {
+        if (!mfaCode.trim()) {
+          setLocalError("Code de validation requis.");
+          return;
+        }
+        await login(email, password, { tempToken: mfaTempToken, code: mfaCode.trim() });
+        setMfaTempToken(null);
+        setMfaPurpose(null);
+        setMfaCode("");
+      } else {
+        await login(email, password);
+      }
       await persistLoginRememberMe(email, password, rememberSession);
       await navigateAfterAuth();
     } catch (e) {
-      const typedError = (typeof e === "object" && e ? e : {}) as LoginApiError;
+      const typedError = (typeof e === "object" && e ? e : {}) as LoginApiError & {
+        name?: string;
+        tempToken?: string;
+        purpose?: string;
+        details?: Record<string, unknown>;
+      };
+      const mfaToken =
+        asString(typedError.tempToken) ||
+        asString(typedError.details?.temp_token);
+      const mfaNextPurpose =
+        asString(typedError.purpose) ||
+        asString(typedError.details?.mfa_purpose) ||
+        asString(typedError.code);
+      if (mfaToken || typedError.name === "MfaRequiredError" || /mfa_/.test(mfaNextPurpose)) {
+        if (mfaNextPurpose.includes("enroll")) {
+          setLocalError(
+            "Activez d'abord la validation en deux étapes sur le web, puis reconnectez-vous."
+          );
+          return;
+        }
+        if (mfaToken) {
+          setMfaTempToken(mfaToken);
+          setMfaPurpose(mfaNextPurpose || "2fa_challenge");
+          setLocalError("Saisissez le code de votre application d'authentification.");
+          return;
+        }
+      }
       const message = asString(typedError.message) || "Echec de connexion.";
       const reason = asString(typedError.reason).toLowerCase();
       const errorCode = asString(typedError.code);
@@ -241,13 +281,6 @@ export default function LoginScreen() {
           return;
         }
         setLocalError("Compte en attente d'activation. Vérifiez votre email et SMS.");
-        return;
-      }
-      if (/mfa|required|otp/i.test(message) || reason.includes("mfa")) {
-        router.push({
-          pathname: "/(public)/mfa",
-          params: { email: email.trim() },
-        } as any);
         return;
       }
       if (errorCode === "device_session_limit_reached") {
@@ -311,7 +344,11 @@ export default function LoginScreen() {
   };
 
   const submitDisabled =
-    submitting || !email.trim() || !password.trim() || updateGate.requiresUpdate;
+    submitting ||
+    !email.trim() ||
+    !password.trim() ||
+    Boolean(mfaTempToken && !mfaCode.trim()) ||
+    updateGate.requiresUpdate;
 
   return (
     <View style={styles.screen}>
@@ -455,6 +492,28 @@ export default function LoginScreen() {
               </Pressable>
             </View>
           </View>
+
+          {mfaTempToken ? (
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>
+                {mfaPurpose?.includes("enroll")
+                  ? "Enrollment 2FA (web requis)"
+                  : "Code de validation"}
+              </Text>
+              <TextInput
+                value={mfaCode}
+                onChangeText={(v: string) => setMfaCode(v.replace(/[^\d]/g, "").slice(0, 8))}
+                keyboardType="number-pad"
+                maxLength={8}
+                textContentType="oneTimeCode"
+                autoComplete="one-time-code"
+                placeholder="000000"
+                placeholderTextColor="#91A59D"
+                style={styles.fieldInput}
+                onSubmitEditing={() => void onSubmit()}
+              />
+            </View>
+          ) : null}
 
           <AppSwitch
             value={rememberSession}

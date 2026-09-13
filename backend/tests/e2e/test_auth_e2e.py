@@ -16,6 +16,7 @@ from flask.testing import FlaskClient
 
 from models import User, UserRole
 from tests.e2e.helpers.e2e_helpers import create_test_client, create_test_company
+from tests.security.mfa_session import complete_password_totp_login
 
 
 class TestAuthLoginToLogoutFlow:
@@ -174,7 +175,7 @@ class TestAuthExpiredTokenHandling:
 class TestAuthRoleBasedAccess:
     """Tests : RBAC (Role-Based Access Control)."""
 
-    def test_e2e_auth_role_based_access(self, e2e_client, db):
+    def test_e2e_auth_role_based_access(self, e2e_client, db, monkeypatch):
         """Test : Login company → Accès endpoints company → Tentative accès admin → 403."""
         # Setup : Créer un utilisateur company
         # create_test_company crée un user avec le rôle défini par CompanyFactory
@@ -195,12 +196,9 @@ class TestAuthRoleBasedAccess:
         user.set_password("testpassword123", force_change=False)
         db.session.commit()
 
-        # 1. Login en tant que company
-        login_response = e2e_client.post(
-            "/api/v1/auth/login",
-            json={"email": user.email, "password": "testpassword123"},
+        login_response = complete_password_totp_login(
+            e2e_client, user, "testpassword123", monkeypatch, db
         )
-        assert login_response.status_code == 200
         login_data = login_response.get_json()
         assert login_data["user"]["role"] == UserRole.COMPANY.value
 
@@ -234,12 +232,9 @@ class TestAuthRoleBasedAccess:
         db.session.add(admin_user)
         db.session.commit()
 
-        # Login en tant qu'admin
-        admin_login_response = e2e_client.post(
-            "/api/v1/auth/login",
-            json={"email": admin_user.email, "password": "adminpassword123"},
+        admin_login_response = complete_password_totp_login(
+            e2e_client, admin_user, "adminpassword123", monkeypatch, db
         )
-        assert admin_login_response.status_code == 200
         admin_login_data = admin_login_response.get_json()
         assert admin_login_data["user"]["role"] == UserRole.ADMIN.value
 

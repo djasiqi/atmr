@@ -78,6 +78,12 @@ from schemas.auth_schemas import (
 )
 from schemas.validation_utils import handle_validation_error, validate_request
 from security.audit_log import AuditLogger
+from security.mfa_login import (
+    PURPOSE_2FA_CHALLENGE,
+    PURPOSE_MFA_ENROLL,
+    issue_mfa_temp_token,
+    maybe_interrupt_login_for_mfa,
+)
 from security.mobile_device_session_service import (
     DeviceSessionLimitReached,
     RotationProof,
@@ -94,6 +100,7 @@ from security.mobile_device_session_service import (
 from security.mobile_device_session_service import (
     revoke_session as revoke_mobile_device_session,
 )
+from security.privileged_access import requires_mfa_enrollment
 from security.refresh_token_service import (
     RefreshStoreUnavailableError,
     _hash_refresh_token,
@@ -323,14 +330,21 @@ def _clear_web_auth_cookies(response) -> None:
             )
 
 
-def _resolve_access_token_expires(is_mobile_request: bool) -> timedelta:
+def _resolve_access_token_expires(
+    is_mobile_request: bool, user: User | None = None
+) -> timedelta:
     """Résout la durée d'expiration de l'access token selon le client."""
     if is_mobile_request:
-        return current_app.config.get(
+        base = current_app.config.get(
             "JWT_MOBILE_ACCESS_TOKEN_EXPIRES",
             current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
         )
-    return current_app.config["JWT_ACCESS_TOKEN_EXPIRES"]
+    else:
+        base = current_app.config["JWT_ACCESS_TOKEN_EXPIRES"]
+    if user is not None and requires_mfa_enrollment(user):
+        privileged = timedelta(minutes=15)
+        return privileged if base > privileged else base
+    return base
 
 
 def _resolve_refresh_token_expires(
@@ -1273,6 +1287,15 @@ def _login_post_body():
             "retryable": False,
         }, 403
 
+    mfa_interrupt = maybe_interrupt_login_for_mfa(user, remember_me=remember_me)
+    if mfa_interrupt is not None:
+        return mfa_interrupt
+
+    return _complete_authenticated_session(user, remember_me=remember_me)
+
+
+def _complete_authenticated_session(user: User, *, remember_me: bool = False):
+    """Émet les JWT métier + sessions après mot de passe (et MFA si requis)."""
     is_mobile_request = _is_mobile_request()
 
     contract = (request.headers.get("X-Auth-Contract-Version") or "").strip()
@@ -1428,31 +1451,21 @@ def _login_post_body():
                 remember_me=remember_me,
             )
 
-    # Création du token avec le rôle dans additional_claims
-    # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
-    claims = {
-        "role": user.role.value,
-        "company_id": _resolve_company_id(user),
-        "driver_id": getattr(user, "driver_id", None),
-        "institution_id": getattr(user, "institution_id", None),
-        "institution_role": getattr(user, "institution_role", None),
-        "aud": "atmr-api",  # Audience claim pour sécurité
-        "token_version": _user_token_version(user),
-    }
+    extra_claims: dict[str, object] = {}
     if mobile_session is not None:
-        claims["session_id"] = str(mobile_session.session_id)
-        claims["session_epoch"] = int(getattr(mobile_session, "session_epoch", 1) or 1)
-        # Compat clients legacy
-        claims["session_generation"] = claims["session_epoch"]
+        extra_claims["session_id"] = str(mobile_session.session_id)
+        extra_claims["session_epoch"] = int(
+            getattr(mobile_session, "session_epoch", 1) or 1
+        )
+        extra_claims["session_generation"] = extra_claims["session_epoch"]
     if web_session is not None:
-        claims["sid"] = str(web_session.id)
-    access_expires_delta = _resolve_access_token_expires(is_mobile_request)
-    access_token = create_access_token(
-        identity=str(user.public_id),
-        # ⚠️ ID numérique attendu par dispatch_routes
-        additional_claims=claims,
+        extra_claims["sid"] = str(web_session.id)
+    access_expires_delta = _resolve_access_token_expires(is_mobile_request, user)
+    access_token = issue_business_access_token(
+        user,
+        is_mobile_request=is_mobile_request,
+        extra_claims=extra_claims or None,
         expires_delta=access_expires_delta,
-        fresh=True,  # ✅ Token fresh lors de la connexion initiale
     )
 
     # Création du refresh token
@@ -1558,7 +1571,7 @@ def _login_post_body():
             user_type=user.role.value if user.role else "unknown",
             result_status="success",
             action_details={
-                "email": mask_email(email),
+                "email": mask_email(user.email or ""),
                 "username": user.username,
                 "role": user.role.value if user.role else None,
             },
@@ -1579,7 +1592,7 @@ def _login_post_body():
         extra={
             "trace_id": trace_id,
             "user_id": user.id,
-            "email": mask_email(email),
+            "email": mask_email(user.email or ""),
         },
     )
 
@@ -1750,6 +1763,42 @@ def _resolve_company_id(user: User) -> int | None:
         return None
     company = getattr(user, "company", None)
     return company.id if company else None
+
+
+def build_business_access_claims(
+    user: User, *, extra: dict[str, object] | None = None
+) -> dict[str, object]:
+    """Claims d'un access token métier (post-login ou post-/totp/challenge)."""
+    role = user.role.value if hasattr(user.role, "value") else str(user.role)
+    claims: dict[str, object] = {
+        "role": role,
+        "company_id": _resolve_company_id(user),
+        "driver_id": getattr(user, "driver_id", None),
+        "institution_id": getattr(user, "institution_id", None),
+        "institution_role": getattr(user, "institution_role", None),
+        "aud": "atmr-api",
+        "token_version": _user_token_version(user),
+    }
+    if extra:
+        claims.update(extra)
+    return claims
+
+
+def issue_business_access_token(
+    user: User,
+    *,
+    is_mobile_request: bool = False,
+    extra_claims: dict[str, object] | None = None,
+    expires_delta: timedelta | None = None,
+) -> str:
+    """Émet le JWT métier utilisé après authentification complète."""
+    return create_access_token(
+        identity=str(user.public_id),
+        additional_claims=build_business_access_claims(user, extra=extra_claims),
+        expires_delta=expires_delta
+        or _resolve_access_token_expires(is_mobile_request, user),
+        fresh=True,
+    )
 
 
 # ========================
@@ -2289,6 +2338,15 @@ def _validate_refresh_token(
         decoded = decode_token(refresh_token, allow_expired=False)
         user_public_id = decoded.get("sub")
 
+        from security.mfa_login import is_restricted_mfa_jwt
+
+        if is_restricted_mfa_jwt(decoded):
+            error_response, _ = APIErrorHandler.handle_validation_error(
+                "Le token fourni n'est pas un refresh token",
+                logger_instance=logger,
+            )
+            return None, error_response
+
         # Vérifier que c'est bien un refresh token (pas un access token)
         # Les refresh tokens n'ont pas les claims "role" ou "company_id"
         token_type = decoded.get("type", "")
@@ -2535,6 +2593,10 @@ class LoginTest(Resource):
                 "Identifiants invalides",
                 401,
             )
+
+        mfa_interrupt = maybe_interrupt_login_for_mfa(user, remember_me=False)
+        if mfa_interrupt is not None:
+            return mfa_interrupt
 
         # Note: Pas de vérification is_active car c'est un endpoint de test simplifié
 
@@ -3315,6 +3377,19 @@ class FreshToken(Resource):
                     "Mot de passe incorrect",
                     401,
                 )
+
+            if bool(getattr(user, "totp_enabled", False)):
+                code = str(data.get("code") or "").strip()
+                from security.totp_service import verify_totp_code
+
+                if not code or not user.totp_secret_encrypted:
+                    return {
+                        "error": "mfa_challenge_required",
+                        "error_code": "mfa_challenge_required",
+                        "message": "Code de validation en deux étapes requis.",
+                    }, 401
+                if not verify_totp_code(user.totp_secret_encrypted, code):
+                    return {"error": "Code invalide"}, 401
 
             # 4. Créer un token fresh
             claims = {
@@ -4618,6 +4693,9 @@ class PasswordlessOtpVerify(Resource):
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user:
                 return {"error": "user_not_found"}, 404
+            mfa_interrupt = maybe_interrupt_login_for_mfa(user, remember_me=False)
+            if mfa_interrupt is not None:
+                return mfa_interrupt
             claims = {
                 "role": user.role.value,
                 "company_id": _resolve_company_id(user),
@@ -6240,28 +6318,93 @@ RECOVERY_CODE_LENGTH = 8
 MAX_2FA_FAILURES = 10
 
 
+def _totp_feature_enabled() -> bool:
+    return os.environ.get("SECURITY_2FA_ENABLED", "false") == "true"
+
+
+def _extract_totp_bearer_token() -> str:
+    header = request.headers.get("Authorization") or ""
+    if header.lower().startswith("bearer "):
+        return header.split(" ", 1)[1].strip()
+    data = request.get_json(silent=True) or {}
+    return str(data.get("temp_token") or "").strip()
+
+
+def _load_user_from_mfa_token(
+    *, allowed_purposes: frozenset[str]
+) -> tuple[Any, dict[str, Any] | None, tuple[dict[str, Any], int] | None]:
+    """Charge l'utilisateur depuis un JWT métier fresh ou un temp_token MFA."""
+    token = _extract_totp_bearer_token()
+    if not token:
+        return None, None, ({"error": "Token requis"}, 401)
+    try:
+        decoded = decode_token(token)
+    except Exception:
+        return None, None, ({"error": "Token invalide"}, 401)
+    purpose = decoded.get("purpose")
+    user_public_id = decoded.get("sub")
+    if not user_public_id:
+        return None, None, ({"error": "Token invalide"}, 401)
+    if purpose:
+        if purpose not in allowed_purposes:
+            return None, None, ({"error": "Token invalide"}, 401)
+        if purpose == PURPOSE_MFA_ENROLL:
+            from security.totp_service import has_mfa_enroll_jti
+
+            jti = decoded.get("jti")
+            if not jti or not has_mfa_enroll_jti(str(jti)):
+                return None, None, ({"error": "Token déjà utilisé ou expiré"}, 401)
+        user = User.query.filter_by(public_id=user_public_id).first()
+        if not user:
+            user = user_repo.find_by_public_id(user_public_id)
+        if not user:
+            return (
+                None,
+                None,
+                (
+                    APIErrorHandler.handle_not_found(
+                        "Utilisateur", user_public_id, logger
+                    )
+                ),
+            )
+        return user, decoded, None
+    # JWT métier : jwt_required l'aurait déjà accepté ; ici décodage manuel.
+    if decoded.get("fresh") is False:
+        return None, None, ({"error": "Token fresh requis"}, 401)
+    user = User.query.filter_by(public_id=user_public_id).first()
+    if not user:
+        user = user_repo.find_by_public_id(user_public_id)
+    if not user:
+        return (
+            None,
+            None,
+            (APIErrorHandler.handle_not_found("Utilisateur", user_public_id, logger)),
+        )
+    return user, decoded, None
+
+
 # ========================
 # Endpoints TOTP 2FA (Sprint 2)
 # ========================
 @auth_ns.route("/totp/setup")
 class TOTPSetup(Resource):
-    @jwt_required(fresh=True)
     @limiter.limit("5 per 15 minutes")
     def post(self):
         """Génère un secret TOTP et retourne le QR code + URI.
 
-        Gardé par feature flag SECURITY_2FA_ENABLED.
+        Accepte un JWT fresh métier (enrollment volontaire) ou un temp_token
+        ``mfa_enroll`` (enrollment obligatoire, aucune API métier).
         """
-        if os.environ.get("SECURITY_2FA_ENABLED", "false") != "true":
-            return {"error": "2FA non disponible"}, 403
-
         try:
-            current_user_public_id = get_jwt_identity()
-            user = user_repo.find_by_public_id(current_user_public_id)
-            if not user:
-                return APIErrorHandler.handle_not_found(
-                    "Utilisateur", current_user_public_id, logger
-                )
+            user, decoded, err = _load_user_from_mfa_token(
+                allowed_purposes=frozenset({PURPOSE_MFA_ENROLL})
+            )
+            if err:
+                return err
+            assert user is not None
+            is_enroll = bool(decoded and decoded.get("purpose") == PURPOSE_MFA_ENROLL)
+            if not is_enroll and not _totp_feature_enabled():
+                return {"error": "2FA non disponible"}, 403
 
             if user.totp_enabled:
                 return {"error": "2FA déjà activée. Désactivez d'abord."}, 409
@@ -6285,20 +6428,19 @@ class TOTPSetup(Resource):
 
 @auth_ns.route("/totp/verify")
 class TOTPVerify(Resource):
-    @jwt_required(fresh=True)
     @limiter.limit("5 per 15 minutes")
     def post(self):
         """Vérifie un code TOTP et active le 2FA. Retourne les recovery codes."""
-        if os.environ.get("SECURITY_2FA_ENABLED", "false") != "true":
-            return {"error": "2FA non disponible"}, 403
-
         try:
-            current_user_public_id = get_jwt_identity()
-            user = user_repo.find_by_public_id(current_user_public_id)
-            if not user:
-                return APIErrorHandler.handle_not_found(
-                    "Utilisateur", current_user_public_id, logger
-                )
+            user, decoded, err = _load_user_from_mfa_token(
+                allowed_purposes=frozenset({PURPOSE_MFA_ENROLL})
+            )
+            if err:
+                return err
+            assert user is not None
+            is_enroll = bool(decoded and decoded.get("purpose") == PURPOSE_MFA_ENROLL)
+            if not is_enroll and not _totp_feature_enabled():
+                return {"error": "2FA non disponible"}, 403
 
             data = request.get_json() or {}
             code = str(data.get("code", "")).strip()
@@ -6309,6 +6451,7 @@ class TOTPVerify(Resource):
                 return {"error": "Appelez /totp/setup d'abord"}, 400
 
             from security.totp_service import (
+                consume_mfa_enroll_jti,
                 generate_recovery_codes,
                 verify_totp_code,
             )
@@ -6327,10 +6470,22 @@ class TOTPVerify(Resource):
 
             audit_log("totp_enabled", "security")
 
-            return {
+            payload: dict[str, Any] = {
                 "message": "Validation en deux étapes activée.",
                 "recovery_codes": codes,
-            }, 200
+            }
+            if is_enroll:
+                jti = (decoded or {}).get("jti")
+                if jti:
+                    consume_mfa_enroll_jti(str(jti))
+                remember_me = bool((decoded or {}).get("remember_me"))
+                payload["mfa_required"] = True
+                payload["mfa_purpose"] = PURPOSE_2FA_CHALLENGE
+                payload["temp_token"] = issue_mfa_temp_token(
+                    user, PURPOSE_2FA_CHALLENGE, remember_me=remember_me
+                )
+                payload["error_code"] = "mfa_challenge_required"
+            return payload, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             return APIErrorHandler.handle_exception(e, logger)
@@ -6347,7 +6502,9 @@ class TOTPDisable(Resource):
 
         try:
             current_user_public_id = get_jwt_identity()
-            user = user_repo.find_by_public_id(current_user_public_id)
+            user = User.query.filter_by(public_id=current_user_public_id).first()
+            if not user:
+                user = user_repo.find_by_public_id(current_user_public_id)
             if not user:
                 return APIErrorHandler.handle_not_found(
                     "Utilisateur", current_user_public_id, logger
@@ -6355,8 +6512,23 @@ class TOTPDisable(Resource):
 
             data = request.get_json() or {}
             password = data.get("password", "")
-            if not password or not user.check_password(password):
+            check_password = getattr(user, "check_password", None)
+            if (
+                not password
+                or not callable(check_password)
+                or not check_password(password)
+            ):
                 return {"error": "Mot de passe incorrect"}, 401
+
+            if requires_mfa_enrollment(user):
+                return {
+                    "error": "mfa_disable_forbidden",
+                    "error_code": "mfa_disable_forbidden",
+                    "message": (
+                        "Les comptes privilégiés ne peuvent pas désactiver "
+                        "la validation en deux étapes sans procédure contrôlée."
+                    ),
+                }, 403
 
             user.totp_enabled = False
             user.totp_secret_encrypted = None
@@ -6370,6 +6542,105 @@ class TOTPDisable(Resource):
             audit_log("totp_disabled", "security")
 
             return {"message": "Validation en deux étapes désactivée."}, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@auth_ns.route("/totp/admin-disable")
+class TOTPAdminDisable(Resource):
+    @jwt_required(fresh=True)
+    @limiter.limit("5 per 15 minutes")
+    def post(self):
+        """Break-glass : super-admin LIRIE désactive le TOTP d'un autre compte.
+
+        Exige une session fresh **et** un code TOTP/recovery de l'acteur :
+        un JWT obtenu au mot de passe seul ne suffit pas.
+        """
+        try:
+            actor_public_id = get_jwt_identity()
+            actor = User.query.filter_by(public_id=actor_public_id).first()
+            if not actor or getattr(actor, "role", None) != UserRole.ADMIN:
+                return {
+                    "error": "forbidden",
+                    "message": "Réservé au super-admin LIRIE.",
+                }, 403
+
+            if not bool(getattr(actor, "totp_enabled", False)):
+                return {
+                    "error": "mfa_required",
+                    "error_code": "mfa_challenge_required",
+                    "message": (
+                        "Le break-glass exige une session super-admin "
+                        "protégée par validation en deux étapes."
+                    ),
+                }, 403
+
+            data = request.get_json() or {}
+            target_public_id = str(data.get("target_public_id") or "").strip()
+            reason = str(data.get("reason") or "").strip()
+            code = str(data.get("code") or "").strip()
+            if not target_public_id or len(reason) < 8:
+                return {
+                    "error": "invalid_request",
+                    "message": "target_public_id et motif (8 caractères min.) requis.",
+                }, 400
+            if not code:
+                return {
+                    "error": "mfa_challenge_required",
+                    "error_code": "mfa_challenge_required",
+                    "message": "Code de validation en deux étapes requis.",
+                }, 401
+
+            from security.totp_service import verify_recovery_code, verify_totp_code
+
+            code_ok = False
+            if len(code) == TOTP_CODE_LENGTH and code.isdigit():
+                code_ok = bool(
+                    actor.totp_secret_encrypted
+                    and verify_totp_code(actor.totp_secret_encrypted, code)
+                )
+            elif len(code) == RECOVERY_CODE_LENGTH and code.isdigit():
+                is_valid, updated_hashes = verify_recovery_code(
+                    actor.recovery_codes_hash or "[]", code
+                )
+                if is_valid:
+                    actor.recovery_codes_hash = updated_hashes
+                    actor.recovery_codes_remaining = max(
+                        0, (actor.recovery_codes_remaining or 0) - 1
+                    )
+                    code_ok = True
+            if not code_ok:
+                return {"error": "Code invalide"}, 401
+
+            target = User.query.filter_by(public_id=target_public_id).first()
+            if not target:
+                target = user_repo.find_by_public_id(target_public_id)
+            if not target:
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur", target_public_id, logger
+                )
+
+            target.totp_enabled = False
+            target.totp_secret_encrypted = None
+            target.totp_enabled_at = None
+            target.recovery_codes_hash = None
+            target.recovery_codes_remaining = 0
+            db.session.commit()
+
+            from shared.audit_helpers import audit_log
+
+            audit_log(
+                "totp_admin_disabled",
+                "security",
+                action_details={
+                    "target_public_id": target_public_id,
+                    "reason": reason,
+                },
+            )
+            return {
+                "message": "Validation en deux étapes désactivée (break-glass).",
+            }, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             return APIErrorHandler.handle_exception(e, logger)
@@ -6454,9 +6725,6 @@ class TOTPChallenge(Resource):
 
         Reçoit temp_token + code TOTP, retourne les vrais tokens si valide.
         """
-        if os.environ.get("SECURITY_2FA_ENABLED", "false") != "true":
-            return {"error": "2FA non disponible"}, 403
-
         try:
             data = request.get_json() or {}
             temp_token = data.get("temp_token", "")
@@ -6487,7 +6755,9 @@ class TOTPChallenge(Resource):
             if not consume_2fa_challenge_jti(jti):
                 return {"error": "Token déjà utilisé ou expiré"}, 401
 
-            user = user_repo.find_by_public_id(user_public_id)
+            user = User.query.filter_by(public_id=user_public_id).first()
+            if not user:
+                user = user_repo.find_by_public_id(user_public_id)
             if not user:
                 return {"error": "Utilisateur non trouvé"}, 404
 
@@ -6522,90 +6792,9 @@ class TOTPChallenge(Resource):
 
             reset_2fa_failures(user.id)
 
-            # Charger le modèle User pour token_version
             db_user = User.query.filter_by(public_id=user.public_id).first() or user
-            additional_claims = {
-                "role": user.role.value if user.role else "unknown",
-                "aud": "atmr-api",
-                "token_version": _user_token_version(db_user),
-                "company_id": _resolve_company_id(db_user),
-            }
-
-            access_token = create_access_token(
-                identity=user.public_id,
-                additional_claims=additional_claims,
-                fresh=True,
-            )
-            refresh_token = create_refresh_token(
-                identity=user.public_id,
-                additional_claims={
-                    "aud": "atmr-api",
-                    "token_version": _user_token_version(db_user),
-                },
-            )
-
-            device_id = request.headers.get("X-Device-Id")
-            from security.refresh_token_service import store_refresh_token
-            from shared.security_helpers import parse_device
-
-            store_refresh_token(
-                token=refresh_token,
-                user_id=user.id,
-                expires_at=datetime.now(UTC) + timedelta(days=30),
-                device_id=device_id,
-                device_name=parse_device(request.headers.get("User-Agent")),
-            )
-
-            db.session.commit()
-
-            from shared.audit_helpers import audit_log
-
-            audit_log("user_login", "security", user=user)
-
-            resp = json_response(
-                {
-                    "message": "2FA validée",
-                    "user": {
-                        "id": user.id,
-                        "public_id": user.public_id,
-                        "username": user.username,
-                        "email": user.email,
-                        "role": user.role.value if user.role else None,
-                    },
-                    "token": access_token,
-                    "refresh_token": refresh_token,
-                }
-            )
-
-            from services.security.csrf import generate_csrf_token
-
-            csrf_token = generate_csrf_token()
-            resp.set_cookie(
-                "csrf_token",
-                csrf_token,
-                httponly=False,
-                samesite="Lax",
-                secure=False,
-                path="/",
-            )
-            resp.set_cookie(
-                "access_token_cookie",
-                access_token,
-                httponly=True,
-                samesite="Lax",
-                secure=False,
-                path="/",
-            )
-            resp.set_cookie(
-                "refresh_token_cookie",
-                refresh_token,
-                httponly=True,
-                samesite="Lax",
-                secure=False,
-                path="/api",
-            )
-
-            return resp
+            remember_me = bool(decoded.get("remember_me"))
+            return _complete_authenticated_session(db_user, remember_me=remember_me)
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -6860,6 +7049,10 @@ class ActivateAccount(Resource):
                 user.id,
                 user.email,
             )
+
+            mfa_interrupt = maybe_interrupt_login_for_mfa(user, remember_me=False)
+            if mfa_interrupt is not None:
+                return mfa_interrupt
 
             # Auto-login : générer un JWT pour connexion immédiate
             claims = {

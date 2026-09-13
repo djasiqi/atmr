@@ -123,7 +123,11 @@ type SessionContextValue = {
   activeContext: AuthContext | null;
   error: string | null;
   autoBootstrapAllowed: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (
+    email: string,
+    password: string,
+    mfa?: { tempToken: string; code: string }
+  ) => Promise<void>;
   bootstrapSession: (opts?: { trigger?: BootstrapTrigger }) => Promise<void>;
   changeContext: (targetContextId: string) => Promise<void>;
   contextSwitchInFlight: boolean;
@@ -681,13 +685,25 @@ export function SessionProvider({ children }: PropsWithChildren) {
     return cycle;
   }, [resumeSessionIfPossible, setAutoBootstrapAllowedSync]);
 
-  const loginAndBootstrap = ReactRuntime.useCallback(async (email: string, password: string) => {
+  const loginAndBootstrap = ReactRuntime.useCallback(async (
+    email: string,
+    password: string,
+    mfa?: { tempToken: string; code: string }
+  ) => {
     setError(null);
     setAutoBootstrapAllowedSync(true);
     try {
-      await login(email, password);
+      await login(email, password, mfa);
       await bootstrapSession({ trigger: "login_success" });
     } catch (e) {
+      const maybeMfa = e as { name?: string; code?: string };
+      if (
+        maybeMfa?.name === "MfaRequiredError" ||
+        maybeMfa?.code === "mfa_challenge_required" ||
+        maybeMfa?.code === "mfa_enroll_required"
+      ) {
+        throw e;
+      }
       const message = toUiErrorMessage(e, "Login failed");
       setError(message);
       throw e;

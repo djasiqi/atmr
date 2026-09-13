@@ -635,8 +635,14 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
         True si le token est révoqué (blacklisté) ou a une audience invalide,
         False sinon
     """
+    from security.mfa_login import is_restricted_mfa_jwt
     from security.security_metrics import security_invalid_audience_total
     from security.token_blacklist import is_token_blacklisted
+
+    # Tokens MFA (challenge / enrollment) : interdits sur les routes jwt_required.
+
+    if is_restricted_mfa_jwt(jwt_payload):
+        return True
 
     # ✅ SECURITY: Valider audience AVANT de vérifier la blacklist
     audience_valid, reason = validate_jwt_audience(jwt_payload)

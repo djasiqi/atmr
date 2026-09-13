@@ -254,7 +254,7 @@ services:
       API_DOCS: "off" # Désactiver Swagger UI en production
 
       # Sécurité — feature flags
-      SECURITY_2FA_ENABLED: "false"
+      SECURITY_2FA_ENABLED: "true"
       IP_MASK_MODE: "first_octet"
       AUDIT_LOG_RETENTION_DAYS: "730"
 

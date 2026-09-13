@@ -15,6 +15,10 @@ from flask import Flask
 from flask.testing import FlaskClient
 
 from services.security.authentication import RefreshTokenService
+from tests.security.mfa_session import (
+    complete_password_totp_login,
+    refresh_token_from_response,
+)
 
 
 class FakeRedis:
@@ -186,33 +190,19 @@ def test_token_rotation_on_refresh(
     client: FlaskClient,
     auth_headers: dict[str, str],
     sample_user,
+    db,
+    monkeypatch,
 ) -> None:
     """Test que le refresh token est roté lors d'un refresh."""
-    # 1. Login
-    login_response = client.post(
-        "/api/v1/auth/login",
-        json={
-            "email": sample_user.email,
-            "password": "password123",
-        },
+    login_response = complete_password_totp_login(
+        client,
+        sample_user,
+        "password123",
+        monkeypatch,
+        db,
+        extra_headers={"X-Requested-With": "Expo"},
     )
-    assert login_response.status_code == 200
-
-    # Récupérer le refresh token depuis le cookie ou la réponse JSON
-    old_refresh_token = None
-    if login_response.headers.getlist("Set-Cookie"):
-        for cookie in login_response.headers.getlist("Set-Cookie"):
-            if "refresh_token=" in cookie:
-                # Extraire la valeur du cookie
-                cookie_parts = cookie.split(";")[0]
-                old_refresh_token = cookie_parts.split("=", 1)[1]
-
-    # Si pas dans le cookie, chercher dans la réponse JSON (mobile)
-    if not old_refresh_token and login_response.is_json:
-        data = login_response.get_json()
-        if data and "refresh_token" in data:
-            old_refresh_token = data["refresh_token"]
-
+    old_refresh_token = refresh_token_from_response(login_response)
     assert old_refresh_token is not None, "Refresh token non trouvé après login"
 
     # 2. Refresh - utiliser set_cookie pour envoyer le cookie
@@ -273,33 +263,21 @@ def test_revoke_current_token_on_logout(
     client: FlaskClient,
     auth_headers: dict[str, str],
     sample_user,
+    db,
+    monkeypatch,
 ) -> None:
     """Test que le refresh token explicitement fourni est révoqué au logout."""
-    # 1. Login plusieurs fois (créer plusieurs tokens)
     tokens = []
     for _ in range(3):
-        login_response = client.post(
-            "/api/v1/auth/login",
-            json={
-                "email": sample_user.email,
-                "password": "password123",
-            },
+        login_response = complete_password_totp_login(
+            client,
+            sample_user,
+            "password123",
+            monkeypatch,
+            db,
+            extra_headers={"X-Requested-With": "Expo"},
         )
-        assert login_response.status_code == 200
-
-        # Récupérer le refresh token
-        refresh_token = None
-        if login_response.headers.getlist("Set-Cookie"):
-            for cookie in login_response.headers.getlist("Set-Cookie"):
-                if "refresh_token=" in cookie:
-                    cookie_parts = cookie.split(";")[0]
-                    refresh_token = cookie_parts.split("=", 1)[1]
-
-        if not refresh_token and login_response.is_json:
-            data = login_response.get_json()
-            if data and "refresh_token" in data:
-                refresh_token = data["refresh_token"]
-
+        refresh_token = refresh_token_from_response(login_response)
         if refresh_token:
             tokens.append(refresh_token)
 

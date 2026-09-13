@@ -372,6 +372,21 @@ export class AuthContractError extends Error {
   }
 }
 
+export class MfaRequiredError extends AuthContractError {
+  readonly tempToken: string;
+  readonly purpose: string;
+
+  constructor(tempToken: string, purpose: string, message: string) {
+    super(
+      purpose === "mfa_enroll" ? "mfa_enroll_required" : "mfa_challenge_required",
+      message
+    );
+    this.name = "MfaRequiredError";
+    this.tempToken = tempToken;
+    this.purpose = purpose;
+  }
+}
+
 function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -1092,6 +1107,17 @@ function buildNoHttpResponseHint(requestUrl: string, error: AxiosError): string 
 }
 
 function toApiError(error: unknown): ApiCallError {
+  if (error instanceof MfaRequiredError) {
+    return {
+      status: 202,
+      code: error.code,
+      message: error.message,
+      details: {
+        temp_token: error.tempToken,
+        mfa_purpose: error.purpose,
+      },
+    };
+  }
   if (error instanceof AuthContractError) {
     return {
       status: null,
@@ -1422,7 +1448,11 @@ export async function fetchBootstrap(activeContextId?: string | null): Promise<B
   }
 }
 
-export async function login(email: string, password: string): Promise<void> {
+export async function login(
+  email: string,
+  password: string,
+  mfa?: { tempToken: string; code: string }
+): Promise<void> {
   if (useMockBootstrap) return;
   try {
     const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
@@ -1448,19 +1478,52 @@ export async function login(email: string, password: string): Promise<void> {
     }
 
     const deviceHeaders = await buildRequiredAuthDeviceHeaders();
-    const { data } = await apiClient.post(
-      "/auth/login",
-      {
-        email: email.trim(),
-        password,
-      },
-      {
-        headers: {
-          ...deviceHeaders,
-          "X-Auth-Contract-Version": "mobile-device-session-v1",
-        },
+    const { data } = mfa
+      ? await apiClient.post(
+          "/auth/totp/challenge",
+          {
+            temp_token: mfa.tempToken,
+            code: mfa.code,
+          },
+          {
+            headers: {
+              ...deviceHeaders,
+              "X-Auth-Contract-Version": "mobile-device-session-v1",
+            },
+          }
+        )
+      : await apiClient.post(
+          "/auth/login",
+          {
+            email: email.trim(),
+            password,
+          },
+          {
+            headers: {
+              ...deviceHeaders,
+              "X-Auth-Contract-Version": "mobile-device-session-v1",
+            },
+          }
+        );
+    const responsePreview =
+      data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+    if (!mfa && responsePreview.mfa_required) {
+      const purpose = String(responsePreview.mfa_purpose || "2fa_challenge");
+      const tempToken = String(responsePreview.temp_token || "");
+      if (!tempToken) {
+        throw new AuthContractError(
+          "AUTH_LOGIN_CONTRACT_INCOMPLETE",
+          "Le serveur n'a pas retourné le jeton de validation en deux étapes."
+        );
       }
-    );
+      throw new MfaRequiredError(
+        tempToken,
+        purpose,
+        purpose === "mfa_enroll"
+          ? "Activez la validation en deux étapes pour ce compte."
+          : "Code de validation en deux étapes requis."
+      );
+    }
     const token = extractToken(data);
     const refreshToken = extractRefreshToken(data);
     const responseObj = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
@@ -1618,6 +1681,9 @@ export async function login(email: string, password: string): Promise<void> {
       void schedulePendingSessionConfirmation(sessionId, deviceId);
     }
   } catch (error) {
+    if (error instanceof MfaRequiredError) {
+      throw error;
+    }
     // Best-effort : flush pending créés lors d'un échec d'écriture login.
     try {
       const recoveryMod = require("../auth/authRecoveryCoordinator") as typeof import("../auth/authRecoveryCoordinator");
