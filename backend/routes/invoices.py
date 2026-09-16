@@ -2705,9 +2705,9 @@ class InvoicePdfDownload(Resource):
 
         invoice = Invoice.query.get(invoice_id)
         if not invoice or invoice.company_id != company_id:
-            return APIErrorHandler.handle_not_found("Invoice", invoice_id, logger)
+            return APIErrorHandler.handle_not_found("Facture", invoice_id, logger)
         if not invoice.pdf_url:
-            return APIErrorHandler.handle_not_found("Invoice PDF", invoice_id, logger)
+            return APIErrorHandler.handle_not_found("Facture PDF", invoice_id, logger)
         try:
             from shared.invoice_pdf_filename import build_invoice_pdf_download_filename
 
@@ -2716,7 +2716,7 @@ class InvoicePdfDownload(Resource):
                 download_filename=build_invoice_pdf_download_filename(invoice),
             )
         except WzNotFound:
-            return APIErrorHandler.handle_not_found("Invoice PDF", invoice_id, logger)
+            return APIErrorHandler.handle_not_found("Facture PDF", invoice_id, logger)
 
 
 @invoices_ns.route(
@@ -2742,7 +2742,7 @@ class InvoiceReminderPdfDownload(Resource):
 
         invoice = Invoice.query.get(invoice_id)
         if not invoice or invoice.company_id != company_id:
-            return APIErrorHandler.handle_not_found("Invoice", invoice_id, logger)
+            return APIErrorHandler.handle_not_found("Facture", invoice_id, logger)
 
         reminder = InvoiceReminder.query.filter_by(
             id=reminder_id, invoice_id=invoice_id
@@ -2863,15 +2863,7 @@ class InvoiceDetail(Resource):
             input_data = GetInvoiceInput(invoice_id=invoice_id, company_id=company_id)
             result = uc.execute(input_data)
 
-            if not result.found:
-                return APIErrorHandler.handle_validation_error(
-                    result.error.get("message", "Erreur inconnue")
-                    if result.error
-                    else "Erreur inconnue",
-                    logger_instance=logger,
-                )
-
-            if result.invoice is None:
+            if not result.found or result.invoice is None:
                 return APIErrorHandler.handle_not_found(
                     "Facture",
                     resource_id=invoice_id,
