@@ -116,4 +116,5 @@ def test_list_exposes_partner_flag_and_company_id(
     )
     assert partner_row["company_id"] == sample_company.id
     assert partner_row["is_partner_invoice"] is True
+    assert partner_row.get("kind") == "partner"
     assert not regular_row.get("is_partner_invoice")

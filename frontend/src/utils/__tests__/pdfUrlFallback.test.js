@@ -22,10 +22,17 @@ describe('catalogues facture client vs partenaire', () => {
     is_partner_invoice: true,
   };
 
-  test('isPartnerInvoice ne se fie qu’au flag catalogue', () => {
+  test('isPartnerInvoice reconnait le flag, le kind et le préfixe PARTNER-', () => {
     expect(isPartnerInvoice(standardInvoice)).toBe(false);
     expect(isPartnerInvoice(partnerInvoice)).toBe(true);
     expect(isPartnerInvoice({ id: sharedId })).toBe(false);
+    expect(
+      isPartnerInvoice({
+        id: sharedId,
+        invoice_number: 'PARTNER-EM-2026-08-0097',
+      })
+    ).toBe(true);
+    expect(isPartnerInvoice({ id: sharedId, kind: 'partner' })).toBe(true);
   });
 
   test('IDs identiques : les builders ne se mélangent pas', () => {
@@ -50,6 +57,15 @@ describe('catalogues facture client vs partenaire', () => {
     expect(resolveInvoicePdfApiUrl(partnerInvoice)).not.toMatch(
       `/invoices/${sharedId}`
     );
+  });
+
+  test('numéro PARTNER- suffit à éviter /invoices/{id}/pdf', () => {
+    expect(
+      resolveInvoicePdfApiUrl(
+        { id: sharedId, invoice_number: 'PARTNER-EM-2026-08-0097' },
+        companyId
+      )
+    ).toBe(`/invoices/companies/${companyId}/partner-invoices/${sharedId}/pdf`);
   });
 
   test('company_id fourni à part suffit pour le partenaire', () => {

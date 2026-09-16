@@ -19,7 +19,6 @@ import {
 import styles from './InvoicesRegistry.module.css';
 import {
   fetchInvoices,
-  getInvoice,
   sendInvoiceByEmail,
   markInvoiceAsSent,
   bulkMarkAsSent,
@@ -67,7 +66,6 @@ const InvoicesRegistry = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef(null);
   const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
-  const urlInvoiceId = searchParams.get('invoice_id');
   const [actionError, setActionError] = useState(null);
   const [listErrorDismissed, setListErrorDismissed] = useState(false);
   const [filters, setFilters] = useState({
@@ -199,47 +197,6 @@ const InvoicesRegistry = () => {
       consumeFocus();
     }
   }, [initialized, initialSearch, shouldFocus, consumeFocus, filters.q]);
-
-  // Si invoice_id dans l'URL et facture absente de la liste, la charger et l'ajouter au cache.
-  // Ne jamais appeler GET /invoices/{id} pour un ID partenaire (catalogues distincts).
-  useEffect(() => {
-    if (!urlInvoiceId || !company?.id || listInitialLoading) return;
-    const invoiceId = parseInt(urlInvoiceId, 10);
-    if (Number.isNaN(invoiceId)) return;
-    if (searchParams.get('partner') === '1') return;
-
-    const existing = invoices.find((i) => i.id === invoiceId);
-    if (isPartnerInvoice(existing)) return;
-    if (existing) return;
-
-    const key = lirieKeys.companyInvoices(company.id, filtersHash);
-    const fetchAndPrependIfMissing = async () => {
-      try {
-        const res = await getInvoice(company.id, invoiceId);
-        const inv = res?.data ?? res;
-        if (inv?.id) {
-          queryClient.setQueryData(key, (old) => {
-            if (!old?.invoices) return old;
-            if (old.invoices.some((i) => i.id === invoiceId && !isPartnerInvoice(i))) {
-              return old;
-            }
-            return { ...old, invoices: [inv, ...old.invoices] };
-          });
-        }
-      } catch (e) {
-        // Ignorer si la facture n'existe pas ou n'est pas accessible
-      }
-    };
-    fetchAndPrependIfMissing();
-  }, [
-    urlInvoiceId,
-    company?.id,
-    listInitialLoading,
-    filtersHash,
-    queryClient,
-    invoices,
-    searchParams,
-  ]);
 
   // Handlers
   const handleFilterChange = (newFilters) => {
@@ -471,6 +428,8 @@ const InvoicesRegistry = () => {
 
   const handleRegeneratePdf = async (invoiceId) => {
     try {
+      const target = invoices.find((i) => i.id === invoiceId);
+      if (isPartnerInvoice(target)) return;
       // Contrat figé unique — ne pas contourner forceRegenerateInvoicePdf.
       await forceRegenerateInvoicePdf(company.id, invoiceId);
       await loadInvoices();

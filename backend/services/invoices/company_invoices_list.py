@@ -368,6 +368,7 @@ def list_company_invoices_unified(
                     "reminder_level": 0,  # Les factures partenaires n'ont pas de rappels
                     "last_reminder_at": None,
                     "is_partner_invoice": True,  # Flag pour identifier les factures partenaires
+                    "kind": "partner",
                     "partnership_id": pi.partnership_id,
                     "company_id": pi.executing_company_id,
                 }

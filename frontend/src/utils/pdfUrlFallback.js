@@ -58,11 +58,18 @@ export function ensurePdfUrlWorksInDev(url) {
  * True uniquement pour une ligne issue du catalogue `partner_invoices`.
  * Les IDs des deux catalogues ne sont pas commensurables.
  *
- * @param {{ is_partner_invoice?: boolean }|null|undefined} invoice
+ * Le numéro `PARTNER-…` sert de filet si le flag liste est absent.
+ *
+ * @param {{ is_partner_invoice?: boolean, invoice_number?: string, kind?: string }|null|undefined} invoice
  * @returns {boolean}
  */
 export function isPartnerInvoice(invoice) {
-  return invoice?.is_partner_invoice === true;
+  if (!invoice || typeof invoice !== 'object') return false;
+  if (invoice.is_partner_invoice === true || invoice.kind === 'partner') {
+    return true;
+  }
+  const number = String(invoice.invoice_number || '').trim().toUpperCase();
+  return number.startsWith('PARTNER-');
 }
 
 /**
@@ -118,7 +125,13 @@ export function resolveInvoicePdfApiUrl(invoice, companyId) {
   const id = invoice?.id;
   const cid = companyId || invoice?.company_id;
   if (!id || !cid) return null;
-  const scoped = { id, company_id: cid, is_partner_invoice: invoice?.is_partner_invoice };
+  const scoped = {
+    id,
+    company_id: cid,
+    is_partner_invoice: invoice?.is_partner_invoice,
+    invoice_number: invoice?.invoice_number,
+    kind: invoice?.kind,
+  };
   if (isPartnerInvoice(scoped)) {
     return buildPartnerInvoicePdfApiUrl(scoped);
   }
