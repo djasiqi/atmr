@@ -40,6 +40,7 @@ import {
 import { openProtectedPdfInNewTab } from '../../../../utils/protectedPdf';
 import { buildInvoicePdfDownloadFilename } from '../../../../utils/invoicePdfFilename';
 import { useLirieCompany } from '../../../../hooks/useLirieCompany';
+import { getApiErrorMessage } from '../../../../utils/apiErrorMessage';
 import { lirieKeys, invoiceFiltersHash } from '../../../../queryKeys/lirie';
 import CommandBar from './components/CommandBar';
 import InvoiceRowActions from './components/InvoiceRowActions';
@@ -56,15 +57,8 @@ const InvoiceDraftEditModal = lazy(() => import('./components/InvoiceDraftEditMo
 const SendEmailModal = lazy(() => import('./components/SendEmailModal'));
 const ExportPaymentsModal = lazy(() => import('./components/ExportPaymentsModal'));
 
-const extractApiError = (err, fallback = 'Erreur inconnue') => {
-  const data = err?.response?.data;
-  if (data) {
-    if (typeof data === 'string') return data;
-    if (typeof data.error === 'string') return data.error;
-    if (typeof data.message === 'string') return data.message;
-  }
-  return err?.message || fallback;
-};
+const extractApiError = (err, fallback = 'Erreur inconnue') =>
+  getApiErrorMessage(err, fallback);
 
 const InvoicesRegistry = () => {
   const { company } = useLirieCompany();
@@ -215,6 +209,7 @@ const InvoicesRegistry = () => {
     if (searchParams.get('partner') === '1') return;
 
     const existing = invoices.find((i) => i.id === invoiceId);
+    if (isPartnerInvoice(existing)) return;
     if (existing) return;
 
     const key = lirieKeys.companyInvoices(company.id, filtersHash);

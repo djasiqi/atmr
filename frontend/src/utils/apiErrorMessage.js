@@ -48,6 +48,20 @@ const _matchesServiceUnavailableMessage = (value) => {
 export function isServiceUnavailableError(error) {
   const status = error?.response?.status;
   if (SERVICE_UNAVAILABLE_HTTP_STATUSES.has(status)) {
+    const d = error?.response?.data;
+    // 404 API métier (facture introuvable, etc.) ≠ page / proxy down.
+    if (
+      status === 404 &&
+      d &&
+      typeof d === 'object' &&
+      !Array.isArray(d) &&
+      (d.error_code || d.details?.resource_type || d.error)
+    ) {
+      const blob = `${d.error || ''} ${d.message || ''} ${d.error_code || ''}`;
+      if (!_matchesServiceUnavailableMessage(blob)) {
+        return false;
+      }
+    }
     return true;
   }
 

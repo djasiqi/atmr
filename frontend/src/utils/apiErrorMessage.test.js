@@ -6,6 +6,24 @@ describe('getApiErrorMessage', () => {
     expect(getApiErrorMessage({}, 'Défaut')).toBe('Défaut');
   });
 
+  it('affiche une 404 métier facture au lieu du message de panne', () => {
+    const err = {
+      message: 'Request failed with status code 404',
+      response: {
+        status: 404,
+        data: {
+          error: "Facture avec l'ID '34' introuvable",
+          error_code: 'not_found',
+          details: { resource_type: 'Facture', resource_id: 34 },
+        },
+      },
+    };
+    expect(isServiceUnavailableError(err)).toBe(false);
+    expect(getApiErrorMessage(err, 'Défaut')).toBe(
+      "Facture avec l'ID '34' introuvable"
+    );
+  });
+
   it('remplace les erreurs de panne/maintenance par le message support', () => {
     const err = {
       message: 'Request failed with status code 404',
