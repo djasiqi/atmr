@@ -138,6 +138,20 @@ class TestInvoicesIntegration:
         assert "invoice_number" in data
         assert "status" in data
 
+    def test_get_missing_invoice_returns_not_found(
+        self, authenticated_client, test_company
+    ):
+        """Une facture absente pour l'entreprise renvoie 404, pas validation_error."""
+        if not test_company:
+            pytest.skip("Required fixtures missing")
+        url = f"/api/v1/invoices/companies/{test_company.id}/invoices/34"
+        response = authenticated_client.get(url)
+        assert_response_status(response, 404)
+        body = assert_response_json(response)
+        assert body.get("error_code") == "not_found"
+        assert "34" in str(body.get("error", ""))
+        assert "Erreur inconnue" not in str(body.get("error", ""))
+
     @measure_performance(threshold_seconds=2.0)
     def test_cancel_invoice_releases_bookings(
         self, authenticated_client, test_company, test_invoice, test_completed_booking

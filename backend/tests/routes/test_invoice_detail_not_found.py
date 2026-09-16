@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from models import Invoice
@@ -93,6 +93,7 @@ def test_list_exposes_partner_flag_and_company_id(
     regular.total_amount = Decimal("10.00")
     regular.balance_due = Decimal("10.00")
     regular.issued_at = issued
+    regular.due_date = issued + timedelta(days=30)
     db.session.add(regular)
     db.session.commit()
 

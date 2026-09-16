@@ -2707,7 +2707,9 @@ class InvoicePdfDownload(Resource):
         if not invoice or invoice.company_id != company_id:
             return APIErrorHandler.handle_not_found("Facture", invoice_id, logger)
         if not invoice.pdf_url:
-            return APIErrorHandler.handle_not_found("Facture PDF", invoice_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "PDF de facture", invoice_id, logger
+            )
         try:
             from shared.invoice_pdf_filename import build_invoice_pdf_download_filename
 
@@ -2716,7 +2718,9 @@ class InvoicePdfDownload(Resource):
                 download_filename=build_invoice_pdf_download_filename(invoice),
             )
         except WzNotFound:
-            return APIErrorHandler.handle_not_found("Facture PDF", invoice_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "PDF de facture", invoice_id, logger
+            )
 
 
 @invoices_ns.route(
@@ -3966,7 +3970,13 @@ class RegenerateInvoicePdf(Resource):
                     "pdf_generated_at": pdf_result.generated_at,
                 }
             err = pdf_result.error or {"error": "Impossible de régénérer le PDF"}
-            err_txt = str(err.get("error", "Impossible de régénérer le PDF"))
+            err_txt = str(
+                err.get("error")
+                or err.get("message")
+                or "Impossible de régénérer le PDF"
+            )
+            if pdf_result.status_code == 404:
+                return APIErrorHandler.handle_not_found("Facture", invoice_id, logger)
             return APIErrorHandler.handle_validation_error(
                 err_txt,
                 logger_instance=logger,
