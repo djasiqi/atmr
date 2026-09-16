@@ -217,6 +217,7 @@ class TestBuildRecipientBlockFlowable:
             )
             assert "<b>À l'att." not in content
             assert "<b>À l&apos;att." not in content
+
     def test_recipient_lines_respect_wrapping(self):
         """Les lignes retournées ne dépassent pas maxWidth (après wrap)."""
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet

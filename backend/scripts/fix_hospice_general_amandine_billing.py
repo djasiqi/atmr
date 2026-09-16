@@ -126,7 +126,9 @@ def main(argv: list[str] | None = None) -> int:
         if not candidates:
             print("Aucun candidat Amandine HAUSER inversé trouvé.")
             return 0
-        print(f"{len(candidates)} candidat(s) trouvé(s) ({'dry-run' if args.dry_run else 'APPLY'}) :")
+        print(
+            f"{len(candidates)} candidat(s) trouvé(s) ({'dry-run' if args.dry_run else 'APPLY'}) :"
+        )
         for bp, links in candidates:
             apply_fix(bp, links, dry_run=args.dry_run)
         if args.apply:

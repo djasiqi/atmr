@@ -26,9 +26,7 @@ def regenerate_standard_invoice_pdf_task(
         force_regenerate_invoice_pdf,
     )
 
-    result = force_regenerate_invoice_pdf(
-        company_id=company_id, invoice_id=invoice_id
-    )
+    result = force_regenerate_invoice_pdf(company_id=company_id, invoice_id=invoice_id)
     if result.ok and result.pdf_url:
         return {
             "ok": True,

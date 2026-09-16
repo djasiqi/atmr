@@ -37,9 +37,7 @@ class ForceRegenerateInvoicePdfResult:
     status_code: int | None = None
 
 
-def reload_invoice_graph_for_pdf(
-    invoice_id: int, company_id: int
-) -> Invoice | None:
+def reload_invoice_graph_for_pdf(invoice_id: int, company_id: int) -> Invoice | None:
     """Relecture obligatoire de la facture et des relations nécessaires au PDF."""
     db.session.expire_all()
     return (
@@ -168,9 +166,7 @@ class ForceRegenerateInvoicePdfUseCase:
                 invoice=invoice, force_regenerate=True
             )
         except Exception:
-            logger.exception(
-                "Régénération PDF interrompue invoice_id=%s", invoice_id
-            )
+            logger.exception("Régénération PDF interrompue invoice_id=%s", invoice_id)
             db.session.rollback()
             return ForceRegenerateInvoicePdfResult(
                 ok=False,

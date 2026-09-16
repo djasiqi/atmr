@@ -166,7 +166,9 @@ def live_patient_payer_identity(
     addr = "\n".join(parts) if parts else None
     if not addr:
         try:
-            addr = (getattr(client, "billing_address_secure", None) or "").strip() or None
+            addr = (
+                getattr(client, "billing_address_secure", None) or ""
+            ).strip() or None
         except Exception:
             addr = (getattr(client, "billing_address", None) or "").strip() or None
     if not addr and user is not None:
