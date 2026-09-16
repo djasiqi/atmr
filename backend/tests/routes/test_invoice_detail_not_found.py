@@ -10,9 +10,9 @@ from models.enums import InvoiceStatus
 from tests.routes.test_invoices_list_lot6 import (
     _company_headers,
     _make_partner_invoice,
-    lot6_invoice_client,
-    lot6_partnership,
 )
+
+pytest_plugins = ["tests.routes.test_invoices_list_lot6"]
 
 
 def test_missing_standard_invoice_is_not_found_not_validation_error(
