@@ -17,9 +17,10 @@ import {
 } from 'react-icons/fi';
 import styles from './InvoiceRowActions.module.css';
 import {
-  buildInvoicePdfApiUrl,
   buildReminderPdfApiUrl,
   ensurePdfUrlWorksInDev,
+  isPartnerInvoice,
+  resolveInvoicePdfApiUrl,
 } from '../../../../../utils/pdfUrlFallback';
 import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
 import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
@@ -120,17 +121,20 @@ const InvoiceRowActions = ({
     }
   };
 
+  const partnerInvoice = isPartnerInvoice(invoice);
+
   const actions = [
     {
       key: 'editDraft',
-      label:
-        invoiceStatusLower(invoice) === 'draft'
+      label: partnerInvoice
+        ? 'Voir la facture'
+        : invoiceStatusLower(invoice) === 'draft'
           ? 'Éditer le brouillon'
           : 'Éditer la facture',
-      icon: <FiEdit size={14} />,
+      icon: partnerInvoice ? <FiFileText size={14} /> : <FiEdit size={14} />,
       onClick: () => onEditDraft?.(),
       className: styles.actionBtnPrimary,
-      show: Boolean(onEditDraft) && canEditDraft(invoice),
+      show: Boolean(onEditDraft) && (partnerInvoice || canEditDraft(invoice)),
     },
     {
       key: 'viewInitial',
@@ -138,7 +142,7 @@ const InvoiceRowActions = ({
       icon: <FiFileText size={14} />,
       onClick: () =>
         openProtectedPdf(
-          buildInvoicePdfApiUrl(invoice),
+          resolveInvoicePdfApiUrl(invoice),
           invoice.pdf_url,
           buildInvoicePdfDownloadFilename(invoice)
         ),
@@ -158,7 +162,7 @@ const InvoiceRowActions = ({
         }
       },
       className: styles.actionBtnSecondary,
-      show: hasReminder,
+      show: !partnerInvoice && hasReminder,
     },
     {
       key: 'sendEmail',
@@ -182,7 +186,7 @@ const InvoiceRowActions = ({
       icon: <FiDollarSign size={14} />,
       onClick: onPayment,
       className: styles.actionBtnSuccess,
-      show: canAddPayment(invoice),
+      show: !partnerInvoice && canAddPayment(invoice),
     },
     {
       key: 'reminder',
@@ -190,7 +194,7 @@ const InvoiceRowActions = ({
       icon: <FiClock size={14} />,
       onClick: onReminder,
       className: styles.actionBtnWarning,
-      show: canGenerateReminder(invoice),
+      show: !partnerInvoice && canGenerateReminder(invoice),
     },
     {
       key: 'sendReminderEmail',
@@ -198,7 +202,10 @@ const InvoiceRowActions = ({
       icon: <FiMail size={14} />,
       onClick: onSendReminderEmail,
       className: styles.actionBtnPrimary,
-      show: invoice.reminder_level > 0 && invoiceStatusLower(invoice) !== 'paid',
+      show:
+        !partnerInvoice &&
+        invoice.reminder_level > 0 &&
+        invoiceStatusLower(invoice) !== 'paid',
     },
     {
       key: 'regenerate',
@@ -207,7 +214,7 @@ const InvoiceRowActions = ({
       icon: <FiRefreshCw size={14} />,
       onClick: onRegeneratePdf,
       className: styles.actionBtnSecondary,
-      show: canRegeneratePdf(invoice),
+      show: !partnerInvoice && canRegeneratePdf(invoice),
     },
     {
       key: 'duplicate',
@@ -215,7 +222,7 @@ const InvoiceRowActions = ({
       icon: <FiEdit size={14} />,
       onClick: onDuplicate,
       className: styles.actionBtnSecondary,
-      show: canDuplicateInvoice(invoice),
+      show: !partnerInvoice && canDuplicateInvoice(invoice),
     },
     {
       key: 'cancel',
@@ -223,7 +230,7 @@ const InvoiceRowActions = ({
       icon: <FiXCircle size={14} />,
       onClick: onCancel,
       className: styles.actionBtnDanger,
-      show: canCancelInvoice(invoice),
+      show: !partnerInvoice && canCancelInvoice(invoice),
     },
   ];
 

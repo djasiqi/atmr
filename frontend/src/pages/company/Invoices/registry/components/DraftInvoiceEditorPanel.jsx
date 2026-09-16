@@ -34,7 +34,8 @@ import {
 import { printPdfBytes, preloadInvoicePdfPrint } from '../../../../../utils/invoicePdfPrint';
 import {
   appendPdfEmbedChromiumViewerFragment,
-  buildInvoicePdfApiUrl,
+  isPartnerInvoice,
+  resolveInvoicePdfApiUrl,
 } from '../../../../../utils/pdfUrlFallback';
 import {
   downloadProtectedPdfAsFile,
@@ -400,6 +401,9 @@ const DraftInvoiceEditorPanel = ({
       if (!companyId || !id) {
         throw new Error('MISSING_INVOICE_CONTEXT');
       }
+      if (isPartnerInvoice(inv) || isPartnerInvoice(initialInvoice)) {
+        return unwrapInvoicePayload(inv) ?? inv ?? initialInvoice;
+      }
       const res = await getInvoice(companyId, id, { cacheBust: true });
       const data = unwrapInvoicePayload(res) ?? res?.data ?? res;
       if (!data || typeof data !== 'object' || data.id == null) {
@@ -415,6 +419,7 @@ const DraftInvoiceEditorPanel = ({
   /** Après mutation brouillon : GET détail pour JSON à jour (totaux, lignes). */
   const syncInvoiceAfterDraftMutation = useCallback(async () => {
     if (!companyId || !inv?.id) return;
+    if (isPartnerInvoice(inv)) return;
     try {
       printPdfBytesCacheRef.current = { key: '', bytes: null };
       const res = await getInvoice(companyId, inv.id, { cacheBust: true });
@@ -690,8 +695,8 @@ const DraftInvoiceEditorPanel = ({
     const id = inv?.id;
     const cid = companyId || inv?.company_id;
     if (!id || !cid || !String(inv?.pdf_url || '').trim()) return null;
-    return buildInvoicePdfApiUrl({ id, company_id: cid });
-  }, [inv?.id, inv?.company_id, inv?.pdf_url, companyId]);
+    return resolveInvoicePdfApiUrl({ ...inv, id, company_id: cid }, cid);
+  }, [inv, inv?.id, inv?.company_id, inv?.pdf_url, inv?.is_partner_invoice, companyId]);
 
   const hasStoredPdf = Boolean(String(inv?.pdf_url || '').trim());
 
@@ -719,10 +724,7 @@ const DraftInvoiceEditorPanel = ({
       printPdfBytesCacheRef.current = { key: '', bytes: null };
       return undefined;
     }
-    const apiPath = buildInvoicePdfApiUrl({
-      id: inv.id,
-      company_id: companyId || inv.company_id,
-    });
+    const apiPath = resolveInvoicePdfApiUrl(inv, companyId || inv.company_id);
     if (!apiPath) return undefined;
 
     const pdfStatus = parseInvoiceMeta(inv?.meta)?.pdf?.status || '';
@@ -907,10 +909,7 @@ const DraftInvoiceEditorPanel = ({
     setError('');
 
     try {
-      const apiPath = buildInvoicePdfApiUrl({
-        id: inv.id,
-        company_id: companyId || inv.company_id,
-      });
+      const apiPath = resolveInvoicePdfApiUrl(inv, companyId || inv.company_id);
 
       if (!apiPath) {
         throw new Error('Aucun PDF disponible.');
@@ -1003,10 +1002,7 @@ const DraftInvoiceEditorPanel = ({
       if (allowsLineEditing) {
         await forceRegeneratePdfRef.current();
       }
-      const apiPath = buildInvoicePdfApiUrl({
-        id: inv.id,
-        company_id: companyId || inv.company_id,
-      });
+      const apiPath = resolveInvoicePdfApiUrl(inv, companyId || inv.company_id);
       if (!apiPath) {
         if (mountedRef.current) setError('Aucun PDF disponible.');
         return;
@@ -1029,10 +1025,7 @@ const DraftInvoiceEditorPanel = ({
 
   const handleOpenPdfInNewTab = useCallback(async () => {
     if (!companyId || !inv?.id) return;
-    const apiPath = buildInvoicePdfApiUrl({
-      id: inv.id,
-      company_id: companyId || inv.company_id,
-    });
+    const apiPath = resolveInvoicePdfApiUrl(inv, companyId || inv.company_id);
     if (!apiPath) {
       if (mountedRef.current) setError('Aucun PDF disponible.');
       return;

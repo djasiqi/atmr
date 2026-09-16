@@ -33,6 +33,12 @@ import {
   getEffectiveDueDate,
   getDaysOverdue,
 } from '../../../../services/invoiceService';
+import {
+  isPartnerInvoice,
+  resolveInvoicePdfApiUrl,
+} from '../../../../utils/pdfUrlFallback';
+import { openProtectedPdfInNewTab } from '../../../../utils/protectedPdf';
+import { buildInvoicePdfDownloadFilename } from '../../../../utils/invoicePdfFilename';
 import { useLirieCompany } from '../../../../hooks/useLirieCompany';
 import { lirieKeys, invoiceFiltersHash } from '../../../../queryKeys/lirie';
 import CommandBar from './components/CommandBar';
@@ -200,11 +206,16 @@ const InvoicesRegistry = () => {
     }
   }, [initialized, initialSearch, shouldFocus, consumeFocus, filters.q]);
 
-  // Si invoice_id dans l'URL et facture absente de la liste, la charger et l'ajouter au cache
+  // Si invoice_id dans l'URL et facture absente de la liste, la charger et l'ajouter au cache.
+  // Ne jamais appeler GET /invoices/{id} pour un ID partenaire (catalogues distincts).
   useEffect(() => {
     if (!urlInvoiceId || !company?.id || listInitialLoading) return;
     const invoiceId = parseInt(urlInvoiceId, 10);
     if (Number.isNaN(invoiceId)) return;
+    if (searchParams.get('partner') === '1') return;
+
+    const existing = invoices.find((i) => i.id === invoiceId);
+    if (existing) return;
 
     const key = lirieKeys.companyInvoices(company.id, filtersHash);
     const fetchAndPrependIfMissing = async () => {
@@ -214,7 +225,9 @@ const InvoicesRegistry = () => {
         if (inv?.id) {
           queryClient.setQueryData(key, (old) => {
             if (!old?.invoices) return old;
-            if (old.invoices.some((i) => i.id === invoiceId)) return old;
+            if (old.invoices.some((i) => i.id === invoiceId && !isPartnerInvoice(i))) {
+              return old;
+            }
             return { ...old, invoices: [inv, ...old.invoices] };
           });
         }
@@ -223,7 +236,15 @@ const InvoicesRegistry = () => {
       }
     };
     fetchAndPrependIfMissing();
-  }, [urlInvoiceId, company?.id, listInitialLoading, filtersHash, queryClient]);
+  }, [
+    urlInvoiceId,
+    company?.id,
+    listInitialLoading,
+    filtersHash,
+    queryClient,
+    invoices,
+    searchParams,
+  ]);
 
   // Handlers
   const handleFilterChange = (newFilters) => {
@@ -538,15 +559,29 @@ const InvoicesRegistry = () => {
   const handleOpenDraftEdit = useCallback(
     (invoice) => {
       if (!invoice?.id) return;
-      setDraftEditInvoice(invoice);
+      const scoped = {
+        ...invoice,
+        company_id: invoice.company_id || company?.id,
+      };
+      if (isPartnerInvoice(scoped)) {
+        const apiPath = resolveInvoicePdfApiUrl(scoped, company?.id);
+        if (apiPath) {
+          void openProtectedPdfInNewTab(apiPath, null, {
+            filename: buildInvoicePdfDownloadFilename(scoped),
+          });
+        }
+        return;
+      }
+      setDraftEditInvoice(scoped);
       setSearchParams((prev) => {
         const p = new URLSearchParams(prev);
         p.set('invoice_id', String(invoice.id));
         p.set('draft_edit', '1');
+        p.delete('partner');
         return p;
       });
     },
-    [setSearchParams]
+    [setSearchParams, company?.id]
   );
 
   // Formatage des statuts
@@ -966,7 +1001,10 @@ const InvoicesRegistry = () => {
                 const daysOverdue = getDaysOverdueLocal(invoice);
                 const displayDueDate = getEffectiveDueDate(invoice);
                 return (
-                  <tr key={invoice.id} className={`${getRowClassName(invoice)} ${selectedIds.has(invoice.id) ? styles.rowSelected : ''}`}>
+                  <tr
+                    key={`${isPartnerInvoice(invoice) ? 'partner' : 'invoice'}-${invoice.id}`}
+                    className={`${getRowClassName(invoice)} ${selectedIds.has(invoice.id) ? styles.rowSelected : ''}`}
+                  >
                     <td className={styles.tdCheckbox}>
                       <input
                         type="checkbox"
@@ -1023,7 +1061,11 @@ const InvoicesRegistry = () => {
                     <td>{getReminderBadge(invoice)}</td>
                     <td>
                       <InvoiceRowActions
-                        invoice={invoice}
+                        invoice={
+                          invoice.company_id
+                            ? invoice
+                            : { ...invoice, company_id: company?.id }
+                        }
                         isGuideAnchor={index === 0}
                         onSend={() => handleMarkAsSent(invoice.id)}
                         onSendEmail={() => handleOpenSendEmail(invoice)}

@@ -55,6 +55,17 @@ export function ensurePdfUrlWorksInDev(url) {
 }
 
 /**
+ * True uniquement pour une ligne issue du catalogue `partner_invoices`.
+ * Les IDs des deux catalogues ne sont pas commensurables.
+ *
+ * @param {{ is_partner_invoice?: boolean }|null|undefined} invoice
+ * @returns {boolean}
+ */
+export function isPartnerInvoice(invoice) {
+  return invoice?.is_partner_invoice === true;
+}
+
+/**
  * Construit le chemin API (relatif à apiClient.baseURL `/api/v1`) pour le PDF
  * d'une facture (Lot 0 SEC-06). Les anciens liens /uploads/invoices/... ne sont
  * plus publics.
@@ -93,6 +104,25 @@ export function buildReminderPdfApiUrl(invoice, reminder) {
 export function buildPartnerInvoicePdfApiUrl(partnerInvoice) {
   if (!partnerInvoice?.id || !partnerInvoice?.company_id) return null;
   return `/invoices/companies/${partnerInvoice.company_id}/partner-invoices/${partnerInvoice.id}/pdf`;
+}
+
+/**
+ * Route le PDF vers le bon catalogue. Un `partner_invoices.id` ne doit jamais
+ * produire `/invoices/{id}/pdf`.
+ *
+ * @param {{ id?: number, company_id?: number, is_partner_invoice?: boolean }|null|undefined} invoice
+ * @param {number|string|null|undefined} [companyId]
+ * @returns {string|null}
+ */
+export function resolveInvoicePdfApiUrl(invoice, companyId) {
+  const id = invoice?.id;
+  const cid = companyId || invoice?.company_id;
+  if (!id || !cid) return null;
+  const scoped = { id, company_id: cid, is_partner_invoice: invoice?.is_partner_invoice };
+  if (isPartnerInvoice(scoped)) {
+    return buildPartnerInvoicePdfApiUrl(scoped);
+  }
+  return buildInvoicePdfApiUrl(scoped);
 }
 
 /**

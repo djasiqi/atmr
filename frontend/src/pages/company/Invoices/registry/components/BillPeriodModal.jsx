@@ -27,6 +27,9 @@ import {
 } from 'react-icons/fi';
 import { invoiceService, formatCurrencyCHF, generateInvoice } from '../../../../../services/invoiceService';
 import { getApiErrorMessage } from '../../../../../utils/apiErrorMessage';
+import { resolveInvoicePdfApiUrl } from '../../../../../utils/pdfUrlFallback';
+import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
+import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
 import {
   alreadyInvoicedInvoiceLabel,
   excludedBlockTitle,
@@ -1574,7 +1577,21 @@ const BillPeriodModal = ({
         period_year: periodYear,
         period_month: periodMonth,
       });
-      if (!acceptPreparedDraft(result)) {
+      const inv = result?.data ?? result;
+      if (inv?.id) {
+        const partnerInv = {
+          ...inv,
+          is_partner_invoice: true,
+          company_id: inv.company_id || companyId,
+        };
+        const apiPath = resolveInvoicePdfApiUrl(partnerInv, companyId);
+        if (apiPath) {
+          await openProtectedPdfInNewTab(apiPath, null, {
+            filename: buildInvoicePdfDownloadFilename(partnerInv),
+          });
+        }
+        onInvoiceGenerated?.(partnerInv);
+      } else {
         setError('Réponse inattendue du serveur.');
       }
     } catch (err) {

@@ -18,10 +18,7 @@ import {
   parseGlobalDiscountPercentField,
   roundTo005,
 } from '../../../../../utils/directInvoicePricing';
-import {
-  buildInvoicePdfApiUrl,
-  buildPartnerInvoicePdfApiUrl,
-} from '../../../../../utils/pdfUrlFallback';
+import { resolveInvoicePdfApiUrl } from '../../../../../utils/pdfUrlFallback';
 import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
 import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
 
@@ -33,9 +30,10 @@ async function openGeneratedInvoicePdf(companyId, invoiceLike, { partner = false
       : invoiceLike;
   if (!inv) return;
   const cid = companyId || inv.company_id;
-  const apiPath = partner
-    ? buildPartnerInvoicePdfApiUrl({ id: inv.id, company_id: cid })
-    : buildInvoicePdfApiUrl({ id: inv.id, company_id: cid });
+  const apiPath = resolveInvoicePdfApiUrl(
+    { ...inv, company_id: cid, is_partner_invoice: partner || inv.is_partner_invoice },
+    cid
+  );
   if (!apiPath) return;
   await openProtectedPdfInNewTab(apiPath, null, {
     filename: partner
