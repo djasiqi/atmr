@@ -1,3 +1,7 @@
+/**
+ * Menu d'actions de ligne. La régénération PDF est déléguée (contrat figé CLOSED) :
+ * pas de logique de génération ici — voir docs/facturation/regenerer-pdf-contrat.md.
+ */
 import React, { useState, useRef, useEffect } from 'react';
 import {
   FiFileText,
@@ -198,6 +202,7 @@ const InvoiceRowActions = ({
     },
     {
       key: 'regenerate',
+      // Contrat figé : déléguer uniquement. Pas de logique de génération ici.
       label: 'Regenerer PDF',
       icon: <FiRefreshCw size={14} />,
       onClick: onRegeneratePdf,

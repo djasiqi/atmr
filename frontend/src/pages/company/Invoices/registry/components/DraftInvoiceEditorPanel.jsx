@@ -272,6 +272,8 @@ const DraftInvoiceEditorPanel = ({
   const protectedPdfBlobUrlRef = useRef('');
   /** Cache octets PDF pour réimpression / prefetch (évite un 2e GET API). */
   const printPdfBytesCacheRef = useRef({ key: '', bytes: null });
+  /** Contrat unique de régénération forcée (assigné après définition, évite l’ordre des hooks). */
+  const forceRegeneratePdfRef = useRef(null);
   const mountedRef = useRef(true);
   /** Clé « société:facture » déjà chargée — empêche un GET répété si les callbacks parent changent. */
   const initialLoadKeyRef = useRef('');
@@ -937,7 +939,7 @@ const DraftInvoiceEditorPanel = ({
 
       if (needsRegen) {
         if (allowsLineEditing) {
-          await invoiceService.regenerateInvoicePdf(companyId, inv.id);
+          await forceRegeneratePdfRef.current();
         }
         printPdfBytesCacheRef.current = { key: '', bytes: null };
         void reloadPdfPreviewFromServer().catch(() => {});
@@ -999,10 +1001,7 @@ const DraftInvoiceEditorPanel = ({
     setSaving(true);
     try {
       if (allowsLineEditing) {
-        await invoiceService.regenerateInvoicePdf(companyId, inv.id);
-        printPdfBytesCacheRef.current = { key: '', bytes: null };
-        // Recharge l’aperçu en arrière-plan : le téléchargement n’attend pas le GET détail.
-        void reloadPdfPreviewFromServer().catch(() => {});
+        await forceRegeneratePdfRef.current();
       }
       const apiPath = buildInvoicePdfApiUrl({
         id: inv.id,
@@ -1026,13 +1025,7 @@ const DraftInvoiceEditorPanel = ({
     } finally {
       if (mountedRef.current) setSaving(false);
     }
-  }, [
-    companyId,
-    inv,
-    allowsLineEditing,
-    pdfDownloadName,
-    reloadPdfPreviewFromServer,
-  ]);
+  }, [companyId, inv, allowsLineEditing, pdfDownloadName]);
 
   const handleOpenPdfInNewTab = useCallback(async () => {
     if (!companyId || !inv?.id) return;
@@ -1048,9 +1041,7 @@ const DraftInvoiceEditorPanel = ({
     setSaving(true);
     try {
       if (allowsLineEditing) {
-        await invoiceService.regenerateInvoicePdf(companyId, inv.id);
-        printPdfBytesCacheRef.current = { key: '', bytes: null };
-        void reloadPdfPreviewFromServer().catch(() => {});
+        await forceRegeneratePdfRef.current();
       }
       const ok = await openProtectedPdfInNewTab(apiPath, null, {
         filename: pdfDownloadName,
@@ -1066,48 +1057,19 @@ const DraftInvoiceEditorPanel = ({
     } finally {
       if (mountedRef.current) setSaving(false);
     }
-  }, [
-    companyId,
-    inv,
-    allowsLineEditing,
-    pdfDownloadName,
-    reloadPdfPreviewFromServer,
-  ]);
+  }, [companyId, inv, allowsLineEditing, pdfDownloadName]);
 
-  /** Barre PDF : si édition lignes possible, régénère le fichier puis recharge ; sinon GET détail seulement. */
+  /** Barre PDF : même contrat que « Régénérer PDF » de la ligne de facture. */
   const handleToolbarPdfRefresh = useCallback(async () => {
     if (!companyId || !(inv?.id ?? initialInvoice?.id)) return;
-    const id = inv?.id ?? initialInvoice?.id;
     setSaving(true);
     setError('');
     try {
-      // Invalide le cache mémoire + HTTP : même route `/pdf` sert un nouveau fichier après regen.
-      printPdfBytesCacheRef.current = { key: '', bytes: null };
-      if (allowsLineEditing) {
-        const regen = await invoiceService.regenerateInvoicePdf(companyId, id);
-        const regenUrl = regen?.pdf_url || regen?.data?.pdf_url || null;
-        if (regenUrl) {
-          setInv((prev) => {
-            if (!prev || prev.id !== id) return prev;
-            const prevMeta = parseInvoiceMeta(prev.meta) || {};
-            const prevPdf =
-              prevMeta.pdf && typeof prevMeta.pdf === 'object' ? prevMeta.pdf : {};
-            return {
-              ...prev,
-              pdf_url: regenUrl,
-              meta: {
-                ...prevMeta,
-                pdf: {
-                  ...prevPdf,
-                  status: 'ready',
-                },
-              },
-            };
-          });
-        }
-      }
-      await reloadPdfPreviewFromServer();
+      await forceRegeneratePdfRef.current();
     } catch (e) {
+      if (e?.message === 'SAVE_REQUIRED') {
+        return;
+      }
       if (e?.message === 'INVALID_INVOICE_PAYLOAD') {
         setError('Réponse facture invalide.');
       } else if (e?.message === 'MISSING_INVOICE_CONTEXT') {
@@ -1118,7 +1080,7 @@ const DraftInvoiceEditorPanel = ({
     } finally {
       setSaving(false);
     }
-  }, [companyId, inv?.id, initialInvoice?.id, allowsLineEditing, reloadPdfPreviewFromServer]);
+  }, [companyId, inv?.id, initialInvoice?.id]);
 
   if (!open || !initialInvoice) return null;
 
@@ -1183,15 +1145,35 @@ const DraftInvoiceEditorPanel = ({
   const lineRowTitle = (line) =>
     `#${line.id} · ${lineCategoryLabel(line)}`;
 
-  /** Un seul PATCH par ligne pour libellé, HT et note (champs présents uniquement pour ce qui est éditable). */
-  const handleSaveLine = async (line) => {
-    if (!allowsLineEditing) return;
+  const isLineDirty = (line) => {
+    if (!line?.id) return false;
+    if (localDescriptions[line.id] !== undefined) {
+      if (String(localDescriptions[line.id] ?? '') !== String(line.description ?? '')) {
+        return true;
+      }
+    }
+    if (localAmounts[line.id] !== undefined) {
+      const next = String(localAmounts[line.id] ?? '').replace(',', '.').trim();
+      const prev = String(line.line_total?.toFixed?.(2) ?? line.line_total ?? '');
+      if (next && next !== prev) return true;
+    }
+    if (localNotes[line.id] !== undefined) {
+      const next = String(localNotes[line.id] ?? '').trim();
+      const prev = String(line.adjustment_note ?? '').trim();
+      if (next !== prev) return true;
+    }
+    return false;
+  };
+
+  /** Persist une ligne (sans gérer `saving`) — utilisé par save et régénération. */
+  const persistLine = async (line) => {
+    if (!allowsLineEditing || !companyId || !inv?.id) return false;
     const rn = isRemiseLine(line);
     const lec = isCustom(line.type) && (!rn || isManualDiscountLine(line));
     const dEd = isRideLike(line.type) || lec;
     const aEd = isRideLike(line.type) || lec;
     const nEd = isRideLike(line.type) || lec;
-    if (!dEd && !aEd && !nEd) return;
+    if (!dEd && !aEd && !nEd) return true;
 
     const body = { ...draftConcurrencyPayload };
 
@@ -1201,7 +1183,7 @@ const DraftInvoiceEditorPanel = ({
       const next = String(rawD ?? '').trim();
       if (!next) {
         setError('Le libellé ne peut pas être vide.');
-        return;
+        return false;
       }
       body.description = next.slice(0, 500);
     }
@@ -1215,7 +1197,7 @@ const DraftInvoiceEditorPanel = ({
       const parsed = parseFloat(strAmt);
       if (Number.isNaN(parsed)) {
         setError('Montant HT invalide.');
-        return;
+        return false;
       }
       body.line_total = parsed;
     }
@@ -1226,17 +1208,83 @@ const DraftInvoiceEditorPanel = ({
       body.adjustment_note = rawN && String(rawN).trim() ? String(rawN) : null;
     }
 
-    setSaving(true);
-    setError('');
     try {
       const res = await invoiceService.updateDraftInvoiceLine(companyId, inv.id, line.id, body);
       await afterDraftMutation(res);
+      return true;
     } catch (e) {
       setError(e?.response?.data?.error || 'Enregistrement ligne impossible.');
+      return false;
+    }
+  };
+
+  const persistDirtyLines = async () => {
+    const lines = Array.isArray(inv?.lines) ? inv.lines : [];
+    const dirty = lines.filter((line) => isLineDirty(line));
+    for (const line of dirty) {
+      const ok = await persistLine(line);
+      if (!ok) return false;
+    }
+    return true;
+  };
+
+  /** Un seul PATCH par ligne pour libellé, HT et note (champs présents uniquement pour ce qui est éditable). */
+  const handleSaveLine = async (line) => {
+    if (!allowsLineEditing) return;
+    setSaving(true);
+    setError('');
+    try {
+      await persistLine(line);
     } finally {
       setSaving(false);
     }
   };
+
+  /**
+   * Contrat figé « Régénérer PDF » (CLOSED) : SAVE (si brouillon sale) →
+   * forceRegenerateInvoicePdf → reload. Pas de génération parallèle ni depuis le state local.
+   * Voir docs/facturation/regenerer-pdf-contrat.md.
+   */
+  const runForceRegeneratePdf = async () => {
+    const id = inv?.id ?? initialInvoice?.id;
+    if (!companyId || !id) {
+      throw new Error('MISSING_INVOICE_CONTEXT');
+    }
+    printPdfBytesCacheRef.current = { key: '', bytes: null };
+    if (allowsLineEditing) {
+      const saved = await persistDirtyLines();
+      if (!saved) {
+        throw new Error('SAVE_REQUIRED');
+      }
+      const regen = await invoiceService.forceRegenerateInvoicePdf(companyId, id);
+      const regenUrl = regen?.pdf_url || regen?.data?.pdf_url || null;
+      if (!regenUrl) {
+        throw new Error('REGENERATE_FAILED');
+      }
+      setPdfNonce((n) => n + 1);
+      setInv((prev) => {
+        if (!prev || prev.id !== id) return prev;
+        const prevMeta = parseInvoiceMeta(prev.meta) || {};
+        const prevPdf =
+          prevMeta.pdf && typeof prevMeta.pdf === 'object' ? prevMeta.pdf : {};
+        return {
+          ...prev,
+          pdf_url: regenUrl,
+          updated_at: regen?.pdf_generated_at || prev.updated_at,
+          meta: {
+            ...prevMeta,
+            pdf: {
+              ...prevPdf,
+              status: 'ready',
+              generated_at: regen?.pdf_generated_at || prevPdf.generated_at,
+            },
+          },
+        };
+      });
+    }
+    await reloadPdfPreviewFromServer();
+  };
+  forceRegeneratePdfRef.current = runForceRegeneratePdf;
 
   const handleRemoveLine = async (line) => {
     if (!allowsLineEditing) return;

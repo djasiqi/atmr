@@ -190,6 +190,25 @@ def test_each_patient_keeps_own_domicile(
     assert "1222 Vésenaz" in addr_b
 
 
+def test_patient_name_overrides_stale_billing_party_display_name(
+    db, company, shared_institution_client, camoletti
+):
+    """Un snapshot BillingParty périmé ne doit pas écraser le nom courant."""
+    bp = _patient_billing_party(
+        db, company, camoletti, billing_address="Chemin du Gué 69\n1213 Petit-Lancy"
+    )
+    bp.display_name = "Ancien Nom Snapshot"
+    db.session.flush()
+    invoice = _invoice(
+        db, company, shared_institution_client, camoletti, billing_party=bp
+    )
+
+    name, _addr = _get_billed_to(invoice)
+
+    assert "CAMOLETTI" in name.upper()
+    assert "Ancien Nom Snapshot" not in name
+
+
 def test_patient_domicile_overrides_stale_billing_party_address(
     db, company, shared_institution_client, camoletti
 ):

@@ -176,8 +176,8 @@ class TestBuildRecipientBlockFlowable:
             # Zone fenêtre : pas de label « Facturé à : » dans le bloc destinataire
             assert "Facturé à" not in para.text
 
-    def test_name_second_line_c_o_uses_address_font_size(self):
-        """Ligne c/o (2ᵉ ligne du champ nom) : même taille que l’adresse, pas en gras."""
+    def test_name_second_line_attn_uses_address_font_size(self):
+        """Ligne « À l'att. de » (2ᵉ ligne du champ nom) : même taille que l’adresse, pas en gras."""
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 
         invoice = MagicMock()
@@ -190,8 +190,8 @@ class TestBuildRecipientBlockFlowable:
         with patch(
             "services.documents.pdf._get_billed_to",
             return_value=(
-                "Alexandre BANCHET\nc/o OPAD (Office de Protection de L'ADULTE)",
-                "Rte des Jeunes 1c<br/>1227 Genève",
+                "Hospice général\nÀ l'att. de Mme Amandine HAUSER",
+                "Rte des Acacias 1<br/>1227 Genève",
             ),
         ):
             para, lines = _build_recipient_block_flowable(
@@ -201,18 +201,22 @@ class TestBuildRecipientBlockFlowable:
                 addr_font_size=10,
             )
             assert para is not None
-            assert "Alexandre BANCHET" in lines
-            assert any("c/o OPAD" in ln for ln in lines)
+            assert "Hospice général" in lines
+            assert any("À l'att. de Mme Amandine HAUSER" in ln for ln in lines)
             content = para.text
-            # Une seule ligne en 12 pt gras (prénom / nom)
+            # Une seule ligne en 12 pt gras (organisme / débiteur)
             assert content.count('size="12"') == 1
-            assert "<b>Alexandre BANCHET</b>" in content
-            # c/o + adresse en 10 pt (pas de gras sur c/o)
-            assert "c/o OPAD" in content
-            # Après le nom en 12 pt, le fragment c/o commence en 10 pt (balise <font size="10">)
-            assert '</b></font><br/><font size="10">c/o OPAD' in content
-            assert "<b>c/o" not in content
-
+            assert "<b>Hospice général</b>" in content
+            # À l'att. + adresse en 10 pt (apostrophe éventuellement échappée en HTML)
+            attn = "À l'att. de Mme Amandine HAUSER"
+            attn_html = attn.replace("'", "&apos;")
+            assert attn in content or attn_html in content
+            assert (
+                f'</b></font><br/><font size="10">{attn}' in content
+                or f'</b></font><br/><font size="10">{attn_html}' in content
+            )
+            assert "<b>À l'att." not in content
+            assert "<b>À l&apos;att." not in content
     def test_recipient_lines_respect_wrapping(self):
         """Les lignes retournées ne dépassent pas maxWidth (après wrap)."""
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet

@@ -24,7 +24,6 @@ from application.invoices import (
     CancelInvoiceUseCase,
     DuplicateInvoiceUseCase,
     GenerateConsolidatedInvoiceUseCase,
-    GenerateInvoicePdfUseCase,
     GenerateInvoiceReminderUseCase,
     GenerateInvoiceUseCase,
     GetInvoiceUseCase,
@@ -3960,32 +3959,24 @@ class RegenerateInvoicePdf(Resource):
                     status_code=202,
                 )
 
-            # ✅ DDD: Régénérer le PDF via use case (force_regenerate=True pour écraser l'ancien)
-            uc = GenerateInvoicePdfUseCase()
-            pdf_result = uc.execute(invoice=invoice, force_regenerate=True)
+            # Contrat unique : relecture DB + nouveau fichier + remplacement atomique.
+            from application.invoices.force_regenerate_invoice_pdf import (
+                force_regenerate_invoice_pdf,
+            )
 
+            pdf_result = force_regenerate_invoice_pdf(
+                company_id=company_id, invoice_id=invoice_id
+            )
             if pdf_result.ok and pdf_result.pdf_url:
-                from application.invoices.invoice_pdf_state import mark_pdf_ready
-
-                mark_pdf_ready(invoice, pdf_result.pdf_url)
-                db.session.commit()
-                return {"message": "PDF régénéré", "pdf_url": pdf_result.pdf_url}
-            if pdf_result.error:
-                if invoice.status == InvoiceStatus.DRAFT:
-                    from application.invoices.invoice_pdf_state import mark_pdf_failed
-
-                    pe = pdf_result.error
-                    err_txt = str(pe.get("error", "PDF_FAIL"))
-                    mark_pdf_failed(invoice, str(err_txt))
-                    db.session.commit()
-                return pdf_result.error, pdf_result.status_code or 400
-            if invoice.status == InvoiceStatus.DRAFT:
-                from application.invoices.invoice_pdf_state import mark_pdf_failed
-
-                mark_pdf_failed(invoice, "PDF_FAIL")
-                db.session.commit()
+                return {
+                    "message": "PDF régénéré",
+                    "pdf_url": pdf_result.pdf_url,
+                    "pdf_generated_at": pdf_result.generated_at,
+                }
+            err = pdf_result.error or {"error": "Impossible de régénérer le PDF"}
+            err_txt = str(err.get("error", "Impossible de régénérer le PDF"))
             return APIErrorHandler.handle_validation_error(
-                "Impossible de régénérer le PDF",
+                err_txt,
                 logger_instance=logger,
             )
 

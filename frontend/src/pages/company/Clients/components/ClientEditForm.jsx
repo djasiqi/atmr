@@ -1147,7 +1147,7 @@ const ClientEditForm = ({
               onClick={() => toggleSection('billingParties')}
               className={styles.accordionHeader}
             >
-              <span className={styles.accordionTitle}><FiBriefcase size={14} className={styles.accordionTitleIcon} />Tiers payeur / Curateur</span>
+              <span className={styles.accordionTitle}><FiBriefcase size={14} className={styles.accordionTitleIcon} />Tiers payeur</span>
               <span className={styles.accordionChevron}>
                 {expandedSections.billingParties ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
               </span>

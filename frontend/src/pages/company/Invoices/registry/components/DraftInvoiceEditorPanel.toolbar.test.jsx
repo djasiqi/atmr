@@ -30,6 +30,12 @@ jest.mock('../../../../../services/invoiceService', () => ({
   getInvoice: jest.fn(async () => draftInvoice),
   invoiceService: {
     fetchBillingSettings: jest.fn(async () => ({ vat_applicable: false })),
+    forceRegenerateInvoicePdf: jest.fn(async () => ({
+      pdf_url: '/uploads/invoices/new.pdf',
+    })),
+    regenerateInvoicePdf: jest.fn(async () => ({
+      pdf_url: '/uploads/invoices/new.pdf',
+    })),
   },
   formatCurrencyCHF: (n) => `${Number(n).toFixed(2)} CHF`,
 }));

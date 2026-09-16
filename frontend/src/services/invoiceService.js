@@ -136,12 +136,32 @@ export const invoiceService = {
     return response.data;
   },
 
-  // Régénérer le PDF d'une facture
-  async regenerateInvoicePdf(companyId, invoiceId) {
+  /**
+   * Régénération FORCÉE du PDF depuis l'état courant serveur/DB.
+   * Contrat figé (CLOSED) pour InvoiceRowActions et DraftInvoiceEditorPanel.
+   * Ne déclare jamais le succès si aucune nouvelle URL n'est retournée.
+   * Voir docs/facturation/regenerer-pdf-contrat.md.
+   */
+  async forceRegenerateInvoicePdf(companyId, invoiceId) {
     const response = await apiClient.post(
       `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/regenerate-pdf`
     );
-    return response.data;
+    const payload = response?.data;
+    const pdfUrl = payload?.pdf_url || payload?.data?.pdf_url || null;
+    if (!pdfUrl) {
+      const message =
+        (typeof payload?.error === 'string' && payload.error) ||
+        'La régénération du PDF n’a pas retourné de nouveau document.';
+      const err = new Error(message);
+      err.response = { data: payload };
+      throw err;
+    }
+    return payload;
+  },
+
+  // Alias historique — même contrat que forceRegenerateInvoicePdf.
+  async regenerateInvoicePdf(companyId, invoiceId) {
+    return this.forceRegenerateInvoicePdf(companyId, invoiceId);
   },
 
   // Annuler une facture
@@ -769,6 +789,7 @@ export const {
   sendReminderByEmail,
   postPayment,
   postReminder,
+  forceRegenerateInvoicePdf,
   regenerateInvoicePdf,
   cancelInvoice,
   fetchBillingSettings,

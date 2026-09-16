@@ -57,7 +57,7 @@ const NewClientModal = ({ onClose, onSave }) => {
   /* Harmonica : un seul accordéon ouvert à la fois (identity | contact | residence | billing) */
   const [openAccordion, setOpenAccordion] = useState('identity');
 
-  /* Hospitalisation et Curateur : sections conditionnelles, état séparé */
+  /* Hospitalisation et tiers payeur : sections conditionnelles, état séparé */
   const [expandedSections, setExpandedSections] = useState({
     hospitalization: false,
     curator: false,
@@ -1201,7 +1201,7 @@ const NewClientModal = ({ onClose, onSave }) => {
 
           </div>
 
-          {/* 6) Curateur / Tiers payeur — toujours visible quand client privé */}
+          {/* 6) Tiers payeur — toujours visible quand client privé */}
           {!formData.is_institution && (
             <div className={styles.accordion}>
               <button
@@ -1212,7 +1212,7 @@ const NewClientModal = ({ onClose, onSave }) => {
                 aria-controls="accordion-curator"
                 id="accordion-curator-trigger"
               >
-                <span className={styles.accordionTitle}>Curateur / tiers payeur</span>
+                <span className={styles.accordionTitle}>Tiers payeur</span>
                 <span className={styles.accordionIcon} aria-hidden="true">▾</span>
               </button>
               <div
@@ -1263,7 +1263,7 @@ const NewClientModal = ({ onClose, onSave }) => {
 
                   <div className={styles.formGroup}>
                     <label htmlFor="billing_party_role" className={styles.label}>
-                      Rôle
+                      Fonction / lien
                     </label>
                     <input
                       type="text"
@@ -1273,9 +1273,12 @@ const NewClientModal = ({ onClose, onSave }) => {
                         setBillingPartyData((prev) => ({ ...prev, role: e.target.value }))
                       }
                       className={styles.input}
-                      placeholder="Ex: curateur principal"
+                      placeholder="Ex: Coordinatrice, Fils, Gestionnaire…"
                       disabled={loading}
                     />
+                    <small className={styles.hint}>
+                      Relation ou fonction libre — sans effet sur le statut juridique.
+                    </small>
                   </div>
 
                   <div className={`${styles.checkboxRow} ${styles.checkboxRowCompact}`}>
@@ -1300,12 +1303,12 @@ const NewClientModal = ({ onClose, onSave }) => {
 
                   <div className={styles.formRow}>
                     <div className={styles.formGroup}>
-                      <label htmlFor="curator_name" className={styles.label}>
-                        Curateur
+                      <label htmlFor="billing_contact_name" className={styles.label}>
+                        Contact facturation
                       </label>
                       <input
                         type="text"
-                        id="curator_name"
+                        id="billing_contact_name"
                         value={billingPartyData.contact_name}
                         onChange={(e) =>
                           setBillingPartyData((prev) => ({
@@ -1314,18 +1317,18 @@ const NewClientModal = ({ onClose, onSave }) => {
                           }))
                         }
                         className={styles.input}
-                        placeholder="Ex: Curateur A"
+                        placeholder="Ex: Amandine HAUSER"
                         disabled={loading}
                       />
                     </div>
 
                     <div className={styles.formGroup}>
-                      <label htmlFor="curator_email" className={styles.label}>
-                        Email du curateur
+                      <label htmlFor="billing_contact_email" className={styles.label}>
+                        Email du contact
                       </label>
                       <input
                         type="email"
-                        id="curator_email"
+                        id="billing_contact_email"
                         value={billingPartyData.contact_email}
                         onChange={(e) =>
                           setBillingPartyData((prev) => ({
@@ -1334,18 +1337,18 @@ const NewClientModal = ({ onClose, onSave }) => {
                           }))
                         }
                         className={styles.input}
-                        placeholder="curateur@opad.ch"
+                        placeholder="contact@exemple.ch"
                         disabled={loading}
                       />
                     </div>
 
                     <div className={styles.formGroup}>
-                      <label htmlFor="curator_phone" className={styles.label}>
-                        Téléphone du curateur
+                      <label htmlFor="billing_contact_phone" className={styles.label}>
+                        Téléphone du contact
                       </label>
                       <input
                         type="tel"
-                        id="curator_phone"
+                        id="billing_contact_phone"
                         value={billingPartyData.contact_phone}
                         onChange={(e) =>
                           setBillingPartyData((prev) => ({
@@ -1360,7 +1363,7 @@ const NewClientModal = ({ onClose, onSave }) => {
                     </div>
                   </div>
                   <small className={styles.hintFullWidth}>
-                    Contact spécifique à ce client (ne modifie pas le tiers payeur)
+                    Interlocuteur pour les factures de ce client (ne modifie pas le tiers payeur).
                   </small>
                 </div>
               </div>
@@ -1425,7 +1428,7 @@ const NewClientModal = ({ onClose, onSave }) => {
                 )}
                 {billingPartyData.billing_party_id && (
                   <div className={styles.summaryRow}>
-                    <span className={styles.summaryLabel}>Curateur</span>
+                    <span className={styles.summaryLabel}>Tiers payeur</span>
                     <span
                       className={`${styles.summaryValue} ${!selectedBillingParty ? styles.summaryValueEmpty : ''}`}
                     >
@@ -1433,6 +1436,18 @@ const NewClientModal = ({ onClose, onSave }) => {
                         ? selectedBillingParty.display_name
                         : 'Tiers payeur à définir'}
                     </span>
+                  </div>
+                )}
+                {billingPartyData.contact_name && (
+                  <div className={styles.summaryRow}>
+                    <span className={styles.summaryLabel}>Contact facturation</span>
+                    <span className={styles.summaryValue}>{billingPartyData.contact_name}</span>
+                  </div>
+                )}
+                {billingPartyData.role && (
+                  <div className={styles.summaryRow}>
+                    <span className={styles.summaryLabel}>Fonction</span>
+                    <span className={styles.summaryValue}>{billingPartyData.role}</span>
                   </div>
                 )}
               </div>

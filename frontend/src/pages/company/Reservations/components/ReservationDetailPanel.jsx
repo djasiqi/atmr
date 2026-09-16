@@ -83,7 +83,7 @@ const isClinicPayerMissingCompany = (btype, companyId) => {
 
 const INTENT_LABELS = {
   institution: 'Institution', clinic: 'Clinique', patient: 'Patient',
-  curator: 'Curateur', spc: 'SPC', other: 'Autre',
+  curator: 'Curatelle', spc: 'SPC', other: 'Autre',
 };
 
 const formatCurrency = (value) => {

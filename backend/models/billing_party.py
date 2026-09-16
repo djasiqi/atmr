@@ -139,7 +139,8 @@ class ClientBillingParty(db.Model):
     # On garde un champ texte simple pour la V1.
     role: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
-    # Contact spécifique au client (ex: curateur assigné).
+    # Contact spécifique au client (interlocuteur de facturation).
+    # Ne jamais déduire une représentation légale depuis ce champ ou le type du payeur.
     contact_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)

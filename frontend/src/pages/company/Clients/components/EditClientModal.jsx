@@ -768,7 +768,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
           <ClientStaysSection clientId={client.id} />
         )}
 
-        {/* Tiers payeur / Curateur - Uniquement pour les clients (pas les institutions) */}
+        {/* Tiers payeur - Uniquement pour les clients (pas les institutions) */}
         {/* Placé en dehors du formulaire principal pour éviter les formulaires imbriqués */}
         {!formData.is_institution && (
           <ClientBillingPartiesSection clientId={client.id} />

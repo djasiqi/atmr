@@ -15,8 +15,10 @@ from typing import Any
 from services.billing import BillingProfileService
 from services.documents.invoice_recipient import (
     append_residence_to_billed_to_name,
+    format_billing_party_recipient_name,
     institution_patient_billing_address,
     invoice_residence_label,
+    live_patient_payer_identity,
     resolve_invoice_institution_patient,
 )
 
@@ -318,11 +320,12 @@ class InvoiceTemplateBuilder:
             # Si le client n'a plus de lien avec ce tiers payeur (lien supprimé), facturer au domicile du client
             client_id = getattr(invoice, "client_id", None)
             bp_id = getattr(invoice, "billing_party_id", None)
+            link_for_contact = None
             if not is_patient_party and client_id is not None and bp_id is not None:
-                link = ClientBillingParty.query.filter_by(
+                link_for_contact = ClientBillingParty.query.filter_by(
                     client_id=client_id, billing_party_id=bp_id
                 ).first()
-                if link is None:
+                if link_for_contact is None:
                     logger.info(
                         "[InvoiceTemplateBuilder] Lien client↔tiers payeur supprimé (invoice_id=%s). Facturé à = domicile du client.",
                         getattr(invoice, "id", None),
@@ -336,12 +339,18 @@ class InvoiceTemplateBuilder:
                 addr = (getattr(bp, "billing_address", None) or "").strip()
                 patient = None
                 if is_patient_party:
-                    # Facturation au patient : son domicile légal fait foi, le
-                    # snapshot du BillingParty peut être vide ou périmé.
+                    # Facturation au patient : nom + domicile courants font foi.
+                    # Le snapshot BillingParty peut être vide ou périmé.
                     patient = resolve_invoice_institution_patient(invoice)
-                    domicile = institution_patient_billing_address(patient)
-                    if domicile:
-                        addr = domicile
+                    live_name, live_addr = live_patient_payer_identity(invoice)
+                    if live_name:
+                        bp_name = live_name
+                    if live_addr:
+                        addr = live_addr
+                    else:
+                        domicile = institution_patient_billing_address(patient)
+                        if domicile:
+                            addr = domicile
                 if addr:
                     addr_html = (
                         addr.replace("\r\n", "\n")
@@ -364,23 +373,17 @@ class InvoiceTemplateBuilder:
                     contact_lines.append(f"Référence : {ext}")
                 if contact_lines:
                     addr_html = f"{addr_html}<br/>{'<br/>'.join(contact_lines)}"
-                # Tiers payeur : plusieurs lignes = client, puis c/o tiers payeur, puis adresse
-                name = bp_name
-                if getattr(invoice, "client_id", None) and getattr(
-                    bp, "type", None
-                ) in (
-                    BillingPartyType.FAMILY,
-                    BillingPartyType.CURATORSHIP,
-                    BillingPartyType.OPAD,
-                    BillingPartyType.LAWYER,
-                    BillingPartyType.INSURANCE,
-                    BillingPartyType.OTHER,
-                ):
-                    client = getattr(invoice, "client", None)
-                    if client is not None:
-                        client_name = self._format_client_name(client)
-                        if client_name.strip():
-                            name = f"{client_name}<br/>c/o {bp_name}"
+                # Débiteur = BillingParty ; contact facturation = lien client (jamais « curateur »).
+                contact_name = (
+                    getattr(link_for_contact, "contact_name", None)
+                    if link_for_contact is not None
+                    else None
+                )
+                name = format_billing_party_recipient_name(
+                    bp_name,
+                    contact_name,
+                    separator="<br/>",
+                )
                 # Si le tiers payeur est SPC : ajouter le numéro SPC après l'adresse (2 sauts de ligne)
                 if is_patient_party:
                     name = append_residence_to_billed_to_name(
@@ -392,23 +395,14 @@ class InvoiceTemplateBuilder:
                         separator="<br/>",
                     )
                 if (bp_name or "").upper().find("SPC") >= 0:
-                    from models.billing_party import ClientBillingParty
-
-                    client_id = getattr(invoice, "client_id", None)
-                    bp_id = getattr(bp, "id", None) or getattr(
-                        invoice, "billing_party_id", None
-                    )
-                    if client_id is not None and bp_id is not None:
-                        link = ClientBillingParty.query.filter_by(
-                            client_id=client_id, billing_party_id=bp_id
-                        ).first()
-                        if (
-                            link
-                            and getattr(link, "client_reference", None)
-                            and (link.client_reference or "").strip()
-                        ):
-                            # 2 lignes vides puis numéro SPC (3 <br/> = 2 lignes vides)
-                            addr_html = f"{addr_html}<br/><br/><br/>No. SPC : {(link.client_reference or '').strip()}"
+                    link = link_for_contact
+                    if (
+                        link
+                        and getattr(link, "client_reference", None)
+                        and (link.client_reference or "").strip()
+                    ):
+                        # 2 lignes vides puis numéro SPC (3 <br/> = 2 lignes vides)
+                        addr_html = f"{addr_html}<br/><br/><br/>No. SPC : {(link.client_reference or '').strip()}"
                 return (name, addr_html)
         except Exception:
             pass

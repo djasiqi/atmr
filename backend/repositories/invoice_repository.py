@@ -109,7 +109,9 @@ def _snapshot_billing_party(inv: Invoice) -> dict[str, Any] | None:
     return {
         "id": bp.id,
         "display_name": bp.display_name,
+        "billing_address": getattr(bp, "billing_address", None),
         "contact_email": getattr(bp, "contact_email", None),
+        "contact_phone": getattr(bp, "contact_phone", None),
         "type": type_str,
     }
 

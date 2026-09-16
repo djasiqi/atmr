@@ -26,7 +26,7 @@ import {
   sendReminderByEmail,
   postPayment,
   postReminder,
-  regenerateInvoicePdf,
+  forceRegenerateInvoicePdf,
   cancelInvoice,
   duplicateInvoice,
   fetchBillingOpportunities,
@@ -94,7 +94,7 @@ const InvoicesRegistry = () => {
   const [newInvoiceModal, setNewInvoiceModal] = useState({ open: false, invoiceDraft: null });
   const [billPeriodOpen, setBillPeriodOpen] = useState(false);
   const [draftEditInvoice, setDraftEditInvoice] = useState(null);
-  /** Incrémenté uniquement après annulation de facture; déclenche refetch eligible + S2 dans le modal. */
+  /** Incrémenté après mutation facture (annulation, régénération PDF, etc.). */
   const [invoiceDataRefreshTrigger, setInvoiceDataRefreshTrigger] = useState(0);
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', variant: 'default', onConfirm: null });
   const [sendEmailModal, setSendEmailModal] = useState({
@@ -455,8 +455,10 @@ const InvoicesRegistry = () => {
 
   const handleRegeneratePdf = async (invoiceId) => {
     try {
-      await regenerateInvoicePdf(company.id, invoiceId);
+      // Contrat figé unique — ne pas contourner forceRegenerateInvoicePdf.
+      await forceRegenerateInvoicePdf(company.id, invoiceId);
       await loadInvoices();
+      setInvoiceDataRefreshTrigger((t) => t + 1);
     } catch (err) {
       setActionError(extractApiError(err, 'Erreur lors de la régénération du PDF'));
     }

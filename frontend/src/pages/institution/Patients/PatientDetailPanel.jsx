@@ -960,12 +960,12 @@ const PatientDetailPanel = ({ patient, onClose }) => {
           </div>
         )}
 
-        {/* ▸ Curatelle */}
+        {/* ▸ Représentation légale */}
         {(editing || patient.has_guardianship) && (
           <div className={`${s.section} ${s.sectionCuratelle}`}>
             <div className={s.sectionHeader}>
               <FaGavel className={s.sectionIcon} />
-              <span>Curatelle</span>
+              <span>Représentation légale</span>
               {!editing && patient.guardianship_type && gColor && (
                 <span className={s.guardianTypeBadge} style={{ background: gColor.bg, color: gColor.text, borderColor: gColor.border }}>
                   {GUARDIANSHIP_TYPE_LABELS[patient.guardianship_type]}
@@ -977,7 +977,7 @@ const PatientDetailPanel = ({ patient, onClose }) => {
                 <div className={s.eRow}>
                   <label className={s.eCheckLabel}>
                     <input type="checkbox" checked={form.has_guardianship} onChange={setCheck('has_guardianship')} />
-                    <span>Sous curatelle</span>
+                    <span>Mandat de représentation légale renseigné</span>
                   </label>
                 </div>
               )}
@@ -991,7 +991,7 @@ const PatientDetailPanel = ({ patient, onClose }) => {
                         onChange={(v) => setForm(p => ({ ...p, guardianship_type: v }))}
                       />
                     </ERow>
-                    <ERow label="Nom"><input className={s.eInput} value={form.guardian_name} onChange={set('guardian_name')} placeholder="Nom du curateur" /></ERow>
+                    <ERow label="Curateur légal"><input className={s.eInput} value={form.guardian_name} onChange={set('guardian_name')} placeholder="Nom du représentant" /></ERow>
                     <ERow label="Org."><input className={s.eInput} value={form.guardian_organization} onChange={set('guardian_organization')} placeholder="Organisation" /></ERow>
                     <div className={s.eRowSplit}>
                       <ERow label="Tél."><input className={s.eInput} type="tel" value={form.guardian_phone} onChange={set('guardian_phone')} placeholder="+41..." /></ERow>
@@ -1009,7 +1009,7 @@ const PatientDetailPanel = ({ patient, onClose }) => {
                   </>
                 ) : (
                   <>
-                    <VRow label="Nom" value={patient.guardian_name} />
+                    <VRow label="Curateur légal" value={patient.guardian_name} />
                     <VRow label="Organisation" value={patient.guardian_organization} />
                     <VRow label="Tél." value={patient.guardian_phone} icon={<FaPhone size={10} />} />
                     <VRow label="Email" value={patient.guardian_email} icon={<FaEnvelope size={10} />} />

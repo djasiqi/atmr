@@ -26,7 +26,7 @@ const FIELD_LABELS = {
   insurance_number: 'N° assuré',
   guardian_phone: 'Téléphone curateur',
   guardian_email: 'Email curateur',
-  guardianship_type: 'Type de curatelle',
+  guardianship_type: 'Type de représentation légale',
 };
 
 function pad2(n) {

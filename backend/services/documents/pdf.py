@@ -22,9 +22,11 @@ from infrastructure.invoices.invoice_calculator import round_to_5_cents
 from models import Client, CompanyBillingSettings, Invoice, InvoiceLine, InvoiceLineType
 from services.documents.invoice_recipient import (
     append_residence_to_billed_to_name,
+    format_billing_party_recipient_name,
     institution_patient_billing_address,
     invoice_residence_label,
     iter_invoice_bookings,
+    live_patient_payer_identity,
     resolve_invoice_institution_patient,
 )
 from services.documents.invoice_template_builder import InvoiceTemplateBuilder
@@ -2325,46 +2327,47 @@ def _get_billed_to(
         if use_billing_party and bp:
             raw = bp.billing_address or ""
             _ip = None
+            live_patient_name = None
             if _is_patient_party:
-                # Facturation au patient : son domicile légal fait foi, le snapshot
-                # du BillingParty peut être vide ou périmé.
+                # Facturation au patient : nom + domicile légal font foi.
+                # Le snapshot BillingParty peut être vide ou périmé après
+                # modification du client / patient.
                 _ip = resolve_invoice_institution_patient(
                     invoice, bookings_by_id=bookings_by_id
                 )
-                _domicile = institution_patient_billing_address(_ip)
-                if _domicile:
-                    raw = _domicile
+                live_patient_name, live_addr = live_patient_payer_identity(
+                    invoice, bookings_by_id=bookings_by_id
+                )
+                if live_addr:
+                    raw = live_addr
+                else:
+                    _domicile = institution_patient_billing_address(_ip)
+                    if _domicile:
+                        raw = _domicile
             raw = raw or "Adresse non renseignée"
             raw = _sanitize_billed_to_address(bp.display_name or "Payeur", raw)
             addr = _format_billed_to_three_lines(
                 raw or "Adresse non renseignée", company_country=company_country
             )
-            if getattr(invoice, "client_id", None) and getattr(bp, "type", None) in (
-                BillingPartyType.FAMILY,
-                BillingPartyType.CURATORSHIP,
-                BillingPartyType.OPAD,
-                BillingPartyType.LAWYER,
-                BillingPartyType.INSURANCE,
-                BillingPartyType.OTHER,
-            ):
-                client = getattr(invoice, "client", None)
-                if client and getattr(client, "user", None):
-                    client_name = (
-                        f"{client.user.first_name or ''} {(client.user.last_name or '').upper()}".strip()
-                        or getattr(client.user, "username", None)
-                        or "Client"
-                    )
-                    client_name = _name_with_uppercase_last_name(
-                        client_name or "Client"
-                    )
-                    bp_name = _name_with_uppercase_last_name(
-                        bp.display_name or "Payeur"
-                    )
-                    name = f"{client_name}\nc/o {bp_name}"
-                else:
-                    name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
+            # Débiteur = BillingParty ; contact = lien ClientBillingParty (jamais déduit du type).
+            # PATIENT : préférer l'identité live (client / patient) au snapshot BP.
+            bp_display = (
+                live_patient_name
+                if _is_patient_party and live_patient_name
+                else (bp.display_name or "Payeur")
+            )
+            bp_name = _name_with_uppercase_last_name(bp_display)
+            contact_name = (
+                getattr(_link, "contact_name", None) if _link is not None else None
+            )
+            if not _is_patient_party:
+                name = format_billing_party_recipient_name(
+                    bp_name,
+                    contact_name,
+                    separator="\n",
+                )
             else:
-                name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
+                name = bp_name
             if _is_patient_party:
                 name = append_residence_to_billed_to_name(
                     name,
@@ -2579,7 +2582,7 @@ def _build_recipient_block_flowable(
     - Filtre les lignes vides (no data => no UI).
     - Wrap via stringWidth/simpleSplit (font metrics ReportLab).
     - Ne dessine rien si aucune ligne utile.
-    - 2ᵉ+ lignes du bloc nom (ex. ``c/o OPAD …`` après saut de ligne) : même taille que l’adresse,
+    - 2ᵉ+ lignes du bloc nom (ex. ``À l'att. de …`` après saut de ligne) : même taille que l’adresse,
       pas le corps du nom en gras.
 
     ``name_font_size`` / ``addr_font_size`` : hiérarchie type facture pro (ex. 12 / 10 pt) ;
@@ -2617,7 +2620,7 @@ def _build_recipient_block_flowable(
     max_chars_fallback = max(30, int(DEST_ADDR_MAX_WIDTH_MM * 3))
 
     # Rôle par ligne source : nom principal (gras + name_fs) ; lignes suivantes du champ nom
-    # (c/o …) comme l’adresse (addr_fs, sans gras).
+    # (À l'att. de …) comme l’adresse (addr_fs, sans gras).
     visual_rows: list[tuple[str, str]] = []
     for i, line in enumerate(lines):
         role = ("name_primary" if i == 0 else "name_co") if i < name_count else "addr"

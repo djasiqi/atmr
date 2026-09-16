@@ -518,7 +518,7 @@ class GenerateInvoiceUseCase:
                 else:
                     billing_party_id = bp.id
             # Facturation directe au client : si le client a un tiers payeur par défaut, l'utiliser
-            # (PDF affichera "Client c/o Tiers payeur" + adresse du tiers)
+            # (PDF : organisme/débiteur + « À l'att. de {contact} » + adresse du tiers)
             elif effective_client_id is not None:
                 from services.billing.client_stay_resolver import (
                     resolve_default_billing_party_for_client,

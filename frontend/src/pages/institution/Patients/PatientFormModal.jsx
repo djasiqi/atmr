@@ -541,12 +541,12 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
               </div>
             )}
 
-            {/* ═══ Section 4b : Curatelle ═══ */}
+            {/* ═══ Section 4b : Représentation légale ═══ */}
             {canSeeAdmin && (
               <div className={`${s.section} ${formData.has_guardianship ? s.sectionCuratelle : ''}`}>
                 <div className={s.sectionHeader}>
                   <FaGavel className={s.sectionIcon} />
-                  <span>Curatelle / Représentation légale</span>
+                  <span>Représentation légale</span>
                   {formData.has_guardianship && formData.guardianship_type && (
                     <span
                       className={s.guardianshipTypeBadge}
@@ -564,8 +564,11 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                   <div className={s.field}>
                     <div className={s.checkboxField}>
                       <input type="checkbox" id="has_guardianship" checked={formData.has_guardianship} onChange={(e) => handleChange('has_guardianship', e.target.checked)} disabled={!canEditAdmin} />
-                      <label htmlFor="has_guardianship">Patient sous curatelle ou représentation légale</label>
+                      <label htmlFor="has_guardianship">Mandat de représentation légale renseigné</label>
                     </div>
+                    <span className={s.fieldHint}>
+                      Sans mandat : aucune mesure / aucun représentant. L’absence de curateur n’équivaut pas à une auto-représentation.
+                    </span>
                   </div>
                   {formData.has_guardianship && (
                     <>
@@ -578,17 +581,17 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                           disabled={!canEditAdmin}
                         />
                         <span className={s.fieldHint}>
-                          {formData.guardianship_type === 'opad' && 'Service public de protection de l\'adulte — facturation gérée automatiquement.'}
-                          {formData.guardianship_type === 'lawyer' && 'Avocat ou étude juridique mandaté(e) — adresse utilisée pour la facturation.'}
-                          {formData.guardianship_type === 'curatorship' && 'Curateur professionnel désigné — l\'adresse de facturation sera celle du curateur.'}
-                          {formData.guardianship_type === 'family' && 'Membre de la famille désigné comme représentant légal.'}
+                          {formData.guardianship_type === 'opad' && 'Service public de protection de l\'adulte — mandat explicite. La facturation reste indépendante.'}
+                          {formData.guardianship_type === 'lawyer' && 'Avocat ou étude — ne signifie pas automatiquement un mandat de curatelle. Représentation uniquement si le mandat est confirmé.'}
+                          {formData.guardianship_type === 'curatorship' && 'Curateur légal professionnel — le mandat ne donne pas tous les pouvoirs, ni le rôle de payeur automatiquement.'}
+                          {formData.guardianship_type === 'family' && 'Membre de la famille désigné comme représentant légal (mandat explicite).'}
                           {formData.guardianship_type === 'other' && 'Autre type de représentation ou mesure de protection.'}
                         </span>
                       </div>
 
                       <div className={s.row}>
                         <div className={s.field}>
-                          <label>Nom du curateur / représentant</label>
+                          <label>Curateur légal / représentant</label>
                           <input type="text" value={formData.guardian_name} onChange={(e) => handleChange('guardian_name', e.target.value)} placeholder="Me. Dupont, M. Martin..." disabled={!canEditAdmin} />
                         </div>
                         <div className={s.field}>
@@ -631,7 +634,7 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                       </div>
 
                       <div className={s.field}>
-                        <label><FaMapMarkerAlt size={9} style={{marginRight: 4, opacity: 0.5}} />Adresse du curateur</label>
+                        <label><FaMapMarkerAlt size={9} style={{marginRight: 4, opacity: 0.5}} />Adresse du représentant légal</label>
                         {canEditAdmin ? (
                           <AddressAutocomplete
                             name="guardian_address"

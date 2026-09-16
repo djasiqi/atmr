@@ -128,31 +128,31 @@ class InstitutionPatient(db.Model):
         nullable=False,
         default=False,
         server_default="false",
-        comment="Patient sous curatelle",
+        comment="Patient avec mandat de représentation légale renseigné (≠ auto-représentation ; ≠ payeur)",
     )
     guardianship_type: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
-        comment="Type de curatelle: curatorship, opad, lawyer, family, other",
+        comment="Type de mesure: curatorship, opad, lawyer, family, other",
     )
     guardian_name: Mapped[str | None] = mapped_column(
-        String(200), nullable=True, comment="Nom du curateur / représentant légal"
+        String(200), nullable=True, comment="Nom du curateur légal / représentant"
     )
     guardian_organization: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
-        comment="Organisation du curateur (OPAD Genève, Étude Me. Dupont, etc.)",
+        comment="Organisation du représentant légal (OPAD Genève, Étude Me. Dupont, etc.)",
     )
     guardian_phone: Mapped[str | None] = mapped_column(
-        String(50), nullable=True, comment="Téléphone du curateur"
+        String(50), nullable=True, comment="Téléphone du représentant légal"
     )
     guardian_email: Mapped[str | None] = mapped_column(
-        String(200), nullable=True, comment="Email du curateur"
+        String(200), nullable=True, comment="Email du représentant légal"
     )
     guardian_address: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
-        comment="Adresse complète du curateur (utilisée pour facturation)",
+        comment="Adresse du représentant légal (indépendante de la facturation)",
     )
 
     # Équipe de curateurs assignée (curatelle uniquement)

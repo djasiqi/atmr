@@ -7,8 +7,11 @@ vers ce use case.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +57,10 @@ class GenerateInvoicePdfUseCase:
                 status_code=500,
             )
         except Exception:
+            logger.exception(
+                "Erreur lors de la génération du PDF invoice_id=%s",
+                getattr(invoice, "id", None),
+            )
             return GenerateInvoicePdfResult(
                 ok=False,
                 error={"error": "Erreur lors de la génération du PDF"},

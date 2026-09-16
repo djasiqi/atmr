@@ -10,10 +10,12 @@
  * - Les autres tiers payeurs peuvent être utilisés pour des cas spécifiques (séjours hospitaliers, etc.)
  * 
  * CAS D'USAGE :
- * - Curatelle : le curateur paie toutes les factures
- * - Famille : un membre de la famille paie
+ * - Curatelle : le service de curatelle peut être le payeur (type curatorship) ;
+ *   le contact facturation n'est PAS automatiquement le curateur légal
+ * - Famille : un membre de la famille paie (role = Fils, etc.)
  * - Assurance : l'assurance paie (pour certains trajets)
  * - Clinique/EMS : l'établissement paie (pendant un séjour)
+ * - Autre : Hospice général, service social… (type other + contact facturation)
  * 
  * IMPORTANT : Chaque facture est toujours pour UN client, mais peut être adressée à différents tiers payeurs selon le contexte.
  */
@@ -461,20 +463,15 @@ const ClientBillingPartiesSection = forwardRef(({
     (link) => String(link.billing_party_id) === String(formData.billing_party_id)
   );
   const hasExistingLink = !!selectedLink?.id;
-  const isCuratorshipParty = selectedParty
-    ? selectedParty.type === 'curatorship' || /opad/i.test(selectedParty.display_name || '')
-    : false;
-  const hasLinkContact = !!(
-    selectedLink?.contact_name || selectedLink?.contact_email || selectedLink?.contact_phone
-  );
-  const showCuratorFields = isCuratorshipParty || hasLinkContact;
+  // Contact facturation toujours éditable (indépendant du type de payeur / curatelle).
+  const showBillingContactFields = !!formData.billing_party_id || createMode;
 
   useLayoutEffect(() => {
     if (!onScrollBottomGapChange) return;
 
     const updateGap = () => {
       const height = actionsRef.current?.offsetHeight || 0;
-      const base = error ? 56 : showCuratorFields ? 40 : 28;
+      const base = error ? 56 : showBillingContactFields ? 40 : 28;
       const computed = Math.min(Math.max(height + base, 32), 240);
       setBottomSpacerHeight(computed);
       onScrollBottomGapChange(computed);
@@ -489,7 +486,7 @@ const ClientBillingPartiesSection = forwardRef(({
     return () => observer.disconnect();
   }, [
     onScrollBottomGapChange,
-    showCuratorFields,
+    showBillingContactFields,
     formData.billing_party_id,
     createMode,
     showForm,
@@ -503,7 +500,7 @@ const ClientBillingPartiesSection = forwardRef(({
         <div className={styles.sectionHeader}>
           <h3 className={styles.sectionTitle}>
             <FiBriefcase size={14} className={styles.sectionIcon} />
-            Tiers payeur / Curateur
+            Tiers payeur
           </h3>
           {!readOnly && !showForm && (
             <button
@@ -739,12 +736,6 @@ const ClientBillingPartiesSection = forwardRef(({
                           <span className={styles.mappingValue}>{formData.client_reference}</span>
                         </div>
                       )}
-                      {formData.role && (
-                        <div className={styles.mappingRow}>
-                          <span className={styles.mappingLabel}>Rôle</span>
-                          <span className={styles.mappingValue}>{formData.role}</span>
-                        </div>
-                      )}
                       {formData.is_default && (
                         <div className={styles.mappingRow}>
                           <span className={styles.mappingTag}>
@@ -754,14 +745,20 @@ const ClientBillingPartiesSection = forwardRef(({
                         </div>
                       )}
                       {(formData.contact_name ||
+                        formData.role ||
                         formData.contact_email ||
                         formData.contact_phone) && (
                         <div className={styles.mappingContact}>
-                          <div className={styles.mappingLabel}>Curateur</div>
+                          <div className={styles.mappingLabel}>Contact facturation</div>
                           {formData.contact_name && (
                             <div className={styles.mappingValue}>
                               <FiUser size={12} className={styles.mappingContactIcon} />
                               {formData.contact_name}
+                            </div>
+                          )}
+                          {formData.role && (
+                            <div className={styles.mappingValue}>
+                              Fonction : {formData.role}
                             </div>
                           )}
                           {formData.contact_email && (
@@ -795,7 +792,7 @@ const ClientBillingPartiesSection = forwardRef(({
 
           <div className={styles.formGroup}>
             <label htmlFor="role" className={styles.label}>
-              Rôle (optionnel)
+              Fonction / lien (optionnel)
             </label>
             <input
               type="text"
@@ -803,8 +800,11 @@ const ClientBillingPartiesSection = forwardRef(({
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
               className={styles.input}
-              placeholder="Ex: curateur principal, payeur secondaire..."
+              placeholder="Ex: Coordinatrice, Fils, Gestionnaire…"
             />
+            <small className={styles.hint}>
+              Relation ou fonction libre — sans effet sur le statut juridique du patient.
+            </small>
           </div>
 
           {selectedParty && (selectedParty.display_name || '').toUpperCase().includes('SPC') && (
@@ -828,11 +828,11 @@ const ClientBillingPartiesSection = forwardRef(({
             </div>
           )}
 
-          {showCuratorFields && (
+          {showBillingContactFields && (
             <>
               <div className={styles.formGroup}>
                 <label htmlFor="contact_name" className={styles.label}>
-                  Curateur (optionnel)
+                  Contact facturation (optionnel)
                 </label>
                 <input
                   type="text"
@@ -840,16 +840,16 @@ const ClientBillingPartiesSection = forwardRef(({
                   value={formData.contact_name}
                   onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
                   className={styles.input}
-                  placeholder="Ex: Curateur A"
+                  placeholder="Ex: Amandine HAUSER"
                 />
                 <small className={styles.hint}>
-                  Contact spécifique à ce client (ne modifie pas OPAD)
+                  Interlocuteur pour les factures de ce client (ne modifie pas le tiers payeur).
                 </small>
               </div>
 
               <div className={styles.formGroup}>
                 <label htmlFor="contact_email" className={styles.label}>
-                  Email du curateur (optionnel)
+                  Email du contact (optionnel)
                 </label>
                 <input
                   type="email"
@@ -857,13 +857,13 @@ const ClientBillingPartiesSection = forwardRef(({
                   value={formData.contact_email}
                   onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
                   className={styles.input}
-                  placeholder="curateur@opad.ch"
+                  placeholder="contact@exemple.ch"
                 />
               </div>
 
               <div className={styles.formGroup}>
                 <label htmlFor="contact_phone" className={styles.label}>
-                  Téléphone du curateur (optionnel)
+                  Téléphone du contact (optionnel)
                 </label>
                 <input
                   type="tel"
@@ -1010,12 +1010,29 @@ const ClientBillingPartiesSection = forwardRef(({
               </div>
 
               <div className={styles.subSectionTitle}>
-                Contact curateur pour ce client
+                Contact facturation pour ce client
+              </div>
+
+              <div className={styles.formGroup}>
+                <label htmlFor="new_party_role" className={styles.label}>
+                  Fonction / lien (optionnel)
+                </label>
+                <input
+                  type="text"
+                  id="new_party_role"
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  className={styles.input}
+                  placeholder="Ex: Coordinatrice, Fils, Gestionnaire…"
+                />
+                <small className={styles.hint}>
+                  Relation ou fonction libre — sans effet sur le statut juridique.
+                </small>
               </div>
 
               <div className={styles.formGroup}>
                 <label htmlFor="contact_name" className={styles.label}>
-                  Contact curateur (optionnel)
+                  Contact facturation (optionnel)
                 </label>
                 <input
                   type="text"
@@ -1023,16 +1040,16 @@ const ClientBillingPartiesSection = forwardRef(({
                   value={formData.contact_name}
                   onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
                   className={styles.input}
-                  placeholder="Ex: Curateur A"
+                  placeholder="Ex: Amandine HAUSER"
                 />
                 <small className={styles.hint}>
-                  Contact spécifique à ce client (ne modifie pas OPAD)
+                  Interlocuteur pour les factures de ce client (ne modifie pas le tiers payeur).
                 </small>
               </div>
 
               <div className={styles.formGroup}>
                 <label htmlFor="contact_email" className={styles.label}>
-                  Email du curateur (optionnel)
+                  Email du contact (optionnel)
                 </label>
                 <input
                   type="email"
@@ -1040,13 +1057,13 @@ const ClientBillingPartiesSection = forwardRef(({
                   value={formData.contact_email}
                   onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
                   className={styles.input}
-                  placeholder="curateur@opad.ch"
+                  placeholder="contact@exemple.ch"
                 />
               </div>
 
               <div className={styles.formGroup}>
                 <label htmlFor="contact_phone" className={styles.label}>
-                  Téléphone du curateur (optionnel)
+                  Téléphone du contact (optionnel)
                 </label>
                 <input
                   type="tel"
@@ -1146,7 +1163,6 @@ const ClientBillingPartiesSection = forwardRef(({
                             {link.client_reference
                               ? `No. SPC ${link.client_reference} / Type: ${link.billing_party?.type || 'N/A'}`
                               : `Type: ${link.billing_party?.type || 'N/A'}`}
-                            {link.role && ` • Rôle: ${link.role}`}
                             {link.is_default && (
                               <span className={styles.defaultBadge}>Par défaut</span>
                             )}
@@ -1159,15 +1175,19 @@ const ClientBillingPartiesSection = forwardRef(({
                                   <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                                 </svg>
                               </span>
-                              Mandat de curatelle — non modifiable
+                              Payeur lié à un mandat — non modifiable ici
                             </div>
                           )}
                           {(link.contact_name ||
+                            link.role ||
                             link.contact_email ||
                             link.contact_phone) && (
                             <div className={styles.linkContacts}>
                               {link.contact_name && (
-                                <div>Curateur : {link.contact_name}</div>
+                                <div>Contact facturation : {link.contact_name}</div>
+                              )}
+                              {link.role && (
+                                <div>Fonction : {link.role}</div>
                               )}
                               {link.contact_email && (
                                 <div>

@@ -111,3 +111,87 @@ def append_residence_to_billed_to_name(
     if label.casefold() in base.casefold():
         return base
     return f"{base}{separator}{label}"
+
+
+def live_patient_payer_identity(
+    invoice: Any,
+    *,
+    bookings_by_id: dict[int, Any] | None = None,
+) -> tuple[str | None, str | None]:
+    """Nom et adresse courants du payeur PATIENT (relecture live, pas snapshot BP).
+
+    Un BillingParty PATIENT est un pointeur vers le bénéficiaire : si le client
+    ou le patient institutionnel a été modifié après création de la facture, le
+    PDF doit reprendre ces valeurs actuelles — jamais un ``display_name`` /
+    ``billing_address`` périmé.
+    """
+    patient = resolve_invoice_institution_patient(
+        invoice, bookings_by_id=bookings_by_id
+    )
+    if patient is not None:
+        first = (getattr(patient, "first_name", None) or "").strip()
+        last = (getattr(patient, "last_name", None) or "").strip()
+        name = f"{first} {last}".strip() or None
+        addr = institution_patient_billing_address(patient) or None
+        return name, addr or None
+
+    client = getattr(invoice, "client", None)
+    if client is None:
+        return None, None
+
+    user = getattr(client, "user", None)
+    name = None
+    if user is not None:
+        first = (getattr(user, "first_name", None) or "").strip()
+        last = (getattr(user, "last_name", None) or "").strip()
+        full = f"{first} {last}".strip()
+        username = (getattr(user, "username", None) or "").strip()
+        name = full or username or None
+    if not name:
+        first = (getattr(client, "first_name", None) or "").strip()
+        last = (getattr(client, "last_name", None) or "").strip()
+        name = f"{first} {last}".strip() or None
+    if not name and bool(getattr(client, "is_institution", False)):
+        name = (getattr(client, "institution_name", None) or "").strip() or None
+
+    street = (getattr(client, "domicile_address", None) or "").strip()
+    postal = (getattr(client, "domicile_zip", None) or "").strip()
+    city = (getattr(client, "domicile_city", None) or "").strip()
+    parts: list[str] = []
+    if street:
+        parts.append(street)
+    postal_city = " ".join(part for part in (postal, city) if part)
+    if postal_city:
+        parts.append(postal_city)
+    addr = "\n".join(parts) if parts else None
+    if not addr:
+        try:
+            addr = (getattr(client, "billing_address_secure", None) or "").strip() or None
+        except Exception:
+            addr = (getattr(client, "billing_address", None) or "").strip() or None
+    if not addr and user is not None:
+        addr = (getattr(user, "address", None) or "").strip() or None
+    return name, addr
+
+
+def format_billing_party_recipient_name(
+    bp_display_name: str,
+    contact_name: str | None = None,
+    *,
+    separator: str = "\n",
+) -> str:
+    """Nom « Facturé à » : débiteur/organisme, puis contact facturation.
+
+    Le type du tiers payeur (ex. ``curatorship``) ne qualifie jamais le contact
+    comme représentant légal. On affiche uniquement :
+
+    ``Hospice général``
+    ``À l'att. de Mme Amandine HAUSER``
+    """
+    name = (bp_display_name or "Payeur").strip() or "Payeur"
+    contact = (contact_name or "").strip()
+    if not contact:
+        return name
+    if contact.casefold() == name.casefold():
+        return name
+    return f"{name}{separator}À l'att. de {contact}"
