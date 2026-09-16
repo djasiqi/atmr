@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
-import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   FiFileText,
@@ -33,9 +33,13 @@ import {
   getDaysOverdue,
 } from '../../../../services/invoiceService';
 import {
-  isPartnerInvoice,
-  resolveInvoicePdfApiUrl,
-} from '../../../../utils/pdfUrlFallback';
+  INVOICE_CATALOG,
+  clearInvoiceCatalogSearchParams,
+  invoiceCatalogRowKey,
+  readInvoiceCatalogFromSearch,
+  resolveInvoiceResource,
+  writeInvoiceCatalogSearchParams,
+} from '../../../../utils/invoiceCatalog';
 import { openProtectedPdfInNewTab } from '../../../../utils/protectedPdf';
 import { buildInvoicePdfDownloadFilename } from '../../../../utils/invoicePdfFilename';
 import { useLirieCompany } from '../../../../hooks/useLirieCompany';
@@ -109,7 +113,6 @@ const InvoicesRegistry = () => {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  const queryClient = useQueryClient();
   const canLoadInvoices = Boolean(company?.id);
   const filtersHash = useMemo(() => invoiceFiltersHash(filters), [filters]);
 
@@ -233,16 +236,18 @@ const InvoicesRegistry = () => {
       if (prev.size === displayedInvoices.length && displayedInvoices.length > 0) {
         return new Set();
       }
-      return new Set(displayedInvoices.map((inv) => inv.id));
+      return new Set(
+        displayedInvoices.map((inv) => invoiceCatalogRowKey(inv, company?.id))
+      );
     });
-  }, [displayedInvoices]);
+  }, [displayedInvoices, company?.id]);
 
   const selectAllDrafts = useCallback(() => {
     const draftIds = displayedInvoices
       .filter((inv) => inv.status === 'draft')
-      .map((inv) => inv.id);
+      .map((inv) => invoiceCatalogRowKey(inv, company?.id));
     setSelectedIds(new Set(draftIds));
-  }, [displayedInvoices]);
+  }, [displayedInvoices, company?.id]);
 
   const selectTodaysDrafts = useCallback(() => {
     const today = new Date();
@@ -254,17 +259,19 @@ const InvoicesRegistry = () => {
         issued.setHours(0, 0, 0, 0);
         return issued.getTime() === today.getTime();
       })
-      .map((inv) => inv.id);
+      .map((inv) => invoiceCatalogRowKey(inv, company?.id));
     setSelectedIds(new Set(draftIds));
-  }, [displayedInvoices]);
+  }, [displayedInvoices, company?.id]);
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
   }, []);
 
   const selectedInvoices = useMemo(() => {
-    return displayedInvoices.filter((inv) => selectedIds.has(inv.id));
-  }, [displayedInvoices, selectedIds]);
+    return displayedInvoices.filter((inv) =>
+      selectedIds.has(invoiceCatalogRowKey(inv, company?.id))
+    );
+  }, [displayedInvoices, selectedIds, company?.id]);
 
   const selectedDraftCount = useMemo(() => {
     return selectedInvoices.filter((inv) => inv.status === 'draft').length;
@@ -426,12 +433,12 @@ const InvoicesRegistry = () => {
     }
   };
 
-  const handleRegeneratePdf = async (invoiceId) => {
+  const handleRegeneratePdf = async (invoice) => {
     try {
-      const target = invoices.find((i) => i.id === invoiceId);
-      if (isPartnerInvoice(target)) return;
+      const resource = resolveInvoiceResource(invoice, company?.id);
+      if (resource.type === INVOICE_CATALOG.PARTNER || !resource.id) return;
       // Contrat figé unique — ne pas contourner forceRegenerateInvoicePdf.
-      await forceRegenerateInvoicePdf(company.id, invoiceId);
+      await forceRegenerateInvoicePdf(company.id, resource.id);
       await loadInvoices();
       setInvoiceDataRefreshTrigger((t) => t + 1);
     } catch (err) {
@@ -494,8 +501,7 @@ const InvoicesRegistry = () => {
   const clearDraftEditParams = useCallback(() => {
     setSearchParams((prev) => {
       const p = new URLSearchParams(prev);
-      p.delete('draft_edit');
-      p.delete('invoice_id');
+      clearInvoiceCatalogSearchParams(p);
       return p;
     });
   }, [setSearchParams]);
@@ -513,14 +519,14 @@ const InvoicesRegistry = () => {
   const handleOpenDraftEdit = useCallback(
     (invoice) => {
       if (!invoice?.id) return;
-      const scoped = {
+      const resource = resolveInvoiceResource(invoice, company?.id);
+      const scoped = resource.invoice || {
         ...invoice,
         company_id: invoice.company_id || company?.id,
       };
-      if (isPartnerInvoice(scoped)) {
-        const apiPath = resolveInvoicePdfApiUrl(scoped, company?.id);
-        if (apiPath) {
-          void openProtectedPdfInNewTab(apiPath, null, {
+      if (resource.type === INVOICE_CATALOG.PARTNER) {
+        if (resource.pdfApiUrl) {
+          void openProtectedPdfInNewTab(resource.pdfApiUrl, null, {
             filename: buildInvoicePdfDownloadFilename(scoped),
           });
         }
@@ -529,7 +535,10 @@ const InvoicesRegistry = () => {
       setDraftEditInvoice(scoped);
       setSearchParams((prev) => {
         const p = new URLSearchParams(prev);
-        p.set('invoice_id', String(invoice.id));
+        writeInvoiceCatalogSearchParams(p, {
+          type: INVOICE_CATALOG.STANDARD,
+          id: invoice.id,
+        });
         p.set('draft_edit', '1');
         p.delete('partner');
         return p;
@@ -537,6 +546,48 @@ const InvoicesRegistry = () => {
     },
     [setSearchParams, company?.id]
   );
+
+  /**
+   * Deep-link : `invoice_id` seul est ambigu (catalogues indépendants).
+   * La liste + `invoice_type` tranchent ; un partenaire n’ouvre jamais l’éditeur.
+   */
+  useEffect(() => {
+    if (!company?.id) return;
+    const ref = readInvoiceCatalogFromSearch(searchParams);
+    if (!ref) return;
+    const wantsDraft = searchParams.get('draft_edit') === '1';
+    const fromList = invoices.find((i) => Number(i.id) === Number(ref.id));
+    const resource = fromList
+      ? resolveInvoiceResource(fromList, company.id)
+      : resolveInvoiceResource(
+          { id: ref.id, company_id: company.id },
+          company.id,
+          { type: ref.type }
+        );
+    if (resource.type === INVOICE_CATALOG.PARTNER) {
+      if (wantsDraft) {
+        if (resource.pdfApiUrl) {
+          void openProtectedPdfInNewTab(resource.pdfApiUrl, null, {
+            filename: buildInvoicePdfDownloadFilename(resource.invoice),
+          });
+        }
+        clearDraftEditParams();
+      }
+      return;
+    }
+    if (!wantsDraft || draftEditInvoice) return;
+    if (!fromList) {
+      clearDraftEditParams();
+      return;
+    }
+    setDraftEditInvoice(resource.invoice);
+  }, [
+    searchParams,
+    invoices,
+    company?.id,
+    draftEditInvoice,
+    clearDraftEditParams,
+  ]);
 
   // Formatage des statuts
   const getStatusBadge = (status) => {
@@ -956,15 +1007,15 @@ const InvoicesRegistry = () => {
                 const displayDueDate = getEffectiveDueDate(invoice);
                 return (
                   <tr
-                    key={`${isPartnerInvoice(invoice) ? 'partner' : 'invoice'}-${invoice.id}`}
-                    className={`${getRowClassName(invoice)} ${selectedIds.has(invoice.id) ? styles.rowSelected : ''}`}
+                    key={invoiceCatalogRowKey(invoice, company?.id)}
+                    className={`${getRowClassName(invoice)} ${selectedIds.has(invoiceCatalogRowKey(invoice, company?.id)) ? styles.rowSelected : ''}`}
                   >
                     <td className={styles.tdCheckbox}>
                       <input
                         type="checkbox"
                         className={styles.checkbox}
-                        checked={selectedIds.has(invoice.id)}
-                        onChange={() => toggleSelect(invoice.id)}
+                        checked={selectedIds.has(invoiceCatalogRowKey(invoice, company?.id))}
+                        onChange={() => toggleSelect(invoiceCatalogRowKey(invoice, company?.id))}
                       />
                     </td>
                     <td>
@@ -1026,7 +1077,7 @@ const InvoicesRegistry = () => {
                         onPayment={() => setPaymentModal({ open: true, invoice })}
                         onReminder={() => setReminderModal({ open: true, invoice })}
                         onSendReminderEmail={() => handleOpenSendReminderEmail(invoice)}
-                        onRegeneratePdf={() => handleRegeneratePdf(invoice.id)}
+                        onRegeneratePdf={() => handleRegeneratePdf(invoice)}
                         onCancel={() => handleCancelInvoice(invoice.id)}
                         onDuplicate={() => handleDuplicateInvoice(invoice.id)}
                         onEditDraft={() => handleOpenDraftEdit(invoice)}

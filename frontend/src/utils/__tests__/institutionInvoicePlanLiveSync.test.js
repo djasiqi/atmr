@@ -478,6 +478,24 @@ describe('institutionInvoicePlanLiveSync — gate live payeur', () => {
     expect(shouldShowDraftInvoiceToolbar({ hasPreparedDraft: Boolean(existing) })).toBe(true);
   });
 
+  it('UI-DRAFT-6c : un 409 partenaire marque le stub hors catalogue client', () => {
+    const existing = draftInvoiceFromPrepareError({
+      response: {
+        data: {
+          existing_invoice_id: 34,
+          existing_invoice_number: 'PARTNER-EM-2026-08-0097',
+        },
+      },
+    });
+    expect(existing).toEqual({
+      id: 34,
+      invoice_number: 'PARTNER-EM-2026-08-0097',
+      status: 'draft',
+      is_partner_invoice: true,
+      kind: 'partner',
+    });
+  });
+
   it('UI-DRAFT-12 : actions PDF suivent le lifecycle du brouillon', () => {
     const afterPrepareNoPdf = draftPdfActionsAvailability({
       invoiceStatus: 'draft',

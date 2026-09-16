@@ -32,11 +32,13 @@ import {
   formatCurrencyCHF,
 } from '../../../../../services/invoiceService';
 import { printPdfBytes, preloadInvoicePdfPrint } from '../../../../../utils/invoicePdfPrint';
+import { appendPdfEmbedChromiumViewerFragment } from '../../../../../utils/pdfUrlFallback';
 import {
-  appendPdfEmbedChromiumViewerFragment,
-  isPartnerInvoice,
-  resolveInvoicePdfApiUrl,
-} from '../../../../../utils/pdfUrlFallback';
+  INVOICE_CATALOG,
+  createInvoiceLoadSession,
+  invoiceCatalogFingerprint,
+  resolveInvoiceResource,
+} from '../../../../../utils/invoiceCatalog';
 import {
   downloadProtectedPdfAsFile,
   fetchProtectedPdfBytes,
@@ -278,6 +280,11 @@ const DraftInvoiceEditorPanel = ({
   const mountedRef = useRef(true);
   /** Clé « société:facture » déjà chargée — empêche un GET répété si les callbacks parent changent. */
   const initialLoadKeyRef = useRef('');
+  const loadSessionRef = useRef(createInvoiceLoadSession());
+  const invRef = useRef(inv);
+  invRef.current = inv;
+  const initialInvoiceRef = useRef(initialInvoice);
+  initialInvoiceRef.current = initialInvoice;
   /** Dernière date « ligne suppl. » connue (évite perte si blur/changement d’état pas encore rejoué). */
   const customLineServiceDateRef = useRef('');
   const addLineHeadingId = useId();
@@ -397,14 +404,17 @@ const DraftInvoiceEditorPanel = ({
    */
   const reloadPdfPreviewFromServer = useCallback(
     async ({ notify = true } = {}) => {
-      const id = inv?.id ?? initialInvoice?.id;
-      if (!companyId || !id) {
+      const current = invRef.current ?? initialInvoiceRef.current;
+      const resource = resolveInvoiceResource(current, companyId);
+      if (!resource.id || !companyId) {
         throw new Error('MISSING_INVOICE_CONTEXT');
       }
-      if (isPartnerInvoice(inv) || isPartnerInvoice(initialInvoice)) {
-        return unwrapInvoicePayload(inv) ?? inv ?? initialInvoice;
+      if (!resource.allowsStandardDetailGet) {
+        const payload = resource.invoice ?? current ?? initialInvoiceRef.current;
+        if (payload) applyInvoiceData(payload);
+        return payload;
       }
-      const res = await getInvoice(companyId, id, { cacheBust: true });
+      const res = await getInvoice(companyId, resource.id, { cacheBust: true });
       const data = unwrapInvoicePayload(res) ?? res?.data ?? res;
       if (!data || typeof data !== 'object' || data.id == null) {
         throw new Error('INVALID_INVOICE_PAYLOAD');
@@ -413,25 +423,34 @@ const DraftInvoiceEditorPanel = ({
       if (notify) notifyUpdated();
       return data;
     },
-    [companyId, inv?.id, initialInvoice?.id, applyInvoiceData, notifyUpdated]
+    [companyId, applyInvoiceData, notifyUpdated]
   );
 
   /** Après mutation brouillon : GET détail pour JSON à jour (totaux, lignes). */
   const syncInvoiceAfterDraftMutation = useCallback(async () => {
-    if (!companyId || !inv?.id) return;
-    if (isPartnerInvoice(inv)) return;
+    const current = invRef.current;
+    if (!companyId || !current?.id) return;
+    if (!resolveInvoiceResource(current, companyId).allowsStandardDetailGet) return;
+    if (!resolveInvoiceResource(initialInvoiceRef.current, companyId).allowsStandardDetailGet) {
+      return;
+    }
     try {
       printPdfBytesCacheRef.current = { key: '', bytes: null };
-      const res = await getInvoice(companyId, inv.id, { cacheBust: true });
+      const res = await getInvoice(companyId, current.id, { cacheBust: true });
       const data = unwrapInvoicePayload(res) ?? res?.data ?? res;
       if (data && typeof data === 'object' && data.id != null) {
         applyInvoiceData(data);
         notifyUpdated();
       }
     } catch {
+      if (!resolveInvoiceResource(invRef.current || initialInvoiceRef.current, companyId)
+        .allowsStandardDetailGet) {
+        setError('');
+        return;
+      }
       setError('Impossible de recharger la facture.');
     }
-  }, [companyId, inv?.id, applyInvoiceData, notifyUpdated]);
+  }, [companyId, applyInvoiceData, notifyUpdated]);
 
   /** Réponse mutation contient déjà ``invoice`` → pas de GET redondant. */
   const afterDraftMutation = useCallback(
@@ -445,40 +464,74 @@ const DraftInvoiceEditorPanel = ({
 
   const load = useCallback(async () => {
     if (!open || !companyId || !initialInvoice?.id) return;
+    const token = loadSessionRef.current.begin();
+    const resource = resolveInvoiceResource(
+      initialInvoiceRef.current || invRef.current,
+      companyId
+    );
+    if (!resource.allowsStandardDetailGet) {
+      setError('');
+      setLoading(false);
+      if (resource.invoice) applyInvoiceData(resource.invoice);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       await reloadPdfPreviewFromServer({ notify: false });
+      if (!loadSessionRef.current.isCurrent(token)) return;
+      if (
+        !resolveInvoiceResource(
+          invRef.current || initialInvoiceRef.current,
+          companyId
+        ).allowsStandardDetailGet
+      ) {
+        setError('');
+      }
     } catch (e) {
+      if (!loadSessionRef.current.isCurrent(token)) return;
+      if (
+        !resolveInvoiceResource(
+          invRef.current || initialInvoiceRef.current,
+          companyId
+        ).allowsStandardDetailGet
+      ) {
+        setError('');
+        return;
+      }
       if (e?.message === 'INVALID_INVOICE_PAYLOAD') {
         setError('Réponse facture invalide.');
       } else {
         setError('Impossible de charger la facture.');
       }
     } finally {
-      setLoading(false);
+      if (loadSessionRef.current.isCurrent(token)) {
+        setLoading(false);
+      }
     }
-  }, [open, companyId, initialInvoice?.id, reloadPdfPreviewFromServer]);
+  }, [open, companyId, initialInvoice?.id, reloadPdfPreviewFromServer, applyInvoiceData]);
+
+  const initialCatalogKey = invoiceCatalogFingerprint(initialInvoice);
 
   /** Hydratation immédiate depuis la liste (avant peinture) pour éviter un écran « Chargement… » inutile. */
   useLayoutEffect(() => {
     if (!open || initialInvoice?.id == null) return;
     setInv(initialInvoice);
-    // Dépendances volontairement limitées à open + id : sinon une nouvelle référence parent à chaque rendu réécrase inv après le GET.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialInvoice?.id]);
+  }, [open, initialCatalogKey]);
 
-  /** Un seul GET initial par (société, facture) : le bouton « Recharger » reste la relance manuelle. */
+  /** Un seul GET initial par (société, facture, catalogue) : le bouton « Recharger » reste la relance manuelle. */
   useEffect(() => {
     if (!open || !companyId || initialInvoice?.id == null) {
       initialLoadKeyRef.current = '';
+      loadSessionRef.current.invalidate();
       return;
     }
-    const key = `${companyId}:${initialInvoice.id}`;
+    const key = `${companyId}:${initialCatalogKey}`;
     if (initialLoadKeyRef.current === key) return;
     initialLoadKeyRef.current = key;
     void load();
-  }, [open, companyId, initialInvoice?.id, load]);
+  }, [open, companyId, initialInvoice?.id, initialCatalogKey, load]);
 
   useEffect(() => {
     if (!open) {
@@ -567,23 +620,37 @@ const DraftInvoiceEditorPanel = ({
 
   const isDraft = invoiceStatusLowerResolved === 'draft';
 
+  const isPartnerDoc = useMemo(
+    () =>
+      resolveInvoiceResource(inv || initialInvoice, companyId).type ===
+      INVOICE_CATALOG.PARTNER,
+    [inv, initialInvoice, companyId]
+  );
+
+  useEffect(() => {
+    if (!isPartnerDoc) return;
+    loadSessionRef.current.invalidate();
+    setError('');
+  }, [isPartnerDoc]);
+
   /** Même barre d’édition que le brouillon : envoyée / partielle / en retard (pas payée / annulée). */
   const allowsLineEditing = useMemo(
     () =>
+      !isPartnerDoc &&
       ['draft', 'sent', 'partially_paid', 'overdue'].includes(invoiceStatusLowerResolved),
-    [invoiceStatusLowerResolved]
+    [isPartnerDoc, invoiceStatusLowerResolved]
   );
 
   /** Aperçu HTML aligné PDF (A/R, montants fusionnés) : émise éditable ou payée en lecture seule. */
   const showHtmlInvoicePreview = useMemo(() => {
-    if (!inv) return false;
+    if (!inv || isPartnerDoc) return false;
     if (allowsLineEditing) return true;
     return (
       invoiceStatusLowerResolved === 'paid' &&
       Array.isArray(inv.lines) &&
       inv.lines.length > 0
     );
-  }, [inv, allowsLineEditing, invoiceStatusLowerResolved]);
+  }, [inv, isPartnerDoc, allowsLineEditing, invoiceStatusLowerResolved]);
 
   const filteredLines = useMemo(
     () => filterInvoiceLines(lines, lineFilter),
@@ -692,11 +759,13 @@ const DraftInvoiceEditorPanel = ({
 
   /** Chemin API JWT pour le PDF (Lot 0 SEC-06) — ne plus utiliser `/uploads/invoices/...`. */
   const invoicePdfApiPath = useMemo(() => {
-    const id = inv?.id;
-    const cid = companyId || inv?.company_id;
-    if (!id || !cid || !String(inv?.pdf_url || '').trim()) return null;
-    return resolveInvoicePdfApiUrl({ ...inv, id, company_id: cid }, cid);
-  }, [inv, inv?.id, inv?.company_id, inv?.pdf_url, inv?.is_partner_invoice, companyId]);
+    const source = inv || initialInvoice;
+    const resource = resolveInvoiceResource(source, companyId);
+    if (!resource.id || !resource.companyId) return null;
+    if (resource.type === INVOICE_CATALOG.PARTNER) return resource.pdfApiUrl;
+    if (!String(source?.pdf_url || '').trim()) return null;
+    return resource.pdfApiUrl;
+  }, [inv, initialInvoice, companyId]);
 
   const hasStoredPdf = Boolean(String(inv?.pdf_url || '').trim());
 
@@ -724,7 +793,7 @@ const DraftInvoiceEditorPanel = ({
       printPdfBytesCacheRef.current = { key: '', bytes: null };
       return undefined;
     }
-    const apiPath = resolveInvoicePdfApiUrl(inv, companyId || inv.company_id);
+    const apiPath = resolveInvoiceResource(inv, companyId || inv.company_id).pdfApiUrl;
     if (!apiPath) return undefined;
 
     const pdfStatus = parseInvoiceMeta(inv?.meta)?.pdf?.status || '';
@@ -909,7 +978,7 @@ const DraftInvoiceEditorPanel = ({
     setError('');
 
     try {
-      const apiPath = resolveInvoicePdfApiUrl(inv, companyId || inv.company_id);
+      const apiPath = resolveInvoiceResource(inv, companyId || inv.company_id).pdfApiUrl;
 
       if (!apiPath) {
         throw new Error('Aucun PDF disponible.');
@@ -1002,7 +1071,7 @@ const DraftInvoiceEditorPanel = ({
       if (allowsLineEditing) {
         await forceRegeneratePdfRef.current();
       }
-      const apiPath = resolveInvoicePdfApiUrl(inv, companyId || inv.company_id);
+      const apiPath = resolveInvoiceResource(inv, companyId || inv.company_id).pdfApiUrl;
       if (!apiPath) {
         if (mountedRef.current) setError('Aucun PDF disponible.');
         return;
@@ -1025,7 +1094,7 @@ const DraftInvoiceEditorPanel = ({
 
   const handleOpenPdfInNewTab = useCallback(async () => {
     if (!companyId || !inv?.id) return;
-    const apiPath = resolveInvoicePdfApiUrl(inv, companyId || inv.company_id);
+    const apiPath = resolveInvoiceResource(inv, companyId || inv.company_id).pdfApiUrl;
     if (!apiPath) {
       if (mountedRef.current) setError('Aucun PDF disponible.');
       return;
@@ -1242,6 +1311,13 @@ const DraftInvoiceEditorPanel = ({
     const id = inv?.id ?? initialInvoice?.id;
     if (!companyId || !id) {
       throw new Error('MISSING_INVOICE_CONTEXT');
+    }
+    if (
+      isPartnerDoc ||
+      resolveInvoiceResource(inv || initialInvoice, companyId).type ===
+        INVOICE_CATALOG.PARTNER
+    ) {
+      return;
     }
     printPdfBytesCacheRef.current = { key: '', bytes: null };
     if (allowsLineEditing) {

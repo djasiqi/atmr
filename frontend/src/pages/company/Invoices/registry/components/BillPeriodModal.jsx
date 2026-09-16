@@ -27,7 +27,7 @@ import {
 } from 'react-icons/fi';
 import { invoiceService, formatCurrencyCHF, generateInvoice } from '../../../../../services/invoiceService';
 import { getApiErrorMessage } from '../../../../../utils/apiErrorMessage';
-import { resolveInvoicePdfApiUrl } from '../../../../../utils/pdfUrlFallback';
+import { INVOICE_CATALOG, resolveInvoiceResource } from '../../../../../utils/invoiceCatalog';
 import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
 import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
 import {
@@ -1487,6 +1487,24 @@ const BillPeriodModal = ({
   const acceptPreparedDraft = (inv) => {
     const stub = unwrapPreparedDraftInvoice(inv);
     if (!stub?.id) return false;
+    if (
+      payerType === 'partner' ||
+      resolveInvoiceResource(stub, companyId).type === INVOICE_CATALOG.PARTNER
+    ) {
+      const resource = resolveInvoiceResource(
+        { ...stub, company_id: stub.company_id || companyId },
+        companyId,
+        { type: INVOICE_CATALOG.PARTNER }
+      );
+      const partnerInv = resource.invoice;
+      if (resource.pdfApiUrl) {
+        void openProtectedPdfInNewTab(resource.pdfApiUrl, null, {
+          filename: buildInvoicePdfDownloadFilename(partnerInv),
+        });
+      }
+      onInvoiceGenerated?.(partnerInv);
+      return true;
+    }
     setDraftInvoiceStub(stub);
     setComposerPhase('draft');
     setShowLinesPreview(false);
@@ -1579,14 +1597,14 @@ const BillPeriodModal = ({
       });
       const inv = result?.data ?? result;
       if (inv?.id) {
-        const partnerInv = {
-          ...inv,
-          is_partner_invoice: true,
-          company_id: inv.company_id || companyId,
-        };
-        const apiPath = resolveInvoicePdfApiUrl(partnerInv, companyId);
-        if (apiPath) {
-          await openProtectedPdfInNewTab(apiPath, null, {
+        const resource = resolveInvoiceResource(
+          { ...inv, company_id: inv.company_id || companyId },
+          companyId,
+          { type: INVOICE_CATALOG.PARTNER }
+        );
+        const partnerInv = resource.invoice;
+        if (resource.pdfApiUrl) {
+          await openProtectedPdfInNewTab(resource.pdfApiUrl, null, {
             filename: buildInvoicePdfDownloadFilename(partnerInv),
           });
         }
@@ -2446,8 +2464,12 @@ const BillPeriodModal = ({
           {error && <div className={styles.err}>{error}</div>}
 
           {shouldShowDraftInvoiceToolbar({
-            hasPreparedDraft: Boolean(draftInvoiceStub),
+            hasPreparedDraft:
+              Boolean(draftInvoiceStub) &&
+              resolveInvoiceResource(draftInvoiceStub, companyId).type !==
+                INVOICE_CATALOG.PARTNER,
           }) ? (
+            /* catalogue partenaire : PDF via resolver, jamais l’éditeur client */
             <div className={styles.draftEditorMount} data-testid="invoice-draft-editor">
               <DraftInvoiceEditorPanel
                 key={draftInvoiceStub?.id ?? 'draft-stub'}

@@ -33,6 +33,7 @@ describe('catalogues facture client vs partenaire', () => {
       })
     ).toBe(true);
     expect(isPartnerInvoice({ id: sharedId, kind: 'partner' })).toBe(true);
+    expect(isPartnerInvoice({ id: sharedId, invoice_type: 'partner' })).toBe(true);
   });
 
   test('IDs identiques : les builders ne se mélangent pas', () => {

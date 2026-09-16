@@ -65,7 +65,11 @@ export function ensurePdfUrlWorksInDev(url) {
  */
 export function isPartnerInvoice(invoice) {
   if (!invoice || typeof invoice !== 'object') return false;
-  if (invoice.is_partner_invoice === true || invoice.kind === 'partner') {
+  if (
+    invoice.is_partner_invoice === true ||
+    invoice.kind === 'partner' ||
+    invoice.invoice_type === 'partner'
+  ) {
     return true;
   }
   const number = String(invoice.invoice_number || '').trim().toUpperCase();
@@ -131,6 +135,7 @@ export function resolveInvoicePdfApiUrl(invoice, companyId) {
     is_partner_invoice: invoice?.is_partner_invoice,
     invoice_number: invoice?.invoice_number,
     kind: invoice?.kind,
+    invoice_type: invoice?.invoice_type,
   };
   if (isPartnerInvoice(scoped)) {
     return buildPartnerInvoicePdfApiUrl(scoped);

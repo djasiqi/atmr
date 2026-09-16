@@ -19,9 +19,8 @@ import styles from './InvoiceRowActions.module.css';
 import {
   buildReminderPdfApiUrl,
   ensurePdfUrlWorksInDev,
-  isPartnerInvoice,
-  resolveInvoicePdfApiUrl,
 } from '../../../../../utils/pdfUrlFallback';
+import { INVOICE_CATALOG, resolveInvoiceResource } from '../../../../../utils/invoiceCatalog';
 import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
 import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
 import {
@@ -121,7 +120,8 @@ const InvoiceRowActions = ({
     }
   };
 
-  const partnerInvoice = isPartnerInvoice(invoice);
+  const partnerResource = resolveInvoiceResource(invoice);
+  const partnerInvoice = partnerResource.type === INVOICE_CATALOG.PARTNER;
 
   const actions = [
     {
@@ -142,9 +142,9 @@ const InvoiceRowActions = ({
       icon: <FiFileText size={14} />,
       onClick: () =>
         openProtectedPdf(
-          resolveInvoicePdfApiUrl(invoice),
+          partnerResource.pdfApiUrl,
           invoice.pdf_url,
-          buildInvoicePdfDownloadFilename(invoice)
+          buildInvoicePdfDownloadFilename(partnerResource.invoice || invoice)
         ),
       className: styles.actionBtnSecondary,
       show: !!invoice.pdf_url,

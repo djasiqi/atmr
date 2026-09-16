@@ -18,7 +18,7 @@ import {
   parseGlobalDiscountPercentField,
   roundTo005,
 } from '../../../../../utils/directInvoicePricing';
-import { resolveInvoicePdfApiUrl } from '../../../../../utils/pdfUrlFallback';
+import { INVOICE_CATALOG, existingInvoiceOpenPlan, resolveInvoiceResource } from '../../../../../utils/invoiceCatalog';
 import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
 import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
 
@@ -30,10 +30,11 @@ async function openGeneratedInvoicePdf(companyId, invoiceLike, { partner = false
       : invoiceLike;
   if (!inv) return;
   const cid = companyId || inv.company_id;
-  const apiPath = resolveInvoicePdfApiUrl(
-    { ...inv, company_id: cid, is_partner_invoice: partner || inv.is_partner_invoice },
-    cid
-  );
+  const apiPath = resolveInvoiceResource(
+    { ...inv, company_id: cid },
+    cid,
+    partner ? { type: INVOICE_CATALOG.PARTNER } : undefined
+  ).pdfApiUrl;
   if (!apiPath) return;
   await openProtectedPdfInNewTab(apiPath, null, {
     filename: partner
@@ -1900,21 +1901,28 @@ const NewInvoiceModal = ({
                 );
                 if (openExisting) {
                   const openPdfAndNavigate = async () => {
+                    const plan = existingInvoiceOpenPlan({
+                      existingInvoiceId,
+                      existingInvoiceNumber,
+                      companyId,
+                    });
                     try {
-                      const res = await invoiceService.getInvoice(companyId, existingInvoiceId);
-                      const inv = res?.data ?? res;
-                      if (inv?.pdf_url || inv?.id) {
-                        await openGeneratedInvoicePdf(companyId, inv);
+                      if (plan.fetchStandardDetail) {
+                        const res = await invoiceService.getInvoice(companyId, existingInvoiceId);
+                        const inv = res?.data ?? res;
+                        if (inv?.pdf_url || inv?.id) {
+                          await openGeneratedInvoicePdf(companyId, inv);
+                        }
+                      } else {
+                        await openGeneratedInvoicePdf(companyId, plan.resource.invoice, {
+                          partner: true,
+                        });
                       }
                     } catch (e) {
                       // Ignorer si la récupération échoue
                     }
                     if (company?.public_id) {
-                      const params = new URLSearchParams({
-                        search: existingInvoiceNumber,
-                        focusSearch: '1',
-                        invoice_id: String(existingInvoiceId),
-                      });
+                      const params = new URLSearchParams(plan.searchParams);
                       navigate(
                         `/dashboard/company/${company.public_id}/invoices/clients?${params.toString()}`
                       );
@@ -1985,24 +1993,31 @@ const NewInvoiceModal = ({
                 if (openExisting) {
                   // ✅ Ouvrir le PDF directement si disponible, puis naviguer vers le registre
                   const openPdfAndNavigate = async () => {
+                    const plan = existingInvoiceOpenPlan({
+                      existingInvoiceId,
+                      existingInvoiceNumber,
+                      companyId,
+                    });
                     try {
-                      const invoiceDetail = await invoiceService.getInvoice(
-                        companyId,
-                        existingInvoiceId
-                      );
-                      const inv = invoiceDetail?.data ?? invoiceDetail;
-                      if (inv?.pdf_url || inv?.id) {
-                        await openGeneratedInvoicePdf(companyId, inv);
+                      if (plan.fetchStandardDetail) {
+                        const invoiceDetail = await invoiceService.getInvoice(
+                          companyId,
+                          existingInvoiceId
+                        );
+                        const inv = invoiceDetail?.data ?? invoiceDetail;
+                        if (inv?.pdf_url || inv?.id) {
+                          await openGeneratedInvoicePdf(companyId, inv);
+                        }
+                      } else {
+                        await openGeneratedInvoicePdf(companyId, plan.resource.invoice, {
+                          partner: true,
+                        });
                       }
                     } catch (e) {
                       // Ignorer si la récupération échoue, on navigue quand même
                     }
                     if (company?.public_id) {
-                      const params = new URLSearchParams({
-                        search: existingInvoiceNumber,
-                        focusSearch: '1',
-                        invoice_id: String(existingInvoiceId),
-                      });
+                      const params = new URLSearchParams(plan.searchParams);
                       navigate(
                         `/dashboard/company/${company.public_id}/invoices/clients?${params.toString()}`
                       );

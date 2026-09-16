@@ -74,10 +74,16 @@ export const draftInvoiceFromPrepareError = (err) => {
   const data = err?.response?.data || err?.data || {};
   const id = data.existing_invoice_id ?? data.invoice_id;
   if (id == null) return null;
+  const invoice_number = data.existing_invoice_number || data.invoice_number || '';
+  const partner =
+    data.is_partner_invoice === true ||
+    data.kind === 'partner' ||
+    String(invoice_number).trim().toUpperCase().startsWith('PARTNER-');
   return {
     id,
-    invoice_number: data.existing_invoice_number || data.invoice_number || '',
+    invoice_number,
     status: 'draft',
+    ...(partner ? { is_partner_invoice: true, kind: 'partner' } : {}),
   };
 };
 

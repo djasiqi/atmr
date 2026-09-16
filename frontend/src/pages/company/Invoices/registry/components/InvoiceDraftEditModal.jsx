@@ -1,7 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
 import DraftInvoiceEditorPanel from './DraftInvoiceEditorPanel';
+import { INVOICE_CATALOG, resolveInvoiceResource } from '../../../../../utils/invoiceCatalog';
+import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
+import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
 import styles from './InvoiceDraftEditModal.module.css';
 
 /**
@@ -18,6 +21,8 @@ const InvoiceDraftEditModal = ({
   onMarkAsSent,
 }) => {
   const [portalTarget, setPortalTarget] = useState(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (typeof document === 'undefined' || !document.body) return undefined;
@@ -31,7 +36,22 @@ const InvoiceDraftEditModal = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (!open || !initialInvoice) return;
+    const resource = resolveInvoiceResource(initialInvoice, companyId);
+    if (resource.type !== INVOICE_CATALOG.PARTNER) return;
+    if (resource.pdfApiUrl) {
+      void openProtectedPdfInNewTab(resource.pdfApiUrl, null, {
+        filename: buildInvoicePdfDownloadFilename(resource.invoice),
+      });
+    }
+    onCloseRef.current?.();
+  }, [open, initialInvoice, companyId]);
+
   if (!open || !initialInvoice || !portalTarget) return null;
+  if (resolveInvoiceResource(initialInvoice, companyId).type === INVOICE_CATALOG.PARTNER) {
+    return null;
+  }
 
   return createPortal(
     <div className={styles.overlay} onClick={onClose} role="presentation">
