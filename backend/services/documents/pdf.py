@@ -2317,10 +2317,8 @@ def _get_billed_to(
             ).first()
             if _link is None:
                 app_logger.info(
-                    "[PDF] Lien client↔tiers payeur supprimé (invoice_id=%s, client_id=%s, billing_party_id=%s). Facturé à = domicile du client.",
+                    "[PDF] Lien client↔tiers payeur supprimé (invoice_id=%s). Facturé à = domicile du client.",
                     getattr(invoice, "id", None),
-                    _client_id,
-                    _bp_id,
                 )
                 use_billing_party = False
 
@@ -2388,8 +2386,7 @@ def _get_billed_to(
             return (name, addr)
         if getattr(invoice, "billing_party_id", None) and not bp:
             app_logger.warning(
-                "[PDF] billing_party_id=%s défini mais BillingParty introuvable (invoice_id=%s). Fallback.",
-                getattr(invoice, "billing_party_id", None),
+                "[PDF] BillingParty introuvable pour la facture (invoice_id=%s). Fallback.",
                 getattr(invoice, "id", None),
             )
             return (_name_with_uppercase_last_name("Payeur"), "Adresse non renseignée")
