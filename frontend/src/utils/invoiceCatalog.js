@@ -138,6 +138,12 @@ export function clearInvoiceCatalogSearchParams(params) {
  *   companyId: number|string|null,
  *   invoice: object|null,
  *   pdfApiUrl: string|null,
+ *   detailApiUrl: string|null,
+ *   updateApiUrl: string|null,
+ *   regeneratePdfApiUrl: string|null,
+ *   cancelApiUrl: string|null,
+ *   paymentApiUrl: string|null,
+ *   sendApiUrl: string|null,
  *   allowsStandardDetailGet: boolean,
  * }}
  */
@@ -152,12 +158,27 @@ export function resolveInvoiceResource(invoice, companyId, extras = {}) {
     id == null
       ? null
       : stampInvoiceCatalog({ ...(invoice || {}), id, company_id: cid }, type);
+  const partnerBase =
+    type === INVOICE_CATALOG.PARTNER && cid && id != null
+      ? `/invoices/companies/${cid}/partner-invoices/${id}`
+      : null;
+  const standardBase =
+    type === INVOICE_CATALOG.STANDARD && cid && id != null
+      ? `/invoices/companies/${cid}/invoices/${id}`
+      : null;
+  const apiBase = partnerBase || standardBase;
   return {
     type,
     id,
     companyId: cid,
     invoice: stamped,
     pdfApiUrl: stamped ? resolveInvoicePdfApiUrl(stamped, cid) : null,
+    detailApiUrl: apiBase,
+    updateApiUrl: apiBase,
+    regeneratePdfApiUrl: apiBase ? `${apiBase}/regenerate-pdf` : null,
+    cancelApiUrl: apiBase ? `${apiBase}/cancel` : null,
+    paymentApiUrl: apiBase ? `${apiBase}/payments` : null,
+    sendApiUrl: apiBase ? `${apiBase}/send` : null,
     allowsStandardDetailGet: type === INVOICE_CATALOG.STANDARD && id != null,
   };
 }

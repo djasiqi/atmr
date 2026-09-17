@@ -1,15 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
 import DraftInvoiceEditorPanel from './DraftInvoiceEditorPanel';
+import PartnerInvoiceDraftEditModal from './PartnerInvoiceDraftEditModal';
 import { INVOICE_CATALOG, resolveInvoiceResource } from '../../../../../utils/invoiceCatalog';
-import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
-import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
 import styles from './InvoiceDraftEditModal.module.css';
 
 /**
- * Édition facture (brouillon ou envoyée / en encaissement) depuis le registre : overlay + DraftInvoiceEditorPanel.
- * Portal sur body pour passer au-dessus de la sidebar company (stacking context).
+ * Édition facture depuis le registre.
+ * Catalogue partenaire → éditeur partenaire natif (jamais GET /invoices/{id}).
  */
 const InvoiceDraftEditModal = ({
   open,
@@ -21,8 +20,6 @@ const InvoiceDraftEditModal = ({
   onMarkAsSent,
 }) => {
   const [portalTarget, setPortalTarget] = useState(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (typeof document === 'undefined' || !document.body) return undefined;
@@ -36,22 +33,22 @@ const InvoiceDraftEditModal = ({
     };
   }, []);
 
-  useEffect(() => {
-    if (!open || !initialInvoice) return;
-    const resource = resolveInvoiceResource(initialInvoice, companyId);
-    if (resource.type !== INVOICE_CATALOG.PARTNER) return;
-    if (resource.pdfApiUrl) {
-      void openProtectedPdfInNewTab(resource.pdfApiUrl, null, {
-        filename: buildInvoicePdfDownloadFilename(resource.invoice),
-      });
-    }
-    onCloseRef.current?.();
-  }, [open, initialInvoice, companyId]);
+  if (!open || !initialInvoice) return null;
 
-  if (!open || !initialInvoice || !portalTarget) return null;
-  if (resolveInvoiceResource(initialInvoice, companyId).type === INVOICE_CATALOG.PARTNER) {
-    return null;
+  const resource = resolveInvoiceResource(initialInvoice, companyId);
+  if (resource.type === INVOICE_CATALOG.PARTNER) {
+    return (
+      <PartnerInvoiceDraftEditModal
+        open={open}
+        initialInvoice={initialInvoice}
+        companyId={companyId}
+        onClose={onClose}
+        onUpdated={onUpdated}
+      />
+    );
   }
+
+  if (!portalTarget) return null;
 
   return createPortal(
     <div className={styles.overlay} onClick={onClose} role="presentation">

@@ -19,18 +19,18 @@ import {
 import styles from './InvoicesRegistry.module.css';
 import {
   fetchInvoices,
-  sendInvoiceByEmail,
-  markInvoiceAsSent,
-  bulkMarkAsSent,
   sendReminderByEmail,
-  postPayment,
   postReminder,
-  forceRegenerateInvoicePdf,
-  cancelInvoice,
   duplicateInvoice,
   fetchBillingOpportunities,
   getEffectiveDueDate,
   getDaysOverdue,
+  forceRegenerateInvoicePdfForResource,
+  cancelInvoiceResource,
+  postPaymentForResource,
+  sendInvoiceByEmailForResource,
+  markInvoiceAsSentForResource,
+  bulkMarkAsSent,
 } from '../../../../services/invoiceService';
 import {
   INVOICE_CATALOG,
@@ -40,6 +40,7 @@ import {
   resolveInvoiceResource,
   writeInvoiceCatalogSearchParams,
 } from '../../../../utils/invoiceCatalog';
+import { getInvoiceCapabilities } from '../../../../utils/invoiceCapabilities';
 import { openProtectedPdfInNewTab } from '../../../../utils/protectedPdf';
 import { buildInvoicePdfDownloadFilename } from '../../../../utils/invoicePdfFilename';
 import { useLirieCompany } from '../../../../hooks/useLirieCompany';
@@ -334,7 +335,14 @@ const InvoicesRegistry = () => {
   };
 
   // Marquer comme envoyée (papier) sans email
-  const handleMarkAsSent = (invoiceId, { afterSuccess } = {}) => {
+  const handleMarkAsSent = (invoiceOrId, { afterSuccess } = {}) => {
+    const invoice =
+      invoiceOrId && typeof invoiceOrId === 'object'
+        ? invoiceOrId
+        : invoices.find((i) => Number(i.id) === Number(invoiceOrId)) || {
+            id: invoiceOrId,
+            company_id: company.id,
+          };
     setConfirmDialog({
       open: true,
       title: 'Marquer comme envoyée',
@@ -343,7 +351,7 @@ const InvoicesRegistry = () => {
       onConfirm: async () => {
         setConfirmDialog((d) => ({ ...d, open: false }));
         try {
-          await markInvoiceAsSent(company.id, invoiceId);
+          await markInvoiceAsSentForResource(invoice, company.id);
           await loadInvoices();
           afterSuccess?.();
         } catch (err) {
@@ -397,7 +405,7 @@ const InvoicesRegistry = () => {
         );
       } else {
         // Envoi d'une facture
-        await sendInvoiceByEmail(company.id, sendEmailModal.invoice.id, {
+        await sendInvoiceByEmailForResource(sendEmailModal.invoice, company.id, {
           recipient_email: options.recipient_email,
           force_regenerate_pdf: options.force_regenerate_pdf,
         });
@@ -415,7 +423,11 @@ const InvoicesRegistry = () => {
 
   const handlePayment = async (invoiceId, paymentData) => {
     try {
-      await postPayment(company.id, invoiceId, paymentData);
+      await postPaymentForResource(
+        paymentModal.invoice || { id: invoiceId, company_id: company.id },
+        company.id,
+        paymentData
+      );
       await loadInvoices();
       setPaymentModal({ open: false, invoice: null });
     } catch (err) {
@@ -436,9 +448,8 @@ const InvoicesRegistry = () => {
   const handleRegeneratePdf = async (invoice) => {
     try {
       const resource = resolveInvoiceResource(invoice, company?.id);
-      if (resource.type === INVOICE_CATALOG.PARTNER || !resource.id) return;
-      // Contrat figé unique — ne pas contourner forceRegenerateInvoicePdf.
-      await forceRegenerateInvoicePdf(company.id, resource.id);
+      if (!resource.id) return;
+      await forceRegenerateInvoicePdfForResource(invoice, company.id);
       await loadInvoices();
       setInvoiceDataRefreshTrigger((t) => t + 1);
     } catch (err) {
@@ -446,7 +457,7 @@ const InvoicesRegistry = () => {
     }
   };
 
-  const handleCancelInvoice = (invoiceId) => {
+  const handleCancelInvoice = (invoice) => {
     setConfirmDialog({
       open: true,
       title: 'Annuler la facture',
@@ -455,7 +466,7 @@ const InvoicesRegistry = () => {
       onConfirm: async () => {
         setConfirmDialog((d) => ({ ...d, open: false }));
         try {
-          await cancelInvoice(company.id, invoiceId);
+          await cancelInvoiceResource(invoice, company.id);
           await loadInvoices();
           setInvoiceDataRefreshTrigger((t) => t + 1);
         } catch (err) {
@@ -524,7 +535,8 @@ const InvoicesRegistry = () => {
         ...invoice,
         company_id: invoice.company_id || company?.id,
       };
-      if (resource.type === INVOICE_CATALOG.PARTNER) {
+      const capabilities = getInvoiceCapabilities(scoped, company?.id);
+      if (resource.type === INVOICE_CATALOG.PARTNER && !capabilities.canEdit) {
         if (resource.pdfApiUrl) {
           void openProtectedPdfInNewTab(resource.pdfApiUrl, null, {
             filename: buildInvoicePdfDownloadFilename(scoped),
@@ -536,7 +548,7 @@ const InvoicesRegistry = () => {
       setSearchParams((prev) => {
         const p = new URLSearchParams(prev);
         writeInvoiceCatalogSearchParams(p, {
-          type: INVOICE_CATALOG.STANDARD,
+          type: resource.type,
           id: invoice.id,
         });
         p.set('draft_edit', '1');
@@ -565,14 +577,23 @@ const InvoicesRegistry = () => {
           { type: ref.type }
         );
     if (resource.type === INVOICE_CATALOG.PARTNER) {
-      if (wantsDraft) {
+      if (!wantsDraft || draftEditInvoice) return;
+      const scoped = resource.invoice || fromList;
+      const capabilities = getInvoiceCapabilities(scoped, company.id);
+      if (!capabilities.canEdit) {
         if (resource.pdfApiUrl) {
           void openProtectedPdfInNewTab(resource.pdfApiUrl, null, {
             filename: buildInvoicePdfDownloadFilename(resource.invoice),
           });
         }
         clearDraftEditParams();
+        return;
       }
+      if (!fromList) {
+        clearDraftEditParams();
+        return;
+      }
+      setDraftEditInvoice(scoped);
       return;
     }
     if (!wantsDraft || draftEditInvoice) return;
@@ -1072,13 +1093,13 @@ const InvoicesRegistry = () => {
                             : { ...invoice, company_id: company?.id }
                         }
                         isGuideAnchor={index === 0}
-                        onSend={() => handleMarkAsSent(invoice.id)}
+                        onSend={() => handleMarkAsSent(invoice)}
                         onSendEmail={() => handleOpenSendEmail(invoice)}
                         onPayment={() => setPaymentModal({ open: true, invoice })}
                         onReminder={() => setReminderModal({ open: true, invoice })}
                         onSendReminderEmail={() => handleOpenSendReminderEmail(invoice)}
                         onRegeneratePdf={() => handleRegeneratePdf(invoice)}
-                        onCancel={() => handleCancelInvoice(invoice.id)}
+                        onCancel={() => handleCancelInvoice(invoice)}
                         onDuplicate={() => handleDuplicateInvoice(invoice.id)}
                         onEditDraft={() => handleOpenDraftEdit(invoice)}
                         onViewPdf={(url) => window.open(url, '_blank')}

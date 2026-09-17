@@ -21,16 +21,10 @@ import {
   ensurePdfUrlWorksInDev,
 } from '../../../../../utils/pdfUrlFallback';
 import { INVOICE_CATALOG, resolveInvoiceResource } from '../../../../../utils/invoiceCatalog';
+import { getInvoiceCapabilities } from '../../../../../utils/invoiceCapabilities';
 import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
 import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
 import {
-  canSendInvoice,
-  canAddPayment,
-  canGenerateReminder,
-  canRegeneratePdf,
-  canCancelInvoice,
-  canDuplicateInvoice,
-  canEditDraft,
   invoiceStatusLower,
   getNextReminderLevel,
   getReminderLabel,
@@ -121,20 +115,22 @@ const InvoiceRowActions = ({
   };
 
   const partnerResource = resolveInvoiceResource(invoice);
+  const capabilities = getInvoiceCapabilities(invoice, invoice?.company_id);
   const partnerInvoice = partnerResource.type === INVOICE_CATALOG.PARTNER;
+  const canEdit = capabilities.canEdit;
 
   const actions = [
     {
       key: 'editDraft',
-      label: partnerInvoice
-        ? 'Voir la facture'
-        : invoiceStatusLower(invoice) === 'draft'
+      label: canEdit
+        ? invoiceStatusLower(invoice) === 'draft'
           ? 'Éditer le brouillon'
-          : 'Éditer la facture',
-      icon: partnerInvoice ? <FiFileText size={14} /> : <FiEdit size={14} />,
+          : 'Éditer la facture'
+        : 'Voir la facture',
+      icon: canEdit ? <FiEdit size={14} /> : <FiFileText size={14} />,
       onClick: () => onEditDraft?.(),
       className: styles.actionBtnPrimary,
-      show: Boolean(onEditDraft) && (partnerInvoice || canEditDraft(invoice)),
+      show: Boolean(onEditDraft) && (canEdit || partnerInvoice),
     },
     {
       key: 'viewInitial',
@@ -162,7 +158,7 @@ const InvoiceRowActions = ({
         }
       },
       className: styles.actionBtnSecondary,
-      show: !partnerInvoice && hasReminder,
+      show: capabilities.canViewReminder && hasReminder,
     },
     {
       key: 'sendEmail',
@@ -170,7 +166,7 @@ const InvoiceRowActions = ({
       icon: <FiMail size={14} />,
       onClick: onSendEmail,
       className: styles.actionBtnPrimary,
-      show: canSendInvoice(invoice),
+      show: capabilities.canSend,
     },
     {
       key: 'send',
@@ -178,7 +174,7 @@ const InvoiceRowActions = ({
       icon: <FiSend size={14} />,
       onClick: onSend,
       className: styles.actionBtnSecondary,
-      show: canSendInvoice(invoice),
+      show: capabilities.canSend,
     },
     {
       key: 'payment',
@@ -186,7 +182,7 @@ const InvoiceRowActions = ({
       icon: <FiDollarSign size={14} />,
       onClick: onPayment,
       className: styles.actionBtnSuccess,
-      show: !partnerInvoice && canAddPayment(invoice),
+      show: capabilities.canAddPayment,
     },
     {
       key: 'reminder',
@@ -194,7 +190,7 @@ const InvoiceRowActions = ({
       icon: <FiClock size={14} />,
       onClick: onReminder,
       className: styles.actionBtnWarning,
-      show: !partnerInvoice && canGenerateReminder(invoice),
+      show: capabilities.canGenerateReminder,
     },
     {
       key: 'sendReminderEmail',
@@ -202,10 +198,7 @@ const InvoiceRowActions = ({
       icon: <FiMail size={14} />,
       onClick: onSendReminderEmail,
       className: styles.actionBtnPrimary,
-      show:
-        !partnerInvoice &&
-        invoice.reminder_level > 0 &&
-        invoiceStatusLower(invoice) !== 'paid',
+      show: capabilities.canSendReminderEmail,
     },
     {
       key: 'regenerate',
@@ -214,7 +207,7 @@ const InvoiceRowActions = ({
       icon: <FiRefreshCw size={14} />,
       onClick: onRegeneratePdf,
       className: styles.actionBtnSecondary,
-      show: !partnerInvoice && canRegeneratePdf(invoice),
+      show: capabilities.canRegeneratePdf,
     },
     {
       key: 'duplicate',
@@ -222,7 +215,7 @@ const InvoiceRowActions = ({
       icon: <FiEdit size={14} />,
       onClick: onDuplicate,
       className: styles.actionBtnSecondary,
-      show: !partnerInvoice && canDuplicateInvoice(invoice),
+      show: capabilities.canDuplicate,
     },
     {
       key: 'cancel',
@@ -230,7 +223,7 @@ const InvoiceRowActions = ({
       icon: <FiXCircle size={14} />,
       onClick: onCancel,
       className: styles.actionBtnDanger,
-      show: !partnerInvoice && canCancelInvoice(invoice),
+      show: capabilities.canCancel,
     },
   ];
 

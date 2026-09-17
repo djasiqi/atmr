@@ -1,4 +1,5 @@
 import apiClient from '../utils/apiClient';
+import { INVOICE_CATALOG, resolveInvoiceResource } from '../utils/invoiceCatalog';
 
 const API_BASE = '';
 
@@ -170,6 +171,125 @@ export const invoiceService = {
       `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/cancel`
     );
     return response.data;
+  },
+
+  _unwrapResourcePayload(payload) {
+    if (payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+      return payload.data;
+    }
+    return payload;
+  },
+
+  async getPartnerInvoice(companyId, partnerInvoiceId, options = {}) {
+    const params = new URLSearchParams();
+    if (options.cacheBust) {
+      params.set('_cb', String(Date.now()));
+    }
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const response = await apiClient.get(
+      `${API_BASE}/invoices/companies/${companyId}/partner-invoices/${partnerInvoiceId}${qs}`
+    );
+    return this._unwrapResourcePayload(response.data);
+  },
+
+  async updatePartnerInvoice(companyId, partnerInvoiceId, payload) {
+    const response = await apiClient.patch(
+      `${API_BASE}/invoices/companies/${companyId}/partner-invoices/${partnerInvoiceId}`,
+      payload
+    );
+    return this._unwrapResourcePayload(response.data);
+  },
+
+  async forceRegeneratePartnerInvoicePdf(companyId, partnerInvoiceId) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/partner-invoices/${partnerInvoiceId}/regenerate-pdf`
+    );
+    const payload = response?.data;
+    const pdfUrl = payload?.pdf_url || payload?.data?.pdf_url || null;
+    if (!pdfUrl) {
+      const message =
+        (typeof payload?.error === 'string' && payload.error) ||
+        'La régénération du PDF partenaire n’a pas retourné de nouveau document.';
+      const err = new Error(message);
+      err.response = { data: payload };
+      throw err;
+    }
+    return payload;
+  },
+
+  async cancelPartnerInvoice(companyId, partnerInvoiceId) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/partner-invoices/${partnerInvoiceId}/cancel`
+    );
+    return this._unwrapResourcePayload(response.data);
+  },
+
+  async postPartnerPayment(companyId, partnerInvoiceId, paymentData) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/partner-invoices/${partnerInvoiceId}/payments`,
+      paymentData
+    );
+    return this._unwrapResourcePayload(response.data);
+  },
+
+  async sendPartnerInvoiceByEmail(companyId, partnerInvoiceId, options = {}) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/partner-invoices/${partnerInvoiceId}/send`,
+      {
+        send_method: 'email',
+        recipient_email: options.recipient_email || null,
+        force_regenerate_pdf: options.force_regenerate_pdf || false,
+      }
+    );
+    return response.data;
+  },
+
+  async markPartnerInvoiceAsSent(companyId, partnerInvoiceId) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/partner-invoices/${partnerInvoiceId}/send`,
+      { send_method: 'paper' }
+    );
+    return response.data;
+  },
+
+  async forceRegenerateInvoicePdfForResource(invoice, companyId) {
+    const resource = resolveInvoiceResource(invoice, companyId);
+    if (resource.type === INVOICE_CATALOG.PARTNER) {
+      return this.forceRegeneratePartnerInvoicePdf(resource.companyId, resource.id);
+    }
+    return this.forceRegenerateInvoicePdf(resource.companyId, resource.id);
+  },
+
+  async cancelInvoiceResource(invoice, companyId) {
+    const resource = resolveInvoiceResource(invoice, companyId);
+    if (resource.type === INVOICE_CATALOG.PARTNER) {
+      return this.cancelPartnerInvoice(resource.companyId, resource.id);
+    }
+    return this.cancelInvoice(resource.companyId, resource.id);
+  },
+
+  async postPaymentForResource(invoice, companyId, paymentData) {
+    const resource = resolveInvoiceResource(invoice, companyId);
+    if (resource.type === INVOICE_CATALOG.PARTNER) {
+      return this.postPartnerPayment(resource.companyId, resource.id, paymentData);
+    }
+    return this.postPayment(resource.companyId, resource.id, paymentData);
+  },
+
+  async sendInvoiceByEmailForResource(invoice, companyId, options = {}) {
+    const resource = resolveInvoiceResource(invoice, companyId);
+    if (resource.type === INVOICE_CATALOG.PARTNER) {
+      return this.sendPartnerInvoiceByEmail(resource.companyId, resource.id, options);
+    }
+    return this.sendInvoiceByEmail(resource.companyId, resource.id, options);
+  },
+
+  async markInvoiceAsSentForResource(invoice, companyId) {
+    const resource = resolveInvoiceResource(invoice, companyId);
+    if (resource.type === INVOICE_CATALOG.PARTNER) {
+      return this.markPartnerInvoiceAsSent(resource.companyId, resource.id);
+    }
+    return this.markInvoiceAsSent(resource.companyId, resource.id);
   },
 
   // Récupérer les paramètres de facturation
@@ -792,6 +912,18 @@ export const {
   forceRegenerateInvoicePdf,
   regenerateInvoicePdf,
   cancelInvoice,
+  getPartnerInvoice,
+  updatePartnerInvoice,
+  forceRegeneratePartnerInvoicePdf,
+  cancelPartnerInvoice,
+  postPartnerPayment,
+  sendPartnerInvoiceByEmail,
+  markPartnerInvoiceAsSent,
+  forceRegenerateInvoicePdfForResource,
+  cancelInvoiceResource,
+  postPaymentForResource,
+  sendInvoiceByEmailForResource,
+  markInvoiceAsSentForResource,
   fetchBillingSettings,
   updateBillingSettings,
   exportInvoicesCSV,
