@@ -175,6 +175,7 @@ def generate_partner_invoice_pdf_content(
     transfers: list[BookingTransfer],
     *,
     line_amounts: dict[int, Any] | None = None,
+    line_snapshots: list[dict[str, Any]] | None = None,
 ) -> bytes:
     """Génère le contenu PDF d'une facture partenaire.
 
@@ -188,6 +189,7 @@ def generate_partner_invoice_pdf_content(
         partner_invoice: Facture partenaire
         transfers: Liste des transferts inclus dans la facture
         line_amounts: Montants par transfer_id (après overrides) pour cohérence ligne/total
+        line_snapshots: Lignes persistées (libellé / montant édités). Prioritaires sur les transferts live.
 
     Returns:
         Contenu PDF en bytes
@@ -218,12 +220,21 @@ def generate_partner_invoice_pdf_content(
     )
 
     # === DÉTERMINER LES ENTREPRISES ===
+    from models.company import Company
+
     partnership = partner_invoice.partnership
-    if not transfers:
+    if not transfers and not line_snapshots:
         raise ValueError("Aucun transfert fourni pour la facture partenaire")
 
-    executing_company = transfers[0].executing_company
-    if executing_company.id == partnership.owner_company_id:
+    executing_company = transfers[0].executing_company if transfers else None
+    if executing_company is None:
+        executing_company = Company.query.get(partner_invoice.executing_company_id)
+    if partnership is None:
+        raise ValueError("Partenariat introuvable pour la facture partenaire")
+    if (
+        executing_company is not None
+        and executing_company.id == partnership.owner_company_id
+    ):
         billed_company = partnership.partner_company
     else:
         billed_company = partnership.owner_company
@@ -343,11 +354,24 @@ def generate_partner_invoice_pdf_content(
         company_info_html += f"<br/>{_xml_escape_for_paragraph(vat_status_text)}"
     company_para = Paragraph(company_info_html, normal_style)
 
-    # Informations destinataire (partenaire)
-    billed_name = billed_company.name or "Entreprise"
-    billed_address = _format_address_multiline(billed_company.address)
-    billed_email = billed_company.billing_email or billed_company.contact_email or ""
-    billed_phone = billed_company.contact_phone or ""
+    # Informations destinataire (partenaire) — overrides snapshot si présents
+    billed_name = (
+        partner_invoice.recipient_name
+        or (billed_company.name if billed_company else None)
+        or "Entreprise"
+    )
+    billed_address = partner_invoice.recipient_address or _format_address_multiline(
+        billed_company.address if billed_company else None
+    )
+    billed_email = ""
+    billed_phone = ""
+    if partner_invoice.recipient_contact:
+        billed_email = partner_invoice.recipient_contact
+    elif billed_company:
+        billed_email = (
+            billed_company.billing_email or billed_company.contact_email or ""
+        )
+        billed_phone = billed_company.contact_phone or ""
 
     _bill_addr = _escape_multiline_address_html(billed_address)
     recipient_parts = [
@@ -488,45 +512,60 @@ def generate_partner_invoice_pdf_content(
         ["Date", "Client", "Départ", "Arrivée", "Montant CHF"]
     ]
 
-    for transfer in transfers:
-        booking = transfer.booking
-        if booking:
-            date_str = (
-                booking.scheduled_time.strftime("%d.%m.%Y")
-                if booking.scheduled_time
-                else ""
+    if line_snapshots:
+        for snap in line_snapshots:
+            client_label = str(
+                snap.get("description") or snap.get("client_name") or "Client"
             )
-            # Nom du client
-            client_name = ""
-            if booking.client and booking.client.user:
-                client_name = (
-                    booking.customer_name
-                    or f"{booking.client.user.first_name or ''} {booking.client.user.last_name or ''}".strip()
-                    or booking.client.user.username
-                    or "Client"
+            if len(client_label) > MAX_CLIENT_NAME_LENGTH:
+                client_label = client_label[: MAX_CLIENT_NAME_LENGTH - 1] + "…"
+            table_data.append(
+                [
+                    snap.get("service_date") or "",
+                    client_label,
+                    format_address_for_table(snap.get("departure")),
+                    format_address_for_table(snap.get("arrival")),
+                    f"{float(snap.get('amount') or 0):.2f}",
+                ]
+            )
+    else:
+        for transfer in transfers:
+            booking = transfer.booking
+            if booking:
+                date_str = (
+                    booking.scheduled_time.strftime("%d.%m.%Y")
+                    if booking.scheduled_time
+                    else ""
                 )
-                if len(client_name) > MAX_CLIENT_NAME_LENGTH:
-                    client_name = client_name[: MAX_CLIENT_NAME_LENGTH - 1] + "…"
+                client_name = ""
+                if booking.client and booking.client.user:
+                    client_name = (
+                        booking.customer_name
+                        or f"{booking.client.user.first_name or ''} {booking.client.user.last_name or ''}".strip()
+                        or booking.client.user.username
+                        or "Client"
+                    )
+                    if len(client_name) > MAX_CLIENT_NAME_LENGTH:
+                        client_name = client_name[: MAX_CLIENT_NAME_LENGTH - 1] + "…"
+                else:
+                    client_name = booking.customer_name or "Client"
+
+                departure = format_address_for_table(booking.pickup_location)
+                arrival = format_address_for_table(booking.dropoff_location)
             else:
-                client_name = booking.customer_name or "Client"
+                date_str = ""
+                client_name = "N/A"
+                departure = "N/A"
+                arrival = "N/A"
 
-            departure = format_address_for_table(booking.pickup_location)
-            arrival = format_address_for_table(booking.dropoff_location)
-        else:
-            date_str = ""
-            client_name = "N/A"
-            departure = "N/A"
-            arrival = "N/A"
-
-        # Montant effectif (override si fourni, sinon partner_cost)
-        line_amt = (line_amounts or {}).get(transfer.id)
-        if line_amt is not None:
-            amount = f"{float(line_amt):.2f}"
-        elif transfer.partner_cost is not None:
-            amount = f"{float(transfer.partner_cost):.2f}"
-        else:
-            amount = "0.00"
-        table_data.append([date_str, client_name, departure, arrival, amount])
+            line_amt = (line_amounts or {}).get(transfer.id)
+            if line_amt is not None:
+                amount = f"{float(line_amt):.2f}"
+            elif transfer.partner_cost is not None:
+                amount = f"{float(transfer.partner_cost):.2f}"
+            else:
+                amount = "0.00"
+            table_data.append([date_str, client_name, departure, arrival, amount])
 
     # Style tableau IDENTIQUE à pdf.py (pas de couleurs de fond) ; largeur totale = zone utile
     _cols_scale = usable_width_pt / (17 * cm)

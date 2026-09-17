@@ -334,6 +334,14 @@ class PartnerInvoiceService:
                 )
             )
 
+        from application.invoices.partner_invoice_lines import (
+            persist_partner_invoice_lines_from_transfers,
+        )
+
+        persist_partner_invoice_lines_from_transfers(
+            partner_invoice, transfers, line_amounts=line_amounts
+        )
+
         # Générer le PDF (brouillon : la facture reste DRAFT jusqu'à action explicite "Envoyer")
         try:
             pdf_url = self._generate_invoice_pdf(
@@ -384,13 +392,17 @@ class PartnerInvoiceService:
 
         from flask import current_app
 
+        from application.invoices.partner_invoice_lines import line_snapshots_for_pdf
         from services.partnerships.invoices_pdf import (
             generate_partner_invoice_pdf_content,
         )
 
         # Générer le contenu PDF
         pdf_content = generate_partner_invoice_pdf_content(
-            partner_invoice, transfers, line_amounts=line_amounts or {}
+            partner_invoice,
+            transfers,
+            line_amounts=line_amounts or {},
+            line_snapshots=line_snapshots_for_pdf(partner_invoice),
         )
 
         # Sauvegarder le fichier
@@ -452,7 +464,14 @@ class PartnerInvoiceService:
             .all()
         )
 
-        if not transfers:
+        from application.invoices.partner_invoice_lines import (
+            ensure_partner_invoice_lines,
+            line_amounts_for_pdf,
+        )
+
+        ensure_partner_invoice_lines(partner_invoice)
+
+        if not transfers and not partner_invoice.lines:
             raise ValueError(
                 f"Aucun transfert associé à la facture partenaire {partner_invoice_id}"
             )
@@ -483,7 +502,11 @@ class PartnerInvoiceService:
 
         # Générer le nouveau PDF
         try:
-            pdf_url = self._generate_invoice_pdf(partner_invoice, transfers)
+            pdf_url = self._generate_invoice_pdf(
+                partner_invoice,
+                transfers,
+                line_amounts=line_amounts_for_pdf(partner_invoice),
+            )
             partner_invoice.pdf_url = pdf_url
             db.session.commit()
 

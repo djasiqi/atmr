@@ -211,7 +211,11 @@ from .messaging_enums import (
     ParticipantRole,
 )
 from .ml_prediction import MLPrediction
-from .partner_invoice import PartnerInvoice
+from .partner_invoice import (
+    PartnerInvoice,
+    PartnerInvoiceLine,
+    PartnerInvoicePayment,
+)
 from .partnership import Partnership
 from .control_plane import (
     ControlPlaneAnomaly,
@@ -419,6 +423,8 @@ __all__ = [
     "MessageRead",
     "ParticipantRole",
     "PartnerInvoice",
+    "PartnerInvoiceLine",
+    "PartnerInvoicePayment",
     "Partnership",
     "PlatformAdminPermissionGrant",
     "BookingBillingOriginAudit",

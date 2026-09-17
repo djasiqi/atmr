@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     func,
 )
 from sqlalchemy.orm import (
@@ -108,12 +109,29 @@ class PartnerInvoice(db.Model):
     pdf_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
+    # Overrides destinataire (snapshot facturé, ne réécrit pas Company)
+    recipient_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    recipient_address: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    recipient_contact: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
     # Relations
     partnership = relationship("Partnership", backref="invoices")
     transfers = relationship(
         "BookingTransfer",
         secondary="partner_invoice_transfers",
         backref="partner_invoices",
+    )
+    lines = relationship(
+        "PartnerInvoiceLine",
+        back_populates="partner_invoice",
+        cascade="all, delete-orphan",
+        order_by="PartnerInvoiceLine.sort_order",
+    )
+    recorded_payments = relationship(
+        "PartnerInvoicePayment",
+        back_populates="partner_invoice",
+        cascade="all, delete-orphan",
+        order_by="PartnerInvoicePayment.paid_at",
     )
 
     # Pas de contrainte unique sur (partnership_id, period_year, period_month, executing_company_id)
@@ -144,6 +162,9 @@ class PartnerInvoice(db.Model):
             "sent_at": self.sent_at.isoformat() if self.sent_at else None,
             "pdf_url": self.pdf_url,
             "notes": self.notes,
+            "recipient_name": self.recipient_name,
+            "recipient_address": self.recipient_address,
+            "recipient_contact": self.recipient_contact,
             "partnership": self.partnership.to_dict() if self.partnership else None,
             "transfers_count": len(self.transfers) if self.transfers else 0,
         }
@@ -165,3 +186,101 @@ partner_invoice_transfers = db.Table(
         primary_key=True,
     ),
 )
+
+
+class PartnerInvoiceLine(db.Model):
+    """Snapshot facturé d'une ligne partenaire (source ≠ ligne éditable)."""
+
+    __tablename__ = "partner_invoice_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    partner_invoice_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("partner_invoices.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    description: Mapped[str] = mapped_column(String(500), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=1)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    vat_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    source_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="booking_transfer"
+    )
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    service_date: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    client_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    departure: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    arrival: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    partner_invoice = relationship("PartnerInvoice", back_populates="lines")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Sérialise la ligne snapshot."""
+        return {
+            "id": self.id,
+            "partner_invoice_id": self.partner_invoice_id,
+            "description": self.description,
+            "quantity": float(self.quantity),
+            "unit_price": float(self.unit_price),
+            "amount": float(self.amount),
+            "vat_rate": float(self.vat_rate) if self.vat_rate is not None else None,
+            "source_type": self.source_type,
+            "source_id": self.source_id,
+            "sort_order": self.sort_order,
+            "service_date": self.service_date,
+            "client_name": self.client_name,
+            "departure": self.departure,
+            "arrival": self.arrival,
+            "note": self.note,
+        }
+
+
+class PartnerInvoicePayment(db.Model):
+    """Paiement rattaché à partner_invoices (jamais à invoices.id)."""
+
+    __tablename__ = "partner_invoice_payments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    partner_invoice_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("partner_invoices.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    method: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="bank_transfer"
+    )
+    paid_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    partner_invoice = relationship("PartnerInvoice", back_populates="recorded_payments")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Sérialise le paiement partenaire."""
+        return {
+            "id": self.id,
+            "partner_invoice_id": self.partner_invoice_id,
+            "amount": float(self.amount),
+            "method": self.method,
+            "paid_at": self.paid_at.isoformat() if self.paid_at else None,
+            "note": self.note,
+        }
