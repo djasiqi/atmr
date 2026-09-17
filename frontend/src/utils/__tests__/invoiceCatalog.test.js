@@ -62,6 +62,19 @@ describe('invoiceCatalog — identité typée', () => {
     expect(standard.pdfApiUrl).toBe(
       `/invoices/companies/${companyId}/invoices/${sharedId}/pdf`
     );
+    expect(partner.detailApiUrl).toBe(
+      `/invoices/companies/${companyId}/partner-invoices/${sharedId}`
+    );
+    expect(partner.regeneratePdfApiUrl).toBe(
+      `/invoices/companies/${companyId}/partner-invoices/${sharedId}/regenerate-pdf`
+    );
+    expect(partner.cancelApiUrl).toBe(
+      `/invoices/companies/${companyId}/partner-invoices/${sharedId}/cancel`
+    );
+    expect(partner.detailApiUrl).not.toMatch(`/invoices/${sharedId}`);
+    expect(standard.regeneratePdfApiUrl).toBe(
+      `/invoices/companies/${companyId}/invoices/${sharedId}/regenerate-pdf`
+    );
   });
 
   test('query invoice_type + invoice_id reconstitue le catalogue', () => {
