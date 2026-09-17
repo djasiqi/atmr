@@ -2816,6 +2816,253 @@ class PartnerInvoicePdfDownload(Resource):
             )
 
 
+def _partner_invoice_company_guard(company_id: int):
+    """Contrôle d'accès entreprise pour les routes partner-invoices.
+
+    Retourne ``(company, None)`` ou ``(None, (body, status))``.
+    """
+    from routes.companies import _get_current_company_via_use_case
+
+    company, error_response, status_code = _get_current_company_via_use_case()
+    if error_response or not company:
+        return None, (error_response, status_code)
+    cid_obj = getattr(company, "id", None)
+    try:
+        cid = int(cid_obj) if cid_obj is not None else None
+    except (ValueError, TypeError, OverflowError):
+        cid = None
+    if cid != company_id:
+        return None, APIErrorHandler.handle_permission_error(
+            "Non autorisé",
+            logger_instance=logger,
+        )
+    return company, None
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/partner-invoices/<int:partner_invoice_id>"
+)
+class PartnerInvoiceDetail(Resource):
+    """Détail / édition native d'une facture partenaire."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id, partner_invoice_id):
+        _company, error_response = _partner_invoice_company_guard(company_id)
+        if error_response:
+            return error_response
+        from application.invoices.get_partner_invoice import get_partner_invoice
+
+        result = get_partner_invoice(
+            company_id=company_id, partner_invoice_id=partner_invoice_id
+        )
+        if not result.ok:
+            return APIErrorHandler.handle_not_found(
+                "PartnerInvoice", partner_invoice_id, logger
+            )
+        return success_response(data=result.invoice)
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def patch(self, company_id, partner_invoice_id):
+        _company, error_response = _partner_invoice_company_guard(company_id)
+        if error_response:
+            return error_response
+        from application.invoices.update_partner_invoice_draft import (
+            update_partner_invoice_draft,
+        )
+
+        payload = request.get_json() or {}
+        result = update_partner_invoice_draft(
+            company_id=company_id,
+            partner_invoice_id=partner_invoice_id,
+            payload=payload,
+        )
+        if not result.ok:
+            if result.status_code == 404:
+                return APIErrorHandler.handle_not_found(
+                    "PartnerInvoice", partner_invoice_id, logger
+                )
+            return APIErrorHandler.handle_validation_error(
+                (result.error or {}).get("error", "Mise à jour refusée"),
+                logger_instance=logger,
+            )
+        return success_response(
+            data=result.invoice, message="Facture partenaire enregistrée"
+        )
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/partner-invoices/<int:partner_invoice_id>/regenerate-pdf"
+)
+class PartnerInvoiceRegeneratePdf(Resource):
+    """Régénération PDF native — jamais /invoices/{id}/regenerate-pdf."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def post(self, company_id, partner_invoice_id):
+        _company, error_response = _partner_invoice_company_guard(company_id)
+        if error_response:
+            return error_response
+        from application.invoices.force_regenerate_partner_invoice_pdf import (
+            force_regenerate_partner_invoice_pdf,
+        )
+
+        result = force_regenerate_partner_invoice_pdf(
+            company_id=company_id, partner_invoice_id=partner_invoice_id
+        )
+        if not result.ok:
+            if result.status_code == 404:
+                return APIErrorHandler.handle_not_found(
+                    "PartnerInvoice", partner_invoice_id, logger
+                )
+            return {
+                "success": False,
+                "error": (result.error or {}).get("error", "Régénération impossible"),
+            }, result.status_code or 500
+        return {"message": "PDF régénéré", "pdf_url": result.pdf_url}
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/partner-invoices/<int:partner_invoice_id>/cancel"
+)
+class PartnerInvoiceCancel(Resource):
+    """Annulation native d'une facture partenaire."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def post(self, company_id, partner_invoice_id):
+        _company, error_response = _partner_invoice_company_guard(company_id)
+        if error_response:
+            return error_response
+        from application.invoices.cancel_partner_invoice import cancel_partner_invoice
+
+        result = cancel_partner_invoice(
+            company_id=company_id, partner_invoice_id=partner_invoice_id
+        )
+        if not result.ok:
+            if result.status_code == 404:
+                return APIErrorHandler.handle_not_found(
+                    "PartnerInvoice", partner_invoice_id, logger
+                )
+            return APIErrorHandler.handle_validation_error(
+                (result.error or {}).get("error", "Annulation refusée"),
+                logger_instance=logger,
+            )
+        return success_response(
+            data=result.invoice, message="Facture partenaire annulée"
+        )
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/partner-invoices/<int:partner_invoice_id>/payments"
+)
+class PartnerInvoicePayments(Resource):
+    """Paiement natif rattaché à partner_invoices."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def post(self, company_id, partner_invoice_id):
+        _company, error_response = _partner_invoice_company_guard(company_id)
+        if error_response:
+            return error_response
+        from application.invoices.add_partner_invoice_payment import (
+            add_partner_invoice_payment,
+        )
+
+        result = add_partner_invoice_payment(
+            company_id=company_id,
+            partner_invoice_id=partner_invoice_id,
+            payload=request.get_json() or {},
+        )
+        if not result.ok:
+            if result.status_code == 404:
+                return APIErrorHandler.handle_not_found(
+                    "PartnerInvoice", partner_invoice_id, logger
+                )
+            return APIErrorHandler.handle_validation_error(
+                (result.error or {}).get("error", "Paiement refusé"),
+                logger_instance=logger,
+            )
+        return success_response(
+            data=result.invoice, message="Paiement partenaire enregistré"
+        )
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/partner-invoices/<int:partner_invoice_id>/send"
+)
+class PartnerInvoiceSend(Resource):
+    """Envoi email / papier natif partenaire."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def post(self, company_id, partner_invoice_id):
+        _company, error_response = _partner_invoice_company_guard(company_id)
+        if error_response:
+            return error_response
+        from application.invoices.partner_invoice_access import (
+            load_accessible_partner_invoice,
+        )
+        from application.invoices.send_partner_invoice_by_email import (
+            SendPartnerInvoiceByEmailInput,
+            SendPartnerInvoiceByEmailUseCase,
+        )
+        from models.partner_invoice import PartnerInvoiceStatus
+        from services.partnerships.invoices import PartnerInvoiceService
+
+        partner_invoice = load_accessible_partner_invoice(
+            company_id, partner_invoice_id
+        )
+        if partner_invoice is None:
+            return APIErrorHandler.handle_not_found(
+                "PartnerInvoice", partner_invoice_id, logger
+            )
+
+        data = request.get_json() or {}
+        send_method = data.get("send_method", "email")
+        if send_method == "email":
+            result = SendPartnerInvoiceByEmailUseCase().execute(
+                SendPartnerInvoiceByEmailInput(
+                    partner_invoice_id=partner_invoice_id,
+                    company_id=company_id,
+                    recipient_email=data.get("recipient_email"),
+                    force_regenerate_pdf=data.get("force_regenerate_pdf", False),
+                )
+            )
+            if not result.success:
+                return {"success": False, "error": result.error}, result.status_code
+            return success_response(
+                data={
+                    "invoice_id": result.partner_invoice_id,
+                    "recipient": result.recipient,
+                    "sent_at": result.sent_at.isoformat() if result.sent_at else None,
+                    "send_method": "email",
+                },
+                message=f"Facture partenaire envoyée par email à {result.recipient}",
+            )
+
+        if partner_invoice.status != PartnerInvoiceStatus.DRAFT:
+            return APIErrorHandler.handle_validation_error(
+                "Déjà envoyée ou statut invalide (utilisez une facture en brouillon)",
+                logger_instance=logger,
+            )
+        try:
+            pi = PartnerInvoiceService().mark_as_sent(partner_invoice_id, company_id)
+        except ValueError as exc:
+            return APIErrorHandler.handle_validation_error(
+                str(exc), logger_instance=logger
+            )
+        return success_response(
+            data={
+                "invoice_id": partner_invoice_id,
+                "sent_at": pi.sent_at.isoformat() if pi.sent_at else None,
+                "send_method": "paper",
+            },
+            message="Facture marquée comme envoyée (courrier papier)",
+        )
+
+
 @invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>")
 class InvoiceDetail(Resource):
     @jwt_required()
