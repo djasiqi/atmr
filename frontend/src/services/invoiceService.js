@@ -3,6 +3,13 @@ import { INVOICE_CATALOG, resolveInvoiceResource } from '../utils/invoiceCatalog
 
 const API_BASE = '';
 
+function unwrapResourcePayload(payload) {
+  if (payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+    return payload.data;
+  }
+  return payload;
+}
+
 // Service pour la gestion des factures
 export const invoiceService = {
   // Récupérer la liste des factures avec filtres
@@ -162,7 +169,7 @@ export const invoiceService = {
 
   // Alias historique — même contrat que forceRegenerateInvoicePdf.
   async regenerateInvoicePdf(companyId, invoiceId) {
-    return this.forceRegenerateInvoicePdf(companyId, invoiceId);
+    return invoiceService.forceRegenerateInvoicePdf(companyId, invoiceId);
   },
 
   // Annuler une facture
@@ -171,13 +178,6 @@ export const invoiceService = {
       `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/cancel`
     );
     return response.data;
-  },
-
-  _unwrapResourcePayload(payload) {
-    if (payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
-      return payload.data;
-    }
-    return payload;
   },
 
   async getPartnerInvoice(companyId, partnerInvoiceId, options = {}) {
@@ -189,7 +189,7 @@ export const invoiceService = {
     const response = await apiClient.get(
       `${API_BASE}/invoices/companies/${companyId}/partner-invoices/${partnerInvoiceId}${qs}`
     );
-    return this._unwrapResourcePayload(response.data);
+    return unwrapResourcePayload(response.data);
   },
 
   async updatePartnerInvoice(companyId, partnerInvoiceId, payload) {
@@ -197,7 +197,7 @@ export const invoiceService = {
       `${API_BASE}/invoices/companies/${companyId}/partner-invoices/${partnerInvoiceId}`,
       payload
     );
-    return this._unwrapResourcePayload(response.data);
+    return unwrapResourcePayload(response.data);
   },
 
   async forceRegeneratePartnerInvoicePdf(companyId, partnerInvoiceId) {
@@ -221,7 +221,7 @@ export const invoiceService = {
     const response = await apiClient.post(
       `${API_BASE}/invoices/companies/${companyId}/partner-invoices/${partnerInvoiceId}/cancel`
     );
-    return this._unwrapResourcePayload(response.data);
+    return unwrapResourcePayload(response.data);
   },
 
   async postPartnerPayment(companyId, partnerInvoiceId, paymentData) {
@@ -229,7 +229,7 @@ export const invoiceService = {
       `${API_BASE}/invoices/companies/${companyId}/partner-invoices/${partnerInvoiceId}/payments`,
       paymentData
     );
-    return this._unwrapResourcePayload(response.data);
+    return unwrapResourcePayload(response.data);
   },
 
   async sendPartnerInvoiceByEmail(companyId, partnerInvoiceId, options = {}) {
@@ -250,46 +250,6 @@ export const invoiceService = {
       { send_method: 'paper' }
     );
     return response.data;
-  },
-
-  async forceRegenerateInvoicePdfForResource(invoice, companyId) {
-    const resource = resolveInvoiceResource(invoice, companyId);
-    if (resource.type === INVOICE_CATALOG.PARTNER) {
-      return this.forceRegeneratePartnerInvoicePdf(resource.companyId, resource.id);
-    }
-    return this.forceRegenerateInvoicePdf(resource.companyId, resource.id);
-  },
-
-  async cancelInvoiceResource(invoice, companyId) {
-    const resource = resolveInvoiceResource(invoice, companyId);
-    if (resource.type === INVOICE_CATALOG.PARTNER) {
-      return this.cancelPartnerInvoice(resource.companyId, resource.id);
-    }
-    return this.cancelInvoice(resource.companyId, resource.id);
-  },
-
-  async postPaymentForResource(invoice, companyId, paymentData) {
-    const resource = resolveInvoiceResource(invoice, companyId);
-    if (resource.type === INVOICE_CATALOG.PARTNER) {
-      return this.postPartnerPayment(resource.companyId, resource.id, paymentData);
-    }
-    return this.postPayment(resource.companyId, resource.id, paymentData);
-  },
-
-  async sendInvoiceByEmailForResource(invoice, companyId, options = {}) {
-    const resource = resolveInvoiceResource(invoice, companyId);
-    if (resource.type === INVOICE_CATALOG.PARTNER) {
-      return this.sendPartnerInvoiceByEmail(resource.companyId, resource.id, options);
-    }
-    return this.sendInvoiceByEmail(resource.companyId, resource.id, options);
-  },
-
-  async markInvoiceAsSentForResource(invoice, companyId) {
-    const resource = resolveInvoiceResource(invoice, companyId);
-    if (resource.type === INVOICE_CATALOG.PARTNER) {
-      return this.markPartnerInvoiceAsSent(resource.companyId, resource.id);
-    }
-    return this.markInvoiceAsSent(resource.companyId, resource.id);
   },
 
   // Récupérer les paramètres de facturation
@@ -745,6 +705,68 @@ export const invoiceService = {
   },
 };
 
+/**
+ * Dispatchers isolés du registre : jamais de `this`.
+ * Importables en fonctions nommées sans perdre le contexte.
+ */
+export async function forceRegenerateInvoicePdfForResource(invoice, companyId) {
+  const resource = resolveInvoiceResource(invoice, companyId);
+  if (resource.type === INVOICE_CATALOG.PARTNER) {
+    return invoiceService.forceRegeneratePartnerInvoicePdf(
+      resource.companyId,
+      resource.id
+    );
+  }
+  return invoiceService.forceRegenerateInvoicePdf(resource.companyId, resource.id);
+}
+
+export async function cancelInvoiceResource(invoice, companyId) {
+  const resource = resolveInvoiceResource(invoice, companyId);
+  if (resource.type === INVOICE_CATALOG.PARTNER) {
+    return invoiceService.cancelPartnerInvoice(resource.companyId, resource.id);
+  }
+  return invoiceService.cancelInvoice(resource.companyId, resource.id);
+}
+
+export async function postPaymentForResource(invoice, companyId, paymentData) {
+  const resource = resolveInvoiceResource(invoice, companyId);
+  if (resource.type === INVOICE_CATALOG.PARTNER) {
+    return invoiceService.postPartnerPayment(
+      resource.companyId,
+      resource.id,
+      paymentData
+    );
+  }
+  return invoiceService.postPayment(resource.companyId, resource.id, paymentData);
+}
+
+export async function sendInvoiceByEmailForResource(invoice, companyId, options = {}) {
+  const resource = resolveInvoiceResource(invoice, companyId);
+  if (resource.type === INVOICE_CATALOG.PARTNER) {
+    return invoiceService.sendPartnerInvoiceByEmail(
+      resource.companyId,
+      resource.id,
+      options
+    );
+  }
+  return invoiceService.sendInvoiceByEmail(resource.companyId, resource.id, options);
+}
+
+export async function markInvoiceAsSentForResource(invoice, companyId) {
+  const resource = resolveInvoiceResource(invoice, companyId);
+  if (resource.type === INVOICE_CATALOG.PARTNER) {
+    return invoiceService.markPartnerInvoiceAsSent(resource.companyId, resource.id);
+  }
+  return invoiceService.markInvoiceAsSent(resource.companyId, resource.id);
+}
+
+invoiceService.forceRegenerateInvoicePdfForResource =
+  forceRegenerateInvoicePdfForResource;
+invoiceService.cancelInvoiceResource = cancelInvoiceResource;
+invoiceService.postPaymentForResource = postPaymentForResource;
+invoiceService.sendInvoiceByEmailForResource = sendInvoiceByEmailForResource;
+invoiceService.markInvoiceAsSentForResource = markInvoiceAsSentForResource;
+
 // Fonctions utilitaires pour les composants
 export const formatCurrency = (amount) => {
   return new Intl.NumberFormat('fr-CH', {
@@ -919,11 +941,6 @@ export const {
   postPartnerPayment,
   sendPartnerInvoiceByEmail,
   markPartnerInvoiceAsSent,
-  forceRegenerateInvoicePdfForResource,
-  cancelInvoiceResource,
-  postPaymentForResource,
-  sendInvoiceByEmailForResource,
-  markInvoiceAsSentForResource,
   fetchBillingSettings,
   updateBillingSettings,
   exportInvoicesCSV,

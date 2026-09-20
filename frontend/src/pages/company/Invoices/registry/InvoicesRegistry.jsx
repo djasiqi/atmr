@@ -18,6 +18,7 @@ import {
 } from 'react-icons/fi';
 import styles from './InvoicesRegistry.module.css';
 import {
+  invoiceService,
   fetchInvoices,
   sendReminderByEmail,
   postReminder,
@@ -25,11 +26,6 @@ import {
   fetchBillingOpportunities,
   getEffectiveDueDate,
   getDaysOverdue,
-  forceRegenerateInvoicePdfForResource,
-  cancelInvoiceResource,
-  postPaymentForResource,
-  sendInvoiceByEmailForResource,
-  markInvoiceAsSentForResource,
   bulkMarkAsSent,
 } from '../../../../services/invoiceService';
 import {
@@ -351,7 +347,7 @@ const InvoicesRegistry = () => {
       onConfirm: async () => {
         setConfirmDialog((d) => ({ ...d, open: false }));
         try {
-          await markInvoiceAsSentForResource(invoice, company.id);
+          await invoiceService.markInvoiceAsSentForResource(invoice, company.id);
           await loadInvoices();
           afterSuccess?.();
         } catch (err) {
@@ -405,7 +401,7 @@ const InvoicesRegistry = () => {
         );
       } else {
         // Envoi d'une facture
-        await sendInvoiceByEmailForResource(sendEmailModal.invoice, company.id, {
+        await invoiceService.sendInvoiceByEmailForResource(sendEmailModal.invoice, company.id, {
           recipient_email: options.recipient_email,
           force_regenerate_pdf: options.force_regenerate_pdf,
         });
@@ -423,7 +419,7 @@ const InvoicesRegistry = () => {
 
   const handlePayment = async (invoiceId, paymentData) => {
     try {
-      await postPaymentForResource(
+      await invoiceService.postPaymentForResource(
         paymentModal.invoice || { id: invoiceId, company_id: company.id },
         company.id,
         paymentData
@@ -449,7 +445,7 @@ const InvoicesRegistry = () => {
     try {
       const resource = resolveInvoiceResource(invoice, company?.id);
       if (!resource.id) return;
-      await forceRegenerateInvoicePdfForResource(invoice, company.id);
+      await invoiceService.forceRegenerateInvoicePdfForResource(invoice, company.id);
       await loadInvoices();
       setInvoiceDataRefreshTrigger((t) => t + 1);
     } catch (err) {
@@ -466,7 +462,7 @@ const InvoicesRegistry = () => {
       onConfirm: async () => {
         setConfirmDialog((d) => ({ ...d, open: false }));
         try {
-          await cancelInvoiceResource(invoice, company.id);
+          await invoiceService.cancelInvoiceResource(invoice, company.id);
           await loadInvoices();
           setInvoiceDataRefreshTrigger((t) => t + 1);
         } catch (err) {
