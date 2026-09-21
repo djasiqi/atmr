@@ -47,6 +47,13 @@ import {
   formatNameWithCivility,
   resolvePassengerGender,
 } from '../../../../utils/personCivility';
+import {
+  DELIVERY_BENEFICIARY_LABEL,
+  formatDeliveryDescriptionDisplay,
+  formatMissionTypeLabel,
+  isMaterialDelivery as isMaterialDeliveryEntity,
+  MISSION_DELIVERY_BADGE,
+} from '../../../../utils/missionTypeDisplay';
 import s from './ReservationDetailPanel.module.css';
 
 const STATUS_MAP = {
@@ -374,6 +381,7 @@ const ReservationDetailPanel = ({
       phone: r.phone || r.client?.contact_phone || r.client?.phone || '',
       notes_medical: (r.notes_medical && r.notes_medical !== 'Aucune note') ? r.notes_medical : '',
       instructions: r.instructions || '',
+      delivery_description: r.delivery_description || '',
       external_reference: meta.external_reference || r.external_reference || '',
     };
   }, []);
@@ -657,6 +665,10 @@ const ReservationDetailPanel = ({
       setSaveError(returnPickupConflict);
       return;
     }
+    if (isMaterialDeliveryEntity(reservation) && !(form.delivery_description || '').trim()) {
+      setSaveError('Veuillez saisir une description pour la livraison.');
+      return;
+    }
     try {
       setSaving(true);
       setSaveError(null);
@@ -675,6 +687,10 @@ const ReservationDetailPanel = ({
       } else if (isSchedulePending(reservation) || reservation?.is_return) {
         payload.scheduled_time = null;
         payload.time_confirmed = false;
+      }
+      if (isMaterialDeliveryEntity(reservation)) {
+        payload.mission_type = 'material_delivery';
+        payload.delivery_description = String(payload.delivery_description || '').trim();
       }
       await onSave(reservation.id, payload);
       setEditing(false);
@@ -806,7 +822,7 @@ const ReservationDetailPanel = ({
   const chatBookingId = reservation.is_return && reservation.parent_booking_id
     ? reservation.parent_booking_id
     : reservation.id;
-  const isMaterialDelivery = reservation.mission_type === 'material_delivery';
+  const isMaterialDelivery = isMaterialDeliveryEntity(reservation);
 
   const originalAmount = reservation?.amount_original ?? reservation?.original_amount ?? reservation?.requested_amount;
   const adjustedDelta = Number.isFinite(Number(originalAmount))
@@ -1058,7 +1074,12 @@ const ReservationDetailPanel = ({
       {/* Header */}
       <div className={s.panelHeader}>
         <div className={s.panelTitleRow}>
-          <span className={s.panelTitle}>Réservation #{reservation.id}</span>
+          <span className={s.panelTitle}>
+            {isMaterialDelivery ? `Livraison #${reservation.id}` : `Réservation #${reservation.id}`}
+          </span>
+          {isMaterialDelivery && (
+            <span className={`${s.statusBadge} ${s.deliveryBadge}`}>{MISSION_DELIVERY_BADGE}</span>
+          )}
           <span className={`${s.statusBadge} ${s[statusInfo.css]}`}>{statusInfo.label}</span>
         </div>
         <div className={s.headerActions}>
@@ -1075,6 +1096,16 @@ const ReservationDetailPanel = ({
 
       {/* Scrollable body */}
       <div className={s.panelBody}>
+
+        {isMaterialDelivery && (
+          <div className={s.deliveryLead} data-testid="company-delivery-lead">
+            <span className={`${s.statusBadge} ${s.deliveryBadge}`}>{MISSION_DELIVERY_BADGE}</span>
+            <div className={s.deliveryLeadTitle}>Description de la livraison</div>
+            <div className={s.deliveryLeadText}>
+              {formatDeliveryDescriptionDisplay(reservation)}
+            </div>
+          </div>
+        )}
 
         {showScheduleReconfirmBanner && (
           <div
@@ -1540,9 +1571,16 @@ const ReservationDetailPanel = ({
                   <FiPackage size={12} className={s.editGroupIcon} />
                   Livraison
                 </div>
-                <textarea className={s.editTextarea} value={form.instructions}
-                  onChange={(e) => handleChange('instructions', e.target.value)}
-                  placeholder="Description du matériel" rows={3} />
+                <textarea
+                  id={`reservation-${reservation.id}-delivery-description`}
+                  name="delivery_description"
+                  aria-label="Description de la livraison"
+                  className={s.editTextarea}
+                  value={form.delivery_description}
+                  onChange={(e) => handleChange('delivery_description', e.target.value)}
+                  placeholder="Description de la livraison (ex. médicament, oxygène, dossiers…)"
+                  rows={3}
+                />
               </div>
             )}
 
@@ -1572,10 +1610,20 @@ const ReservationDetailPanel = ({
                 <h3 className={s.sectionTitle}>Informations</h3>
               </div>
               <div className={s.summaryGrid}>
-                <div className={s.summaryItem}>
-                  <span className={s.summaryLabel}>Passager</span>
-                  <span className={s.summaryValue}>{passengerDisplayName}</span>
-                </div>
+                {(!isMaterialDelivery || passengerDisplayName) && (
+                  <div className={s.summaryItem}>
+                    <span className={s.summaryLabel}>
+                      {isMaterialDelivery ? DELIVERY_BENEFICIARY_LABEL : 'Passager'}
+                    </span>
+                    <span className={s.summaryValue}>{passengerDisplayName || '—'}</span>
+                  </div>
+                )}
+                {!isMaterialDelivery && (
+                  <div className={s.summaryItem}>
+                    <span className={s.summaryLabel}>Type</span>
+                    <span className={s.summaryValue}>{formatMissionTypeLabel(reservation.mission_type)}</span>
+                  </div>
+                )}
                 {bookingIdentity.source?.name && (
                   <div className={s.summaryItem}>
                     <span className={s.summaryLabel}>Origine</span>

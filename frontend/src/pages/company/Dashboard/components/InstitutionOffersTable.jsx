@@ -10,6 +10,11 @@ import { formatMissionScheduleDetail, formatLegTime, formatDepartureTime, getCon
 import { formatWallClockDateTime } from '../../../../utils/missionTimeDisplay';
 import { canRespondToInstitutionOffer, isInstitutionOfferExpired, filterVisibleInstitutionOffers } from '../../../../utils/institutionOfferResponse';
 import { resolveInstitutionOfferActions, computeAcceptNowPickupIso } from '../../../../utils/institutionOfferActions';
+import {
+  formatMissionTypeLabel,
+  isMaterialDelivery,
+  MISSION_DELIVERY_BADGE,
+} from '../../../../utils/missionTypeDisplay';
 import PlanOfferTimeModal from './ProposeOfferTimeModal';
 import InstitutionOfferActions from './InstitutionOfferActions';
 
@@ -172,7 +177,7 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
                     </div>
                   </td>
                   <td className={styles.clientCell}>
-                    <BookingIdentityCell identity={buildOfferIdentity(offer)} />
+                    <BookingIdentityCell booking={req} identity={buildOfferIdentity(offer)} />
                   </td>
                   <td
                     className={styles.locationCell}
@@ -199,9 +204,7 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
                   </td>
                   <td>
                     <div style={{ fontSize: '13px' }}>
-                      {req.mission_type === 'patient_transport'
-                        ? 'Patient'
-                        : req.mission_type || '—'}
+                      {isMaterialDelivery(req) ? MISSION_DELIVERY_BADGE : formatMissionTypeLabel(req.mission_type)}
                     </div>
                     {mobilityTags.length > 0 && (
                       <div
@@ -299,7 +302,7 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
             >
               <div className={styles.mobileCardHeader}>
                 <div className={styles.mobileCardTitleGroup}>
-                  <BookingIdentityCell identity={buildOfferIdentity(offer)} layout="compact" />
+                  <BookingIdentityCell booking={req} identity={buildOfferIdentity(offer)} layout="compact" />
                 </div>
                 <span className={`${styles.statusBadge} ${styles.pending}`}>
                   {canRespond ? 'En attente' : isExpired ? 'Expiré' : 'Indisponible'}

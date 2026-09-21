@@ -42,6 +42,12 @@ import {
   resolveBillingMetaLabel,
 } from './statusColors';
 import {
+  formatDeliveryDescriptionDisplay,
+  formatMissionTypeLabel,
+  getDeliveryDescription,
+  isMaterialDelivery,
+} from '../../../utils/missionTypeDisplay';
+import {
   extractWallClockDate,
   extractWallClockTime,
   getGenevaTodayDateStr,
@@ -640,6 +646,14 @@ const InstitutionRequests = () => {
                             >
                               {st.label}
                             </span>
+                            {isMaterialDelivery(req) && (
+                              <span
+                                className={`${s.badge} ${s.deliveryBadge}`}
+                                title={getDeliveryDescription(req) || 'Livraison'}
+                              >
+                                LIVRAISON
+                              </span>
+                            )}
                             {delay && (
                               <span
                                 className={`${s.lateBadge} ${delay.severity === 'severe' ? s.lateBadgeSevere : ''}`}
@@ -779,6 +793,12 @@ const InstitutionRequests = () => {
           onClose={() => setRelaunchTarget(null)}
           onConfirm={handleConfirmRelaunch}
           loading={sendMutation.isPending}
+          missionTypeLabel={formatMissionTypeLabel(relaunchTarget.mission_type)}
+          deliveryDescription={
+            isMaterialDelivery(relaunchTarget)
+              ? formatDeliveryDescriptionDisplay(relaunchTarget)
+              : null
+          }
         />
       )}
     </div>

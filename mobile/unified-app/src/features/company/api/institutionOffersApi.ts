@@ -28,6 +28,7 @@ export type InstitutionTransportRequestSummary = {
     external_reference?: string | null;
   } | null;
   mission_type?: string;
+  delivery_description?: string | null;
   mission_date?: string | null;
   scheduled_time?: string | null;
   next_confirmed_time?: string | null;

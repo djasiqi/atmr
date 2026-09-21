@@ -33,6 +33,7 @@ import {
   isInstantInPast,
 } from '../../../utils/missionScheduleForm';
 import { extractWallClockDate } from '../../../utils/missionTimeDisplay';
+import { isMaterialDelivery } from '../../../utils/missionTypeDisplay';
 import s from './RequestDetailPanel.module.css';
 
 const parseDate = (iso) => {
@@ -115,6 +116,7 @@ const InstitutionOperationalEdit = ({
     if (err.key === 'pickup_time') return { ...err, fieldId: fieldId('pickup-time') };
     if (err.key === 'dropoff_location') return { ...err, fieldId: fieldId('dest-address-0') };
     if (err.key === 'medical_principal') return { ...err, fieldId: fieldId('dest-service-0') };
+    if (err.key === 'delivery_description') return { ...err, fieldId: fieldId('delivery-description') };
     const loc = /^extra_stop_location_(\d+)$/.exec(err.key);
     if (loc) return { ...err, fieldId: fieldId(`dest-address-${Number(loc[1]) + 1}`) };
     const time = /^extra_stop_time_(\d+)$/.exec(err.key);
@@ -243,6 +245,7 @@ const InstitutionOperationalEdit = ({
         return_to_institution: returnToInstitution,
         return_time: returnTime,
         intermediate_stops: extraStops,
+        delivery_description: accessForm.delivery_description,
       },
     }));
     if (isEnRoute && accessForm.reason.trim().length < 10) {
@@ -642,10 +645,44 @@ const InstitutionOperationalEdit = ({
       {isReturnTrip ? homeBlock : hospitalBlock}
       <div className={s.editDivider} />
 
+      {isMaterialDelivery(request) && (
+        <div className={s.editGroup}>
+          <div className={s.editGroupTitle}>
+            <FiFileText className={s.editGroupIcon} size={12} />
+            Livraison
+          </div>
+          <textarea
+            id={fieldId('delivery-description')}
+            name="delivery_description"
+            aria-label="Description de la livraison"
+            className={s.editTextarea}
+            value={accessForm.delivery_description}
+            onChange={(e) => {
+              handleAccessChange('delivery_description', e.target.value);
+              if (e.target.value.trim()) clearFieldErrors('delivery_description');
+            }}
+            placeholder="Description de la livraison (ex. médicament, oxygène, dossiers…)"
+            rows={3}
+            aria-invalid={Boolean(fieldErrors.delivery_description) || undefined}
+            aria-describedby={
+              fieldErrors.delivery_description
+                ? formErrorId(fieldId('delivery-description'))
+                : undefined
+            }
+          />
+          {fieldErrors.delivery_description && (
+            <p id={formErrorId(fieldId('delivery-description'))} className={s.fieldError} role="alert">
+              {fieldErrors.delivery_description}
+            </p>
+          )}
+        </div>
+      )}
+      {isMaterialDelivery(request) && <div className={s.editDivider} />}
+
       <div className={s.editGroup}>
         <div className={s.editGroupTitle}>
           <FiUser className={s.editGroupIcon} size={12} />
-          Patient
+          {isMaterialDelivery(request) ? 'Destinataire' : 'Patient'}
         </div>
         <input
           id={fieldId('customer-name')}

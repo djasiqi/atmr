@@ -1073,17 +1073,23 @@ class TransportRequestCreateSchema(Schema):
     @validates_schema
     def validate_delivery_description(self, data, **_kwargs):
         """Valide que delivery_description est présent si mission_type != patient_transport."""
-        mission_type = data.get("mission_type", MissionType.PATIENT_TRANSPORT.value)
-        delivery_description = data.get("delivery_description")
+        from shared.utils.material_delivery import (
+            is_material_delivery,
+            normalize_delivery_description,
+        )
 
-        if (
-            mission_type != MissionType.PATIENT_TRANSPORT.value
-            and not delivery_description
-        ):
+        mission_type = data.get("mission_type", MissionType.PATIENT_TRANSPORT.value)
+        delivery_description = normalize_delivery_description(
+            data.get("delivery_description")
+        )
+
+        if is_material_delivery(mission_type) and not delivery_description:
             raise ValidationError(
                 "delivery_description est requis pour mission_type=material_delivery",
                 field_name="delivery_description",
             )
+        if delivery_description:
+            data["delivery_description"] = delivery_description
 
     @validates_schema
     def validate_destination_service_or_doctor(self, data, **_kwargs):

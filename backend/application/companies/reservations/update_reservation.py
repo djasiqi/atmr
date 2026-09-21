@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol
 
 from shared.time_utils import parse_local_naive
+from shared.utils.material_delivery import require_delivery_description_on_write
 
 from ._status import status_value
 
@@ -74,6 +75,24 @@ class UpdateCompanyReservationUseCase:
             )
 
         updated_fields: list[str] = []
+
+        try:
+            normalized_desc = require_delivery_description_on_write(
+                mission_type=validated_data.get("mission_type"),
+                delivery_description=validated_data.get("delivery_description"),
+                mission_type_in_payload="mission_type" in validated_data,
+                description_in_payload="delivery_description" in validated_data,
+                existing_mission_type=getattr(booking, "mission_type", None),
+                existing_description=getattr(booking, "delivery_description", None),
+            )
+        except ValueError as exc:
+            return UpdateCompanyReservationResult(
+                ok=False,
+                error={"error": str(exc)},
+                status_code=400,
+            )
+        if normalized_desc is not None and "delivery_description" in validated_data:
+            validated_data["delivery_description"] = normalized_desc
 
         if "pickup_location" in validated_data:
             booking.pickup_location = validated_data["pickup_location"]

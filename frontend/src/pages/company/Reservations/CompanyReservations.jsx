@@ -103,6 +103,8 @@ const buildInstitutionOfferRow = (offer) => {
     __priceEstimate: offer.price_estimate || null,
     pickup_location: req.pickup_location,
     dropoff_location: req.dropoff_location,
+    mission_type: req.mission_type,
+    delivery_description: req.delivery_description,
     scheduling: req.scheduling || buildOfferScheduling(req),
     scheduled_time: req.scheduled_time,
     time_confirmed: req.pickup_time_confirmed,

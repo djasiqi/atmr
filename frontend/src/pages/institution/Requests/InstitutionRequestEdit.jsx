@@ -8,6 +8,7 @@ import RouteStepTimeField from '../../../components/institution/RouteStepTimeFie
 import ConfirmRequestEditModal from './ConfirmRequestEditModal';
 import { combineMissionDateTime, extractHHMM } from '../../../utils/missionScheduleForm';
 import { extractWallClockDate } from '../../../utils/missionTimeDisplay';
+import { isMaterialDelivery } from '../../../utils/missionTypeDisplay';
 import MedicalDestinationDetails from '../../../components/institution/MedicalDestinationDetails';
 import {
   DESTINATION_TYPE_MEDICAL,
@@ -62,6 +63,9 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
     Boolean(request.return_time_confirmed),
   );
   const [notes, setNotes] = useState(request.notes || '');
+  const [deliveryDescription, setDeliveryDescription] = useState(
+    request.delivery_description || '',
+  );
   const initialMobility = useMemo(() => request.mobility || {}, [request.mobility]);
   const [mobility, setMobility] = useState(() => ({
     wheelchair: Boolean(request.requires_wheelchair || initialMobility.wheelchair),
@@ -86,6 +90,7 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
     if (err.key === 'pickup_time') return { ...err, fieldId: 'edit-pickup-time' };
     if (err.key === 'dropoff_location') return { ...err, fieldId: 'edit-dest-address-0' };
     if (err.key === 'medical_principal') return { ...err, fieldId: 'edit-dest-service-0' };
+    if (err.key === 'delivery_description') return { ...err, fieldId: 'edit-delivery-description' };
     const loc = /^extra_stop_location_(\d+)$/.exec(err.key);
     if (loc) return { ...err, fieldId: `edit-dest-address-${Number(loc[1]) + 1}` };
     const time = /^extra_stop_time_(\d+)$/.exec(err.key);
@@ -180,6 +185,7 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
     const validationErrors = remapEditErrorIds(collectInstitutionRequestFormErrors({
       formData: {
         mission_type: request.mission_type || 'patient_transport',
+        delivery_description: deliveryDescription,
         mission_date: missionDate,
         pickup_location: pickupLocation,
         pickup_type: 'other',
@@ -211,6 +217,10 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
       pickup_location: pickupLocation.trim(),
       pickup_time_confirmed: pickupTimeConfirmed,
       notes: notes || null,
+      ...(isMaterialDelivery(request) ? {
+        mission_type: 'material_delivery',
+        delivery_description: deliveryDescription.trim(),
+      } : {}),
     };
 
     const isMultiRoute = returnToInstitution
@@ -512,6 +522,34 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
           )}
         </div>
       </div>
+
+      {isMaterialDelivery(request) && (
+        <label className={s.editLabel} htmlFor="edit-delivery-description">
+          Description de la livraison
+          <textarea
+            id="edit-delivery-description"
+            className={s.editTextarea}
+            value={deliveryDescription}
+            onChange={(e) => {
+              setDeliveryDescription(e.target.value);
+              clearFieldErrors('delivery_description');
+            }}
+            rows={3}
+            placeholder="Ex. médicament, oxygène, dossiers…"
+            aria-invalid={Boolean(fieldErrors.delivery_description) || undefined}
+            aria-describedby={
+              fieldErrors.delivery_description
+                ? formErrorId('edit-delivery-description')
+                : undefined
+            }
+          />
+          {fieldErrors.delivery_description && (
+            <p id={formErrorId('edit-delivery-description')} className={s.fieldError} role="alert">
+              {fieldErrors.delivery_description}
+            </p>
+          )}
+        </label>
+      )}
 
       <label className={s.editLabel}>
         Notes

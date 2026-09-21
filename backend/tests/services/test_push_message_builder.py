@@ -48,6 +48,19 @@ def test_build_push_message_assigned_driver():
     assert out["data"]["mission_id"] == 3253
 
 
+def test_build_push_message_assigned_driver_material_delivery():
+    ctx = {
+        "id": 39869,
+        "client_name": "Michel BASSET",
+        "time_formatted": "17:10",
+        "mission_type": "material_delivery",
+        "delivery_description": "Livraison des effets personnels de M. Basset.",
+    }
+    out = build_push_message(EVENT_ASSIGNED, ctx, "driver", discrete_mode=False)
+    assert out["title"] == "Nouvelle livraison • Assignée"
+    assert "Michel BASSET" in out["body"]
+
+
 def test_build_push_message_assigned_with_event_id_dedupe_in_fanout_style():
     """dedupe_key event:{id} prioritaire côté fanout ; fallback booking au build."""
     ctx = {"id": 3253, "client_name": "Drin Jasiqi", "time_formatted": "13:00"}

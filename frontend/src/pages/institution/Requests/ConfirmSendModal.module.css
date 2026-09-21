@@ -66,6 +66,39 @@
   padding: 12px 20px 20px;
 }
 
+.recap {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  background: #fff7ed;
+}
+
+.recapRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recapRow + .recapRow {
+  margin-top: 8px;
+}
+
+.recapLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #c2410c;
+}
+
+.recapValue {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: pre-wrap;
+}
+
 .message {
   margin: 0;
   font-size: 0.875rem;

@@ -140,3 +140,32 @@ export function getClientBirthDateDisplay(mission: DriverMission): string | null
   }
   return null;
 }
+
+export function isMaterialDeliveryMission(mission: DriverMission | null | undefined): boolean {
+  if (!mission) return false;
+  const raw = mission as Record<string, unknown>;
+  return String(raw.mission_type || "").trim().toLowerCase() === "material_delivery";
+}
+
+export const MISSION_DELIVERY_BADGE = "LIVRAISON";
+export const MISSING_DELIVERY_DESCRIPTION = "Description de livraison non renseignée";
+export const DELIVERY_BENEFICIARY_LABEL = "Bénéficiaire";
+export const DELIVERY_CARGO_LABEL = "À transporter";
+
+export function getDeliveryDescription(mission: DriverMission | null | undefined): string | null {
+  if (!mission) return null;
+  const raw = mission as Record<string, unknown>;
+  const desc = typeof raw.delivery_description === "string" ? raw.delivery_description.trim() : "";
+  return desc.length > 0 ? desc : null;
+}
+
+export function formatDeliveryDescriptionDisplay(mission: DriverMission | null | undefined): string {
+  return getDeliveryDescription(mission) || MISSING_DELIVERY_DESCRIPTION;
+}
+
+export function formatMissionTypeLabel(value: string | null | undefined): string {
+  const key = String(value || "").trim().toLowerCase();
+  if (key === "material_delivery") return "Livraison";
+  if (key === "patient_transport" || !key) return "Transport patient";
+  return key.replace(/_/g, " ");
+}

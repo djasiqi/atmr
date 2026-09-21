@@ -1016,6 +1016,24 @@ class TransportRequestDetail(Resource):
             if billing_guard is not None:
                 return billing_guard
 
+            from shared.utils.material_delivery import (
+                require_delivery_description_on_write,
+            )
+
+            try:
+                normalized_desc = require_delivery_description_on_write(
+                    mission_type=validated.get("mission_type"),
+                    delivery_description=validated.get("delivery_description"),
+                    mission_type_in_payload="mission_type" in validated,
+                    description_in_payload="delivery_description" in validated,
+                    existing_mission_type=transport_req.mission_type,
+                    existing_description=transport_req.delivery_description,
+                )
+            except ValueError as exc:
+                return {"error": str(exc)}, 400
+            if normalized_desc is not None and "delivery_description" in validated:
+                validated["delivery_description"] = normalized_desc
+
             operational_fields = [
                 k for k in validated if k != "acknowledge_carrier_impact"
             ]

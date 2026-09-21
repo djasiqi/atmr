@@ -268,8 +268,13 @@ export default function InstitutionOfferDetailScreen() {
       <View style={s.headerCard}>
         <View style={s.headerTop}>
           <View style={s.headerTitles}>
+            {req?.mission_type === "material_delivery" ? (
+              <AppText variant="label" style={s.deliveryBadge}>
+                LIVRAISON
+              </AppText>
+            ) : null}
             <AppText variant="sectionTitle" style={s.patientTitle}>
-              {patientName}
+              {req?.mission_type === "material_delivery" ? (patientName || "Livraison") : patientName}
             </AppText>
             {expiresLabel ? (
               <AppText variant="bodyMuted" style={s.expMeta}>
@@ -382,11 +387,24 @@ export default function InstitutionOfferDetailScreen() {
           Informations
         </AppText>
         <View style={s.summaryGrid}>
-          <SummaryRow label="Passager" value={patientName} />
+          {req?.mission_type === "material_delivery" ? (
+            <SummaryRow
+              label="Description de la livraison"
+              value={(req.delivery_description || "").trim() || "Description de livraison non renseignée"}
+            />
+          ) : null}
+          {(patientName || req?.mission_type !== "material_delivery") ? (
+            <SummaryRow
+              label={req?.mission_type === "material_delivery" ? "Bénéficiaire" : "Passager"}
+              value={patientName}
+            />
+          ) : null}
           {birthDate ? <SummaryRow label="Date de naissance" value={birthDate} /> : null}
           <SummaryRow label="Origine" value={institutionName} />
           <SummaryRow label="Horaire" value={scheduleLabel} />
-          {missionType ? <SummaryRow label="Type" value={missionType} /> : null}
+          {missionType && req?.mission_type !== "material_delivery" ? (
+            <SummaryRow label="Type" value={missionType} />
+          ) : null}
           {priceEstimate ? (
             <SummaryRow label={priceEstimate.label} value={priceEstimate.value} />
           ) : null}
@@ -530,6 +548,11 @@ const s = StyleSheet.create({
   },
   headerTitles: { flex: 1, gap: 2 },
   patientTitle: { color: E.TEXT },
+  deliveryBadge: {
+    color: "#C2410C",
+    fontWeight: "800",
+    marginBottom: 4,
+  },
   expMeta: { fontSize: 12 },
   statusBadge: {
     backgroundColor: "rgba(245, 158, 11, 0.15)",

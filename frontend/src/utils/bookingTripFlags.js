@@ -1,9 +1,12 @@
+import { isMaterialDelivery } from './missionTypeDisplay';
+
 /**
  * Dérive la liste de badges parcours depuis trip_flags API ou fallback legacy.
  */
 
 export function resolveTripFlagsFromBooking(booking, routeGroupSizes = {}) {
   const flags = booking?.trip_flags;
+  const materialDelivery = isMaterialDelivery(booking);
   if (flags) {
     if (
       process.env.NODE_ENV !== 'production'
@@ -24,6 +27,7 @@ export function resolveTripFlagsFromBooking(booking, routeGroupSizes = {}) {
       legCount: flags.leg_count ?? null,
       transferred: Boolean(flags.transferred),
       changeRequestPending: Boolean(flags.change_request_pending),
+      materialDelivery,
     };
   }
 
@@ -42,12 +46,21 @@ export function resolveTripFlagsFromBooking(booking, routeGroupSizes = {}) {
     changeRequestPending: ['pending', 'escalation_required', 'expired'].includes(
       String(booking?.active_change_request?.status || '').toLowerCase()
     ),
+    materialDelivery,
   };
 }
 
 /** @returns {Array<{ key: string, label: string, title?: string, variant?: string }>} */
 export function buildTripBadgeDescriptors(flags) {
   const badges = [];
+  if (flags.materialDelivery) {
+    badges.push({
+      key: 'material_delivery',
+      label: 'LIVRAISON',
+      title: 'Livraison de matériel',
+      variant: 'delivery',
+    });
+  }
   if (flags.roundTrip) {
     badges.push({
       key: 'round_trip',

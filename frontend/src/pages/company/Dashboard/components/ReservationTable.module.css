@@ -149,7 +149,8 @@
 
 .roundTripBadge,
 .returnLegBadge,
-.routeLegBadge {
+.routeLegBadge,
+.deliveryBadge {
   align-self: flex-start;
   margin-top: 2px;
   padding: 2px 8px;
@@ -176,6 +177,12 @@
   background: #eef2ff;
   color: #4338ca;
   border: 1px solid #c7d2fe;
+}
+
+.deliveryBadge {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fdba74;
 }
 
 .dateCell {

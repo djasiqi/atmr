@@ -67,6 +67,14 @@ def _as_str(v: Any, default: str = "") -> str:
     return s if s else default
 
 
+def _is_material_delivery(booking_or_context: Any) -> bool:
+    from shared.utils.material_delivery import is_material_delivery
+
+    if isinstance(booking_or_context, dict):
+        return is_material_delivery(booking_or_context.get("mission_type"))
+    return is_material_delivery(getattr(booking_or_context, "mission_type", None))
+
+
 def _get_booking_id(booking_or_context: Any) -> int:
     """Retourne l'ID de la course depuis un modèle Booking ou un dict."""
     if hasattr(booking_or_context, "id"):
@@ -552,7 +560,11 @@ def build_push_for_company_to_driver(
     body_lines: list[str] = []
 
     if change_type == CHANGE_TYPE_ASSIGN:
-        title = "Nouvelle course • Assignée"
+        title = (
+            "Nouvelle livraison • Assignée"
+            if _is_material_delivery(booking_or_context)
+            else "Nouvelle course • Assignée"
+        )
         body_lines.append(f"{client_name} • {time_short or ''}".strip().rstrip(" •"))
         if pickup_short and dropoff_short:
             body_lines.append(_format_route_line(pickup_short, dropoff_short))
@@ -680,7 +692,11 @@ def build_push_message(
     body = ""
 
     if event == EVENT_ASSIGNED:
-        title = "Nouvelle course • Assignée"
+        title = (
+            "Nouvelle livraison • Assignée"
+            if _is_material_delivery(booking_or_context)
+            else "Nouvelle course • Assignée"
+        )
         if discrete_mode:
             body = "Nouvelle course assignée. Ouvrez l'application pour les détails."
         elif recipient_role == "driver":

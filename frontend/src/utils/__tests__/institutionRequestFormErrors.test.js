@@ -2,6 +2,7 @@ import { MEDICAL_DESTINATION_OR_ERROR } from '../institutionDestinationDetails';
 import {
   APPOINTMENT_LEAD_REQUIRED,
   CONFIRMED_TIME_REQUIRED,
+  DELIVERY_DESCRIPTION_REQUIRED,
   DROPOFF_ADDRESS_REQUIRED,
   EXTRA_STOP_ADDRESS_REQUIRED,
   MISSION_DATE_REQUIRED,
@@ -172,5 +173,19 @@ describe('institutionRequestFormErrors', () => {
       message: PATIENT_REQUIRED_FOR_DOMICILE,
       fieldId: 'patient-select',
     });
+  });
+
+  it('exige une description pour une livraison matériel', () => {
+    const errors = collectInstitutionRequestFormErrors({
+      formData: {
+        ...base,
+        mission_type: 'material_delivery',
+        mission_date: '2026-12-01',
+        delivery_description: '   ',
+      },
+    });
+    expect(errors.some((err) => err.key === 'delivery_description')).toBe(true);
+    expect(errors.find((err) => err.key === 'delivery_description')?.message)
+      .toBe(DELIVERY_DESCRIPTION_REQUIRED);
   });
 });

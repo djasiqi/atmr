@@ -683,6 +683,37 @@ button.needsChip:hover {
   border: 1px solid transparent;
 }
 
+.deliveryBadge {
+  background: #fff7ed;
+  color: #c2410c;
+  border-color: #fdba74;
+}
+
+.deliveryLead {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  background: #fff7ed;
+}
+
+.deliveryLeadTitle {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #c2410c;
+}
+
+.deliveryLeadText {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: pre-wrap;
+}
+
 .badgeStatusNeutral {
   background: var(--status-neutral-bg, var(--bg-muted));
   color: var(--status-neutral-text, var(--text-muted));

@@ -16,6 +16,13 @@ import { formatWallClockDateShort } from '../../../../utils/missionTimeDisplay';
 import { institutionOfferEstimateLabel } from '../../../../utils/institutionOfferEstimateLabel';
 import { canRespondToInstitutionOffer, isInstitutionOfferExpired } from '../../../../utils/institutionOfferResponse';
 import { resolveInstitutionOfferActions } from '../../../../utils/institutionOfferActions';
+import {
+  DELIVERY_BENEFICIARY_LABEL,
+  formatDeliveryDescriptionDisplay,
+  formatMissionTypeLabel,
+  isMaterialDelivery,
+  MISSION_DELIVERY_BADGE,
+} from '../../../../utils/missionTypeDisplay';
 
 /** Formate un instant absolu (ex. expiration d'offre). */
 const formatInstantDateTime = (isoString) => {
@@ -29,17 +36,7 @@ const formatInstantDateTime = (isoString) => {
   };
 };
 
-const MISSION_LABELS = {
-  patient_transport: 'Transport patient',
-  material_delivery: 'Livraison matériel',
-};
-
-const formatMissionType = (value) => {
-  if (!value) return '';
-  if (MISSION_LABELS[value]) return MISSION_LABELS[value];
-  const readable = String(value).replace(/_/g, ' ').trim();
-  return readable ? readable.charAt(0).toUpperCase() + readable.slice(1) : '';
-};
+const formatMissionType = (value) => formatMissionTypeLabel(value);
 
 const getRoutePoints = (request) => {
   const legs = Array.isArray(request?.legs)
@@ -196,6 +193,9 @@ const InstitutionOfferDetailPanel = ({
               </span>
             )}
           </div>
+          {isMaterialDelivery(req) && (
+            <span className={`${styles.statusBadge} ${styles.deliveryBadge}`}>{MISSION_DELIVERY_BADGE}</span>
+          )}
           <span className={`${styles.statusBadge} ${statusClass}`}>{statusLabel}</span>
         </div>
         <button type="button" className={styles.closeBtn} onClick={onClose} title="Fermer" aria-label="Fermer">
@@ -265,16 +265,30 @@ const InstitutionOfferDetailPanel = ({
           </div>
         )}
 
+        {isMaterialDelivery(req) && (
+          <div className={styles.deliveryLead} data-testid="company-offer-delivery-lead">
+            <span className={`${styles.statusBadge} ${styles.deliveryBadge}`}>{MISSION_DELIVERY_BADGE}</span>
+            <div className={styles.deliveryLeadTitle}>Description de la livraison</div>
+            <div className={styles.deliveryLeadText}>
+              {formatDeliveryDescriptionDisplay(req)}
+            </div>
+          </div>
+        )}
+
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <div className={`${styles.sectionIcon} ${styles.sectionIconBrand}`}><FaInfoCircle /></div>
             <h3 className={styles.sectionTitle}>Informations</h3>
           </div>
           <div className={styles.summaryGrid}>
-            <div className={styles.summaryItem}>
-              <span className={styles.summaryLabel}>Passager</span>
-              <span className={styles.summaryValue}>{identity.passengerLabel || '—'}</span>
-            </div>
+            {(identity.passengerLabel || !isMaterialDelivery(req)) && (
+              <div className={styles.summaryItem}>
+                <span className={styles.summaryLabel}>
+                  {isMaterialDelivery(req) ? DELIVERY_BENEFICIARY_LABEL : 'Passager'}
+                </span>
+                <span className={styles.summaryValue}>{identity.passengerLabel || '—'}</span>
+              </div>
+            )}
             {passengerBirthDate && (
               <div className={styles.summaryItem}>
                 <span className={styles.summaryLabel}>Date de naissance</span>
@@ -291,7 +305,7 @@ const InstitutionOfferDetailPanel = ({
               <span className={styles.summaryLabel}>Horaire</span>
               <span className={styles.summaryValue}>{scheduleLabel}</span>
             </div>
-            {req.mission_type && (
+            {!isMaterialDelivery(req) && (
               <div className={styles.summaryItem}>
                 <span className={styles.summaryLabel}>Type</span>
                 <span className={styles.summaryValue}>{formatMissionType(req.mission_type)}</span>

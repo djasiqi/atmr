@@ -11,6 +11,7 @@ import {
   getClientBirthDateDisplay,
   getMissionClientDisplayName,
   getScheduledWhenDisplay,
+  isMaterialDeliveryMission,
 } from "../domain/missionDisplay";
 import { formatMissionPickupTime } from "../domain/missionMetrics";
 import {
@@ -78,14 +79,14 @@ function navigationDestination(mission: DriverMission, statusKey: DriverMissionS
   return pickup || dropoff;
 }
 
-function transitionLabel(target: DriverTransitionStatus): string {
+function transitionLabel(target: DriverTransitionStatus, delivery = false): string {
   switch (target) {
     case "EN_ROUTE":
       return "EN ROUTE";
     case "ARRIVED":
       return "ARRIVÉ";
     case "IN_PROGRESS":
-      return "À BORD";
+      return delivery ? "RÉCUPÉRÉ" : "À BORD";
     case "COMPLETED":
       return "TERMINER";
     default:
@@ -427,7 +428,7 @@ export function DashboardActiveMission({
             onPress={() => onMissionTransition?.(forwardTransition)}
             disabled={pending}
             accessibilityRole="button"
-            accessibilityLabel={transitionLabel(forwardTransition)}
+            accessibilityLabel={transitionLabel(forwardTransition, isMaterialDeliveryMission(mission))}
             style={({ pressed }) => [
               styles.primaryCta,
               pending && styles.disabledOpacity,
@@ -436,7 +437,7 @@ export function DashboardActiveMission({
           >
             <Ionicons name="play" size={12} color="#FFFFFF" accessibilityElementsHidden />
             <AppText variant="label" style={styles.primaryCtaLabel}>
-              {transitionLabel(forwardTransition)}
+              {transitionLabel(forwardTransition, isMaterialDeliveryMission(mission))}
             </AppText>
           </Pressable>
         ) : null}

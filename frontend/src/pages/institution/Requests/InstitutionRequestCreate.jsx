@@ -85,6 +85,13 @@ import {
   TRIP_TYPE_DOM_TO_DEST,
 } from '../../../utils/institutionRouteForm';
 import { formatWallClockDateShort, formatWallClockDateTime } from '../../../utils/missionTimeDisplay';
+import {
+  formatDeliveryDescriptionDisplay,
+  formatMissionTypeLabel,
+  isMaterialDelivery,
+  MISSION_DELIVERY_BADGE,
+  PATIENT_TRANSPORT_CREATE_LABEL,
+} from '../../../utils/missionTypeDisplay';
 
 const TRAVEL_MINUTES_BETWEEN_STOPS = 20;
 
@@ -1384,7 +1391,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               <button type="button"
                 className={`${styles.missionBtn} ${formData.mission_type === 'patient_transport' ? styles.missionBtnActive : ''}`}
                 onClick={() => handleChange('mission_type', 'patient_transport')}>
-                Patient
+                {PATIENT_TRANSPORT_CREATE_LABEL}
               </button>
               <button type="button"
                 className={`${styles.missionBtn} ${formData.mission_type === 'material_delivery' ? styles.missionBtnActive : ''}`}
@@ -1393,6 +1400,34 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               </button>
             </div>
           </div>
+
+          {isMaterialDelivery(formData) && (
+            <div className={styles.deliveryBlock} data-testid="institution-create-delivery-block">
+              <div className={styles.deliveryBlockBadge}>{MISSION_DELIVERY_BADGE}</div>
+              <label htmlFor="delivery_description" className={styles.deliveryBlockTitle}>
+                Description de la livraison *
+              </label>
+              <textarea
+                id="delivery_description"
+                value={formData.delivery_description}
+                onChange={(e) => handleChange('delivery_description', e.target.value)}
+                placeholder="Indiquez ce qui doit être transporté et, si nécessaire, les instructions utiles au chauffeur."
+                rows={3}
+                required
+                className={styles.detailsTextarea}
+                aria-invalid={Boolean(fieldErrors.delivery_description) || undefined}
+                aria-describedby={fieldErrors.delivery_description ? formErrorId('delivery_description') : 'delivery-description-hint'}
+              />
+              <p id="delivery-description-hint" className={styles.deliveryBlockHint}>
+                Indiquez ce qui doit être transporté et, si nécessaire, les instructions utiles au chauffeur.
+              </p>
+              {fieldErrors.delivery_description && (
+                <p id={formErrorId('delivery_description')} className={styles.fieldError} role="alert">
+                  {fieldErrors.delivery_description}
+                </p>
+              )}
+            </div>
+          )}
 
           {selectedPatient && patientPrefilled && (
             <div className={styles.prefillTag}>
@@ -2017,7 +2052,9 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
             <hr className={styles.detailsDivider} />
 
             {/* ═══ SECTION 3 — Infos patient ═══ */}
-            <h2 className={styles.detailsPanelTitle}>👤 Patient & contact</h2>
+            <h2 className={styles.detailsPanelTitle}>
+              {isMaterialDelivery(formData) ? 'Bénéficiaire & contact' : '👤 Patient & contact'}
+            </h2>
 
             {formData.mission_type === 'patient_transport' && (
               <div className={styles.needsChips} style={{ marginBottom: 10, flexWrap: 'nowrap' }}>
@@ -2039,25 +2076,17 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               </div>
             )}
 
-            {formData.mission_type === 'material_delivery' ? (
+            {isMaterialDelivery(formData) ? (
               <div className={styles.detailsGroup}>
-                <label htmlFor="delivery_description" className={styles.detailsLabel}>Description du matériel *</label>
+                <label htmlFor="patient_notes" className={styles.detailsLabel}>Notes complémentaires</label>
                 <textarea
-                  id="delivery_description"
-                  value={formData.delivery_description}
-                  onChange={(e) => handleChange('delivery_description', e.target.value)}
-                  placeholder="Ex: lit médicalisé, fauteuil roulant"
+                  id="patient_notes"
+                  value={formData.notes}
+                  onChange={(e) => handleChange('notes', e.target.value)}
+                  placeholder="Notes libres, distinctes de la description de livraison…"
                   rows={2}
-                  required
                   className={styles.detailsTextarea}
-                  aria-invalid={Boolean(fieldErrors.delivery_description) || undefined}
-                  aria-describedby={fieldErrors.delivery_description ? formErrorId('delivery_description') : undefined}
                 />
-                {fieldErrors.delivery_description && (
-                  <p id={formErrorId('delivery_description')} className={styles.fieldError} role="alert">
-                    {fieldErrors.delivery_description}
-                  </p>
-                )}
               </div>
             ) : (
               <div className={styles.detailsGroup}>
@@ -2119,7 +2148,9 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
             <div className={styles.footerLeft}>
               <button type="button" className={styles.btnGhost} onClick={handleClose}>Annuler</button>
               <span className={styles.footerSummaryText}>
-                {selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.last_name}` : 'Patient non sélectionné'}
+                {isMaterialDelivery(formData)
+                  ? `${formatMissionTypeLabel(formData.mission_type)} · ${formatDeliveryDescriptionDisplay(formData)}`
+                  : (selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.last_name}` : 'Patient non sélectionné')}
                 {formData.mission_date
                   ? ` · ${formatWallClockDateShort(formData.mission_date)}`
                   : (formData.scheduled_time
@@ -2130,6 +2161,9 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                     : '')}
               </span>
               <span className={styles.footerBadges}>
+                {isMaterialDelivery(formData) && (
+                  <span className={styles.footerBadge}>{MISSION_DELIVERY_BADGE}</span>
+                )}
                 {isLirieSendMode && <span className={styles.footerBadge}>Envoi auto</span>}
                 {isExternalMode && <span className={styles.footerBadge}>Externe</span>}
                 {advancedFilledCount > 0 && <span className={styles.footerBadge}>{advancedFilledCount} détail{advancedFilledCount > 1 ? 's' : ''}</span>}

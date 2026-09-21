@@ -61,6 +61,53 @@ describe("companyRideDetailPresentation", () => {
     expect(rows.some((r) => r.label === "Passager" && r.value.startsWith("M."))).toBe(true);
   });
 
+  it("présente une livraison avant le bénéficiaire", () => {
+    const deliveryMission = {
+      ...baseMission,
+      mission_id: 39869,
+      mission_type: "material_delivery",
+      delivery_description: "Livraison des effets personnels de M. Basset.",
+      client_name: "Michel BASSET",
+      identity: {
+        passenger: { name: "Michel BASSET", birth_date: "1940-01-01", gender: "MALE" },
+        source: { type: "institution", name: "Clinique les Hauts d'Anières", code: "CLHDA" },
+      },
+    } as Record<string, unknown>;
+    const identity = buildIdentityFromMission(deliveryMission as CompanyDispatchMission);
+    const rows = buildRideDetailInfoRows(deliveryMission, identity, {
+      statusLabel: "Terminée",
+      scheduledIso: "2026-09-17T17:10:00",
+      driverDisplay: "Emmenez Moi",
+      billingSummary: buildRideBillingSummary(deliveryMission, null),
+    });
+    expect(rows[0]).toEqual({ label: "Type de mission", value: "Livraison" });
+    expect(rows[1]).toEqual({
+      label: "Description de la livraison",
+      value: "Livraison des effets personnels de M. Basset.",
+    });
+    expect(rows.some((r) => r.label === "Passager")).toBe(false);
+    expect(rows.some((r) => r.label === "Bénéficiaire")).toBe(true);
+  });
+
+  it("n’affiche pas un rendu livraison si delivery_description est accidentelle", () => {
+    const accidental = {
+      ...baseMission,
+      mission_type: "patient_transport",
+      delivery_description: "Livraison de documents",
+    } as Record<string, unknown>;
+    const identity = buildIdentityFromMission(accidental as CompanyDispatchMission);
+    const rows = buildRideDetailInfoRows(accidental, identity, {
+      statusLabel: "Terminée",
+      scheduledIso: "2026-06-28T14:27:00",
+      driverDisplay: "Emmenez Moi",
+      billingSummary: buildRideBillingSummary(accidental, null),
+    });
+    expect(rows.some((r) => r.label === "Type de mission" && r.value === "Livraison")).toBe(false);
+    expect(rows.some((r) => r.label === "Description de la livraison")).toBe(false);
+    expect(rows.some((r) => r.label === "Bénéficiaire")).toBe(false);
+    expect(rows.some((r) => r.label === "Passager")).toBe(true);
+  });
+
   it("en attente serveur : skeleton téléphone, pas de facture vide inventée", () => {
     const listOnly = {
       mission_id: 1,

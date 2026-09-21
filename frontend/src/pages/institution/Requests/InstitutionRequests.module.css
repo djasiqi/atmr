@@ -876,6 +876,12 @@
   border-color: var(--status-info-border, #93c5fd);
 }
 
+.deliveryBadge {
+  background: #fff7ed;
+  color: #c2410c;
+  border-color: #fdba74;
+}
+
 .badgeStatusSuccess {
   background: var(--status-success-bg, #ecfdf5);
   color: var(--status-success-text, #15803d);

@@ -326,7 +326,22 @@ export function buildRideDetailInfoRows(
   }
 ): RideDetailInfoRow[] {
   const rows: RideDetailInfoRow[] = [];
-  rows.push({ label: "Passager", value: formatPassengerDisplayName(identity, data) });
+  const missionType = String(data.mission_type || "").trim().toLowerCase();
+  const isDelivery = missionType === "material_delivery";
+  if (isDelivery) {
+    rows.push({ label: "Type de mission", value: "Livraison" });
+    const deliveryDescription = String(data.delivery_description || "").trim();
+    rows.push({
+      label: "Description de la livraison",
+      value: deliveryDescription || "Description de livraison non renseignée",
+    });
+    const beneficiary = formatPassengerDisplayName(identity, data);
+    if (beneficiary && beneficiary !== "—") {
+      rows.push({ label: "Bénéficiaire", value: beneficiary });
+    }
+  } else {
+    rows.push({ label: "Passager", value: formatPassengerDisplayName(identity, data) });
+  }
 
   const origin = formatRideOriginLine(identity, data);
   if (origin) rows.push({ label: "Origine", value: origin });

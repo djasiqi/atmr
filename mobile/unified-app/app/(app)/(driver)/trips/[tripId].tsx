@@ -5,6 +5,14 @@ import { DriverContextGuard, PermissionGuard } from "../../../../src/core/guards
 import { useDriverMissionDetailQuery } from "../../../../src/features/driver/hooks";
 import { AppCard, AppSpinner, AppText, brandSurfaceSoft, Screen } from "../../../../src/design/responsive";
 import { getDriverStatusUx } from "../../../../src/features/driver/statusDictionary";
+import {
+  DELIVERY_BENEFICIARY_LABEL,
+  DELIVERY_CARGO_LABEL,
+  formatDeliveryDescriptionDisplay,
+  formatMissionTypeLabel,
+  isMaterialDeliveryMission,
+  MISSION_DELIVERY_BADGE,
+} from "../../../../src/features/driver/domain/missionDisplay";
 import { useDriverFloatingTabScrollPadding } from "../../../../src/features/driver/navigation/DriverFloatingTabBar";
 
 export default function DriverTripDetailScreen() {
@@ -54,11 +62,23 @@ export default function DriverTripDetailScreen() {
           ) : null}
           <AppCard>
             <AppText variant="label" style={styles.cardTitle}>
-              Course #{params.tripId ?? "N/A"}
+              {isMaterialDeliveryMission(missionDetail.data)
+                ? `${MISSION_DELIVERY_BADGE} #${params.tripId ?? "N/A"}`
+                : `Course #${params.tripId ?? "N/A"}`}
             </AppText>
+            {isMaterialDeliveryMission(missionDetail.data) ? (
+              <>
+                <AppText variant="body" style={styles.body}>
+                  {formatMissionTypeLabel("material_delivery")}
+                </AppText>
+                <AppText variant="body" style={styles.body}>
+                  {DELIVERY_CARGO_LABEL} : {formatDeliveryDescriptionDisplay(missionDetail.data)}
+                </AppText>
+              </>
+            ) : null}
             {String(missionDetail.data?.client_name ?? params.client ?? "").trim().length > 0 ? (
               <AppText variant="body" style={styles.body}>
-                Client : {String(missionDetail.data?.client_name ?? params.client ?? "N/A")}
+                {isMaterialDeliveryMission(missionDetail.data) ? DELIVERY_BENEFICIARY_LABEL : "Client"} : {String(missionDetail.data?.client_name ?? params.client ?? "N/A")}
               </AppText>
             ) : null}
             {String(params.driver ?? "").trim().length > 0 ? (
@@ -69,6 +89,15 @@ export default function DriverTripDetailScreen() {
             <AppText variant="body" style={styles.body}>
               Source : {params.source ?? "unknown"}
             </AppText>
+            {!isMaterialDeliveryMission(missionDetail.data) ? (
+              <AppText variant="body" style={styles.body}>
+                Type : {formatMissionTypeLabel(
+                  typeof missionDetail.data?.mission_type === "string"
+                    ? missionDetail.data.mission_type
+                    : null
+                )}
+              </AppText>
+            ) : null}
             <AppText variant="body" style={styles.body}>
               Statut : {ux.label}
             </AppText>

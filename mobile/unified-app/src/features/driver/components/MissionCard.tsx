@@ -5,7 +5,7 @@ import { createShadow } from "../../../styles/shadowStyles";
 import { E } from "../../company/theme/enterpriseOpsTheme";
 import { resolveDriverStatusForUx, getDriverStatusUx } from "../statusDictionary";
 import type { DriverMission, DriverMissionStatus, DriverTransitionStatus } from "../types";
-import { getClientBirthDateDisplay } from "../domain/missionDisplay";
+import { getClientBirthDateDisplay, isMaterialDeliveryMission } from "../domain/missionDisplay";
 import {
   getCallablePhoneFromMission,
   openNavigation,
@@ -176,14 +176,14 @@ function getClientCivilityLabel(mission: DriverMission): string | null {
   return null;
 }
 
-function transitionLabel(target: DriverTransitionStatus): string {
+function transitionLabel(target: DriverTransitionStatus, delivery = false): string {
   switch (target) {
     case "EN_ROUTE":
       return "En route";
     case "ARRIVED":
       return "Arrivé";
     case "IN_PROGRESS":
-      return "À bord";
+      return delivery ? "Colis récupéré" : "À bord";
     case "COMPLETED":
       return "Terminer";
     case "CANCELLED":
@@ -467,11 +467,11 @@ export function MissionCard({
                   pressed && styles.pressed,
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel={transitionLabel(forwardTransition)}
+                accessibilityLabel={transitionLabel(forwardTransition, isMaterialDeliveryMission(mission))}
               >
                 <Ionicons name={transitionIcon(forwardTransition)} size={13} color="#FFFFFF" />
                 <AppText variant="caption" style={styles.actionPillLabel}>
-                  {transitionLabel(forwardTransition)}
+                  {transitionLabel(forwardTransition, isMaterialDeliveryMission(mission))}
                 </AppText>
               </Pressable>
             ) : null}

@@ -39,7 +39,13 @@ import {
   formatDriverScheduleTimeLabel,
 } from "../../../src/features/driver/utils/pickupScheduling";
 import { buildDriverDayMissionSections } from "../../../src/features/driver/utils/driverDayMissionSections";
-import { MISSION_ROUTE_ARROW } from "../../../src/features/driver/domain/missionDisplay";
+import {
+  DELIVERY_CARGO_LABEL,
+  formatDeliveryDescriptionDisplay,
+  isMaterialDeliveryMission,
+  MISSION_DELIVERY_BADGE,
+  MISSION_ROUTE_ARROW,
+} from "../../../src/features/driver/domain/missionDisplay";
 import {
   inferTripDirection,
   type MissionHintLike,
@@ -360,6 +366,7 @@ function isInstitutionTransport(mission: DriverMission): boolean {
 }
 
 function personLabelForMission(mission: DriverMission): string {
+  if (isMaterialDeliveryMission(mission)) return "Bénéficiaire";
   return isInstitutionTransport(mission) ? "Patient" : "Client";
 }
 
@@ -492,6 +499,13 @@ function MissionAccordionCard({
                 </AppText>
               </View>
             ) : null}
+            {isMaterialDeliveryMission(mission) ? (
+              <View style={styles.deliveryBadge}>
+                <AppText variant="label" style={styles.deliveryBadgeText} scaleRole="chrome">
+                  {MISSION_DELIVERY_BADGE}
+                </AppText>
+              </View>
+            ) : null}
             {tripLegLabel ? (
               <View style={styles.tripLegBadge}>
                 <AppText variant="label" style={styles.tripLegBadgeText} scaleRole="chrome">
@@ -512,14 +526,16 @@ function MissionAccordionCard({
           </View>
         </View>
 
-        <AppText
-          variant="label"
-          scaleRole="content"
-          style={[styles.client, { color: theme.sectionText }, done && styles.clientDone, done && { color: theme.mutedText }]}
-          numberOfLines={isVeryLargeText ? undefined : 1}
-        >
-          {missionClientName(mission)}
-        </AppText>
+        {isMaterialDeliveryMission(mission) ? null : (
+          <AppText
+            variant="label"
+            scaleRole="content"
+            style={[styles.client, { color: theme.sectionText }, done && styles.clientDone, done && { color: theme.mutedText }]}
+            numberOfLines={isVeryLargeText ? undefined : 1}
+          >
+            {missionClientName(mission)}
+          </AppText>
+        )}
 
         <View style={styles.routeRow}>
           <Ionicons name="ellipse" size={8} color={done ? "#94A3B8" : statusColor} />
@@ -601,27 +617,43 @@ function MissionAccordionCard({
                 }
               }}
             >
-            <AppText variant="label" style={[styles.sectionLabel, { color: theme.mutedText }]}>
-              {personLabelForMission(mission)}
-            </AppText>
-            <View style={styles.detailRow}>
-              <AppText variant="body" style={[styles.sectionValue, styles.detailRowText, { color: theme.sectionText }]}>
-                {missionClientName(mission)}
+            {isMaterialDeliveryMission(mission) ? (
+              <>
+                <AppText variant="label" style={[styles.sectionLabel, { color: theme.mutedText }]}>
+                  {MISSION_DELIVERY_BADGE}
+                </AppText>
+                <AppText variant="label" style={[styles.sectionLabel, styles.sectionGap, { color: theme.mutedText }]}>
+                  {DELIVERY_CARGO_LABEL}
+                </AppText>
+                <AppText variant="body" style={[styles.sectionValue, { color: theme.sectionText }]}>
+                  {formatDeliveryDescriptionDisplay(mission)}
+                </AppText>
+              </>
+            ) : (
+              <AppText variant="label" style={[styles.sectionLabel, { color: theme.mutedText }]}>
+                {personLabelForMission(mission)}
               </AppText>
-              {canCall ? (
-                <Pressable
-                  style={({ pressed }) => [styles.detailIconButton, { borderColor: theme.secondaryActionBorder, backgroundColor: theme.secondaryActionBg }, pressed && styles.actionPressed]}
-                  onPress={() => {
-                    const phone = getCallablePhoneFromMission(mission);
-                    if (!phone) return;
-                    void safeCall(phone);
-                  }}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="call-outline" size={15} color={theme.secondaryActionText} />
-                </Pressable>
-              ) : null}
-            </View>
+            )}
+            {!isMaterialDeliveryMission(mission) ? (
+              <View style={styles.detailRow}>
+                <AppText variant="body" style={[styles.sectionValue, styles.detailRowText, { color: theme.sectionText }]}>
+                  {missionClientName(mission)}
+                </AppText>
+                {canCall ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.detailIconButton, { borderColor: theme.secondaryActionBorder, backgroundColor: theme.secondaryActionBg }, pressed && styles.actionPressed]}
+                    onPress={() => {
+                      const phone = getCallablePhoneFromMission(mission);
+                      if (!phone) return;
+                      void safeCall(phone);
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="call-outline" size={15} color={theme.secondaryActionText} />
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
 
             <View style={styles.timelineRow}>
               <View style={styles.timelineTrack}>
@@ -665,6 +697,17 @@ function MissionAccordionCard({
                 </View>
               </View>
             </View>
+
+            {isMaterialDeliveryMission(mission) && missionClientName(mission) ? (
+              <>
+                <AppText variant="label" style={[styles.sectionLabel, styles.sectionGap, { color: theme.mutedText }]}>
+                  {personLabelForMission(mission)}
+                </AppText>
+                <AppText variant="body" style={[styles.sectionValue, { color: theme.sectionText }]}>
+                  {missionClientName(mission)}
+                </AppText>
+              </>
+            ) : null}
 
             <AppText variant="label" style={[styles.sectionLabel, styles.sectionGap, { color: theme.mutedText }]}>
               Notes
@@ -1214,6 +1257,15 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   lateBadgeText: { color: "#DC2626", fontWeight: "700" },
+  deliveryBadge: {
+    borderWidth: 1,
+    borderColor: "rgba(194,65,12,0.40)",
+    backgroundColor: "rgba(255,247,237,0.95)",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  deliveryBadgeText: { color: "#C2410C", fontWeight: "700" },
   tripLegBadge: {
     borderWidth: 1,
     borderColor: "rgba(15, 118, 110, 0.35)",

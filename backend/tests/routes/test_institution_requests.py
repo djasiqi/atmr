@@ -268,6 +268,25 @@ class TestTransportRequestsCRUD:
 
         assert response.status_code == 400
 
+    def test_create_request_material_delivery_whitespace_description(
+        self, client, db, admin_auth_headers
+    ):
+        """Test: livraison avec description blanche -> 400."""
+        response = client.post(
+            "/api/v1/institutions/requests",
+            json={
+                "external_reference": "DEL-003",
+                "scheduled_time": self._get_scheduled_time(),
+                "pickup_location": "A",
+                "dropoff_location": "B",
+                "mission_type": "material_delivery",
+                "delivery_description": "   ",
+            },
+            headers=admin_auth_headers,
+        )
+
+        assert response.status_code == 400
+
     def test_create_request_duplicate_external_reference(
         self, client, db, admin_auth_headers, sample_institution
     ):

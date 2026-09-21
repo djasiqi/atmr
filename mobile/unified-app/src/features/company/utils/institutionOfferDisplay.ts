@@ -349,7 +349,7 @@ export function buildInstitutionMobilityChips(
 export function formatMissionTypeLabel(value: string | null | undefined): string | null {
   if (!value) return null;
   if (value === "patient_transport") return "Transport patient";
-  if (value === "material_delivery") return "Livraison matériel";
+  if (value === "material_delivery") return "Livraison";
   return value.replace(/_/g, " ");
 }
 

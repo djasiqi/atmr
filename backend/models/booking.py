@@ -880,6 +880,8 @@ class Booking(db.Model):
                 or "standard",
                 "mission_type": getattr(self, "mission_type", None)
                 or "patient_transport",
+                "delivery_description": getattr(self, "delivery_description", None)
+                or None,
                 "wheelchair_need": _as_bool(self.wheelchair_need),
                 "amount": round(_as_float(self.amount), 2),
                 "billed_to_type": (_as_str(self.billed_to_type) or "patient"),

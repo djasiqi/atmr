@@ -65,14 +65,18 @@ import {
   isTransportActionPending,
 } from '../../../utils/transportActionPending';
 import { BOOKING_STATUS_LABELS } from './statusColors';
+import {
+  DELIVERY_BENEFICIARY_LABEL,
+  formatDeliveryDescriptionDisplay,
+  formatMissionTypeLabel,
+  isMaterialDelivery,
+  MISSION_DELIVERY_BADGE,
+} from '../../../utils/missionTypeDisplay';
 import s from './RequestDetailPanel.module.css';
 
 const CANCEL_ALREADY_PENDING_MSG = 'Demande d’annulation déjà transmise au transporteur';
 
-const MISSION_LABELS = {
-  patient_transport: 'Transport patient',
-  material_delivery: 'Livraison matériel',
-};
+const resolveMissionTypeLabel = (request) => formatMissionTypeLabel(request?.mission_type);
 const DEMO_COMPANY_NAME = 'LIRIE Transport Démo';
 const DEMO_INSTITUTION_SESSION_KEY = 'demo_institution_request_simulation_state';
 const DEMO_INSTITUTION_COMPLETED_KEY = 'demo_institution_journey_completed';
@@ -1036,7 +1040,12 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
       {/* ── Panel header ── */}
       <div className={s.panelHeader}>
         <div className={s.panelTitleRow}>
-          <span className={s.panelTitle}>Demande #{request.id}</span>
+          <span className={s.panelTitle}>
+            {isMaterialDelivery(request) ? `Livraison #${request.id}` : `Demande #${request.id}`}
+          </span>
+          {isMaterialDelivery(request) && (
+            <span className={`${s.statusBadge} ${s.deliveryBadge}`}>{MISSION_DELIVERY_BADGE}</span>
+          )}
         </div>
         {canExport && (
           <div className={s.pdfExportGroup}>
@@ -1067,6 +1076,16 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
 
       {/* ── Scrollable content ── */}
       <div className={s.panelBody}>
+
+        {isMaterialDelivery(request) && (
+          <div className={s.deliveryLead} data-testid="institution-delivery-lead">
+            <span className={`${s.statusBadge} ${s.deliveryBadge}`}>{MISSION_DELIVERY_BADGE}</span>
+            <div className={s.deliveryLeadTitle}>Description de la livraison</div>
+            <div className={s.deliveryLeadText}>
+              {formatDeliveryDescriptionDisplay(request)}
+            </div>
+          </div>
+        )}
 
         {bs?.pending_change_request?.status === 'escalation_required' && canManage && bookingIdForOperations && (
           <div className={s.actions} style={{ marginBottom: 12 }}>
@@ -1353,7 +1372,9 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
                   </span>
                 </div>
                 <div className={s.summaryItem}>
-                  <span className={s.summaryLabel}>Patient</span>
+                  <span className={s.summaryLabel}>
+                    {isMaterialDelivery(request) ? DELIVERY_BENEFICIARY_LABEL : 'Patient'}
+                  </span>
                   <span className={s.summaryValue}>{patientName}</span>
                 </div>
                 <div className={s.summaryItem}>
@@ -1444,8 +1465,16 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           </div>
           <div className={s.infoRow}>
             <span className={s.infoLabel}>Type</span>
-            <span className={s.infoValue}>{MISSION_LABELS[request.mission_type] || request.mission_type}</span>
+            <span className={s.infoValue}>{resolveMissionTypeLabel(request)}</span>
           </div>
+          {isMaterialDelivery(request) && (
+            <div className={s.infoRow}>
+              <span className={s.infoLabel}>Description</span>
+              <span className={s.infoValue}>
+                {formatDeliveryDescriptionDisplay(request)}
+              </span>
+            </div>
+          )}
           <div className={s.infoRow}>
             <span className={s.infoLabel}>Date et heure</span>
             <span className={s.infoValue}>
@@ -1571,6 +1600,10 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           onClose={() => setShowSendModal(false)}
           onConfirm={handleSend}
           loading={sendMutation.isPending}
+          missionTypeLabel={formatMissionTypeLabel(request.mission_type)}
+          deliveryDescription={
+            isMaterialDelivery(request) ? formatDeliveryDescriptionDisplay(request) : null
+          }
         />
       )}
 

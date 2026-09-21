@@ -31,7 +31,7 @@ const RECOMMENDED_ACTION_LABELS = {
 
 const MISSION_TYPE_LABELS = {
   patient_transport: 'Transport patient',
-  material_delivery: 'Livraison matériel',
+  material_delivery: 'Livraison',
 };
 
 const SOURCE_LABELS = {

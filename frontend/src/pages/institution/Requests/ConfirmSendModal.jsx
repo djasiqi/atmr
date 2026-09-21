@@ -29,9 +29,17 @@ const COPY = {
   },
 };
 
-const ConfirmSendModal = ({ onClose, onConfirm, loading = false, mode = 'send' }) => {
+const ConfirmSendModal = ({
+  onClose,
+  onConfirm,
+  loading = false,
+  mode = 'send',
+  missionTypeLabel = null,
+  deliveryDescription = null,
+}) => {
   const copy = COPY[mode] || COPY.send;
   const Icon = copy.Icon;
+  const showDeliveryRecap = Boolean(missionTypeLabel);
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -48,6 +56,20 @@ const ConfirmSendModal = ({ onClose, onConfirm, loading = false, mode = 'send' }
         </div>
 
         <div className={styles.body}>
+          {showDeliveryRecap && (
+            <div className={styles.recap} data-testid="confirm-send-mission-recap">
+              <div className={styles.recapRow}>
+                <span className={styles.recapLabel}>Type de mission</span>
+                <span className={styles.recapValue}>{missionTypeLabel}</span>
+              </div>
+              {deliveryDescription != null && (
+                <div className={styles.recapRow}>
+                  <span className={styles.recapLabel}>Description</span>
+                  <span className={styles.recapValue}>{deliveryDescription}</span>
+                </div>
+              )}
+            </div>
+          )}
           <p className={styles.message}>{copy.message}</p>
           <p className={styles.hint}>{copy.hint}</p>
         </div>

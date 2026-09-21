@@ -186,6 +186,7 @@ def _dashboard_ns(**overrides):
         "created_via": None,
         "booking_type": None,
         "mission_type": None,
+        "delivery_description": None,
         "wheelchair_need": False,
         "amount": 12.5,
         "billed_to_type": None,
@@ -204,6 +205,16 @@ def _dashboard_ns(**overrides):
     return SimpleNamespace(**data)
 
 
+def test_serialize_dashboard_material_delivery_keeps_description():
+    cached = _dashboard_ns(
+        mission_type="material_delivery",
+        delivery_description="Livraison des effets personnels de M. Basset.",
+    )
+    payload = Booking.serialize_dashboard.fget(cached)
+    assert payload["mission_type"] == "material_delivery"
+    assert payload["delivery_description"] == "Livraison des effets personnels de M. Basset."
+
+
 def test_serialize_dashboard_cache_et_sans_horaire():
     cached = _dashboard_ns(
         _transfer_cache={
@@ -216,6 +227,8 @@ def test_serialize_dashboard_cache_et_sans_horaire():
     assert payload["active_transfer"]["id"] == 99
     assert payload["date_formatted"] == "Non spécifié"
     assert payload["created_via"] == BookingCreatedVia.LEGACY.value
+    assert payload["mission_type"] == "patient_transport"
+    assert payload["delivery_description"] is None
 
     change = SimpleNamespace(serialize=lambda: {"id": 4})
     client = SimpleNamespace(
