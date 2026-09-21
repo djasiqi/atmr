@@ -32,9 +32,10 @@ function resolveCapturePath(filename) {
  * Masque toaster / toasts Sonner sans toucher aux contrôles LIRIE.
  * @param {import('@playwright/test').Page} page
  */
-async function hideNonDeterministic(page) {
+async function hideNonDeterministic(page, extraSelectors = []) {
+  const selectors = [...HIDE_SELECTORS, ...extraSelectors];
   await page.addStyleTag({
-    content: `${HIDE_SELECTORS.join(', ')} { visibility: hidden !important; }`,
+    content: `${selectors.join(', ')} { visibility: hidden !important; }`,
   });
 }
 
@@ -150,6 +151,95 @@ async function capturePortalUntil(page, contentLocators, filename, options = {})
 }
 
 /**
+ * Contenu principal Institution (sans sidebar) jusqu'au bas des blocs.
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator[]} contentLocators
+ * @param {string} filename
+ * @param {{ pad?: number }} [options]
+ */
+async function captureMainUntil(page, contentLocators, filename, options = {}) {
+  const pad = options.pad ?? 16;
+  const header = page.locator('main header').first();
+  await expect(header).toBeVisible();
+  const headerBox = await requireBox(header, 'header');
+  const contentBoxes = [];
+  for (const locator of contentLocators) {
+    contentBoxes.push(await requireBox(locator, await locator.evaluate((el) => el.getAttribute('data-tour-id') || el.tagName)));
+  }
+  const contentUnion = unionBoxes(headerBox, ...contentBoxes);
+  const clip = {
+    x: headerBox.x,
+    y: headerBox.y,
+    width: (contentUnion.x + contentUnion.width) - headerBox.x,
+    height: contentUnion.y + contentUnion.height + pad - headerBox.y,
+  };
+  return captureClip(page, clip, filename);
+}
+
+/**
+ * Screenshot de l'élément complet (offsetWidth, même hors viewport) puis coupe verticale.
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator} element
+ * @param {import('@playwright/test').Locator} lastContent
+ * @param {string} filename
+ * @param {{ pad?: number }} [options]
+ */
+async function captureElementUntil(page, element, lastContent, filename, options = {}) {
+  const pad = options.pad ?? 16;
+  await expect(element).toBeVisible();
+  await expect(lastContent).toBeVisible();
+  // Header sticky du layout : recouvre le titre du panneau si Playwright
+  // fait défiler l'élément (hauteur > viewport). Masquage chrome uniquement.
+  await hideNonDeterministic(page, ['main > header']);
+  await prepareCaptureChrome(page);
+
+  const layout = await element.evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    return {
+      x: rect.x,
+      y: rect.y,
+      offsetWidth: el.offsetWidth,
+      offsetHeight: el.offsetHeight,
+      clientWidth: el.clientWidth,
+    };
+  });
+  const lastBox = await requireBox(lastContent, 'dernier contenu');
+  const cropCss = lastBox.y + lastBox.height + pad - layout.y;
+
+  const buffer = await element.screenshot({
+    ...SCREENSHOT_OPTIONS,
+  });
+  const pngWidth = buffer.readUInt32BE(16);
+  const pngHeight = buffer.readUInt32BE(20);
+  const scale = pngWidth / layout.offsetWidth;
+  const cropPx = Math.max(1, Math.min(pngHeight, Math.round(cropCss * scale)));
+
+  const dest = resolveCapturePath(filename);
+  if (cropPx >= pngHeight) {
+    fs.writeFileSync(dest, buffer);
+    return dest;
+  }
+
+  const croppedB64 = await page.evaluate(async ({ b64, height }) => {
+    const res = await fetch(`data:image/png;base64,${b64}`);
+    const blob = await res.blob();
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Canvas 2D indisponible pour le cadrage documentaire.');
+    }
+    ctx.drawImage(bitmap, 0, 0);
+    return canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
+  }, { b64: buffer.toString('base64'), height: cropPx });
+
+  fs.writeFileSync(dest, Buffer.from(croppedB64, 'base64'));
+  return dest;
+}
+
+/**
  * Colonne liste : haut du locator jusqu'au bas d'un contenu (évite le min-height 100vh).
  * @param {import('@playwright/test').Page} page
  * @param {import('@playwright/test').Locator} column
@@ -221,6 +311,8 @@ module.exports = {
   capturePage,
   captureClip,
   capturePortalUntil,
+  captureMainUntil,
+  captureElementUntil,
   captureColumnUntil,
   captureColumnUntilBox,
   unionBoxes,

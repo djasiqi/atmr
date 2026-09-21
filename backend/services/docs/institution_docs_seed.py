@@ -29,6 +29,8 @@ from models.enums import (
     CarrierSource,
     InstitutionRole,
     MissionType,
+    OfferMode,
+    OfferStatus,
     RequestStatus,
     ScheduledTimeType,
     UserRole,
@@ -55,6 +57,20 @@ DOCS_USER_LAST_NAME = "Documentation"
 DOCS_PICKUP = "Route de Démonstration 10, 1200 Genève"
 DOCS_HOSPITAL = "Hôpital de démonstration, Rue Exemple Médical 20, 1200 Genève"
 DOCS_MEDICAL_CENTER = "Centre médical Démo, Rue Exemple 30, 1200 Genève"
+
+# IDs numériques réservés au tenant docs — hors plage locale habituelle.
+# Insertion explicite, sans réécrire la séquence PostgreSQL.
+DOCS_REQUEST_IDS = {
+    "DOCS-REQ-001": 900001,
+    "DOCS-REQ-002": 900002,
+    "DOCS-REQ-003": 900003,
+    "DOCS-REQ-004": 900004,
+}
+DOCS_EXTERNAL_MISSION_DATE = date(2026, 3, 17)
+DOCS_CARRIER_EMAIL = f"carrier@{DOCS_EMAIL_DOMAIN}"
+DOCS_CARRIER_NAME = "Transporteur Démo Docs"
+DOCS_CARRIER_USERNAME = "docs.carrier"
+DOCS_CARRIER_PUBLIC_ID = "d0c50000-1613-4000-8000-000000000090"
 
 _BLOCKED_ENV = frozenset({"production", "prod", "staging"})
 _BLOCKED_DB_MARKERS = ("prod", "staging")
@@ -139,10 +155,6 @@ def _docs_dt(hour: int, minute: int) -> datetime:
     return datetime(2026, 3, 16, hour, minute, tzinfo=DOCS_TIMEZONE)
 
 
-def _docs_naive(hour: int, minute: int) -> datetime:
-    return datetime(2026, 3, 16, hour, minute)
-
-
 def _is_docs_email(value: str | None) -> bool:
     email = (value or "").strip().lower()
     return email.endswith(f"@{DOCS_EMAIL_DOMAIN}")
@@ -217,6 +229,14 @@ def _purge_docs_tenant(institutions: list[Institution], user_ids: list[int]) -> 
     institution_ids = [int(inst.id) for inst in institutions]
     if not institution_ids and not user_ids:
         return
+
+    reserved_ids = list(DOCS_REQUEST_IDS.values())
+    if reserved_ids:
+        from models.request_offer import RequestOffer
+
+        RequestOffer.query.filter(
+            RequestOffer.transport_request_id.in_(reserved_ids)
+        ).delete(synchronize_session=False)
 
     if institution_ids:
         org_ids = [
@@ -377,8 +397,12 @@ def _create_request(
     external_carrier: dict[str, str] | None = None,
     dropoff_establishment: str | None = None,
     dropoff_service: str | None = None,
+    request_id: int | None = None,
+    mission_date: date | None = None,
 ) -> TransportRequest:
     request = TransportRequest()
+    if request_id is not None:
+        request.id = request_id
     request.public_id = public_id
     request.institution_id = institution.id
     request.created_by_user_id = user.id
@@ -387,8 +411,11 @@ def _create_request(
     request.patient_id = patient.id if patient else None
     request.mission_type = mission_type
     request.delivery_description = delivery_description
-    request.mission_date = DOCS_MISSION_DATE
-    request.scheduled_time = _docs_naive(hour, minute)
+    resolved_date = mission_date or DOCS_MISSION_DATE
+    request.mission_date = resolved_date
+    request.scheduled_time = datetime(
+        resolved_date.year, resolved_date.month, resolved_date.day, hour, minute
+    )
     request.pickup_time_confirmed = True
     request.scheduled_time_type = ScheduledTimeType.DEPARTURE.value
     request.pickup_location = DOCS_PICKUP
@@ -451,6 +478,72 @@ def _create_notification(
     return notif
 
 
+def _assert_reserved_request_ids_free() -> None:
+    """Refuse d'écraser une demande hors tenant docs sur un ID réservé."""
+    reserved = list(DOCS_REQUEST_IDS.values())
+    taken = TransportRequest.query.filter(TransportRequest.id.in_(reserved)).all()
+    if not taken:
+        return
+    refs = ", ".join(
+        f"{req.id} ({req.external_reference or req.public_id})" for req in taken
+    )
+    raise RuntimeError(
+        "Seed institution-docs aborté: ID réservé déjà utilisé hors reset docs "
+        f"({refs})."
+    )
+
+
+def _ensure_docs_offer_company(password: str):
+    """Entreprise fictive pour une offre PENDING encore active (pas d'expiration)."""
+    from models.company import Company
+
+    existing = Company.query.filter_by(contact_email=DOCS_CARRIER_EMAIL).first()
+    if existing is not None:
+        return existing
+
+    any_company = Company.query.order_by(Company.id.asc()).first()
+    if any_company is not None:
+        return any_company
+
+    owner = User.query.filter_by(email=DOCS_CARRIER_EMAIL).first()
+    if owner is None:
+        owner = User()
+        owner.public_id = DOCS_CARRIER_PUBLIC_ID
+        owner.username = DOCS_CARRIER_USERNAME
+        owner.email = DOCS_CARRIER_EMAIL
+        owner.first_name = "Démo"
+        owner.last_name = "Carrier"
+        owner.role = UserRole.COMPANY
+        owner.account_status = "active"
+        owner.set_password(password, force_change=False)
+        db.session.add(owner)
+        db.session.flush()
+
+    company = Company()
+    company.name = DOCS_CARRIER_NAME
+    company.contact_email = DOCS_CARRIER_EMAIL
+    company.user_id = owner.id
+    company.is_approved = True
+    db.session.add(company)
+    db.session.flush()
+    return company
+
+
+def _attach_active_pending_offer(request: TransportRequest, company) -> None:
+    """Offre PENDING sans expires_at : dispatch encore actif côté serveur réel."""
+    from models.request_offer import RequestOffer
+
+    offer = RequestOffer()
+    offer.transport_request_id = request.id
+    offer.company_id = company.id
+    offer.mode = OfferMode.BROADCAST.value
+    offer.order = 0
+    offer.status = OfferStatus.PENDING.value
+    offer.sent_at = request.sent_at or _docs_dt(9, 36)
+    offer.expires_at = None
+    db.session.add(offer)
+
+
 def reset_and_seed_institution_docs(*, commit: bool = True) -> dict[str, Any]:
     """Reset du tenant docs uniquement, puis reconstruction exacte."""
     assert_institution_docs_seed_environment()
@@ -459,6 +552,8 @@ def reset_and_seed_institution_docs(*, commit: bool = True) -> dict[str, Any]:
     institutions = _collect_docs_institutions()
     user_ids = _collect_docs_user_ids([int(inst.id) for inst in institutions])
     _purge_docs_tenant(institutions, user_ids)
+    _assert_reserved_request_ids_free()
+    offer_company = _ensure_docs_offer_company(password)
 
     institution = _create_institution()
     user = _create_user(institution, password)
@@ -498,6 +593,7 @@ def reset_and_seed_institution_docs(*, commit: bool = True) -> dict[str, Any]:
     req_001 = _create_request(
         institution,
         user,
+        request_id=DOCS_REQUEST_IDS["DOCS-REQ-001"],
         external_reference="DOCS-REQ-001",
         public_id="d0c50000-1613-4000-8000-000000000031",
         patient=patient_test,
@@ -515,6 +611,7 @@ def reset_and_seed_institution_docs(*, commit: bool = True) -> dict[str, Any]:
     req_002 = _create_request(
         institution,
         user,
+        request_id=DOCS_REQUEST_IDS["DOCS-REQ-002"],
         external_reference="DOCS-REQ-002",
         public_id="d0c50000-1613-4000-8000-000000000032",
         patient=None,
@@ -531,6 +628,7 @@ def reset_and_seed_institution_docs(*, commit: bool = True) -> dict[str, Any]:
     req_003 = _create_request(
         institution,
         user,
+        request_id=DOCS_REQUEST_IDS["DOCS-REQ-003"],
         external_reference="DOCS-REQ-003",
         public_id="d0c50000-1613-4000-8000-000000000033",
         patient=patient_test,
@@ -538,6 +636,7 @@ def reset_and_seed_institution_docs(*, commit: bool = True) -> dict[str, Any]:
         status=RequestStatus.EXTERNAL_ASSIGNED.value,
         hour=14,
         minute=0,
+        mission_date=DOCS_EXTERNAL_MISSION_DATE,
         dropoff_location=DOCS_MEDICAL_CENTER,
         carrier_source=CarrierSource.EXTERNAL.value,
         created_at=_docs_dt(8, 50),
@@ -554,6 +653,7 @@ def reset_and_seed_institution_docs(*, commit: bool = True) -> dict[str, Any]:
     req_004 = _create_request(
         institution,
         user,
+        request_id=DOCS_REQUEST_IDS["DOCS-REQ-004"],
         external_reference="DOCS-REQ-004",
         public_id="d0c50000-1613-4000-8000-000000000034",
         patient=patient_alice,
@@ -568,6 +668,9 @@ def reset_and_seed_institution_docs(*, commit: bool = True) -> dict[str, Any]:
         dropoff_establishment="Hôpital de démonstration",
         dropoff_service="Consultation",
     )
+
+    _attach_active_pending_offer(req_001, offer_company)
+    _attach_active_pending_offer(req_002, offer_company)
 
     _create_notification(
         institution,

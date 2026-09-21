@@ -12,10 +12,12 @@ from models import (
     User,
 )
 from models.enums import CarrierSource, InstitutionRole, MissionType, RequestStatus
+from models.request_offer import RequestOffer
 from services.docs.institution_docs_seed import (
     DOCS_EMAIL_DOMAIN,
     DOCS_INSTITUTION_EMAIL,
     DOCS_INSTITUTION_NAME,
+    DOCS_REQUEST_IDS,
     DOCS_USER_EMAIL,
     assert_institution_docs_seed_environment,
     reset_and_seed_institution_docs,
@@ -106,22 +108,34 @@ def test_seed_cree_tenant_docs_deterministe(docs_password, db, client):
     }
 
     req_001 = refs["DOCS-REQ-001"]
+    assert req_001.id == DOCS_REQUEST_IDS["DOCS-REQ-001"]
     assert req_001.status == RequestStatus.SENT.value
     assert req_001.mission_type == MissionType.PATIENT_TRANSPORT.value
     assert req_001.carrier_source == CarrierSource.LIRIE.value
+    dispatch_001 = req_001.serialize["dispatch"]
+    assert dispatch_001["can_relaunch"] is False
+    assert dispatch_001["has_pending_offers"] is True
+    assert RequestOffer.query.filter_by(
+        transport_request_id=req_001.id, status="PENDING"
+    ).count() == 1
 
     req_002 = refs["DOCS-REQ-002"]
+    assert req_002.id == DOCS_REQUEST_IDS["DOCS-REQ-002"]
     assert req_002.mission_type == MissionType.MATERIAL_DELIVERY.value
     assert req_002.delivery_description == "Livraison de documents"
     assert req_002.status == RequestStatus.SENT.value
+    assert req_002.serialize["dispatch"]["can_relaunch"] is False
 
     req_003 = refs["DOCS-REQ-003"]
+    assert req_003.id == DOCS_REQUEST_IDS["DOCS-REQ-003"]
+    assert req_003.mission_date.isoformat() == "2026-03-17"
     assert req_003.status == RequestStatus.EXTERNAL_ASSIGNED.value
     assert req_003.carrier_source == CarrierSource.EXTERNAL.value
     assert req_003.external_carrier_name == "Taxi Démo Genève"
     assert req_003.external_carrier_email == f"externe@{DOCS_EMAIL_DOMAIN}"
 
     req_004 = refs["DOCS-REQ-004"]
+    assert req_004.id == DOCS_REQUEST_IDS["DOCS-REQ-004"]
     assert req_004.status == RequestStatus.ACCEPTED.value
 
     notifications = InstitutionNotification.query.filter_by(
@@ -167,3 +181,6 @@ def test_seed_idempotent_reset_sans_doublon(docs_password, db):
         "notifications": 3,
     }
     assert first["institution_public_id"] == second["institution_public_id"]
+    assert TransportRequest.query.filter_by(
+        external_reference="DOCS-REQ-001"
+    ).one().id == DOCS_REQUEST_IDS["DOCS-REQ-001"]

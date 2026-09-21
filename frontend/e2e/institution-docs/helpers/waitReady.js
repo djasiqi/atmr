@@ -89,6 +89,8 @@ async function waitForRequestsListReady(page) {
   await expect(list.getByText('Exemple Alice')).toBeVisible();
   await expect(list.getByText('10:30').first()).toBeVisible();
   await expect(list.getByText('15:30').first()).toBeVisible();
+  await expect(list.getByText(/Diffusion expirée/)).toHaveCount(0);
+  await expect(list.getByRole('button', { name: 'Relancer' })).toHaveCount(0);
 }
 
 /**
