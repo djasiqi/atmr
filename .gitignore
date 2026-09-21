@@ -151,6 +151,8 @@ backend/celerybeat-schedule*
 !/docs/security/**
 !/docs/development/
 !/docs/development/**
+!/docs/guides/
+!/docs/guides/**
 !/docs/backend/
 !/docs/backend/coverage-policy.md
 !/docs/
