@@ -85,6 +85,8 @@ def test_cli_db_et_seed(dummy_app, monkeypatch):
     monkeypatch.setattr(manage, "_stamp", MagicMock())
     seed = MagicMock(return_value={"users": 2})
     monkeypatch.setattr(manage, "reset_and_seed_demo_dataset", seed)
+    docs_seed = MagicMock(return_value={"patients": 3})
+    monkeypatch.setattr(manage, "reset_and_seed_institution_docs", docs_seed)
 
     assert runner.invoke(cli, ["--help"]).exit_code == 0
 
@@ -114,6 +116,11 @@ def test_cli_db_et_seed(dummy_app, monkeypatch):
     assert demo.exit_code == 0
     seed.assert_called_once_with(profile_name="sales", reset=True)
     assert "profile=sales" in demo.output
+
+    docs = runner.invoke(cli, ["seed", "institution-docs"])
+    assert docs.exit_code == 0
+    docs_seed.assert_called_once_with()
+    assert "institution-docs" in docs.output
 
 
 def test_get_app_cache(monkeypatch):

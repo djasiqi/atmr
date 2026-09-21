@@ -103,6 +103,9 @@ from services.demo.seed_service import (  # noqa: E402
     PROFILES,
     reset_and_seed_demo_dataset,
 )
+from services.docs.institution_docs_seed import (  # noqa: E402
+    reset_and_seed_institution_docs,
+)
 
 _app = None
 
@@ -197,6 +200,14 @@ def seed_demo(reset: bool, profile_name: str):
     click.echo(
         f"✅ Seed demo terminé (profile={profile_name}, reset={reset}) - {summary}"
     )
+
+
+@seedcli.command(name="institution-docs")
+def seed_institution_docs():
+    """Reset contrôlé + seed du tenant documentation Institution."""
+    with get_app().app_context():
+        summary = reset_and_seed_institution_docs()
+    click.echo(f"✅ Seed institution-docs terminé - {summary}")
 
 
 if __name__ == "__main__":
