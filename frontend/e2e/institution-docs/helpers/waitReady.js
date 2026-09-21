@@ -73,6 +73,55 @@ async function waitForInstitutionViewReady(page, root) {
   await waitForSonnerGone(page);
 }
 
+/**
+ * Liste Transports : 4 demandes docs + badge livraison (mission_type).
+ * @param {import('@playwright/test').Page} page
+ */
+async function waitForRequestsListReady(page) {
+  const list = page.locator('[data-tour-id="institution-history"]');
+  await expect(list).toBeVisible();
+  await waitForInstitutionViewReady(page, list);
+  await expect(list.getByPlaceholder(/Rechercher un patient/i)).toBeVisible();
+  await expect(list.getByRole('button', { name: /^Toutes/ })).toBeVisible();
+  await expect(list.getByText('LIVRAISON', { exact: true })).toBeVisible();
+  await expect(list.getByText('DOCS-REQ-002', { exact: true })).toBeVisible();
+  await expect(list.getByText('Test TEST').first()).toBeVisible();
+  await expect(list.getByText('Exemple Alice')).toBeVisible();
+  await expect(list.getByText('10:30').first()).toBeVisible();
+  await expect(list.getByText('15:30').first()).toBeVisible();
+}
+
+/**
+ * Détail DOCS-REQ-001 : trajet / détails / besoins, hors facturation.
+ * @param {import('@playwright/test').Page} page
+ */
+async function waitForRequestDetailReady(page) {
+  const panel = page.locator('[data-tour-id="institution-request-detail-panel"]').last();
+  await expect(panel).toBeVisible();
+  await waitForInstitutionViewReady(page, panel);
+  await expect(panel.getByText(/^Demande #/)).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Modifier' })).toBeVisible();
+  await expect(panel.getByRole('heading', { name: 'Trajet' })).toBeVisible();
+  await expect(panel.getByRole('heading', { name: 'Détails' })).toBeVisible();
+  await expect(panel.getByRole('heading', { name: 'Besoins' })).toBeVisible();
+  await expect(panel.getByText('Radiologie')).toBeVisible();
+  await expect(panel.getByText('DOCS-REQ-001')).toBeVisible();
+}
+
+/**
+ * Liste Patients : 3 fiches docs, sans panneau détail ouvert.
+ * @param {import('@playwright/test').Page} page
+ */
+async function waitForPatientsListReady(page) {
+  await waitForInstitutionViewReady(page);
+  await expect(page.getByPlaceholder(/Rechercher par nom/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Nouveau patient/ })).toBeVisible();
+  await expect(page.getByText('Test TEST').first()).toBeVisible();
+  await expect(page.getByText('Exemple Alice').first()).toBeVisible();
+  await expect(page.getByText('Démonstration Marc').first()).toBeVisible();
+  await expect(page.getByText(/3 patients/)).toBeVisible();
+}
+
 module.exports = {
   LOADING_TEXT,
   attachCriticalGuards,
@@ -80,4 +129,7 @@ module.exports = {
   waitForSonnerGone,
   waitForDashboardReady,
   waitForInstitutionViewReady,
+  waitForRequestsListReady,
+  waitForRequestDetailReady,
+  waitForPatientsListReady,
 };
