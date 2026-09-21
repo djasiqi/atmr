@@ -9,15 +9,12 @@ from shared.utils.material_delivery import (
 
 
 def test_create_delivery_with_description_ok():
-    assert (
-        require_delivery_description_on_write(
-            mission_type="material_delivery",
-            delivery_description="Livraison d'effets personnels au domicile du patient.",
-            mission_type_in_payload=True,
-            description_in_payload=True,
-        )
-        == "Livraison d'effets personnels au domicile du patient."
-    )
+    assert require_delivery_description_on_write(
+        mission_type="material_delivery",
+        delivery_description=("Livraison d'effets personnels au domicile du patient."),
+        mission_type_in_payload=True,
+        description_in_payload=True,
+    ) == ("Livraison d'effets personnels au domicile du patient.")
 
 
 @pytest.mark.parametrize("value", ["", "   ", None])

@@ -212,7 +212,10 @@ def test_serialize_dashboard_material_delivery_keeps_description():
     )
     payload = Booking.serialize_dashboard.fget(cached)
     assert payload["mission_type"] == "material_delivery"
-    assert payload["delivery_description"] == "Livraison des effets personnels de M. Basset."
+    assert (
+        payload["delivery_description"]
+        == "Livraison des effets personnels de M. Basset."
+    )
 
 
 def test_serialize_dashboard_cache_et_sans_horaire():

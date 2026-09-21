@@ -55,13 +55,9 @@ def require_delivery_description_on_write(
 
     if description_in_payload:
         if not incoming:
-            raise ValueError(
-                "Veuillez saisir une description pour la livraison."
-            )
+            raise ValueError("Veuillez saisir une description pour la livraison.")
         return incoming
 
     if mission_type_in_payload and not existing:
-        raise ValueError(
-            "Veuillez saisir une description pour la livraison."
-        )
+        raise ValueError("Veuillez saisir une description pour la livraison.")
     return existing or None
