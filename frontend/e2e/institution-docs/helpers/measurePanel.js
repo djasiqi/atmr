@@ -51,7 +51,51 @@ async function measureTextOverflow(scope, text) {
   }, text);
 }
 
+/**
+ * Dimensions CSS du modal Nouvelle demande (Lot 4).
+ * @param {import('@playwright/test').Page} page
+ */
+async function measureCreateModal(page) {
+  return page.evaluate(() => {
+    const form = document.querySelector('[data-tour-id="institution-request-create"]');
+    const dialog = form && form.closest('.modal-content');
+    const scroller = form && form.querySelector('form > div');
+    if (!form || !dialog) {
+      return { found: false };
+    }
+    const formRect = form.getBoundingClientRect();
+    const dialogRect = dialog.getBoundingClientRect();
+    return {
+      found: true,
+      dialog: {
+        cssWidth: Math.round(dialogRect.width),
+        cssHeight: Math.round(dialogRect.height),
+        offsetWidth: dialog.offsetWidth,
+        offsetHeight: dialog.offsetHeight,
+      },
+      form: {
+        cssWidth: Math.round(formRect.width),
+        cssHeight: Math.round(formRect.height),
+        offsetWidth: form.offsetWidth,
+        offsetHeight: form.offsetHeight,
+      },
+      scroller: scroller
+        ? {
+            clientHeight: scroller.clientHeight,
+            scrollHeight: scroller.scrollHeight,
+            scrollTop: scroller.scrollTop,
+          }
+        : null,
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      },
+    };
+  });
+}
+
 module.exports = {
   measureDetailPanel,
   measureTextOverflow,
+  measureCreateModal,
 };

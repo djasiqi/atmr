@@ -13,6 +13,14 @@ const HIDE_SELECTORS = [
   '[data-sonner-toast]',
 ];
 
+/** Dropdowns flottants du formulaire (autocomplete / date / heure) — chrome uniquement. */
+const FORM_CHROME_SELECTORS = [
+  '[id$="-ac-listbox"]',
+  '.pac-container',
+  '.react-select__menu',
+  '[role="dialog"][aria-label="Choisir une date"]',
+];
+
 function resolveCapturePath(filename) {
   if (!filename || typeof filename !== 'string') {
     throw new Error('Nom de fichier de capture manquant.');
@@ -33,7 +41,7 @@ function resolveCapturePath(filename) {
  * @param {import('@playwright/test').Page} page
  */
 async function hideNonDeterministic(page, extraSelectors = []) {
-  const selectors = [...HIDE_SELECTORS, ...extraSelectors];
+  const selectors = [...HIDE_SELECTORS, ...FORM_CHROME_SELECTORS, ...extraSelectors];
   await page.addStyleTag({
     content: `${selectors.join(', ')} { visibility: hidden !important; }`,
   });
@@ -280,6 +288,7 @@ async function captureColumnUntilBox(page, column, lastBox, filename, options = 
 async function captureLocator(page, locator, filename) {
   await expect(locator, `Cible de capture invisible: ${filename}`).toBeVisible();
   await hideNonDeterministic(page);
+  await prepareCaptureChrome(page);
   const dest = resolveCapturePath(filename);
   await locator.screenshot({
     ...SCREENSHOT_OPTIONS,
@@ -307,6 +316,7 @@ async function capturePage(page, filename) {
 module.exports = {
   CAPTURES_DIR,
   HIDE_SELECTORS,
+  FORM_CHROME_SELECTORS,
   captureLocator,
   capturePage,
   captureClip,

@@ -124,6 +124,20 @@ async function waitForPatientsListReady(page) {
   await expect(page.getByText(/3 patients/)).toBeVisible();
 }
 
+/**
+ * Modal Nouvelle demande prêt (parcours CTA dashboard).
+ * @param {import('@playwright/test').Page} page
+ */
+async function waitForCreateFormReady(page) {
+  const form = page.locator('[data-tour-id="institution-request-create"]');
+  await expect(form).toBeVisible();
+  await waitForLoadingGone(form);
+  await waitForSonnerGone(page);
+  await expect(form.getByRole('heading', { name: 'Nouvelle demande' })).toBeVisible();
+  await expect(form.locator('#patient-select')).toBeVisible();
+  await expect(form.getByRole('button', { name: 'Livraison', exact: true })).toBeVisible();
+}
+
 module.exports = {
   LOADING_TEXT,
   attachCriticalGuards,
@@ -134,4 +148,5 @@ module.exports = {
   waitForRequestsListReady,
   waitForRequestDetailReady,
   waitForPatientsListReady,
+  waitForCreateFormReady,
 };
