@@ -32,7 +32,7 @@ fi
 
 # Démarrer les services de monitoring
 echo "🔄 Démarrage des services de monitoring (Prometheus, Grafana, Alertmanager)..."
-if ! docker compose -f docker-compose.monitoring.yml up -d --remove-orphans; then
+if ! docker compose --env-file .env.production -f docker-compose.monitoring.yml up -d; then
   echo "❌ Échec du démarrage du monitoring"
   echo "📋 Logs du monitoring:"
   docker compose -f docker-compose.monitoring.yml logs --tail=50 || true

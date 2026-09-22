@@ -13,6 +13,36 @@ set -o errexit -o nounset -o pipefail
 
 cd /srv/atmr
 
+# Jamais `source` un .env Compose : les valeurs avec espaces (ex. « 100 per 15 »)
+# deviennent des commandes. Voir scripts/lib/load_compose_env.sh.
+# shellcheck source=/dev/null
+if [ -f "/srv/atmr/scripts/lib/load_compose_env.sh" ]; then
+  source "/srv/atmr/scripts/lib/load_compose_env.sh"
+elif [ -f "$(dirname "$0")/lib/load_compose_env.sh" ]; then
+  source "$(dirname "$0")/lib/load_compose_env.sh"
+else
+  echo "❌ scripts/lib/load_compose_env.sh introuvable" >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+if [ -f "/srv/atmr/scripts/lib/deploy_db_upgrade.sh" ]; then
+  source "/srv/atmr/scripts/lib/deploy_db_upgrade.sh"
+elif [ -f "$(dirname "$0")/lib/deploy_db_upgrade.sh" ]; then
+  source "$(dirname "$0")/lib/deploy_db_upgrade.sh"
+else
+  echo "❌ scripts/lib/deploy_db_upgrade.sh introuvable" >&2
+  exit 1
+fi
+
+COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-/srv/atmr/.env.production}"
+compose_prod() {
+  if [ -n "${COMPOSE_ENV_FILE:-}" ] && [ -f "${COMPOSE_ENV_FILE}" ]; then
+    docker compose --env-file "${COMPOSE_ENV_FILE}" -f docker-compose.production.yml "$@"
+  else
+    docker compose -f docker-compose.production.yml "$@"
+  fi
+}
+
 LOCAL_ENV_FRAGMENT="scripts/env.production.local.fragment"
 
 # Lit la dernière valeur KEY= depuis un fichier fragment (sans logger la valeur).
@@ -54,7 +84,7 @@ load_internal_service_token() {
 # SKIP_DB_UPGRADE=1 : déploie le code, lance le preview read-only, n'écrit pas
 # (voir docs/ops/auth-sms-02-prod-runbook.md). Défaut = upgrade automatique.
 migration_exec() {
-  docker compose -f docker-compose.production.yml exec -T \
+  compose_prod exec -T \
     -e DISABLE_EVENTLET=1 \
     -e SQLALCHEMY_DATABASE_URI="${DATABASE_URL_DIRECT}" \
     -e DATABASE_URL="${DATABASE_URL_DIRECT}" \
@@ -84,13 +114,13 @@ migration_failure_diag() {
   migration_exec flask db heads 2>&1 || true
   echo ""
   echo "📋 Dernières lignes logs backend:"
-  docker compose -f docker-compose.production.yml logs backend --tail=50 2>&1 || true
+  compose_prod logs backend --tail=50 2>&1 || true
   echo ""
   echo "📋 Dernières lignes logs postgres:"
-  docker compose -f docker-compose.production.yml logs postgres --tail=50 2>&1 || true
+  compose_prod logs postgres --tail=50 2>&1 || true
   echo ""
   echo "📋 Dernières lignes logs pgbouncer:"
-  docker compose -f docker-compose.production.yml logs pgbouncer --tail=50 2>&1 || true
+  compose_prod logs pgbouncer --tail=50 2>&1 || true
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
@@ -100,10 +130,10 @@ wait_postgres_ready() {
   local max="${2:-60}"
   local i
   for i in $(seq 1 "$max"); do
-    POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+    POSTGRES_STATUS=$(compose_prod ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
     if [ "$POSTGRES_STATUS" = "running" ]; then
       HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-postgres 2>/dev/null || echo "none")
-      if [ "$HEALTH" = "healthy" ] && docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
+      if [ "$HEALTH" = "healthy" ] && compose_prod exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
         echo "✅ ${label} prêt (healthy + pg_isready)"
         return 0
       fi
@@ -111,7 +141,7 @@ wait_postgres_ready() {
     sleep 2
   done
   echo "❌ Timeout attente ${label}"
-  docker compose -f docker-compose.production.yml logs postgres --tail=100 || true
+  compose_prod logs postgres --tail=100 || true
   return 1
 }
 
@@ -120,7 +150,7 @@ wait_redis_ready() {
   local max="${2:-90}"
   local i
   for i in $(seq 1 "$max"); do
-    RD_STATUS=$(docker compose -f docker-compose.production.yml ps redis --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+    RD_STATUS=$(compose_prod ps redis --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
     if [ "$RD_STATUS" = "running" ]; then
       HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-redis 2>/dev/null || echo "none")
       if [ "$HEALTH" = "healthy" ]; then
@@ -131,7 +161,7 @@ wait_redis_ready() {
     sleep 2
   done
   echo "⚠️  Timeout attente ${label} (healthy) — les applis ont des retries LOADING ; voir logs Redis"
-  docker compose -f docker-compose.production.yml logs redis --tail=80 || true
+  compose_prod logs redis --tail=80 || true
   return 0
 }
 
@@ -139,7 +169,7 @@ wait_pgbouncer_ready() {
   local max="${1:-40}"
   local i
   for i in $(seq 1 "$max"); do
-    PB_STATUS=$(docker compose -f docker-compose.production.yml ps pgbouncer --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+    PB_STATUS=$(compose_prod ps pgbouncer --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
     if [ "$PB_STATUS" = "running" ]; then
       PB_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-pgbouncer 2>/dev/null || echo "none")
       if [ "$PB_HEALTH" = "healthy" ]; then
@@ -150,14 +180,14 @@ wait_pgbouncer_ready() {
     sleep 2
   done
   echo "⚠️  PgBouncer pas healthy dans le délai (les migrations utilisent Postgres direct)"
-  docker compose -f docker-compose.production.yml logs pgbouncer --tail=50 || true
+  compose_prod logs pgbouncer --tail=50 || true
   return 1
 }
 
 # F-01 : le port 5000 n'est pas publié sur l'hôte — sonde HTTP depuis le conteneur backend.
 backend_ready_probe() {
   local path="${1:-/api/v1/ready}"
-  docker compose -f docker-compose.production.yml exec -T backend python -c "
+  compose_prod exec -T backend python -c "
 import urllib.request
 import sys
 try:
@@ -218,10 +248,12 @@ deploy_from_manifest() {
   echo "📦 Pull digests depuis manifeste..."
   docker pull "${BACKEND_IMAGE_REF}"
   docker pull "${WS_SERVICE_IMAGE_REF}"
-  docker compose -f docker-compose.production.yml up -d --remove-orphans
+  # Jamais --remove-orphans : Kafka / monitoring partagent le répertoire projet.
+  COMPOSE_IGNORE_ORPHANS=1 compose_prod up -d
 }
 
 # Fonction de rollback — redéploie le manifeste précédent (pas un simple compose down).
+# Ne touche qu'à la stack applicative (docker-compose.production.yml).
 rollback() {
   echo "🔄 Rollback vers previous-release.json..."
   if [ -f "$PREVIOUS_RELEASE_LINK" ]; then
@@ -230,8 +262,8 @@ rollback() {
       exit 1
     fi
   fi
-  echo "⚠️  previous-release.json absent ou échec — arrêt de la stack (dernier recours)"
-  docker compose -f docker-compose.production.yml down --remove-orphans || true
+  echo "⚠️  previous-release.json absent ou échec — arrêt applicatif uniquement"
+  COMPOSE_IGNORE_ORPHANS=1 compose_prod down || true
   echo "❌ Déploiement échoué, rollback effectué"
   exit 1
 }
@@ -242,11 +274,13 @@ if [ -n "${ENV_FILE_ARG}" ]; then
     echo "Fichier env introuvable: ${ENV_FILE_ARG}" >&2
     exit 1
   fi
-  set -a
-  # shellcheck disable=SC1090
-  source "${ENV_FILE_ARG}"
-  set +a
-  echo "✅ Secrets chargés depuis --env-file (hors argv)"
+  # Le flag CLI/environnement prime : un KEY=VALUE du fichier ne doit pas l'effacer.
+  capture_requested_skip_db_upgrade
+  load_compose_env_file "${ENV_FILE_ARG}"
+  restore_requested_skip_db_upgrade
+  COMPOSE_ENV_FILE="${ENV_FILE_ARG}"
+  echo "✅ Secrets lus depuis --env-file (parse KEY=VALUE, pas source)"
+  echo "   SKIP_DB_UPGRADE=${SKIP_DB_UPGRADE}"
 elif [ $# -ge 14 ]; then
   echo "⚠️  Args positionnels dépréciés — préférer --env-file"
   export APP_ENCRYPTION_KEY_B64="$1"
@@ -379,12 +413,20 @@ export DATABASE_URL_DIRECT="${DATABASE_URL}"
 ESCAPED_REDIS_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${REDIS_PASSWORD}")
 export REDIS_URL="redis://:${ESCAPED_REDIS_PASSWORD}@redis:6379/0"
 
-# Pull avec retry
+# Pull avec retry. `timeout` ne peut pas invoquer une fonction shell.
 pull_with_retry() {
-  local max_attempts=3 attempt=1 timeout=600
+  local max_attempts=3 attempt=1 timeout_s=600 pull_ok=0
   while [ $attempt -le $max_attempts ]; do
     echo "🔄 Pull Docker ($attempt/$max_attempts)..."
-    if command -v timeout >/dev/null 2>&1 && timeout $timeout docker compose -f docker-compose.production.yml pull || ! command -v timeout >/dev/null 2>&1 && docker compose -f docker-compose.production.yml pull; then
+    pull_ok=0
+    if command -v timeout >/dev/null 2>&1; then
+      if timeout "$timeout_s" docker compose --env-file "${COMPOSE_ENV_FILE}" -f docker-compose.production.yml pull; then
+        pull_ok=1
+      fi
+    elif compose_prod pull; then
+      pull_ok=1
+    fi
+    if [ "$pull_ok" = "1" ]; then
       echo "✅ Pull réussi"
       return 0
     elif [ $attempt -lt $max_attempts ]; then
@@ -406,9 +448,9 @@ BACKUP_FILE="${BACKUP_DIR}/pre-deploy-$(date +%Y%m%d-%H%M%S).sql"
 mkdir -p "${BACKUP_DIR}"
 
 # Vérifier si PostgreSQL est en cours d'exécution
-if docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -q '"State":"running"'; then
+if compose_prod ps postgres --format json 2>/dev/null | grep -q '"State":"running"'; then
   echo "📦 Création du backup dans ${BACKUP_FILE}..."
-  docker compose -f docker-compose.production.yml exec -T postgres pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > "${BACKUP_FILE}" 2>/dev/null || {
+  compose_prod exec -T postgres pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > "${BACKUP_FILE}" 2>/dev/null || {
     echo "⚠️  Backup échoué (peut-être le premier déploiement ou PostgreSQL non démarré)"
     echo "   Poursuite du déploiement..."
   }
@@ -535,6 +577,7 @@ if [ -f ".env.production.local" ]; then
 fi
 
 cp .env.production .env && chmod 600 .env
+COMPOSE_ENV_FILE="/srv/atmr/.env.production"
 
 # Garde-fou Kafka : si les 4 flags sont à true, les brokers doivent être joignables.
 if [ -f "scripts/lib/kafka_checks.sh" ]; then
@@ -565,7 +608,7 @@ echo "🧹 Arrêt des conteneurs de la stack production (conservation des donné
 # Ne pas utiliser --remove-orphans ici : avec le même répertoire/projet Compose,
 # cela supprime aussi Grafana / Prometheus / Alertmanager considérés comme
 # orphelins du fichier docker-compose.production.yml.
-docker compose -f docker-compose.production.yml down || true
+compose_prod down || true
 
 # Supprimer d'éventuels résidus **uniquement** pour les services prod (pas atmr-grafana, etc.)
 # atmr-backend retiré : le service s'appelle backend sans container_name fixe; compose down le gère
@@ -650,7 +693,7 @@ fi
 echo "🚀 Démarrage infra + backend (Celery différé jusqu'aux migrations)..."
 # Pas de --remove-orphans : avec le même répertoire projet, Compose traiterait Grafana /
 # Prometheus / Alertmanager comme « orphelins » (absents de ce fichier) et les supprimerait.
-docker compose -f docker-compose.production.yml up -d postgres pgbouncer redis osrm backend
+compose_prod up -d postgres pgbouncer redis osrm backend
 
 # Laisser le temps aux conteneurs de se stabiliser
 echo "⏳ Stabilisation des conteneurs (5 secondes)..."
@@ -664,73 +707,26 @@ wait_redis_ready "Redis (post up -d)" 90 || true
 
 echo "⏳ Attente du démarrage du backend..."
 for i in $(seq 1 30); do
-  BACKEND_STATUS=$(docker compose -f docker-compose.production.yml ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+  BACKEND_STATUS=$(compose_prod ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
   [ "$BACKEND_STATUS" = "running" ] && echo "✅ Backend démarré" && break
   sleep 1
 done
 
-# Migrations Alembic avant Celery / API pleine charge : RUN_ENTRYPOINT_MIGRATIONS=0 en prod.
-# AUTH-SMS-02 : SKIP_DB_UPGRADE=1 déploie le code sans écrire. Preview obligatoire
-# avant `flask db upgrade` — voir docs/ops/auth-sms-02-prod-runbook.md.
-echo "🔄 Migrations Alembic (cycle safe prod)..."
+# Migrations Alembic avant Celery : RUN_ENTRYPOINT_MIGRATIONS=0 en prod.
+# SKIP_DB_UPGRADE=1 : preview read-only, aucun flask db upgrade.
+# Voir scripts/lib/deploy_db_upgrade.sh et docs/ops/auth-sms-02-prod-runbook.md.
 echo "   Connexion Alembic: hôte postgres:5432 (direct), pas pgbouncer — voir migration_exec."
-echo "📋 État avant upgrade:"
-migration_exec flask db current || true
-migration_exec flask db heads || true
-SKIP_DB_UPGRADE="${SKIP_DB_UPGRADE:-0}"
-if [ "$SKIP_DB_UPGRADE" = "1" ] || [ "$SKIP_DB_UPGRADE" = "true" ] || [ "$SKIP_DB_UPGRADE" = "yes" ]; then
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "ℹ️  SKIP_DB_UPGRADE=${SKIP_DB_UPGRADE} — aucune écriture Alembic."
-  echo "   Preview AUTH-SMS-02 (read-only) :"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  migration_exec python -m scripts.preview_auth_sms_02_promotion || true
-  echo ""
-  echo "Ensuite, après revue des comptes :"
-  echo "  docker compose -f docker-compose.production.yml exec -T \\"
-  echo "    -e DISABLE_EVENTLET=1 backend flask db upgrade heads"
-  echo "Puis relancer le même preview (users_a_promouvoir doit être 0)."
-  echo "Runbook : docs/ops/auth-sms-02-prod-runbook.md"
-else
-  echo "⬆️  Application des migrations..."
-  if migration_exec flask db upgrade heads; then
-    :
-  else
-    echo "⚠️  Tentative 1 échouée, nouvel essai après 5s..."
-    sleep 5
-    if migration_exec flask db upgrade heads; then
-      :
-    else
-      echo "⚠️  Tentative 2 échouée, dernière tentative après 10s..."
-      sleep 10
-      if migration_exec flask db upgrade heads; then
-        :
-      else
-        echo "❌ Migrations échouées après 3 tentatives"
-        migration_failure_diag
-        exit 1
-      fi
-    fi
-  fi
-  echo "📋 État après upgrade (validation current == head):"
-  CURRENT_AFTER=$(migration_exec flask db current 2>&1) || true
-  HEADS_AFTER=$(migration_exec flask db heads 2>&1) || true
-  echo "  current: ${CURRENT_AFTER:- (vide)}"
-  echo "  heads:   ${HEADS_AFTER:- (vide)}"
-  if [ -z "$CURRENT_AFTER" ] || [ -z "$HEADS_AFTER" ]; then
-    echo "⚠️  Impossible de vérifier current/heads après upgrade"
-  elif ! echo "$HEADS_AFTER" | grep -qF "$(echo "$CURRENT_AFTER" | head -1)"; then
-    echo "⚠️  current après upgrade ne correspond pas au head affiché (vérifier manuellement)"
-  else
-    echo "✅ current cohérent avec head"
-  fi
-  echo "✅ Migrations appliquées"
+if ! run_prod_db_upgrade_cycle; then
+  migration_failure_diag
+  exit 1
 fi
 
-if [ "$SKIP_DB_UPGRADE" = "1" ] || [ "$SKIP_DB_UPGRADE" = "true" ] || [ "$SKIP_DB_UPGRADE" = "yes" ]; then
+if skip_db_upgrade_enabled; then
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "⏸️  SKIP_DB_UPGRADE : Celery / stack complète / smoke non lancés."
   echo "   Relire le COUNT ci-dessus, puis dans l'ordre :"
-  echo "   1. docker compose -f docker-compose.production.yml exec -T \\"
+  echo "   1. docker compose --env-file /srv/atmr/.env.production \\"
+  echo "        -f docker-compose.production.yml exec -T \\"
   echo "        -e DISABLE_EVENTLET=1 backend flask db upgrade heads"
   echo "   2. même preview (users_a_promouvoir = 0)"
   echo "   3. relancer deploy-production.sh SANS SKIP_DB_UPGRADE"
@@ -743,13 +739,13 @@ if [ "$SKIP_DB_UPGRADE" = "1" ] || [ "$SKIP_DB_UPGRADE" = "true" ] || [ "$SKIP_D
 fi
 
 echo "🚀 Démarrage de la stack complète (Celery, ws-service, consommateurs…)..."
-docker compose -f docker-compose.production.yml up -d
+compose_prod up -d
 
 echo "🔐 Correction des permissions ML..."
-docker compose -f docker-compose.production.yml exec -T --user root backend bash -c "mkdir -p /app/data /app/data/ml /app/data/ml/models && chmod -R 755 /app/data && chown -R 999:999 /app/data" || true
+compose_prod exec -T --user root backend bash -c "mkdir -p /app/data /app/data/ml /app/data/ml/models && chmod -R 755 /app/data && chown -R 999:999 /app/data" || true
 
 echo "🔄 Redémarrage backend + Celery (post-migrations)..."
-docker compose -f docker-compose.production.yml restart backend celery-worker celery-beat || true
+compose_prod restart backend celery-worker celery-beat || true
 sleep 5
 
 wait_postgres_ready "PostgreSQL (après redémarrage backend)" 60
@@ -758,7 +754,7 @@ wait_postgres_ready "PostgreSQL (après redémarrage backend)" 60
 echo "⏳ Attente du healthcheck backend (jusqu'à 2 minutes)..."
 BACKEND_HEALTHY=false
 for i in $(seq 1 120); do
-  BACKEND_CID=$(docker compose -f docker-compose.production.yml ps -q backend 2>/dev/null)
+  BACKEND_CID=$(compose_prod ps -q backend 2>/dev/null)
   if [ -n "$BACKEND_CID" ]; then
     BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' "$BACKEND_CID" 2>/dev/null || echo "none")
   else
@@ -780,7 +776,7 @@ done
 if [ "$BACKEND_HEALTHY" = "false" ]; then
   echo "❌ Backend healthcheck timeout après 2 minutes"
   echo "📋 Logs du backend (dernières 50 lignes):"
-  docker compose -f docker-compose.production.yml logs backend --tail=50
+  compose_prod logs backend --tail=50
   exit 1
 fi
 
@@ -799,7 +795,7 @@ done
 if [ "$HEALTH_OK" = "false" ]; then
   echo "❌ Endpoint /api/v1/ready ne répond pas après 15 secondes (conteneur backend)"
   echo "📋 Logs du backend (dernières 50 lignes):"
-  docker compose -f docker-compose.production.yml logs backend --tail=50
+  compose_prod logs backend --tail=50
   exit 1
 fi
 

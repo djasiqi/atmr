@@ -36,9 +36,16 @@ CODE PROD ......................... OLD (sha-fca85737fb7b)
 MIGRATION ......................... NOT RUN
 TWILIO ............................ OFF volontairement
 
-VERDICT :
-GO POUR PUBLICATION AUTH-SMS-02
-NO-GO MIGRATION TANT QUE LE NOUVEAU CODE N'EST PAS EN EXÉCUTION
+ÉTAT PROD 2026-09-22 17:40
+IMAGE ...................... sha-7e5a6058d14d (en exécution)
+ALEMBIC .................... 395bd3663e8d (upgrade déjà passé)
+PHILIPPE ................... active, phone_verified_at NULL
+PREVIEW RESTANT ............ 0
+TWILIO ..................... OFF
+KAFKA / MONITORING ......... healthy
+SKIP_DB_UPGRADE ............ verrouillé par scripts/tests/test_skip_db_upgrade.sh
+                             (SKIP=1 n'appelle pas flask db upgrade, même si l'env dit 0)
+MIGRATION VOLONTAIRE ....... NE PAS RELANCER (déjà au head)
 ```
 
 ## Séquence
