@@ -77,6 +77,12 @@ class AuthenticateUserUseCase:
         """Refuse la connexion si le profil métier associé est désactivé."""
         from models.enums import UserRole
 
+        from ext import db
+        from services.auth.portal_phone_verification import maybe_promote_portal_account
+
+        if maybe_promote_portal_account(user):
+            db.session.commit()
+
         if getattr(user, "account_status", None) == "pending_activation":
             return AuthenticateUserOutput(
                 success=False,

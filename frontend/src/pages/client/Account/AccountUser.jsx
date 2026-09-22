@@ -53,6 +53,7 @@ function mapClientResponseToForm(data) {
     gender: ['HOMME', 'FEMME', 'AUTRE'].includes(genderNorm) ? genderNorm : '',
     profile_image: u.profile_image || null,
     force_password_change: Boolean(u.force_password_change),
+    phone_verified: Boolean(data.phone_verified || u.phone_verified),
   };
 }
 
@@ -164,6 +165,14 @@ const AccountUser = () => {
   const [showPwdForm, setShowPwdForm] = useState(false);
   const [securityHint, setSecurityHint] = useState(null);
   const [privacyAnalytics, setPrivacyAnalytics] = useState(false);
+  const [phoneVerify, setPhoneVerify] = useState({
+    sending: false,
+    verifying: false,
+    awaitingCode: false,
+    code: '',
+    message: '',
+    error: '',
+  });
   const [privacySms, setPrivacySms] = useState(true);
   const [privacyEmail, setPrivacyEmail] = useState(true);
   const [privacyHint, setPrivacyHint] = useState(null);
@@ -252,6 +261,52 @@ const AccountUser = () => {
     () => computeProfileCompletionPercent(updatedProfile),
     [updatedProfile]
   );
+
+  const handleSendPhoneVerification = async () => {
+    setPhoneVerify((prev) => ({ ...prev, sending: true, error: '', message: '' }));
+    try {
+      const smsRes = await apiClient.post('/auth/phone/send-code', {});
+      setPhoneVerify((prev) => ({
+        ...prev,
+        sending: false,
+        awaitingCode: true,
+        message: smsRes?.data?.message || 'Code SMS envoyé.',
+      }));
+    } catch (err) {
+      setPhoneVerify((prev) => ({
+        ...prev,
+        sending: false,
+        error: getApiErrorMessage(err, 'Impossible d’envoyer le SMS.'),
+      }));
+    }
+  };
+
+  const handleConfirmPhoneVerification = async () => {
+    const code = String(phoneVerify.code || '').trim();
+    if (!/^\d{6}$/.test(code)) {
+      setPhoneVerify((prev) => ({ ...prev, error: 'Entrez un code SMS à 6 chiffres.' }));
+      return;
+    }
+    setPhoneVerify((prev) => ({ ...prev, verifying: true, error: '' }));
+    try {
+      await apiClient.post('/auth/phone/verify-code', { code });
+      setUpdatedProfile((prev) => ({ ...prev, phone_verified: true }));
+      setPhoneVerify({
+        sending: false,
+        verifying: false,
+        awaitingCode: false,
+        code: '',
+        message: 'Téléphone confirmé.',
+        error: '',
+      });
+    } catch (err) {
+      setPhoneVerify((prev) => ({
+        ...prev,
+        verifying: false,
+        error: getApiErrorMessage(err, 'Code SMS invalide ou expiré.'),
+      }));
+    }
+  };
 
   const handleUpdateProfile = () => {
     setSaveError(null);
@@ -594,7 +649,9 @@ const AccountUser = () => {
                             value={updatedProfile.email || ''}
                             disabled
                           />
-                          <p className="field-hint profile-fieldNote">Non modifiable.</p>
+                          <p className="field-hint profile-fieldNote">
+                            Vérifié. Non modifiable.
+                          </p>
                         </div>
                         <div className="profile-field">
                           <label htmlFor="account-phone">Téléphone</label>
@@ -609,6 +666,57 @@ const AccountUser = () => {
                               setUpdatedProfile({ ...updatedProfile, phone: e.target.value })
                             }
                           />
+                          <p className="field-hint profile-fieldNote">
+                            {updatedProfile.phone_verified
+                              ? 'Vérifié. Un changement de numéro exigera une nouvelle validation SMS avant le prochain transport.'
+                              : 'À vérifier. Requis uniquement pour confirmer une demande de transport.'}
+                          </p>
+                          {!updatedProfile.phone_verified ? (
+                            <div className="phoneVerifyBox">
+                              <button
+                                type="button"
+                                className="phoneVerifyNow"
+                                onClick={handleSendPhoneVerification}
+                                disabled={phoneVerify.sending || phoneVerify.verifying}
+                              >
+                                {phoneVerify.sending
+                                  ? 'Envoi…'
+                                  : 'Vérifier mon numéro maintenant'}
+                              </button>
+                              {phoneVerify.message ? (
+                                <p className="field-hint profile-fieldNote">{phoneVerify.message}</p>
+                              ) : null}
+                              {phoneVerify.error ? (
+                                <p className="profile-saveError">{phoneVerify.error}</p>
+                              ) : null}
+                              {phoneVerify.awaitingCode ? (
+                                <div className="phoneVerifyRow">
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    maxLength={6}
+                                    autoComplete="one-time-code"
+                                    placeholder="Code à 6 chiffres"
+                                    value={phoneVerify.code}
+                                    onChange={(e) =>
+                                      setPhoneVerify((prev) => ({
+                                        ...prev,
+                                        code: e.target.value.replace(/[^\d]/g, ''),
+                                      }))
+                                    }
+                                    disabled={phoneVerify.verifying}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleConfirmPhoneVerification}
+                                    disabled={phoneVerify.verifying}
+                                  >
+                                    Valider le code
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </fieldset>

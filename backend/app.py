@@ -490,9 +490,11 @@ def create_app(config_name: str | None = None):
 
     validate_production_security(app)
 
+    from services.notifications.sms import log_sms_provider_readiness
     from services.saferpay.config import warn_saferpay_test_api_url_in_production
 
     warn_saferpay_test_api_url_in_production(app.logger, config_name=config_name)
+    log_sms_provider_readiness(app.logger)
 
     # ✅ Force UTF-8 encoding pour JSON et réponses
     app.config["JSON_AS_ASCII"] = False

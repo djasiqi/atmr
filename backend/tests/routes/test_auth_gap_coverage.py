@@ -110,17 +110,15 @@ def test_send_activation_sms_ok_et_ko(monkeypatch):
         "services.notifications.sms.send_sms_notification",
         lambda **_k: {"ok": True},
     )
-    assert (
+    assert auth._sms_send_succeeded(
         auth._send_activation_sms(SimpleNamespace(phone="+41791234567"), "123456")
-        is True
     )
     monkeypatch.setattr(
         "services.notifications.sms.send_sms_notification",
         lambda **_k: {"ok": False},
     )
-    assert (
+    assert not auth._sms_send_succeeded(
         auth._send_activation_sms(SimpleNamespace(phone="+41791234567"), "123456")
-        is False
     )
 
 

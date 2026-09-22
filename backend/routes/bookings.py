@@ -693,6 +693,35 @@ def execute_client_booking_creation(public_id: str) -> Any:
         if validation_error:
             return validation_error
 
+        from models import User as UserModel
+        from routes.api_error_utils import auth_error
+        from services.auth.portal_phone_verification import (
+            is_portal_client,
+            user_phone_is_verified,
+        )
+        from services.notifications.phone_e164 import mask_phone_for_log
+        from shared.constants import AuthErrorCodes
+
+        # ``user`` ici est un DTO : la source de vérité SMS est ``User.phone_verified_at``.
+        orm_user = db.session.get(UserModel, user.id) if user is not None else None
+        if (
+            orm_user is not None
+            and client is not None
+            and is_portal_client(client)
+            and not user_phone_is_verified(orm_user)
+        ):
+            return auth_error(
+                AuthErrorCodes.PHONE_VERIFICATION_REQUIRED,
+                "Validez votre téléphone pour confirmer la demande de transport.",
+                403,
+                details={
+                    "phone_verified": False,
+                    "masked_phone": mask_phone_for_log(
+                        getattr(orm_user, "phone", None)
+                    ),
+                },
+            )
+
         if user is None or client is None:
             return APIErrorHandler.handle_exception(
                 Exception("Erreur interne d'authentification"),
@@ -705,9 +734,19 @@ def execute_client_booking_creation(public_id: str) -> Any:
 
         try:
             from application.bookings.create_booking import InvalidClientBookingCommand
+            from services.auth.portal_phone_verification import (
+                PortalPhoneVerificationRequired,
+            )
 
             new_booking = create_booking_via_use_case(
                 user_id=user.id, client_id=client.id, data=data
+            )
+        except PortalPhoneVerificationRequired as e:
+            return auth_error(
+                AuthErrorCodes.PHONE_VERIFICATION_REQUIRED,
+                e.message,
+                403,
+                details={"phone_verified": False},
             )
         except InvalidClientBookingCommand as e:
             return {

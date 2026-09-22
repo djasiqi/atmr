@@ -50,8 +50,12 @@ load_internal_service_token() {
 }
 
 # Alembic / flask db upgrade : connexion directe Postgres (pas PgBouncer) pour éviter les effets du pool transactionnel.
+# DISABLE_EVENTLET=1 : Alembic et le preview AUTH-SMS-02 doivent rester hors monkey-patch.
+# SKIP_DB_UPGRADE=1 : déploie le code, lance le preview read-only, n'écrit pas
+# (voir docs/ops/auth-sms-02-prod-runbook.md). Défaut = upgrade automatique.
 migration_exec() {
   docker compose -f docker-compose.production.yml exec -T \
+    -e DISABLE_EVENTLET=1 \
     -e SQLALCHEMY_DATABASE_URI="${DATABASE_URL_DIRECT}" \
     -e DATABASE_URL="${DATABASE_URL_DIRECT}" \
     -e PRIMARY_DATABASE_URL="${DATABASE_URL_DIRECT}" \
@@ -467,6 +471,7 @@ fi
   echo "TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}"
   echo "TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}"
   echo "TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-}"
+  echo "TWILIO_MESSAGING_SERVICE_SID=${TWILIO_MESSAGING_SERVICE_SID:-}"
   echo "SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-noreply@lirie.ch}"
   echo "SMTP_FROM_NAME=${SMTP_FROM_NAME:-LIRIE}"
   echo "DEMO_EMAIL_FROM=${DEMO_EMAIL_FROM:-noreply@lirie.ch}"
@@ -665,44 +670,77 @@ for i in $(seq 1 30); do
 done
 
 # Migrations Alembic avant Celery / API pleine charge : RUN_ENTRYPOINT_MIGRATIONS=0 en prod.
+# AUTH-SMS-02 : SKIP_DB_UPGRADE=1 déploie le code sans écrire. Preview obligatoire
+# avant `flask db upgrade` — voir docs/ops/auth-sms-02-prod-runbook.md.
 echo "🔄 Migrations Alembic (cycle safe prod)..."
 echo "   Connexion Alembic: hôte postgres:5432 (direct), pas pgbouncer — voir migration_exec."
 echo "📋 État avant upgrade:"
 migration_exec flask db current || true
 migration_exec flask db heads || true
-echo "⬆️  Application des migrations..."
-if migration_exec flask db upgrade heads; then
-  :
+SKIP_DB_UPGRADE="${SKIP_DB_UPGRADE:-0}"
+if [ "$SKIP_DB_UPGRADE" = "1" ] || [ "$SKIP_DB_UPGRADE" = "true" ] || [ "$SKIP_DB_UPGRADE" = "yes" ]; then
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "ℹ️  SKIP_DB_UPGRADE=${SKIP_DB_UPGRADE} — aucune écriture Alembic."
+  echo "   Preview AUTH-SMS-02 (read-only) :"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  migration_exec python -m scripts.preview_auth_sms_02_promotion || true
+  echo ""
+  echo "Ensuite, après revue des comptes :"
+  echo "  docker compose -f docker-compose.production.yml exec -T \\"
+  echo "    -e DISABLE_EVENTLET=1 backend flask db upgrade heads"
+  echo "Puis relancer le même preview (users_a_promouvoir doit être 0)."
+  echo "Runbook : docs/ops/auth-sms-02-prod-runbook.md"
 else
-  echo "⚠️  Tentative 1 échouée, nouvel essai après 5s..."
-  sleep 5
+  echo "⬆️  Application des migrations..."
   if migration_exec flask db upgrade heads; then
     :
   else
-    echo "⚠️  Tentative 2 échouée, dernière tentative après 10s..."
-    sleep 10
+    echo "⚠️  Tentative 1 échouée, nouvel essai après 5s..."
+    sleep 5
     if migration_exec flask db upgrade heads; then
       :
     else
-      echo "❌ Migrations échouées après 3 tentatives"
-      migration_failure_diag
-      exit 1
+      echo "⚠️  Tentative 2 échouée, dernière tentative après 10s..."
+      sleep 10
+      if migration_exec flask db upgrade heads; then
+        :
+      else
+        echo "❌ Migrations échouées après 3 tentatives"
+        migration_failure_diag
+        exit 1
+      fi
     fi
   fi
+  echo "📋 État après upgrade (validation current == head):"
+  CURRENT_AFTER=$(migration_exec flask db current 2>&1) || true
+  HEADS_AFTER=$(migration_exec flask db heads 2>&1) || true
+  echo "  current: ${CURRENT_AFTER:- (vide)}"
+  echo "  heads:   ${HEADS_AFTER:- (vide)}"
+  if [ -z "$CURRENT_AFTER" ] || [ -z "$HEADS_AFTER" ]; then
+    echo "⚠️  Impossible de vérifier current/heads après upgrade"
+  elif ! echo "$HEADS_AFTER" | grep -qF "$(echo "$CURRENT_AFTER" | head -1)"; then
+    echo "⚠️  current après upgrade ne correspond pas au head affiché (vérifier manuellement)"
+  else
+    echo "✅ current cohérent avec head"
+  fi
+  echo "✅ Migrations appliquées"
 fi
-echo "📋 État après upgrade (validation current == head):"
-CURRENT_AFTER=$(migration_exec flask db current 2>&1) || true
-HEADS_AFTER=$(migration_exec flask db heads 2>&1) || true
-echo "  current: ${CURRENT_AFTER:- (vide)}"
-echo "  heads:   ${HEADS_AFTER:- (vide)}"
-if [ -z "$CURRENT_AFTER" ] || [ -z "$HEADS_AFTER" ]; then
-  echo "⚠️  Impossible de vérifier current/heads après upgrade"
-elif ! echo "$HEADS_AFTER" | grep -qF "$(echo "$CURRENT_AFTER" | head -1)"; then
-  echo "⚠️  current après upgrade ne correspond pas au head affiché (vérifier manuellement)"
-else
-  echo "✅ current cohérent avec head"
+
+if [ "$SKIP_DB_UPGRADE" = "1" ] || [ "$SKIP_DB_UPGRADE" = "true" ] || [ "$SKIP_DB_UPGRADE" = "yes" ]; then
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "⏸️  SKIP_DB_UPGRADE : Celery / stack complète / smoke non lancés."
+  echo "   Relire le COUNT ci-dessus, puis dans l'ordre :"
+  echo "   1. docker compose -f docker-compose.production.yml exec -T \\"
+  echo "        -e DISABLE_EVENTLET=1 backend flask db upgrade heads"
+  echo "   2. même preview (users_a_promouvoir = 0)"
+  echo "   3. relancer deploy-production.sh SANS SKIP_DB_UPGRADE"
+  echo "      (upgrade no-op, puis Celery + healthcheck + smoke)"
+  echo "   Runbook : docs/ops/auth-sms-02-prod-runbook.md"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  trap - ERR
+  echo "✅ Déploiement CODE terminé (migrations en attente de revue)"
+  exit 0
 fi
-echo "✅ Migrations appliquées"
 
 echo "🚀 Démarrage de la stack complète (Celery, ws-service, consommateurs…)..."
 docker compose -f docker-compose.production.yml up -d

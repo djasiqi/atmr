@@ -455,10 +455,11 @@ def _activation_channel_requirements(
     """Retourne (requires_email, requires_phone) selon les canaux fournis à l'inscription."""
     user = User.query.get(session.user_id) if session.user_id else None
     requires_email = bool(user and (user.email or "").strip())
-    requires_phone = bool(user and (user.phone or "").strip())
-    # Filet de sécurité : si aucun canal n'est détecté, exiger les deux (comportement historique)
+    # AUTH-SMS-02 : si un e-mail est fourni, le SMS n'est plus requis pour activer le compte.
+    requires_phone = bool(user and (user.phone or "").strip()) and not requires_email
+    # Filet de sécurité : si aucun canal n'est détecté, exiger l'e-mail (identité minimale)
     if not requires_email and not requires_phone:
-        return True, True
+        return True, False
     return requires_email, requires_phone
 
 
@@ -467,6 +468,17 @@ def _activation_is_complete(session: ActivationSession) -> bool:
     email_ok = (not requires_email) or bool(session.email_verified_at)
     phone_ok = (not requires_phone) or bool(session.phone_verified_at)
     return email_ok and phone_ok
+
+
+def _promote_portal_after_email(
+    user: User | None, session: ActivationSession
+) -> None:
+    from services.auth.portal_phone_verification import (
+        promote_portal_account_after_email,
+    )
+
+    if user is not None:
+        promote_portal_account_after_email(user, session)
 
 
 def _build_activation_status(session: ActivationSession) -> dict[str, object]:
@@ -893,17 +905,88 @@ def _activation_email_send_failed_body(
     )
 
 
-def _send_activation_sms(user: User, code: str) -> bool:
+def _sms_send_succeeded(result: object) -> bool:
+    if isinstance(result, dict):
+        return bool(result.get("ok"))
+    return bool(result)
+
+
+def _sms_result_error_class(result: object) -> str:
+    if isinstance(result, dict):
+        return str(result.get("error_class") or "DELIVERY_FAILURE")
+    return "DELIVERY_FAILURE"
+
+
+def _sms_result_provider_error_code(result: object) -> str | None:
+    if not isinstance(result, dict):
+        return None
+    code = result.get("provider_error_code")
+    return str(code) if code else None
+
+
+def _log_sms_activation_event(
+    event: str,
+    *,
+    user_id: int | None = None,
+    activation_session_id: str | None = None,
+    phone: str | None = None,
+    error_class: str | None = None,
+    provider_error_code: str | None = None,
+) -> None:
+    from services.notifications.phone_e164 import mask_phone_for_log
+
+    logger.info(
+        "%s user_id=%s activation_session_id=%s phone=%s provider=twilio "
+        "error_class=%s provider_error_code=%s",
+        event,
+        user_id if user_id is not None else "-",
+        activation_session_id or "-",
+        mask_phone_for_log(phone),
+        error_class or "-",
+        provider_error_code or "-",
+    )
+
+
+def _activation_sms_failure_response(
+    result: object,
+) -> tuple[dict[str, object], int]:
+    error_class = _sms_result_error_class(result)
+    if error_class == "DESTINATION_ERROR":
+        return auth_error(
+            AuthErrorCodes.INVALID_PHONE,
+            "Numéro de téléphone invalide.",
+            400,
+        )
+    if error_class in {"DISABLED", "CONFIG_ERROR", "SENDER_ERROR"}:
+        return auth_error(
+            AuthErrorCodes.SMS_UNAVAILABLE,
+            "SMS temporairement indisponible.",
+            503,
+        )
+    return auth_error(
+        AuthErrorCodes.SMS_PROVIDER_UNAVAILABLE,
+        "Le service SMS est temporairement indisponible.",
+        503,
+    )
+
+
+def _send_activation_sms(user: User, code: str) -> dict[str, object]:
     if not user.phone:
-        return False
+        return {
+            "ok": False,
+            "error": "missing_phone",
+            "error_class": "DESTINATION_ERROR",
+        }
     from services.notifications.sms import send_sms_notification
 
-    sms_result = send_sms_notification(
+    return send_sms_notification(
         phone=user.phone,
-        message=f"ATMR: votre code d'activation est {code}. Il expire dans quelques minutes.",
+        message=(
+            f"LIRIE: votre code d'activation est {code}. "
+            "Il expire dans quelques minutes."
+        ),
         notification_type="activation_signup",
     )
-    return bool(sms_result.get("ok"))
 
 
 # Modèle Swagger pour la connexion (login)
@@ -2216,8 +2299,13 @@ def _check_user_profile_active(user: User) -> tuple[bool, str | None]:
         - Si inactif: (False, "Compte désactivé")
         - Si pas de profil: (True, None) - on considère comme actif par défaut
     """
+    from services.auth.portal_phone_verification import maybe_promote_portal_account
+
+    if maybe_promote_portal_account(user):
+        db.session.commit()
+
     if getattr(user, "account_status", None) == "pending_activation":
-        return False, "Compte en attente de validation email/SMS."
+        return False, "Compte en attente de validation email."
 
     if user.role == UserRole.driver and user.driver and not user.driver.is_active:
         return False, "Compte désactivé"
@@ -4745,6 +4833,17 @@ class Register(Resource):
             phone_raw = validated_data.get("phone")
             email: str | None = (str(email_raw).strip() if email_raw else None) or None
             phone: str | None = (str(phone_raw).strip() if phone_raw else None) or None
+            if phone:
+                from services.notifications.phone_e164 import normalize_e164_phone
+
+                normalized_phone = normalize_e164_phone(phone)
+                if not normalized_phone:
+                    return auth_error(
+                        AuthErrorCodes.INVALID_PHONE,
+                        "Numéro de téléphone invalide.",
+                        400,
+                    )
+                phone = normalized_phone
 
             if not email and not phone:
                 return auth_error(
@@ -4853,7 +4952,8 @@ class Register(Resource):
             activation_session.resend_count_sms = 0
 
             sms_code = None
-            if phone:
+            # AUTH-SMS-02 : pas de SMS à l'inscription si un e-mail est fourni.
+            if phone and not email:
                 sms_code = _generate_sms_otp()
                 activation_session.sms_code_hash = _hash_plain_value(sms_code)
             db.session.add(activation_session)
@@ -4880,13 +4980,44 @@ class Register(Resource):
             sms_sent = False
             if phone and sms_code:
                 try:
-                    sms_sent = _send_activation_sms(user, sms_code)
+                    _log_sms_activation_event(
+                        "sms_verification_requested",
+                        user_id=user.id,
+                        activation_session_id=activation_session.activation_session_id,
+                        phone=user.phone,
+                    )
+                    sms_result = _send_activation_sms(user, sms_code)
+                    sms_sent = _sms_send_succeeded(sms_result)
                     if sms_sent:
                         activation_session.last_sms_sent_at = datetime.now(UTC)
                         db.session.commit()
+                        _log_sms_activation_event(
+                            "sms_verification_provider_accepted",
+                            user_id=user.id,
+                            activation_session_id=activation_session.activation_session_id,
+                            phone=user.phone,
+                        )
+                    else:
+                        _log_sms_activation_event(
+                            "sms_verification_provider_failed",
+                            user_id=user.id,
+                            activation_session_id=activation_session.activation_session_id,
+                            phone=user.phone,
+                            error_class=_sms_result_error_class(sms_result),
+                            provider_error_code=_sms_result_provider_error_code(
+                                sms_result
+                            ),
+                        )
                 except Exception as sms_err:
                     logger.warning(
                         "[Activation] Echec envoi SMS activation: %s", sms_err
+                    )
+                    _log_sms_activation_event(
+                        "sms_verification_provider_failed",
+                        user_id=user.id,
+                        activation_session_id=activation_session.activation_session_id,
+                        phone=user.phone,
+                        error_class="DELIVERY_FAILURE",
                     )
 
             logger.info("Client créé : user_id=%s, client_id=%s", user.id, client.id)
@@ -4902,10 +5033,12 @@ class Register(Resource):
                     ]
                 return body, code
 
+            requires_email = bool(email)
+            requires_phone = bool(phone) and not requires_email
             channels: list[str] = []
-            if email:
+            if requires_email:
                 channels.append("email")
-            if phone:
+            if requires_phone:
                 channels.append("SMS")
             channel_msg = " et ".join(channels) if channels else "vos canaux"
             response_body: dict[str, object] = {
@@ -4918,8 +5051,8 @@ class Register(Resource):
                 "email_sent": None,
                 "activation_email_queued": bool(enqueue_result.get("queued")),
                 "sms_sent": sms_sent,
-                "requires_email": bool(email),
-                "requires_phone": bool(phone),
+                "requires_email": requires_email,
+                "requires_phone": requires_phone,
             }
             if enqueue_result.get("debug_activation_link"):
                 response_body["debug_activation_link"] = enqueue_result[
@@ -5099,8 +5232,9 @@ class VerifyActivationEmail(Resource):
                     )
 
                 if locked.email_verified_at:
-                    db.session.commit()
                     user = User.query.get(locked.user_id)
+                    _promote_portal_after_email(user, locked)
+                    db.session.commit()
                     return {
                         "message": "Email déjà confirmé.",
                         "activation_session_id": locked.activation_session_id,
@@ -5110,8 +5244,9 @@ class VerifyActivationEmail(Resource):
                     }, 200
 
                 locked.email_verified_at = now
-                db.session.commit()
                 user = User.query.get(locked.user_id)
+                _promote_portal_after_email(user, locked)
+                db.session.commit()
                 return {
                     "message": "Email confirmé.",
                     "activation_session_id": locked.activation_session_id,
@@ -5202,6 +5337,8 @@ class VerifyActivationEmail(Resource):
                 )
             if activation_session.email_verified_at:
                 user = User.query.get(activation_session.user_id)
+                _promote_portal_after_email(user, activation_session)
+                db.session.commit()
                 return {
                     "message": "Email déjà confirmé.",
                     "activation_session_id": activation_session.activation_session_id,
@@ -5210,8 +5347,9 @@ class VerifyActivationEmail(Resource):
                     "activation_status": _build_activation_status(activation_session),
                 }, 200
             activation_session.email_verified_at = now
-            db.session.commit()
             user = User.query.get(activation_session.user_id)
+            _promote_portal_after_email(user, activation_session)
+            db.session.commit()
             return {
                 "message": "Email confirmé.",
                 "activation_session_id": activation_session.activation_session_id,
@@ -5258,6 +5396,12 @@ class VerifyActivationSms(Resource):
                 retry_after = int(
                     (activation_session.sms_locked_until - now).total_seconds()
                 )
+                _log_sms_activation_event(
+                    "sms_verification_rate_limited",
+                    user_id=activation_session.user_id,
+                    activation_session_id=activation_session.activation_session_id,
+                    error_class="locked",
+                )
                 return auth_error(
                     AuthErrorCodes.ACCOUNT_LOCKED,
                     "Trop d'essais SMS. Réessayez plus tard.",
@@ -5269,6 +5413,12 @@ class VerifyActivationSms(Resource):
                 activation_session.sms_expires_at
                 and activation_session.sms_expires_at < now
             ):
+                _log_sms_activation_event(
+                    "sms_verification_failed",
+                    user_id=activation_session.user_id,
+                    activation_session_id=activation_session.activation_session_id,
+                    error_class="expired",
+                )
                 return auth_error(
                     AuthErrorCodes.TOKEN_EXPIRED,
                     "Le code SMS a expiré. Demandez un nouveau code.",
@@ -5287,6 +5437,12 @@ class VerifyActivationSms(Resource):
                         minutes=ACTIVATION_SMS_LOCK_MINUTES
                     )
                     db.session.commit()
+                    _log_sms_activation_event(
+                        "sms_verification_failed",
+                        user_id=activation_session.user_id,
+                        activation_session_id=activation_session.activation_session_id,
+                        error_class="locked",
+                    )
                     return auth_error(
                         AuthErrorCodes.ACCOUNT_LOCKED,
                         "Trop d'essais SMS. Réessayez plus tard.",
@@ -5296,6 +5452,12 @@ class VerifyActivationSms(Resource):
                         },
                     )
                 db.session.commit()
+                _log_sms_activation_event(
+                    "sms_verification_failed",
+                    user_id=activation_session.user_id,
+                    activation_session_id=activation_session.activation_session_id,
+                    error_class="invalid_code",
+                )
                 return auth_error(
                     AuthErrorCodes.INVALID_CREDENTIALS,
                     "Code SMS invalide.",
@@ -5308,7 +5470,15 @@ class VerifyActivationSms(Resource):
             activation_session.phone_verified_at = now
             activation_session.sms_attempts = 0
             activation_session.sms_locked_until = None
+            verified_user = User.query.get(activation_session.user_id)
+            if verified_user is not None:
+                verified_user.phone_verified_at = now
             db.session.commit()
+            _log_sms_activation_event(
+                "sms_verification_success",
+                user_id=activation_session.user_id,
+                activation_session_id=activation_session.activation_session_id,
+            )
             return {
                 "message": "Téléphone confirmé.",
                 "activation_status": _build_activation_status(activation_session),
@@ -5556,6 +5726,12 @@ class ResendActivationSms(Resource):
                     if policy_error == "cooldown"
                     else "Limite journalière de renvoi SMS atteinte."
                 )
+                _log_sms_activation_event(
+                    "sms_verification_rate_limited",
+                    user_id=activation_session.user_id,
+                    activation_session_id=activation_session.activation_session_id,
+                    error_class=policy_error,
+                )
                 return auth_error(
                     AuthErrorCodes.RATE_LIMITED,
                     message,
@@ -5576,7 +5752,22 @@ class ResendActivationSms(Resource):
             user = User.query.get(activation_session.user_id)
             if not user:
                 return {"error": "Utilisateur introuvable."}, 404
-            if not _send_activation_sms(user, sms_code):
+            _log_sms_activation_event(
+                "sms_verification_requested",
+                user_id=user.id,
+                activation_session_id=activation_session.activation_session_id,
+                phone=user.phone,
+            )
+            sms_result = _send_activation_sms(user, sms_code)
+            if not _sms_send_succeeded(sms_result):
+                _log_sms_activation_event(
+                    "sms_verification_provider_failed",
+                    user_id=user.id,
+                    activation_session_id=activation_session.activation_session_id,
+                    phone=user.phone,
+                    error_class=_sms_result_error_class(sms_result),
+                    provider_error_code=_sms_result_provider_error_code(sms_result),
+                )
                 environment = (
                     str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
                 )
@@ -5599,7 +5790,13 @@ class ResendActivationSms(Resource):
                     }, 200
 
                 db.session.rollback()
-                return {"error": "Echec envoi SMS. Réessayez plus tard."}, 502
+                return _activation_sms_failure_response(sms_result)
+            _log_sms_activation_event(
+                "sms_verification_provider_accepted",
+                user_id=user.id,
+                activation_session_id=activation_session.activation_session_id,
+                phone=user.phone,
+            )
             db.session.commit()
             return {"message": "Code SMS renvoyé."}, 200
         except ValidationError as e:
@@ -5636,6 +5833,17 @@ class UpdateActivationPhone(Resource):
             if not user:
                 return {"error": "Utilisateur introuvable."}, 404
 
+            from services.notifications.phone_e164 import normalize_e164_phone
+
+            normalized_phone = normalize_e164_phone(new_phone)
+            if not normalized_phone:
+                return auth_error(
+                    AuthErrorCodes.INVALID_PHONE,
+                    "Numéro de téléphone invalide.",
+                    400,
+                )
+            new_phone = normalized_phone
+
             now = datetime.now(UTC)
             daily_count = int(activation_session.resend_count_sms or 0)
             if activation_session.last_sms_sent_at and not _is_same_utc_day(
@@ -5652,6 +5860,13 @@ class UpdateActivationPhone(Resource):
                     "Veuillez patienter avant de renvoyer le SMS."
                     if policy_error == "cooldown"
                     else "Limite journalière de renvoi SMS atteinte."
+                )
+                _log_sms_activation_event(
+                    "sms_verification_rate_limited",
+                    user_id=user.id,
+                    activation_session_id=activation_session.activation_session_id,
+                    phone=new_phone,
+                    error_class=policy_error,
                 )
                 return auth_error(
                     AuthErrorCodes.RATE_LIMITED,
@@ -5671,7 +5886,22 @@ class UpdateActivationPhone(Resource):
             activation_session.last_sms_sent_at = now
             activation_session.resend_count_sms = daily_count + 1
 
-            if not _send_activation_sms(user, sms_code):
+            _log_sms_activation_event(
+                "sms_verification_requested",
+                user_id=user.id,
+                activation_session_id=activation_session.activation_session_id,
+                phone=user.phone,
+            )
+            sms_result = _send_activation_sms(user, sms_code)
+            if not _sms_send_succeeded(sms_result):
+                _log_sms_activation_event(
+                    "sms_verification_provider_failed",
+                    user_id=user.id,
+                    activation_session_id=activation_session.activation_session_id,
+                    phone=user.phone,
+                    error_class=_sms_result_error_class(sms_result),
+                    provider_error_code=_sms_result_provider_error_code(sms_result),
+                )
                 environment = (
                     str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
                 )
@@ -5698,8 +5928,14 @@ class UpdateActivationPhone(Resource):
                     }, 200
 
                 db.session.rollback()
-                return {"error": "Echec envoi SMS. Réessayez plus tard."}, 502
+                return _activation_sms_failure_response(sms_result)
 
+            _log_sms_activation_event(
+                "sms_verification_provider_accepted",
+                user_id=user.id,
+                activation_session_id=activation_session.activation_session_id,
+                phone=user.phone,
+            )
             db.session.commit()
             return {
                 "message": "Numéro mis à jour. Nouveau code SMS envoyé.",
@@ -5734,6 +5970,191 @@ class ActivationStatus(Resource):
             "masked_phone": _mask_phone(user.phone) if user else None,
             "activation_status": _build_activation_status(activation_session),
         }, 200
+
+
+def _current_user_from_jwt() -> User | None:
+    identity = get_jwt_identity()
+    if not identity:
+        return None
+    return User.query.filter_by(public_id=str(identity)).first()
+
+
+def _phone_otp_session_for_user(user: User) -> ActivationSession:
+    session = (
+        ActivationSession.query.filter_by(user_id=user.id)
+        .order_by(ActivationSession.created_at.desc())
+        .first()
+    )
+    if session is not None:
+        return session
+    now = datetime.now(UTC)
+    session = ActivationSession()
+    session.activation_session_id = str(uuid.uuid4())
+    session.user_id = user.id
+    session.sms_attempts = 0
+    session.resend_count_sms = 0
+    session.created_at = now
+    db.session.add(session)
+    return session
+
+
+@auth_ns.route("/phone/send-code")
+class SendPhoneVerificationCode(Resource):
+    @jwt_required()
+    @limiter.limit("15 per hour")
+    def post(self):
+        """Envoie un OTP SMS au numéro courant (action volontaire ou 1er transport)."""
+        user = _current_user_from_jwt()
+        if not user:
+            return {"error": "Utilisateur introuvable."}, 401
+        if getattr(user, "phone_verified_at", None):
+            return {"message": "Téléphone déjà confirmé.", "phone_verified": True}, 200
+        if not (user.phone or "").strip():
+            return auth_error(
+                AuthErrorCodes.INVALID_PHONE,
+                "Numéro de téléphone invalide.",
+                400,
+            )
+        session = _phone_otp_session_for_user(user)
+        now = datetime.now(UTC)
+        daily_count = int(session.resend_count_sms or 0)
+        if session.last_sms_sent_at and not _is_same_utc_day(
+            session.last_sms_sent_at, now
+        ):
+            daily_count = 0
+        allowed, policy_error, retry_after = _enforce_resend_policy(
+            last_sent_at=session.last_sms_sent_at,
+            resend_count=daily_count,
+        )
+        if not allowed:
+            _log_sms_activation_event(
+                "sms_verification_rate_limited",
+                user_id=user.id,
+                activation_session_id=session.activation_session_id,
+                phone=user.phone,
+                error_class=policy_error,
+            )
+            return auth_error(
+                AuthErrorCodes.RATE_LIMITED,
+                (
+                    "Veuillez patienter avant de renvoyer le SMS."
+                    if policy_error == "cooldown"
+                    else "Limite journalière de renvoi SMS atteinte."
+                ),
+                429,
+                details={"retry_after_seconds": retry_after},
+            )
+        sms_code = _generate_sms_otp()
+        session.sms_code_hash = _hash_plain_value(sms_code)
+        session.sms_expires_at = now + timedelta(minutes=ACTIVATION_SMS_TTL_MINUTES)
+        session.sms_attempts = 0
+        session.sms_locked_until = None
+        session.last_sms_sent_at = now
+        session.resend_count_sms = daily_count + 1
+        _log_sms_activation_event(
+            "sms_verification_requested",
+            user_id=user.id,
+            activation_session_id=session.activation_session_id,
+            phone=user.phone,
+        )
+        sms_result = _send_activation_sms(user, sms_code)
+        if not _sms_send_succeeded(sms_result):
+            db.session.rollback()
+            _log_sms_activation_event(
+                "sms_verification_provider_failed",
+                user_id=user.id,
+                activation_session_id=session.activation_session_id,
+                phone=user.phone,
+                error_class=_sms_result_error_class(sms_result),
+                provider_error_code=_sms_result_provider_error_code(sms_result),
+            )
+            return _activation_sms_failure_response(sms_result)
+        db.session.commit()
+        _log_sms_activation_event(
+            "sms_verification_provider_accepted",
+            user_id=user.id,
+            activation_session_id=session.activation_session_id,
+            phone=user.phone,
+        )
+        return {
+            "message": "Code SMS envoyé.",
+            "masked_phone": _mask_phone(user.phone),
+            "sms_sent": True,
+            "phone_verified": False,
+        }, 200
+
+
+@auth_ns.route("/phone/verify-code")
+class VerifyPhoneCode(Resource):
+    @jwt_required()
+    @limiter.limit("30 per hour")
+    def post(self):
+        """Valide l'OTP SMS et renseigne ``user.phone_verified_at``."""
+        user = _current_user_from_jwt()
+        if not user:
+            return {"error": "Utilisateur introuvable."}, 401
+        data = request.get_json() or {}
+        code = str(data.get("code") or "").strip()
+        if not re.fullmatch(r"\d{6}", code):
+            return auth_error(
+                AuthErrorCodes.INVALID_CREDENTIALS,
+                "Code SMS invalide.",
+                400,
+            )
+        if getattr(user, "phone_verified_at", None):
+            return {"message": "Téléphone déjà confirmé.", "phone_verified": True}, 200
+        session = _phone_otp_session_for_user(user)
+        now = datetime.now(UTC)
+        if session.sms_locked_until and session.sms_locked_until > now:
+            retry_after = int((session.sms_locked_until - now).total_seconds())
+            return auth_error(
+                AuthErrorCodes.ACCOUNT_LOCKED,
+                "Trop d'essais SMS. Réessayez plus tard.",
+                429,
+                details={"retry_after_seconds": retry_after},
+            )
+        if session.sms_expires_at and session.sms_expires_at < now:
+            return auth_error(
+                AuthErrorCodes.TOKEN_EXPIRED,
+                "Le code SMS a expiré. Demandez un nouveau code.",
+                400,
+            )
+        if not hmac.compare_digest(
+            _hash_plain_value(code), session.sms_code_hash or ""
+        ):
+            attempts = int(session.sms_attempts or 0) + 1
+            session.sms_attempts = attempts
+            if attempts >= ACTIVATION_SMS_MAX_ATTEMPTS:
+                session.sms_attempts = 0
+                session.sms_locked_until = now + timedelta(
+                    minutes=ACTIVATION_SMS_LOCK_MINUTES
+                )
+                db.session.commit()
+                return auth_error(
+                    AuthErrorCodes.ACCOUNT_LOCKED,
+                    "Trop d'essais SMS. Réessayez plus tard.",
+                    429,
+                    details={"retry_after_seconds": ACTIVATION_SMS_LOCK_MINUTES * 60},
+                )
+            db.session.commit()
+            return auth_error(
+                AuthErrorCodes.INVALID_CREDENTIALS,
+                "Code SMS invalide.",
+                400,
+                details={"remaining_attempts": ACTIVATION_SMS_MAX_ATTEMPTS - attempts},
+            )
+        session.phone_verified_at = now
+        session.sms_attempts = 0
+        session.sms_locked_until = None
+        user.phone_verified_at = now
+        db.session.commit()
+        _log_sms_activation_event(
+            "sms_verification_success",
+            user_id=user.id,
+            activation_session_id=session.activation_session_id,
+            phone=user.phone,
+        )
+        return {"message": "Téléphone confirmé.", "phone_verified": True}, 200
 
 
 # ========================

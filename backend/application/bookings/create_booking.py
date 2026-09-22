@@ -255,6 +255,15 @@ class CreateBookingUseCase:
         client_dto = self.client_repo.find_by_id(cmd.client_id)
         if not client_dto:
             raise ValueError("Client non trouvé")
+
+        from services.auth.portal_phone_verification import (
+            assert_portal_can_confirm_transport,
+        )
+
+        assert_portal_can_confirm_transport(
+            user_id=cmd.user_id, client=client_dto
+        )
+
         company_id = resolve_booking_owner_company_id_for_create(client_dto)
         if company_id is not None and company_id > 0:
             self.company_creation_gate_fn(company_id)

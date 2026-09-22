@@ -79,7 +79,7 @@ def _mark_current_delivery_sent(db, session: ActivationSession) -> None:
 
 
 class TestAuthActivationFlow:
-    """Tests : register -> verify-email -> verify-sms -> finalize -> login."""
+    """Tests : register -> verify-email -> login (SMS au 1er transport)."""
 
     def test_e2e_activation_flow_register_to_login(self, e2e_client, db):
         unique_suffix = str(uuid.uuid4())[:8]
@@ -109,6 +109,9 @@ class TestAuthActivationFlow:
         assert activation_session_id, "activation_session_id manquant apres register"
         assert register_data.get("email_sent") is None
         assert "activation_email_queued" in register_data
+        assert register_data.get("sms_sent") is False
+        assert register_data.get("requires_phone") is False
+        assert register_data.get("requires_email") is True
 
         # 2) Login bloqué avant activation complète
         login_before_response = e2e_client.post(
@@ -142,46 +145,20 @@ class TestAuthActivationFlow:
             f"{verify_email_response.get_json()}"
         )
 
-        # 4) Préparer un code SMS connu puis verify-sms
-        known_sms_code = "123456"
+        # 4) AUTH-SMS-02 : login autorisé dès l'e-mail, sans SMS
+        from models import User
+
         session = ActivationSession.query.filter_by(
             activation_session_id=activation_session_id
         ).first()
-        assert session is not None, "Session d'activation introuvable en base"
-        session.sms_code_hash = hashlib.sha256(
-            known_sms_code.encode("utf-8")
-        ).hexdigest()
-        session.sms_attempts = 0
-        session.sms_locked_until = None
-        db.session.commit()
+        assert session is not None
+        assert session.email_verified_at is not None
+        assert session.phone_verified_at is None
+        user = db.session.get(User, session.user_id)
+        assert user is not None
+        assert user.account_status == "active"
+        assert user.phone_verified_at is None
 
-        verify_sms_response = e2e_client.post(
-            "/api/v1/auth/activation/verify-sms",
-            json={
-                "activation_session_id": activation_session_id,
-                "code": known_sms_code,
-            },
-            headers={"Content-Type": "application/json"},
-        )
-        assert verify_sms_response.status_code == 200, (
-            f"verify-sms doit reussir, recu {verify_sms_response.status_code}: "
-            f"{verify_sms_response.get_json()}"
-        )
-
-        # 5) Finalize activation
-        finalize_response = e2e_client.post(
-            "/api/v1/auth/activation/finalize",
-            json={"activation_session_id": activation_session_id},
-            headers={"Content-Type": "application/json"},
-        )
-        assert finalize_response.status_code == 200, (
-            f"finalize doit reussir, recu {finalize_response.status_code}: "
-            f"{finalize_response.get_json()}"
-        )
-        finalize_data = finalize_response.get_json() or {}
-        assert "user_id" in finalize_data
-
-        # 6) Login autorisé après activation
         login_after_response = e2e_client.post(
             "/api/v1/auth/login",
             json={
@@ -343,7 +320,7 @@ class TestAuthActivationFlow:
         verify_email_data = verify_email_response.get_json() or {}
         assert verify_email_data.get("error") == "token_expired"
 
-    def test_e2e_activation_finalize_refused_when_sms_not_verified(
+    def test_e2e_activation_complete_after_email_without_sms(
         self, e2e_client, db
     ):
         unique_suffix = str(uuid.uuid4())[:8]
@@ -390,20 +367,32 @@ class TestAuthActivationFlow:
             f"{verify_email_response.get_json()}"
         )
 
+        from models import User
+
+        session = ActivationSession.query.filter_by(
+            activation_session_id=activation_session_id
+        ).first()
+        assert session is not None
+        user = db.session.get(User, session.user_id)
+        assert user is not None
+        assert user.account_status == "active"
+        assert user.phone_verified_at is None
+
         finalize_response = e2e_client.post(
             "/api/v1/auth/activation/finalize",
             json={"activation_session_id": activation_session_id},
             headers={"Content-Type": "application/json"},
         )
-        assert finalize_response.status_code == 400, (
-            f"finalize doit etre refuse sans SMS confirme, recu {finalize_response.status_code}: "
+        assert finalize_response.status_code == 200, (
+            f"finalize doit etre idempotent apres e-mail, recu {finalize_response.status_code}: "
             f"{finalize_response.get_json()}"
         )
         finalize_data = finalize_response.get_json() or {}
-        assert finalize_data.get("error") == "email_not_verified"
-        details = finalize_data.get("details") or {}
-        assert details.get("email_verified") is True
-        assert details.get("phone_verified") is False
+        status = finalize_data.get("activation_status") or {}
+        assert status.get("email_verified") is True
+        assert status.get("phone_verified") is False
+        assert status.get("requires_phone") is False
+        assert status.get("is_complete") is True
 
     def test_e2e_activation_verify_sms_expired_code(self, e2e_client, db):
         unique_suffix = str(uuid.uuid4())[:8]

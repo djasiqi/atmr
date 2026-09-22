@@ -138,6 +138,10 @@ class User(db.Model):
     account_status: Mapped[str | None] = mapped_column(
         String(20), nullable=True, default=None
     )  # None (legacy/active), "pending_activation", "invited", "active", "disabled"
+    # Source de vérité SMS CLIENT/PORTAL (NULL = jamais validé). Indépendant de account_status.
+    phone_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     invite_token_hash: Mapped[str | None] = mapped_column(
         String(64), nullable=True, index=True
     )  # sha256 du token d'invitation
@@ -542,6 +546,7 @@ class User(db.Model):
             "city": self.city or "Non spécifié",
             "created_at": _iso(self.created_at),
             "force_password_change": self.force_password_change,
+            "phone_verified": bool(getattr(self, "phone_verified_at", None)),
         }
         # ✅ Institution: Ajouter les champs institution si présents
         if self.institution_id:

@@ -131,8 +131,12 @@ def test_activation_exigences_et_statut(app, monkeypatch):
         assert status["is_complete"] is True
         assert status["is_finalized"] is False
 
+        user.phone = "+41768190077"
+        assert auth._activation_channel_requirements(session) == (True, False)
+        assert auth._activation_is_complete(session) is True
+
         user.email = None
-        assert auth._activation_channel_requirements(session) == (True, True)
+        assert auth._activation_channel_requirements(session) == (False, True)
 
 
 def test_configuration_statuts_et_onboarding(app, monkeypatch):

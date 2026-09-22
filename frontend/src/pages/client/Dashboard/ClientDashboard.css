@@ -1505,6 +1505,25 @@
   gap: 10px;
 }
 
+.phoneGateBox {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-primary, #d5ddd8);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.phoneGateBox .formActions {
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.phoneGateBox .input {
+  min-width: 140px;
+  flex: 1 1 140px;
+}
+
 .formActionsPrimary {
   padding-top: 4px;
   margin-top: 2px;

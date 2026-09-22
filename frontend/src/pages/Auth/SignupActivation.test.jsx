@@ -93,6 +93,7 @@ describe('SignupActivation', () => {
         activation_status: {
           email_verified: true,
           phone_verified: false,
+          requires_phone: true,
           is_complete: false,
           is_finalized: false,
         },
@@ -103,6 +104,7 @@ describe('SignupActivation', () => {
         activation_status: {
           email_verified: true,
           phone_verified: true,
+          requires_phone: true,
           is_complete: true,
           is_finalized: false,
         },
@@ -273,6 +275,7 @@ describe('SignupActivation', () => {
         activation_status: {
           email_verified: true,
           phone_verified: false,
+          requires_phone: true,
           is_complete: false,
           is_finalized: false,
         },
@@ -285,6 +288,7 @@ describe('SignupActivation', () => {
         activation_status: {
           email_verified: true,
           phone_verified: false,
+          requires_phone: true,
           is_complete: false,
           is_finalized: false,
         },
@@ -322,6 +326,7 @@ describe('SignupActivation', () => {
         activation_status: {
           email_verified: true,
           phone_verified: false,
+          requires_phone: true,
           is_complete: false,
           is_finalized: false,
         },
@@ -354,5 +359,63 @@ describe('SignupActivation', () => {
       expect(screen.getByText(/code sms de secours/i)).toBeInTheDocument();
       expect(screen.getByText('654321')).toBeInTheDocument();
     });
+  });
+
+  it('affiche le message API si resend-sms renvoie 503 sms_unavailable', async () => {
+    apiClient.get.mockResolvedValueOnce({
+      data: {
+        activation_status: {
+          email_verified: true,
+          phone_verified: false,
+          requires_phone: true,
+          is_complete: false,
+          is_finalized: false,
+        },
+      },
+    });
+    apiClient.post.mockRejectedValueOnce({
+      response: {
+        status: 503,
+        data: {
+          error: 'sms_unavailable',
+          message: 'SMS temporairement indisponible.',
+        },
+      },
+    });
+
+    renderActivation('/activate-account?activation_session_id=sess-sms-503');
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /renvoyer le code/i })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /renvoyer le code/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/sms temporairement indisponible/i)).toBeInTheDocument();
+    });
+  });
+
+  it("n'affiche pas le SMS quand l'email suffit à activer le compte", async () => {
+    apiClient.get.mockResolvedValueOnce({
+      data: {
+        activation_status: {
+          email_verified: false,
+          phone_verified: false,
+          requires_email: true,
+          requires_phone: false,
+          is_complete: false,
+          is_finalized: false,
+        },
+      },
+    });
+
+    renderActivation('/activate-account?activation_session_id=sess-email-only');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /renvoyer l'email/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /valider le code/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /renvoyer le code/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/le téléphone se vérifiera plus tard/i)
+    ).toBeInTheDocument();
   });
 });

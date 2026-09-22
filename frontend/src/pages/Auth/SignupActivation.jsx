@@ -40,7 +40,7 @@ const SignupActivation = () => {
     email_verified: false,
     phone_verified: false,
     requires_email: true,
-    requires_phone: true,
+    requires_phone: false,
     is_complete: false,
     is_finalized: false,
     email_delivery_status: null,
@@ -70,7 +70,7 @@ const SignupActivation = () => {
       requires_email:
         newStatus.requires_email == null ? true : Boolean(newStatus.requires_email),
       requires_phone:
-        newStatus.requires_phone == null ? true : Boolean(newStatus.requires_phone),
+        newStatus.requires_phone == null ? false : Boolean(newStatus.requires_phone),
       is_complete: Boolean(newStatus.is_complete),
       is_finalized: Boolean(newStatus.is_finalized),
       email_delivery_status: newStatus.email_delivery_status || null,
@@ -362,16 +362,13 @@ const SignupActivation = () => {
   );
 
   const activationSubtitle = useMemo(() => {
-    if (status.requires_email && status.requires_phone) {
-      return 'Validez votre email et votre téléphone pour activer le compte.';
-    }
-    if (status.requires_email) {
-      return 'Validez votre email pour activer le compte.';
+    if (status.requires_email && !status.email_verified) {
+      return 'Validez votre email pour activer le compte. Le téléphone se vérifiera plus tard, au premier transport.';
     }
     if (status.requires_phone) {
       return 'Validez votre téléphone pour activer le compte.';
     }
-    return 'Validez vos informations pour activer le compte.';
+    return 'Votre compte peut être activé. La validation SMS n’est requise qu’avant le premier transport.';
   }, [status.requires_email, status.requires_phone]);
 
   const handleLoginRedirect = () => {

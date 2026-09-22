@@ -619,6 +619,41 @@
   margin: 0;
 }
 
+.phoneVerifyBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.phoneVerifyNow,
+.phoneVerifyRow button {
+  align-self: flex-start;
+  border: 1px solid var(--border-primary, #d5ddd8);
+  background: #fff;
+  color: inherit;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.phoneVerifyNow:disabled,
+.phoneVerifyRow button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.phoneVerifyRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.phoneVerifyRow input {
+  min-width: 140px;
+  flex: 1 1 140px;
+}
+
 .profile-cardActions {
   display: flex;
   flex-direction: column;

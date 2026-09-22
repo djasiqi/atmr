@@ -3,6 +3,7 @@
 from marshmallow import (
     Schema,
     fields,
+    pre_load,
     validate,
 )
 
@@ -11,6 +12,20 @@ from schemas.validation_utils import ISO8601_DATE_REGEX
 
 class ClientUpdateSchema(Schema):
     """Schema pour mise à jour profil client (PUT /api/clients/<id>)."""
+
+    @pre_load
+    def _strip_phone_separators(self, data, **_kwargs):
+        if not isinstance(data, dict) or "phone" not in data:
+            return data
+        raw = data.get("phone")
+        if raw is None:
+            return data
+        cleaned = (
+            str(raw).replace(" ", "").replace(".", "").replace("-", "")
+        )
+        updated = dict(data)
+        updated["phone"] = cleaned
+        return updated
 
     first_name = fields.Str(validate=validate.Length(min=1, max=100))
     last_name = fields.Str(validate=validate.Length(min=1, max=100))

@@ -416,6 +416,22 @@ class ManageClientProfile(Resource):
                 client.user.last_name = validated_data["last_name"]
             if "gender" in validated_data:
                 client.user.gender = GenderEnum(validated_data["gender"])
+            if "phone" in validated_data and client.user is not None:
+                from services.auth.portal_phone_verification import (
+                    apply_user_phone_change,
+                    is_portal_client_user,
+                )
+
+                if is_portal_client_user(client.user):
+                    try:
+                        apply_user_phone_change(client.user, validated_data.get("phone"))
+                    except ValueError:
+                        return {
+                            "error": "invalid_phone",
+                            "message": "Numéro de téléphone invalide.",
+                        }, 400
+                else:
+                    client.user.phone = validated_data.get("phone")
 
             db.session.commit()
             return {"message": "Profile updated successfully"}, 200

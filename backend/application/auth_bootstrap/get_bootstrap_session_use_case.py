@@ -57,6 +57,15 @@ class GetBootstrapSessionUseCase:
             return BootstrapSessionHttpResult(404, body)
 
         snapshot, user_orm = loaded
+        from services.auth.portal_phone_verification import maybe_promote_portal_account
+
+        if maybe_promote_portal_account(user_orm):
+            from ext import db
+
+            db.session.commit()
+            reloaded = self._reader.load_user_for_bootstrap(str(public_id))
+            if reloaded is not None:
+                snapshot, user_orm = reloaded
         denial = evaluate_access_denial(snapshot, user_orm)
         if denial is not None:
             payload = build_auth_me_payload(snapshot, denial)

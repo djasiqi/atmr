@@ -337,6 +337,15 @@ const ClientDashboard = () => {
   const [payOfferBookingId, setPayOfferBookingId] = useState(null);
   const [payingSaferpay, setPayingSaferpay] = useState(false);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [phoneGate, setPhoneGate] = useState({
+    open: false,
+    code: '',
+    sending: false,
+    verifying: false,
+    message: '',
+    error: '',
+    maskedPhone: '',
+  });
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [asapMode, setAsapMode] = useState(false);
   const [roundTripEnabled, setRoundTripEnabled] = useState(false);
@@ -909,6 +918,58 @@ const ClientDashboard = () => {
     recurrenceSeriesMultiplier,
   ]);
 
+  const closePhoneGate = () => {
+    setPhoneGate({
+      open: false,
+      code: '',
+      sending: false,
+      verifying: false,
+      message: '',
+      error: '',
+      maskedPhone: '',
+    });
+  };
+
+  const handlePhoneGateVerify = async () => {
+    const code = String(phoneGate.code || '').trim();
+    if (!/^\d{6}$/.test(code)) {
+      setPhoneGate((prev) => ({ ...prev, error: 'Entrez un code SMS à 6 chiffres.' }));
+      return;
+    }
+    setPhoneGate((prev) => ({ ...prev, verifying: true, error: '' }));
+    try {
+      await apiClient.post('/auth/phone/verify-code', { code });
+      closePhoneGate();
+      toast.success('Téléphone confirmé. Reprise de la demande…');
+      await handleBooking();
+    } catch (err) {
+      setPhoneGate((prev) => ({
+        ...prev,
+        verifying: false,
+        error: getApiErrorMessage(err, 'Code SMS invalide ou expiré.'),
+      }));
+    }
+  };
+
+  const handlePhoneGateResend = async () => {
+    setPhoneGate((prev) => ({ ...prev, sending: true, error: '' }));
+    try {
+      const smsRes = await apiClient.post('/auth/phone/send-code', {});
+      setPhoneGate((prev) => ({
+        ...prev,
+        sending: false,
+        message: smsRes?.data?.message || 'Code SMS renvoyé.',
+        maskedPhone: smsRes?.data?.masked_phone || prev.maskedPhone,
+      }));
+    } catch (err) {
+      setPhoneGate((prev) => ({
+        ...prev,
+        sending: false,
+        error: getApiErrorMessage(err, 'Impossible d’envoyer le SMS.'),
+      }));
+    }
+  };
+
   const handleBooking = async () => {
     if (bookingSubmitting) return;
     const token = getActiveAccessToken({ allowLegacy: true });
@@ -1241,6 +1302,43 @@ const ClientDashboard = () => {
       }
     } catch (err) {
       console.error('Erreur réservation :', err);
+      const apiError = err?.response?.data?.error;
+      if (apiError === 'phone_verification_required' || err?.response?.status === 403) {
+        const details = err?.response?.data?.details || {};
+        if (apiError === 'phone_verification_required') {
+          setPhoneGate({
+            open: true,
+            code: '',
+            sending: true,
+            verifying: false,
+            message: '',
+            error: '',
+            maskedPhone: details.masked_phone || '',
+          });
+          try {
+            const smsRes = await apiClient.post('/auth/phone/send-code', {});
+            setPhoneGate((prev) => ({
+              ...prev,
+              sending: false,
+              message: smsRes?.data?.message || 'Code SMS envoyé.',
+              maskedPhone: smsRes?.data?.masked_phone || prev.maskedPhone,
+            }));
+          } catch (smsErr) {
+            setPhoneGate((prev) => ({
+              ...prev,
+              sending: false,
+              error: getApiErrorMessage(
+                smsErr,
+                'SMS temporairement indisponible. Réessayez.'
+              ),
+            }));
+          }
+          setFormError(
+            'Validez votre téléphone pour confirmer la demande. Le formulaire est conservé.'
+          );
+          return;
+        }
+      }
       const msg = getApiErrorMessage(err, 'Une erreur est survenue lors de la réservation.');
       setFormError(msg);
       toast.error(msg, { duration: 6000 });
@@ -2174,6 +2272,51 @@ const ClientDashboard = () => {
                     <p className="networkHint" role="status" aria-live="polite">
                       Indicatif en cours de calcul…
                     </p>
+                  ) : null}
+
+                  {phoneGate.open ? (
+                    <div className="phoneGateBox" role="dialog" aria-label="Validation du téléphone">
+                      <p>
+                        Validez le code reçu
+                        {phoneGate.maskedPhone ? ` sur ${phoneGate.maskedPhone}` : ''} pour
+                        confirmer la demande. Vos informations sont conservées.
+                      </p>
+                      {phoneGate.message ? <p className="networkHint">{phoneGate.message}</p> : null}
+                      {phoneGate.error ? <p className="error">{phoneGate.error}</p> : null}
+                      <div className="formActions">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          className="input"
+                          placeholder="Code à 6 chiffres"
+                          value={phoneGate.code}
+                          onChange={(e) =>
+                            setPhoneGate((prev) => ({
+                              ...prev,
+                              code: e.target.value.replace(/[^\d]/g, ''),
+                            }))
+                          }
+                          disabled={phoneGate.sending || phoneGate.verifying}
+                        />
+                        <button
+                          type="button"
+                          className={homeFieldStyles.ctaButton}
+                          onClick={handlePhoneGateVerify}
+                          disabled={phoneGate.sending || phoneGate.verifying}
+                        >
+                          Valider le code
+                        </button>
+                        <button
+                          type="button"
+                          className="ghostButton"
+                          onClick={handlePhoneGateResend}
+                          disabled={phoneGate.sending || phoneGate.verifying}
+                        >
+                          Renvoyer le SMS
+                        </button>
+                      </div>
+                    </div>
                   ) : null}
 
                   <div className="formActions formActionsPrimary">

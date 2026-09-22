@@ -19,6 +19,7 @@ from application.bookings.create_booking import (
 from domain.bookings.commands import CreateBookingCommand
 from domain.events.events import BookingCreatedEvent
 from models.enums import ClientType
+from services.auth.portal_phone_verification import PortalPhoneVerificationRequired
 from services.platform_exceptions import PlatformTenantSuspended
 from shared.booking_company_resolution import (
     resolve_booking_owner_company_id_for_create,
@@ -190,6 +191,23 @@ def test_create_booking_use_case_publishes_booking_created_event(monkeypatch) ->
     }
     assert "pickup_admin_resolved_at" in writer.last_kwargs
     assert "dropoff_admin_resolved_at" in writer.last_kwargs
+
+
+def test_create_booking_use_case_blocks_unverified_portal_phone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import application.bookings.create_booking as mod
+
+    _patch_common(monkeypatch, mod)
+    writer = _FakeBookingWriter()
+    uc = _build_uc(writer=writer, client_repo=_FakeClientRepo(company_id=None))
+    monkeypatch.setattr(
+        "services.auth.portal_phone_verification.assert_portal_can_confirm_transport",
+        lambda **_k: (_ for _ in ()).throw(PortalPhoneVerificationRequired()),
+    )
+    with pytest.raises(PortalPhoneVerificationRequired):
+        uc.execute(_base_cmd())
+    assert writer.calls == 0
 
 
 def test_create_booking_use_case_invalid_scheduled_time_raises_value_error() -> None:

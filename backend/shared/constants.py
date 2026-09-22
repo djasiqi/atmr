@@ -264,6 +264,21 @@ class AuthErrorCodes:
     """Trop de tentatives, veuillez patienter. HTTP 429."""
 
     # -------------------------------------------------------------------------
+    # Activation SMS (400 / 503)
+    # -------------------------------------------------------------------------
+    INVALID_PHONE = "invalid_phone"
+    """Numéro de téléphone invalide ou non normalisable en E.164. HTTP 400."""
+
+    SMS_UNAVAILABLE = "sms_unavailable"
+    """Canal SMS désactivé ou mal configuré. HTTP 503."""
+
+    SMS_PROVIDER_UNAVAILABLE = "sms_provider_unavailable"
+    """Le fournisseur SMS a refusé ou n'est pas joignable. HTTP 503."""
+
+    PHONE_VERIFICATION_REQUIRED = "phone_verification_required"
+    """Téléphone non vérifié : action sensible (1er transport) bloquée. HTTP 403."""
+
+    # -------------------------------------------------------------------------
     # Erreurs génériques
     # -------------------------------------------------------------------------
     REGISTRATION_ERROR = "registration_error"
@@ -303,4 +318,9 @@ AUTH_ERROR_HTTP_STATUS = {
     AuthErrorCodes.EMAIL_NOT_VERIFIED: 403,
     # 429 Too Many Requests
     AuthErrorCodes.RATE_LIMITED: 429,
+    # 400 / 503 SMS activation
+    AuthErrorCodes.INVALID_PHONE: 400,
+    AuthErrorCodes.SMS_UNAVAILABLE: 503,
+    AuthErrorCodes.SMS_PROVIDER_UNAVAILABLE: 503,
+    AuthErrorCodes.PHONE_VERIFICATION_REQUIRED: 403,
 }

@@ -136,7 +136,12 @@ def test_register_succes_email_sms(client, monkeypatch):
     monkeypatch.setattr(auth.db.session, "add", lambda _value: None)
     monkeypatch.setattr(auth.db.session, "commit", lambda: None)
     monkeypatch.setattr(auth, "_generate_sms_otp", lambda: "123456")
-    monkeypatch.setattr(auth, "_send_activation_sms", lambda *_args: True)
+    sms_calls = {"n": 0}
+    monkeypatch.setattr(
+        auth,
+        "_send_activation_sms",
+        lambda *_args: sms_calls.__setitem__("n", sms_calls["n"] + 1) or True,
+    )
     monkeypatch.setattr(
         "security.password_policy.PasswordPolicyService.validate_password",
         lambda *_args, **_kwargs: None,
@@ -152,7 +157,12 @@ def test_register_succes_email_sms(client, monkeypatch):
     response = client.post("/api/v1/auth/register", json=payload)
 
     assert response.status_code == 201
-    assert response.get_json()["activation_email_queued"] is True
+    body = response.get_json()
+    assert body["activation_email_queued"] is True
+    assert body["sms_sent"] is False
+    assert body["requires_email"] is True
+    assert body["requires_phone"] is False
+    assert sms_calls["n"] == 0
     assert created_sessions
 
 
@@ -892,7 +902,8 @@ def test_activation_gardes_et_fallbacks(client, monkeypatch):
         "/api/v1/auth/activation/resend-sms",
         json={"activation_session_id": session.activation_session_id},
     )
-    assert failed_sms.status_code == 502
+    assert failed_sms.status_code == 503
+    assert failed_sms.get_json()["error"] == "sms_provider_unavailable"
 
     session.last_sms_sent_at = None
     failed_update = client.post(
@@ -902,7 +913,8 @@ def test_activation_gardes_et_fallbacks(client, monkeypatch):
             "phone": "+41790000001",
         },
     )
-    assert failed_update.status_code == 502
+    assert failed_update.status_code == 503
+    assert failed_update.get_json()["error"] == "sms_provider_unavailable"
 
     session.consumed_at = datetime.now(UTC)
     conflict = client.post(
@@ -1823,7 +1835,9 @@ def test_login_json_malforme_et_sms_sans_telephone(app):
     ):
         response = auth._login_post_body()
     assert response[1] == 400
-    assert auth._send_activation_sms(SimpleNamespace(phone=None), "123456") is False
+    assert auth._sms_send_succeeded(
+        auth._send_activation_sms(SimpleNamespace(phone=None), "123456")
+    ) is False
 
 
 def test_verify_email_legacy_signatures_et_doublon(client, monkeypatch):

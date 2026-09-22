@@ -427,6 +427,7 @@ class Client(db.Model):
             else None,
             "contact_email": self.contact_email,
             "phone": self.contact_phone or phone_user,
+            "phone_verified": bool(getattr(user, "phone_verified_at", None)),
             "domicile": {
                 "address": self.domicile_address,
                 "zip": self.domicile_zip,
