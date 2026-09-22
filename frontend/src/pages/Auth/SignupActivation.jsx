@@ -369,7 +369,7 @@ const SignupActivation = () => {
       return 'Validez votre téléphone pour activer le compte.';
     }
     return 'Votre compte peut être activé. La validation SMS n’est requise qu’avant le premier transport.';
-  }, [status.requires_email, status.requires_phone]);
+  }, [status.email_verified, status.requires_email, status.requires_phone]);
 
   const handleLoginRedirect = () => {
     navigate('/login', {
