@@ -260,9 +260,7 @@ class CreateBookingUseCase:
             assert_portal_can_confirm_transport,
         )
 
-        assert_portal_can_confirm_transport(
-            user_id=cmd.user_id, client=client_dto
-        )
+        assert_portal_can_confirm_transport(user_id=cmd.user_id, client=client_dto)
 
         company_id = resolve_booking_owner_company_id_for_create(client_dto)
         if company_id is not None and company_id > 0:

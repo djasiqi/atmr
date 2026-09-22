@@ -470,9 +470,7 @@ def _activation_is_complete(session: ActivationSession) -> bool:
     return email_ok and phone_ok
 
 
-def _promote_portal_after_email(
-    user: User | None, session: ActivationSession
-) -> None:
+def _promote_portal_after_email(user: User | None, session: ActivationSession) -> None:
     from services.auth.portal_phone_verification import (
         promote_portal_account_after_email,
     )

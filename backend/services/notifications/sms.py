@@ -80,7 +80,9 @@ def get_sms_config() -> SmsProviderConfig:
     )
 
 
-def mask_secret_id(value: str | None, *, prefix_len: int = 2, suffix_len: int = 4) -> str:
+def mask_secret_id(
+    value: str | None, *, prefix_len: int = 2, suffix_len: int = 4
+) -> str:
     """Masque un identifiant (SID, message SID). Ne jamais logger la valeur brute."""
     raw = (value or "").strip()
     if not raw:

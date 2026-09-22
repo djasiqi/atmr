@@ -85,9 +85,10 @@ def main() -> int:
                 f"  {row['id']}\t{row['email']}\t{row['account_status']}\t"
                 f"{row['phone_verified_at']}"
             )
-        philippe = db.session.execute(
-            text(
-                f"""
+        philippe = (
+            db.session.execute(
+                text(
+                    f"""
                 SELECT u.id, u.account_status, {phone_select},
                        EXISTS (
                            SELECT 1 FROM activation_session s
@@ -97,9 +98,12 @@ def main() -> int:
                 FROM "user" AS u
                 WHERE u.id = :uid
                 """
-            ),
-            {"uid": PHILIPPE_USER_ID},
-        ).mappings().first()
+                ),
+                {"uid": PHILIPPE_USER_ID},
+            )
+            .mappings()
+            .first()
+        )
         print("")
         if philippe:
             print(

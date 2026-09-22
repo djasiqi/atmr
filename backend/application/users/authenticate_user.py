@@ -75,9 +75,8 @@ class AuthenticateUserUseCase:
 
     def _inactive_profile_error(self, user) -> AuthenticateUserOutput | None:
         """Refuse la connexion si le profil métier associé est désactivé."""
-        from models.enums import UserRole
-
         from ext import db
+        from models.enums import UserRole
         from services.auth.portal_phone_verification import maybe_promote_portal_account
 
         if maybe_promote_portal_account(user):

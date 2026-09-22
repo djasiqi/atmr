@@ -34,9 +34,7 @@ def _print_config() -> dict:
     print(f"TWILIO_ACCOUNT_SID          : {snapshot['twilio_account_sid']}")
     print(f"TWILIO_AUTH_TOKEN           : {snapshot['twilio_auth_token']}")
     print(f"TWILIO_PHONE_NUMBER         : {snapshot['twilio_phone_number']}")
-    print(
-        f"TWILIO_MESSAGING_SERVICE_SID: {snapshot['twilio_messaging_service_sid']}"
-    )
+    print(f"TWILIO_MESSAGING_SERVICE_SID: {snapshot['twilio_messaging_service_sid']}")
     print(f"SENDER MODE                 : {snapshot['sender_mode']}")
     print(f"PROVIDER READY              : {snapshot['ready']}")
     return snapshot
@@ -84,7 +82,9 @@ def main() -> int:
     print(f"provider_error_code         : {result.get('provider_error_code') or '-'}")
     print(f"message_sid                 : {result.get('message_sid') or '-'}")
     print(f"RESULT                      : {result.get('error_class')}")
-    print(json.dumps({**snapshot, "probe": result.get("error_class")}, ensure_ascii=True))
+    print(
+        json.dumps({**snapshot, "probe": result.get("error_class")}, ensure_ascii=True)
+    )
     return 0 if result.get("ok") else 4
 
 
