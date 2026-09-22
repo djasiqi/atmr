@@ -1835,9 +1835,12 @@ def test_login_json_malforme_et_sms_sans_telephone(app):
     ):
         response = auth._login_post_body()
     assert response[1] == 400
-    assert auth._sms_send_succeeded(
-        auth._send_activation_sms(SimpleNamespace(phone=None), "123456")
-    ) is False
+    assert (
+        auth._sms_send_succeeded(
+            auth._send_activation_sms(SimpleNamespace(phone=None), "123456")
+        )
+        is False
+    )
 
 
 def test_verify_email_legacy_signatures_et_doublon(client, monkeypatch):

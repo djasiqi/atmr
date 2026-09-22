@@ -32,7 +32,9 @@ def docs_password(monkeypatch):
 
 
 def _tenant_counts():
-    institution = Institution.query.filter_by(contact_email=DOCS_INSTITUTION_EMAIL).one()
+    institution = Institution.query.filter_by(
+        contact_email=DOCS_INSTITUTION_EMAIL
+    ).one()
     return {
         "institutions": Institution.query.filter_by(
             contact_email=DOCS_INSTITUTION_EMAIL
@@ -79,7 +81,9 @@ def test_seed_refuse_sans_mot_de_passe(monkeypatch, db):
 def test_seed_cree_tenant_docs_deterministe(docs_password, db, client):
     summary = reset_and_seed_institution_docs(commit=False)
 
-    institutions = Institution.query.filter_by(contact_email=DOCS_INSTITUTION_EMAIL).all()
+    institutions = Institution.query.filter_by(
+        contact_email=DOCS_INSTITUTION_EMAIL
+    ).all()
     assert len(institutions) == 1
     institution = institutions[0]
     assert institution.name == DOCS_INSTITUTION_NAME
@@ -94,7 +98,11 @@ def test_seed_cree_tenant_docs_deterministe(docs_password, db, client):
     patients = InstitutionPatient.query.filter_by(institution_id=institution.id).all()
     assert len(patients) == 3
     identities = {(p.first_name, p.last_name) for p in patients}
-    assert identities == {("TEST", "Test"), ("Alice", "Exemple"), ("Marc", "Démonstration")}
+    assert identities == {
+        ("TEST", "Test"),
+        ("Alice", "Exemple"),
+        ("Marc", "Démonstration"),
+    }
 
     refs = {
         req.external_reference: req
@@ -115,9 +123,12 @@ def test_seed_cree_tenant_docs_deterministe(docs_password, db, client):
     dispatch_001 = req_001.serialize["dispatch"]
     assert dispatch_001["can_relaunch"] is False
     assert dispatch_001["has_pending_offers"] is True
-    assert RequestOffer.query.filter_by(
-        transport_request_id=req_001.id, status="PENDING"
-    ).count() == 1
+    assert (
+        RequestOffer.query.filter_by(
+            transport_request_id=req_001.id, status="PENDING"
+        ).count()
+        == 1
+    )
 
     req_002 = refs["DOCS-REQ-002"]
     assert req_002.id == DOCS_REQUEST_IDS["DOCS-REQ-002"]
@@ -181,6 +192,7 @@ def test_seed_idempotent_reset_sans_doublon(docs_password, db):
         "notifications": 3,
     }
     assert first["institution_public_id"] == second["institution_public_id"]
-    assert TransportRequest.query.filter_by(
-        external_reference="DOCS-REQ-001"
-    ).one().id == DOCS_REQUEST_IDS["DOCS-REQ-001"]
+    assert (
+        TransportRequest.query.filter_by(external_reference="DOCS-REQ-001").one().id
+        == DOCS_REQUEST_IDS["DOCS-REQ-001"]
+    )

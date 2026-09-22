@@ -90,12 +90,16 @@ def _database_name_from_url(database_url: str) -> str:
 def assert_institution_docs_seed_environment() -> None:
     """Refuse production / staging et les bases aux noms officiels."""
     env = (
-        os.getenv("ENVIRONMENT")
-        or os.getenv("FLASK_CONFIG")
-        or os.getenv("FLASK_ENV")
-        or os.getenv("APP_ENV")
-        or ""
-    ).strip().lower()
+        (
+            os.getenv("ENVIRONMENT")
+            or os.getenv("FLASK_CONFIG")
+            or os.getenv("FLASK_ENV")
+            or os.getenv("APP_ENV")
+            or ""
+        )
+        .strip()
+        .lower()
+    )
     if env in _BLOCKED_ENV:
         raise RuntimeError(
             "Seed institution-docs bloqué: environnement production/staging détecté."
@@ -277,9 +281,9 @@ def _purge_docs_tenant(institutions: list[Institution], user_ids: list[int]) -> 
         InstitutionReservedUsername.query.filter(
             InstitutionReservedUsername.institution_id.in_(institution_ids)
         ).delete(synchronize_session=False)
-        WebSession.query.filter(
-            WebSession.institution_id.in_(institution_ids)
-        ).delete(synchronize_session=False)
+        WebSession.query.filter(WebSession.institution_id.in_(institution_ids)).delete(
+            synchronize_session=False
+        )
 
     if user_ids:
         WebSession.query.filter(WebSession.user_id.in_(user_ids)).delete(

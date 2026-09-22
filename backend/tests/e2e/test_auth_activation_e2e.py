@@ -320,9 +320,7 @@ class TestAuthActivationFlow:
         verify_email_data = verify_email_response.get_json() or {}
         assert verify_email_data.get("error") == "token_expired"
 
-    def test_e2e_activation_complete_after_email_without_sms(
-        self, e2e_client, db
-    ):
+    def test_e2e_activation_complete_after_email_without_sms(self, e2e_client, db):
         unique_suffix = str(uuid.uuid4())[:8]
         password = f"FinalizeGuardPass123!{unique_suffix}"
         register_payload = {

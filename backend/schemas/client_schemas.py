@@ -20,9 +20,7 @@ class ClientUpdateSchema(Schema):
         raw = data.get("phone")
         if raw is None:
             return data
-        cleaned = (
-            str(raw).replace(" ", "").replace(".", "").replace("-", "")
-        )
+        cleaned = str(raw).replace(" ", "").replace(".", "").replace("-", "")
         updated = dict(data)
         updated["phone"] = cleaned
         return updated

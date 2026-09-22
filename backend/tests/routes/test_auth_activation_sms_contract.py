@@ -95,7 +95,9 @@ def test_verify_sms_wrong_code_does_not_activate(client, monkeypatch):
 
 
 def test_verify_sms_expired_code_refused(client, monkeypatch):
-    session = _activation_session(sms_expires_at=datetime.now(UTC) - timedelta(seconds=1))
+    session = _activation_session(
+        sms_expires_at=datetime.now(UTC) - timedelta(seconds=1)
+    )
     user = _activation_user()
     _patch_activation_models(monkeypatch, session, user)
     monkeypatch.setattr(auth, "validate_request", lambda _schema, data, **_kw: data)

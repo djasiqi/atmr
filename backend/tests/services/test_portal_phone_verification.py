@@ -57,7 +57,9 @@ def test_promote_requires_email_and_keeps_phone_unverified():
 
 
 def test_phone_change_revokes_only_when_normalized_differs():
-    user = SimpleNamespace(id=1, phone="+41768190077", phone_verified_at=datetime.now(UTC))
+    user = SimpleNamespace(
+        id=1, phone="+41768190077", phone_verified_at=datetime.now(UTC)
+    )
     apply_user_phone_change(user, "076 819 00 77")
     assert user.phone == "+41768190077"
     assert user.phone_verified_at is not None
@@ -116,7 +118,12 @@ def test_assert_portal_can_confirm_skips_transport_and_blocks_unverified():
 
 
 def test_user_phone_is_verified_uses_timestamp_only():
-    assert user_phone_is_verified(SimpleNamespace(phone="+41768190077", phone_verified_at=None)) is False
+    assert (
+        user_phone_is_verified(
+            SimpleNamespace(phone="+41768190077", phone_verified_at=None)
+        )
+        is False
+    )
     assert (
         user_phone_is_verified(
             SimpleNamespace(phone=None, phone_verified_at=datetime.now(UTC))

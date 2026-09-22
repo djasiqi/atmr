@@ -424,7 +424,9 @@ class ManageClientProfile(Resource):
 
                 if is_portal_client_user(client.user):
                     try:
-                        apply_user_phone_change(client.user, validated_data.get("phone"))
+                        apply_user_phone_change(
+                            client.user, validated_data.get("phone")
+                        )
                     except ValueError:
                         return {
                             "error": "invalid_phone",
