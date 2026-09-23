@@ -1,8 +1,10 @@
 """Créance PORTAL : facture réelle du transporteur, hors estimation de course.
 
 Ce n'est pas le moteur ``Invoice`` entreprise (S1/S2). Le montant vient de la
-facture externe du transporteur, jamais de ``booking.amount``. Aucun
-``PAYMENT_HOLD`` n'est déclenché depuis cette table.
+facture externe du transporteur, jamais de ``booking.amount``.
+
+Le hold de paiement est **dérivé** (voir ``portal_payment_hold``), jamais un
+flag global mutable sur le client.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -54,6 +57,12 @@ PAYMENT_METHODS = (
     PAYMENT_OTHER,
 )
 
+DISPUTE_OPEN = "open"
+DISPUTE_ACCEPTED = "accepted"
+DISPUTE_REJECTED = "rejected"
+
+DISPUTE_STATUSES = (DISPUTE_OPEN, DISPUTE_ACCEPTED, DISPUTE_REJECTED)
+
 
 class PortalReceivable(db.Model):
     """Créance d'un transporteur envers un client privé."""
@@ -79,6 +88,11 @@ class PortalReceivable(db.Model):
         Index("ix_portal_receivable_debtor", "debtor_user_id"),
         Index("ix_portal_receivable_due_date", "due_date"),
         Index("ix_portal_receivable_status", "status"),
+        Index(
+            "ix_portal_receivable_debtor_creditor",
+            "debtor_user_id",
+            "creditor_company_id",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -156,6 +170,12 @@ class PortalReceivable(db.Model):
         cascade="all, delete-orphan",
         order_by="PortalReceivablePayment.id",
     )
+    disputes = relationship(
+        "PortalReceivableDispute",
+        back_populates="receivable",
+        cascade="all, delete-orphan",
+        order_by="PortalReceivableDispute.id",
+    )
 
 
 class PortalReceivableLine(db.Model):
@@ -223,3 +243,48 @@ class PortalReceivablePayment(db.Model):
     )
 
     receivable = relationship("PortalReceivable", back_populates="payments")
+
+
+class PortalReceivableDispute(db.Model):
+    """Contestation append-only d'une créance PORTAL."""
+
+    __tablename__ = "portal_receivable_dispute"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('open', 'accepted', 'rejected')",
+            name="ck_portal_receivable_dispute_status",
+        ),
+        Index("ix_portal_receivable_dispute_receivable_id", "receivable_id"),
+        Index(
+            "ix_portal_receivable_dispute_open",
+            "receivable_id",
+            unique=True,
+            postgresql_where=text("status = 'open'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    receivable_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("portal_receivable.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    disputed_by_user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("user.id", ondelete="RESTRICT"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=DISPUTE_OPEN
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    resolved_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    receivable = relationship("PortalReceivable", back_populates="disputes")

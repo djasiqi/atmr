@@ -154,6 +154,9 @@ const AdminOptuna = lazy(() => import('./pages/admin/Optuna/AdminOptuna'));
 const ClientDashboard = lazy(() => import('./pages/client/Dashboard/ClientDashboard'));
 const AccountUser = lazy(() => import('./pages/client/Account/AccountUser'));
 const ReservationsPage = lazy(() => import('./pages/client/Reservations/ReservationsPage'));
+const PortalReceivablesPage = lazy(
+  () => import('./pages/client/Receivables/PortalReceivables')
+);
 const ClientSaferpayPaymentReturn = lazy(() =>
   import('./pages/client/Payment/ClientSaferpayPaymentReturn')
 );
@@ -752,6 +755,16 @@ const App = () => {
               element={
                 <ProtectedRoute allowedRoles={['client']}>
                   <ReservationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/factures/:public_id"
+              element={
+                <ProtectedRoute allowedRoles={['client']}>
+                  <Suspense fallback={null}>
+                    <PortalReceivablesPage />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />

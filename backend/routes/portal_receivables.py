@@ -19,10 +19,12 @@ from routes.companies import _get_current_company_via_use_case
 from services.billing.portal_receivable import (
     PortalReceivableError,
     ReceivableLineInput,
+    accept_portal_receivable_dispute,
     add_portal_receivable_payment,
     cancel_portal_receivable,
     create_portal_receivable,
     dispute_portal_receivable,
+    reject_portal_receivable_dispute,
     serialize_portal_receivable,
 )
 
@@ -211,7 +213,7 @@ class PortalReceivablePayments(Resource):
 
 
 @portal_receivables_ns.route("/<int:receivable_id>/dispute")
-class PortalReceivableDispute(Resource):
+class PortalReceivableCompanyDispute(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self, receivable_id: int):
@@ -228,6 +230,58 @@ class PortalReceivableDispute(Resource):
                 receivable=receivable,
                 reason=str(data.get("reason") or ""),
                 actor_user_id=int(user.id),
+            )
+            db.session.commit()
+            return {"data": serialize_portal_receivable(receivable)}, 200
+        except PortalReceivableError as exc:
+            db.session.rollback()
+            return {"error": exc.code, "message": exc.message}, 400
+
+
+@portal_receivables_ns.route("/<int:receivable_id>/dispute/accept")
+class PortalReceivableDisputeAccept(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        user = _current_user()
+        if user is None:
+            return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+        data = request.get_json(silent=True) or {}
+        try:
+            receivable = _owned_receivable(int(company.id), receivable_id)
+            accept_portal_receivable_dispute(
+                receivable=receivable,
+                actor_user_id=int(user.id),
+                resolution_note=str(data.get("resolution_note") or "") or None,
+            )
+            db.session.commit()
+            return {"data": serialize_portal_receivable(receivable)}, 200
+        except PortalReceivableError as exc:
+            db.session.rollback()
+            return {"error": exc.code, "message": exc.message}, 400
+
+
+@portal_receivables_ns.route("/<int:receivable_id>/dispute/reject")
+class PortalReceivableDisputeReject(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        user = _current_user()
+        if user is None:
+            return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+        data = request.get_json(silent=True) or {}
+        try:
+            receivable = _owned_receivable(int(company.id), receivable_id)
+            reject_portal_receivable_dispute(
+                receivable=receivable,
+                actor_user_id=int(user.id),
+                resolution_note=str(data.get("resolution_note") or "") or None,
             )
             db.session.commit()
             return {"data": serialize_portal_receivable(receivable)}, 200

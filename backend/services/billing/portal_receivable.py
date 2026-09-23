@@ -21,6 +21,9 @@ from models.client_booking_contract_event import (
 from models.company import Company
 from models.enums import BookingStatus
 from models.portal_receivable import (
+    DISPUTE_ACCEPTED,
+    DISPUTE_OPEN,
+    DISPUTE_REJECTED,
     PAYMENT_METHODS,
     RECEIVABLE_CANCELLED,
     RECEIVABLE_DISPUTED,
@@ -29,10 +32,15 @@ from models.portal_receivable import (
     RECEIVABLE_PAID,
     RECEIVABLE_PARTIALLY_PAID,
     PortalReceivable,
+    PortalReceivableDispute,
     PortalReceivableLine,
     PortalReceivablePayment,
 )
 from services.auth.portal_phone_verification import is_portal_client
+from services.billing.portal_payment_hold import (
+    hold_effect_for_receivable,
+    is_receivable_overdue_for_display,
+)
 
 _TWO = Decimal("0.01")
 
@@ -303,30 +311,6 @@ def add_portal_receivable_payment(
     return payment
 
 
-def dispute_portal_receivable(
-    *,
-    receivable: PortalReceivable,
-    reason: str,
-    actor_user_id: int,
-) -> PortalReceivable:
-    if receivable.status == RECEIVABLE_CANCELLED or receivable.cancelled_at is not None:
-        raise PortalReceivableError(
-            "Une créance annulée ne peut pas être contestée.",
-            code="receivable_cancelled",
-        )
-    text = (reason or "").strip()
-    if not text:
-        raise PortalReceivableError(
-            "Le motif de contestation est obligatoire.",
-            code="dispute_reason_required",
-        )
-    receivable.disputed_at = datetime.now(UTC)
-    receivable.dispute_reason = text
-    receivable.disputed_by_user_id = int(actor_user_id)
-    receivable.status = RECEIVABLE_DISPUTED
-    return receivable
-
-
 def cancel_portal_receivable(
     *,
     receivable: PortalReceivable,
@@ -344,6 +328,147 @@ def cancel_portal_receivable(
     receivable.cancelled_by_user_id = int(actor_user_id)
     receivable.status = RECEIVABLE_CANCELLED
     return receivable
+
+
+def dispute_portal_receivable(
+    *,
+    receivable: PortalReceivable,
+    reason: str,
+    actor_user_id: int,
+) -> tuple[PortalReceivable, PortalReceivableDispute]:
+    """Ouvre une contestation (idempotente si déjà ouverte)."""
+    if receivable.status == RECEIVABLE_CANCELLED or receivable.cancelled_at is not None:
+        raise PortalReceivableError(
+            "Une créance annulée ne peut pas être contestée.",
+            code="receivable_cancelled",
+        )
+    text = (reason or "").strip()
+    if not text:
+        raise PortalReceivableError(
+            "Le motif de contestation est obligatoire.",
+            code="dispute_reason_required",
+        )
+    open_dispute = (
+        PortalReceivableDispute.query.filter_by(
+            receivable_id=int(receivable.id), status=DISPUTE_OPEN
+        )
+        .order_by(PortalReceivableDispute.id.desc())
+        .first()
+    )
+    if open_dispute is not None:
+        # Idempotent : même action, pas de second litige ouvert.
+        receivable.status = RECEIVABLE_DISPUTED
+        return receivable, open_dispute
+
+    dispute = PortalReceivableDispute(
+        receivable_id=int(receivable.id),
+        reason=text,
+        disputed_by_user_id=int(actor_user_id),
+        status=DISPUTE_OPEN,
+    )
+    receivable.disputed_at = datetime.now(UTC)
+    receivable.dispute_reason = text
+    receivable.disputed_by_user_id = int(actor_user_id)
+    receivable.status = RECEIVABLE_DISPUTED
+    receivable.disputes.append(dispute)
+    db.session.flush()
+    return receivable, dispute
+
+
+def reject_portal_receivable_dispute(
+    *,
+    receivable: PortalReceivable,
+    actor_user_id: int,
+    resolution_note: str | None = None,
+) -> PortalReceivableDispute:
+    """Rejette la contestation ouverte : la créance redevient éligible au hold."""
+    open_dispute = (
+        PortalReceivableDispute.query.filter_by(
+            receivable_id=int(receivable.id), status=DISPUTE_OPEN
+        )
+        .order_by(PortalReceivableDispute.id.desc())
+        .first()
+    )
+    if open_dispute is None:
+        raise PortalReceivableError(
+            "Aucune contestation ouverte à rejeter.",
+            code="dispute_not_open",
+        )
+    open_dispute.status = DISPUTE_REJECTED
+    open_dispute.resolved_at = datetime.now(UTC)
+    open_dispute.resolved_by_user_id = int(actor_user_id)
+    open_dispute.resolution_note = (resolution_note or "").strip() or None
+    receivable.disputed_at = None
+    receivable.dispute_reason = None
+    receivable.disputed_by_user_id = None
+    # Retirer le statut disputed avant recalcul solde/échéance.
+    receivable.status = RECEIVABLE_ISSUED
+    refresh_receivable_balances(receivable)
+    return open_dispute
+
+
+def accept_portal_receivable_dispute(
+    *,
+    receivable: PortalReceivable,
+    actor_user_id: int,
+    resolution_note: str | None = None,
+) -> PortalReceivableDispute:
+    """Accepte la contestation : annulation soft de la créance."""
+    open_dispute = (
+        PortalReceivableDispute.query.filter_by(
+            receivable_id=int(receivable.id), status=DISPUTE_OPEN
+        )
+        .order_by(PortalReceivableDispute.id.desc())
+        .first()
+    )
+    if open_dispute is None:
+        raise PortalReceivableError(
+            "Aucune contestation ouverte à accepter.",
+            code="dispute_not_open",
+        )
+    open_dispute.status = DISPUTE_ACCEPTED
+    open_dispute.resolved_at = datetime.now(UTC)
+    open_dispute.resolved_by_user_id = int(actor_user_id)
+    open_dispute.resolution_note = (resolution_note or "").strip() or None
+    cancel_portal_receivable(
+        receivable=receivable,
+        reason=open_dispute.resolution_note
+        or open_dispute.reason
+        or "Contestation acceptée",
+        actor_user_id=actor_user_id,
+    )
+    return open_dispute
+
+
+def serialize_portal_receivable_for_client(
+    receivable: PortalReceivable,
+) -> dict[str, Any]:
+    """Lecture client : pas d'infos internes inutiles."""
+    status = compute_receivable_status(receivable)
+    overdue = is_receivable_overdue_for_display(receivable)
+    effect = hold_effect_for_receivable(receivable)
+    open_dispute = next(
+        (d for d in receivable.disputes if d.status == DISPUTE_OPEN),
+        None,
+    )
+    return {
+        "receivable_id": receivable.id,
+        "creditor_company_name": receivable.creditor_name_snapshot,
+        "external_invoice_number": receivable.external_invoice_number,
+        "issued_at": receivable.issued_at.isoformat() if receivable.issued_at else None,
+        "due_date": receivable.due_date.isoformat() if receivable.due_date else None,
+        "currency": receivable.currency,
+        "total_amount": float(receivable.total_amount),
+        "amount_paid": float(receivable.amount_paid),
+        "balance_due": float(receivable.balance_due),
+        "status": status,
+        "is_overdue": overdue,
+        "hold_effect": effect,
+        "can_dispute": open_dispute is None
+        and status not in (RECEIVABLE_CANCELLED, RECEIVABLE_DISPUTED, RECEIVABLE_PAID)
+        and float(receivable.balance_due) > 0,
+        "dispute_status": open_dispute.status if open_dispute else None,
+    }
 
 
 def serialize_portal_receivable(receivable: PortalReceivable) -> dict[str, Any]:
@@ -387,5 +512,19 @@ def serialize_portal_receivable(receivable: PortalReceivable) -> dict[str, Any]:
                 "reference": payment.reference,
             }
             for payment in receivable.payments
+        ],
+        "disputes": [
+            {
+                "id": dispute.id,
+                "status": dispute.status,
+                "reason": dispute.reason,
+                "created_at": (
+                    dispute.created_at.isoformat() if dispute.created_at else None
+                ),
+                "resolved_at": (
+                    dispute.resolved_at.isoformat() if dispute.resolved_at else None
+                ),
+            }
+            for dispute in receivable.disputes
         ],
     }

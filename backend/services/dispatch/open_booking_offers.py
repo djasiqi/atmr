@@ -186,6 +186,41 @@ def seed_dispatch_offers_for_unassigned_booking(booking_id: int) -> int:
             BillingCapability.RECEIVE_MARKETPLACE_OFFERS,
         )
     ]
+
+    # Hold PORTAL par créancier : exclure X si dette échue, conserver Y/Z.
+    from models.client import Client
+    from services.auth.portal_phone_verification import is_portal_client
+    from services.billing.portal_booking_debtor import (
+        resolve_portal_booking_debtor_user_id,
+    )
+    from services.billing.portal_payment_hold import (
+        resolve_portal_payment_holds_for_companies,
+    )
+
+    debtor_user_id: int | None = None
+    client = None
+    client_id = getattr(booking, "client_id", None)
+    if client_id is not None:
+        client = db.session.get(Client, int(client_id))
+    if client is not None and is_portal_client(client):
+        debtor_user_id = resolve_portal_booking_debtor_user_id(booking)
+
+    def _without_held(cands: list[Any]) -> list[Any]:
+        if debtor_user_id is None or not cands:
+            return cands
+        holds = resolve_portal_payment_holds_for_companies(
+            int(debtor_user_id),
+            [int(c.company_id) for c in cands],
+        )
+        kept: list[Any] = []
+        for cand in cands:
+            hold = holds.get(int(cand.company_id))
+            if hold is not None and hold.is_hold:
+                continue
+            kept.append(cand)
+        return kept
+
+    candidates = _without_held(candidates)
     created_total: list[Any] = []
     for threshold in (100, 70, 50, 10):
         created = persist_offers_for_threshold(
@@ -212,6 +247,7 @@ def seed_dispatch_offers_for_unassigned_booking(booking_id: int) -> int:
             pickup_lat=float(pickup_lat_raw) if pickup_lat_raw is not None else None,
             pickup_lon=float(pickup_lon_raw) if pickup_lon_raw is not None else None,
         )
+        urgent_candidates = _without_held(urgent_candidates)
         created_total = persist_urgency_offers(booking.id, urgent_candidates)
 
     if not created_total:

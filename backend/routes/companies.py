@@ -2901,10 +2901,20 @@ class AcceptReservation(Resource):
         uc = AcceptReservationUseCase()
         uc_result = uc.execute(booking, company_id=company_id)
         if not uc_result.ok:
+            err = uc_result.error or {}
+            code = str(err.get("error") or "")
+            message = str(
+                err.get("message")
+                or err.get("error")
+                or "Reservation not found or cannot be accepted"
+            )
+            if code == "portal_client_payment_hold":
+                return {
+                    "error": code,
+                    "message": message,
+                }, int(uc_result.status_code or 409)
             return APIErrorHandler.handle_validation_error(
-                (uc_result.error or {}).get(
-                    "error", "Reservation not found or cannot be accepted"
-                ),
+                message,
                 logger_instance=logger,
             )
 

@@ -1,0 +1,172 @@
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #fafcfb;
+}
+
+.main {
+  flex: 1;
+  padding: 96px 1.25rem 2.5rem;
+}
+
+.inner {
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5a6b64;
+}
+
+.title {
+  margin: 0 0 0.5rem;
+  font-family: Philosopher, Georgia, serif;
+  font-size: 1.85rem;
+  color: #14352c;
+}
+
+.lead {
+  margin: 0 0 1.25rem;
+  color: #3d4f48;
+  line-height: 1.45;
+}
+
+.navBack {
+  margin: 0 0 1rem;
+}
+
+.navBack a {
+  color: #1f5c4a;
+  text-decoration: none;
+}
+
+.error {
+  color: #8a2b2b;
+  background: #f8eaea;
+  padding: 0.75rem 1rem;
+  border-radius: 0.4rem;
+}
+
+.muted {
+  color: #667770;
+}
+
+.list {
+  list-style: none;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #d9e4df;
+  border-radius: 0.5rem;
+  padding: 1rem 1.1rem;
+}
+
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin-bottom: 0.75rem;
+}
+
+.cardHead span {
+  font-size: 0.9rem;
+  color: #3d4f48;
+}
+
+.meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 1rem;
+}
+
+.meta dt {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #667770;
+}
+
+.meta dd {
+  margin: 0.1rem 0 0;
+  font-weight: 600;
+  color: #14352c;
+}
+
+.holdNote {
+  margin: 0.85rem 0 0;
+  padding: 0.65rem 0.75rem;
+  background: #fff6e8;
+  border-radius: 0.35rem;
+  color: #6a4a12;
+  font-size: 0.92rem;
+}
+
+.disputeBox {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.disputeBox textarea {
+  width: 100%;
+  border: 1px solid #c5d4cd;
+  border-radius: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  font: inherit;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.primary,
+.ghost {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 0.35rem;
+  padding: 0.45rem 0.85rem;
+}
+
+.primary {
+  border: none;
+  background: #1f5c4a;
+  color: #fff;
+}
+
+.ghost {
+  margin-top: 0.75rem;
+  border: 1px solid #c5d4cd;
+  background: #fff;
+  color: #14352c;
+}
+
+.actions .ghost {
+  margin-top: 0;
+}
+
+@media (max-width: 560px) {
+  .meta {
+    grid-template-columns: 1fr;
+  }
+
+  .cardHead {
+    flex-direction: column;
+  }
+}

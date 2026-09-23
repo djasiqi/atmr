@@ -38,6 +38,7 @@ from .client_booking_contract_event import ClientBookingContractEvent
 from .portal_booking_confirmation_email import PortalBookingConfirmationEmail
 from .portal_receivable import (
     PortalReceivable,
+    PortalReceivableDispute,
     PortalReceivableLine,
     PortalReceivablePayment,
 )

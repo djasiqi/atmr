@@ -75,7 +75,9 @@ Une course sans `company_id` ou encore `PENDING` est refusée.
 
 ## Restant hors 6B
 
-- Politique `PAYMENT_HOLD` (étape 6C)
-- Lecture client UI
+- ~~Politique `PAYMENT_HOLD`~~ → 6C/6D
+- ~~Lecture client UI~~ → 6D (`GET /clients/me/portal-receivables`, `/factures/:id`)
+- ~~Contestation client~~ → 6D
 - Copie PDF facture externe
 - Reversal / void de paiement
+- Rappels / recouvrement (6E)

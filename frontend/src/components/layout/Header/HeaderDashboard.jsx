@@ -121,6 +121,7 @@ const HeaderDashboard = ({ variant = 'default', userName: userNameProp }) => {
       ? [
           { to: `/dashboard/client/${publicId}`, label: 'Réserver' },
           { to: `/reservations/${publicId}`, label: 'Mes courses' },
+          { to: `/factures/${publicId}`, label: 'Factures' },
           { to: `/dashboard/account/${publicId}`, label: 'Mon compte' },
           { to: '/aide', label: 'Aide' },
         ]

@@ -27,6 +27,7 @@ class _BookingLike(Protocol):
     id: int | None
     status: Any
     company_id: Any
+    client_id: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +45,15 @@ class AcceptReservationUseCase:
         self, booking: _BookingLike, *, company_id: int
     ) -> AcceptReservationResult:
         from models import Company
+        from models.client import Client
+        from services.auth.portal_phone_verification import is_portal_client
+        from services.billing.portal_booking_debtor import (
+            resolve_portal_booking_debtor_user_id,
+        )
+        from services.billing.portal_payment_hold import (
+            ERROR_PORTAL_CLIENT_PAYMENT_HOLD,
+            resolve_portal_payment_hold,
+        )
 
         company = Company.query.get(company_id)
         if not company or not company.is_approved:
@@ -60,6 +70,29 @@ class AcceptReservationUseCase:
                 error={"error": "Reservation not found or cannot be accepted"},
                 status_code=400,
             )
+
+        client = None
+        client_id = getattr(booking, "client_id", None)
+        if client_id is not None:
+            client = Client.query.get(int(client_id))
+        if client is not None and is_portal_client(client):
+            debtor_user_id = resolve_portal_booking_debtor_user_id(booking)
+            if debtor_user_id is not None:
+                hold = resolve_portal_payment_hold(
+                    int(debtor_user_id), int(company_id)
+                )
+                if hold.is_hold:
+                    return AcceptReservationResult(
+                        ok=False,
+                        error={
+                            "error": ERROR_PORTAL_CLIENT_PAYMENT_HOLD,
+                            "message": (
+                                "Ce client a une facture échue auprès de votre "
+                                "entreprise. L'acceptation est refusée."
+                            ),
+                        },
+                        status_code=409,
+                    )
 
         booking.company_id = company_id
         _set_status(booking, "accepted")

@@ -163,11 +163,28 @@ GLOBAL HOLD CONTRACT ALREADY EXISTS : NO
 Intérêts, frais, rappel, mise en demeure, poursuite, hold manuel admin sans
 créance, Saferpay PORTAL, modification terms/phone.
 
+# Contestation client
+
+Le client peut contester via
+`POST /api/v1/clients/me/portal-receivables/<id>/dispute`.
+L’entreprise peut accepter / rejeter via les routes company
+`.../dispute/accept` et `.../dispute/reject`.
+
+## ✅ Implémenté (étape 6D)
+
+- Resolver dérivé `resolve_portal_payment_hold` /
+  `resolve_portal_payment_holds_for_companies`
+  (`backend/services/billing/portal_payment_hold.py`)
+- Filtre seed offres + gate `AcceptReservationUseCase`
+- Lecture / contestation client + UI `/factures/:public_id`
+- Table `portal_receivable_dispute` (append-only)
+- Migration `919313ab962c_portal_receivable_dispute_and_hold_index`
+
 ## Implémentation
 
 ```text
-IMPLEMENTATION CHANGES : NONE (étape 6C)
+IMPLEMENTATION CHANGES : 6D applied (resolver + gates + client visibility)
 ```
 
-Prochaine étape autorisée : **6D** — resolver + filtrage/gate + visibilité
-client selon cette politique.
+Prochaine étape autorisée : **6E** — rappels / mise en demeure / recouvrement.
+
