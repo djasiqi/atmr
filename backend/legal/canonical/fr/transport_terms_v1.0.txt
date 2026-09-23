@@ -1,0 +1,11 @@
+LIRIE — Conditions générales de réservation et de transport (client privé)
+document_type: transport_terms
+terms_version: 1.0
+locale: fr-CH
+
+Le client privé crée une demande de transport dans LIRIE, puis confirme sa réservation.
+La course est réalisée par l'entreprise de transport.
+Cette entreprise facture directement le client, selon son propre processus.
+LIRIE n'encaisse pas le client privé au titre de cette version.
+Le montant affiché avant la course est une estimation indicative. Il n'est pas le prix contractuel de la plateforme.
+Une version ultérieure fait l'objet d'une nouvelle acceptation. L'acceptation de cette version n'est pas réécrite.

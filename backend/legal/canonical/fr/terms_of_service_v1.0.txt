@@ -1,0 +1,9 @@
+LIRIE — Conditions générales d'utilisation du compte client privé
+document_type: terms_of_service
+terms_version: 1.0
+locale: fr-CH
+
+Les présentes conditions régissent l'accès au compte client privé sur la plateforme LIRIE.
+LIRIE fournit un outil de demande et de suivi de transport. LIRIE n'exécute pas elle-même la course.
+L'utilisation du compte suppose une acceptation explicite de cette version.
+Une version ultérieure fait l'objet d'une nouvelle acceptation. L'acceptation de cette version n'est pas réécrite.

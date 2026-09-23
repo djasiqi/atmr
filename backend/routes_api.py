@@ -214,6 +214,9 @@ def init_namespaces(app):
     from routes.billing_review import billing_review_ns  # ✅ P5: Contrôle facturation
     from routes.bookings import bookings_ns
     from routes.clients import clients_ns
+    from routes.client_terms import ClientMyTermsAcceptances
+
+    _ = ClientMyTermsAcceptances
     from routes.companies import companies_ns
     from routes.contact import contact_ns
     from routes.admin_contact_requests import admin_contact_requests_ns
