@@ -130,6 +130,14 @@ def create_saferpay_payment_page_initialize(
     client: Client | ClientDTO,
     return_url_override: str | None = None,
 ) -> dict[str, Any]:
+    from services.booking.portal_platform_payment import (
+        PortalPlatformPaymentForbidden,
+        platform_checkout_forbidden_for,
+    )
+
+    if platform_checkout_forbidden_for(client, booking):
+        raise PortalPlatformPaymentForbidden()
+
     if not saferpay_configured():
         raise RuntimeError("Saferpay n'est pas configuré sur ce serveur")
 

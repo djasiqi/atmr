@@ -50,6 +50,7 @@ from services.booking.client_booking_live_serializer import enrich_client_bookin
 from services.booking.expire_unpaid_client_bookings import (
     expire_awaiting_client_payment_bookings,
 )
+from services.booking.portal_platform_payment import portal_skips_platform_checkout
 from services.booking.urgent_return_for_client import (
     apply_client_urgent_return_dispatch,
 )
@@ -789,7 +790,9 @@ class ClientMyBookingPreview(Resource):
                             },
                         },
                         "workflow": {
-                            "payment_required": True,
+                            "payment_required": not portal_skips_platform_checkout(
+                                client
+                            ),
                             "transmission_requires_client_action": False,
                         },
                         "validation": {
@@ -929,7 +932,7 @@ class ClientMyBookingPreview(Resource):
                     },
                 },
                 "workflow": {
-                    "payment_required": True,
+                    "payment_required": not portal_skips_platform_checkout(client),
                     "transmission_requires_client_action": False,
                 },
                 "validation": {

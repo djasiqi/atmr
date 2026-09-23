@@ -41,6 +41,11 @@ from schemas.validation_utils import handle_validation_error, validate_request
 from services.booking.expire_unpaid_client_bookings import (
     expire_awaiting_client_payment_bookings,
 )
+from services.booking.portal_platform_payment import (
+    PortalPlatformPaymentForbidden,
+    platform_checkout_forbidden_for,
+    should_hold_client_booking_for_platform_payment,
+)
 from services.platform_exceptions import PlatformTenantSuspended
 from services.platform_governance_constants import ERROR_TENANT_PLATFORM_SUSPENDED
 from services.saferpay.config import saferpay_configured
@@ -776,12 +781,9 @@ def execute_client_booking_creation(public_id: str) -> Any:
         if new_booking is not None:
             from models.enums import BookingStatus
 
-            billed = (
-                str(getattr(new_booking, "billed_to_type", None) or "patient")
-                .strip()
-                .lower()
-            )
-            if billed == "patient":
+            if should_hold_client_booking_for_platform_payment(
+                client, getattr(new_booking, "billed_to_type", None)
+            ):
                 new_booking.status = BookingStatus.AWAITING_CLIENT_PAYMENT
                 db.session.commit()
 
@@ -996,6 +998,11 @@ class BookingSaferpayInitialize(Resource):
                 client=client,
                 return_url_override=return_url if isinstance(return_url, str) else None,
             )
+        except PortalPlatformPaymentForbidden as e:
+            return APIErrorHandler.handle_permission_error(
+                e.message,
+                logger_instance=logger,
+            )
         except ValueError as e:
             return APIErrorHandler.handle_validation_error(
                 str(e),
@@ -1033,6 +1040,13 @@ class BookingSaferpayAssert(Resource):
         if not client:
             return APIErrorHandler.handle_permission_error(
                 "Profil client introuvable",
+                logger_instance=logger,
+            )
+
+        if platform_checkout_forbidden_for(client, booking):
+            return APIErrorHandler.handle_permission_error(
+                "Le paiement en ligne n'est pas disponible pour un compte client privé. "
+                "L'entreprise de transport facture la course après la prestation.",
                 logger_instance=logger,
             )
 

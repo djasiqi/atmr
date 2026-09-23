@@ -388,6 +388,8 @@ const ClientDashboard = () => {
   const effectiveClientId = useMemo(() => {
     return clientId || getActivePublicId();
   }, [clientId]);
+  const isPortalPrivateClient =
+    String(profile?.client_type || 'PORTAL').toUpperCase() === 'PORTAL';
   const accessToken = useMemo(() => getActiveAccessToken({ allowLegacy: true }), []);
   const authHeaders = useMemo(
     () => (accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined),
@@ -1195,6 +1197,7 @@ const ClientDashboard = () => {
       const resolvedBooking = payload.booking || root.booking || {};
       const previewPaymentRequired = Boolean(previewWorkflow.payment_required);
       const needPrivateOnlinePay =
+        !isPortalPrivateClient &&
         Boolean(bookingId) &&
         (previewPaymentRequired || requiresPrivateOnlinePaymentAtBooking(resolvedBooking));
 
@@ -1348,7 +1351,7 @@ const ClientDashboard = () => {
   };
 
   const handlePayNowOffer = () => {
-    if (!payOfferBookingId || !payOffer || payingSaferpay) return;
+    if (isPortalPrivateClient || !payOfferBookingId || !payOffer || payingSaferpay) return;
     const id = payOfferBookingId;
     trackClientKpiEvent('pay_now_clicked', {
       clientPublicId: effectiveClientId,
@@ -1906,7 +1909,7 @@ const ClientDashboard = () => {
                       Horaire du transport
                     </span>
                     <div
-                      className={institutionStyles.missionSegment}
+                      className={`${institutionStyles.missionSegment} ${homeFieldStyles.tripKindSegment}`}
                       role="radiogroup"
                       aria-labelledby="client-dashboard-schedule-mode-label"
                     >
@@ -1975,7 +1978,7 @@ const ClientDashboard = () => {
                       Aller / retour
                     </span>
                     <div
-                      className={institutionStyles.missionSegment}
+                      className={`${institutionStyles.missionSegment} ${homeFieldStyles.tripKindSegment}`}
                       role="radiogroup"
                       aria-labelledby="client-dashboard-trip-type-label"
                     >
@@ -2201,7 +2204,7 @@ const ClientDashboard = () => {
                     </>
                   ) : null}
 
-                  {payOfferBookingId != null && payOffer ? (
+                  {!isPortalPrivateClient && payOfferBookingId != null && payOffer ? (
                     <div
                       className={`bookingPaymentPanel${
                         payOffer.checkoutError ? ' bookingPaymentPanel--error' : ''

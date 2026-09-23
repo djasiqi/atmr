@@ -115,6 +115,7 @@ describe('ClientDashboard', () => {
   const mockProfile = {
     id: 42,
     public_id: 'client-123',
+    client_type: 'PORTAL',
     user: {
       first_name: 'Jean',
       last_name: 'Dupont',
@@ -122,6 +123,30 @@ describe('ClientDashboard', () => {
     },
     billing_address: 'Rue de Lausanne 1, 1201 Genève',
   };
+
+  const previewAndCreateResponse = (booking) => ({
+    data: {
+      pricing: { amount: 90 },
+      workflow: { payment_required: true },
+      canonical_addresses: {
+        pickup: {
+          label: 'Genève Gare',
+          canonical_hash: 'pickup-hash',
+          precision_level: 'address',
+        },
+        dropoff: {
+          label: 'Lausanne Gare',
+          canonical_hash: 'dropoff-hash',
+          precision_level: 'address',
+        },
+      },
+      data: {
+        booking_id: booking.id,
+        trace_id: 'trace',
+        booking,
+      },
+    },
+  });
 
   const mockBookings = [];
 
@@ -142,25 +167,20 @@ describe('ClientDashboard', () => {
       }
       return Promise.reject(new Error('Not found'));
     });
-    apiClient.post.mockResolvedValue({
-      data: {
-        data: {
-          booking_id: 999,
-          trace_id: 'trace',
-          booking: {
-            id: 999,
-            amount: 50,
-            billed_to_type: 'patient',
-            status: 'awaiting_client_payment',
-            pickup_location: 'A',
-            dropoff_location: 'B',
-          },
-        },
-      },
-    });
+    apiClient.post.mockResolvedValue(
+      previewAndCreateResponse({
+        id: 999,
+        amount: 50,
+        billed_to_type: 'patient',
+        status: 'pending',
+        pickup_location: 'A',
+        dropoff_location: 'B',
+      })
+    );
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     localStorage.clear();
   });
 
@@ -357,23 +377,17 @@ describe('ClientDashboard', () => {
         return Promise.reject(new Error('route-failed'));
       }
       if (url.includes('/bookings')) {
-        return Promise.resolve({
-          data: {
-            data: {
-              booking_id: 777,
-              trace_id: 't',
-              booking: {
-                id: 777,
-                pickup_location: 'Genève',
-                dropoff_location: 'Lausanne',
-                scheduled_time: toIso(2 * 60 * 60 * 1000),
-                status: 'awaiting_client_payment',
-                amount: 50,
-                billed_to_type: 'patient',
-              },
-            },
-          },
-        });
+        return Promise.resolve(
+          previewAndCreateResponse({
+            id: 777,
+            pickup_location: 'Genève',
+            dropoff_location: 'Lausanne',
+            scheduled_time: toIso(2 * 60 * 60 * 1000),
+            status: 'pending',
+            amount: 50,
+            billed_to_type: 'patient',
+          })
+        );
       }
       return Promise.reject(new Error('unknown-post'));
     });
@@ -422,7 +436,8 @@ describe('ClientDashboard', () => {
     jest.useRealTimers();
   });
 
-  it('lance Saferpay après réservation lorsque billed_to_type est patient', async () => {
+  it('ne lance pas Saferpay pour un compte PORTAL même si billed_to_type est patient', async () => {
+    startSaferpayHostedCheckout.mockClear();
     render(<ClientDashboard />, { wrapper: createWrapper() });
 
     fireEvent.change(await screen.findByTestId('client-dashboard-pickup'), {
@@ -445,30 +460,73 @@ describe('ClientDashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: /Valider la demande de transport/i }));
 
     await waitFor(() => {
-      expect(startSaferpayHostedCheckout).toHaveBeenCalledWith(999);
-      expect(mockNavigate).not.toHaveBeenCalledWith(
-        expect.stringContaining('/client/payment/saferpay/start'),
-        expect.anything()
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/clients/client-123/bookings',
+        expect.any(Object),
+        expect.any(Object)
       );
+    });
+    expect(startSaferpayHostedCheckout).not.toHaveBeenCalled();
+    expect(screen.queryByText('Paiement sécurisé')).not.toBeInTheDocument();
+  });
+
+  it('lance Saferpay pour un client TRANSPORT lorsque billed_to_type est patient', async () => {
+    startSaferpayHostedCheckout.mockClear();
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/clients/client-123') {
+        return Promise.resolve({
+          data: { ...mockProfile, client_type: 'TRANSPORT' },
+        });
+      }
+      if (url.includes('/bookings')) {
+        return Promise.resolve({ data: mockBookings });
+      }
+      return Promise.reject(new Error('Not found'));
+    });
+
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+
+    await screen.findByDisplayValue('Rue de Lausanne 1, 1201 Genève');
+
+    fireEvent.change(await screen.findByTestId('client-dashboard-pickup'), {
+      target: { value: 'Genève Gare' },
+    });
+    fireEvent.change(screen.getByTestId('client-dashboard-dropoff'), {
+      target: { value: 'Lausanne Gare' },
+    });
+
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const y = tomorrow.getFullYear();
+    const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const d = String(tomorrow.getDate()).padStart(2, '0');
+    fireEvent.change(screen.getByLabelText(/Date/i), {
+      target: { value: `${y}-${m}-${d}` },
+    });
+    fireEvent.change(screen.getByLabelText(/Heure/i), {
+      target: { value: '10:30' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Valider la demande de transport/i }));
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/clients/client-123/bookings',
+        expect.any(Object),
+        expect.any(Object)
+      );
+      expect(startSaferpayHostedCheckout).toHaveBeenCalledWith(999);
     });
   });
 
   it('ne lance pas Saferpay pour une réservation tiers payeur (assurance)', async () => {
     startSaferpayHostedCheckout.mockClear();
-    apiClient.post.mockResolvedValue({
-      data: {
-        data: {
-          booking_id: 1002,
-          trace_id: 'trace',
-          booking: {
-            id: 1002,
-            amount: 50,
-            billed_to_type: 'insurance',
-            status: 'pending',
-          },
-        },
-      },
-    });
+    apiClient.post.mockResolvedValue(
+      previewAndCreateResponse({
+        id: 1002,
+        amount: 50,
+        billed_to_type: 'insurance',
+        status: 'pending',
+      })
+    );
 
     render(<ClientDashboard />, { wrapper: createWrapper() });
 
