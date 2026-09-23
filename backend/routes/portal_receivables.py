@@ -13,6 +13,11 @@ from flask_restx import Namespace, Resource
 from ext import db, role_required
 from models.enums import UserRole
 from models.portal_receivable import PortalReceivable
+from models.portal_receivable_collection_action import (
+    TRANSMISSION_PRIVATE_COLLECTION,
+    TRANSMISSION_PURSUIT_DRAFT,
+    PortalReceivableCollectionTransmission,
+)
 from models.portal_receivable_dunning import PortalReceivableDunningEvent
 from models.user import User
 from routes.api_error_utils import auth_error
@@ -43,6 +48,14 @@ from services.billing.portal_receivable_dunning import (
     serialize_dunning_event,
     serialize_dunning_policy,
     update_dunning_policy,
+)
+from services.billing.portal_receivable_pursuit import (
+    cancel_collection_transmission,
+    prepare_collection_transmission,
+    resolve_portal_enforcement_evidence,
+    resolve_portal_pursuit_readiness,
+    serialize_pursuit_readiness,
+    serialize_transmission,
 )
 
 logger = logging.getLogger(__name__)
@@ -516,3 +529,197 @@ class PortalReceivableDunningPrepareCollection(Resource):
     @role_required(UserRole.company)
     def post(self, receivable_id: int):
         return _emit_dunning(receivable_id, DUNNING_COLLECTION_PREPARED)
+
+
+@portal_receivables_ns.route("/<int:receivable_id>/pursuit-readiness")
+class PortalReceivablePursuitReadiness(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, receivable_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        try:
+            _owned_receivable(int(company.id), receivable_id)
+            readiness = resolve_portal_pursuit_readiness(receivable_id)
+            return {"data": serialize_pursuit_readiness(readiness)}, 200
+        except PortalReceivableError as exc:
+            return {"error": exc.code, "message": exc.message}, 404
+
+
+@portal_receivables_ns.route("/<int:receivable_id>/enforcement-evidence")
+class PortalReceivableEnforcementEvidence(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, receivable_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        try:
+            _owned_receivable(int(company.id), receivable_id)
+            return {
+                "data": resolve_portal_enforcement_evidence(receivable_id)
+            }, 200
+        except PortalReceivableError as exc:
+            return {"error": exc.code, "message": exc.message}, 404
+
+
+def _prepare_transmission(receivable_id: int, transmission_type: str):
+    company, error, status = _get_current_company_via_use_case()
+    if error or company is None:
+        return error or {"error": "Entreprise non trouvée"}, status or 404
+    user = _current_user()
+    if user is None:
+        return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+    data = request.get_json(silent=True) or {}
+    confirmed = bool(data.get("creditor_confirmed"))
+    try:
+        receivable = _owned_receivable(int(company.id), receivable_id)
+        row = prepare_collection_transmission(
+            receivable=receivable,
+            transmission_type=transmission_type,
+            requested_by_user_id=int(user.id),
+            creditor_confirmed=confirmed,
+        )
+        db.session.commit()
+        return {"data": serialize_transmission(row)}, 201
+    except PortalReceivableError as exc:
+        db.session.rollback()
+        status_code = 400
+        if exc.code == "pursuit_not_ready":
+            readiness = resolve_portal_pursuit_readiness(receivable_id)
+            return {
+                "error": exc.code,
+                "message": exc.message,
+                "readiness": serialize_pursuit_readiness(readiness),
+            }, 409
+        if exc.code == "creditor_confirmation_required":
+            status_code = 403
+        return {"error": exc.code, "message": exc.message}, status_code
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/pursuit-draft"
+)
+class PortalReceivablePursuitDraft(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int):
+        """Préparer une réquisition (draft) — aucune transmission externe."""
+        return _prepare_transmission(receivable_id, TRANSMISSION_PURSUIT_DRAFT)
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/private-collection-draft"
+)
+class PortalReceivablePrivateCollectionDraft(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int):
+        """Préparer un dossier pour recouvrement privé — sans envoi auto."""
+        return _prepare_transmission(
+            receivable_id, TRANSMISSION_PRIVATE_COLLECTION
+        )
+
+
+@portal_receivables_ns.route("/<int:receivable_id>/collection-transmissions")
+class PortalReceivableCollectionTransmissionList(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, receivable_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        try:
+            _owned_receivable(int(company.id), receivable_id)
+            rows = (
+                PortalReceivableCollectionTransmission.query.filter_by(
+                    receivable_id=int(receivable_id),
+                    creditor_company_id=int(company.id),
+                )
+                .order_by(PortalReceivableCollectionTransmission.id.asc())
+                .all()
+            )
+            return {"data": [serialize_transmission(r) for r in rows]}, 200
+        except PortalReceivableError as exc:
+            return {"error": exc.code, "message": exc.message}, 404
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/export"
+)
+class PortalReceivableCollectionTransmissionExport(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, receivable_id: int, transmission_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        try:
+            _owned_receivable(int(company.id), receivable_id)
+            row = (
+                PortalReceivableCollectionTransmission.query.filter_by(
+                    id=int(transmission_id),
+                    receivable_id=int(receivable_id),
+                    creditor_company_id=int(company.id),
+                )
+                .one_or_none()
+            )
+            if row is None:
+                return {
+                    "error": "transmission_not_found",
+                    "message": "Draft introuvable.",
+                }, 404
+            import json
+
+            return {
+                "data": {
+                    "transmission": serialize_transmission(row),
+                    "export": json.loads(row.export_payload),
+                    "disclaimer": (
+                        "Export JSON de travail. Ce n'est pas un formulaire "
+                        "officiel ni une preuve de transmission."
+                    ),
+                }
+            }, 200
+        except PortalReceivableError as exc:
+            return {"error": exc.code, "message": exc.message}, 404
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/cancel"
+)
+class PortalReceivableCollectionTransmissionCancel(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int, transmission_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        user = _current_user()
+        if user is None:
+            return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+        try:
+            _owned_receivable(int(company.id), receivable_id)
+            row = (
+                PortalReceivableCollectionTransmission.query.filter_by(
+                    id=int(transmission_id),
+                    receivable_id=int(receivable_id),
+                    creditor_company_id=int(company.id),
+                )
+                .one_or_none()
+            )
+            if row is None:
+                return {
+                    "error": "transmission_not_found",
+                    "message": "Draft introuvable.",
+                }, 404
+            cancel_collection_transmission(
+                transmission=row, requested_by_user_id=int(user.id)
+            )
+            db.session.commit()
+            return {"data": serialize_transmission(row)}, 200
+        except PortalReceivableError as exc:
+            db.session.rollback()
+            return {"error": exc.code, "message": exc.message}, 400
+
