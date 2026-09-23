@@ -175,6 +175,16 @@ class PortalReceivableDunningEvent(db.Model):
     initiated_by_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
+    # Snapshot JSON immuable (surtout COLLECTION_PREPARED).
+    dossier_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dossier_snapshot_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    formal_notice_event_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("portal_receivable_dunning_event.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -444,12 +444,20 @@ def serialize_portal_receivable_for_client(
     receivable: PortalReceivable,
 ) -> dict[str, Any]:
     """Lecture client : pas d'infos internes inutiles."""
+    from models.portal_receivable_dunning import PortalReceivableDunningEvent
+    from services.billing.portal_receivable_dunning import serialize_dunning_event
+
     status = compute_receivable_status(receivable)
     overdue = is_receivable_overdue_for_display(receivable)
     effect = hold_effect_for_receivable(receivable)
     open_dispute = next(
         (d for d in receivable.disputes if d.status == DISPUTE_OPEN),
         None,
+    )
+    dunning_events = (
+        PortalReceivableDunningEvent.query.filter_by(receivable_id=int(receivable.id))
+        .order_by(PortalReceivableDunningEvent.id.asc())
+        .all()
     )
     return {
         "receivable_id": receivable.id,
@@ -468,6 +476,9 @@ def serialize_portal_receivable_for_client(
         and status not in (RECEIVABLE_CANCELLED, RECEIVABLE_DISPUTED, RECEIVABLE_PAID)
         and float(receivable.balance_due) > 0,
         "dispute_status": open_dispute.status if open_dispute else None,
+        "dunning_history": [
+            serialize_dunning_event(e, for_client=True) for e in dunning_events
+        ],
     }
 
 

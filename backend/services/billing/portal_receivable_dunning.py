@@ -1,24 +1,35 @@
 """Rappels / mise en demeure PORTAL — au nom du transporteur créancier.
 
 Aucun frais, intérêt ni poursuite automatique. Le hold 6D reste inchangé.
+FORMAL_NOTICE exige une validation explicite du créancier.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from ext import db
+from models.booking import Booking
+from models.client_booking_contract_event import (
+    EVENT_BOOKING_CANCELLED,
+    EVENT_BOOKING_CREATED,
+    EVENT_BOOKING_MODIFIED,
+    ClientBookingContractEvent,
+)
 from models.company import Company
 from models.portal_receivable import (
+    DISPUTE_OPEN,
     RECEIVABLE_CANCELLED,
     RECEIVABLE_DISPUTED,
     RECEIVABLE_PAID,
     PortalReceivable,
+    PortalReceivableDispute,
 )
 from models.portal_receivable_dunning import (
     CHANNEL_EMAIL,
@@ -46,6 +57,20 @@ from services.billing.portal_receivable import PortalReceivableError
 
 EmailSender = Callable[..., dict[str, Any]]
 
+REASON_NOT_OVERDUE = "not_overdue"
+REASON_PAID = "paid"
+REASON_CANCELLED = "cancelled"
+REASON_DISPUTED = "disputed"
+REASON_FORMAL_NOTICE_MISSING = "formal_notice_missing"
+REASON_DEBTOR_NAME_MISSING = "debtor_name_missing"
+REASON_DEBTOR_ADDRESS_MISSING = "debtor_address_missing"
+REASON_CREDITOR_IDENTITY_MISSING = "creditor_identity_missing"
+REASON_INVOICE_REFERENCE_MISSING = "invoice_reference_missing"
+REASON_COLLECTION_ALREADY_PREPARED = "collection_already_prepared"
+
+READY = "ready"
+NOT_READY = "not_ready"
+
 
 @dataclass(frozen=True, slots=True)
 class DunningEligibility:
@@ -54,6 +79,17 @@ class DunningEligibility:
     days_past_due: int
     next_event_type: str | None
     policy: PortalReceivableDunningPolicy | None
+
+
+@dataclass(frozen=True, slots=True)
+class CollectionReadiness:
+    state: str
+    reasons: tuple[str, ...]
+    dossier: dict[str, Any] | None = None
+
+    @property
+    def is_ready(self) -> bool:
+        return self.state == READY
 
 
 def get_or_create_dunning_policy(company_id: int) -> PortalReceivableDunningPolicy:
@@ -118,21 +154,33 @@ def serialize_dunning_policy(policy: PortalReceivableDunningPolicy) -> dict[str,
         "default_interest_rate": None,
         "reminder_fees": "NOT_IMPLEMENTED",
         "auto_pursuit": False,
+        "formal_notice_auto_sent": False,
+        "creditor_approval_required_for_formal_notice": True,
+        "reminders_automatable": True,
     }
+
+
+def _terminal_dunning_reason(
+    receivable: PortalReceivable, *, as_of_date: date
+) -> str | None:
+    if receivable.status == RECEIVABLE_CANCELLED or receivable.cancelled_at is not None:
+        return REASON_CANCELLED
+    if receivable.status == RECEIVABLE_DISPUTED or receivable.disputed_at is not None:
+        return REASON_DISPUTED
+    if receivable.status == RECEIVABLE_PAID or Decimal(str(receivable.balance_due)) <= 0:
+        return REASON_PAID
+    due = business_calendar_date(receivable.due_date)
+    if due is None or due >= as_of_date:
+        return REASON_NOT_OVERDUE
+    return None
 
 
 def receivable_eligible_for_dunning(
     receivable: PortalReceivable, *, as_of: date | datetime | None = None
 ) -> bool:
-    as_of_date = current_business_date(as_of)
-    if receivable.status == RECEIVABLE_CANCELLED or receivable.cancelled_at is not None:
-        return False
-    if receivable.status == RECEIVABLE_DISPUTED or receivable.disputed_at is not None:
-        return False
-    if receivable.status == RECEIVABLE_PAID or Decimal(str(receivable.balance_due)) <= 0:
-        return False
-    due = business_calendar_date(receivable.due_date)
-    return due is not None and due < as_of_date
+    return _terminal_dunning_reason(
+        receivable, as_of_date=current_business_date(as_of)
+    ) is None
 
 
 def _days_past_due(receivable: PortalReceivable, *, as_of_date: date) -> int:
@@ -142,17 +190,21 @@ def _days_past_due(receivable: PortalReceivable, *, as_of_date: date) -> int:
     return max(0, (as_of_date - due).days)
 
 
-def _successful_event_types(receivable_id: int) -> set[str]:
-    rows = (
+def _successful_events(receivable_id: int) -> list[PortalReceivableDunningEvent]:
+    return (
         PortalReceivableDunningEvent.query.filter_by(receivable_id=int(receivable_id))
         .filter(
             PortalReceivableDunningEvent.delivery_status.in_(
                 (DELIVERY_SENT, DELIVERY_RECORDED, DELIVERY_DRAFT)
             )
         )
+        .order_by(PortalReceivableDunningEvent.id.asc())
         .all()
     )
-    return {str(r.event_type) for r in rows}
+
+
+def _successful_event_types(receivable_id: int) -> set[str]:
+    return {str(r.event_type) for r in _successful_events(receivable_id)}
 
 
 def resolve_dunning_eligibility(
@@ -162,11 +214,12 @@ def resolve_dunning_eligibility(
 ) -> DunningEligibility:
     policy = get_or_create_dunning_policy(int(receivable.creditor_company_id))
     as_of_date = current_business_date(as_of)
-    if not receivable_eligible_for_dunning(receivable, as_of=as_of_date):
+    terminal = _terminal_dunning_reason(receivable, as_of_date=as_of_date)
+    if terminal is not None:
         return DunningEligibility(
             eligible=False,
-            reason="not_overdue_or_terminal",
-            days_past_due=0,
+            reason=terminal,
+            days_past_due=_days_past_due(receivable, as_of_date=as_of_date),
             next_event_type=None,
             policy=policy,
         )
@@ -183,7 +236,7 @@ def resolve_dunning_eligibility(
     if DUNNING_COLLECTION_PREPARED in done:
         return DunningEligibility(
             eligible=False,
-            reason="collection_already_prepared",
+            reason=REASON_COLLECTION_ALREADY_PREPARED,
             days_past_due=days,
             next_event_type=None,
             policy=policy,
@@ -262,11 +315,246 @@ def _format_date(value: datetime | None) -> str:
     return d.strftime("%d.%m.%Y")
 
 
+def _nonempty(value: object | None) -> bool:
+    return bool(str(value or "").strip())
+
+
+def _creditor_postal_address(company: Company) -> str | None:
+    line1 = getattr(company, "domicile_address_line1", None)
+    zip_c = getattr(company, "domicile_zip", None)
+    city = getattr(company, "domicile_city", None)
+    if _nonempty(line1) and (_nonempty(zip_c) or _nonempty(city)):
+        parts = [str(line1).strip()]
+        line2 = getattr(company, "domicile_address_line2", None)
+        if _nonempty(line2):
+            parts.append(str(line2).strip())
+        loc = " ".join(p for p in [str(zip_c or "").strip(), str(city or "").strip()] if p)
+        if loc:
+            parts.append(loc)
+        return ", ".join(parts)
+    addr = getattr(company, "address", None)
+    return str(addr).strip() if _nonempty(addr) else None
+
+
+def creditor_identity_complete(company: Company) -> bool:
+    return _nonempty(getattr(company, "name", None)) and _nonempty(
+        _creditor_postal_address(company)
+    )
+
+
+def build_claim_title(receivable: PortalReceivable) -> str:
+    dates: list[str] = []
+    for line in receivable.lines or []:
+        booking = db.session.get(Booking, int(line.booking_id))
+        if booking is not None and getattr(booking, "scheduled_time", None):
+            dates.append(_format_date(booking.scheduled_time))
+    dates_txt = ", ".join(dates) if dates else "dates concernées"
+    return (
+        f"Facture n° {receivable.external_invoice_number} relative aux "
+        f"prestations de transport des {dates_txt}"
+    )
+
+
+def build_collection_dossier(receivable: PortalReceivable) -> dict[str, Any]:
+    company = db.session.get(Company, int(receivable.creditor_company_id))
+    lines_payload = []
+    booking_ids: list[int] = []
+    contract_events: list[dict[str, Any]] = []
+    for line in receivable.lines or []:
+        booking_ids.append(int(line.booking_id))
+        lines_payload.append(
+            {
+                "booking_id": line.booking_id,
+                "booking_contract_event_id": line.booking_contract_event_id,
+                "invoiced_amount": float(line.invoiced_amount),
+                "description": line.description,
+            }
+        )
+        events = (
+            ClientBookingContractEvent.query.filter_by(booking_id=int(line.booking_id))
+            .filter(
+                ClientBookingContractEvent.event_type.in_(
+                    (
+                        EVENT_BOOKING_CREATED,
+                        EVENT_BOOKING_MODIFIED,
+                        EVENT_BOOKING_CANCELLED,
+                    )
+                )
+            )
+            .order_by(ClientBookingContractEvent.id.asc())
+            .all()
+        )
+        for ev in events:
+            contract_events.append(
+                {
+                    "id": ev.id,
+                    "booking_id": ev.booking_id,
+                    "event_type": ev.event_type,
+                    "occurred_at": (
+                        ev.occurred_at.isoformat()
+                        if getattr(ev, "occurred_at", None)
+                        else None
+                    ),
+                }
+            )
+    disputes = [
+        {
+            "id": d.id,
+            "status": d.status,
+            "reason": d.reason,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+        }
+        for d in (receivable.disputes or [])
+    ]
+    dunning = [
+        serialize_dunning_event(e) for e in _successful_events(int(receivable.id))
+    ]
+    formal = next(
+        (e for e in reversed(_successful_events(int(receivable.id))) if e.event_type == DUNNING_FORMAL_NOTICE),
+        None,
+    )
+    return {
+        "receivable_id": receivable.id,
+        "claim_title": build_claim_title(receivable),
+        "creditor": {
+            "company_id": receivable.creditor_company_id,
+            "display_name": receivable.creditor_name_snapshot,
+            "legal_form": getattr(company, "legal_form", None) if company else None,
+            "uid_ide": getattr(company, "uid_ide", None) if company else None,
+            "postal_address": (
+                _creditor_postal_address(company) if company else None
+            ),
+            "contact_email": (
+                (
+                    getattr(company, "billing_email", None)
+                    or getattr(company, "contact_email", None)
+                )
+                if company
+                else None
+            ),
+            "contact_phone": (
+                getattr(company, "contact_phone", None) if company else None
+            ),
+            "iban_present": bool(getattr(company, "iban", None)) if company else False,
+        },
+        "debtor": {
+            "user_id": receivable.debtor_user_id,
+            "name": receivable.debtor_name_snapshot,
+            "email": receivable.debtor_email_snapshot,
+            "phone": receivable.debtor_phone_snapshot,
+            "postal_address": receivable.debtor_billing_address_snapshot,
+        },
+        "invoice": {
+            "external_invoice_number": receivable.external_invoice_number,
+            "issued_at": (
+                receivable.issued_at.isoformat() if receivable.issued_at else None
+            ),
+            "due_date": receivable.due_date.isoformat() if receivable.due_date else None,
+            "currency": receivable.currency,
+            "principal_initial": float(receivable.total_amount),
+            "amount_paid": float(receivable.amount_paid),
+            "balance_due": float(receivable.balance_due),
+        },
+        "lines": lines_payload,
+        "booking_ids": booking_ids,
+        "contract_events": contract_events,
+        "payments": [
+            {
+                "amount": float(p.amount),
+                "paid_at": p.paid_at.isoformat() if p.paid_at else None,
+                "method": p.method,
+                "reference": p.reference,
+            }
+            for p in (receivable.payments or [])
+        ],
+        "dunning_history": dunning,
+        "dispute_history": disputes,
+        "formal_notice_event_id": formal.id if formal else None,
+        "availability": {
+            "debtor_legal_name": (
+                "AVAILABLE" if _nonempty(receivable.debtor_name_snapshot) else "MISSING"
+            ),
+            "debtor_postal_address": (
+                "AVAILABLE"
+                if _nonempty(receivable.debtor_billing_address_snapshot)
+                else "MISSING"
+            ),
+            "creditor_legal_identity": (
+                "AVAILABLE"
+                if company and creditor_identity_complete(company)
+                else "PARTIAL"
+                if company and _nonempty(company.name)
+                else "MISSING"
+            ),
+            "title_reason_of_claim": "AVAILABLE",
+            "invoice_reference": (
+                "AVAILABLE"
+                if _nonempty(receivable.external_invoice_number)
+                else "MISSING"
+            ),
+        },
+    }
+
+
+def resolve_portal_collection_readiness(
+    receivable_id: int,
+    *,
+    as_of: date | datetime | None = None,
+) -> CollectionReadiness:
+    receivable = db.session.get(PortalReceivable, int(receivable_id))
+    if receivable is None:
+        return CollectionReadiness(
+            state=NOT_READY, reasons=("receivable_not_found",), dossier=None
+        )
+    as_of_date = current_business_date(as_of)
+    reasons: list[str] = []
+    if receivable.status == RECEIVABLE_CANCELLED or receivable.cancelled_at is not None:
+        reasons.append(REASON_CANCELLED)
+    if receivable.status == RECEIVABLE_DISPUTED or receivable.disputed_at is not None:
+        open_d = (
+            PortalReceivableDispute.query.filter_by(
+                receivable_id=int(receivable.id), status=DISPUTE_OPEN
+            ).first()
+        )
+        if open_d is not None or receivable.disputed_at is not None:
+            reasons.append(REASON_DISPUTED)
+    if receivable.status == RECEIVABLE_PAID or _money(receivable.balance_due) <= 0:
+        reasons.append(REASON_PAID)
+    due = business_calendar_date(receivable.due_date)
+    if due is None or due >= as_of_date:
+        reasons.append(REASON_NOT_OVERDUE)
+    done = _successful_event_types(int(receivable.id))
+    if DUNNING_FORMAL_NOTICE not in done:
+        reasons.append(REASON_FORMAL_NOTICE_MISSING)
+    if not _nonempty(receivable.debtor_name_snapshot):
+        reasons.append(REASON_DEBTOR_NAME_MISSING)
+    if not _nonempty(receivable.debtor_billing_address_snapshot):
+        reasons.append(REASON_DEBTOR_ADDRESS_MISSING)
+    company = db.session.get(Company, int(receivable.creditor_company_id))
+    if company is None or not creditor_identity_complete(company):
+        reasons.append(REASON_CREDITOR_IDENTITY_MISSING)
+    if not _nonempty(receivable.external_invoice_number):
+        reasons.append(REASON_INVOICE_REFERENCE_MISSING)
+
+    dossier = build_collection_dossier(receivable)
+    # Dédupliquer en conservant l'ordre
+    uniq: list[str] = []
+    for r in reasons:
+        if r not in uniq:
+            uniq.append(r)
+    if uniq:
+        return CollectionReadiness(
+            state=NOT_READY, reasons=tuple(uniq), dossier=dossier
+        )
+    return CollectionReadiness(state=READY, reasons=(), dossier=dossier)
+
+
 def render_dunning_message(
     *,
     receivable: PortalReceivable,
     company: Company,
     event_type: str,
+    payment_deadline: date | None = None,
 ) -> tuple[str, str]:
     """Sujet + corps texte — au nom du créancier, pas de LIRIE créancier."""
     creditor = str(receivable.creditor_name_snapshot or company.name)
@@ -291,18 +579,39 @@ def render_dunning_message(
         title = "Dossier de recouvrement"
 
     subject = f"{creditor} — {title} facture {invoice_no}"
+    creditor_addr = _creditor_postal_address(company) or "—"
+    payment_coords = []
+    if getattr(company, "iban", None):
+        payment_coords.append(f"IBAN : {company.iban}")
+    if getattr(company, "billing_email", None) or getattr(company, "contact_email", None):
+        payment_coords.append(
+            "Contact : "
+            + str(
+                getattr(company, "billing_email", None)
+                or getattr(company, "contact_email", None)
+            )
+        )
+    payment_block = (
+        "\n".join(f"  - {c}" for c in payment_coords)
+        if payment_coords
+        else "  - Coordonnées de paiement à obtenir auprès du créancier"
+    )
+    deadline = payment_deadline or (current_business_date() + timedelta(days=10))
+    deadline_txt = deadline.strftime("%d.%m.%Y")
+
     body = (
         f"{title}\n"
         f"\n"
         f"Émetteur (créancier) : {creditor}\n"
+        f"Adresse créancier : {creditor_addr}\n"
         f"Destinataire (débiteur) : {debtor}\n"
         f"\n"
         f"Facture n° {invoice_no}\n"
         f"Date de facture : {_format_date(receivable.issued_at)}\n"
-        f"Date d'échéance : {_format_date(receivable.due_date)}\n"
+        f"Date d'échéance initiale : {_format_date(receivable.due_date)}\n"
         f"Montant initial : {_format_chf(_money(receivable.total_amount))}\n"
         f"Paiements reçus :\n{paid_lines}\n"
-        f"Solde restant dû : {_format_chf(_money(receivable.balance_due))}\n"
+        f"Principal / solde restant dû : {_format_chf(_money(receivable.balance_due))}\n"
         f"\n"
         f"Merci de régulariser le solde auprès de {creditor}.\n"
         f"\n"
@@ -312,8 +621,13 @@ def render_dunning_message(
     )
     if event_type == DUNNING_FORMAL_NOTICE:
         body += (
-            "\nSans règlement, le créancier pourra préparer un dossier de "
-            "recouvrement. Aucune poursuite n'est déposée automatiquement.\n"
+            f"\nNouvelle date limite de règlement : {deadline_txt}\n"
+            f"Coordonnées de paiement :\n{payment_block}\n"
+            f"\n"
+            f"En l'absence de règlement dans ce délai, le créancier pourra "
+            f"préparer un dossier de recouvrement et décider des suites "
+            f"appropriées. Aucune poursuite n'est déposée automatiquement "
+            f"par la plateforme.\n"
         )
     if event_type == DUNNING_COLLECTION_PREPARED:
         body += (
@@ -334,7 +648,6 @@ def _default_email_sender(**kwargs: Any) -> dict[str, Any]:
 
 
 def _creditor_email_identity(company: Company) -> tuple[str | None, str, str | None]:
-    """from_name = créancier ; reply_to = contact entreprise."""
     from_name = str(getattr(company, "name", "") or "Transporteur")
     reply = (
         getattr(company, "billing_email", None)
@@ -354,8 +667,9 @@ def emit_portal_dunning_event(
     as_of: date | datetime | None = None,
     email_sender: EmailSender | None = None,
     force: bool = False,
+    creditor_approved: bool = False,
 ) -> PortalReceivableDunningEvent:
-    """Émet un événement. E-mail : succès requis pour delivery=sent."""
+    """Émet un événement. FORMAL_NOTICE exige creditor_approved=True."""
     company = db.session.get(Company, int(receivable.creditor_company_id))
     if company is None:
         raise PortalReceivableError(
@@ -367,20 +681,44 @@ def emit_portal_dunning_event(
         not force
         and (not eligibility.eligible or eligibility.next_event_type != event_type)
     ):
+        code = "dunning_not_due"
+        if eligibility.reason in (
+            REASON_DISPUTED,
+            REASON_PAID,
+            REASON_CANCELLED,
+            REASON_NOT_OVERDUE,
+        ):
+            code = f"dunning_blocked_{eligibility.reason}"
         raise PortalReceivableError(
             "Cette étape de rappel n'est pas encore due ou déjà effectuée.",
-            code="dunning_not_due",
+            code=code,
         )
-    if event_type not in (
-        DUNNING_REMINDER_1,
-        DUNNING_REMINDER_2,
-        DUNNING_FORMAL_NOTICE,
-        DUNNING_COLLECTION_PREPARED,
-    ):
+    if event_type == DUNNING_FORMAL_NOTICE and not creditor_approved:
         raise PortalReceivableError(
-            "Type d'événement inconnu.",
-            code="dunning_event_type_invalid",
+            "La mise en demeure nécessite une validation explicite du créancier.",
+            code="formal_notice_approval_required",
         )
+
+    dossier_json: str | None = None
+    dossier_hash: str | None = None
+    formal_notice_event_id: int | None = None
+
+    if event_type == DUNNING_COLLECTION_PREPARED:
+        readiness = resolve_portal_collection_readiness(
+            int(receivable.id), as_of=as_of
+        )
+        if not readiness.is_ready:
+            raise PortalReceivableError(
+                "Dossier de recouvrement incomplet : "
+                + ", ".join(readiness.reasons),
+                code="collection_not_ready",
+            )
+        dossier = readiness.dossier or {}
+        dossier["prepared_at"] = datetime.now(UTC).isoformat()
+        dossier["prepared_by_user_id"] = initiated_by_user_id
+        dossier_json = json.dumps(dossier, ensure_ascii=False, sort_keys=True)
+        dossier_hash = _hash_body(dossier_json)
+        formal_notice_event_id = dossier.get("formal_notice_event_id")
 
     subject, body = render_dunning_message(
         receivable=receivable, company=company, event_type=event_type
@@ -450,31 +788,53 @@ def emit_portal_dunning_event(
         provider_message_id=provider_message_id,
         delivery_error=None,
         initiated_by_user_id=initiated_by_user_id,
+        dossier_snapshot=dossier_json,
+        dossier_snapshot_hash=dossier_hash,
+        formal_notice_event_id=formal_notice_event_id,
     )
     db.session.add(event)
     db.session.flush()
     return event
 
 
-def serialize_dunning_event(event: PortalReceivableDunningEvent) -> dict[str, Any]:
-    return {
+def serialize_dunning_event(
+    event: PortalReceivableDunningEvent, *, for_client: bool = False
+) -> dict[str, Any]:
+    base = {
         "id": event.id,
         "receivable_id": event.receivable_id,
-        "creditor_company_id": event.creditor_company_id,
-        "debtor_user_id": event.debtor_user_id,
         "event_type": event.event_type,
         "occurred_at": event.occurred_at.isoformat() if event.occurred_at else None,
         "channel": event.channel,
-        "recipient": event.recipient,
-        "recipient_email": event.recipient_email,
-        "template_version": event.template_version,
-        "rendered_subject": event.rendered_subject,
-        "rendered_body_hash": event.rendered_body_hash,
-        "balance_due_snapshot": float(event.balance_due_snapshot),
-        "due_date_snapshot": (
-            event.due_date_snapshot.isoformat() if event.due_date_snapshot else None
-        ),
-        "external_invoice_number_snapshot": event.external_invoice_number_snapshot,
         "delivery_status": event.delivery_status,
-        "provider_message_id": event.provider_message_id,
+        "balance_due_snapshot": float(event.balance_due_snapshot),
+        "external_invoice_number_snapshot": event.external_invoice_number_snapshot,
+    }
+    if for_client:
+        return base
+    base.update(
+        {
+            "creditor_company_id": event.creditor_company_id,
+            "debtor_user_id": event.debtor_user_id,
+            "recipient": event.recipient,
+            "recipient_email": event.recipient_email,
+            "template_version": event.template_version,
+            "rendered_subject": event.rendered_subject,
+            "rendered_body_hash": event.rendered_body_hash,
+            "due_date_snapshot": (
+                event.due_date_snapshot.isoformat() if event.due_date_snapshot else None
+            ),
+            "provider_message_id": event.provider_message_id,
+            "dossier_snapshot_hash": event.dossier_snapshot_hash,
+            "formal_notice_event_id": event.formal_notice_event_id,
+        }
+    )
+    return base
+
+
+def serialize_collection_readiness(result: CollectionReadiness) -> dict[str, Any]:
+    return {
+        "state": result.state,
+        "reasons": list(result.reasons),
+        "dossier": result.dossier,
     }

@@ -38,6 +38,8 @@ from services.billing.portal_receivable_dunning import (
     emit_portal_dunning_event,
     get_or_create_dunning_policy,
     resolve_dunning_eligibility,
+    resolve_portal_collection_readiness,
+    serialize_collection_readiness,
     serialize_dunning_event,
     serialize_dunning_policy,
     update_dunning_policy,
@@ -412,7 +414,12 @@ class PortalReceivableDunningStatus(Resource):
             return {"error": exc.code, "message": exc.message}, 404
 
 
-def _emit_dunning(receivable_id: int, event_type: str):
+def _emit_dunning(
+    receivable_id: int,
+    event_type: str,
+    *,
+    creditor_approved: bool | None = None,
+):
     company, error, status = _get_current_company_via_use_case()
     if error or company is None:
         return error or {"error": "Entreprise non trouvée"}, status or 404
@@ -429,6 +436,9 @@ def _emit_dunning(receivable_id: int, event_type: str):
             "error": "dunning_channel_invalid",
             "message": "Canal invalide.",
         }, 400
+    approved = creditor_approved
+    if approved is None:
+        approved = bool(data.get("creditor_approved"))
     try:
         receivable = _owned_receivable(int(company.id), receivable_id)
         event = emit_portal_dunning_event(
@@ -440,12 +450,23 @@ def _emit_dunning(receivable_id: int, event_type: str):
                 if event_type == DUNNING_COLLECTION_PREPARED
                 else channel
             ),
+            creditor_approved=bool(approved),
         )
         db.session.commit()
         return {"data": serialize_dunning_event(event)}, 201
     except PortalReceivableError as exc:
         db.session.rollback()
-        return {"error": exc.code, "message": exc.message}, 400
+        status_code = 400
+        if exc.code == "collection_not_ready":
+            readiness = resolve_portal_collection_readiness(receivable_id)
+            return {
+                "error": exc.code,
+                "message": exc.message,
+                "readiness": serialize_collection_readiness(readiness),
+            }, 409
+        if exc.code == "formal_notice_approval_required":
+            status_code = 403
+        return {"error": exc.code, "message": exc.message}, status_code
 
 
 @portal_receivables_ns.route("/<int:receivable_id>/dunning/reminder-1")
@@ -469,7 +490,24 @@ class PortalReceivableDunningFormalNotice(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def post(self, receivable_id: int):
+        # Validation explicite du créancier obligatoire (body creditor_approved=true).
         return _emit_dunning(receivable_id, DUNNING_FORMAL_NOTICE)
+
+
+@portal_receivables_ns.route("/<int:receivable_id>/collection-readiness")
+class PortalReceivableCollectionReadiness(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, receivable_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        try:
+            _owned_receivable(int(company.id), receivable_id)
+            readiness = resolve_portal_collection_readiness(receivable_id)
+            return {"data": serialize_collection_readiness(readiness)}, 200
+        except PortalReceivableError as exc:
+            return {"error": exc.code, "message": exc.message}, 404
 
 
 @portal_receivables_ns.route("/<int:receivable_id>/dunning/prepare-collection")
