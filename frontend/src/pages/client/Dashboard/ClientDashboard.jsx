@@ -362,6 +362,9 @@ const ClientDashboard = () => {
   const [portalReview, setPortalReview] = useState(null);
   const [termsCatalog, setTermsCatalog] = useState([]);
   const [termsAcceptances, setTermsAcceptances] = useState([]);
+  const [termsStatus, setTermsStatus] = useState(null);
+  const [termsAcceptChecked, setTermsAcceptChecked] = useState(false);
+  const [termsAccepting, setTermsAccepting] = useState(false);
   const [openTermsDoc, setOpenTermsDoc] = useState(null);
   const submitLockRef = useRef(false);
   const portalIdempotencyKeyRef = useRef(null);
@@ -396,11 +399,37 @@ const ClientDashboard = () => {
   }, [clientId]);
   const isPortalPrivateClient =
     String(profile?.client_type || 'PORTAL').toUpperCase() === 'PORTAL';
+  const requiredTermsDocs = (termsStatus?.documents || []).filter(
+    (doc) => doc.acceptance_required
+  );
+  const termsReacceptanceRequired =
+    isPortalPrivateClient && termsStatus?.status === 'reacceptance_required';
   const accessToken = useMemo(() => getActiveAccessToken({ allowLegacy: true }), []);
   const authHeaders = useMemo(
     () => (accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined),
     [accessToken]
   );
+
+  useEffect(() => {
+    if (String(profile?.client_type || '').toUpperCase() !== 'PORTAL') {
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiClient.get('/clients/me/portal-terms-status');
+        if (!cancelled) {
+          setTermsStatus(res.data?.data || null);
+          setTermsAcceptChecked(false);
+        }
+      } catch {
+        if (!cancelled) setTermsStatus(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile]);
 
   useEffect(() => {
     const saved = readAndConsumeSaferpayPayResume();
@@ -978,6 +1007,41 @@ const ClientDashboard = () => {
     }
   };
 
+  const termsDocumentTitle = (documentType) =>
+    documentType === 'transport_terms'
+      ? 'Conditions générales de transport'
+      : 'Conditions générales d’utilisation';
+
+  const requiredTermsAcceptLabel = () => {
+    const labels = requiredTermsDocs.map((doc) => termsDocumentTitle(doc.document_type));
+    if (labels.length === 2) {
+      return 'J’ai lu et j’accepte les Conditions générales d’utilisation et les Conditions générales de transport applicables.';
+    }
+    if (labels.length === 1) {
+      return `J’ai lu et j’accepte les ${labels[0]} applicables.`;
+    }
+    return 'J’ai lu et j’accepte les conditions applicables.';
+  };
+
+  const handleAcceptRequiredTerms = async () => {
+    if (!termsAcceptChecked || termsAccepting) return;
+    setTermsAccepting(true);
+    setFormError(null);
+    try {
+      await apiClient.post('/clients/me/terms-acceptances', {
+        accept_current_required_terms: true,
+      });
+      setTermsAcceptChecked(false);
+      const res = await apiClient.get('/clients/me/portal-terms-status');
+      setTermsStatus(res.data?.data || null);
+      await loadPortalTerms();
+    } catch (err) {
+      setFormError(getApiErrorMessage(err, 'Impossible d’enregistrer l’acceptation.'));
+    } finally {
+      setTermsAccepting(false);
+    }
+  };
+
   const loadPortalTerms = async () => {
     try {
       const [catalogRes, acceptanceRes] = await Promise.all([
@@ -996,6 +1060,10 @@ const ClientDashboard = () => {
 
   const handleBooking = async ({ confirm = false } = {}) => {
     if (bookingSubmitting || submitLockRef.current) return;
+    if (termsReacceptanceRequired) {
+      setFormError('Acceptez les conditions en vigueur avant une nouvelle réservation.');
+      return;
+    }
     const token = getActiveAccessToken({ allowLegacy: true });
     setFormError(null);
     setReservationFeedback(null);
@@ -1389,6 +1457,17 @@ const ClientDashboard = () => {
     } catch (err) {
       console.error('Erreur réservation :', err);
       const apiError = err?.response?.data?.error;
+      if (apiError === 'terms_reacceptance_required') {
+        setFormError('Acceptez les conditions en vigueur avant une nouvelle réservation.');
+        try {
+          const res = await apiClient.get('/clients/me/portal-terms-status');
+          setTermsStatus(res.data?.data || null);
+          setTermsAcceptChecked(false);
+        } catch {
+          /* le message suffit si le statut est momentanément illisible */
+        }
+        return;
+      }
       if (apiError === 'phone_verification_required' || err?.response?.status === 403) {
         const details = err?.response?.data?.details || {};
         if (apiError === 'phone_verification_required') {
@@ -1761,6 +1840,50 @@ const ClientDashboard = () => {
                 </div>
               </div>
               <div className="cardBody">
+                {termsReacceptanceRequired ? (
+                  <section
+                    className="portalTermsUpdate"
+                    aria-labelledby="portal-terms-update-title"
+                  >
+                    <h2 id="portal-terms-update-title" className="portalTermsUpdateTitle">
+                      Mise à jour des conditions
+                    </h2>
+                    <p>
+                      Une nouvelle acceptation est nécessaire avant une nouvelle réservation.
+                    </p>
+                    {requiredTermsDocs.map((doc) => (
+                      <div key={doc.document_type} className="portalTermsUpdateDoc">
+                        <button
+                          type="button"
+                          className="portalOrderTermsLink"
+                          onClick={() => setOpenTermsDoc(doc)}
+                        >
+                          {termsDocumentTitle(doc.document_type)} {doc.current_version}
+                        </button>
+                        {openTermsDoc?.document_type === doc.document_type ? (
+                          <pre className="portalTermsBody">{doc.canonical_body}</pre>
+                        ) : null}
+                      </div>
+                    ))}
+                    <label className="portalTermsAccept" htmlFor="portal-terms-reaccept">
+                      <input
+                        id="portal-terms-reaccept"
+                        type="checkbox"
+                        checked={termsAcceptChecked}
+                        onChange={(event) => setTermsAcceptChecked(event.target.checked)}
+                      />
+                      <span>{requiredTermsAcceptLabel()}</span>
+                    </label>
+                    <button
+                      type="button"
+                      className={homeFieldStyles.ctaButton}
+                      onClick={handleAcceptRequiredTerms}
+                      disabled={!termsAcceptChecked || termsAccepting}
+                    >
+                      {termsAccepting ? 'Enregistrement…' : 'Accepter les conditions'}
+                    </button>
+                  </section>
+                ) : null}
                 <form className="form formDense">
                   {reservationFeedback ? (
                     <div className="bookingFeedback" role="status" aria-live="polite">
@@ -2517,7 +2640,13 @@ const ClientDashboard = () => {
                       type="button"
                       className={`${homeFieldStyles.ctaButton} bookingDashboardCta`}
                       onClick={() => handleBooking(isPortalPrivateClient ? { confirm: false } : undefined)}
-                      disabled={bookingSubmitting || loadingProfile || loadingBookings || !effectiveClientId}
+                      disabled={
+                        bookingSubmitting ||
+                        loadingProfile ||
+                        loadingBookings ||
+                        !effectiveClientId ||
+                        termsReacceptanceRequired
+                      }
                       aria-busy={bookingSubmitting}
                       hidden={isPortalPrivateClient && Boolean(portalReview)}
                     >

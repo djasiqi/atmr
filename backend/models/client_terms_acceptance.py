@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -59,6 +60,9 @@ class LegalDocumentVersion(db.Model):
         String(16), nullable=False, server_default=TERMS_LOCALE_FR_CH
     )
     canonical_body: Mapped[str] = mapped_column(Text, nullable=False)
+    requires_reacceptance: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

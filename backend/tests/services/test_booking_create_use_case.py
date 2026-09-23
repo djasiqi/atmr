@@ -202,6 +202,10 @@ def test_create_booking_use_case_blocks_unverified_portal_phone(
     writer = _FakeBookingWriter()
     uc = _build_uc(writer=writer, client_repo=_FakeClientRepo(company_id=None))
     monkeypatch.setattr(
+        "services.legal.portal_terms_status.assert_portal_terms_current",
+        lambda **_k: None,
+    )
+    monkeypatch.setattr(
         "services.auth.portal_phone_verification.assert_portal_can_confirm_transport",
         lambda **_k: (_ for _ in ()).throw(PortalPhoneVerificationRequired()),
     )

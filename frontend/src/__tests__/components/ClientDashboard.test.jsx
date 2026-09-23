@@ -676,4 +676,80 @@ describe('ClientDashboard', () => {
     );
     expect(await screen.findByText('CORPS CANONIQUE CGU')).toBeInTheDocument();
   });
+
+  it('demande une acceptation explicite avant une nouvelle réservation', async () => {
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/clients/client-123') {
+        return Promise.resolve({ data: mockProfile });
+      }
+      if (String(url).includes('/clients/me/portal-terms-status')) {
+        return Promise.resolve({
+          data: {
+            data: {
+              status: 'reacceptance_required',
+              documents: [
+                {
+                  document_type: 'transport_terms',
+                  current_version: '2.0',
+                  acceptance_required: true,
+                  canonical_body: 'CORPS CGV 2.0',
+                },
+                {
+                  document_type: 'terms_of_service',
+                  current_version: '1.0',
+                  acceptance_required: false,
+                  canonical_body: 'CORPS CGU DEJA COURANT',
+                },
+              ],
+            },
+          },
+        });
+      }
+      if (url.includes('/bookings')) {
+        return Promise.resolve({ data: mockBookings });
+      }
+      return Promise.reject(new Error('Not found'));
+    });
+
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+    expect(await screen.findByRole('heading', { name: 'Mise à jour des conditions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Conditions générales de transport 2.0/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Conditions générales d’utilisation 1.0/i })).not.toBeInTheDocument();
+    const checkbox = screen.getByRole('checkbox');
+    expect(checkbox).not.toBeChecked();
+    const accept = screen.getByRole('button', { name: 'Accepter les conditions' });
+    expect(accept).toBeDisabled();
+    const verify = screen.getByRole('button', { name: /Vérifier la demande/i });
+    expect(verify).toBeDisabled();
+
+    fireEvent.click(checkbox);
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/clients/client-123') {
+        return Promise.resolve({ data: mockProfile });
+      }
+      if (String(url).includes('/clients/me/portal-terms-status')) {
+        return Promise.resolve({
+          data: { data: { status: 'current', documents: [] } },
+        });
+      }
+      if (url.includes('/bookings')) {
+        return Promise.resolve({ data: mockBookings });
+      }
+      return Promise.reject(new Error('Not found'));
+    });
+    fireEvent.click(accept);
+
+    await waitFor(() => {
+      const posts = apiClient.post.mock.calls.filter((call) =>
+        String(call[0]).includes('/clients/me/terms-acceptances')
+      );
+      expect(posts).toHaveLength(1);
+      expect(posts[0][1]).toEqual({ accept_current_required_terms: true });
+      expect(posts[0][1].terms_version).toBeUndefined();
+      expect(posts[0][1].terms_hash).toBeUndefined();
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Mise à jour des conditions' })).not.toBeInTheDocument();
+    });
+  });
 });

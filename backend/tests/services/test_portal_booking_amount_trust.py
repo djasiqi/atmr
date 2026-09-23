@@ -95,6 +95,10 @@ def _patch_side_effects(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(stay_mod, "find_active_stay_for_client", lambda **_k: None)
     monkeypatch.setattr(stay_mod, "get_clinic_address_for_stay", lambda _s: None)
     monkeypatch.setattr(
+        "services.legal.portal_terms_status.assert_portal_terms_current",
+        lambda **_k: None,
+    )
+    monkeypatch.setattr(
         "services.auth.portal_phone_verification.assert_portal_can_confirm_transport",
         _allow_verified_portal,
     )

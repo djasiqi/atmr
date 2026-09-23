@@ -721,7 +721,24 @@ def execute_client_booking_creation(public_id: str) -> Any:
         from shared.constants import AuthErrorCodes
 
         # ``user`` ici est un DTO : la source de vérité SMS est ``User.phone_verified_at``.
+        # Ordre PORTAL : identité, conditions courantes, puis téléphone AUTH-SMS-02.
         orm_user = db.session.get(UserModel, user.id) if user is not None else None
+        if orm_user is not None and client is not None and is_portal_client(client):
+            from services.legal.portal_terms_status import (
+                PortalTermsReacceptanceRequired,
+                assert_portal_terms_current,
+            )
+
+            try:
+                assert_portal_terms_current(user_id=orm_user.id, client=client)
+            except PortalTermsReacceptanceRequired as exc:
+                return auth_error(
+                    exc.code,
+                    exc.message,
+                    403,
+                    details={"documents": exc.documents},
+                )
+
         if (
             orm_user is not None
             and client is not None
@@ -772,9 +789,22 @@ def execute_client_booking_creation(public_id: str) -> Any:
             from services.auth.portal_phone_verification import (
                 PortalPhoneVerificationRequired,
             )
+            from services.legal.portal_terms_status import (
+                PortalTermsReacceptanceRequired,
+            )
 
             new_booking = create_booking_via_use_case(
                 user_id=user.id, client_id=client.id, data=data
+            )
+        except PortalTermsReacceptanceRequired as e:
+            if idempotency_owned and idempotency_key:
+                IdempotencyService.release(idempotency_key)
+                idempotency_owned = False
+            return auth_error(
+                e.code,
+                e.message,
+                403,
+                details={"documents": e.documents},
             )
         except PortalPhoneVerificationRequired as e:
             if idempotency_owned and idempotency_key:

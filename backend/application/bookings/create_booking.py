@@ -256,6 +256,10 @@ class CreateBookingUseCase:
         if not client_dto:
             raise ValueError("Client non trouvé")
 
+        from services.legal.portal_terms_status import assert_portal_terms_current
+
+        assert_portal_terms_current(user_id=cmd.user_id, client=client_dto)
+
         from services.auth.portal_phone_verification import (
             assert_portal_can_confirm_transport,
         )

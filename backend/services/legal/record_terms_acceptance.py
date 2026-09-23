@@ -75,6 +75,7 @@ def ensure_document_version(spec: PublishedTerms) -> LegalDocumentVersion:
         if (
             existing.terms_hash != spec.terms_hash
             or existing.canonical_body != spec.canonical_body
+            or bool(existing.requires_reacceptance) != bool(spec.requires_reacceptance)
         ):
             raise CatalogIntegrityError(
                 "La version déjà publiée ne correspond pas au catalogue."
@@ -86,6 +87,7 @@ def ensure_document_version(spec: PublishedTerms) -> LegalDocumentVersion:
         terms_hash=spec.terms_hash,
         locale=spec.locale,
         canonical_body=spec.canonical_body,
+        requires_reacceptance=bool(spec.requires_reacceptance),
     )
     db.session.add(row)
     db.session.flush()

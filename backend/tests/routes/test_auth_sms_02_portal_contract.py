@@ -120,7 +120,10 @@ def test_login_still_blocked_without_email(client, db):
 def test_booking_requires_phone_then_succeeds_once_verified(
     client, app, db, monkeypatch
 ):
-    user, _portal_client = _make_portal_user(db)
+    from services.legal.record_terms_acceptance import record_portal_terms_acceptance
+
+    user, portal_client = _make_portal_user(db)
+    record_portal_terms_acceptance(user, portal_client)
     db.session.commit()
     headers = _headers(app, user)
     url = f"/api/v1/clients/{user.public_id}/bookings"

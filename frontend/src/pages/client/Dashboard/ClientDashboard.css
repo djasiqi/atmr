@@ -2282,6 +2282,30 @@ section.leftSection.card.bookingFormCard
   cursor: pointer;
 }
 
+.portalTermsUpdate {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid #d7dde6;
+  border-radius: 8px;
+  background: #f7f9fc;
+}
+
+.portalTermsUpdateTitle {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+
+.portalTermsUpdateDoc {
+  margin: 0.6rem 0;
+}
+
+.portalTermsAccept {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin: 0.8rem 0;
+}
+
 .portalTermsBody {
   white-space: pre-wrap;
   max-height: 16rem;

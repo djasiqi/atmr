@@ -40,6 +40,7 @@ class PublishedTerms:
     terms_hash: str
     canonical_body: str
     locale: str = TERMS_LOCALE_FR_CH
+    requires_reacceptance: bool = True
 
 
 def canonical_sha256(body: str) -> str:
@@ -73,11 +74,13 @@ def current_portal_terms() -> tuple[PublishedTerms, PublishedTerms]:
             terms_version="1.0",
             terms_hash=TERMS_OF_SERVICE_V1_SHA256,
             canonical_body=terms_of_service,
+            requires_reacceptance=True,
         ),
         PublishedTerms(
             document_type=DOCUMENT_TRANSPORT_TERMS,
             terms_version="1.0",
             terms_hash=TRANSPORT_TERMS_V1_SHA256,
             canonical_body=transport_terms,
+            requires_reacceptance=True,
         ),
     )

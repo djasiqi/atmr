@@ -16,11 +16,14 @@ from services.legal.portal_terms_catalog import (
     CatalogIntegrityError,
     current_portal_terms,
 )
+from services.legal.portal_terms_status import (
+    accept_current_required_portal_terms,
+    resolve_portal_terms_status,
+)
 from services.legal.record_terms_acceptance import (
     ClientSuppliedTermsError,
     PortalTermsContextError,
     list_portal_terms_acceptances,
-    record_portal_terms_acceptance,
     reject_client_supplied_terms,
 )
 from shared.error_handlers import APIErrorHandler
@@ -84,23 +87,37 @@ class ClientMyTermsAcceptances(Resource):
                 "Profil client introuvable",
                 logger_instance=logger,
             )
+        payload = request.get_json(silent=True) or {}
         try:
-            reject_client_supplied_terms(request.get_json(silent=True) or {})
-            rows = record_portal_terms_acceptance(current_user, client)
+            reject_client_supplied_terms(payload)
+            if payload.get("accept_current_required_terms") is not True:
+                return {
+                    "error": "terms_acceptance_required",
+                    "message": (
+                        "L'acceptation des conditions exigées doit être explicite."
+                    ),
+                }, 400
+            rows, inserted = accept_current_required_portal_terms(current_user, client)
             db.session.commit()
         except ClientSuppliedTermsError as exc:
-            return APIErrorHandler.handle_validation_error(
-                str(exc),
-                logger_instance=logger,
-            )
+            db.session.rollback()
+            return {"error": exc.code, "message": str(exc)}, 400
         except PortalTermsContextError as exc:
+            db.session.rollback()
             return APIErrorHandler.handle_permission_error(
                 str(exc),
                 logger_instance=logger,
             )
         except CatalogIntegrityError as exc:
+            db.session.rollback()
             return APIErrorHandler.handle_exception(exc, logger)
-        return created_response(data=[_serialize(row) for row in rows])
+        except Exception as exc:
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(exc, logger)
+        body = [_serialize(row) for row in rows]
+        if inserted:
+            return created_response(data=body)
+        return success_response(data=body)
 
 
 @clients_ns.route("/me/portal-terms")
@@ -150,3 +167,63 @@ class ClientMyPortalTerms(Resource):
                 for spec in documents
             ]
         )
+
+
+def _serialize_status(user: object) -> dict[str, object]:
+    resolved = resolve_portal_terms_status(user)
+    return {
+        "status": resolved.status,
+        "documents": [
+            {
+                "document_type": document.document_type,
+                "current_version": document.current_version,
+                "current_hash": document.current_hash,
+                "requires_reacceptance": document.requires_reacceptance,
+                "accepted_version": document.accepted_version,
+                "accepted_at": _iso(document.accepted_at),
+                "acceptance_id": document.acceptance_id,
+                "acceptance_required": document.acceptance_required,
+                "contractual_basis": document.contractual_basis,
+                "canonical_body": document.canonical_body,
+            }
+            for document in resolved.documents
+        ],
+    }
+
+
+@clients_ns.route("/me/portal-terms-status")
+class ClientMyPortalTermsStatus(Resource):
+    """Statut des acceptations exigées. Lecture seule, sans écriture."""
+
+    @jwt_required()
+    @role_required(UserRole.client)
+    @limiter.limit("120 per hour")
+    def get(self):
+        current_user = get_current_user_via_use_case()
+        if not current_user:
+            return APIErrorHandler.handle_permission_error(
+                "Utilisateur introuvable ou jeton invalide",
+                logger_instance=logger,
+            )
+        client = client_repo.find_by_user_id(current_user.id)
+        if client is None:
+            return APIErrorHandler.handle_permission_error(
+                "Profil client introuvable",
+                logger_instance=logger,
+            )
+        try:
+            from services.auth.portal_phone_verification import is_portal_client
+
+            if not is_portal_client(client):
+                raise PortalTermsContextError(
+                    "Ces conditions concernent le compte client privé."
+                )
+            payload = _serialize_status(current_user)
+        except PortalTermsContextError as exc:
+            return APIErrorHandler.handle_permission_error(
+                str(exc),
+                logger_instance=logger,
+            )
+        except CatalogIntegrityError as exc:
+            return APIErrorHandler.handle_exception(exc, logger)
+        return success_response(data=payload)
