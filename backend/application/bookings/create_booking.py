@@ -492,6 +492,19 @@ class CreateBookingUseCase:
                 return_time_exact=return_time_exact,
             )
 
+            from services.auth.portal_phone_verification import is_portal_client
+
+            if has_app_context() and is_portal_client(client_dto):
+                from services.legal.record_booking_contract_event import (
+                    record_portal_booking_created_event,
+                )
+
+                record_portal_booking_created_event(
+                    booking=new_booking,
+                    user_id=cmd.user_id,
+                    return_scheduled_time=return_scheduled_time,
+                )
+
         booking_id = int(getattr(new_booking, "id", 0) or 0)
         if booking_id <= 0:
             raise RuntimeError("Booking writer returned a booking without a valid id")

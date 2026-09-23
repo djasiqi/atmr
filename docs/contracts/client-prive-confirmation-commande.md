@@ -105,6 +105,8 @@ cgv_hash
 
 Aucune nouvelle réservation si le compte n’a pas d’acceptation valide pour la version substantielle en vigueur (`TERMS_REACCEPTANCE_REQUIRED`).
 
+✅ **Implémenté** : événement append-only `client_booking_contract_event` à la création PORTAL, dans la même transaction que le booking (`BOOKING_CREATED` seulement). Le montant figé est `estimated_amount_snapshot` avec `amount_is_contractual = false`. Sans acceptation, les clés vers `ClientTermsAcceptance` restent vides. Le débiteur reste `PARTIAL` (`billed_to_type = patient` n’identifie pas une personne). Le bouton et `TERMS_REACCEPTANCE_REQUIRED` ne sont pas faits ici.
+
 ## 3. E-mail : confirmation, pas acceptation
 
 Trois rôles distincts :

@@ -34,6 +34,7 @@ from .booking_message import BookingMessage, BookingMessageSender
 from .booking_transfer import BookingTransfer
 from .client import Client
 from .client_stay import ClientStay
+from .client_booking_contract_event import ClientBookingContractEvent
 from .client_terms_acceptance import ClientTermsAcceptance, LegalDocumentVersion
 from .clinic_billing_party_mapping import ClinicBillingPartyMapping
 from .company import Company
