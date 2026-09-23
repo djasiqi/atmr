@@ -359,6 +359,12 @@ const ClientDashboard = () => {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [estimateNotice, setEstimateNotice] = useState('');
   const [reservationFeedback, setReservationFeedback] = useState(null);
+  const [portalReview, setPortalReview] = useState(null);
+  const [termsCatalog, setTermsCatalog] = useState([]);
+  const [termsAcceptances, setTermsAcceptances] = useState([]);
+  const [openTermsDoc, setOpenTermsDoc] = useState(null);
+  const submitLockRef = useRef(false);
+  const portalIdempotencyKeyRef = useRef(null);
   const [payOffer, setPayOffer] = useState(null);
   const [pickup, setPickup] = useState('');
   const [destination, setDestination] = useState('');
@@ -972,8 +978,24 @@ const ClientDashboard = () => {
     }
   };
 
-  const handleBooking = async () => {
-    if (bookingSubmitting) return;
+  const loadPortalTerms = async () => {
+    try {
+      const [catalogRes, acceptanceRes] = await Promise.all([
+        apiClient.get('/clients/me/portal-terms'),
+        apiClient.get('/clients/me/terms-acceptances'),
+      ]);
+      const catalog = catalogRes.data?.data || [];
+      const rows = acceptanceRes.data?.data || [];
+      setTermsCatalog(Array.isArray(catalog) ? catalog : []);
+      setTermsAcceptances(Array.isArray(rows) ? rows : []);
+    } catch {
+      setTermsCatalog([]);
+      setTermsAcceptances([]);
+    }
+  };
+
+  const handleBooking = async ({ confirm = false } = {}) => {
+    if (bookingSubmitting || submitLockRef.current) return;
     const token = getActiveAccessToken({ allowLegacy: true });
     setFormError(null);
     setReservationFeedback(null);
@@ -1085,6 +1107,50 @@ const ClientDashboard = () => {
 
     const clientNotePayload = buildClientNoteFromLegs(clientNoteDeparture, clientNoteArrival);
 
+    if (isPortalPrivateClient && !confirm) {
+      const fingerprint = JSON.stringify({
+        pickup,
+        destination,
+        scheduledTimeIso,
+        amount: amountForApi,
+        roundTripEnabled,
+        returnDate: returnDate || '',
+        returnTimeIso,
+      });
+      const storageKey = `portal-order-idempotency:${fingerprint}`;
+      let key = null;
+      try {
+        key = sessionStorage.getItem(storageKey);
+      } catch {
+        key = null;
+      }
+      if (!key) {
+        key =
+          window.crypto?.randomUUID?.() ||
+          `portal-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        try {
+          sessionStorage.setItem(storageKey, key);
+        } catch {
+          /* sessionStorage indisponible : la clé reste en mémoire pour ce clic */
+        }
+      }
+      portalIdempotencyKeyRef.current = key;
+      setPortalReview({
+        amountLabel: Number(amountForApi).toFixed(2),
+        debtorName: buildCustomerName(profile),
+        billingAddress: String(profile?.billing_address || '').trim(),
+        scheduledLabel: asapMode ? 'Dès que possible' : `${selectedDate} ${selectedTime}`,
+        pickup,
+        destination,
+        roundTrip: roundTripEnabled,
+        returnLabel: roundTripEnabled ? [returnDate, returnTime].filter(Boolean).join(' ') : '',
+        storageKey,
+      });
+      setOpenTermsDoc(null);
+      void loadPortalTerms();
+      return;
+    }
+
     const bookingData = {
       customer_name: buildCustomerName(profile),
       pickup_location: pickup,
@@ -1113,6 +1179,7 @@ const ClientDashboard = () => {
         : {}),
     };
 
+    submitLockRef.current = true;
     setBookingSubmitting(true);
     try {
       const previewPayload = {
@@ -1189,7 +1256,12 @@ const ClientDashboard = () => {
         amount: previewAmount,
         preview_amount: previewAmount,
       }, {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(isPortalPrivateClient && portalIdempotencyKeyRef.current
+            ? { 'Idempotency-Key': portalIdempotencyKeyRef.current }
+            : {}),
+        },
       });
       const root = response.data || {};
       const payload = root.data !== undefined ? root.data : root;
@@ -1221,11 +1293,22 @@ const ClientDashboard = () => {
         destination,
         scheduledLabel: asapMode ? 'Dès que possible' : `${selectedDate} ${selectedTime}`,
         statusLabel: getClientBookingUx('pending').label,
-        billingLabel:
-          resolvedBooking.payer_label ||
-          resolvedBooking.coverage_label ||
-          'Payeur non défini',
+        reference: bookingId ? `#${bookingId}` : null,
+        billingLabel: isPortalPrivateClient
+          ? buildCustomerName(profile)
+          : resolvedBooking.payer_label ||
+            resolvedBooking.coverage_label ||
+            'Payeur non défini',
       });
+      if (isPortalPrivateClient && portalReview?.storageKey) {
+        try {
+          sessionStorage.removeItem(portalReview.storageKey);
+        } catch {
+          /* ignore */
+        }
+      }
+      portalIdempotencyKeyRef.current = null;
+      setPortalReview(null);
       setUpcomingBookings((prev) => {
         const incomingBooking = payload.booking || root.booking;
         if (incomingBooking?.pickup_location) {
@@ -1346,6 +1429,7 @@ const ClientDashboard = () => {
       setFormError(msg);
       toast.error(msg, { duration: 6000 });
     } finally {
+      submitLockRef.current = false;
       setBookingSubmitting(false);
     }
   };
@@ -1699,8 +1783,14 @@ const ClientDashboard = () => {
                           <dt>Horaire</dt>
                           <dd>{reservationFeedback.scheduledLabel}</dd>
                         </div>
+                        {reservationFeedback.reference ? (
+                          <div className="bookingFeedbackItem">
+                            <dt>Référence</dt>
+                            <dd>{reservationFeedback.reference}</dd>
+                          </div>
+                        ) : null}
                         <div className="bookingFeedbackItem">
-                          <dt>Couverture</dt>
+                          <dt>Facturé à</dt>
                           <dd>{reservationFeedback.billingLabel}</dd>
                         </div>
                       </dl>
@@ -2322,13 +2412,114 @@ const ClientDashboard = () => {
                     </div>
                   ) : null}
 
+                  {isPortalPrivateClient && portalReview ? (
+                    <section
+                      className="portalOrderReview"
+                      aria-labelledby="portal-order-review-title"
+                    >
+                      <h2 id="portal-order-review-title" className="portalOrderReviewTitle">
+                        Récapitulatif de la demande
+                      </h2>
+                      <dl className="portalOrderReviewGrid">
+                        <div>
+                          <dt>Demandeur</dt>
+                          <dd>{portalReview.debtorName}</dd>
+                        </div>
+                        <div>
+                          <dt>Facturé à</dt>
+                          <dd>
+                            {portalReview.debtorName}
+                            {portalReview.billingAddress ? (
+                              <span className="portalOrderReviewMuted">
+                                {portalReview.billingAddress}
+                              </span>
+                            ) : null}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Date et heure</dt>
+                          <dd>{portalReview.scheduledLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Prise en charge</dt>
+                          <dd>{portalReview.pickup}</dd>
+                        </div>
+                        <div>
+                          <dt>Destination</dt>
+                          <dd>{portalReview.destination}</dd>
+                        </div>
+                        <div>
+                          <dt>Trajet</dt>
+                          <dd>
+                            {portalReview.roundTrip ? 'Aller-retour' : 'Aller simple'}
+                            {portalReview.returnLabel ? ` — retour ${portalReview.returnLabel}` : ''}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Transporteur</dt>
+                          <dd>Attribué après confirmation</dd>
+                        </div>
+                      </dl>
+                      <p className="portalOrderEstimate">
+                        Estimation actuelle : CHF {portalReview.amountLabel}
+                      </p>
+                      <p className="portalOrderEstimateNote">
+                        Indicative — le montant final sera facturé par l’entreprise de transport.
+                      </p>
+                      <p className="portalOrderLegal">
+                        {termsAcceptances.some((row) => row.document_type === 'terms_of_service') &&
+                        termsAcceptances.some((row) => row.document_type === 'transport_terms')
+                          ? 'En confirmant cette demande, vous passez une commande de transport soumise aux conditions acceptées pour votre compte.'
+                          : 'Aucune acceptation des conditions n’est enregistrée pour ce compte. Confirmer cette demande n’en crée pas.'}
+                      </p>
+                      <p className="portalOrderLegalLinks">
+                        {termsCatalog.map((doc) => (
+                          <button
+                            key={doc.document_type}
+                            type="button"
+                            className="portalOrderTermsLink"
+                            onClick={() => setOpenTermsDoc(doc)}
+                          >
+                            {doc.document_type === 'transport_terms'
+                              ? 'Conditions générales de transport'
+                              : 'Conditions générales d’utilisation'}
+                            {doc.terms_version ? ` ${doc.terms_version}` : ''}
+                          </button>
+                        ))}
+                      </p>
+                      {openTermsDoc ? (
+                        <pre className="portalTermsBody">{openTermsDoc.canonical_body}</pre>
+                      ) : null}
+                      <div className="formActions formActionsPrimary">
+                        <button
+                          type="button"
+                          className={`${homeFieldStyles.ctaButton} bookingDashboardCta`}
+                          onClick={() => handleBooking({ confirm: true })}
+                          disabled={bookingSubmitting}
+                          aria-busy={bookingSubmitting}
+                        >
+                          {bookingSubmitting ? 'Confirmation en cours…' : 'Confirmer la demande de transport'}
+                        </button>
+                        <button
+                          type="button"
+                          className="ghostButton"
+                          onClick={() => setPortalReview(null)}
+                          disabled={bookingSubmitting}
+                        >
+                          Modifier la demande
+                        </button>
+                      </div>
+                    </section>
+                  ) : null}
+
                   <div className="formActions formActionsPrimary">
                     <button
                       type="button"
                       className={`${homeFieldStyles.ctaButton} bookingDashboardCta`}
-                      onClick={handleBooking}
+                      onClick={() => handleBooking(isPortalPrivateClient ? { confirm: false } : undefined)}
                       disabled={bookingSubmitting || loadingProfile || loadingBookings || !effectiveClientId}
                       aria-busy={bookingSubmitting}
+                      hidden={isPortalPrivateClient && Boolean(portalReview)}
                     >
                       {bookingSubmitting ? (
                         <>
@@ -2337,7 +2528,9 @@ const ClientDashboard = () => {
                         </>
                       ) : (
                         <>
-                          Valider la demande de transport
+                          {isPortalPrivateClient
+                            ? 'Vérifier la demande'
+                            : 'Valider la demande de transport'}
                           <svg
                             width="18"
                             height="18"

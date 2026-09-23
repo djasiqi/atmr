@@ -2223,3 +2223,72 @@ section.leftSection.card.bookingFormCard
   outline-offset: 0 !important;
   box-shadow: none !important;
 }
+
+.portalOrderReview {
+  margin-top: 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #d7dde6;
+  border-radius: 12px;
+  background: #f7f9fb;
+}
+
+.portalOrderReviewTitle {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+.portalOrderReviewGrid {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.portalOrderReviewGrid dt {
+  font-size: 0.75rem;
+  color: #5c6b7a;
+}
+
+.portalOrderReviewGrid dd {
+  margin: 0;
+}
+
+.portalOrderReviewMuted {
+  display: block;
+  color: #5c6b7a;
+}
+
+.portalOrderEstimate {
+  margin: 0.9rem 0 0.2rem;
+  font-weight: 650;
+}
+
+.portalOrderEstimateNote,
+.portalOrderLegal {
+  margin: 0.25rem 0;
+}
+
+.portalOrderLegalLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.portalOrderTermsLink {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: #0b5cab;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.portalTermsBody {
+  white-space: pre-wrap;
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0.75rem;
+  background: #fff;
+  border: 1px solid #d7dde6;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}

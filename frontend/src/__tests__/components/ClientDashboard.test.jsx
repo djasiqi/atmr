@@ -1,6 +1,6 @@
 // frontend/tests/components/ClientDashboard.test.jsx
 import React from 'react';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ClientDashboard from 'pages/client/Dashboard/ClientDashboard';
@@ -21,6 +21,11 @@ jest.mock('react-router-dom', () => {
 jest.mock('utils/apiClient');
 jest.mock('services/clientSaferpayPaymentService', () => ({
   startSaferpayHostedCheckout: jest.fn(() => Promise.resolve()),
+}));
+jest.mock('services/clientPortalSocket', () => ({
+  ensureClientPortalSocket: jest.fn(() => Promise.resolve(null)),
+  getClientPortalSocket: () => null,
+  disconnectClientPortalSocket: jest.fn(),
 }));
 jest.mock('sonner', () => ({
   toast: {
@@ -150,11 +155,31 @@ describe('ClientDashboard', () => {
 
   const mockBookings = [];
 
+  const openPortalReview = async () => {
+    const verify = await screen.findByRole('button', { name: /Vérifier la demande/i });
+    await waitFor(() => expect(verify).toBeEnabled());
+    fireEvent.click(verify);
+    expect(
+      await screen.findByRole('heading', { name: 'Récapitulatif de la demande' })
+    ).toBeInTheDocument();
+  };
+
+  const confirmPortalOrder = async () => {
+    await openPortalReview();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer la demande de transport' }));
+  };
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
+    jest.useRealTimers();
     mockNavigate.mockClear();
     jest.clearAllMocks();
     window.__LIRIE_CLIENT_KPI__ = [];
     localStorage.clear();
+    sessionStorage.clear();
     localStorage.setItem('authToken', 'fake-client-token');
     localStorage.setItem('public_id', 'client-123');
     // Mock profil client
@@ -233,7 +258,7 @@ describe('ClientDashboard', () => {
     fireEvent.change(screen.getByTestId('client-dashboard-dropoff'), {
       target: { value: 'Lausanne Gare' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /Valider la demande de transport/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Vérifier la demande/i }));
 
     await waitFor(() => {
       expect(window.__LIRIE_CLIENT_KPI__.some((e) => e.name === 'reserve_cta_clicked')).toBe(true);
@@ -371,7 +396,6 @@ describe('ClientDashboard', () => {
   });
 
   it('la réservation reste possible si estimation itinéraire échoue', async () => {
-    jest.useFakeTimers();
     apiClient.post.mockImplementation((url) => {
       if (url === '/ai/optimized-route') {
         return Promise.reject(new Error('route-failed'));
@@ -401,27 +425,12 @@ describe('ClientDashboard', () => {
       target: { value: 'Lausanne Gare' },
     });
 
-    await act(async () => {
-      jest.advanceTimersByTime(2100);
-    });
+    expect(
+      await screen.findByText(/Impossible d’estimer ce trajet pour le moment/i, {}, { timeout: 4000 })
+    ).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(
-        screen.getByText(/Impossible d’estimer ce trajet pour le moment/i)
-      ).toBeInTheDocument();
-    });
-
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const y = tomorrow.getFullYear();
-    const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
-    const d = String(tomorrow.getDate()).padStart(2, '0');
-    fireEvent.change(screen.getByLabelText(/Date/i), {
-      target: { value: `${y}-${m}-${d}` },
-    });
-    fireEvent.change(screen.getByLabelText(/Heure/i), {
-      target: { value: '10:30' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Valider la demande de transport/i }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Dès que possible' }));
+    await confirmPortalOrder();
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
@@ -433,7 +442,6 @@ describe('ClientDashboard', () => {
         expect.any(Object)
       );
     });
-    jest.useRealTimers();
   });
 
   it('ne lance pas Saferpay pour un compte PORTAL même si billed_to_type est patient', async () => {
@@ -457,7 +465,7 @@ describe('ClientDashboard', () => {
     fireEvent.change(screen.getByLabelText(/Heure/i), {
       target: { value: '10:30' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /Valider la demande de transport/i }));
+    await confirmPortalOrder();
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
@@ -505,7 +513,11 @@ describe('ClientDashboard', () => {
     fireEvent.change(screen.getByLabelText(/Heure/i), {
       target: { value: '10:30' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /Valider la demande de transport/i }));
+    const submitTransport = await screen.findByRole('button', {
+      name: /Valider la demande de transport/i,
+    });
+    await waitFor(() => expect(submitTransport).toBeEnabled());
+    fireEvent.click(submitTransport);
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
@@ -547,7 +559,7 @@ describe('ClientDashboard', () => {
     fireEvent.change(screen.getByLabelText(/Heure/i), {
       target: { value: '10:30' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /Valider la demande de transport/i }));
+    await confirmPortalOrder();
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
@@ -558,5 +570,110 @@ describe('ClientDashboard', () => {
     });
 
     expect(startSaferpayHostedCheckout).not.toHaveBeenCalled();
+  });
+
+  const fillOutbound = async () => {
+    fireEvent.change(await screen.findByTestId('client-dashboard-pickup'), {
+      target: { value: 'Genève Gare' },
+    });
+    fireEvent.change(screen.getByTestId('client-dashboard-dropoff'), {
+      target: { value: 'Lausanne Gare' },
+    });
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const y = tomorrow.getFullYear();
+    const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const d = String(tomorrow.getDate()).padStart(2, '0');
+    fireEvent.change(document.getElementById('client-booking-date'), {
+      target: { value: `${y}-${m}-${d}` },
+    });
+    fireEvent.change(document.getElementById('client-booking-time'), {
+      target: { value: '10:30' },
+    });
+  };
+
+  it('affiche une estimation indicative et le titulaire comme débiteur', async () => {
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+    await fillOutbound();
+    await openPortalReview();
+
+    expect(screen.getAllByText('Jean Dupont').length).toBeGreaterThan(1);
+    expect(screen.getByText(/Estimation actuelle : CHF/i)).toBeInTheDocument();
+    expect(screen.getByText(/Indicative — le montant final/i)).toBeInTheDocument();
+    expect(screen.getByText(/Attribué après confirmation/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Confirmer la demande de transport' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /CHF/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Aucune acceptation des conditions n’est enregistrée/i)
+    ).toBeInTheDocument();
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
+  it('ne crée qu’une demande et réutilise la clé d’idempotence', async () => {
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+    await fillOutbound();
+    await openPortalReview();
+    const confirm = screen.getByRole('button', { name: 'Confirmer la demande de transport' });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    await waitFor(() => {
+      const creates = apiClient.post.mock.calls.filter(
+        (call) => String(call[0]).includes('/bookings') && !String(call[0]).includes('preview')
+      );
+      expect(creates).toHaveLength(1);
+      expect(creates[0][2].headers['Idempotency-Key']).toEqual(expect.any(String));
+    });
+  });
+
+  it('affiche le corps canonique servi par le catalogue', async () => {
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/clients/client-123') {
+        return Promise.resolve({ data: mockProfile });
+      }
+      if (String(url).includes('/clients/me/portal-terms')) {
+        return Promise.resolve({
+          data: {
+            data: [
+              {
+                document_type: 'terms_of_service',
+                terms_version: '1.0',
+                canonical_body: 'CORPS CANONIQUE CGU',
+              },
+              {
+                document_type: 'transport_terms',
+                terms_version: '1.0',
+                canonical_body: 'CORPS CANONIQUE CGV',
+              },
+            ],
+          },
+        });
+      }
+      if (String(url).includes('/clients/me/terms-acceptances')) {
+        return Promise.resolve({
+          data: {
+            data: [
+              { document_type: 'terms_of_service' },
+              { document_type: 'transport_terms' },
+            ],
+          },
+        });
+      }
+      if (url.includes('/bookings')) {
+        return Promise.resolve({ data: mockBookings });
+      }
+      return Promise.reject(new Error('Not found'));
+    });
+
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+    await fillOutbound();
+    await openPortalReview();
+    expect(
+      await screen.findByText(/conditions acceptées pour votre compte/i)
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /Conditions générales d’utilisation 1.0/i })
+    );
+    expect(await screen.findByText('CORPS CANONIQUE CGU')).toBeInTheDocument();
   });
 });

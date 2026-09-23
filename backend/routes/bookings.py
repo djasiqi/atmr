@@ -705,6 +705,7 @@ def execute_client_booking_creation(public_id: str) -> Any:
                 return cached_payload, 201
 
         data = request.get_json(silent=True) or {}
+        idempotency_owned = False
 
         user, client, validation_error = _validate_booking_request(data, public_id)
         if validation_error:
@@ -749,6 +750,23 @@ def execute_client_booking_creation(public_id: str) -> Any:
             create_booking_via_use_case,
         )
 
+        if idempotency_key:
+            state, replay = IdempotencyService.begin(idempotency_key)
+            if state == "replay" and isinstance(replay, dict):
+                cached_payload = replay
+                if "response" in cached_payload:
+                    return (
+                        cached_payload["response"],
+                        cached_payload.get("status_code", 201),
+                    )
+                return cached_payload, 201
+            if state == "busy":
+                return {
+                    "error": "Cette confirmation est déjà en cours.",
+                    "error_code": "idempotency_in_progress",
+                }, 409
+            idempotency_owned = state == "owner"
+
         try:
             from application.bookings.create_booking import InvalidClientBookingCommand
             from services.auth.portal_phone_verification import (
@@ -759,6 +777,9 @@ def execute_client_booking_creation(public_id: str) -> Any:
                 user_id=user.id, client_id=client.id, data=data
             )
         except PortalPhoneVerificationRequired as e:
+            if idempotency_owned and idempotency_key:
+                IdempotencyService.release(idempotency_key)
+                idempotency_owned = False
             return auth_error(
                 AuthErrorCodes.PHONE_VERIFICATION_REQUIRED,
                 e.message,
@@ -766,17 +787,26 @@ def execute_client_booking_creation(public_id: str) -> Any:
                 details={"phone_verified": False},
             )
         except InvalidClientBookingCommand as e:
+            if idempotency_owned and idempotency_key:
+                IdempotencyService.release(idempotency_key)
+                idempotency_owned = False
             return {
                 "error": str(e),
                 "error_code": e.code,
                 "fields": e.fields,
             }, 400
         except ValueError as e:
+            if idempotency_owned and idempotency_key:
+                IdempotencyService.release(idempotency_key)
+                idempotency_owned = False
             return APIErrorHandler.handle_validation_error(
                 str(e),
                 logger_instance=logger,
             )
         except PlatformTenantSuspended as e:
+            if idempotency_owned and idempotency_key:
+                IdempotencyService.release(idempotency_key)
+                idempotency_owned = False
             trace_id = get_trace_id()
             return {
                 "error": e.message,
@@ -787,6 +817,9 @@ def execute_client_booking_creation(public_id: str) -> Any:
                 "trace_id": trace_id,
             }, 403
         except RuntimeError as e:
+            if idempotency_owned and idempotency_key:
+                IdempotencyService.release(idempotency_key)
+                idempotency_owned = False
             return _handle_geocoding_error(e)
 
         booking_id = getattr(new_booking, "id", None)
@@ -862,10 +895,34 @@ def execute_client_booking_creation(public_id: str) -> Any:
 
         if idempotency_key:
             IdempotencyService.store_response(idempotency_key, response_data, 201)
+            if idempotency_owned:
+                IdempotencyService.release(idempotency_key)
+                idempotency_owned = False
+
+        if (
+            new_booking is not None
+            and client is not None
+            and is_portal_client(client)
+            and orm_user is not None
+        ):
+            try:
+                from services.legal.send_portal_booking_confirmation import (
+                    notify_portal_booking_confirmed,
+                )
+
+                notify_portal_booking_confirmed(booking=new_booking, user=orm_user)
+            except Exception:
+                logger.exception(
+                    "[Bookings] E-mail de confirmation non envoyé booking_id=%s ; "
+                    "la commande reste enregistrée",
+                    booking_id,
+                )
 
         return response_data, status_code
 
     except Exception as e:
+        if idempotency_owned and idempotency_key:
+            IdempotencyService.release(idempotency_key)
         db.session.rollback()
         return APIErrorHandler.handle_exception(e, logger)
 

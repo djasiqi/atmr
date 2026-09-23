@@ -83,6 +83,46 @@ class IdempotencyService:
             # Ne pas bloquer la réponse en cas d'erreur
 
     @staticmethod
+    def begin(key: str) -> tuple[str, dict[str, Any] | None]:
+        """Réserve une clé avant création.
+
+        Retourne ``owner``, ``replay``, ``busy`` ou ``unavailable``.
+        ``unavailable`` laisse passer la requête (Redis absent ou en erreur).
+        """
+        if not redis_client:
+            logger.warning("Redis non disponible, idempotency désactivé")
+            return "unavailable", None
+        exists, cached = IdempotencyService.check_key(key)
+        if exists and isinstance(cached, dict):
+            return "replay", cached
+        try:
+            acquired = redis_client.set(
+                f"idempotency:lock:{key}",
+                "pending",
+                nx=True,
+                ex=120,
+            )
+        except Exception as exc:
+            logger.error("Erreur lors de la réservation idempotency: %s", exc)
+            return "unavailable", None
+        if acquired:
+            return "owner", None
+        exists, cached = IdempotencyService.check_key(key)
+        if exists and isinstance(cached, dict):
+            return "replay", cached
+        return "busy", None
+
+    @staticmethod
+    def release(key: str) -> None:
+        """Libère le verrou. La réponse déjà stockée reste rejouable."""
+        if not redis_client:
+            return
+        try:
+            redis_client.delete(f"idempotency:lock:{key}")
+        except Exception as exc:
+            logger.error("Erreur lors de la libération idempotency: %s", exc)
+
+    @staticmethod
     def get_idempotency_key_from_request() -> str | None:
         """Extrait la clé d'idempotence depuis les headers de la requête.
 

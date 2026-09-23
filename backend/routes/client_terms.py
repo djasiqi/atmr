@@ -12,7 +12,10 @@ from ext import db, limiter, role_required
 from models.enums import UserRole
 from repositories.client_repository import ClientRepository
 from routes.clients import clients_ns
-from services.legal.portal_terms_catalog import CatalogIntegrityError
+from services.legal.portal_terms_catalog import (
+    CatalogIntegrityError,
+    current_portal_terms,
+)
 from services.legal.record_terms_acceptance import (
     ClientSuppliedTermsError,
     PortalTermsContextError,
@@ -98,3 +101,52 @@ class ClientMyTermsAcceptances(Resource):
         except CatalogIntegrityError as exc:
             return APIErrorHandler.handle_exception(exc, logger)
         return created_response(data=[_serialize(row) for row in rows])
+
+
+@clients_ns.route("/me/portal-terms")
+class ClientMyPortalTerms(Resource):
+    """Textes canoniques actuellement opposables. Lecture seule, sans acceptation."""
+
+    @jwt_required()
+    @role_required(UserRole.client)
+    @limiter.limit("60 per hour")
+    def get(self):
+        current_user = get_current_user_via_use_case()
+        if not current_user:
+            return APIErrorHandler.handle_permission_error(
+                "Utilisateur introuvable ou jeton invalide",
+                logger_instance=logger,
+            )
+        client = client_repo.find_by_user_id(current_user.id)
+        if client is None:
+            return APIErrorHandler.handle_permission_error(
+                "Profil client introuvable",
+                logger_instance=logger,
+            )
+        try:
+            from services.auth.portal_phone_verification import is_portal_client
+
+            if not is_portal_client(client):
+                raise PortalTermsContextError(
+                    "Ces conditions concernent le compte client privé."
+                )
+            documents = current_portal_terms()
+        except PortalTermsContextError as exc:
+            return APIErrorHandler.handle_permission_error(
+                str(exc),
+                logger_instance=logger,
+            )
+        except CatalogIntegrityError as exc:
+            return APIErrorHandler.handle_exception(exc, logger)
+        return success_response(
+            data=[
+                {
+                    "document_type": spec.document_type,
+                    "terms_version": spec.terms_version,
+                    "terms_hash": spec.terms_hash,
+                    "canonical_body": spec.canonical_body,
+                    "locale": spec.locale,
+                }
+                for spec in documents
+            ]
+        )

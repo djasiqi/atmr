@@ -109,7 +109,11 @@ Aucune nouvelle réservation si le compte n’a pas d’acceptation valide pour 
 
 ✅ **Implémenté** : pour un nouveau `BOOKING_CREATED` PORTAL, le débiteur nominal est le titulaire authentifié (`debtor_type_snapshot = account_holder`, `debtor_user_id`, nom, e-mail et téléphone du `User`, et `Client.billing_address` seulement si cette colonne est renseignée). `billed_to_type = patient` reste une catégorie legacy et n’est pas cette identité. Le domicile, `contact_email` et le nom saisi dans la demande ne sont pas recopiés comme débiteur. Les événements déjà `partial` ne sont pas réécrits. Le navigateur ne peut pas soumettre `debtor_*`.
 
+✅ **Implémenté** : le parcours PORTAL affiche un récapitulatif puis le bouton « Confirmer la demande de transport », sans montant dans le bouton. L’estimation reste indicative. Les liens affichent le catalogue serveur `GET /clients/me/portal-terms`, pas `TermsOfService.jsx`. Sans acceptation enregistrée, le texte ne prétend pas que les conditions ont été acceptées. L’activation ne crée toujours pas de `ClientTermsAcceptance`.
+
 ## 3. E-mail : confirmation, pas acceptation
+
+✅ **Implémenté** : après le commit de la commande PORTAL, un e-mail de confirmation est tenté. Son échec n’annule pas le booking ni `BOOKING_CREATED`. Chaque tentative est tracée dans `portal_booking_confirmation_email`.
 
 Trois rôles distincts :
 
