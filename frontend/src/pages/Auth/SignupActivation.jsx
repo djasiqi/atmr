@@ -44,7 +44,11 @@ const SignupActivation = () => {
     is_complete: false,
     is_finalized: false,
     email_delivery_status: null,
+    portal_terms_required: false,
   });
+  const [termsCatalog, setTermsCatalog] = useState([]);
+  const [openTermsDoc, setOpenTermsDoc] = useState(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [infoMessage, setInfoMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -74,6 +78,7 @@ const SignupActivation = () => {
       is_complete: Boolean(newStatus.is_complete),
       is_finalized: Boolean(newStatus.is_finalized),
       email_delivery_status: newStatus.email_delivery_status || null,
+      portal_terms_required: Boolean(newStatus.portal_terms_required),
     });
   };
 
@@ -332,6 +337,7 @@ const SignupActivation = () => {
     try {
       const response = await apiClient.post('/auth/activation/finalize', {
         activation_session_id: activationSessionId,
+        ...(status.portal_terms_required ? { accept_current_portal_terms: true } : {}),
       });
       updateStatus(response?.data?.activation_status);
       setInfoMessage('Compte activé. Vous pouvez maintenant vous connecter.');
@@ -356,20 +362,59 @@ const SignupActivation = () => {
     });
   }, [activationSessionId, maskedEmail, maskedPhone, prefillEmail]);
 
+  const showPortalTerms = Boolean(
+    status.portal_terms_required && status.email_verified && !status.is_finalized
+  );
+  const termsReady =
+    termsCatalog.some((doc) => doc.document_type === 'terms_of_service') &&
+    termsCatalog.some((doc) => doc.document_type === 'transport_terms');
+
+  useEffect(() => {
+    if (!showPortalTerms || !activationSessionId) {
+      return undefined;
+    }
+    let cancelled = false;
+    apiClient
+      .get(
+        `/auth/activation/portal-terms?activation_session_id=${encodeURIComponent(
+          activationSessionId
+        )}`
+      )
+      .then((response) => {
+        if (!cancelled) {
+          setTermsCatalog(Array.isArray(response?.data?.documents) ? response.data.documents : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTermsCatalog([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showPortalTerms, activationSessionId]);
+
   const finalizeEnabled = useMemo(
-    () => Boolean(status.is_complete && !status.is_finalized),
-    [status]
+    () =>
+      Boolean(
+        status.is_complete &&
+          !status.is_finalized &&
+          (!status.portal_terms_required || (termsAccepted && termsReady))
+      ),
+    [status, termsAccepted, termsReady]
   );
 
   const activationSubtitle = useMemo(() => {
     if (status.requires_email && !status.email_verified) {
       return 'Validez votre email pour activer le compte. Le téléphone se vérifiera plus tard, au premier transport.';
     }
+    if (showPortalTerms) {
+      return 'Email confirmé. Lisez et acceptez les conditions pour activer le compte. Le téléphone se vérifiera au premier transport.';
+    }
     if (status.requires_phone) {
       return 'Validez votre téléphone pour activer le compte.';
     }
     return 'Votre compte peut être activé. La validation SMS n’est requise qu’avant le premier transport.';
-  }, [status.email_verified, status.requires_email, status.requires_phone]);
+  }, [showPortalTerms, status.email_verified, status.requires_email, status.requires_phone]);
 
   const handleLoginRedirect = () => {
     navigate('/login', {
@@ -525,6 +570,46 @@ const SignupActivation = () => {
             </button>
           </div>
         </section>
+        ) : null}
+
+        {showPortalTerms ? (
+          <section className={styles.section} aria-labelledby="portal-terms-title">
+            <h2 id="portal-terms-title" className={styles.sectionTitle}>
+              Conditions
+            </h2>
+            <p className={styles.sectionHint}>
+              Ces textes sont ceux du catalogue serveur. Les lire fait partie de l&apos;activation.
+            </p>
+            <div className={styles.termsLinks}>
+              {termsCatalog.map((doc) => (
+                <button
+                  key={doc.document_type}
+                  type="button"
+                  className={styles.linkButton}
+                  onClick={() => setOpenTermsDoc(doc)}
+                >
+                  {doc.document_type === 'transport_terms'
+                    ? 'Conditions générales de transport'
+                    : "Conditions générales d'utilisation"}
+                  {doc.terms_version ? ` ${doc.terms_version}` : ''}
+                </button>
+              ))}
+            </div>
+            {openTermsDoc ? (
+              <pre className={styles.termsBody}>{openTermsDoc.canonical_body}</pre>
+            ) : null}
+            <label className={styles.termsAccept}>
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(event) => setTermsAccepted(event.target.checked)}
+              />
+              <span>
+                J&apos;ai lu et j&apos;accepte les Conditions générales d&apos;utilisation et les
+                Conditions générales de transport.
+              </span>
+            </label>
+          </section>
         ) : null}
 
         <div className={styles.footerActions}>

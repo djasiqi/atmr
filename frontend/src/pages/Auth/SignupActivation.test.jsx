@@ -418,4 +418,78 @@ describe('SignupActivation', () => {
       screen.getByText(/le téléphone se vérifiera plus tard/i)
     ).toBeInTheDocument();
   });
+
+  it('exige une case non cochée avant d’accepter les deux textes canoniques', async () => {
+    apiClient.get.mockImplementation((url) => {
+      if (String(url).includes('/auth/activation/portal-terms')) {
+        return Promise.resolve({
+          data: {
+            documents: [
+              {
+                document_type: 'terms_of_service',
+                terms_version: '1.0',
+                terms_hash: 'hash-cgu',
+                canonical_body: 'CORPS CANONIQUE CGU',
+              },
+              {
+                document_type: 'transport_terms',
+                terms_version: '1.0',
+                terms_hash: 'hash-cgv',
+                canonical_body: 'CORPS CANONIQUE CGV',
+              },
+            ],
+          },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          activation_status: {
+            email_verified: true,
+            phone_verified: false,
+            requires_email: true,
+            requires_phone: false,
+            is_complete: true,
+            is_finalized: false,
+            portal_terms_required: true,
+          },
+        },
+      });
+    });
+    apiClient.post.mockResolvedValue({
+      data: {
+        activation_status: {
+          email_verified: true,
+          phone_verified: false,
+          is_complete: true,
+          is_finalized: true,
+          portal_terms_required: true,
+        },
+      },
+    });
+
+    renderActivation('/activate-account?activation_session_id=sess-terms');
+
+    const activate = await screen.findByRole('button', { name: /activer mon compte/i });
+    expect(activate).toBeDisabled();
+    const checkbox = screen.getByRole('checkbox');
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Conditions générales d'utilisation 1.0/i })
+    );
+    expect(screen.getByText('CORPS CANONIQUE CGU')).toBeInTheDocument();
+    fireEvent.click(checkbox);
+    await waitFor(() => expect(activate).toBeEnabled());
+    fireEvent.click(activate);
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith('/auth/activation/finalize', {
+        activation_session_id: 'sess-terms',
+        accept_current_portal_terms: true,
+      });
+    });
+    const payload = apiClient.post.mock.calls.find((call) =>
+      String(call[0]).includes('finalize')
+    )[1];
+    expect(payload.terms_hash).toBeUndefined();
+    expect(payload.terms_version).toBeUndefined();
+  });
 });

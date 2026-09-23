@@ -58,8 +58,14 @@ class GetBootstrapSessionUseCase:
 
         snapshot, user_orm = loaded
         from services.auth.portal_phone_verification import maybe_promote_portal_account
+        from services.legal.portal_activation_terms import (
+            portal_terms_block_lazy_promotion,
+        )
 
-        if maybe_promote_portal_account(user_orm):
+        if (
+            not portal_terms_block_lazy_promotion(user_orm)
+            and maybe_promote_portal_account(user_orm)
+        ):
             from ext import db
 
             db.session.commit()

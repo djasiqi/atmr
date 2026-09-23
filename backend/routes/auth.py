@@ -488,6 +488,7 @@ def _build_activation_status(session: ActivationSession) -> dict[str, object]:
         "requires_phone": requires_phone,
         "is_complete": _activation_is_complete(session),
         "is_finalized": bool(session.consumed_at),
+        "portal_terms_required": bool(getattr(session, "portal_terms_required", False)),
         # Statut livraison (pas email_last_error — interne uniquement)
         "email_delivery_status": session.email_delivery_status,
     }
@@ -2298,8 +2299,12 @@ def _check_user_profile_active(user: User) -> tuple[bool, str | None]:
         - Si pas de profil: (True, None) - on considère comme actif par défaut
     """
     from services.auth.portal_phone_verification import maybe_promote_portal_account
+    from services.legal.portal_activation_terms import portal_terms_block_lazy_promotion
 
-    if maybe_promote_portal_account(user):
+    if (
+        not portal_terms_block_lazy_promotion(user)
+        and maybe_promote_portal_account(user)
+    ):
         db.session.commit()
 
     if getattr(user, "account_status", None) == "pending_activation":
@@ -4948,6 +4953,7 @@ class Register(Resource):
             activation_session.sms_attempts = 0
             activation_session.resend_count_email = 0
             activation_session.resend_count_sms = 0
+            activation_session.portal_terms_required = True
 
             sms_code = None
             # AUTH-SMS-02 : pas de SMS à l'inscription si un e-mail est fourni.
@@ -5231,7 +5237,8 @@ class VerifyActivationEmail(Resource):
 
                 if locked.email_verified_at:
                     user = User.query.get(locked.user_id)
-                    _promote_portal_after_email(user, locked)
+                    if not getattr(locked, "portal_terms_required", False):
+                        _promote_portal_after_email(user, locked)
                     db.session.commit()
                     return {
                         "message": "Email déjà confirmé.",
@@ -5243,7 +5250,8 @@ class VerifyActivationEmail(Resource):
 
                 locked.email_verified_at = now
                 user = User.query.get(locked.user_id)
-                _promote_portal_after_email(user, locked)
+                if not getattr(locked, "portal_terms_required", False):
+                    _promote_portal_after_email(user, locked)
                 db.session.commit()
                 return {
                     "message": "Email confirmé.",
@@ -5335,7 +5343,8 @@ class VerifyActivationEmail(Resource):
                 )
             if activation_session.email_verified_at:
                 user = User.query.get(activation_session.user_id)
-                _promote_portal_after_email(user, activation_session)
+                if not getattr(activation_session, "portal_terms_required", False):
+                    _promote_portal_after_email(user, activation_session)
                 db.session.commit()
                 return {
                     "message": "Email déjà confirmé.",
@@ -5346,7 +5355,8 @@ class VerifyActivationEmail(Resource):
                 }, 200
             activation_session.email_verified_at = now
             user = User.query.get(activation_session.user_id)
-            _promote_portal_after_email(user, activation_session)
+            if not getattr(activation_session, "portal_terms_required", False):
+                _promote_portal_after_email(user, activation_session)
             db.session.commit()
             return {
                 "message": "Email confirmé.",
@@ -5495,13 +5505,24 @@ class FinalizeActivation(Resource):
     def post(self):
         """Active définitivement le compte après validation des canaux fournis."""
         try:
+            from services.auth.portal_phone_verification import is_portal_client
+            from services.legal.record_terms_acceptance import (
+                ClientSuppliedTermsError,
+                record_portal_terms_acceptance,
+                reject_client_supplied_terms,
+            )
+
             data = request.get_json() or {}
+            reject_client_supplied_terms(data)
             validated_data = validate_request(FinalizeActivationSchema(), data)
             session_id = cast("str", validated_data.get("activation_session_id"))
+            accept_terms = bool(validated_data.get("accept_current_portal_terms"))
 
-            activation_session = ActivationSession.query.filter_by(
-                activation_session_id=session_id
-            ).first()
+            activation_session = (
+                ActivationSession.query.filter_by(activation_session_id=session_id)
+                .with_for_update()
+                .first()
+            )
             if not activation_session:
                 return {"error": "Session d'activation introuvable."}, 404
 
@@ -5528,9 +5549,32 @@ class FinalizeActivation(Resource):
                     details=_build_activation_status(activation_session),
                 )
 
+            if (
+                getattr(activation_session, "portal_terms_required", False)
+                and not accept_terms
+            ):
+                return {
+                    "error": "terms_acceptance_required",
+                    "message": (
+                        "Acceptez les conditions générales d'utilisation et "
+                        "de transport pour activer le compte."
+                    ),
+                    "activation_status": _build_activation_status(activation_session),
+                }, 400
+
             user = User.query.get(activation_session.user_id)
             if not user:
                 return {"error": "Utilisateur introuvable."}, 404
+
+            if getattr(activation_session, "portal_terms_required", False):
+                portal_client = next(
+                    (row for row in user.clients if is_portal_client(row)),
+                    None,
+                )
+                if portal_client is None:
+                    db.session.rollback()
+                    return {"error": "Profil client privé introuvable."}, 404
+                record_portal_terms_acceptance(user, portal_client)
 
             user.account_status = "active"
             for client in user.clients:
@@ -5543,6 +5587,9 @@ class FinalizeActivation(Resource):
                 "user_id": user.public_id,
                 "activation_status": _build_activation_status(activation_session),
             }, 200
+        except ClientSuppliedTermsError as exc:
+            db.session.rollback()
+            return {"error": exc.code, "message": str(exc)}, 400
         except ValidationError as e:
             return handle_validation_error(e)
         except Exception as e:
@@ -5946,6 +5993,33 @@ class UpdateActivationPhone(Resource):
             db.session.rollback()
             sentry_sdk.capture_exception(e)
             return APIErrorHandler.handle_exception(e, logger)
+
+
+@auth_ns.route("/activation/portal-terms")
+class ActivationPortalTerms(Resource):
+    @limiter.limit("60 per hour")
+    def get(self):
+        """Textes canoniques à lire avant l'acceptation. N'enregistre rien."""
+        session_id = (request.args.get("activation_session_id") or "").strip()
+        if not session_id:
+            return {"error": "activation_session_id requis."}, 400
+        activation_session = ActivationSession.query.filter_by(
+            activation_session_id=session_id
+        ).first()
+        if not activation_session or not getattr(
+            activation_session, "portal_terms_required", False
+        ):
+            return {"error": "Session d'activation introuvable."}, 404
+        from services.legal.portal_activation_terms import (
+            serialize_current_portal_terms,
+        )
+        from services.legal.portal_terms_catalog import CatalogIntegrityError
+
+        try:
+            documents = serialize_current_portal_terms()
+        except CatalogIntegrityError as exc:
+            return APIErrorHandler.handle_exception(exc, logger)
+        return {"documents": documents}, 200
 
 
 @auth_ns.route("/activation/status")

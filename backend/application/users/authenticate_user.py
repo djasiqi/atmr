@@ -78,8 +78,14 @@ class AuthenticateUserUseCase:
         from ext import db
         from models.enums import UserRole
         from services.auth.portal_phone_verification import maybe_promote_portal_account
+        from services.legal.portal_activation_terms import (
+            portal_terms_block_lazy_promotion,
+        )
 
-        if maybe_promote_portal_account(user):
+        if (
+            not portal_terms_block_lazy_promotion(user)
+            and maybe_promote_portal_account(user)
+        ):
             db.session.commit()
 
         if getattr(user, "account_status", None) == "pending_activation":

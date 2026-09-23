@@ -121,6 +121,7 @@ class FinalizeActivationSchema(Schema):
     activation_session_id = fields.Str(
         required=True, validate=validate.Length(min=8, max=64)
     )
+    accept_current_portal_terms = fields.Boolean(load_default=False)
 
 
 class ResendActivationSchema(Schema):

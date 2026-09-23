@@ -145,8 +145,10 @@ class TestAuthActivationFlow:
             f"{verify_email_response.get_json()}"
         )
 
-        # 4) AUTH-SMS-02 : login autorisé dès l'e-mail, sans SMS
+        # 4) E-mail confirmé, téléphone non vérifié. Le compte n'est actif
+        # qu'après l'acceptation explicite des deux documents.
         from models import User
+        from models.client_terms_acceptance import ClientTermsAcceptance
 
         session = ActivationSession.query.filter_by(
             activation_session_id=activation_session_id
@@ -154,10 +156,57 @@ class TestAuthActivationFlow:
         assert session is not None
         assert session.email_verified_at is not None
         assert session.phone_verified_at is None
+        assert session.portal_terms_required is True
+        user = db.session.get(User, session.user_id)
+        assert user is not None
+        assert user.account_status == "pending_activation"
+        assert user.phone_verified_at is None
+
+        login_before_terms = e2e_client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": register_payload["email"],
+                "password": register_payload["password"],
+            },
+            headers={"Content-Type": "application/json"},
+        )
+        assert login_before_terms.status_code == 403
+
+        terms_response = e2e_client.get(
+            "/api/v1/auth/activation/portal-terms",
+            query_string={"activation_session_id": activation_session_id},
+        )
+        assert terms_response.status_code == 200, terms_response.get_json()
+        documents = (terms_response.get_json() or {}).get("documents") or []
+        finalize_response = e2e_client.post(
+            "/api/v1/auth/activation/finalize",
+            json={
+                "activation_session_id": activation_session_id,
+                "accept_current_portal_terms": True,
+            },
+            headers={"Content-Type": "application/json"},
+        )
+        assert finalize_response.status_code == 200, finalize_response.get_json()
+        db.session.expire_all()
         user = db.session.get(User, session.user_id)
         assert user is not None
         assert user.account_status == "active"
         assert user.phone_verified_at is None
+        rows = ClientTermsAcceptance.query.filter_by(user_id=user.id).all()
+        assert len(rows) == 2
+        assert {(doc["document_type"], doc["terms_hash"]) for doc in documents} == {
+            (row.document_type, row.terms_hash) for row in rows
+        }
+        replay = e2e_client.post(
+            "/api/v1/auth/activation/finalize",
+            json={
+                "activation_session_id": activation_session_id,
+                "accept_current_portal_terms": True,
+            },
+            headers={"Content-Type": "application/json"},
+        )
+        assert replay.status_code == 200
+        assert ClientTermsAcceptance.query.filter_by(user_id=user.id).count() == 2
 
         login_after_response = e2e_client.post(
             "/api/v1/auth/login",
@@ -373,18 +422,36 @@ class TestAuthActivationFlow:
         assert session is not None
         user = db.session.get(User, session.user_id)
         assert user is not None
-        assert user.account_status == "active"
+        assert user.account_status == "pending_activation"
         assert user.phone_verified_at is None
 
-        finalize_response = e2e_client.post(
+        refused = e2e_client.post(
             "/api/v1/auth/activation/finalize",
             json={"activation_session_id": activation_session_id},
             headers={"Content-Type": "application/json"},
         )
+        assert refused.status_code == 400
+        assert (refused.get_json() or {}).get("error") == "terms_acceptance_required"
+        db.session.expire_all()
+        user = db.session.get(User, session.user_id)
+        assert user is not None
+        assert user.account_status == "pending_activation"
+
+        finalize_response = e2e_client.post(
+            "/api/v1/auth/activation/finalize",
+            json={
+                "activation_session_id": activation_session_id,
+                "accept_current_portal_terms": True,
+            },
+            headers={"Content-Type": "application/json"},
+        )
         assert finalize_response.status_code == 200, (
-            f"finalize doit etre idempotent apres e-mail, recu {finalize_response.status_code}: "
+            f"finalize doit reussir apres acceptation, recu {finalize_response.status_code}: "
             f"{finalize_response.get_json()}"
         )
+        db.session.refresh(user)
+        assert user.account_status == "active"
+        assert user.phone_verified_at is None
         finalize_data = finalize_response.get_json() or {}
         status = finalize_data.get("activation_status") or {}
         assert status.get("email_verified") is True

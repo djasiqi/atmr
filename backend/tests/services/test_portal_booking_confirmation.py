@@ -63,10 +63,10 @@ def _booking(user: User, client: Client) -> Booking:
     return booking
 
 
-def test_activation_does_not_record_terms_acceptance() -> None:
+def test_email_verification_does_not_record_terms() -> None:
     from routes import auth
 
-    source = inspect.getsource(auth)
+    source = inspect.getsource(auth.VerifyActivationEmail)
     assert "record_portal_terms_acceptance" not in source
     assert "ClientTermsAcceptance" not in source
 

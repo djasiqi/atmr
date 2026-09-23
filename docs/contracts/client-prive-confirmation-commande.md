@@ -70,6 +70,8 @@ Les CGU et les CGV doivent être lisibles **avant** le clic d’acceptation. La 
 
 ✅ **Implémenté** : registre append-only `legal_document_version` et `client_terms_acceptance` (`backend/models/client_terms_acceptance.py`). CGU (`terms_of_service`) et CGV de transport (`transport_terms`) sont deux documents. Le corps figé est dans `backend/legal/canonical/fr/`, pas dans la page frontend. `POST/GET /api/v1/clients/me/terms-acceptances` insère et lit seulement. Les comptes existants ne sont pas backfillés. Le blocage `TERMS_REACCEPTANCE_REQUIRED` reste à l’étape 4. La page `frontend/src/pages/Legal/TermsOfService.jsx` n’est pas la source canonique.
 
+✅ **Implémenté** : une nouvelle inscription PORTAL (`activation_session.portal_terms_required`) suit `inscription → e-mail confirmé → lecture des deux textes canoniques → case explicite non précochée → finalisation`. `POST /api/v1/auth/activation/finalize` avec `accept_current_portal_terms: true` écrit les deux `ClientTermsAcceptance` et active le compte dans la même transaction. Le navigateur ne choisit ni version ni empreinte. `GET /api/v1/auth/activation/portal-terms` sert les mêmes corps que le catalogue. Sans téléphone vérifié, `verification_method = not_verified`. Un OTP ultérieur ne réécrit pas ces lignes. Les sessions antérieures (`portal_terms_required = false`) restent activables sans acceptation, et AUTH-SMS-02 n’exige toujours pas le SMS pour activer le compte.
+
 ## 2. Chaque réservation
 
 Récapitulatif visible avant le bouton :
