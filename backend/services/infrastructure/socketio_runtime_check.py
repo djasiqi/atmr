@@ -159,18 +159,21 @@ def log_socketio_runtime_diagnostics(
         app_logger.warning("[Socket.IO] %s", warning)
     if diag.message_queue_enabled and diag.redis_ping_ok:
         print(
-            f"✅ [Socket.IO] Message queue Redis active (workers={diag.gunicorn_workers}) "
-            "— coordination des émissions, pas la propriété des sid Engine.IO",
+            f"✅ [Socket.IO] Message queue Redis active "
+            f"(workers={diag.gunicorn_workers}) — coordination des émissions, "
+            "pas la propriété des sid Engine.IO",
             flush=True,
         )
     if diag.gunicorn_workers == 1:
         print(
-            "✅ [Socket.IO] Mode single-worker : long-polling Engine.IO dans le même process",
+            "✅ [Socket.IO] Mode single-worker : long-polling Engine.IO "
+            "dans le même process",
             flush=True,
         )
     elif not diag.engineio_polling_safe:
         print(
-            "⚠️ [Socket.IO] Long-polling Engine.IO non sûr : plusieurs workers sans affinité",
+            "⚠️ [Socket.IO] Long-polling Engine.IO non sûr : plusieurs "
+            "workers sans affinité",
             flush=True,
         )
     return diag

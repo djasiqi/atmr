@@ -124,9 +124,7 @@ def _receivable(
         issued_at=issued,
         due_date=due,
         lines=[
-            ReceivableLineInput(
-                booking_id=booking.id, invoiced_amount=Decimal(amount)
-            )
+            ReceivableLineInput(booking_id=booking.id, invoiced_amount=Decimal(amount))
         ],
     )
 
@@ -322,9 +320,7 @@ def test_payment_auto_clears_without_manual_lift(db) -> None:
         issued=datetime(2026, 9, 1, tzinfo=UTC),
         due=datetime(2026, 10, 1, tzinfo=UTC),
     )
-    assert (
-        resolve_portal_payment_hold(user.id, company.id, as_of_date=as_of).is_hold
-    )
+    assert resolve_portal_payment_hold(user.id, company.id, as_of_date=as_of).is_hold
     add_portal_receivable_payment(
         receivable=recv,
         amount=Decimal("60.00"),

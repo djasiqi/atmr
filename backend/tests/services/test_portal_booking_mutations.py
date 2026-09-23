@@ -142,11 +142,7 @@ def test_modification_keeps_original_terms_after_a_later_acceptance(db) -> None:
     db.session.flush()
     created = record_portal_booking_created_event(booking=booking, user_id=user.id)
     assert created.transport_terms_acceptance_id is not None
-    body = (
-        "LIRIE — CGV transport\n"
-        "terms_version: 2.0\n"
-        "Version substantielle de test.\n"
-    )
+    body = "LIRIE — CGV transport\nterms_version: 2.0\nVersion substantielle de test.\n"
     record_portal_terms_acceptance(
         user,
         client,
@@ -178,7 +174,9 @@ def test_modification_keeps_original_terms_after_a_later_acceptance(db) -> None:
         },
     )
     assert modified is not None
-    assert modified.transport_terms_acceptance_id == created.transport_terms_acceptance_id
+    assert (
+        modified.transport_terms_acceptance_id == created.transport_terms_acceptance_id
+    )
     assert (
         db.session.get(
             ClientTermsAcceptance, modified.transport_terms_acceptance_id
@@ -390,9 +388,9 @@ def test_sequence_lock_is_in_front_of_allocation() -> None:
     ).read_text(encoding="utf-8")
     lock = source.split("def _lock_booking_sequence", 1)[1]
     assert lock.index("with_for_update") < lock.index("func.max")
-    route = (
-        Path(__file__).resolve().parents[2] / "routes" / "bookings.py"
-    ).read_text(encoding="utf-8")
+    route = (Path(__file__).resolve().parents[2] / "routes" / "bookings.py").read_text(
+        encoding="utf-8"
+    )
     put = route.split("def put(", 1)[1].split("def delete(", 1)[0]
     delete = route.split("def delete(", 1)[1]
     assert put.index("record_portal_booking_modified_event") < put.index(

@@ -15,7 +15,6 @@ from typing import Any
 
 import pytest
 
-from application.bookings.create_booking import CreateBookingUseCase
 from domain.bookings.commands import CreateBookingCommand
 from models.enums import BookingStatus, ClientType
 from services.auth.portal_phone_verification import (
@@ -25,6 +24,7 @@ from services.booking.portal_platform_payment import (
     PortalPlatformPaymentForbidden,
 )
 from services.saferpay.payment_page import create_saferpay_payment_page_initialize
+from tests.helpers.create_booking_use_case import CreateBookingUseCase
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
@@ -67,7 +67,9 @@ class _Geocoding:
 
 def _allow_verified_portal(**kwargs: Any) -> None:
     """Garde-fou réel, avec un utilisateur dont le téléphone est déjà vérifié."""
-    verified = SimpleNamespace(id=kwargs["user_id"], phone_verified_at=datetime.now(UTC))
+    verified = SimpleNamespace(
+        id=kwargs["user_id"], phone_verified_at=datetime.now(UTC)
+    )
     real_assert_portal_can_confirm(
         user_id=kwargs["user_id"],
         client=kwargs["client"],

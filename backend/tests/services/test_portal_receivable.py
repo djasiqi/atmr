@@ -204,7 +204,9 @@ def test_partial_then_full_payment(db) -> None:
         issued_at=datetime(2026, 9, 1, tzinfo=UTC),
         due_date=datetime(2026, 10, 1, tzinfo=UTC),
         lines=[
-            ReceivableLineInput(booking_id=booking.id, invoiced_amount=Decimal("500.00"))
+            ReceivableLineInput(
+                booking_id=booking.id, invoiced_amount=Decimal("500.00")
+            )
         ],
     )
     add_portal_receivable_payment(
@@ -247,14 +249,18 @@ def test_dispute_and_cancel_keep_history(db) -> None:
         receivable=receivable, reason="Montant contesté", actor_user_id=owner.id
     )
     assert receivable.status == RECEIVABLE_DISPUTED
-    assert PortalReceivableLine.query.filter_by(receivable_id=receivable_id).count() == 1
+    assert (
+        PortalReceivableLine.query.filter_by(receivable_id=receivable_id).count() == 1
+    )
 
     cancel_portal_receivable(
         receivable=receivable, reason="Émise par erreur", actor_user_id=owner.id
     )
     assert receivable.status == RECEIVABLE_CANCELLED
     assert db.session.get(PortalReceivable, receivable_id) is not None
-    assert PortalReceivableLine.query.filter_by(receivable_id=receivable_id).count() == 1
+    assert (
+        PortalReceivableLine.query.filter_by(receivable_id=receivable_id).count() == 1
+    )
 
 
 def test_multi_carrier_receivables_stay_separate(db) -> None:

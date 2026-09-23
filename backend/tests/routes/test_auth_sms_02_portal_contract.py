@@ -320,9 +320,7 @@ def test_verified_account_books_twice_without_sms(client, app, db, monkeypatch):
         return {"ok": True}
 
     monkeypatch.setattr(auth, "_send_activation_sms", _forbid_sms)
-    monkeypatch.setattr(
-        "services.notifications.sms.send_sms_notification", _forbid_sms
-    )
+    monkeypatch.setattr("services.notifications.sms.send_sms_notification", _forbid_sms)
     created: list[int] = []
 
     def _create(**_kwargs):

@@ -54,6 +54,9 @@ CANONICAL_IMPORT_ALLOWLIST_PROD = frozenset(
 TEST_CANONICAL_IMPORT_ALLOWLIST = frozenset(
     {
         "backend/tests/services/test_booking_create_use_case.py",
+        # Seam unique pour les tests métier qui instancient le UC avec des doubles
+        # (ne pas élargir aux suites portal / routes directement).
+        "backend/tests/helpers/create_booking_use_case.py",
     }
 )
 

@@ -44,6 +44,16 @@ Toute nouvelle création **client** doit passer par `application.bookings.create
 
 Garde-fou CI : `scripts/architecture/check_booking_create_authority.py` — exécuté **systématiquement** (workflow `architecture-review.yml`, sans path-filter).
 
+### Seam de test (imports `CreateBookingUseCase`)
+
+- Caractérisation / identité : `backend/tests/services/test_booking_create_use_case.py` (allowlist directe).
+- Autres tests métier qui doivent **instancier** le UC avec des doubles : importer uniquement via
+  `backend/tests/helpers/create_booking_use_case.py` (seul autre fichier allowlisté pour l’import canonique).
+- ❌ Pas d’import direct `application.bookings.create_booking.CreateBookingUseCase` hors de ces deux chemins.
+- ❌ Pas d’élargissement `backend/tests/**` ni d’import dynamique pour contourner le checker.
+
+✅ **Implémenté** : seam `tests.helpers.create_booking_use_case` ; migration des tests portal amount-trust / terms-reacceptance vers ce seam.
+
 ## 2. Façade legacy
 
 [`backend/bookings/application/use_cases/create_booking.py`](../../backend/bookings/application/use_cases/create_booking.py) est un **alias d’identité** du canonique (réexport uniquement).

@@ -77,9 +77,7 @@ def test_new_portal_acceptance_creates_two_rows_matching_catalog(client, db):
     assert {(doc["document_type"], doc["terms_hash"]) for doc in documents} == {
         (row.document_type, row.terms_hash) for row in rows
     }
-    catalog = {
-        (spec.document_type, spec.terms_hash) for spec in current_portal_terms()
-    }
+    catalog = {(spec.document_type, spec.terms_hash) for spec in current_portal_terms()}
     assert {(row.document_type, row.terms_hash) for row in rows} == catalog
     db.session.refresh(user)
     assert user.account_status == "active"
@@ -114,7 +112,9 @@ def test_second_insert_failure_rolls_back_finalization(client, db, monkeypatch):
     _mark_phone_verified(db, user, session)
 
     def fail_second(portal_user, portal_client, documents=None):
-        specs = list(documents) if documents is not None else list(current_portal_terms())
+        specs = (
+            list(documents) if documents is not None else list(current_portal_terms())
+        )
         record_portal_terms_acceptance(portal_user, portal_client, documents=specs[:1])
         raise RuntimeError("insertion transport_terms interrompue")
 

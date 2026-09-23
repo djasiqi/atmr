@@ -11,7 +11,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from application.bookings.cancel_booking import CancelBookingInput, CancelBookingUseCase
-from application.bookings.create_booking import CreateBookingUseCase
 from domain.bookings.commands import CreateBookingCommand
 from models.booking import Booking
 from models.client_booking_contract_event import ClientBookingContractEvent
@@ -42,6 +41,7 @@ from services.legal.record_booking_contract_event import (
     record_portal_booking_created_event,
 )
 from services.legal.record_terms_acceptance import record_portal_terms_acceptance
+from tests.helpers.create_booking_use_case import CreateBookingUseCase
 from tests.routes.test_auth_sms_02_portal_contract import (
     _headers,
     _make_portal_user,
@@ -71,7 +71,9 @@ def _booking(user, client) -> Booking:
     return booking
 
 
-def _spec(document_type: str, version: str, body: str, *, required: bool) -> PublishedTerms:
+def _spec(
+    document_type: str, version: str, body: str, *, required: bool
+) -> PublishedTerms:
     return PublishedTerms(
         document_type=document_type,
         terms_version=version,
@@ -249,12 +251,16 @@ def test_substantial_transport_version_then_reacceptance_relinks_new_booking(
     user.phone_verified_at = None
     rows = record_portal_terms_acceptance(user, portal)
     cgu_v1 = next(row for row in rows if row.document_type == DOCUMENT_TERMS_OF_SERVICE)
-    transport_v1 = next(row for row in rows if row.document_type == DOCUMENT_TRANSPORT_TERMS)
+    transport_v1 = next(
+        row for row in rows if row.document_type == DOCUMENT_TRANSPORT_TERMS
+    )
     assert transport_v1.verification_method == VERIFICATION_NOT_VERIFIED
     old_booking = _booking(user, portal)
     db.session.add(old_booking)
     db.session.flush()
-    old_event = record_portal_booking_created_event(booking=old_booking, user_id=user.id)
+    old_event = record_portal_booking_created_event(
+        booking=old_booking, user_id=user.id
+    )
     db.session.commit()
     old_event_id = old_event.id
     old_transport_acceptance_id = old_event.transport_terms_acceptance_id
@@ -311,7 +317,9 @@ def test_substantial_transport_version_then_reacceptance_relinks_new_booking(
     new_booking.customer_name = "Jeanne Martin retour"
     db.session.add(new_booking)
     db.session.flush()
-    new_event = record_portal_booking_created_event(booking=new_booking, user_id=user.id)
+    new_event = record_portal_booking_created_event(
+        booking=new_booking, user_id=user.id
+    )
     kept = db.session.get(ClientBookingContractEvent, old_event_id)
     assert kept is not None
     assert kept.transport_terms_acceptance_id == old_transport_acceptance_id
@@ -321,9 +329,7 @@ def test_substantial_transport_version_then_reacceptance_relinks_new_booking(
     assert new_event.amount_is_contractual is False
 
 
-def test_non_substantial_version_keeps_prior_acceptance(
-    db, monkeypatch
-) -> None:
+def test_non_substantial_version_keeps_prior_acceptance(db, monkeypatch) -> None:
     user, portal = _make_portal_user(db)
     _names(user)
     rows = record_portal_terms_acceptance(user, portal)
@@ -339,7 +345,9 @@ def test_non_substantial_version_keeps_prior_acceptance(
     resolved = resolve_portal_terms_status(user)
     assert resolved.status == STATUS_CURRENT
     cgu_status = next(
-        doc for doc in resolved.documents if doc.document_type == DOCUMENT_TERMS_OF_SERVICE
+        doc
+        for doc in resolved.documents
+        if doc.document_type == DOCUMENT_TERMS_OF_SERVICE
     )
     assert cgu_status.acceptance_required is False
     assert cgu_status.requires_reacceptance is False
@@ -354,9 +362,7 @@ def test_non_substantial_version_keeps_prior_acceptance(
     db.session.flush()
     event = record_portal_booking_created_event(booking=booking, user_id=user.id)
     assert event.terms_of_service_acceptance_id == cgu_v1.id
-    linked = db.session.get(
-        ClientTermsAcceptance, event.terms_of_service_acceptance_id
-    )
+    linked = db.session.get(ClientTermsAcceptance, event.terms_of_service_acceptance_id)
     assert linked is not None
     assert linked.terms_version == "1.0"
 
@@ -406,13 +412,13 @@ def test_use_case_blocks_before_writer(db) -> None:
 
 
 def test_gate_order_and_existing_booking_flows_are_unchanged() -> None:
-    create_source = (BACKEND_ROOT / "application" / "bookings" / "create_booking.py").read_text(
-        encoding="utf-8"
-    )
+    create_source = (
+        BACKEND_ROOT / "application" / "bookings" / "create_booking.py"
+    ).read_text(encoding="utf-8")
     route_source = (BACKEND_ROOT / "routes" / "bookings.py").read_text(encoding="utf-8")
-    execute_uc = create_source.split(
-        "def execute(self, cmd: CreateBookingCommand)", 1
-    )[1]
+    execute_uc = create_source.split("def execute(self, cmd: CreateBookingCommand)", 1)[
+        1
+    ]
     assert execute_uc.index("assert_portal_terms_current") < execute_uc.index(
         "assert_portal_phone_verified"
     )

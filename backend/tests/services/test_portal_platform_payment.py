@@ -31,7 +31,9 @@ def test_portal_patient_billing_does_not_hold_for_platform_payment() -> None:
     assert should_hold_client_booking_for_platform_payment(portal, "patient") is False
     assert should_hold_client_booking_for_platform_payment(portal, None) is False
     assert should_hold_client_booking_for_platform_payment(transport, "patient") is True
-    assert should_hold_client_booking_for_platform_payment(transport, "insurance") is False
+    assert (
+        should_hold_client_booking_for_platform_payment(transport, "insurance") is False
+    )
 
 
 def test_transport_checkout_still_enters_saferpay_service(
@@ -70,7 +72,9 @@ def test_unverified_portal_phone_still_blocks_confirmation() -> None:
 
 
 def test_guest_saferpay_path_is_unchanged() -> None:
-    guest = (BACKEND_ROOT / "services" / "guest_saferpay.py").read_text(encoding="utf-8")
+    guest = (BACKEND_ROOT / "services" / "guest_saferpay.py").read_text(
+        encoding="utf-8"
+    )
     auth = (BACKEND_ROOT / "routes" / "auth.py").read_text(encoding="utf-8")
     assert "portal_platform_payment" not in guest
     assert "initialize_guest_saferpay" in guest

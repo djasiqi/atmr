@@ -60,7 +60,9 @@ def test_six_workers_redis_ok_queue_on_without_affinity_is_not_polling_safe(
     assert diag.engineio_polling_safe is False
     assert diag.multi_worker_safe is False
     assert any("ne partage pas ces sid" in w for w in diag.warnings)
-    assert not any("émissions Socket.IO ne sont pas coordonnées" in w for w in diag.warnings)
+    assert not any(
+        "émissions Socket.IO ne sont pas coordonnées" in w for w in diag.warnings
+    )
 
 
 def test_multi_worker_with_explicit_affinity_is_polling_safe(
