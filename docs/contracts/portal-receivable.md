@@ -26,6 +26,10 @@ course terminée (COMPLETED / RETURN_COMPLETED)
 
 Aucun `PAYMENT_HOLD` n’est branché sur cette ressource.
 
+Politique de hold (étape 6C, audit seul) :
+[`docs/contracts/portal-payment-hold-policy.md`](portal-payment-hold-policy.md)
+— scope `creditor_company`, hold dérivé, pas encore de gate.
+
 ## ✅ Implémenté (étape 6B)
 
 - Modèles `PortalReceivable` / `Line` / `Payment` :
