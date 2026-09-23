@@ -80,8 +80,8 @@ import {
 } from "../../../../src/core/public/preRequestDraft";
 import { FONT_SIZE } from "../../../../src/design/responsive/typographyTokens";
 
-/** Aligné `BookingCreateSchema.hospital_service` (colonne SQL 100). */
-const MAX_HOSPITAL_SERVICE_LEN = 100;
+/** Aligné `BookingCreateSchema.hospital_service` (colonne SQL 255). */
+const MAX_HOSPITAL_SERVICE_LEN = 255;
 const PREVIEW_FRESHNESS_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_CANONICAL_MATRIX: Record<
   CanonicalAddressPrecisionLevel,

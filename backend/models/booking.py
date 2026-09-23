@@ -209,7 +209,7 @@ class Booking(db.Model):
 
     medical_facility = Column(String(200))
     doctor_name = Column(String(200))
-    hospital_service = Column(String(100))
+    hospital_service = Column(String(255))
     notes_medical = Column(Text)
     pickup_access_notes = Column(Text, nullable=True)
     dropoff_access_notes = Column(Text, nullable=True)

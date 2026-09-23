@@ -46,7 +46,7 @@ class BookingCreateSchema(Schema):
     # Champs optionnels
     medical_facility = fields.Str(load_default="", validate=validate.Length(max=200))
     doctor_name = fields.Str(load_default="", validate=validate.Length(max=200))
-    hospital_service = fields.Str(load_default="", validate=validate.Length(max=100))
+    hospital_service = fields.Str(load_default="", validate=validate.Length(max=255))
     is_round_trip = fields.Bool(load_default=False)
     return_time = fields.Str(
         load_default=None,
@@ -261,7 +261,7 @@ class BookingUpdateSchema(Schema):
     # Champs médicaux optionnels
     medical_facility = fields.Str(validate=validate.Length(max=200))
     doctor_name = fields.Str(validate=validate.Length(max=200))
-    hospital_service = fields.Str(validate=validate.Length(max=100))
+    hospital_service = fields.Str(validate=validate.Length(max=255))
     is_round_trip = fields.Bool()
     return_time = fields.Str(
         validate=validate.Regexp(
