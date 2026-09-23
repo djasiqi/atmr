@@ -66,9 +66,14 @@ def _complete_activation_for_e2e(e2e_client, db, activation_session_id: str) -> 
         f"{verify_sms_response.get_json()}"
     )
 
+    # Contrat PORTAL : finalize exige accept_current_portal_terms
+    # (aligné sur tests/e2e/test_auth_activation_e2e.py).
     finalize_response = e2e_client.post(
         "/api/v1/auth/activation/finalize",
-        json={"activation_session_id": activation_session_id},
+        json={
+            "activation_session_id": activation_session_id,
+            "accept_current_portal_terms": True,
+        },
         headers={"Content-Type": "application/json"},
     )
     assert finalize_response.status_code == 200, (

@@ -296,9 +296,10 @@ def test_substantial_transport_version_then_reacceptance_relinks_new_booking(
     assert replay.status_code == 200
     stored = ClientTermsAcceptance.query.filter_by(user_id=user.id).all()
     assert len(stored) == 3
-    transport_rows = [
-        row for row in stored if row.document_type == DOCUMENT_TRANSPORT_TERMS
-    ]
+    transport_rows = sorted(
+        [row for row in stored if row.document_type == DOCUMENT_TRANSPORT_TERMS],
+        key=lambda row: int(row.id),
+    )
     assert [row.terms_version for row in transport_rows] == ["1.0", "2.0"]
     fresh_v1 = db.session.get(ClientTermsAcceptance, transport_v1.id)
     assert fresh_v1 is not None
