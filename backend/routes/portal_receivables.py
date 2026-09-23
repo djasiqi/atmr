@@ -13,6 +13,7 @@ from flask_restx import Namespace, Resource
 from ext import db, role_required
 from models.enums import UserRole
 from models.portal_receivable import PortalReceivable
+from models.portal_receivable_dunning import PortalReceivableDunningEvent
 from models.user import User
 from routes.api_error_utils import auth_error
 from routes.companies import _get_current_company_via_use_case
@@ -26,6 +27,20 @@ from services.billing.portal_receivable import (
     dispute_portal_receivable,
     reject_portal_receivable_dispute,
     serialize_portal_receivable,
+)
+from services.billing.portal_receivable_dunning import (
+    CHANNEL_EMAIL,
+    CHANNEL_LETTER_DRAFT,
+    DUNNING_COLLECTION_PREPARED,
+    DUNNING_FORMAL_NOTICE,
+    DUNNING_REMINDER_1,
+    DUNNING_REMINDER_2,
+    emit_portal_dunning_event,
+    get_or_create_dunning_policy,
+    resolve_dunning_eligibility,
+    serialize_dunning_event,
+    serialize_dunning_policy,
+    update_dunning_policy,
 )
 
 logger = logging.getLogger(__name__)
@@ -314,3 +329,152 @@ class PortalReceivableCancel(Resource):
         except PortalReceivableError as exc:
             db.session.rollback()
             return {"error": exc.code, "message": exc.message}, 400
+
+
+@portal_receivables_ns.route("/dunning-policy")
+class PortalReceivableDunningPolicyResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        policy = get_or_create_dunning_policy(int(company.id))
+        db.session.commit()
+        return {"data": serialize_dunning_policy(policy)}, 200
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def put(self):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        data = request.get_json(silent=True) or {}
+        try:
+            policy = update_dunning_policy(
+                company_id=int(company.id),
+                first_reminder_days=(
+                    int(data["first_reminder_days"])
+                    if "first_reminder_days" in data
+                    else None
+                ),
+                second_reminder_days=(
+                    int(data["second_reminder_days"])
+                    if "second_reminder_days" in data
+                    else None
+                ),
+                formal_notice_days=(
+                    int(data["formal_notice_days"])
+                    if "formal_notice_days" in data
+                    else None
+                ),
+                enabled=data.get("enabled") if "enabled" in data else None,
+            )
+            db.session.commit()
+            return {"data": serialize_dunning_policy(policy)}, 200
+        except (PortalReceivableError, TypeError, ValueError) as exc:
+            db.session.rollback()
+            if isinstance(exc, PortalReceivableError):
+                return {"error": exc.code, "message": exc.message}, 400
+            return {"error": "dunning_policy_invalid", "message": str(exc)}, 400
+
+
+@portal_receivables_ns.route("/<int:receivable_id>/dunning")
+class PortalReceivableDunningStatus(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, receivable_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        try:
+            receivable = _owned_receivable(int(company.id), receivable_id)
+            elig = resolve_dunning_eligibility(receivable)
+            events = (
+                PortalReceivableDunningEvent.query.filter_by(
+                    receivable_id=int(receivable.id)
+                )
+                .order_by(PortalReceivableDunningEvent.id.asc())
+                .all()
+            )
+            return {
+                "data": {
+                    "eligibility": {
+                        "eligible": elig.eligible,
+                        "reason": elig.reason,
+                        "days_past_due": elig.days_past_due,
+                        "next_event_type": elig.next_event_type,
+                    },
+                    "events": [serialize_dunning_event(e) for e in events],
+                }
+            }, 200
+        except PortalReceivableError as exc:
+            return {"error": exc.code, "message": exc.message}, 404
+
+
+def _emit_dunning(receivable_id: int, event_type: str):
+    company, error, status = _get_current_company_via_use_case()
+    if error or company is None:
+        return error or {"error": "Entreprise non trouvée"}, status or 404
+    user = _current_user()
+    if user is None:
+        return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+    data = request.get_json(silent=True) or {}
+    channel = str(data.get("channel") or CHANNEL_EMAIL).strip().lower()
+    if (
+        channel not in (CHANNEL_EMAIL, CHANNEL_LETTER_DRAFT)
+        and event_type != DUNNING_COLLECTION_PREPARED
+    ):
+        return {
+            "error": "dunning_channel_invalid",
+            "message": "Canal invalide.",
+        }, 400
+    try:
+        receivable = _owned_receivable(int(company.id), receivable_id)
+        event = emit_portal_dunning_event(
+            receivable=receivable,
+            event_type=event_type,
+            initiated_by_user_id=int(user.id),
+            channel=(
+                CHANNEL_EMAIL
+                if event_type == DUNNING_COLLECTION_PREPARED
+                else channel
+            ),
+        )
+        db.session.commit()
+        return {"data": serialize_dunning_event(event)}, 201
+    except PortalReceivableError as exc:
+        db.session.rollback()
+        return {"error": exc.code, "message": exc.message}, 400
+
+
+@portal_receivables_ns.route("/<int:receivable_id>/dunning/reminder-1")
+class PortalReceivableDunningReminder1(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int):
+        return _emit_dunning(receivable_id, DUNNING_REMINDER_1)
+
+
+@portal_receivables_ns.route("/<int:receivable_id>/dunning/reminder-2")
+class PortalReceivableDunningReminder2(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int):
+        return _emit_dunning(receivable_id, DUNNING_REMINDER_2)
+
+
+@portal_receivables_ns.route("/<int:receivable_id>/dunning/formal-notice")
+class PortalReceivableDunningFormalNotice(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int):
+        return _emit_dunning(receivable_id, DUNNING_FORMAL_NOTICE)
+
+
+@portal_receivables_ns.route("/<int:receivable_id>/dunning/prepare-collection")
+class PortalReceivableDunningPrepareCollection(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int):
+        return _emit_dunning(receivable_id, DUNNING_COLLECTION_PREPARED)
