@@ -9,7 +9,6 @@ import time
 from contextlib import suppress
 from typing import Any
 
-import jwt
 import redis.asyncio as redis
 import socketio
 from fastapi import FastAPI
@@ -954,14 +953,15 @@ async def _decode_token(token: str) -> dict[str, Any] | None:
         logger.error("JWT_SECRET_KEY is missing")
         return None
 
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-    except jwt.PyJWTError:
-        return None
+    from jwt_auth import decode_socket_access_token
 
-    if not isinstance(payload, dict):
-        return None
-    return payload
+    # Audiences : atmr-api | atmr-mobile-enterprise (natif PyJWT).
+    # type=access obligatoire (rejette les refresh Flask-JWT-Extended).
+    return decode_socket_access_token(
+        token,
+        secret=JWT_SECRET_KEY,
+        algorithm=JWT_ALGORITHM,
+    )
 
 
 async def _get_auth_payload(token: str) -> dict[str, Any] | None:

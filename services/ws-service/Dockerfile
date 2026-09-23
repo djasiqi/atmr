@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY main.py /app/main.py
 COPY auth_claims.py /app/auth_claims.py
+COPY jwt_auth.py /app/jwt_auth.py
 COPY dedup.py /app/dedup.py
 COPY delivery_metrics.py /app/delivery_metrics.py
 COPY kafka_lag_metrics.py /app/kafka_lag_metrics.py

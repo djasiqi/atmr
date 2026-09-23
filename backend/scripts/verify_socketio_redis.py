@@ -28,10 +28,11 @@ def main() -> int:
     print(f"Redis PING:            {diag.redis_ping_ok}")
     if diag.redis_ping_error:
         print(f"Redis PING error:      {diag.redis_ping_error}")
-    print(f"multi_worker_safe:     {diag.multi_worker_safe}")
+    print(f"worker_affinity:       {diag.worker_affinity_guaranteed}")
+    print(f"engineio_polling_safe: {diag.engineio_polling_safe}")
     for warning in diag.warnings:
         print(f"WARNING: {warning}")
-    return 0 if diag.multi_worker_safe else 1
+    return 0 if diag.engineio_polling_safe else 1
 
 
 if __name__ == "__main__":
