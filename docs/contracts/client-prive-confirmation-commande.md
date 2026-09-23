@@ -105,7 +105,9 @@ cgv_hash
 
 Aucune nouvelle réservation si le compte n’a pas d’acceptation valide pour la version substantielle en vigueur (`TERMS_REACCEPTANCE_REQUIRED`).
 
-✅ **Implémenté** : événement append-only `client_booking_contract_event` à la création PORTAL, dans la même transaction que le booking (`BOOKING_CREATED` seulement). Le montant figé est `estimated_amount_snapshot` avec `amount_is_contractual = false`. Sans acceptation, les clés vers `ClientTermsAcceptance` restent vides. Le débiteur reste `PARTIAL` (`billed_to_type = patient` n’identifie pas une personne). Le bouton et `TERMS_REACCEPTANCE_REQUIRED` ne sont pas faits ici.
+✅ **Implémenté** : événement append-only `client_booking_contract_event` à la création PORTAL, dans la même transaction que le booking (`BOOKING_CREATED` seulement). Le montant figé est `estimated_amount_snapshot` avec `amount_is_contractual = false`. Sans acceptation, les clés vers `ClientTermsAcceptance` restent vides. Le bouton et `TERMS_REACCEPTANCE_REQUIRED` ne sont pas faits ici.
+
+✅ **Implémenté** : pour un nouveau `BOOKING_CREATED` PORTAL, le débiteur nominal est le titulaire authentifié (`debtor_type_snapshot = account_holder`, `debtor_user_id`, nom, e-mail et téléphone du `User`, et `Client.billing_address` seulement si cette colonne est renseignée). `billed_to_type = patient` reste une catégorie legacy et n’est pas cette identité. Le domicile, `contact_email` et le nom saisi dans la demande ne sont pas recopiés comme débiteur. Les événements déjà `partial` ne sont pas réécrits. Le navigateur ne peut pas soumettre `debtor_*`.
 
 ## 3. E-mail : confirmation, pas acceptation
 

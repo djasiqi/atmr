@@ -33,6 +33,8 @@ ACTOR_CLIENT = "client"
 CARRIER_NOT_ASSIGNED = "not_assigned"
 CARRIER_ASSIGNED = "assigned"
 DEBTOR_PARTIAL = "partial"
+DEBTOR_RESOLVED = "resolved"
+DEBTOR_ACCOUNT_HOLDER = "account_holder"
 PRICING_ESTIMATED = "estimated"
 
 
@@ -70,6 +72,20 @@ class ClientBookingContractEvent(db.Model):
             name="ck_client_booking_contract_event_debtor",
         ),
         CheckConstraint(
+            "("
+            "debtor_resolution = 'partial' "
+            "AND debtor_type_snapshot IS NULL "
+            "AND debtor_user_id IS NULL"
+            ") OR ("
+            "debtor_resolution = 'resolved' "
+            "AND debtor_type_snapshot = 'account_holder' "
+            "AND debtor_user_id IS NOT NULL "
+            "AND debtor_name_snapshot IS NOT NULL "
+            "AND btrim(debtor_name_snapshot) <> ''"
+            ")",
+            name="ck_client_booking_contract_event_debtor_identity",
+        ),
+        CheckConstraint(
             "pricing_status = 'estimated'",
             name="ck_client_booking_contract_event_pricing",
         ),
@@ -104,6 +120,22 @@ class ClientBookingContractEvent(db.Model):
     )
     billed_to_type_snapshot: Mapped[str] = mapped_column(String(50), nullable=False)
     debtor_resolution: Mapped[str] = mapped_column(String(16), nullable=False)
+    debtor_type_snapshot: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    debtor_user_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("user.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    debtor_name_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    debtor_email_snapshot: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    debtor_phone_snapshot: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    debtor_billing_address_snapshot: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
     carrier_status: Mapped[str] = mapped_column(String(16), nullable=False)
     company_id_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pickup_snapshot: Mapped[str] = mapped_column(String(500), nullable=False)

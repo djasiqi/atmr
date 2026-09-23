@@ -595,6 +595,18 @@ def _validate_booking_request(
     # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
     from marshmallow import ValidationError
 
+    from services.legal.record_booking_contract_event import (
+        ClientSuppliedDebtorError,
+        reject_client_supplied_debtor,
+    )
+
+    try:
+        reject_client_supplied_debtor(data)
+    except ClientSuppliedDebtorError as exc:
+        return None, None, handle_validation_error(
+            ValidationError({"debtor": [str(exc)]})
+        )
+
     try:
         validated = validate_request(BookingCreateSchema(), data)
     except ValidationError as e:
