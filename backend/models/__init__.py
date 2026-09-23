@@ -51,6 +51,9 @@ from .portal_receivable_collection_action import (
     PortalReceivableCollectionTransmission,
 )
 from .portal_collection_legal_review import PortalCollectionLegalReview
+from .portal_collection_transmission_evidence import (
+    PortalCollectionTransmissionEvidence,
+)
 from .client_terms_acceptance import ClientTermsAcceptance, LegalDocumentVersion
 from .clinic_billing_party_mapping import ClinicBillingPartyMapping
 from .company import Company

@@ -898,6 +898,11 @@ def cancel_collection_transmission(
     transmission: PortalReceivableCollectionTransmission,
     requested_by_user_id: int,
 ) -> PortalReceivableCollectionTransmission:
+    from services.billing.portal_collection_transmission_lifecycle import (
+        assert_cancel_allowed,
+    )
+
+    assert_cancel_allowed(transmission)
     if transmission.status == STATUS_CANCELLED:
         return transmission
     transmission.status = STATUS_CANCELLED
@@ -918,12 +923,19 @@ def cancel_collection_transmission(
 def serialize_transmission(
     row: PortalReceivableCollectionTransmission,
 ) -> dict[str, Any]:
+    from services.billing.portal_collection_transmission_lifecycle import (
+        resolve_collection_transmission_status,
+        serialize_lifecycle_status,
+    )
+
+    lifecycle = resolve_collection_transmission_status(int(row.id))
     return {
         "id": row.id,
         "receivable_id": row.receivable_id,
         "creditor_company_id": row.creditor_company_id,
         "transmission_type": row.transmission_type,
         "status": row.status,
+        "lifecycle_status": serialize_lifecycle_status(lifecycle),
         "collection_prepared_event_id": row.collection_prepared_event_id,
         "balance_snapshot": float(row.balance_snapshot),
         "claim_principal_snapshot": float(row.claim_principal_snapshot),
@@ -931,12 +943,21 @@ def serialize_transmission(
         "invoice_reference_snapshot": row.invoice_reference_snapshot,
         "claim_reason_snapshot": row.claim_reason_snapshot,
         "export_hash": row.export_hash,
+        "export_version": row.export_version,
+        "export_prepared_at": (
+            row.export_prepared_at.isoformat() if row.export_prepared_at else None
+        ),
         "pursuit_jurisdiction": row.pursuit_jurisdiction,
+        "recipient_label": row.recipient_label,
+        "recipient_contact": row.recipient_contact,
+        "recipient_summary_confirmed": bool(row.recipient_summary_confirmed),
         "creditor_confirmed": bool(row.creditor_confirmed),
         "requested_at": row.requested_at.isoformat() if row.requested_at else None,
         "requested_by_user_id": row.requested_by_user_id,
         "disclaimer": (
-            "Draft de travail uniquement — aucune transmission externe effectuée."
+            "Ne jamais afficher « Poursuite déposée avec succès » sans preuve "
+            "réelle. Libellés autorisés : Dossier préparé / Transmission "
+            "enregistrée / Réception confirmée."
         ),
     }
 

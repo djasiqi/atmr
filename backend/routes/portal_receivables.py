@@ -30,6 +30,16 @@ from services.billing.portal_collection_legal_review import (
     serialize_legal_review,
     serialize_transmission_eligibility,
 )
+from services.billing.portal_collection_transmission_lifecycle import (
+    build_recipient_summary,
+    confirm_recipient_and_jurisdiction,
+    prepare_export_artifact,
+    record_acknowledgment,
+    record_external_transmission,
+    resolve_collection_transmission_status,
+    serialize_evidence,
+    serialize_lifecycle_status,
+)
 from services.billing.portal_pursuit_form_mapping import pursuit_form_mapping_report
 from services.billing.portal_receivable import (
     PortalReceivableError,
@@ -863,6 +873,243 @@ class PortalTransmissionEligibility(Resource):
             _owned_transmission(int(company.id), receivable_id, transmission_id)
             result = resolve_transmission_eligibility(transmission_id)
             return {"data": serialize_transmission_eligibility(result)}, 200
+        except PortalReceivableError as exc:
+            return {"error": exc.code, "message": exc.message}, 404
+
+
+def _parse_iso_dt(value: object, *, field: str) -> datetime:
+    if value is None or value == "":
+        raise PortalReceivableError(
+            f"{field} obligatoire.",
+            code="evidence_required",
+        )
+    raw = str(value).strip().replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise PortalReceivableError(
+            f"{field} invalide.",
+            code="invalid_datetime",
+        ) from exc
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/lifecycle-status"
+)
+class PortalTransmissionLifecycleStatus(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, receivable_id: int, transmission_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        try:
+            _owned_transmission(int(company.id), receivable_id, transmission_id)
+            result = resolve_collection_transmission_status(transmission_id)
+            return {"data": serialize_lifecycle_status(result)}, 200
+        except PortalReceivableError as exc:
+            return {"error": exc.code, "message": exc.message}, 404
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/recipient-summary"
+)
+class PortalTransmissionRecipientSummary(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, receivable_id: int, transmission_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        try:
+            tx = _owned_transmission(int(company.id), receivable_id, transmission_id)
+            return {"data": build_recipient_summary(tx)}, 200
+        except PortalReceivableError as exc:
+            return {"error": exc.code, "message": exc.message}, 404
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/confirm-recipient"
+)
+class PortalTransmissionConfirmRecipient(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int, transmission_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        user = _current_user()
+        if user is None:
+            return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+        data = request.get_json(silent=True) or {}
+        try:
+            tx = _owned_transmission(int(company.id), receivable_id, transmission_id)
+            confirm_recipient_and_jurisdiction(
+                transmission=tx,
+                confirmed_by_user_id=int(user.id),
+                pursuit_jurisdiction=str(data.get("pursuit_jurisdiction") or "")
+                or None,
+                recipient_label=str(data.get("recipient_label") or ""),
+                recipient_contact=str(data.get("recipient_contact") or "") or None,
+                summary_confirmed=bool(data.get("summary_confirmed")),
+            )
+            db.session.commit()
+            return {"data": serialize_transmission(tx)}, 200
+        except PortalReceivableError as exc:
+            db.session.rollback()
+            return {"error": exc.code, "message": exc.message}, 400
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/prepare-export"
+)
+class PortalTransmissionPrepareExport(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int, transmission_id: int):
+        """Prépare l'artefact d'export — jamais TRANSMITTED."""
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        user = _current_user()
+        if user is None:
+            return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+        try:
+            tx = _owned_transmission(int(company.id), receivable_id, transmission_id)
+            evidence = prepare_export_artifact(
+                transmission=tx, prepared_by_user_id=int(user.id)
+            )
+            db.session.commit()
+            lifecycle = resolve_collection_transmission_status(int(tx.id))
+            return {
+                "data": {
+                    "evidence": serialize_evidence(evidence),
+                    "lifecycle_status": serialize_lifecycle_status(lifecycle),
+                    "ui_label": lifecycle.ui_label,
+                    "transmitted": False,
+                }
+            }, 201
+        except PortalReceivableError as exc:
+            db.session.rollback()
+            return {"error": exc.code, "message": exc.message}, 400
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/record-transmission"
+)
+class PortalTransmissionRecord(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int, transmission_id: int):
+        """Enregistre une transmission humaine externe avec preuve réelle."""
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        user = _current_user()
+        if user is None:
+            return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+        data = request.get_json(silent=True) or {}
+        try:
+            tx = _owned_transmission(int(company.id), receivable_id, transmission_id)
+            transmitted_at = _parse_iso_dt(
+                data.get("transmitted_at"), field="transmitted_at"
+            )
+            evidence = record_external_transmission(
+                transmission=tx,
+                recorded_by_user_id=int(user.id),
+                channel=str(data.get("channel") or ""),
+                recipient=str(data.get("recipient") or "") or None,
+                external_reference=str(data.get("external_reference") or "") or None,
+                evidence_type=str(data.get("evidence_type") or "") or None,
+                evidence_fields=data.get("evidence")
+                if isinstance(data.get("evidence"), dict)
+                else {},
+                transmitted_at=transmitted_at,
+                expected_dossier_hash=str(data.get("dossier_hash") or "") or None,
+            )
+            db.session.commit()
+            lifecycle = resolve_collection_transmission_status(int(tx.id))
+            return {
+                "data": {
+                    "evidence": serialize_evidence(evidence),
+                    "lifecycle_status": serialize_lifecycle_status(lifecycle),
+                    "ui_label": lifecycle.ui_label,
+                }
+            }, 201
+        except PortalReceivableError as exc:
+            db.session.rollback()
+            return {"error": exc.code, "message": exc.message}, 400
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/record-acknowledgment"
+)
+class PortalTransmissionRecordAcknowledgment(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int, transmission_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        user = _current_user()
+        if user is None:
+            return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+        data = request.get_json(silent=True) or {}
+        try:
+            tx = _owned_transmission(int(company.id), receivable_id, transmission_id)
+            acknowledged_at = _parse_iso_dt(
+                data.get("acknowledged_at"), field="acknowledged_at"
+            )
+            evidence = record_acknowledgment(
+                transmission=tx,
+                recorded_by_user_id=int(user.id),
+                acknowledged_at=acknowledged_at,
+                acknowledgment_reference=str(
+                    data.get("acknowledgment_reference") or ""
+                ),
+                acknowledgment_evidence=str(
+                    data.get("acknowledgment_evidence") or ""
+                ),
+            )
+            db.session.commit()
+            lifecycle = resolve_collection_transmission_status(int(tx.id))
+            return {
+                "data": {
+                    "evidence": serialize_evidence(evidence),
+                    "lifecycle_status": serialize_lifecycle_status(lifecycle),
+                    "ui_label": lifecycle.ui_label,
+                }
+            }, 201
+        except PortalReceivableError as exc:
+            db.session.rollback()
+            return {"error": exc.code, "message": exc.message}, 400
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/evidences"
+)
+class PortalTransmissionEvidences(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, receivable_id: int, transmission_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        try:
+            tx = _owned_transmission(int(company.id), receivable_id, transmission_id)
+            from models.portal_collection_transmission_evidence import (
+                PortalCollectionTransmissionEvidence,
+            )
+
+            rows = (
+                PortalCollectionTransmissionEvidence.query.filter_by(
+                    transmission_id=int(tx.id),
+                    creditor_company_id=int(company.id),
+                )
+                .order_by(PortalCollectionTransmissionEvidence.id.asc())
+                .all()
+            )
+            return {"data": [serialize_evidence(r) for r in rows]}, 200
         except PortalReceivableError as exc:
             return {"error": exc.code, "message": exc.message}, 404
 

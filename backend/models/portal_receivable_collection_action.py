@@ -37,11 +37,19 @@ STATUS_CANCELLED = "cancelled"
 
 ACTION_PURSUIT_DRAFT_PREPARED = "PURSUIT_DRAFT_PREPARED"
 ACTION_PRIVATE_COLLECTION_DRAFT_PREPARED = "PRIVATE_COLLECTION_DRAFT_PREPARED"
+ACTION_EXPORT_PREPARED = "EXPORT_PREPARED"
+ACTION_TRANSMISSION_AUTHORIZED = "TRANSMISSION_AUTHORIZED"
+ACTION_TRANSMITTED = "TRANSMITTED"
+ACTION_ACKNOWLEDGED = "ACKNOWLEDGED"
 ACTION_TRANSMISSION_CANCELLED = "TRANSMISSION_CANCELLED"
 
 ACTION_TYPES = (
     ACTION_PURSUIT_DRAFT_PREPARED,
     ACTION_PRIVATE_COLLECTION_DRAFT_PREPARED,
+    ACTION_EXPORT_PREPARED,
+    ACTION_TRANSMISSION_AUTHORIZED,
+    ACTION_TRANSMITTED,
+    ACTION_ACKNOWLEDGED,
     ACTION_TRANSMISSION_CANCELLED,
 )
 
@@ -110,6 +118,22 @@ class PortalReceivableCollectionTransmission(db.Model):
     # Abstraction — jamais résolue automatiquement sans source fiable.
     pursuit_jurisdiction: Mapped[str | None] = mapped_column(String(120), nullable=True)
     creditor_confirmed: Mapped[bool] = mapped_column(nullable=False, default=False)
+    # Destinataire / office confirmés humainement (6G-B) — pas de défaut juridiction.
+    recipient_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    recipient_contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    recipient_summary_confirmed: Mapped[bool] = mapped_column(
+        nullable=False, default=False
+    )
+    recipient_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    recipient_confirmed_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    export_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    export_prepared_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     requested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -132,6 +156,10 @@ class PortalReceivableCollectionAction(db.Model):
             "action_type IN ("
             "'PURSUIT_DRAFT_PREPARED', "
             "'PRIVATE_COLLECTION_DRAFT_PREPARED', "
+            "'EXPORT_PREPARED', "
+            "'TRANSMISSION_AUTHORIZED', "
+            "'TRANSMITTED', "
+            "'ACKNOWLEDGED', "
             "'TRANSMISSION_CANCELLED'"
             ")",
             name="ck_portal_coll_action_type",

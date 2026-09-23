@@ -25,7 +25,9 @@ DEBTOR BILLING ≠ DOMICILE
 - Export : statut `DRAFT — NON TRANSMIS`
 - Rôles : `COMPANY` uniquement — gap documenté (pas de rôle juridique distinct)
 
-## Hors scope (6G-B)
+## Hors scope (clos — voir 6G-B)
 
 - Transmission réelle EasyGov / office / société de recouvrement
-- Preuve de dépôt / acceptation canal externe
+  → traité en 6G-B comme enregistrement humain avec preuves
+  (`docs/contracts/portal-collection-transmission-evidence.md`)
+- API EasyGov / office / prestataire : toujours NOT IMPLEMENTED
