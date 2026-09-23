@@ -603,8 +603,10 @@ def _validate_booking_request(
     try:
         reject_client_supplied_debtor(data)
     except ClientSuppliedDebtorError as exc:
-        return None, None, handle_validation_error(
-            ValidationError({"debtor": [str(exc)]})
+        return (
+            None,
+            None,
+            handle_validation_error(ValidationError({"debtor": [str(exc)]})),
         )
 
     try:

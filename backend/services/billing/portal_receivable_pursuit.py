@@ -197,7 +197,9 @@ def audit_creditor_identity(company: Company | None) -> dict[str, FieldAvailabil
         ),
         "legal_form": FieldAvailability(
             "legal_form",
-            "AVAILABLE" if _nonempty(getattr(company, "legal_form", None)) else "MISSING",
+            "AVAILABLE"
+            if _nonempty(getattr(company, "legal_form", None))
+            else "MISSING",
             getattr(company, "legal_form", None),
         ),
         "uid_ide": FieldAvailability(
@@ -337,9 +339,7 @@ def resolve_portal_enforcement_evidence(
         "formal_debt_acknowledgment": "absent",
         "factual_categories": categories,
         "formal_notice_email_proof": (
-            "EMAIL_SENT_WITH_PROVIDER_ID"
-            if formal_email
-            else "MISSING"
+            "EMAIL_SENT_WITH_PROVIDER_ID" if formal_email else "MISSING"
         ),
         "formal_notice_postal_proof": (
             "MISSING"
@@ -384,11 +384,9 @@ def resolve_portal_pursuit_readiness(
 
     if receivable.status == RECEIVABLE_CANCELLED or receivable.cancelled_at is not None:
         _add_reason(reasons, REASON_CANCELLED)
-    open_dispute = (
-        PortalReceivableDispute.query.filter_by(
-            receivable_id=int(receivable.id), status=DISPUTE_OPEN
-        ).first()
-    )
+    open_dispute = PortalReceivableDispute.query.filter_by(
+        receivable_id=int(receivable.id), status=DISPUTE_OPEN
+    ).first()
     if (
         receivable.status == RECEIVABLE_DISPUTED
         or receivable.disputed_at is not None
@@ -598,9 +596,7 @@ def build_minimized_export(
             "display_name": receivable.creditor_name_snapshot,
             "legal_form": getattr(company, "legal_form", None) if company else None,
             "uid_ide": getattr(company, "uid_ide", None) if company else None,
-            "postal_address": (
-                _creditor_postal_address(company) if company else None
-            ),
+            "postal_address": (_creditor_postal_address(company) if company else None),
             "billing_email": (
                 (
                     getattr(company, "billing_email", None)

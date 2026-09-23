@@ -153,9 +153,7 @@ class PortalReceivableCollectionAction(db.Model):
     )
     transmission_id: Mapped[int | None] = mapped_column(
         Integer,
-        ForeignKey(
-            "portal_receivable_collection_transmission.id", ondelete="SET NULL"
-        ),
+        ForeignKey("portal_receivable_collection_transmission.id", ondelete="SET NULL"),
         nullable=True,
     )
     action_type: Mapped[str] = mapped_column(String(64), nullable=False)

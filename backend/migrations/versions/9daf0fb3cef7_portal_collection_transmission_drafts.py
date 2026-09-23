@@ -38,9 +38,7 @@ def upgrade():
             "balance_snapshot", sa.Numeric(precision=12, scale=2), nullable=False
         ),
         sa.Column("currency_snapshot", sa.String(length=3), nullable=False),
-        sa.Column(
-            "invoice_reference_snapshot", sa.String(length=80), nullable=False
-        ),
+        sa.Column("invoice_reference_snapshot", sa.String(length=80), nullable=False),
         sa.Column("claim_reason_snapshot", sa.Text(), nullable=False),
         sa.Column("due_date_snapshot", sa.DateTime(timezone=True), nullable=False),
         sa.Column("export_payload", sa.Text(), nullable=False),
@@ -60,9 +58,7 @@ def upgrade():
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.CheckConstraint(
-            "currency_snapshot = 'CHF'", name="ck_portal_coll_tx_chf"
-        ),
+        sa.CheckConstraint("currency_snapshot = 'CHF'", name="ck_portal_coll_tx_chf"),
         sa.CheckConstraint(
             "status IN ('draft', 'cancelled')", name="ck_portal_coll_tx_status"
         ),

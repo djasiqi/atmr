@@ -69,7 +69,9 @@ class PortalTermsStatus:
     documents: tuple[DocumentTermsStatus, ...]
 
 
-def _latest_acceptance(user_id: int, document_type: str) -> ClientTermsAcceptance | None:
+def _latest_acceptance(
+    user_id: int, document_type: str
+) -> ClientTermsAcceptance | None:
     return (
         ClientTermsAcceptance.query.filter_by(
             user_id=user_id, document_type=document_type
@@ -82,9 +84,7 @@ def _latest_acceptance(user_id: int, document_type: str) -> ClientTermsAcceptanc
     )
 
 
-def _document_status(
-    user_id: int, spec: PublishedTerms
-) -> DocumentTermsStatus:
+def _document_status(user_id: int, spec: PublishedTerms) -> DocumentTermsStatus:
     latest = _latest_acceptance(user_id, spec.document_type)
     covers_current = (
         latest is not None

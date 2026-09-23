@@ -78,9 +78,7 @@ class AcceptReservationUseCase:
         if client is not None and is_portal_client(client):
             debtor_user_id = resolve_portal_booking_debtor_user_id(booking)
             if debtor_user_id is not None:
-                hold = resolve_portal_payment_hold(
-                    int(debtor_user_id), int(company_id)
-                )
+                hold = resolve_portal_payment_hold(int(debtor_user_id), int(company_id))
                 if hold.is_hold:
                     return AcceptReservationResult(
                         ok=False,

@@ -90,9 +90,7 @@ class PortalReceivableDunningPolicy(db.Model):
         Integer, nullable=False, default=DEFAULT_FORMAL_NOTICE_DAYS
     )
     # Réservé — non activé dans ce lot.
-    charge_default_interest: Mapped[bool] = mapped_column(
-        nullable=False, default=False
-    )
+    charge_default_interest: Mapped[bool] = mapped_column(nullable=False, default=False)
     default_interest_rate: Mapped[Decimal | None] = mapped_column(
         Numeric(6, 4), nullable=True
     )
@@ -168,18 +166,14 @@ class PortalReceivableDunningEvent(db.Model):
         String(80), nullable=False
     )
     delivery_status: Mapped[str] = mapped_column(String(32), nullable=False)
-    provider_message_id: Mapped[str | None] = mapped_column(
-        String(200), nullable=True
-    )
+    provider_message_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     delivery_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     initiated_by_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
     # Snapshot JSON immuable (surtout COLLECTION_PREPARED).
     dossier_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
-    dossier_snapshot_hash: Mapped[str | None] = mapped_column(
-        String(64), nullable=True
-    )
+    dossier_snapshot_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     formal_notice_event_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("portal_receivable_dunning_event.id", ondelete="SET NULL"),

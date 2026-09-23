@@ -82,9 +82,8 @@ class AuthenticateUserUseCase:
             portal_terms_block_lazy_promotion,
         )
 
-        if (
-            not portal_terms_block_lazy_promotion(user)
-            and maybe_promote_portal_account(user)
+        if not portal_terms_block_lazy_promotion(user) and maybe_promote_portal_account(
+            user
         ):
             db.session.commit()
 

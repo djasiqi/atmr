@@ -136,9 +136,7 @@ def _overdue_receivable(
         issued_at=datetime(2026, 9, 1, tzinfo=UTC),
         due_date=datetime(2026, 9, 10, tzinfo=UTC),
         lines=[
-            ReceivableLineInput(
-                booking_id=booking.id, invoiced_amount=Decimal("95.00")
-            )
+            ReceivableLineInput(booking_id=booking.id, invoiced_amount=Decimal("95.00"))
         ],
     )
     if address is not None:
@@ -203,9 +201,7 @@ def test_disputed_not_eligible(db) -> None:
     user, client = _portal_user(db)
     company, owner = _company(db, name="Litige Dun")
     recv = _overdue_receivable(db, user, client, company, owner, invoice="D-2")
-    dispute_portal_receivable(
-        receivable=recv, reason="Contesté", actor_user_id=user.id
-    )
+    dispute_portal_receivable(receivable=recv, reason="Contesté", actor_user_id=user.id)
     elig = resolve_dunning_eligibility(recv, as_of=date(2026, 10, 1))
     assert elig.eligible is False
     assert elig.reason == REASON_DISPUTED
@@ -295,9 +291,9 @@ def test_reminder_sequence_and_hash_immutable(db) -> None:
     dossier = json.loads(e4.dossier_snapshot)
     assert dossier["invoice"]["balance_due"] == 95.0
     assert dossier["debtor"]["postal_address"]
-    assert PortalReceivableDunningEvent.query.filter_by(
-        receivable_id=recv.id
-    ).count() == 4
+    assert (
+        PortalReceivableDunningEvent.query.filter_by(receivable_id=recv.id).count() == 4
+    )
 
 
 def test_email_failure_does_not_count_as_sent(db) -> None:
@@ -314,8 +310,7 @@ def test_email_failure_does_not_count_as_sent(db) -> None:
         )
     assert exc.value.code == "dunning_email_failed"
     assert (
-        PortalReceivableDunningEvent.query.filter_by(receivable_id=recv.id).count()
-        == 0
+        PortalReceivableDunningEvent.query.filter_by(receivable_id=recv.id).count() == 0
     )
     e1 = emit_portal_dunning_event(
         receivable=recv,
@@ -434,15 +429,12 @@ def test_cancelled_stops_dunning(db) -> None:
         as_of=date(2026, 10, 1),
         email_sender=_ok_sender,
     )
-    cancel_portal_receivable(
-        receivable=recv, reason="Annulée", actor_user_id=owner.id
-    )
+    cancel_portal_receivable(receivable=recv, reason="Annulée", actor_user_id=owner.id)
     elig = resolve_dunning_eligibility(recv, as_of=date(2026, 10, 5))
     assert elig.eligible is False
     assert elig.reason == REASON_CANCELLED
     assert (
-        PortalReceivableDunningEvent.query.filter_by(receivable_id=recv.id).count()
-        == 1
+        PortalReceivableDunningEvent.query.filter_by(receivable_id=recv.id).count() == 1
     )
 
 
@@ -601,7 +593,9 @@ def test_collection_prepared_snapshot_immutable_after_partial_payment(db) -> Non
     assert reloaded is not None
     assert float(reloaded.balance_due_snapshot) == 500.0
     assert reloaded.dossier_snapshot_hash == snap_hash
-    assert json.loads(reloaded.dossier_snapshot or "{}")["invoice"]["balance_due"] == 500.0
+    assert (
+        json.loads(reloaded.dossier_snapshot or "{}")["invoice"]["balance_due"] == 500.0
+    )
 
     readiness = resolve_portal_collection_readiness(recv.id, as_of=date(2026, 10, 7))
     # Solde > 0 mais COLLECTION_PREPARED déjà fait — readiness porte sur le courant :

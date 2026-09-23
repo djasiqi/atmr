@@ -96,9 +96,7 @@ def _billing_address(client: Client) -> str | None:
     return address or None
 
 
-def _resolve_portal_account_holder(
-    *, booking: Any, user: User
-) -> tuple[Client, str]:
+def _resolve_portal_account_holder(*, booking: Any, user: User) -> tuple[Client, str]:
     """Résout le titulaire PORTAL. N'utilise pas ``billed_to_type``."""
     client_id = getattr(booking, "client_id", None)
     client = db.session.get(Client, client_id) if client_id is not None else None
@@ -161,7 +159,9 @@ def changed_client_order_fields(before: dict[str, Any], booking: Any) -> list[st
     """Champs de commande réellement différents après la mutation."""
     changed: list[str] = []
     for field in CLIENT_ORDER_FIELDS:
-        if not _same_order_value(field, before.get(field), getattr(booking, field, None)):
+        if not _same_order_value(
+            field, before.get(field), getattr(booking, field, None)
+        ):
             changed.append(field)
     return changed
 

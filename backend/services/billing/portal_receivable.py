@@ -126,7 +126,9 @@ def _assert_portal_booking_owned(*, booking: Booking, company_id: int) -> Client
     return client
 
 
-def compute_receivable_status(receivable: PortalReceivable, *, now: datetime | None = None) -> str:
+def compute_receivable_status(
+    receivable: PortalReceivable, *, now: datetime | None = None
+) -> str:
     """Statut dérivé du solde, de l'échéance et des marques dispute/annulation."""
     if receivable.status == RECEIVABLE_CANCELLED or receivable.cancelled_at is not None:
         return RECEIVABLE_CANCELLED
@@ -150,7 +152,9 @@ def compute_receivable_status(receivable: PortalReceivable, *, now: datetime | N
 def refresh_receivable_balances(receivable: PortalReceivable) -> None:
     paid = sum((_money(p.amount) for p in receivable.payments), Decimal("0.00"))
     receivable.amount_paid = paid
-    receivable.balance_due = max(_money(receivable.total_amount) - paid, Decimal("0.00"))
+    receivable.balance_due = max(
+        _money(receivable.total_amount) - paid, Decimal("0.00")
+    )
     receivable.status = compute_receivable_status(receivable)
 
 
@@ -222,7 +226,9 @@ def create_portal_receivable(
             )
         if debtor_user_id is None:
             debtor_user_id = int(event.debtor_user_id)
-            debtor_name = str(event.debtor_name_snapshot or event.customer_name_snapshot or "")
+            debtor_name = str(
+                event.debtor_name_snapshot or event.customer_name_snapshot or ""
+            )
             debtor_email = event.debtor_email_snapshot
             debtor_phone = event.debtor_phone_snapshot
             debtor_address = event.debtor_billing_address_snapshot
@@ -244,7 +250,9 @@ def create_portal_receivable(
     assert debtor_user_id is not None
     receivable = PortalReceivable(
         creditor_company_id=int(company.id),
-        creditor_name_snapshot=str(getattr(company, "name", "") or f"Entreprise {company.id}"),
+        creditor_name_snapshot=str(
+            getattr(company, "name", "") or f"Entreprise {company.id}"
+        ),
         debtor_user_id=debtor_user_id,
         debtor_name_snapshot=debtor_name or f"Client {debtor_user_id}",
         debtor_email_snapshot=debtor_email,
@@ -500,9 +508,13 @@ def serialize_portal_receivable(receivable: PortalReceivable) -> dict[str, Any]:
         "amount_paid": float(receivable.amount_paid),
         "balance_due": float(receivable.balance_due),
         "status": compute_receivable_status(receivable),
-        "disputed_at": receivable.disputed_at.isoformat() if receivable.disputed_at else None,
+        "disputed_at": receivable.disputed_at.isoformat()
+        if receivable.disputed_at
+        else None,
         "dispute_reason": receivable.dispute_reason,
-        "cancelled_at": receivable.cancelled_at.isoformat() if receivable.cancelled_at else None,
+        "cancelled_at": receivable.cancelled_at.isoformat()
+        if receivable.cancelled_at
+        else None,
         "cancellation_reason": receivable.cancellation_reason,
         "lines": [
             {
