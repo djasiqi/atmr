@@ -1302,7 +1302,12 @@ class BookingResource(Resource):
             from application.bookings.update_pending_booking import (
                 UpdatePendingBookingUseCase,
             )
+            from services.legal.record_booking_contract_event import (
+                client_visible_booking_state,
+                record_portal_booking_modified_event,
+            )
 
+            before_state = client_visible_booking_state(booking)
             uc = UpdatePendingBookingUseCase()
             input_data = UpdatePendingBookingInput(
                 booking=booking, validated_data=validated_data
@@ -1320,6 +1325,11 @@ class BookingResource(Resource):
             old_pickup = uc_result.old_pickup
             old_dropoff = uc_result.old_dropoff
 
+            record_portal_booking_modified_event(
+                booking=booking,
+                actor_user_id=int(user.id),
+                before_state=before_state,
+            )
             db.session.commit()
 
             # ✅ P1: Invalider cache géocodage et OSRM si adresses changées
@@ -1409,6 +1419,15 @@ class BookingResource(Resource):
                     logger_instance=logger,
                 )
 
+            from services.legal.record_booking_contract_event import (
+                record_portal_booking_cancelled_event,
+            )
+
+            record_portal_booking_cancelled_event(
+                booking=booking,
+                actor_user_id=int(user.id),
+                status_before=previous_status,
+            )
             db.session.commit()
 
             try:

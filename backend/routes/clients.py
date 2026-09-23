@@ -2451,6 +2451,15 @@ class CancelBooking(Resource):
                     "error": "Bad request"
                 }, uc_result.status_code or 400
 
+            from services.legal.record_booking_contract_event import (
+                record_portal_booking_cancelled_event,
+            )
+
+            record_portal_booking_cancelled_event(
+                booking=booking,
+                actor_user_id=int(current_user.id),
+                status_before=previous_status,
+            )
             db.session.commit()
 
             try:
@@ -2505,6 +2514,7 @@ class CancelBooking(Resource):
                 "trace_id": trace_id,
             }, 200
         except Exception as e:
+            db.session.rollback()
             sentry_sdk.capture_exception(e)
             logger.error("❌ ERREUR cancel_booking: %s - %s", type(e).__name__, str(e))
             return APIErrorHandler.handle_exception(e, logger)

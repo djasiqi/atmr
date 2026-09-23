@@ -18,6 +18,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     func,
     text,
 )
@@ -161,6 +162,10 @@ class ClientBookingContractEvent(db.Model):
         ForeignKey("client_terms_acceptance.id", ondelete="RESTRICT"),
         nullable=True,
     )
+    status_before: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    status_after: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    changed_fields: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
