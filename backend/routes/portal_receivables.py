@@ -12,6 +12,7 @@ from flask_restx import Namespace, Resource
 
 from ext import db, role_required
 from models.enums import UserRole
+from models.portal_collection_legal_review import PortalCollectionLegalReview
 from models.portal_receivable import PortalReceivable
 from models.portal_receivable_collection_action import (
     TRANSMISSION_PRIVATE_COLLECTION,
@@ -22,6 +23,14 @@ from models.portal_receivable_dunning import PortalReceivableDunningEvent
 from models.user import User
 from routes.api_error_utils import auth_error
 from routes.companies import _get_current_company_via_use_case
+from services.billing.portal_collection_legal_review import (
+    create_legal_review_pending,
+    decide_legal_review,
+    resolve_transmission_eligibility,
+    serialize_legal_review,
+    serialize_transmission_eligibility,
+)
+from services.billing.portal_pursuit_form_mapping import pursuit_form_mapping_report
 from services.billing.portal_receivable import (
     PortalReceivableError,
     ReceivableLineInput,
@@ -722,4 +731,138 @@ class PortalReceivableCollectionTransmissionCancel(Resource):
         except PortalReceivableError as exc:
             db.session.rollback()
             return {"error": exc.code, "message": exc.message}, 400
+
+
+def _owned_transmission(
+    company_id: int, receivable_id: int, transmission_id: int
+) -> PortalReceivableCollectionTransmission:
+    _owned_receivable(company_id, receivable_id)
+    row = (
+        PortalReceivableCollectionTransmission.query.filter_by(
+            id=int(transmission_id),
+            receivable_id=int(receivable_id),
+            creditor_company_id=int(company_id),
+        )
+        .one_or_none()
+    )
+    if row is None:
+        raise PortalReceivableError(
+            "Draft introuvable.",
+            code="transmission_not_found",
+        )
+    return row
+
+
+@portal_receivables_ns.route("/pursuit-form-mapping")
+class PortalPursuitFormMapping(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        return {"data": pursuit_form_mapping_report()}, 200
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/legal-review"
+)
+class PortalCollectionLegalReviewResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, receivable_id: int, transmission_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        try:
+            tx = _owned_transmission(int(company.id), receivable_id, transmission_id)
+            rows = (
+                PortalCollectionLegalReview.query.filter_by(
+                    transmission_id=int(tx.id)
+                )
+                .order_by(PortalCollectionLegalReview.id.asc())
+                .all()
+            )
+            return {"data": [serialize_legal_review(r) for r in rows]}, 200
+        except PortalReceivableError as exc:
+            return {"error": exc.code, "message": exc.message}, 404
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int, transmission_id: int):
+        """Ouvre une revue pending liée au hash actuel du draft."""
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        user = _current_user()
+        if user is None:
+            return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+        try:
+            tx = _owned_transmission(int(company.id), receivable_id, transmission_id)
+            review = create_legal_review_pending(
+                transmission=tx, requested_by_user_id=int(user.id)
+            )
+            db.session.commit()
+            return {"data": serialize_legal_review(review)}, 201
+        except PortalReceivableError as exc:
+            db.session.rollback()
+            return {"error": exc.code, "message": exc.message}, 400
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/legal-review/decide"
+)
+class PortalCollectionLegalReviewDecide(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, receivable_id: int, transmission_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        user = _current_user()
+        if user is None:
+            return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+        data = request.get_json(silent=True) or {}
+        approve = bool(data.get("approve"))
+        try:
+            tx = _owned_transmission(int(company.id), receivable_id, transmission_id)
+            review = (
+                PortalCollectionLegalReview.query.filter_by(
+                    transmission_id=int(tx.id),
+                    dossier_hash=str(tx.export_hash),
+                )
+                .order_by(PortalCollectionLegalReview.id.desc())
+                .first()
+            )
+            if review is None:
+                review = create_legal_review_pending(
+                    transmission=tx, requested_by_user_id=int(user.id)
+                )
+            decide_legal_review(
+                review=review,
+                transmission=tx,
+                reviewed_by_user_id=int(user.id),
+                approve=approve,
+                notes=str(data.get("notes") or "") or None,
+            )
+            db.session.commit()
+            return {"data": serialize_legal_review(review)}, 200
+        except PortalReceivableError as exc:
+            db.session.rollback()
+            return {"error": exc.code, "message": exc.message}, 400
+
+
+@portal_receivables_ns.route(
+    "/<int:receivable_id>/collection-transmissions/<int:transmission_id>/transmission-eligibility"
+)
+class PortalTransmissionEligibility(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, receivable_id: int, transmission_id: int):
+        company, error, status = _get_current_company_via_use_case()
+        if error or company is None:
+            return error or {"error": "Entreprise non trouvée"}, status or 404
+        try:
+            _owned_transmission(int(company.id), receivable_id, transmission_id)
+            result = resolve_transmission_eligibility(transmission_id)
+            return {"data": serialize_transmission_eligibility(result)}, 200
+        except PortalReceivableError as exc:
+            return {"error": exc.code, "message": exc.message}, 404
 

@@ -154,6 +154,24 @@ def refresh_receivable_balances(receivable: PortalReceivable) -> None:
     receivable.status = compute_receivable_status(receivable)
 
 
+def format_client_legal_domicile(client: Client | None) -> str | None:
+    """Adresse de domicile explicite (pas billing, pas pickup)."""
+    if client is None:
+        return None
+    line = str(getattr(client, "domicile_address", None) or "").strip()
+    if not line:
+        return None
+    zip_c = str(getattr(client, "domicile_zip", None) or "").strip()
+    city = str(getattr(client, "domicile_city", None) or "").strip()
+    if not zip_c and not city:
+        return None
+    loc = " ".join(p for p in (zip_c, city) if p)
+    return f"{line}, {loc}" if loc else line
+
+
+DOMICILE_SEMANTICS = "domicile"
+
+
 def create_portal_receivable(
     *,
     company: Company,
@@ -242,14 +260,26 @@ def create_portal_receivable(
         )
 
     assert debtor_user_id is not None
+    # Domicile LP depuis Client.domicile_* — jamais billing / pickup.
+    first_booking = db.session.get(Booking, int(lines[0].booking_id))
+    domicile_client = (
+        db.session.get(Client, getattr(first_booking, "client_id", None))
+        if first_booking is not None
+        else None
+    )
+    domicile_snap = format_client_legal_domicile(domicile_client)
     receivable = PortalReceivable(
         creditor_company_id=int(company.id),
-        creditor_name_snapshot=str(getattr(company, "name", "") or f"Entreprise {company.id}"),
+        creditor_name_snapshot=str(
+            getattr(company, "name", "") or f"Entreprise {company.id}"
+        ),
         debtor_user_id=debtor_user_id,
         debtor_name_snapshot=debtor_name or f"Client {debtor_user_id}",
         debtor_email_snapshot=debtor_email,
         debtor_phone_snapshot=debtor_phone,
         debtor_billing_address_snapshot=debtor_address,
+        debtor_domicile_address_snapshot=domicile_snap,
+        debtor_domicile_semantics=DOMICILE_SEMANTICS if domicile_snap else None,
         external_invoice_number=number,
         currency=(currency or "CHF").strip().upper()[:3] or "CHF",
         issued_at=issued_at,
@@ -492,6 +522,8 @@ def serialize_portal_receivable(receivable: PortalReceivable) -> dict[str, Any]:
         "debtor_email_snapshot": receivable.debtor_email_snapshot,
         "debtor_phone_snapshot": receivable.debtor_phone_snapshot,
         "debtor_billing_address_snapshot": receivable.debtor_billing_address_snapshot,
+        "debtor_domicile_address_snapshot": receivable.debtor_domicile_address_snapshot,
+        "debtor_domicile_semantics": receivable.debtor_domicile_semantics,
         "external_invoice_number": receivable.external_invoice_number,
         "currency": receivable.currency,
         "issued_at": receivable.issued_at.isoformat() if receivable.issued_at else None,

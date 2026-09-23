@@ -54,13 +54,15 @@ from services.billing.portal_payment_hold import (
     business_calendar_date,
     current_business_date,
 )
+from services.billing.portal_pursuit_form_mapping import (
+    pursuit_form_mapping_report,
+)
 from services.billing.portal_receivable import PortalReceivableError
 from services.billing.portal_receivable_dunning import (
     READY as COLLECTION_READY,
 )
 from services.billing.portal_receivable_dunning import (
     REASON_CANCELLED,
-    REASON_DEBTOR_ADDRESS_MISSING,
     REASON_DISPUTED,
     REASON_FORMAL_NOTICE_MISSING,
     REASON_INVOICE_REFERENCE_MISSING,
@@ -68,7 +70,6 @@ from services.billing.portal_receivable_dunning import (
     REASON_PAID,
     build_claim_title,
     build_collection_dossier,
-    creditor_identity_complete,
     resolve_portal_collection_readiness,
 )
 
@@ -77,11 +78,18 @@ PURSUIT_NOT_READY = "pursuit_not_ready"
 
 REASON_CREDITOR_LEGAL_NAME_MISSING = "creditor_legal_name_missing"
 REASON_CREDITOR_ADDRESS_MISSING = "creditor_address_missing"
+REASON_CREDITOR_IDENTITY_INCOMPLETE = "creditor_identity_incomplete"
 REASON_CLAIM_REASON_MISSING = "claim_reason_missing"
 REASON_CURRENCY_NOT_CHF = "currency_not_chf"
 REASON_COLLECTION_NOT_READY = "collection_not_ready"
 REASON_DEBTOR_NAME_MISSING = "debtor_name_missing"
+REASON_DEBTOR_DOMICILE_MISSING = "debtor_domicile_missing"
+REASON_DEBTOR_DOMICILE_UNVERIFIED = "debtor_domicile_unverified_or_unknown"
 REASON_CONFIRMATION_REQUIRED = "creditor_confirmation_required"
+REASON_OFFICIAL_FORM_MAPPING_INCOMPLETE = "official_form_mapping_incomplete"
+
+DOMICILE_SEMANTICS = "domicile"
+BILLING_SEMANTICS = "billing_address"
 
 # Champs exclus de l'export de recouvrement (minimisation).
 _HEALTH_SENSITIVE_KEYS = frozenset(
@@ -98,7 +106,14 @@ _HEALTH_SENSITIVE_KEYS = frozenset(
     }
 )
 
+# Rôle technique existant : propriétaire COMPANY.
+# Gap documenté : pas de rôle « représentant juridique » distinct.
 AUTHORIZED_CREDITOR_ROLES = ("COMPANY",)
+AUTHORIZED_CREDITOR_ROLES_GAP = (
+    "Aucun rôle company distinct « représentant juridique » : "
+    "seul le compte UserRole.COMPANY lié à company.user_id peut agir. "
+    "Pas de délégation juridique inventée."
+)
 REASON_COLLECTION_PREPARED_MISSING = "collection_prepared_missing"
 
 
@@ -159,8 +174,27 @@ def _format_date(value: datetime | None) -> str:
 
 
 def debtor_address_semantics() -> str:
-    """Adresse figée depuis ``client.billing_address`` — pas un domicile LP prouvé."""
-    return "billing_address"
+    """Sémantique des adresses de facturation (non domicile LP)."""
+    return BILLING_SEMANTICS
+
+
+def debtor_domicile_semantics(receivable: PortalReceivable) -> str | None:
+    """Sémantique du snapshot domicile figé — jamais billing implicite."""
+    sem = getattr(receivable, "debtor_domicile_semantics", None)
+    if _nonempty(sem):
+        return str(sem).strip()
+    if _nonempty(getattr(receivable, "debtor_domicile_address_snapshot", None)):
+        return DOMICILE_SEMANTICS
+    return None
+
+
+def creditor_legal_identity_complete(company: Company | None) -> bool:
+    """Identité légale créancier : legal_name + adresse postale officielle."""
+    if company is None:
+        return False
+    return _nonempty(getattr(company, "legal_name", None)) and _nonempty(
+        _creditor_postal_address(company)
+    )
 
 
 def audit_creditor_identity(company: Company | None) -> dict[str, FieldAvailability]:
@@ -176,12 +210,15 @@ def audit_creditor_identity(company: Company | None) -> dict[str, FieldAvailabil
                 "registered_postal_address", "MISSING"
             ),
             "billing_email": FieldAvailability("billing_email", "MISSING"),
+            "legal_identity_complete": FieldAvailability(
+                "legal_identity_complete", "MISSING", "NO"
+            ),
         }
     name_ok = _nonempty(company.name)
-    # Pas de champ légal distinct du display name dans le modèle actuel.
-    legal_status = "PARTIAL" if name_ok else "MISSING"
+    legal_ok = _nonempty(getattr(company, "legal_name", None))
     postal = _creditor_postal_address(company)
     postal_status = "AVAILABLE" if _nonempty(postal) else "MISSING"
+    complete = creditor_legal_identity_complete(company)
     return {
         "commercial_display_name": FieldAvailability(
             "commercial_display_name",
@@ -190,10 +227,8 @@ def audit_creditor_identity(company: Company | None) -> dict[str, FieldAvailabil
         ),
         "legal_company_name": FieldAvailability(
             "legal_company_name",
-            legal_status,
-            "display name utilisé as legal identity (no distinct legal_name field)"
-            if name_ok
-            else None,
+            "AVAILABLE" if legal_ok else "MISSING",
+            str(company.legal_name) if legal_ok else None,
         ),
         "legal_form": FieldAvailability(
             "legal_form",
@@ -219,6 +254,11 @@ def audit_creditor_identity(company: Company | None) -> dict[str, FieldAvailabil
             )
             else "MISSING",
         ),
+        "legal_identity_complete": FieldAvailability(
+            "legal_identity_complete",
+            "AVAILABLE" if complete else "MISSING",
+            "YES" if complete else "NO",
+        ),
     }
 
 
@@ -233,7 +273,9 @@ def audit_debtor_identity(receivable: PortalReceivable) -> dict[str, FieldAvaila
         name_status = "PARTIAL"
     else:
         name_status = "MISSING"
-    addr = receivable.debtor_billing_address_snapshot
+    billing = receivable.debtor_billing_address_snapshot
+    domicile = getattr(receivable, "debtor_domicile_address_snapshot", None)
+    domicile_sem = debtor_domicile_semantics(receivable)
     return {
         "first_name": FieldAvailability(
             "first_name", "AVAILABLE" if first else "MISSING", first or None
@@ -242,17 +284,28 @@ def audit_debtor_identity(receivable: PortalReceivable) -> dict[str, FieldAvaila
             "last_name", "AVAILABLE" if last else "MISSING", last or None
         ),
         "full_name": FieldAvailability("full_name", name_status, full or None),
-        "postal_address": FieldAvailability(
-            "postal_address",
-            "AVAILABLE" if _nonempty(addr) else "MISSING",
-            str(addr).strip() if _nonempty(addr) else None,
+        "billing_address": FieldAvailability(
+            "billing_address",
+            "AVAILABLE" if _nonempty(billing) else "MISSING",
+            str(billing).strip() if _nonempty(billing) else None,
+        ),
+        "domicile_address": FieldAvailability(
+            "domicile_address",
+            "AVAILABLE" if _nonempty(domicile) else "MISSING",
+            str(domicile).strip() if _nonempty(domicile) else None,
+        ),
+        "domicile_semantics": FieldAvailability(
+            "domicile_semantics",
+            "AVAILABLE" if domicile_sem == DOMICILE_SEMANTICS else "MISSING",
+            domicile_sem,
         ),
         "address_semantics": FieldAvailability(
             "address_semantics",
             "PARTIAL",
-            debtor_address_semantics(),
+            BILLING_SEMANTICS,
         ),
     }
+
 
 
 def build_claim_reason(receivable: PortalReceivable) -> str:
@@ -406,19 +459,31 @@ def resolve_portal_pursuit_readiness(
 
     company = db.session.get(Company, int(receivable.creditor_company_id))
     creditor_audit = audit_creditor_identity(company)
-    if creditor_audit["commercial_display_name"].status == "MISSING":
+    if creditor_audit["legal_company_name"].status == "MISSING":
         _add_reason(reasons, REASON_CREDITOR_LEGAL_NAME_MISSING)
-    if creditor_audit["registered_postal_address"].status == "MISSING" or (
-        (company is None or not creditor_identity_complete(company))
-        and (company is None or not _nonempty(_creditor_postal_address(company)))
-    ):
+    if creditor_audit["registered_postal_address"].status == "MISSING":
         _add_reason(reasons, REASON_CREDITOR_ADDRESS_MISSING)
+    if not creditor_legal_identity_complete(company):
+        _add_reason(reasons, REASON_CREDITOR_IDENTITY_INCOMPLETE)
 
     debtor_audit = audit_debtor_identity(receivable)
     if debtor_audit["full_name"].status == "MISSING":
         _add_reason(reasons, REASON_DEBTOR_NAME_MISSING)
-    if debtor_audit["postal_address"].status == "MISSING":
-        _add_reason(reasons, REASON_DEBTOR_ADDRESS_MISSING)
+    domicile_ok = (
+        debtor_audit["domicile_address"].status == "AVAILABLE"
+        and debtor_audit["domicile_semantics"].status == "AVAILABLE"
+    )
+    if not domicile_ok:
+        if debtor_audit["domicile_address"].status == "MISSING":
+            _add_reason(reasons, REASON_DEBTOR_DOMICILE_MISSING)
+        else:
+            _add_reason(reasons, REASON_DEBTOR_DOMICILE_UNVERIFIED)
+        # billing seul ne suffit jamais
+        if (
+            debtor_audit["billing_address"].status == "AVAILABLE"
+            and debtor_audit["domicile_address"].status == "MISSING"
+        ):
+            _add_reason(reasons, REASON_DEBTOR_DOMICILE_UNVERIFIED)
 
     if not _nonempty(receivable.external_invoice_number):
         _add_reason(reasons, REASON_INVOICE_REFERENCE_MISSING)
@@ -474,14 +539,18 @@ def resolve_portal_pursuit_readiness(
             "fees": "NOT_IMPLEMENTED",
         },
         "debtor_address_semantics": debtor_address_semantics(),
+        "debtor_domicile_semantics": debtor_domicile_semantics(receivable),
+        "debtor_domicile_source": "Client.domicile_address + domicile_zip + domicile_city",
         "collection_readiness": {
             "state": collection.state,
             "reasons": list(collection.reasons),
         },
         "enforcement_evidence": evidence,
-        "official_form_field_mapping": "PARTIAL",
+        "official_form_field_mapping": pursuit_form_mapping_report()["overall"],
+        "official_form_mapping": pursuit_form_mapping_report(),
         "easygov_integration": "NOT_IMPLEMENTED",
         "authorized_creditor_roles": list(AUTHORIZED_CREDITOR_ROLES),
+        "authorized_creditor_roles_gap": AUTHORIZED_CREDITOR_ROLES_GAP,
     }
 
     if reasons:
@@ -586,6 +655,7 @@ def build_minimized_export(
 
     export = {
         "document_kind": "lirie_collection_draft_export",
+        "status_label": "DRAFT — NON TRANSMIS",
         "disclaimer": (
             "Ce fichier est un dossier de travail préparé pour le créancier. "
             "Ce n'est pas un formulaire officiel de réquisition ni une preuve "
@@ -613,8 +683,12 @@ def build_minimized_export(
         "debtor": {
             "user_id": receivable.debtor_user_id,
             "name": receivable.debtor_name_snapshot,
-            "postal_address": receivable.debtor_billing_address_snapshot,
-            "address_semantics": debtor_address_semantics(),
+            "billing_address": receivable.debtor_billing_address_snapshot,
+            "domicile_address": getattr(
+                receivable, "debtor_domicile_address_snapshot", None
+            ),
+            "domicile_semantics": debtor_domicile_semantics(receivable),
+            "billing_semantics": debtor_address_semantics(),
             "email": receivable.debtor_email_snapshot,
         },
         "claim": {
@@ -734,6 +808,7 @@ def prepare_collection_transmission(
     creditor_snap = {
         "company_id": receivable.creditor_company_id,
         "display_name": receivable.creditor_name_snapshot,
+        "legal_name": getattr(company, "legal_name", None) if company else None,
         "legal_form": getattr(company, "legal_form", None) if company else None,
         "uid_ide": getattr(company, "uid_ide", None) if company else None,
         "postal_address": _creditor_postal_address(company) if company else None,
@@ -741,8 +816,11 @@ def prepare_collection_transmission(
     debtor_snap = {
         "user_id": receivable.debtor_user_id,
         "name": receivable.debtor_name_snapshot,
-        "postal_address": receivable.debtor_billing_address_snapshot,
-        "address_semantics": debtor_address_semantics(),
+        "billing_address": receivable.debtor_billing_address_snapshot,
+        "domicile_address": getattr(
+            receivable, "debtor_domicile_address_snapshot", None
+        ),
+        "domicile_semantics": debtor_domicile_semantics(receivable),
         "email": receivable.debtor_email_snapshot,
     }
     payments_snap = [

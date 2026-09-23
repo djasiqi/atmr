@@ -42,7 +42,6 @@ from services.billing.portal_receivable_pursuit import (
     PURSUIT_NOT_READY,
     PURSUIT_READY,
     REASON_CREDITOR_ADDRESS_MISSING,
-    REASON_DEBTOR_ADDRESS_MISSING,
     REASON_DISPUTED,
     REASON_PAID,
     build_minimized_export,
@@ -81,6 +80,9 @@ def _portal_user(db):
     client.client_type = ClientType.PORTAL
     client.contact_email = user.email
     client.billing_address = "Rue du Débiteur 8, 1000 Lausanne"
+    client.domicile_address = "Rue du Débiteur 8"
+    client.domicile_zip = "1000"
+    client.domicile_city = "Lausanne"
     db.session.add(client)
     db.session.flush()
     record_portal_terms_acceptance(user, client)
@@ -100,6 +102,7 @@ def _company(db, *, name: str, with_domicile: bool = True):
     db.session.flush()
     company = Company()
     company.name = name
+    company.legal_name = f"{name} SA"
     company.user_id = owner.id
     company.billing_email = f"billing-{suffix}@carrier.ch"
     if with_domicile:
@@ -198,6 +201,7 @@ def test_pursuit_ready_complete_case(db) -> None:
     assert readiness.state == PURSUIT_READY
     assert readiness.reasons == ()
     assert debtor_address_semantics() == "billing_address"
+    assert readiness.audit.get("debtor_domicile_semantics") == "domicile"
     evidence = resolve_portal_enforcement_evidence(recv.id)
     assert evidence["mainlevee_classification"] == "NOT_AUTOMATICALLY_DETERMINED"
     assert evidence["formal_debt_acknowledgment"] == "absent"
@@ -207,22 +211,31 @@ def test_pursuit_ready_complete_case(db) -> None:
 
 
 def test_pursuit_not_ready_missing_debtor_address(db) -> None:
-    """§44"""
+    """§44 — sans domicile LP (billing seul insuffisant)."""
     user, client = _portal_user(db)
+    # Retirer le domicile client avant création créance
+    client.domicile_address = None
+    client.domicile_zip = None
+    client.domicile_city = None
+    db.session.flush()
     company, owner = _company(db, name="No Addr Pursuit")
     recv = _overdue(
         db, user, client, company, owner, invoice="F-44", address=None
     )
-    # Ne peut pas atteindre COLLECTION_PREPARED sans adresse — readiness directe
     readiness = resolve_portal_pursuit_readiness(recv.id, as_of=date(2026, 10, 5))
     assert readiness.state == PURSUIT_NOT_READY
-    assert REASON_DEBTOR_ADDRESS_MISSING in readiness.reasons
+    assert any(
+        r in readiness.reasons
+        for r in ("debtor_domicile_missing", "debtor_domicile_unverified_or_unknown")
+    )
 
 
 def test_pursuit_not_ready_missing_creditor_address(db) -> None:
     """§45"""
     user, client = _portal_user(db)
     company, owner = _company(db, name="No Cred Addr", with_domicile=False)
+    company.legal_name = "No Cred Addr SA"
+    db.session.flush()
     recv = _overdue(db, user, client, company, owner, invoice="F-45")
     readiness = resolve_portal_pursuit_readiness(recv.id, as_of=date(2026, 10, 5))
     assert readiness.state == PURSUIT_NOT_READY

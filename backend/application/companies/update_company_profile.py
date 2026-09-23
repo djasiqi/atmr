@@ -30,6 +30,8 @@ class UpdateCompanyProfileUseCase:
     _ALLOWED_FIELDS: ClassVar[frozenset[str]] = frozenset(
         {
             "name",
+            "legal_name",
+            "legal_form",
             "address",
             "latitude",
             "longitude",

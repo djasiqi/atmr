@@ -84,6 +84,8 @@ class Company(db.Model):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Raison sociale légale — distincte du nom d'affichage commercial (`name`).
+    legal_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Adresse opérationnelle
     address: Mapped[str] = mapped_column(String(200), nullable=True)
@@ -297,6 +299,7 @@ class Company(db.Model):
         return {
             "id": self.id,
             "name": self.name,
+            "legal_name": self.legal_name,
             "address": self.address,
             "latitude": self.latitude,
             "longitude": self.longitude,

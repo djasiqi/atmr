@@ -340,7 +340,8 @@ company_model = companies_ns.model(
 company_update_model = companies_ns.model(
     "CompanyUpdate",
     {
-        "name": fields.String(description="Nom"),
+        "name": fields.String(description="Nom d'affichage commercial"),
+        "legal_name": fields.String(description="Raison sociale légale"),
         "address": fields.String(description="Adresse opérationnelle"),
         "contact_email": fields.String,
         "contact_phone": fields.String,
@@ -348,6 +349,7 @@ company_update_model = companies_ns.model(
         "billing_notes": fields.String,
         "iban": fields.String(description="IBAN"),
         "uid_ide": fields.String(description="IDE / UID (ex: CHE-123.456789)"),
+        "legal_form": fields.String(description="Forme juridique"),
         "domicile_address_line1": fields.String,
         "domicile_address_line2": fields.String,
         "domicile_zip": fields.String,

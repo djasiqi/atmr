@@ -115,6 +115,13 @@ class PortalReceivable(db.Model):
     debtor_billing_address_snapshot: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )
+    # Domicile LP figé à l'émission — distinct de la facturation. NULL sur historiques.
+    debtor_domicile_address_snapshot: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    debtor_domicile_semantics: Mapped[str | None] = mapped_column(
+        String(40), nullable=True
+    )
 
     external_invoice_number: Mapped[str] = mapped_column(String(80), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="CHF")
