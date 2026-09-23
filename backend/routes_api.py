@@ -218,6 +218,7 @@ def init_namespaces(app):
 
     _ = ClientMyTermsAcceptances
     from routes.companies import companies_ns
+    from routes.portal_receivables import portal_receivables_ns
     from routes.contact import contact_ns
     from routes.admin_contact_requests import admin_contact_requests_ns
     from routes.demo_requests import (
@@ -353,6 +354,7 @@ def init_namespaces(app):
 
     # Routes companies
     api_v1.add_namespace(companies_ns, path="/companies")
+    api_v1.add_namespace(portal_receivables_ns, path="/companies/me/portal-receivables")
 
     # Routes app version check (mobile)
     api_v1.add_namespace(app_version_ns, path="/app")
