@@ -363,7 +363,10 @@ const SignupActivation = () => {
   }, [activationSessionId, maskedEmail, maskedPhone, prefillEmail]);
 
   const showPortalTerms = Boolean(
-    status.portal_terms_required && status.email_verified && !status.is_finalized
+    status.portal_terms_required &&
+      status.email_verified &&
+      status.phone_verified &&
+      !status.is_finalized
   );
   const termsReady =
     termsCatalog.some((doc) => doc.document_type === 'terms_of_service') &&
@@ -405,16 +408,26 @@ const SignupActivation = () => {
 
   const activationSubtitle = useMemo(() => {
     if (status.requires_email && !status.email_verified) {
-      return 'Validez votre email pour activer le compte. Le téléphone se vérifiera plus tard, au premier transport.';
+      if (status.portal_terms_required) {
+        return 'Validez votre email. Le téléphone sera vérifié ensuite, avant l’activation du compte.';
+      }
+      return 'Validez votre email pour activer le compte. Le téléphone, s’il ne l’est pas déjà, se vérifiera une seule fois avant la prochaine réservation.';
+    }
+    if (status.requires_phone && !status.phone_verified) {
+      return 'Validez votre numéro de téléphone. Cette vérification concerne le compte, pas une réservation.';
     }
     if (showPortalTerms) {
-      return 'Email confirmé. Lisez et acceptez les conditions pour activer le compte. Le téléphone se vérifiera au premier transport.';
+      return 'Téléphone confirmé. Lisez et acceptez les conditions pour activer le compte.';
     }
-    if (status.requires_phone) {
-      return 'Validez votre téléphone pour activer le compte.';
-    }
-    return 'Votre compte peut être activé. La validation SMS n’est requise qu’avant le premier transport.';
-  }, [showPortalTerms, status.email_verified, status.requires_email, status.requires_phone]);
+    return 'Votre compte peut être activé.';
+  }, [
+    showPortalTerms,
+    status.email_verified,
+    status.phone_verified,
+    status.portal_terms_required,
+    status.requires_email,
+    status.requires_phone,
+  ]);
 
   const handleLoginRedirect = () => {
     navigate('/login', {

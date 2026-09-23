@@ -19,7 +19,7 @@ from application.bookings.create_booking import CreateBookingUseCase
 from domain.bookings.commands import CreateBookingCommand
 from models.enums import BookingStatus, ClientType
 from services.auth.portal_phone_verification import (
-    assert_portal_can_confirm_transport as real_assert_portal_can_confirm,
+    assert_portal_phone_verified as real_assert_portal_can_confirm,
 )
 from services.booking.portal_platform_payment import (
     PortalPlatformPaymentForbidden,
@@ -99,7 +99,7 @@ def _patch_side_effects(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda **_k: None,
     )
     monkeypatch.setattr(
-        "services.auth.portal_phone_verification.assert_portal_can_confirm_transport",
+        "services.auth.portal_phone_verification.assert_portal_phone_verified",
         _allow_verified_portal,
     )
 

@@ -452,12 +452,16 @@ def _mask_phone(phone: str | None) -> str:
 def _activation_channel_requirements(
     session: ActivationSession,
 ) -> tuple[bool, bool]:
-    """Retourne (requires_email, requires_phone) selon les canaux fournis à l'inscription."""
+    """Retourne (requires_email, requires_phone) selon le parcours du compte."""
     user = User.query.get(session.user_id) if session.user_id else None
     requires_email = bool(user and (user.email or "").strip())
-    # AUTH-SMS-02 : si un e-mail est fourni, le SMS n'est plus requis pour activer le compte.
-    requires_phone = bool(user and (user.phone or "").strip()) and not requires_email
-    # Filet de sécurité : si aucun canal n'est détecté, exiger l'e-mail (identité minimale)
+    has_phone = bool(user and (user.phone or "").strip())
+    if getattr(session, "portal_terms_required", False):
+        # Nouveau compte PORTAL : le téléphone est vérifié avant l'activation.
+        requires_phone = True
+    else:
+        # Session antérieure : l'e-mail suffit, le SMS n'active pas le compte.
+        requires_phone = has_phone and not requires_email
     if not requires_email and not requires_phone:
         return True, False
     return requires_email, requires_phone
@@ -468,6 +472,41 @@ def _activation_is_complete(session: ActivationSession) -> bool:
     email_ok = (not requires_email) or bool(session.email_verified_at)
     phone_ok = (not requires_phone) or bool(session.phone_verified_at)
     return email_ok and phone_ok
+
+
+def _prepare_portal_activation_phone_otp(
+    session: ActivationSession, user: User | None
+) -> None:
+    """Prépare l'OTP téléphone après l'e-mail, sans faire échouer cette confirmation.
+
+    Le SMS n'est pas envoyé à l'inscription. Un échec d'envoi laisse le code
+    en session : l'utilisateur peut le renvoyer.
+    """
+    if user is None or not getattr(session, "portal_terms_required", False):
+        return
+    if session.phone_verified_at or getattr(user, "phone_verified_at", None):
+        return
+    if not (getattr(user, "phone", None) or "").strip():
+        return
+    now = datetime.now(UTC)
+    expires = session.sms_expires_at
+    if expires is not None and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if session.sms_code_hash and expires is not None and expires > now:
+        return
+    sms_code = _generate_sms_otp()
+    session.sms_code_hash = _hash_plain_value(sms_code)
+    session.sms_expires_at = now + timedelta(minutes=ACTIVATION_SMS_TTL_MINUTES)
+    session.sms_attempts = 0
+    session.sms_locked_until = None
+    try:
+        result = _send_activation_sms(user, sms_code)
+        if _sms_send_succeeded(result):
+            session.last_sms_sent_at = now
+    except Exception as sms_err:
+        logger.warning(
+            "[Activation] OTP téléphone non envoyé après l'e-mail: %s", sms_err
+        )
 
 
 def _promote_portal_after_email(user: User | None, session: ActivationSession) -> None:
@@ -4956,7 +4995,7 @@ class Register(Resource):
             activation_session.portal_terms_required = True
 
             sms_code = None
-            # AUTH-SMS-02 : pas de SMS à l'inscription si un e-mail est fourni.
+            # Le SMS d'un nouveau compte part après la confirmation de l'e-mail.
             if phone and not email:
                 sms_code = _generate_sms_otp()
                 activation_session.sms_code_hash = _hash_plain_value(sms_code)
@@ -5038,13 +5077,18 @@ class Register(Resource):
                 return body, code
 
             requires_email = bool(email)
-            requires_phone = bool(phone) and not requires_email
+            requires_phone = bool(
+                activation_session.portal_terms_required
+            ) or (bool(phone) and not requires_email)
             channels: list[str] = []
             if requires_email:
                 channels.append("email")
-            if requires_phone:
+            if requires_phone and not activation_session.portal_terms_required:
                 channels.append("SMS")
-            channel_msg = " et ".join(channels) if channels else "vos canaux"
+            if activation_session.portal_terms_required:
+                channel_msg = "email, puis la vérification de votre téléphone"
+            else:
+                channel_msg = " et ".join(channels) if channels else "vos canaux"
             response_body: dict[str, object] = {
                 "message": f"Inscription créée. Activez votre compte via {channel_msg}.",
                 "user_id": user.public_id,
@@ -5237,6 +5281,7 @@ class VerifyActivationEmail(Resource):
 
                 if locked.email_verified_at:
                     user = User.query.get(locked.user_id)
+                    _prepare_portal_activation_phone_otp(locked, user)
                     if not getattr(locked, "portal_terms_required", False):
                         _promote_portal_after_email(user, locked)
                     db.session.commit()
@@ -5250,6 +5295,7 @@ class VerifyActivationEmail(Resource):
 
                 locked.email_verified_at = now
                 user = User.query.get(locked.user_id)
+                _prepare_portal_activation_phone_otp(locked, user)
                 if not getattr(locked, "portal_terms_required", False):
                     _promote_portal_after_email(user, locked)
                 db.session.commit()
@@ -5343,6 +5389,7 @@ class VerifyActivationEmail(Resource):
                 )
             if activation_session.email_verified_at:
                 user = User.query.get(activation_session.user_id)
+                _prepare_portal_activation_phone_otp(activation_session, user)
                 if not getattr(activation_session, "portal_terms_required", False):
                     _promote_portal_after_email(user, activation_session)
                 db.session.commit()
@@ -5355,6 +5402,7 @@ class VerifyActivationEmail(Resource):
                 }, 200
             activation_session.email_verified_at = now
             user = User.query.get(activation_session.user_id)
+            _prepare_portal_activation_phone_otp(activation_session, user)
             if not getattr(activation_session, "portal_terms_required", False):
                 _promote_portal_after_email(user, activation_session)
             db.session.commit()
@@ -5565,6 +5613,19 @@ class FinalizeActivation(Resource):
             user = User.query.get(activation_session.user_id)
             if not user:
                 return {"error": "Utilisateur introuvable."}, 404
+
+            if (
+                getattr(activation_session, "portal_terms_required", False)
+                and not getattr(user, "phone_verified_at", None)
+            ):
+                return auth_error(
+                    AuthErrorCodes.PHONE_VERIFICATION_REQUIRED,
+                    (
+                        "Vérifiez votre numéro de téléphone avant d'activer le compte."
+                    ),
+                    400,
+                    details=_build_activation_status(activation_session),
+                )
 
             if getattr(activation_session, "portal_terms_required", False):
                 portal_client = next(
@@ -6075,7 +6136,7 @@ class SendPhoneVerificationCode(Resource):
     @jwt_required()
     @limiter.limit("15 per hour")
     def post(self):
-        """Envoie un OTP SMS au numéro courant (action volontaire ou 1er transport)."""
+        """Envoie un OTP SMS au numéro du compte. Ce n'est pas une confirmation de course."""
         user = _current_user_from_jwt()
         if not user:
             return {"error": "Utilisateur introuvable."}, 401

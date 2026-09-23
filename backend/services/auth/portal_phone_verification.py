@@ -1,7 +1,10 @@
-"""Validation téléphone CLIENT/PORTAL — découplée de l'activation du compte.
+"""Vérification unique du téléphone d'un compte client privé.
 
 Source de vérité : ``User.phone_verified_at``.
-L'e-mail active le compte. Le SMS n'est exigé qu'avant le premier transport.
+Un numéro vérifié autorise les réservations suivantes sans nouvel OTP.
+Un compte non vérifié doit l'être une fois avant la prochaine réservation.
+Le changement de numéro révoque cette vérification. Les preuves déjà
+enregistrées ne sont pas réécrites.
 """
 
 from __future__ import annotations
@@ -20,28 +23,31 @@ PHONE_VERIFICATION_REQUIRED = "phone_verification_required"
 
 
 class PortalPhoneVerificationRequired(Exception):
-    """PORTAL : téléphone non vérifié, confirmation de transport interdite."""
+    """PORTAL : le compte n'a pas encore de téléphone vérifié."""
 
     code = PHONE_VERIFICATION_REQUIRED
 
     def __init__(
         self,
-        message: str = "Validez votre téléphone pour confirmer la demande de transport.",
+        message: str = (
+            "Votre numéro de téléphone doit être vérifié "
+            "avant votre prochaine réservation."
+        ),
     ) -> None:
         self.message = message
         super().__init__(message)
 
 
-def assert_portal_can_confirm_transport(
+def assert_portal_phone_verified(
     *,
     user_id: int,
     client: object,
     user_loader: Callable[[int], object | None] | None = None,
 ) -> None:
-    """Autorité métier : PORTAL + ``phone_verified_at`` NULL ⇒ refus.
+    """PORTAL + ``phone_verified_at`` NULL ⇒ refus de créer une réservation.
 
-    Les flux Institution / TRANSPORT / création manuelle entreprise ne sont
-    pas concernés (``is_portal_client`` est faux).
+    Ce n'est pas une confirmation SMS de la course. Les flux Institution,
+    TRANSPORT et création manuelle entreprise ne sont pas concernés.
     """
     if not is_portal_client(client):
         return
@@ -111,6 +117,10 @@ def promote_portal_account_after_email(
         return False
     session = session or latest_activation_session(user)
     if not session or not session.email_verified_at:
+        return False
+    # Les nouvelles inscriptions attendent le téléphone et les conditions
+    # dans la finalisation. Seules les sessions antérieures sont promues ici.
+    if getattr(session, "portal_terms_required", False):
         return False
 
     changed = False

@@ -12,7 +12,7 @@ from models.enums import ClientType, UserRole
 from services.auth.portal_phone_verification import (
     PortalPhoneVerificationRequired,
     apply_user_phone_change,
-    assert_portal_can_confirm_transport,
+    assert_portal_phone_verified,
     is_portal_client_user,
     maybe_promote_portal_account,
     promote_portal_account_after_email,
@@ -99,18 +99,18 @@ def test_maybe_promote_skips_non_portal_and_unverified_email(monkeypatch):
 
 
 def test_assert_portal_can_confirm_skips_transport_and_blocks_unverified():
-    assert_portal_can_confirm_transport(
+    assert_portal_phone_verified(
         user_id=1,
         client=SimpleNamespace(client_type=ClientType.TRANSPORT),
         user_loader=lambda _uid: SimpleNamespace(phone_verified_at=None),
     )
-    assert_portal_can_confirm_transport(
+    assert_portal_phone_verified(
         user_id=1,
         client=SimpleNamespace(client_type=ClientType.PORTAL),
         user_loader=lambda _uid: SimpleNamespace(phone_verified_at=datetime.now(UTC)),
     )
     with pytest.raises(PortalPhoneVerificationRequired):
-        assert_portal_can_confirm_transport(
+        assert_portal_phone_verified(
             user_id=1,
             client=SimpleNamespace(client_type=ClientType.PORTAL),
             user_loader=lambda _uid: SimpleNamespace(phone_verified_at=None),

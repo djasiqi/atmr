@@ -1,4 +1,4 @@
-"""AUTH-SMS-02 : e-mail active le compte CLIENT/PORTAL, SMS au 1er transport."""
+"""Téléphone PORTAL vérifié une fois : plus d'OTP par réservation."""
 
 from __future__ import annotations
 
@@ -293,3 +293,113 @@ def test_institution_user_is_not_auto_promoted():
     assert maybe_promote_portal_account(institution) is False
     assert institution.account_status == "pending_activation"
     assert institution.phone_verified_at is None
+
+
+def _fake_booking(booking_id: int):
+    fake_booking = MagicMock()
+    fake_booking.id = booking_id
+    fake_booking.status = "pending"
+    fake_booking.amount = 50.0
+    fake_booking.price_amount = 50.0
+    fake_booking.price_breakdown_json = {}
+    fake_booking.billed_to_type = "patient"
+    return fake_booking
+
+
+def test_verified_account_books_twice_without_sms(client, app, db, monkeypatch):
+    from services.legal.record_terms_acceptance import record_portal_terms_acceptance
+
+    user, portal_client = _make_portal_user(db)
+    user.phone_verified_at = datetime.now(UTC)
+    record_portal_terms_acceptance(user, portal_client)
+    db.session.commit()
+    sms_calls: list[str] = []
+
+    def _forbid_sms(*_args, **_kwargs):
+        sms_calls.append("sms")
+        return {"ok": True}
+
+    monkeypatch.setattr(auth, "_send_activation_sms", _forbid_sms)
+    monkeypatch.setattr(
+        "services.notifications.sms.send_sms_notification", _forbid_sms
+    )
+    created: list[int] = []
+
+    def _create(**_kwargs):
+        created.append(1)
+        return _fake_booking(8900 + len(created))
+
+    monkeypatch.setattr(
+        "bookings.infrastructure.adapters.booking_service_adapter.create_booking_via_use_case",
+        _create,
+    )
+    headers = _headers(app, user)
+    payload = _valid_booking_payload()
+    urls = [
+        f"/api/v1/clients/{user.public_id}/bookings",
+        "/api/v1/clients/me/bookings",
+        f"/api/v1/bookings/clients/{user.public_id}/bookings",
+    ]
+    for url in urls[:2]:
+        response = client.post(url, json=payload, headers=headers)
+        assert response.status_code == 201, response.get_json()
+    third = client.post(urls[2], json=payload, headers=headers)
+    assert third.status_code == 201, third.get_json()
+    assert len(created) == 3
+    assert sms_calls == []
+
+
+def test_phone_change_blocks_booking_until_the_new_number_is_verified(
+    client, app, db, monkeypatch
+):
+    from services.legal.record_terms_acceptance import record_portal_terms_acceptance
+
+    user, portal_client = _make_portal_user(db)
+    user.phone_verified_at = datetime.now(UTC)
+    record_portal_terms_acceptance(user, portal_client)
+    db.session.commit()
+    headers = _headers(app, user)
+    changed = client.put(
+        f"/api/v1/clients/{user.public_id}",
+        json={"phone": "+41790001122"},
+        headers=headers,
+    )
+    assert changed.status_code == 200, changed.get_json()
+    monkeypatch.setattr(
+        "bookings.infrastructure.adapters.booking_service_adapter.create_booking_via_use_case",
+        lambda **_k: _fake_booking(8910),
+    )
+    blocked = client.post(
+        f"/api/v1/clients/{user.public_id}/bookings",
+        json=_valid_booking_payload(),
+        headers=headers,
+    )
+    assert blocked.status_code == 403
+    assert (blocked.get_json() or {}).get("error") == "phone_verification_required"
+
+    session = ActivationSession()
+    session.activation_session_id = str(uuid.uuid4())
+    session.user_id = user.id
+    session.sms_code_hash = auth._hash_plain_value("654321")
+    session.sms_expires_at = datetime.now(UTC) + timedelta(minutes=5)
+    session.sms_attempts = 0
+    db.session.add(session)
+    db.session.commit()
+    verified = client.post(
+        "/api/v1/auth/phone/verify-code",
+        json={"code": "654321"},
+        headers=headers,
+    )
+    assert verified.status_code == 200, verified.get_json()
+    ok = client.post(
+        f"/api/v1/clients/{user.public_id}/bookings",
+        json=_valid_booking_payload(),
+        headers=headers,
+    )
+    assert ok.status_code == 201, ok.get_json()
+    again = client.post(
+        "/api/v1/clients/me/bookings",
+        json=_valid_booking_payload(),
+        headers=headers,
+    )
+    assert again.status_code == 201, again.get_json()

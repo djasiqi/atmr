@@ -32,9 +32,17 @@ def _open_session(db, user: User, *, required: bool) -> ActivationSession:
     return session
 
 
+def _mark_phone_verified(db, user: User, session: ActivationSession) -> None:
+    now = datetime.now(UTC)
+    user.phone_verified_at = now
+    session.phone_verified_at = now
+    db.session.commit()
+
+
 def test_new_portal_acceptance_creates_two_rows_matching_catalog(client, db):
     user, _portal = _make_portal_user(db, pending=True)
     session = _open_session(db, user, required=True)
+    _mark_phone_verified(db, user, session)
 
     listed = client.get(
         "/api/v1/auth/activation/portal-terms",
@@ -75,9 +83,9 @@ def test_new_portal_acceptance_creates_two_rows_matching_catalog(client, db):
     assert {(row.document_type, row.terms_hash) for row in rows} == catalog
     db.session.refresh(user)
     assert user.account_status == "active"
-    assert user.phone_verified_at is None
-    assert all(row.verification_method == VERIFICATION_NOT_VERIFIED for row in rows)
-    assert all(row.phone_verified_at_snapshot is None for row in rows)
+    assert user.phone_verified_at is not None
+    assert all(row.verification_method == VERIFICATION_OTP_SMS for row in rows)
+    assert all(row.phone_verified_at_snapshot is not None for row in rows)
     assert all(row.phone_snapshot == user.phone for row in rows)
 
 
@@ -103,6 +111,7 @@ def test_client_cannot_choose_version_or_hash(client, db):
 def test_second_insert_failure_rolls_back_finalization(client, db, monkeypatch):
     user, _portal = _make_portal_user(db, pending=True)
     session = _open_session(db, user, required=True)
+    _mark_phone_verified(db, user, session)
 
     def fail_second(portal_user, portal_client, documents=None):
         specs = list(documents) if documents is not None else list(current_portal_terms())
@@ -134,6 +143,7 @@ def test_second_insert_failure_rolls_back_finalization(client, db, monkeypatch):
 def test_repeat_finalize_does_not_duplicate_rows(client, db):
     user, _portal = _make_portal_user(db, pending=True)
     session = _open_session(db, user, required=True)
+    _mark_phone_verified(db, user, session)
     payload = {
         "activation_session_id": session.activation_session_id,
         "accept_current_portal_terms": True,
@@ -148,8 +158,8 @@ def test_repeat_finalize_does_not_duplicate_rows(client, db):
 
 def test_verified_phone_is_recorded_as_otp_sms(client, db):
     user, _portal = _make_portal_user(db, pending=True)
-    user.phone_verified_at = datetime.now(UTC)
     session = _open_session(db, user, required=True)
+    _mark_phone_verified(db, user, session)
     response = client.post(
         "/api/v1/auth/activation/finalize",
         json={
@@ -165,21 +175,12 @@ def test_verified_phone_is_recorded_as_otp_sms(client, db):
 
 
 def test_later_phone_verification_does_not_rewrite_acceptance(client, db):
-    user, _portal = _make_portal_user(db, pending=True)
-    session = _open_session(db, user, required=True)
-    client.post(
-        "/api/v1/auth/activation/finalize",
-        json={
-            "activation_session_id": session.activation_session_id,
-            "accept_current_portal_terms": True,
-        },
-    )
+    user, portal = _make_portal_user(db, pending=True)
+    record_portal_terms_acceptance(user, portal)
+    db.session.commit()
     sms_source = inspect.getsource(auth.VerifyActivationSms)
     assert "ClientTermsAcceptance" not in sms_source
-    db.session.expire_all()
-    stored = db.session.get(User, user.id)
-    assert stored is not None
-    stored.phone_verified_at = datetime.now(UTC)
+    user.phone_verified_at = datetime.now(UTC)
     db.session.commit()
     rows = ClientTermsAcceptance.query.filter_by(user_id=user.id).all()
     assert len(rows) == 2
@@ -199,6 +200,23 @@ def test_existing_session_is_not_backfilled(client, db):
     db.session.refresh(user)
     assert user.account_status == "active"
     assert user.phone_verified_at is None
+
+
+def test_new_account_finalize_without_phone_is_refused(client, db):
+    user, _portal = _make_portal_user(db, pending=True)
+    session = _open_session(db, user, required=True)
+    response = client.post(
+        "/api/v1/auth/activation/finalize",
+        json={
+            "activation_session_id": session.activation_session_id,
+            "accept_current_portal_terms": True,
+        },
+    )
+    assert response.status_code == 400, response.get_json()
+    db.session.refresh(user)
+    assert user.account_status == "pending_activation"
+    assert user.phone_verified_at is None
+    assert ClientTermsAcceptance.query.filter_by(user_id=user.id).count() == 0
 
 
 def test_login_does_not_skip_terms_for_a_new_account(client, db):

@@ -414,9 +414,9 @@ def test_gate_order_and_existing_booking_flows_are_unchanged() -> None:
         "def execute(self, cmd: CreateBookingCommand)", 1
     )[1]
     assert execute_uc.index("assert_portal_terms_current") < execute_uc.index(
-        "assert_portal_can_confirm_transport"
+        "assert_portal_phone_verified"
     )
-    assert execute_uc.index("assert_portal_can_confirm_transport") < execute_uc.index(
+    assert execute_uc.index("assert_portal_phone_verified") < execute_uc.index(
         "self.booking_writer.create_and_commit"
     )
     execute = route_source.split("def execute_client_booking_creation", 1)[1].split(
@@ -437,7 +437,7 @@ def test_gate_order_and_existing_booking_flows_are_unchanged() -> None:
         BACKEND_ROOT / "services" / "auth" / "portal_phone_verification.py"
     ).read_text(encoding="utf-8")
     assert "terms_reacceptance_required" not in phone_source
-    assert "def assert_portal_can_confirm_transport" in phone_source
+    assert "def assert_portal_phone_verified" in phone_source
 
 
 def test_published_version_flag_cannot_be_rewritten(db) -> None:

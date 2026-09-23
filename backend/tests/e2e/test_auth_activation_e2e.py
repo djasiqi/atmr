@@ -110,7 +110,7 @@ class TestAuthActivationFlow:
         assert register_data.get("email_sent") is None
         assert "activation_email_queued" in register_data
         assert register_data.get("sms_sent") is False
-        assert register_data.get("requires_phone") is False
+        assert register_data.get("requires_phone") is True
         assert register_data.get("requires_email") is True
 
         # 2) Login bloqué avant activation complète
@@ -178,6 +178,31 @@ class TestAuthActivationFlow:
         )
         assert terms_response.status_code == 200, terms_response.get_json()
         documents = (terms_response.get_json() or {}).get("documents") or []
+        blocked = e2e_client.post(
+            "/api/v1/auth/activation/finalize",
+            json={
+                "activation_session_id": activation_session_id,
+                "accept_current_portal_terms": True,
+            },
+            headers={"Content-Type": "application/json"},
+        )
+        assert blocked.status_code == 400, blocked.get_json()
+
+        session.sms_code_hash = hashlib.sha256(b"123456").hexdigest()
+        session.sms_expires_at = datetime.now(UTC) + timedelta(minutes=10)
+        session.sms_attempts = 0
+        session.sms_locked_until = None
+        db.session.commit()
+        sms_response = e2e_client.post(
+            "/api/v1/auth/activation/verify-sms",
+            json={
+                "activation_session_id": activation_session_id,
+                "code": "123456",
+            },
+            headers={"Content-Type": "application/json"},
+        )
+        assert sms_response.status_code == 200, sms_response.get_json()
+
         finalize_response = e2e_client.post(
             "/api/v1/auth/activation/finalize",
             json={
@@ -191,9 +216,10 @@ class TestAuthActivationFlow:
         user = db.session.get(User, session.user_id)
         assert user is not None
         assert user.account_status == "active"
-        assert user.phone_verified_at is None
+        assert user.phone_verified_at is not None
         rows = ClientTermsAcceptance.query.filter_by(user_id=user.id).all()
         assert len(rows) == 2
+        assert all(row.verification_method == "otp_sms" for row in rows)
         assert {(doc["document_type"], doc["terms_hash"]) for doc in documents} == {
             (row.document_type, row.terms_hash) for row in rows
         }
@@ -425,6 +451,21 @@ class TestAuthActivationFlow:
         assert user.account_status == "pending_activation"
         assert user.phone_verified_at is None
 
+        session.sms_code_hash = hashlib.sha256(b"123456").hexdigest()
+        session.sms_expires_at = datetime.now(UTC) + timedelta(minutes=10)
+        session.sms_attempts = 0
+        session.sms_locked_until = None
+        db.session.commit()
+        sms_response = e2e_client.post(
+            "/api/v1/auth/activation/verify-sms",
+            json={
+                "activation_session_id": activation_session_id,
+                "code": "123456",
+            },
+            headers={"Content-Type": "application/json"},
+        )
+        assert sms_response.status_code == 200, sms_response.get_json()
+
         refused = e2e_client.post(
             "/api/v1/auth/activation/finalize",
             json={"activation_session_id": activation_session_id},
@@ -451,12 +492,12 @@ class TestAuthActivationFlow:
         )
         db.session.refresh(user)
         assert user.account_status == "active"
-        assert user.phone_verified_at is None
+        assert user.phone_verified_at is not None
         finalize_data = finalize_response.get_json() or {}
         status = finalize_data.get("activation_status") or {}
         assert status.get("email_verified") is True
-        assert status.get("phone_verified") is False
-        assert status.get("requires_phone") is False
+        assert status.get("phone_verified") is True
+        assert status.get("requires_phone") is True
         assert status.get("is_complete") is True
 
     def test_e2e_activation_verify_sms_expired_code(self, e2e_client, db):

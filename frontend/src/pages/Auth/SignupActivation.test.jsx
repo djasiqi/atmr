@@ -415,7 +415,7 @@ describe('SignupActivation', () => {
     expect(screen.queryByRole('button', { name: /valider le code/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /renvoyer le code/i })).not.toBeInTheDocument();
     expect(
-      screen.getByText(/le téléphone se vérifiera plus tard/i)
+      screen.getByText(/une seule fois avant la prochaine réservation/i)
     ).toBeInTheDocument();
   });
 
@@ -445,9 +445,9 @@ describe('SignupActivation', () => {
         data: {
           activation_status: {
             email_verified: true,
-            phone_verified: false,
+            phone_verified: true,
             requires_email: true,
-            requires_phone: false,
+            requires_phone: true,
             is_complete: true,
             is_finalized: false,
             portal_terms_required: true,

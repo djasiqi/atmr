@@ -14,7 +14,7 @@ import pytest
 from models.enums import BookingStatus, ClientType
 from services.auth.portal_phone_verification import (
     PortalPhoneVerificationRequired,
-    assert_portal_can_confirm_transport,
+    assert_portal_phone_verified,
 )
 from services.booking.portal_platform_payment import (
     should_hold_client_booking_for_platform_payment,
@@ -61,7 +61,7 @@ def test_transport_checkout_still_enters_saferpay_service(
 
 def test_unverified_portal_phone_still_blocks_confirmation() -> None:
     with pytest.raises(PortalPhoneVerificationRequired) as exc:
-        assert_portal_can_confirm_transport(
+        assert_portal_phone_verified(
             user_id=1,
             client=SimpleNamespace(client_type=ClientType.PORTAL),
             user_loader=lambda _uid: SimpleNamespace(phone_verified_at=None),

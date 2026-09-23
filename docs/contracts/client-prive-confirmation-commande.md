@@ -1,17 +1,16 @@
 # Cahier des charges — Compte client privé : cadre contractuel et confirmation de commande
 
-**Statut** : source de vérité **cible**, **non implémentée**. L’impayé ne démarre qu’après la bascule (étape 5), elle-même seulement quand les étapes 1 à 4 sont implémentées et testées.
+**Statut** : étapes 1 à 5 réalisées pour le client privé. L’impayé (étape 6) n’est pas commencé.
 
 **Périmètre** : compte **client privé** (rôle CLIENT, hors institution, hors réservation invité). Le portail institution et le paiement guest ne sont pas couverts ici.
 
-**Deux documents, deux rôles, jusqu’à la migration complète.**
+**Deux documents.**
 
 | Document | Rôle |
 | --- | --- |
-| Ce fichier | Cible produit |
-| [AUTH-SMS-02](../ops/auth-sms-02-decouple-activation.md) | Comportement de production **actuel** |
-
-Tant que les étapes 1 à 4 ne sont pas complètement implémentées et testées, AUTH-SMS-02 et `assert_portal_can_confirm_transport` (`backend/services/auth/portal_phone_verification.py`) restent en production. L’OTP à la confirmation de transport n’est retiré qu’à l’étape 5.
+| Ce fichier | Cible produit, étapes 1 à 5 réalisées |
+| [PORTAL_PHONE_VERIFICATION_ONCE](../ops/portal-phone-verification-once.md) | Téléphone vérifié une fois, plus d’OTP de réservation |
+| [AUTH-SMS-02](../ops/auth-sms-02-decouple-activation.md) | Contrat historique, remplacé |
 
 ## Règle d’or
 
@@ -70,7 +69,7 @@ Les CGU et les CGV doivent être lisibles **avant** le clic d’acceptation. La 
 
 ✅ **Implémenté** : registre append-only `legal_document_version` et `client_terms_acceptance` (`backend/models/client_terms_acceptance.py`). CGU (`terms_of_service`) et CGV de transport (`transport_terms`) sont deux documents. Le corps figé est dans `backend/legal/canonical/fr/`, pas dans la page frontend. `POST/GET /api/v1/clients/me/terms-acceptances` insère et lit seulement. Les comptes existants ne sont pas backfillés. Le blocage `TERMS_REACCEPTANCE_REQUIRED` reste à l’étape 4. La page `frontend/src/pages/Legal/TermsOfService.jsx` n’est pas la source canonique.
 
-✅ **Implémenté** : une nouvelle inscription PORTAL (`activation_session.portal_terms_required`) suit `inscription → e-mail confirmé → lecture des deux textes canoniques → case explicite non précochée → finalisation`. `POST /api/v1/auth/activation/finalize` avec `accept_current_portal_terms: true` écrit les deux `ClientTermsAcceptance` et active le compte dans la même transaction. Le navigateur ne choisit ni version ni empreinte. `GET /api/v1/auth/activation/portal-terms` sert les mêmes corps que le catalogue. Sans téléphone vérifié, `verification_method = not_verified`. Un OTP ultérieur ne réécrit pas ces lignes. Les sessions antérieures (`portal_terms_required = false`) restent activables sans acceptation, et AUTH-SMS-02 n’exige toujours pas le SMS pour activer le compte.
+✅ **Implémenté** : une nouvelle inscription PORTAL (`activation_session.portal_terms_required`) suit `inscription → e-mail confirmé → OTP téléphone → lecture des deux textes canoniques → case explicite non précochée → finalisation`. Au moment où le compte devient actif, l’e-mail est confirmé, `phone_verified_at` est renseigné, et les deux `ClientTermsAcceptance` existent avec `verification_method = otp_sms`. `POST /api/v1/auth/activation/finalize` refuse l’activation si le téléphone n’est pas vérifié. Les acceptations déjà enregistrées avec `not_verified` ne sont pas réécrites. Les sessions antérieures (`portal_terms_required = false`) restent activables sans SMS, puis une vérification unique du compte est exigée avant la prochaine réservation.
 
 ## 2. Chaque réservation
 
@@ -111,7 +110,7 @@ Aucune nouvelle réservation si le compte n’a pas d’acceptation valide pour 
 
 Une absence d’acceptation, ou une version courante publiée avec `requires_reacceptance=true` sans acceptation de cette version et de son empreinte, donne `reacceptance_required`. Une version publiée avec `requires_reacceptance=false` ne bloque pas : la dernière acceptation réelle reste la base contractuelle (`contractual_basis=prior_acceptance`) et `BOOKING_CREATED` pointe vers elle. Aucune ligne n’est inventée pour la version informative.
 
-`assert_portal_terms_current` refuse les nouvelles réservations PORTAL dans `execute_client_booking_creation` et dans `CreateBookingUseCase`, avant `assert_portal_can_confirm_transport`. Ordre : autorisation, identité PORTAL, conditions courantes, téléphone AUTH-SMS-02, création. Réponse `403` `terms_reacceptance_required` avec les types de documents exigés. Le login, la consultation et l’annulation d’une réservation existante ne sont pas bloqués. `PUT /api/v1/bookings/<id>` ne consulte pas ce statut : une modification de course déjà créée reste possible selon les règles de statut actuelles.
+`assert_portal_terms_current` refuse les nouvelles réservations PORTAL dans `execute_client_booking_creation` et dans `CreateBookingUseCase`, avant `assert_portal_phone_verified`. Ordre : autorisation, identité PORTAL, conditions courantes, téléphone du compte, création. Réponse `403` `terms_reacceptance_required` avec les types de documents exigés. Le login, la consultation et l’annulation d’une réservation existante ne sont pas bloqués. `PUT /api/v1/bookings/<id>` ne consulte pas ce statut : une modification de course déjà créée reste possible selon les règles de statut actuelles.
 
 L’acceptation envoie seulement `accept_current_required_terms: true` vers `POST /api/v1/clients/me/terms-acceptances`. Le serveur n’insère que les documents exigés, dans une transaction, sous verrou du compte. Le même retry ne duplique pas. Les comptes historiques ne sont pas backfillés : `GET /api/v1/clients/me/portal-terms-status` ne crée aucune ligne. Le dashboard affiche « Mise à jour des conditions » avant une nouvelle réservation. Pas d’e-mail d’acceptation.
 
@@ -231,7 +230,7 @@ Chaque étape attend que la précédente soit en place. L’étape 5 est la seul
 2. **Événement immuable de confirmation de commande** — `transport_id`, `user_id`, montant affiché, devise, texte du bouton, version CGV applicable, horodatage, snapshot des éléments contractuels importants. Modification ou annulation = nouvel événement.
 3. **Parcours client** — bouton **Confirmer la réservation – CHF X.–** ; le clic conclut la commande ; l’e-mail qui suit est une confirmation, pas l’acceptation.
 4. **Réacceptation** — ✅ **Implémenté** : changement publié avec `requires_reacceptance=true` → `TERMS_REACCEPTANCE_REQUIRED` ; aucune nouvelle réservation tant que la nouvelle ligne n’existe pas ; les acceptations et les `BOOKING_CREATED` antérieurs restent. Une publication `requires_reacceptance=false` conserve l’acceptation précédente comme base contractuelle.
-5. **Migration AUTH-SMS-02** — retirer l’OTP systématique à la réservation seulement quand les étapes 1 à 4 sont couvertes par les tests. Conserver l’OTP pour la création de compte, le changement de numéro, la récupération et les événements sensibles.
+5. **Téléphone vérifié une fois** — ✅ **Implémenté** : les nouveaux comptes vérifient le numéro avant l’activation ; les comptes déjà ouverts le vérifient une fois avant la prochaine réservation. L’OTP n’accompagne plus la confirmation d’une course. Le changement de numéro révoque `phone_verified_at`. Pas de moteur de step-up.
 6. **Impayés** — facture échue, blocage des nouvelles réservations, historique probatoire exploitable, rappel et recouvrement.
 
 ## 8. Hors de ce document
@@ -243,4 +242,4 @@ Chaque étape attend que la précédente soit en place. L’étape 5 est la seul
 
 ## Reste à faire
 
-Les six étapes de la section 7. Aucune n’est implémentée. AUTH-SMS-02 reste le comportement de production.
+Étape 6 : impayés et suspension des nouvelles réservations. Les étapes 1 à 5 sont en place.

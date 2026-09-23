@@ -967,6 +967,33 @@ const ClientDashboard = () => {
     });
   };
 
+  const openAccountPhoneVerification = async (maskedPhone = '') => {
+    setPhoneGate({
+      open: true,
+      code: '',
+      sending: true,
+      verifying: false,
+      message: '',
+      error: '',
+      maskedPhone,
+    });
+    try {
+      const smsRes = await apiClient.post('/auth/phone/send-code', {});
+      setPhoneGate((prev) => ({
+        ...prev,
+        sending: false,
+        message: smsRes?.data?.message || 'Code SMS envoyé pour vérifier le compte.',
+        maskedPhone: smsRes?.data?.masked_phone || prev.maskedPhone,
+      }));
+    } catch (smsErr) {
+      setPhoneGate((prev) => ({
+        ...prev,
+        sending: false,
+        error: getApiErrorMessage(smsErr, 'SMS temporairement indisponible. Réessayez.'),
+      }));
+    }
+  };
+
   const handlePhoneGateVerify = async () => {
     const code = String(phoneGate.code || '').trim();
     if (!/^\d{6}$/.test(code)) {
@@ -977,8 +1004,8 @@ const ClientDashboard = () => {
     try {
       await apiClient.post('/auth/phone/verify-code', { code });
       closePhoneGate();
-      toast.success('Téléphone confirmé. Reprise de la demande…');
-      await handleBooking();
+      setProfile((prev) => (prev ? { ...prev, phone_verified: true } : prev));
+      toast.success('Numéro vérifié. Vous pouvez confirmer la demande.');
     } catch (err) {
       setPhoneGate((prev) => ({
         ...prev,
@@ -1317,6 +1344,14 @@ const ClientDashboard = () => {
         return;
       }
 
+      if (isPortalPrivateClient && profile?.phone_verified === false) {
+        setFormError(
+          'Votre numéro de téléphone doit être vérifié avant votre prochaine réservation. La demande saisie est conservée.'
+        );
+        await openAccountPhoneVerification(profile?.phone || '');
+        return;
+      }
+
       const response = await apiClient.post(`/clients/${effectiveClientId}/bookings`, {
         ...bookingData,
         pickup_location: canonicalPickup,
@@ -1468,41 +1503,13 @@ const ClientDashboard = () => {
         }
         return;
       }
-      if (apiError === 'phone_verification_required' || err?.response?.status === 403) {
+      if (apiError === 'phone_verification_required') {
         const details = err?.response?.data?.details || {};
-        if (apiError === 'phone_verification_required') {
-          setPhoneGate({
-            open: true,
-            code: '',
-            sending: true,
-            verifying: false,
-            message: '',
-            error: '',
-            maskedPhone: details.masked_phone || '',
-          });
-          try {
-            const smsRes = await apiClient.post('/auth/phone/send-code', {});
-            setPhoneGate((prev) => ({
-              ...prev,
-              sending: false,
-              message: smsRes?.data?.message || 'Code SMS envoyé.',
-              maskedPhone: smsRes?.data?.masked_phone || prev.maskedPhone,
-            }));
-          } catch (smsErr) {
-            setPhoneGate((prev) => ({
-              ...prev,
-              sending: false,
-              error: getApiErrorMessage(
-                smsErr,
-                'SMS temporairement indisponible. Réessayez.'
-              ),
-            }));
-          }
-          setFormError(
-            'Validez votre téléphone pour confirmer la demande. Le formulaire est conservé.'
-          );
-          return;
-        }
+        setFormError(
+          'Votre numéro de téléphone doit être vérifié avant votre prochaine réservation. La demande saisie est conservée.'
+        );
+        await openAccountPhoneVerification(details.masked_phone || '');
+        return;
       }
       const msg = getApiErrorMessage(err, 'Une erreur est survenue lors de la réservation.');
       setFormError(msg);
@@ -2491,11 +2498,12 @@ const ClientDashboard = () => {
                   ) : null}
 
                   {phoneGate.open ? (
-                    <div className="phoneGateBox" role="dialog" aria-label="Validation du téléphone">
+                    <div className="phoneGateBox" role="dialog" aria-label="Vérification du numéro de compte">
                       <p>
-                        Validez le code reçu
-                        {phoneGate.maskedPhone ? ` sur ${phoneGate.maskedPhone}` : ''} pour
-                        confirmer la demande. Vos informations sont conservées.
+                        Votre numéro
+                        {phoneGate.maskedPhone ? ` ${phoneGate.maskedPhone}` : ''} doit être
+                        vérifié une seule fois avant la prochaine réservation. Cette étape
+                        concerne le compte. La demande saisie reste affichée.
                       </p>
                       {phoneGate.message ? <p className="networkHint">{phoneGate.message}</p> : null}
                       {phoneGate.error ? <p className="error">{phoneGate.error}</p> : null}

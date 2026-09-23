@@ -1,5 +1,15 @@
 # AUTH-SMS-02 — Découpler activation du compte et validation du téléphone
 
+```text
+AUTH-SMS-02 legacy contract : CLOSED / SUPERSEDED
+```
+
+Ce document conserve le contrat historique : l’e-mail activait le compte, et un OTP était exigé avant le premier transport. Ce comportement n’est plus celui des nouveaux comptes PORTAL ni des réservations.
+
+Le contrat actif est [PORTAL_PHONE_VERIFICATION_ONCE](portal-phone-verification-once.md).
+
+---
+
 ## Verdict (figé — READY FOR PROD VALIDATION)
 
 ```text
@@ -15,10 +25,11 @@ TWILIO ........................ OFF volontairement
 VERDICT PROD .................. PENDING
 ```
 
-Périmètre fonctionnel figé. Runbook : [auth-sms-02-prod-runbook.md](auth-sms-02-prod-runbook.md).
-Ne pas ouvrir Twilio. Ne pas lancer `deploy.yml` sans `SKIP_DB_UPGRADE=1`.
+Périmètre fonctionnel figé à l’époque. Runbook historique : [auth-sms-02-prod-runbook.md](auth-sms-02-prod-runbook.md).
 
-## Objectif produit
+Ce fichier n’est plus la description du comportement courant. La cible réalisée est [PORTAL_PHONE_VERIFICATION_ONCE](portal-phone-verification-once.md).
+
+## Objectif produit historique
 
 ```text
 EMAIL = identité nécessaire pour activer et connecter le compte

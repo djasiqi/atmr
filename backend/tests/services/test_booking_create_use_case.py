@@ -206,7 +206,7 @@ def test_create_booking_use_case_blocks_unverified_portal_phone(
         lambda **_k: None,
     )
     monkeypatch.setattr(
-        "services.auth.portal_phone_verification.assert_portal_can_confirm_transport",
+        "services.auth.portal_phone_verification.assert_portal_phone_verified",
         lambda **_k: (_ for _ in ()).throw(PortalPhoneVerificationRequired()),
     )
     with pytest.raises(PortalPhoneVerificationRequired):

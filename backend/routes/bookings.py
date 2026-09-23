@@ -720,8 +720,8 @@ def execute_client_booking_creation(public_id: str) -> Any:
         from services.notifications.phone_e164 import mask_phone_for_log
         from shared.constants import AuthErrorCodes
 
-        # ``user`` ici est un DTO : la source de vérité SMS est ``User.phone_verified_at``.
-        # Ordre PORTAL : identité, conditions courantes, puis téléphone AUTH-SMS-02.
+        # ``user`` ici est un DTO : la source de vérité est ``User.phone_verified_at``.
+        # Ordre PORTAL : identité, conditions courantes, téléphone du compte, création.
         orm_user = db.session.get(UserModel, user.id) if user is not None else None
         if orm_user is not None and client is not None and is_portal_client(client):
             from services.legal.portal_terms_status import (
@@ -747,10 +747,14 @@ def execute_client_booking_creation(public_id: str) -> Any:
         ):
             return auth_error(
                 AuthErrorCodes.PHONE_VERIFICATION_REQUIRED,
-                "Validez votre téléphone pour confirmer la demande de transport.",
+                (
+                    "Votre numéro de téléphone doit être vérifié "
+                    "avant votre prochaine réservation."
+                ),
                 403,
                 details={
                     "phone_verified": False,
+                    "scope": "account",
                     "masked_phone": mask_phone_for_log(
                         getattr(orm_user, "phone", None)
                     ),
@@ -814,7 +818,7 @@ def execute_client_booking_creation(public_id: str) -> Any:
                 AuthErrorCodes.PHONE_VERIFICATION_REQUIRED,
                 e.message,
                 403,
-                details={"phone_verified": False},
+                details={"phone_verified": False, "scope": "account"},
             )
         except InvalidClientBookingCommand as e:
             if idempotency_owned and idempotency_key:

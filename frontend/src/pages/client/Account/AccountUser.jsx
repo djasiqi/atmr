@@ -668,8 +668,8 @@ const AccountUser = () => {
                           />
                           <p className="field-hint profile-fieldNote">
                             {updatedProfile.phone_verified
-                              ? 'Vérifié. Un changement de numéro exigera une nouvelle validation SMS avant le prochain transport.'
-                              : 'À vérifier. Requis uniquement pour confirmer une demande de transport.'}
+                              ? 'Vérifié. Un changement de numéro exigera une nouvelle vérification avant la prochaine réservation.'
+                              : 'À vérifier une seule fois avant la prochaine réservation.'}
                           </p>
                           {!updatedProfile.phone_verified ? (
                             <div className="phoneVerifyBox">
