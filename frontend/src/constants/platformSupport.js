@@ -1,6 +1,6 @@
 /** Coordonnées support plateforme LIRIE (surchargeables via variables d'environnement CRA). */
 export const LIRIE_SUPPORT_PHONE =
-  String(process.env.REACT_APP_LIRIE_SUPPORT_PHONE || '022 512 02 03').trim();
+  String(process.env.REACT_APP_LIRIE_SUPPORT_PHONE || '022 552 03 02').trim();
 
 export const LIRIE_SUPPORT_EMAIL =
   String(process.env.REACT_APP_LIRIE_SUPPORT_EMAIL || 'info@lirie.ch').trim();

@@ -262,7 +262,7 @@ describe('Login Page', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/momentanément indisponible/i);
-      expect(screen.getByRole('alert')).toHaveTextContent(/022 512 02 03/);
+      expect(screen.getByRole('alert')).toHaveTextContent(/022 552 03 02/);
     });
     expect(screen.queryByText(/404 page not found/i)).not.toBeInTheDocument();
   });

@@ -22,6 +22,7 @@ import {
   markCrossTabLogout,
   setAuthLogoutReason,
 } from './sessionLogoutState';
+import { getLirieSupportContactLine } from '../constants/platformSupport';
 
 let baseApiRest = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || '/api/v1';
 
@@ -294,7 +295,7 @@ const addAuthHeader = async (cfg = {}) => {
 
 // ✅ Garde anti-régression dashboard company : company_dispatch/* sans JWT chauffeur.
 export const COMPANY_DISPATCH_MISSING_TOKEN =
-  'Session entreprise manquante pour le dispatch. Reconnectez-vous (Support LIRIE : 022 512 02 03 · info@lirie.ch).';
+  `Session entreprise manquante pour le dispatch. Reconnectez-vous (${getLirieSupportContactLine()}).`;
 
 apiRest.interceptors.request.use((config) => {
   const base = config.baseURL ?? '';

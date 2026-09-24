@@ -34,7 +34,7 @@ describe('getApiErrorMessage', () => {
     };
     expect(isServiceUnavailableError(err)).toBe(true);
     expect(getApiErrorMessage(err, 'Défaut')).toMatch(/momentanément indisponible/i);
-    expect(getApiErrorMessage(err, 'Défaut')).toMatch(/022 512 02 03/);
+    expect(getApiErrorMessage(err, 'Défaut')).toMatch(/022 552 03 02/);
     expect(getApiErrorMessage(err, 'Défaut')).toMatch(/info@lirie\.ch/);
   });
 
@@ -142,7 +142,7 @@ describe('getApiErrorMessage', () => {
     expect(msg).toMatch(/Nouvelle course impossible/i);
     expect(msg).toMatch(/recouvrement/i);
     expect(msg).toMatch(/facturation plateforme/i);
-    expect(msg).toMatch(/022 512 02 03/);
+    expect(msg).toMatch(/022 552 03 02/);
     expect(msg).toMatch(/info@lirie\.ch/);
     expect(msg).not.toMatch(/CREATE_OWN_PORTFOLIO/i);
   });

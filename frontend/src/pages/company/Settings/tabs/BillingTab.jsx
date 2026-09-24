@@ -1207,7 +1207,7 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
                   </div>
                   <div className={styles.formGroup}>
                     <label htmlFor="signature_phone_main">Telephone principal</label>
-                    <input type="text" id="signature_phone_main" name="signature_phone_main" value={form.signature_phone_main} onChange={handleChange} placeholder="022 512 02 03" />
+                    <input type="text" id="signature_phone_main" name="signature_phone_main" value={form.signature_phone_main} onChange={handleChange} placeholder="022 552 03 02" />
                   </div>
                   <div className={styles.formGroup}>
                     <label htmlFor="signature_phone_mobile">Telephone mobile</label>
@@ -1240,7 +1240,7 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
               {form.email_signature_mode === 'text' && (
                 <div className={styles.formGroup}>
                   <label htmlFor="email_signature_text">Signature (texte)</label>
-                  <textarea id="email_signature_text" name="email_signature_text" value={form.email_signature_text ?? ''} onChange={handleChange} rows={6} placeholder={"Khalid ALAOUI\nAssocie gerant\n022 512 02 03"} />
+                  <textarea id="email_signature_text" name="email_signature_text" value={form.email_signature_text ?? ''} onChange={handleChange} rows={6} placeholder={"Khalid ALAOUI\nAssocie gerant\n022 552 03 02"} />
                 </div>
               )}
               {form.email_signature_mode === 'html' && (

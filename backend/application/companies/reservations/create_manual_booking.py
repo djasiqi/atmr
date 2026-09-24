@@ -241,7 +241,7 @@ class CreateManualBookingUseCase:
         except BillingAccessRestricted as exc:
             payload = billing_access_error_payload(exc)
             state = str(payload.get("billing_access_state") or "full").lower()
-            contact = "Support LIRIE : 022 512 02 03 · info@lirie.ch"
+            contact = "Support LIRIE : 022 552 03 02 · info@lirie.ch"
             if state == "full":
                 message = (
                     "Nouvelle course impossible : restriction commerciale liée au "

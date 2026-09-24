@@ -41,7 +41,7 @@ def test_manual_booking_blocked_when_full_restriction():
     assert exc.value.details.get("billing_access_state") == "full"
     assert "nouvelle course impossible" in exc.value.message.lower()
     assert "recouvrement" in exc.value.message.lower()
-    assert "022 512 02 03" in exc.value.message
+    assert "022 552 03 02" in exc.value.message
     assert "info@lirie.ch" in exc.value.message
 
 
