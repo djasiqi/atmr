@@ -16,6 +16,7 @@ from schemas.auth_schemas import LoginSchema, RegisterSchema
 from schemas.booking_schemas import (
     BookingCreateSchema,
     BookingListSchema,
+    BookingPreviewSchema,
     BookingUpdateSchema,
 )
 from schemas.company_schemas import ClientCreateSchema, ManualBookingCreateSchema
@@ -288,6 +289,31 @@ class TestBookingCreateSchema:
         }
         with pytest.raises(ValidationError):
             validate_request(BookingCreateSchema(), data)
+
+
+class TestBookingPreviewSchema:
+    """La preview portail n'envoie pas customer_name."""
+
+    def test_preview_sans_customer_name(self):
+        data = {
+            "pickup_location": "Avenue Ernest-Pictet 9, 1203, Genève",
+            "dropoff_location": "Hôpitaux Universitaires de Genève, Genève",
+            "scheduled_time": "2026-09-23T08:10:00Z",
+        }
+        result = validate_request(BookingPreviewSchema(), data)
+        assert result["pickup_location"].startswith("Avenue Ernest-Pictet")
+        assert result["customer_name"] is None
+
+    def test_creation_exige_toujours_customer_name(self):
+        data = {
+            "pickup_location": "Avenue Ernest-Pictet 9, 1203, Genève",
+            "dropoff_location": "Hôpitaux Universitaires de Genève, Genève",
+            "scheduled_time": "2026-09-23T08:10:00Z",
+            "amount": 50.0,
+        }
+        with pytest.raises(ValidationError) as exc_info:
+            validate_request(BookingCreateSchema(), data)
+        assert "customer_name" in exc_info.value.messages["errors"]
 
 
 class TestBookingListSchema:

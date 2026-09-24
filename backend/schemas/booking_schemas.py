@@ -207,16 +207,24 @@ class BookingCreateSchema(Schema):
 
 
 class BookingPreviewSchema(BookingCreateSchema):
-    """Schema pour prévisualisation de réservation côté client mobile.
+    """Schema pour prévisualisation de réservation côté portail client.
 
-    La preview partage les mêmes validations métier qu'une création,
-    mais n'exige pas un ``amount`` côté client car il est calculé côté backend.
+    La preview partage les validations de trajet d'une création, mais :
+    - n'exige pas ``amount`` (calculé côté backend) ;
+    - n'exige pas ``customer_name`` : le portail omet ce champ, le nom est celui
+      du client authentifié et n'est pas relu par la preview.
     """
 
     amount = fields.Float(
         required=False,
         load_default=1.0,
         validate=validate.Range(min=0.5, error="Le montant minimum accepté est 0.5"),
+    )
+    customer_name = fields.Str(
+        required=False,
+        allow_none=True,
+        load_default=None,
+        validate=validate.Length(min=1, max=200),
     )
 
 
