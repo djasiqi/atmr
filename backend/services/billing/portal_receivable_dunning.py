@@ -167,7 +167,10 @@ def _terminal_dunning_reason(
         return REASON_CANCELLED
     if receivable.status == RECEIVABLE_DISPUTED or receivable.disputed_at is not None:
         return REASON_DISPUTED
-    if receivable.status == RECEIVABLE_PAID or Decimal(str(receivable.balance_due)) <= 0:
+    if (
+        receivable.status == RECEIVABLE_PAID
+        or Decimal(str(receivable.balance_due)) <= 0
+    ):
         return REASON_PAID
     due = business_calendar_date(receivable.due_date)
     if due is None or due >= as_of_date:
@@ -178,9 +181,10 @@ def _terminal_dunning_reason(
 def receivable_eligible_for_dunning(
     receivable: PortalReceivable, *, as_of: date | datetime | None = None
 ) -> bool:
-    return _terminal_dunning_reason(
-        receivable, as_of_date=current_business_date(as_of)
-    ) is None
+    return (
+        _terminal_dunning_reason(receivable, as_of_date=current_business_date(as_of))
+        is None
+    )
 
 
 def _days_past_due(receivable: PortalReceivable, *, as_of_date: date) -> int:
@@ -328,7 +332,9 @@ def _creditor_postal_address(company: Company) -> str | None:
         line2 = getattr(company, "domicile_address_line2", None)
         if _nonempty(line2):
             parts.append(str(line2).strip())
-        loc = " ".join(p for p in [str(zip_c or "").strip(), str(city or "").strip()] if p)
+        loc = " ".join(
+            p for p in [str(zip_c or "").strip(), str(city or "").strip()] if p
+        )
         if loc:
             parts.append(loc)
         return ", ".join(parts)
@@ -410,7 +416,11 @@ def build_collection_dossier(receivable: PortalReceivable) -> dict[str, Any]:
         serialize_dunning_event(e) for e in _successful_events(int(receivable.id))
     ]
     formal = next(
-        (e for e in reversed(_successful_events(int(receivable.id))) if e.event_type == DUNNING_FORMAL_NOTICE),
+        (
+            e
+            for e in reversed(_successful_events(int(receivable.id)))
+            if e.event_type == DUNNING_FORMAL_NOTICE
+        ),
         None,
     )
     return {
@@ -421,9 +431,7 @@ def build_collection_dossier(receivable: PortalReceivable) -> dict[str, Any]:
             "display_name": receivable.creditor_name_snapshot,
             "legal_form": getattr(company, "legal_form", None) if company else None,
             "uid_ide": getattr(company, "uid_ide", None) if company else None,
-            "postal_address": (
-                _creditor_postal_address(company) if company else None
-            ),
+            "postal_address": (_creditor_postal_address(company) if company else None),
             "contact_email": (
                 (
                     getattr(company, "billing_email", None)
@@ -449,7 +457,9 @@ def build_collection_dossier(receivable: PortalReceivable) -> dict[str, Any]:
             "issued_at": (
                 receivable.issued_at.isoformat() if receivable.issued_at else None
             ),
-            "due_date": receivable.due_date.isoformat() if receivable.due_date else None,
+            "due_date": receivable.due_date.isoformat()
+            if receivable.due_date
+            else None,
             "currency": receivable.currency,
             "principal_initial": float(receivable.total_amount),
             "amount_paid": float(receivable.amount_paid),
@@ -511,11 +521,9 @@ def resolve_portal_collection_readiness(
     if receivable.status == RECEIVABLE_CANCELLED or receivable.cancelled_at is not None:
         reasons.append(REASON_CANCELLED)
     if receivable.status == RECEIVABLE_DISPUTED or receivable.disputed_at is not None:
-        open_d = (
-            PortalReceivableDispute.query.filter_by(
-                receivable_id=int(receivable.id), status=DISPUTE_OPEN
-            ).first()
-        )
+        open_d = PortalReceivableDispute.query.filter_by(
+            receivable_id=int(receivable.id), status=DISPUTE_OPEN
+        ).first()
         if open_d is not None or receivable.disputed_at is not None:
             reasons.append(REASON_DISPUTED)
     if receivable.status == RECEIVABLE_PAID or _money(receivable.balance_due) <= 0:
@@ -583,7 +591,9 @@ def render_dunning_message(
     payment_coords = []
     if getattr(company, "iban", None):
         payment_coords.append(f"IBAN : {company.iban}")
-    if getattr(company, "billing_email", None) or getattr(company, "contact_email", None):
+    if getattr(company, "billing_email", None) or getattr(
+        company, "contact_email", None
+    ):
         payment_coords.append(
             "Contact : "
             + str(
@@ -677,9 +687,8 @@ def emit_portal_dunning_event(
             code="creditor_not_found",
         )
     eligibility = resolve_dunning_eligibility(receivable, as_of=as_of)
-    if (
-        not force
-        and (not eligibility.eligible or eligibility.next_event_type != event_type)
+    if not force and (
+        not eligibility.eligible or eligibility.next_event_type != event_type
     ):
         code = "dunning_not_due"
         if eligibility.reason in (
@@ -704,13 +713,10 @@ def emit_portal_dunning_event(
     formal_notice_event_id: int | None = None
 
     if event_type == DUNNING_COLLECTION_PREPARED:
-        readiness = resolve_portal_collection_readiness(
-            int(receivable.id), as_of=as_of
-        )
+        readiness = resolve_portal_collection_readiness(int(receivable.id), as_of=as_of)
         if not readiness.is_ready:
             raise PortalReceivableError(
-                "Dossier de recouvrement incomplet : "
-                + ", ".join(readiness.reasons),
+                "Dossier de recouvrement incomplet : " + ", ".join(readiness.reasons),
                 code="collection_not_ready",
             )
         dossier = readiness.dossier or {}

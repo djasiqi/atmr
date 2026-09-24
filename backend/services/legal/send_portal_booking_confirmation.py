@@ -60,7 +60,9 @@ def build_confirmation_body(
     *, booking: Any, event: ClientBookingContractEvent | None
 ) -> str:
     """Texte de confirmation. L'estimation n'y est pas un prix accepté."""
-    trip = "Aller-retour" if getattr(booking, "is_round_trip", False) else "Aller simple"
+    trip = (
+        "Aller-retour" if getattr(booking, "is_round_trip", False) else "Aller simple"
+    )
     if event is not None and event.is_round_trip_snapshot:
         trip = "Aller-retour"
     amount = (
@@ -128,9 +130,9 @@ def notify_portal_booking_confirmed(*, booking: Any, user: Any) -> None:
         error = "Adresse e-mail absente."
     else:
         try:
-            sender = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get(
-                "MAIL_USERNAME"
-            )
+            sender = current_app.config.get(
+                "MAIL_DEFAULT_SENDER"
+            ) or current_app.config.get("MAIL_USERNAME")
             msg = Message(
                 subject=(
                     f"Demande de transport enregistrée — LIRIE #{getattr(booking, 'id', '')}"

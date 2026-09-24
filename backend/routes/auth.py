@@ -2340,9 +2340,8 @@ def _check_user_profile_active(user: User) -> tuple[bool, str | None]:
     from services.auth.portal_phone_verification import maybe_promote_portal_account
     from services.legal.portal_activation_terms import portal_terms_block_lazy_promotion
 
-    if (
-        not portal_terms_block_lazy_promotion(user)
-        and maybe_promote_portal_account(user)
+    if not portal_terms_block_lazy_promotion(user) and maybe_promote_portal_account(
+        user
     ):
         db.session.commit()
 
@@ -5077,9 +5076,9 @@ class Register(Resource):
                 return body, code
 
             requires_email = bool(email)
-            requires_phone = bool(
-                activation_session.portal_terms_required
-            ) or (bool(phone) and not requires_email)
+            requires_phone = bool(activation_session.portal_terms_required) or (
+                bool(phone) and not requires_email
+            )
             channels: list[str] = []
             if requires_email:
                 channels.append("email")
@@ -5614,15 +5613,12 @@ class FinalizeActivation(Resource):
             if not user:
                 return {"error": "Utilisateur introuvable."}, 404
 
-            if (
-                getattr(activation_session, "portal_terms_required", False)
-                and not getattr(user, "phone_verified_at", None)
-            ):
+            if getattr(
+                activation_session, "portal_terms_required", False
+            ) and not getattr(user, "phone_verified_at", None):
                 return auth_error(
                     AuthErrorCodes.PHONE_VERIFICATION_REQUIRED,
-                    (
-                        "Vérifiez votre numéro de téléphone avant d'activer le compte."
-                    ),
+                    ("Vérifiez votre numéro de téléphone avant d'activer le compte."),
                     400,
                     details=_build_activation_status(activation_session),
                 )

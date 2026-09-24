@@ -62,10 +62,9 @@ class GetBootstrapSessionUseCase:
             portal_terms_block_lazy_promotion,
         )
 
-        if (
-            not portal_terms_block_lazy_promotion(user_orm)
-            and maybe_promote_portal_account(user_orm)
-        ):
+        if not portal_terms_block_lazy_promotion(
+            user_orm
+        ) and maybe_promote_portal_account(user_orm):
             from ext import db
 
             db.session.commit()

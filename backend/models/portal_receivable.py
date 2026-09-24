@@ -82,9 +82,7 @@ class PortalReceivable(db.Model):
         ),
         CheckConstraint("total_amount >= 0", name="ck_portal_receivable_total_nonneg"),
         CheckConstraint("amount_paid >= 0", name="ck_portal_receivable_paid_nonneg"),
-        CheckConstraint(
-            "balance_due >= 0", name="ck_portal_receivable_balance_nonneg"
-        ),
+        CheckConstraint("balance_due >= 0", name="ck_portal_receivable_balance_nonneg"),
         Index("ix_portal_receivable_debtor", "debtor_user_id"),
         Index("ix_portal_receivable_due_date", "due_date"),
         Index("ix_portal_receivable_status", "status"),
@@ -110,7 +108,9 @@ class PortalReceivable(db.Model):
         nullable=False,
     )
     debtor_name_snapshot: Mapped[str] = mapped_column(String(200), nullable=False)
-    debtor_email_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    debtor_email_snapshot: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
     debtor_phone_snapshot: Mapped[str | None] = mapped_column(String(40), nullable=True)
     debtor_billing_address_snapshot: Mapped[str | None] = mapped_column(
         Text, nullable=True
@@ -134,7 +134,9 @@ class PortalReceivable(db.Model):
     )
     balance_due: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
 
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default=RECEIVABLE_ISSUED)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=RECEIVABLE_ISSUED
+    )
 
     disputed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

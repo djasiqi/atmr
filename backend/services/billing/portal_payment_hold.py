@@ -101,7 +101,9 @@ def _result_from_rows(
     rows: Sequence[PortalReceivable],
     as_of_date: date,
 ) -> PortalPaymentHoldResult:
-    overdue = [r for r in rows if receivable_contributes_to_hold(r, as_of_date=as_of_date)]
+    overdue = [
+        r for r in rows if receivable_contributes_to_hold(r, as_of_date=as_of_date)
+    ]
     if not overdue:
         return PortalPaymentHoldResult(
             state=HOLD_STATE_CLEAR,

@@ -53,13 +53,9 @@ def upgrade():
             "second_reminder_days >= first_reminder_days",
             name="ck_portal_dunning_second_ge_first",
         ),
-        sa.ForeignKeyConstraint(
-            ["company_id"], ["company.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "company_id", name="uq_portal_dunning_policy_company"
-        ),
+        sa.UniqueConstraint("company_id", name="uq_portal_dunning_policy_company"),
     )
     op.create_table(
         "portal_receivable_dunning_event",
@@ -115,9 +111,7 @@ def upgrade():
         sa.ForeignKeyConstraint(
             ["creditor_company_id"], ["company.id"], ondelete="RESTRICT"
         ),
-        sa.ForeignKeyConstraint(
-            ["debtor_user_id"], ["user.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["debtor_user_id"], ["user.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["initiated_by_user_id"], ["user.id"], ondelete="SET NULL"
         ),

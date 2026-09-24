@@ -62,9 +62,7 @@ def upgrade():
             ")",
             name="ck_portal_receivable_status",
         ),
-        sa.CheckConstraint(
-            "amount_paid >= 0", name="ck_portal_receivable_paid_nonneg"
-        ),
+        sa.CheckConstraint("amount_paid >= 0", name="ck_portal_receivable_paid_nonneg"),
         sa.CheckConstraint(
             "balance_due >= 0", name="ck_portal_receivable_balance_nonneg"
         ),
@@ -77,9 +75,7 @@ def upgrade():
         sa.ForeignKeyConstraint(
             ["creditor_company_id"], ["company.id"], ondelete="RESTRICT"
         ),
-        sa.ForeignKeyConstraint(
-            ["debtor_user_id"], ["user.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["debtor_user_id"], ["user.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["disputed_by_user_id"], ["user.id"], ondelete="SET NULL"
         ),
@@ -134,9 +130,7 @@ def upgrade():
             ["client_booking_contract_event.id"],
             ondelete="RESTRICT",
         ),
-        sa.ForeignKeyConstraint(
-            ["booking_id"], ["booking.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["receivable_id"], ["portal_receivable.id"], ondelete="CASCADE"
         ),

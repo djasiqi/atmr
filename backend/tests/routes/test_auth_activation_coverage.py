@@ -161,7 +161,9 @@ def test_register_succes_email_sms(client, monkeypatch):
     assert body["activation_email_queued"] is True
     assert body["sms_sent"] is False
     assert body["requires_email"] is True
-    assert body["requires_phone"] is False
+    # Compte PORTAL : portal_terms_required impose requires_phone=True
+    # (SMS différé après verify-email, d'où sms_sent=False à l'inscription).
+    assert body["requires_phone"] is True
     assert sms_calls["n"] == 0
     assert created_sessions
 

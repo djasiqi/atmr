@@ -111,12 +111,9 @@ def _current_user() -> User | None:
 
 
 def _owned_receivable(company_id: int, receivable_id: int) -> PortalReceivable:
-    receivable = (
-        PortalReceivable.query.filter_by(
-            id=receivable_id, creditor_company_id=company_id
-        )
-        .one_or_none()
-    )
+    receivable = PortalReceivable.query.filter_by(
+        id=receivable_id, creditor_company_id=company_id
+    ).one_or_none()
     if receivable is None:
         raise PortalReceivableError(
             "Créance introuvable.",
@@ -478,9 +475,7 @@ def _emit_dunning(
             event_type=event_type,
             initiated_by_user_id=int(user.id),
             channel=(
-                CHANNEL_EMAIL
-                if event_type == DUNNING_COLLECTION_PREPARED
-                else channel
+                CHANNEL_EMAIL if event_type == DUNNING_COLLECTION_PREPARED else channel
             ),
             creditor_approved=bool(approved),
         )
@@ -576,9 +571,7 @@ class PortalReceivableEnforcementEvidence(Resource):
             return error or {"error": "Entreprise non trouvée"}, status or 404
         try:
             _owned_receivable(int(company.id), receivable_id)
-            return {
-                "data": resolve_portal_enforcement_evidence(receivable_id)
-            }, 200
+            return {"data": resolve_portal_enforcement_evidence(receivable_id)}, 200
         except PortalReceivableError as exc:
             return {"error": exc.code, "message": exc.message}, 404
 
@@ -636,9 +629,7 @@ class PortalReceivablePrivateCollectionDraft(Resource):
     @role_required(UserRole.company)
     def post(self, receivable_id: int):
         """Préparer un dossier pour recouvrement privé — sans envoi auto."""
-        return _prepare_transmission(
-            receivable_id, TRANSMISSION_PRIVATE_COLLECTION
-        )
+        return _prepare_transmission(receivable_id, TRANSMISSION_PRIVATE_COLLECTION)
 
 
 @portal_receivables_ns.route("/<int:receivable_id>/collection-transmissions")
@@ -676,14 +667,11 @@ class PortalReceivableCollectionTransmissionExport(Resource):
             return error or {"error": "Entreprise non trouvée"}, status or 404
         try:
             _owned_receivable(int(company.id), receivable_id)
-            row = (
-                PortalReceivableCollectionTransmission.query.filter_by(
-                    id=int(transmission_id),
-                    receivable_id=int(receivable_id),
-                    creditor_company_id=int(company.id),
-                )
-                .one_or_none()
-            )
+            row = PortalReceivableCollectionTransmission.query.filter_by(
+                id=int(transmission_id),
+                receivable_id=int(receivable_id),
+                creditor_company_id=int(company.id),
+            ).one_or_none()
             if row is None:
                 return {
                     "error": "transmission_not_found",
@@ -720,14 +708,11 @@ class PortalReceivableCollectionTransmissionCancel(Resource):
             return auth_error("unauthorized", "Utilisateur introuvable.", 401)
         try:
             _owned_receivable(int(company.id), receivable_id)
-            row = (
-                PortalReceivableCollectionTransmission.query.filter_by(
-                    id=int(transmission_id),
-                    receivable_id=int(receivable_id),
-                    creditor_company_id=int(company.id),
-                )
-                .one_or_none()
-            )
+            row = PortalReceivableCollectionTransmission.query.filter_by(
+                id=int(transmission_id),
+                receivable_id=int(receivable_id),
+                creditor_company_id=int(company.id),
+            ).one_or_none()
             if row is None:
                 return {
                     "error": "transmission_not_found",
@@ -1112,4 +1097,3 @@ class PortalTransmissionEvidences(Resource):
             return {"data": [serialize_evidence(r) for r in rows]}, 200
         except PortalReceivableError as exc:
             return {"error": exc.code, "message": exc.message}, 404
-

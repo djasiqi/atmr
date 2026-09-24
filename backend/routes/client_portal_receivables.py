@@ -57,12 +57,9 @@ class ClientPortalReceivableDispute(Resource):
         if user is None:
             return auth_error("unauthorized", "Utilisateur introuvable.", 401)
         data = request.get_json(silent=True) or {}
-        receivable = (
-            PortalReceivable.query.filter_by(
-                id=int(receivable_id), debtor_user_id=int(user.id)
-            )
-            .one_or_none()
-        )
+        receivable = PortalReceivable.query.filter_by(
+            id=int(receivable_id), debtor_user_id=int(user.id)
+        ).one_or_none()
         if receivable is None:
             return {
                 "error": "receivable_not_found",

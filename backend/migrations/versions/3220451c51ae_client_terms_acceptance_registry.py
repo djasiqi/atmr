@@ -65,7 +65,9 @@ def upgrade():
         sa.Column("terms_hash", sa.String(length=64), nullable=False),
         sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("email_snapshot", sa.String(length=255), nullable=True),
-        sa.Column("email_verified_at_snapshot", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "email_verified_at_snapshot", sa.DateTime(timezone=True), nullable=True
+        ),
         sa.Column("phone_snapshot", sa.String(length=32), nullable=True),
         sa.Column(
             "phone_verified_at_snapshot",

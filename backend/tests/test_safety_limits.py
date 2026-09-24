@@ -110,17 +110,21 @@ class TestAutonomousActionModel:
 
     def test_count_actions_today(self, db, company_fully_auto):
         """Test comptage des actions aujourd'hui."""
-        today = datetime.now(UTC).replace(tzinfo=None)
-        yesterday = today - timedelta(days=1)
+        today_start = (
+            datetime.now(UTC)
+            .replace(tzinfo=None)
+            .replace(hour=0, minute=0, second=0, microsecond=0)
+        )
+        yesterday = today_start - timedelta(hours=1)
 
-        # Créer 5 actions aujourd'hui (minutes, pas heures — stable près de minuit UTC)
+        # Timestamps strictement après today_start (stable près de minuit UTC).
         for i in range(5):
             action = AutonomousAction(
                 company_id=company_fully_auto.id,
                 action_type="notify_customer",
                 action_description=f"Action today {i}",
                 success=True,
-                created_at=today - timedelta(minutes=i * 10),
+                created_at=today_start + timedelta(minutes=i + 1),
             )
             db.session.add(action)
 

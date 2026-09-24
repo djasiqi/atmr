@@ -205,9 +205,10 @@ def test_pursuit_ready_complete_case(db) -> None:
     evidence = resolve_portal_enforcement_evidence(recv.id)
     assert evidence["mainlevee_classification"] == "NOT_AUTOMATICALLY_DETERMINED"
     assert evidence["formal_debt_acknowledgment"] == "absent"
-    assert "EMAIL" in evidence["formal_notice_email_proof"] or evidence[
-        "formal_notice_email_proof"
-    ] == "EMAIL_SENT_WITH_PROVIDER_ID"
+    assert (
+        "EMAIL" in evidence["formal_notice_email_proof"]
+        or evidence["formal_notice_email_proof"] == "EMAIL_SENT_WITH_PROVIDER_ID"
+    )
 
 
 def test_pursuit_not_ready_missing_debtor_address(db) -> None:
@@ -219,9 +220,8 @@ def test_pursuit_not_ready_missing_debtor_address(db) -> None:
     client.domicile_city = None
     db.session.flush()
     company, owner = _company(db, name="No Addr Pursuit")
-    recv = _overdue(
-        db, user, client, company, owner, invoice="F-44", address=None
-    )
+    recv = _overdue(db, user, client, company, owner, invoice="F-44", address=None)
+    # Ne peut pas atteindre COLLECTION_PREPARED sans adresse — readiness directe
     readiness = resolve_portal_pursuit_readiness(recv.id, as_of=date(2026, 10, 5))
     assert readiness.state == PURSUIT_NOT_READY
     assert any(
@@ -248,9 +248,7 @@ def test_dispute_blocks_pursuit_draft(db) -> None:
     company, owner = _company(db, name="Dispute Block")
     recv = _overdue(db, user, client, company, owner, invoice="F-46")
     _bring_to_collection_prepared(recv, owner)
-    dispute_portal_receivable(
-        receivable=recv, reason="Erreur", actor_user_id=user.id
-    )
+    dispute_portal_receivable(receivable=recv, reason="Erreur", actor_user_id=user.id)
     with pytest.raises(PortalReceivableError) as exc:
         prepare_collection_transmission(
             receivable=recv,
@@ -347,11 +345,9 @@ def test_cross_company_isolation(db) -> None:
     )
     assert draft.creditor_company_id == company_x.id
     # Query scoped comme les routes : Y ne voit pas le draft X
-    hidden = (
-        PortalReceivableCollectionTransmission.query.filter_by(
-            id=draft.id, creditor_company_id=company_y.id
-        ).one_or_none()
-    )
+    hidden = PortalReceivableCollectionTransmission.query.filter_by(
+        id=draft.id, creditor_company_id=company_y.id
+    ).one_or_none()
     assert hidden is None
     assert owner_y.id != owner_x.id
 
@@ -400,7 +396,8 @@ def test_pursuit_draft_no_external_transmission(db) -> None:
     assert draft.status == "draft"
     assert draft.transmission_type == TRANSMISSION_PURSUIT_DRAFT
     assert "transmission" in json.loads(draft.export_payload)["disclaimer"].lower() or (
-        "pas un formulaire officiel" in json.loads(draft.export_payload)["disclaimer"].lower()
+        "pas un formulaire officiel"
+        in json.loads(draft.export_payload)["disclaimer"].lower()
     )
     assert calls == []
     # Pas de confirmation → refus
