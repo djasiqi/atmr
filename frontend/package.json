@@ -94,7 +94,7 @@
   },
   "jest": {
     "transformIgnorePatterns": [
-      "node_modules/(?!(axios|date-fns|@mui|slick-carousel)/)"
+      "node_modules/(?!(axios|date-fns|@mui|slick-carousel|@tootallnate|uuid)/)"
     ],
     "testMatch": [
       "<rootDir>/src/**/*.{spec,test}.{js,jsx,ts,tsx}",

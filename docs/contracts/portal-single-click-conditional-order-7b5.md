@@ -23,9 +23,14 @@ LOCAL MANUAL SMOKE                 PASS / CLOSED
   — transport_already_assigned     PASS
   — carrier_quote liste            PASS (= 40, amount 50 isolé)
 
-NEXT                               CI SAME SHA → E2E
-COMMIT                             ca215360 (poussé)
-BUILD / DEPLOY                     NOT YET
+NEXT                               7B.5 RELEASE GATE PASS (vérifier Frontend Tests dispatch)
+COMMIT FEATURE                     ca215360
+COMMIT CI UNBLOCK                  ec2d2760
+  — feature                        ca215360
+  — SQLA/lint/semgrep              1d27fda9
+  — invoice UnboundLocalError      b69695f7
+  — pytest mocks CI                ec2d2760
+BUILD / DEPLOY                     NOT YET (gate CI+E2E d’abord)
 PRODUCTION                         NO (flags défaut OFF / Terms 1.0)
 ```
 
@@ -96,8 +101,14 @@ Si les deux flags sont `true` → refus au boot.
 7B.5              PASS / CLOSED
 LOCAL SMOKE       PASS
 IMPLEMENTATION    CLOSED
-COMMIT            ca215360
+FEATURE SHA       ca215360
+GATE SHA          ec2d2760
 
-NEXT              CI SAME SHA (ca215360) → E2E
+CI SAME SHA       PASS (Backend Tests + Security Gate + Lint + Migrations + E2E)
+E2E PORTAL        PASS (job Backend Tests / E2E Tests sur ec2d2760)
+FRONTEND TESTS    en cours de déblocage (Node 20 + eslint import/first)
+
+NEXT              Frontend Tests vert → 7B.5 RELEASE GATE = PASS
+                  puis prep activation coordonnée Terms 2.1 + CONDITIONAL=true + DV=false
 BUILD / DEPLOY    NOT YET
 ```

@@ -18,8 +18,10 @@ jest.mock('sonner', () => ({
   toast: { info: jest.fn() },
 }));
 
+/* eslint-disable import/first -- imports après jest.mock (hoisting Jest) */
 import { useInstitutionSocket } from './useInstitutionSocket';
 import { institutionQueryKeys } from './useInstitutionData';
+/* eslint-enable import/first */
 
 function wrapper(queryClient) {
   return function Wrapper({ children }) {

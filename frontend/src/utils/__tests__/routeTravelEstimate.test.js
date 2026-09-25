@@ -6,6 +6,7 @@ jest.mock('../apiClient', () => ({
   },
 }));
 
+/* eslint-disable import/first -- imports après jest.mock (hoisting Jest) */
 import apiClient from '../apiClient';
 import {
   resolveOutboundRoute,
@@ -16,6 +17,7 @@ import {
   fetchRouteTravelMinutes,
   toCoord,
 } from '../routeTravelEstimate';
+/* eslint-enable import/first */
 
 describe('routeTravelEstimate', () => {
   beforeEach(() => {
