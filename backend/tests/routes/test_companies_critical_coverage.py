@@ -1316,6 +1316,11 @@ class TestCompaniesCriticalCoverage:
             lambda self, *_args, **_kwargs: SimpleNamespace(  # noqa: ARG005
                 ok=True,
                 error=None,
+                status_code=None,
+                should_trigger_dispatch=True,
+                portal_offer_pending_client=False,
+                portal_offer_id=None,
+                idempotent_replay=False,
             ),
         )
         monkeypatch.setattr(

@@ -165,24 +165,32 @@ def test_activation_v2_requires_reacceptance(db, monkeypatch, app):
 
 
 def test_activation_coordination_gate(monkeypatch, app):
+    # effective_portal_terms_version() privilégie app.config sous contexte Flask.
+    app.config["PORTAL_CONDITIONAL_ORDER_ENABLED"] = False
+    monkeypatch.setenv("PORTAL_CONDITIONAL_ORDER_ENABLED", "false")
+
     monkeypatch.setenv("PORTAL_TERMS_EFFECTIVE_VERSION", "2.0")
+    app.config["PORTAL_TERMS_EFFECTIVE_VERSION"] = "2.0"
     app.config["PORTAL_DOUBLE_VALIDATION_ENABLED"] = False
     monkeypatch.setenv("PORTAL_DOUBLE_VALIDATION_ENABLED", "false")
     with pytest.raises(PortalTermsActivationError):
         assert_activation_coordination()
 
     monkeypatch.setenv("PORTAL_TERMS_EFFECTIVE_VERSION", "1.0")
+    app.config["PORTAL_TERMS_EFFECTIVE_VERSION"] = "1.0"
     app.config["PORTAL_DOUBLE_VALIDATION_ENABLED"] = True
     monkeypatch.setenv("PORTAL_DOUBLE_VALIDATION_ENABLED", "true")
     with pytest.raises(PortalTermsActivationError):
         assert_activation_coordination()
 
     monkeypatch.setenv("PORTAL_TERMS_EFFECTIVE_VERSION", "2.0")
+    app.config["PORTAL_TERMS_EFFECTIVE_VERSION"] = "2.0"
     app.config["PORTAL_DOUBLE_VALIDATION_ENABLED"] = True
     monkeypatch.setenv("PORTAL_DOUBLE_VALIDATION_ENABLED", "true")
     assert_activation_coordination()  # OK
 
     monkeypatch.setenv("PORTAL_TERMS_EFFECTIVE_VERSION", "1.0")
+    app.config["PORTAL_TERMS_EFFECTIVE_VERSION"] = "1.0"
     app.config["PORTAL_DOUBLE_VALIDATION_ENABLED"] = False
     monkeypatch.setenv("PORTAL_DOUBLE_VALIDATION_ENABLED", "false")
     assert_activation_coordination()  # état prod actuel OK

@@ -73,6 +73,7 @@ def mock_client():
     user.first_name = "Test"
     user.last_name = "Client"
     user.username = "testclient"
+    user.email = "client@test.ch"
     client = Mock()
     client.id = 1
     client.name = "Test Client"
@@ -112,6 +113,7 @@ class TestSendInvoiceByEmailUseCase:
         """Test envoi réussi d'une facture par email."""
         # Setup
         use_case = SendInvoiceByEmailUseCase()
+        mock_invoice.client = mock_client
 
         # Mock des queries
         with (
@@ -232,6 +234,7 @@ class TestSendInvoiceByEmailUseCase:
         """Test envoi d'une facture avec domaine non vérifié."""
         use_case = SendInvoiceByEmailUseCase()
         mock_billing_settings.domain_verified = False
+        mock_invoice.client = mock_client
 
         with (
             patch(
@@ -266,6 +269,7 @@ class TestSendInvoiceByEmailUseCase:
     ):
         """Test envoi d'une facture avec erreur Brevo."""
         use_case = SendInvoiceByEmailUseCase()
+        mock_invoice.client = mock_client
 
         with (
             patch(
