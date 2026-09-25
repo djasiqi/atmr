@@ -26,7 +26,10 @@ from ext import db
 from models import RefreshToken, User
 from models.enums import UserRole
 from models.mobile_device_session import AuthRotationResult
-from security.mobile_device_session_service import create_or_reuse_session, get_session_by_id
+from security.mobile_device_session_service import (
+    create_or_reuse_session,
+    get_session_by_id,
+)
 from security.refresh_redis_rotation import (
     RedisRefreshState,
     classify_refresh_in_redis,
@@ -171,7 +174,8 @@ def test_p0_2_postgres_real_concurrent_refresh_for_update(
     tokens = {b.get("refresh_token") for b in bodies}
     assert len(tokens) == 1
     r1 = next(iter(tokens))
-    assert r1 and r1 != r0
+    assert r1
+    assert r1 != r0
     gens = {b.get("refresh_generation") for b in bodies}
     assert gens == {gen_n + 1}
 
@@ -199,9 +203,7 @@ def test_p0_2_postgres_real_concurrent_refresh_for_update(
         assert leaf_active[0].token_hash == _sha(r1)
 
         # Aucun autre token issu de R0 (pas de R2)
-        pointing_from_r0 = RefreshToken.query.filter_by(
-            token_hash=_sha(r1)
-        ).count()
+        pointing_from_r0 = RefreshToken.query.filter_by(token_hash=_sha(r1)).count()
         assert pointing_from_r0 == 1
 
         receipts = AuthRotationResult.query.filter_by(

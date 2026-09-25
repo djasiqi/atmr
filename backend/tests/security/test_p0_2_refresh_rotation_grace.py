@@ -13,7 +13,6 @@ from unittest.mock import patch
 import pytest
 from flask_jwt_extended import create_refresh_token, decode_token
 
-from ext import db
 from models import RefreshToken, User
 from models.enums import UserRole
 from security.mobile_device_session_service import create_or_reuse_session
@@ -130,9 +129,11 @@ class TestP0_1CommitCompensation:
                 == RedisRefreshState.PREVIOUS_WITHIN_GRACE
             )
 
-            with patch.object(db.session, "commit", side_effect=RuntimeError("boom")):
-                with pytest.raises(RuntimeError):
-                    commit_db_after_redis(handle)
+            with (
+                patch.object(db.session, "commit", side_effect=RuntimeError("boom")),
+                pytest.raises(RuntimeError),
+            ):
+                commit_db_after_redis(handle)
 
             assert (
                 classify_refresh_in_redis(r0, user_id=driver_user.id).state
@@ -151,9 +152,11 @@ class TestP0_1CommitCompensation:
                 classify_refresh_in_redis(token, user_id=driver_user.id).state
                 == RedisRefreshState.CURRENT
             )
-            with patch.object(db.session, "commit", side_effect=RuntimeError("fail")):
-                with pytest.raises(RuntimeError):
-                    commit_db_after_redis(handle)
+            with (
+                patch.object(db.session, "commit", side_effect=RuntimeError("fail")),
+                pytest.raises(RuntimeError),
+            ):
+                commit_db_after_redis(handle)
             assert (
                 classify_refresh_in_redis(token, user_id=driver_user.id).state
                 == RedisRefreshState.UNKNOWN
@@ -200,9 +203,7 @@ class TestP0_2SameDeviceBypass:
             )
             mark_token_rotated(old_t, new_t)
             update_token_last_used(new_t)
-            row = RefreshToken.query.filter_by(
-                token_hash=_sha(old_t)
-            ).first()
+            row = RefreshToken.query.filter_by(token_hash=_sha(old_t)).first()
             assert row is not None
             from security.refresh_token_service import _supersede_old_token
 

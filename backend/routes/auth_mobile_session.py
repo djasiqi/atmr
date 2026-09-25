@@ -43,13 +43,13 @@ from security.mobile_device_session_service import (
     store_rotation_result,
     verify_recovery_credential,
 )
-from security.refresh_token_service import (
-    RefreshStoreUnavailableError,
-    store_refresh_token,
-)
 from security.refresh_redis_rotation import (
     commit_db_after_redis,
     publish_refresh_redis,
+)
+from security.refresh_token_service import (
+    RefreshStoreUnavailableError,
+    store_refresh_token,
 )
 
 logger = logging.getLogger(__name__)

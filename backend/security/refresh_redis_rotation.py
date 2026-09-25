@@ -12,6 +12,7 @@ uniquement de le reconnaître comme prédécesseur et de restituer le successeur
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -123,12 +124,13 @@ def rotate_refresh_redis(
         refresh_fail_closed_enabled,
     )
 
-    grace = int(grace_seconds if grace_seconds is not None else rotation_grace_seconds())
+    grace = int(
+        grace_seconds if grace_seconds is not None else rotation_grace_seconds()
+    )
     svc = _svc()
     old_hash = _hash(old_token)
     new_hash = _hash(new_token)
     active_old = f"{svc.active_tokens_prefix}{old_hash}"
-    active_new = f"{svc.active_tokens_prefix}{new_hash}"
     previous_key = f"{PREVIOUS_TOKEN_PREFIX}{old_hash}"
 
     old_was_active = False
@@ -159,10 +161,8 @@ def rotate_refresh_redis(
         # 3) Retirer R0 des actifs SANS le marquer revoked
         svc.redis_client.delete(active_old)
         user_tokens_key = f"user_refresh_tokens:{user_id}"
-        try:
+        with contextlib.suppress(Exception):
             svc.redis_client.zrem(user_tokens_key, old_hash)
-        except Exception:
-            pass
     except RefreshStoreUnavailableError:
         raise
     except Exception as exc:
@@ -242,33 +242,30 @@ def _apply_compensation_ops(client: Any, handle: RedisIssuanceHandle) -> None:
 
     if handle.kind == "publish":
         client.delete(active_new)
-        try:
+        with contextlib.suppress(Exception):
             client.zrem(user_tokens_key, new_hash)
-        except Exception:
-            pass
     elif handle.kind == "rotate" and handle.old_token:
         old_hash = _hash(handle.old_token)
         previous_key = f"{PREVIOUS_TOKEN_PREFIX}{old_hash}"
         active_old = f"active_refresh_token:{old_hash}"
         client.delete(active_new)
         client.delete(previous_key)
-        try:
+        with contextlib.suppress(Exception):
             client.zrem(user_tokens_key, new_hash)
-        except Exception:
-            pass
         if handle.old_was_active:
             ttl = handle.old_active_ttl or max(handle.grace_seconds, 60)
             client.setex(active_old, int(ttl), str(handle.user_id))
-            try:
+            with contextlib.suppress(Exception):
                 client.zadd(user_tokens_key, {old_hash: time.time()})
-            except Exception:
-                pass
 
 
 def _mirror_compensation_both_stores(handle: RedisIssuanceHandle) -> None:
     """Force la compensation sur legacy + auth dédié (modes migration)."""
     try:
-        from security.auth_redis_migration import AuthRedisMigrationMode, get_migration_mode
+        from security.auth_redis_migration import (
+            AuthRedisMigrationMode,
+            get_migration_mode,
+        )
 
         mode = get_migration_mode()
         if mode not in {
@@ -376,7 +373,9 @@ def classify_refresh_in_redis(
         from security.refresh_token_service import refresh_fail_closed_enabled
 
         if refresh_fail_closed_enabled():
-            logger.error("classify_refresh_in_redis fail-closed: %s", type(exc).__name__)
+            logger.error(
+                "classify_refresh_in_redis fail-closed: %s", type(exc).__name__
+            )
             return RedisClassifyResult(state=RedisRefreshState.UNAVAILABLE)
         logger.warning("classify_refresh_in_redis fail-open: %s", exc)
         return RedisClassifyResult(state=RedisRefreshState.UNAVAILABLE)
@@ -390,10 +389,8 @@ def delete_active_refresh_redis(token: str) -> None:
         stored = svc.redis_client.get(f"{svc.active_tokens_prefix}{token_hash}")
         svc.redis_client.delete(f"{svc.active_tokens_prefix}{token_hash}")
         if stored is not None:
-            try:
+            with contextlib.suppress(Exception):
                 svc.redis_client.zrem(f"user_refresh_tokens:{stored}", token_hash)
-            except Exception:
-                pass
     except Exception:
         logger.warning("delete_active_refresh_redis failed", exc_info=True)
 
@@ -472,9 +469,7 @@ def try_repair_orphan_redis_previous(
         )
 
         rows = (
-            AuthRotationResult.query.filter_by(
-                session_id=sid, operation_type="refresh"
-            )
+            AuthRotationResult.query.filter_by(session_id=sid, operation_type="refresh")
             .order_by(AuthRotationResult.created_at.desc())
             .limit(20)
             .all()
@@ -490,13 +485,12 @@ def try_repair_orphan_redis_previous(
                 continue
             public = strip_rotation_meta(stored)
             succ = public.get("refresh_token")
-            if isinstance(succ, str) and succ:
-                if _hash(succ) == str(successor_hash):
-                    return OrphanRedisRepairResult(
-                        repaired=False,
-                        ambiguous=True,
-                        reason="receipt_has_successor",
-                    )
+            if isinstance(succ, str) and succ and _hash(succ) == str(successor_hash):
+                return OrphanRedisRepairResult(
+                    repaired=False,
+                    ambiguous=True,
+                    reason="receipt_has_successor",
+                )
 
     # Réparation Redis
     try:
@@ -506,13 +500,11 @@ def try_repair_orphan_redis_previous(
         active_r0 = f"{svc.active_tokens_prefix}{pred_hash}"
         svc.redis_client.delete(previous_key)
         svc.redis_client.delete(orphan_active)
-        try:
+        with contextlib.suppress(Exception):
             svc.redis_client.zrem(f"user_refresh_tokens:{user_id}", successor_hash)
-        except Exception:
-            pass
         # Remettre R0 CURRENT (TTL large ; aligné sur refresh restant si possible)
         ttl = 90 * 24 * 3600
-        try:
+        with contextlib.suppress(Exception):
             from datetime import UTC, datetime
 
             if r0_row.expires_at is not None:
@@ -520,15 +512,11 @@ def try_repair_orphan_redis_previous(
                 if exp.tzinfo is None:
                     exp = exp.replace(tzinfo=UTC)
                 ttl = max(int((exp - datetime.now(UTC)).total_seconds()), 60)
-        except Exception:
-            pass
         svc.redis_client.setex(active_r0, ttl, str(user_id))
-        try:
+        with contextlib.suppress(Exception):
             svc.redis_client.zadd(
                 f"user_refresh_tokens:{user_id}", {pred_hash: time.time()}
             )
-        except Exception:
-            pass
         logger.error(
             "auth_redis_orphan_repaired",
             extra={

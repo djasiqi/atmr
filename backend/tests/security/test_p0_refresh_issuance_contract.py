@@ -82,12 +82,14 @@ class TestP0_1StoreHelper:
     def test_sync_redis_fail_closed_raises(self, app, fail_closed):
         with app.app_context():
             assert refresh_fail_closed_enabled() is True
-            with patch(
-                "services.security.authentication.RefreshTokenService.store_token",
-                side_effect=RuntimeError("redis down"),
+            with (
+                patch(
+                    "services.security.authentication.RefreshTokenService.store_token",
+                    side_effect=RuntimeError("redis down"),
+                ),
+                pytest.raises(RefreshStoreUnavailableError),
             ):
-                with pytest.raises(RefreshStoreUnavailableError):
-                    sync_refresh_token_to_redis(1, "fake-jwt-token", ttl_seconds=60)
+                sync_refresh_token_to_redis(1, "fake-jwt-token", ttl_seconds=60)
 
     def test_store_commit_true_syncs_redis(self, app, db, resume_user, fail_closed):
         with app.app_context():
@@ -116,17 +118,19 @@ class TestP0_1StoreHelper:
         with app.app_context():
             token = f"unit-refresh-fail-{uuid.uuid4()}"
             expires = datetime.now(UTC) + timedelta(days=1)
-            with patch(
-                "services.security.authentication.RefreshTokenService.store_token",
-                side_effect=RuntimeError("redis down"),
+            with (
+                patch(
+                    "services.security.authentication.RefreshTokenService.store_token",
+                    side_effect=RuntimeError("redis down"),
+                ),
+                pytest.raises(RefreshStoreUnavailableError),
             ):
-                with pytest.raises(RefreshStoreUnavailableError):
-                    store_refresh_token(
-                        token=token,
-                        user_id=resume_user.id,
-                        expires_at=expires,
-                        commit=True,
-                    )
+                store_refresh_token(
+                    token=token,
+                    user_id=resume_user.id,
+                    expires_at=expires,
+                    commit=True,
+                )
             row = RefreshToken.query.filter_by(token_hash=_token_hash(token)).first()
             assert row is not None
             assert row.is_revoked is True
@@ -194,7 +198,9 @@ class TestP0_1P0_3SessionResume:
         session = svc.get_session_by_id(resume_session["session_id"])
         assert session is not None
         assert int(session.refresh_generation) == before + 1
-        assert decode_token(body["refresh_token"]).get("refresh_generation") == before + 1
+        assert (
+            decode_token(body["refresh_token"]).get("refresh_generation") == before + 1
+        )
 
     def test_d_redis_unavailable_no_token_to_client(
         self, client, db, resume_user, resume_session, fail_closed
@@ -208,9 +214,7 @@ class TestP0_1P0_3SessionResume:
                 SESSION_RESUME_URL,
                 json={
                     "session_id": resume_session["session_id"],
-                    "device_installation_id": resume_session[
-                        "device_installation_id"
-                    ],
+                    "device_installation_id": resume_session["device_installation_id"],
                     "recovery_credential": resume_session["recovery_credential"],
                 },
             )
@@ -223,6 +227,6 @@ class TestP0_1P0_3SessionResume:
         session = svc.get_session_by_id(resume_session["session_id"])
         assert session is not None
         # Rollback : génération non bumpée côté vérité.
-        assert int(session.refresh_generation or 1) == resume_session[
-            "refresh_generation"
-        ]
+        assert (
+            int(session.refresh_generation or 1) == resume_session["refresh_generation"]
+        )

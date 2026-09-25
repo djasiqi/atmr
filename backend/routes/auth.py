@@ -106,7 +106,6 @@ from security.refresh_token_service import (
     revoke_refresh_token,
     revoke_tokens_for_session,
     store_refresh_token,
-    sync_refresh_token_to_redis,
     update_token_last_used,
 )
 from security.security_metrics import (
@@ -2964,17 +2963,15 @@ class RefreshToken(Resource):
                         return mapped
 
                 # P0-2 : classification Redis APRÈS idempotence (pas avant).
+                from security.mobile_device_session_service import (
+                    find_refresh_successor_response,
+                )
                 from security.refresh_redis_rotation import (
                     RedisRefreshState,
                     classify_refresh_in_redis,
                 )
-                from security.mobile_device_session_service import (
-                    find_refresh_successor_response,
-                )
 
-                redis_class = classify_refresh_in_redis(
-                    refresh_token, user_id=user.id
-                )
+                redis_class = classify_refresh_in_redis(refresh_token, user_id=user.id)
                 if redis_class.state == RedisRefreshState.UNAVAILABLE:
                     return {
                         "error": "service_unavailable",
@@ -3177,42 +3174,43 @@ class RefreshToken(Resource):
                     classify_refresh_in_redis,
                 )
 
-                redis_class = classify_refresh_in_redis(
-                    refresh_token, user_id=user.id
-                )
+                redis_class = classify_refresh_in_redis(refresh_token, user_id=user.id)
                 if redis_class.state == RedisRefreshState.UNAVAILABLE:
                     return {
                         "error": "service_unavailable",
                         "error_code": "store_unavailable",
                         "retryable": True,
                     }, 503
-                if redis_class.state != RedisRefreshState.CURRENT:
-                    if refresh_fail_closed_enabled() or redis_class.state in (
+                if redis_class.state != RedisRefreshState.CURRENT and (
+                    refresh_fail_closed_enabled()
+                    or redis_class.state
+                    in (
                         RedisRefreshState.EXPIRED_PREVIOUS,
                         RedisRefreshState.UNKNOWN,
                         RedisRefreshState.PREVIOUS_WITHIN_GRACE,
-                    ):
-                        # PREVIOUS sans session mobile : pas de receipt → rejet (pas R2).
-                        try:
-                            if is_token_revoked(
-                                refresh_token,
-                                grace_window=True,
-                                request_device_id=request.headers.get("X-Device-ID"),
-                            ):
-                                return {
-                                    "error": "refresh_token_revoked",
-                                    "error_code": "session_expired",
-                                }, 401
-                        except RefreshStoreUnavailableError:
-                            return {
-                                "error": "service_unavailable",
-                                "retryable": True,
-                            }, 503
-                        if redis_class.state != RedisRefreshState.CURRENT:
+                    )
+                ):
+                    # PREVIOUS sans session mobile : pas de receipt → rejet (pas R2).
+                    try:
+                        if is_token_revoked(
+                            refresh_token,
+                            grace_window=True,
+                            request_device_id=request.headers.get("X-Device-ID"),
+                        ):
                             return {
                                 "error": "refresh_token_revoked",
                                 "error_code": "session_expired",
                             }, 401
+                    except RefreshStoreUnavailableError:
+                        return {
+                            "error": "service_unavailable",
+                            "retryable": True,
+                        }, 503
+                    if redis_class.state != RedisRefreshState.CURRENT:
+                        return {
+                            "error": "refresh_token_revoked",
+                            "error_code": "session_expired",
+                        }, 401
                 try:
                     if is_token_revoked(
                         refresh_token,
@@ -5936,9 +5934,10 @@ class ResendActivationEmail(Resource):
             # Précontrôles indicatifs (non mutatifs) — autorité = service sous verrou
             can_send, block_reason = can_start_new_delivery_snapshot(activation_session)
             if not can_send:
-                retry_after = compute_email_resend_retry_after_seconds(
-                    activation_session
-                ) or ACTIVATION_RESEND_COOLDOWN_SECONDS
+                retry_after = (
+                    compute_email_resend_retry_after_seconds(activation_session)
+                    or ACTIVATION_RESEND_COOLDOWN_SECONDS
+                )
                 return auth_error(
                     AuthErrorCodes.RATE_LIMITED,
                     "Un envoi a déjà été demandé. Vous pourrez renvoyer après le délai indiqué.",
@@ -5985,9 +5984,10 @@ class ResendActivationEmail(Resource):
                 is_testing=bool(current_app.config.get("TESTING")),
             )
             if enqueue_result.get("error") == "email_delivery_in_progress":
-                retry_after = compute_email_resend_retry_after_seconds(
-                    activation_session
-                ) or ACTIVATION_RESEND_COOLDOWN_SECONDS
+                retry_after = (
+                    compute_email_resend_retry_after_seconds(activation_session)
+                    or ACTIVATION_RESEND_COOLDOWN_SECONDS
+                )
                 return auth_error(
                     AuthErrorCodes.RATE_LIMITED,
                     "Un envoi a déjà été demandé. Vous pourrez renvoyer après le délai indiqué.",
@@ -7441,7 +7441,9 @@ class TOTPChallenge(Resource):
 # ========================
 # Quota large : chaque POST/PUT/PATCH/DELETE (y compris refresh-token en CSRF_STRICT)
 # consomme un jeton. 50/h provoquait 429 → refresh sans CSRF → 403 → déconnexion.
-_RATELIMIT_CSRF_TOKEN = os.getenv("RATELIMIT_CSRF_TOKEN", "120 per minute; 2000 per hour")
+_RATELIMIT_CSRF_TOKEN = os.getenv(
+    "RATELIMIT_CSRF_TOKEN", "120 per minute; 2000 per hour"
+)
 
 
 @auth_ns.route("/csrf-token")

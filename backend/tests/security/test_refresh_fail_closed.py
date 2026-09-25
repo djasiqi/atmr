@@ -75,7 +75,10 @@ class TestRefreshEndpoint:
             create=True,
         ):
             pass
-        from security.refresh_redis_rotation import RedisClassifyResult, RedisRefreshState
+        from security.refresh_redis_rotation import (
+            RedisClassifyResult,
+            RedisRefreshState,
+        )
 
         with patch(
             "security.refresh_redis_rotation.classify_refresh_in_redis",
