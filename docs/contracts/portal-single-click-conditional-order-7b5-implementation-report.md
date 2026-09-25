@@ -19,7 +19,7 @@ MIGRATION                          8b1974a79318
 
 LOCAL MANUAL SMOKE                 PASS / CLOSED
   — preuve centrale                #46774 / contract #5 / quote 40
-COMMIT                             PENDING (étape suivante)
+COMMIT                             ca215360 (poussé)
 BUILD / DEPLOY                     NOT YET
 ```
 
@@ -53,6 +53,6 @@ PORTAL_TERMS_EFFECTIVE_VERSION = 1.0
 ```text
 7B.5              PASS / CLOSED
 LOCAL SMOKE       PASS
-NEXT              COMMIT UNIQUE → CI SAME SHA → E2E
+NEXT              CI SAME SHA → E2E
 BUILD / DEPLOY    NOT YET
 ```
