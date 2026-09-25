@@ -1520,7 +1520,6 @@ const ClientDashboard = () => {
         }
       }
       portalIdempotencyKeyRef.current = key;
-      const estimateNum = Number(amountForApi);
       if (portalCeilingFlowEnabled) {
         const maxNum = Number(String(maximumAcceptedAmount).replace(',', '.'));
         if (!Number.isFinite(maxNum) || maxNum <= 0) {
