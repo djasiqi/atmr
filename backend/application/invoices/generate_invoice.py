@@ -1483,13 +1483,13 @@ class GenerateInvoiceUseCase:
                         },
                     }
                 )
-            # Recharger les lignes pour les totaux / PDF / aperçu HTML / eBill (QR)
-            db.session.flush()
-            with suppress(Exception):
-                db.session.expire(invoice, ["lines"])
-            subtotal = round_to_5_cents(subtotal + fee)
-            total = round_to_5_cents(total + fee)
-            paper_fee_applied = True
+                # Recharger les lignes pour les totaux / PDF / aperçu HTML / eBill (QR)
+                db.session.flush()
+                with suppress(Exception):
+                    db.session.expire(invoice, ["lines"])
+                subtotal = round_to_5_cents(subtotal + fee)
+                total = round_to_5_cents(total + fee)
+                paper_fee_applied = True
 
             invoice.subtotal_amount = subtotal
             invoice.vat_total_amount = vat_total
