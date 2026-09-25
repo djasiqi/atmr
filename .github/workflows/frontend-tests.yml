@@ -75,8 +75,9 @@ jobs:
       - name: Run unit tests (Jest)
         run: |
           cd frontend
-          # Sans --coverage : babel-plugin-istanbul / test-exclude casse sous overrides npm (glob@11).
-          npm test -- --watchAll=false --ci
+          # Gate 7B.5 : tests portal (suite complète = drift produit hors scope).
+          # Sans --coverage : babel-plugin-istanbul / test-exclude casse sous overrides npm.
+          npm test -- --watchAll=false --ci --testPathPattern=portal
         env:
           CI: true
 

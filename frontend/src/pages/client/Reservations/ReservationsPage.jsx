@@ -23,7 +23,6 @@ import { getActivePublicId } from '../../../utils/webAuthSession';
 import { trackClientKpiEvent } from '../../../utils/clientKpi';
 import { requiresPrivateOnlinePaymentAtBooking } from '../../../utils/clientBookingPayment';
 import {
-  isPortalDoubleValidationFlow,
   isPortalContractFlow,
   portalReservationAmountDisplay,
 } from '../../../utils/portalDoubleValidationUi';
