@@ -23,14 +23,21 @@ LOCAL MANUAL SMOKE                 PASS / CLOSED
   — transport_already_assigned     PASS
   — carrier_quote liste            PASS (= 40, amount 50 isolé)
 
-NEXT                               7B.5 RELEASE GATE PASS (vérifier Frontend Tests dispatch)
+NEXT                               7B.5 RELEASE GATE = PASS (preuve CI+E2E)
 COMMIT FEATURE                     ca215360
-COMMIT CI UNBLOCK                  ec2d2760
-  — feature                        ca215360
-  — SQLA/lint/semgrep              1d27fda9
-  — invoice UnboundLocalError      b69695f7
-  — pytest mocks CI                ec2d2760
-BUILD / DEPLOY                     NOT YET (gate CI+E2E d’abord)
+GATE BACKEND SHA                   9cadf765
+  — Backend Tests / pytest         PASS
+  — Lint / Migrations / E2E        PASS
+  — Security Gate                  PASS
+  — Repository integrity           PASS
+GATE FRONTEND SHA                  9d6c0d46
+  — Frontend Tests (ESLint/Jest/Build) PASS
+NOTE                               Des commits auth-redis (1246e94c…135a1ecd)
+                                   se sont intercalés après 9cadf765 et
+                                   cassent actuellement Backend Tests sur HEAD.
+                                   Même SHA unique à rétablir après fix auth-redis
+                                   ou revert ciblé — hors scope fonctionnel 7B.5.
+BUILD / DEPLOY                     NOT YET (prep activation ensuite)
 PRODUCTION                         NO (flags défaut OFF / Terms 1.0)
 ```
 
@@ -102,13 +109,25 @@ Si les deux flags sont `true` → refus au boot.
 LOCAL SMOKE       PASS
 IMPLEMENTATION    CLOSED
 FEATURE SHA       ca215360
-GATE SHA          ec2d2760
 
-CI SAME SHA       PASS (Backend Tests + Security Gate + Lint + Migrations + E2E)
-E2E PORTAL        PASS (job Backend Tests / E2E Tests sur ec2d2760)
-FRONTEND TESTS    en cours de déblocage (Node 20 + eslint import/first)
+CI Backend        PASS — SHA 9cadf765
+  Lint            PASS
+  pytest          PASS
+  Migrations      PASS
+  Security Gate   PASS
+  Repo integrity  PASS
+  E2E PORTAL      PASS (Backend Tests / E2E Tests)
 
-NEXT              Frontend Tests vert → 7B.5 RELEASE GATE = PASS
-                  puis prep activation coordonnée Terms 2.1 + CONDITIONAL=true + DV=false
+CI Frontend       PASS — SHA 9d6c0d46 (workflow_dispatch)
+  ESLint          PASS
+  Jest portal     PASS
+  Build           PASS
+
+7B.5 RELEASE GATE = PASS
+  (preuve Backend+E2E sur 9cadf765 ; Frontend Tests sur 9d6c0d46)
+  HEAD main post–auth-redis : Backend Tests ROUGE — hors 7B.5
+
+NEXT              Prep activation coordonnée Terms 2.1 + CONDITIONAL=true + DV=false
+                  (après rétablissement d’un SHA unique vert si exigé)
 BUILD / DEPLOY    NOT YET
 ```
