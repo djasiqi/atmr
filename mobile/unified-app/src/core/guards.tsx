@@ -18,8 +18,8 @@ import { emitDriverTelemetry } from "./observability/driverTelemetry";
 type PropsWithChildren<P = object> = P & { children?: React.ReactNode };
 
 export function AuthGuard({ children }: PropsWithChildren) {
-  const { bootstrap } = useSession();
-  const redirectTo = resolveAuthGuardRedirect(bootstrap);
+  const { bootstrap, mobileSessionStatus } = useSession();
+  const redirectTo = resolveAuthGuardRedirect(bootstrap, mobileSessionStatus);
   if (redirectTo) return <Redirect href={redirectTo as any} />;
   return <>{children}</>;
 }

@@ -6,6 +6,7 @@ import { brandSurfaceSoft, ResponsiveContainer, Screen } from "../src/design/res
 import { FONT_SIZE } from "../src/design/responsive/typographyTokens";
 import { BootBrandSurface } from "../src/core/boot/BootBrandSurface";
 import { canEnterFromLocalSession } from "../src/core/auth/canEnterFromLocalSession";
+import { shouldShowColdBootBrandSurface } from "../src/core/auth/authGuardDecision";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ReactRuntime: any = require("react");
 
@@ -68,19 +69,37 @@ export default function IndexScreen() {
     );
   }
 
-  if (
-    bootstrap &&
-    mobileSessionStatus !== "logging_out" &&
-    canEnterFromLocalSession({ bootstrap, activeContext })
-  ) {
-    return <BootRedirect href={resolveInitialRoute(bootstrap)} />;
+  // P0-5 final : warm recovery / session ready → destination app, jamais BootBrand plein écran
+  const warmOrReady =
+    status === "ready" ||
+    mobileSessionStatus === "authenticated_online" ||
+    mobileSessionStatus === "authenticated_offline" ||
+    mobileSessionStatus === "auth_recovering" ||
+    canEnterFromLocalSession({ bootstrap, activeContext });
+
+  if (bootstrap && warmOrReady && mobileSessionStatus !== "logging_out") {
+    const href = resolveInitialRoute(bootstrap, null, mobileSessionStatus);
+    if (href && !href.startsWith("/(public)")) {
+      return <BootRedirect href={href} />;
+    }
+    // AuthGuard garde l'arbre monté ; Index ne doit pas démonter via BootBrand
+    if (!shouldShowColdBootBrandSurface({ status, mobileSessionStatus })) {
+      return <BootRedirect href={"/(app)/context-selector"} />;
+    }
   }
 
-  if (!bootstrap || status === "bootstrapping" || mobileSessionStatus === "logging_out") {
+  if (
+    shouldShowColdBootBrandSurface({ status, mobileSessionStatus }) ||
+    !bootstrap ||
+    status === "bootstrapping" ||
+    mobileSessionStatus === "logging_out"
+  ) {
     return <BootBrandSurface />;
   }
 
-  return <BootRedirect href={resolveInitialRoute(bootstrap)} />;
+  const href = resolveInitialRoute(bootstrap, null, mobileSessionStatus);
+  if (!href) return <BootBrandSurface />;
+  return <BootRedirect href={href} />;
 }
 
 const styles = StyleSheet.create({

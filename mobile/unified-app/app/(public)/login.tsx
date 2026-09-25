@@ -78,7 +78,7 @@ function asString(value: unknown): string {
 export default function LoginScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ next?: string }>();
-  const { login, error, bootstrap, bootstrapSession } = useSession();
+  const { login, error, bootstrap, bootstrapSession, mobileSessionStatus } = useSession();
   const [email, setEmail] = ReactRuntime.useState("");
   const [password, setPassword] = ReactRuntime.useState("");
   const [showPassword, setShowPassword] = ReactRuntime.useState(false);
@@ -204,7 +204,9 @@ export default function LoginScreen() {
   }, [keyboardVisible]);
 
   if (bootstrap?.is_authenticated) {
-    return <Redirect href={resolveInitialRoute(bootstrap) as any} />;
+    return (
+      <Redirect href={resolveInitialRoute(bootstrap, null, mobileSessionStatus) as any} />
+    );
   }
 
   const onSubmit = async () => {

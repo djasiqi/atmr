@@ -8,7 +8,6 @@ import { isFeatureEnabled } from "../../core/featureFlags/registry";
 import { reconcileDriverMissions } from "./sync";
 import { driverOfflineQueue } from "./offlineQueue";
 import { invalidateDriverMissionScope } from "./queryKeys";
-import { refreshAuthTokenSingleflight } from "../../core/auth/authTokenOrchestrator";
 import {
   subscribeDriverForegroundResume,
   tryClaimDriverResumeWork,
@@ -25,17 +24,19 @@ const RESUME_MAX_ATTEMPTS = 2;
 export function useDriverRuntimeResume(options: RuntimeResumeOptions) {
   const { contextId, enabled, onForegroundResume } = options;
   const queryClient = useQueryClient();
-  const { status, bootstrapSession } = useSession();
+  const { status, bootstrapSession, recoverAuthWarm } = useSession();
   const isResumingRef = useRef(false);
   const resumeAttemptRef = useRef(0);
   const contextIdRef = useRef(contextId);
   const statusRef = useRef(status);
   const bootstrapRef = useRef(bootstrapSession);
+  const recoverRef = useRef(recoverAuthWarm);
   const onResumeRef = useRef(onForegroundResume);
   const queryClientRef = useRef(queryClient);
   contextIdRef.current = contextId;
   statusRef.current = status;
   bootstrapRef.current = bootstrapSession;
+  recoverRef.current = recoverAuthWarm;
   onResumeRef.current = onForegroundResume;
   queryClientRef.current = queryClient;
 
@@ -68,13 +69,28 @@ export function useDriverRuntimeResume(options: RuntimeResumeOptions) {
           const claimedResync = tryClaimDriverResumeWork("resync", resumeEpoch);
           for (let attempt = 1; attempt <= RESUME_MAX_ATTEMPTS; attempt += 1) {
             try {
-              await refreshAuthTokenSingleflight("foreground_resume");
+              // P0-5 : recovery unique (refresh + session-resume), pas refresh nu
+              const outcome = await recoverRef.current("foreground");
+              if (outcome === "terminal") {
+                emitDriverTelemetry("driver.runtime.resume.terminal", {
+                  source: "driver.runtime.resume",
+                  context_id: activeContextId,
+                  resume_attempt_id: resumeAttemptId,
+                });
+                break;
+              }
+              if (outcome === "no_action" && attempt < RESUME_MAX_ATTEMPTS) {
+                continue;
+              }
               if (isFeatureEnabled("realtime_auth_reconnect_enabled")) {
                 realtimeManager.connect(activeContextId, {
                   enableSocket: isFeatureEnabled("realtime_socket_enabled"),
                 });
               }
-              if (claimedResync) {
+              if (
+                claimedResync &&
+                (outcome === "recovered" || outcome === "keep_local")
+              ) {
                 await reconcileDriverMissions(queryClientRef.current, activeContextId);
               }
               await driverOfflineQueue.flush();
@@ -95,6 +111,7 @@ export function useDriverRuntimeResume(options: RuntimeResumeOptions) {
                 retry_count: attempt - 1,
                 resume_attempt_id: resumeAttemptId,
                 resume_epoch: resumeEpoch,
+                recovery_outcome: outcome,
               });
               break;
             } catch (error) {

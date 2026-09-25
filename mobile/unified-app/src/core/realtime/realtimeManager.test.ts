@@ -8,6 +8,7 @@ import { realtimeManager } from "./realtimeManager";
 const mockHandlers = new Map<string, ((payload?: unknown) => void)[]>();
 const mockEmitDriverTelemetry = jest.fn();
 const mockRefreshAuthTokenNow = jest.fn<() => Promise<boolean>>();
+const mockRequestWarmAuthRecovery = jest.fn<() => Promise<string>>();
 const mockGetAuthAccessToken = jest.fn<() => string | null>();
 const mockSocket = {
   connected: true,
@@ -45,6 +46,10 @@ jest.mock("../observability/driverTelemetry", () => ({
 jest.mock("../api/client", () => ({
   refreshAuthTokenNow: () => mockRefreshAuthTokenNow(),
   getAuthAccessToken: () => mockGetAuthAccessToken(),
+}));
+
+jest.mock("../auth/authWarmRecoveryBridge", () => ({
+  requestWarmAuthRecovery: (reason: string) => mockRequestWarmAuthRecovery(reason),
 }));
 
 // Helper — renregistre les handlers après chaque reconnexion simulée
@@ -95,8 +100,10 @@ describe("realtime manager", () => {
     mockSocket.removeAllListeners.mockClear();
     mockEmitDriverTelemetry.mockClear();
     mockRefreshAuthTokenNow.mockReset();
+    mockRequestWarmAuthRecovery.mockReset();
     mockGetAuthAccessToken.mockReset();
     mockRefreshAuthTokenNow.mockResolvedValue(true);
+    mockRequestWarmAuthRecovery.mockResolvedValue("recovered");
     mockGetAuthAccessToken.mockReturnValue("token-test");
     mockResolveDriverSocketUrl.mockImplementation(
       () => process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL ?? null
@@ -369,28 +376,65 @@ describe("realtime manager", () => {
     jest.useRealTimers();
   });
 
-  it("refreshes token before scheduled reconnect", async () => {
+  it("P0-5 final: generic disconnect/backoff reconnect → 0 warm recovery", async () => {
     jest.useFakeTimers();
     process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver.example.test";
     realtimeManager.connect("driver:42", { enableSocket: true });
-    fireConnectError("socket down");
+    mockRequestWarmAuthRecovery.mockClear();
+
+    // disconnect → scheduleReconnect → backoff → connectSocket
+    const disconnect = mockHandlers.get("disconnect")?.[0];
+    disconnect?.();
     rebindSocketHandlers();
     jest.advanceTimersByTime(5000);
     await Promise.resolve();
-    expect(mockRefreshAuthTokenNow).toHaveBeenCalled();
+    disconnect?.();
+    rebindSocketHandlers();
+    jest.advanceTimersByTime(10000);
+    await Promise.resolve();
+
+    expect(mockRequestWarmAuthRecovery).not.toHaveBeenCalled();
     jest.useRealTimers();
   });
 
-  it("does not apply async token refresh after logout disconnect", async () => {
+  it("P0-5 final: auth handshake failure → exactly one warm recovery", async () => {
     process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver.example.test";
-    let resolveRefresh: (() => void) | null = null;
-    mockRefreshAuthTokenNow.mockImplementation(
-      () =>
-        new Promise<boolean>((resolve) => {
-          resolveRefresh = () => resolve(true);
-        })
-    );
+    realtimeManager.connect("driver:42", { enableSocket: true });
+    mockRequestWarmAuthRecovery.mockClear();
 
+    fireConnectError("Unauthorized", "invalid_token");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockRequestWarmAuthRecovery).toHaveBeenCalledTimes(1);
+    expect(mockRequestWarmAuthRecovery).toHaveBeenCalledWith("socket_auth_failure");
+  });
+
+  it("P0-5 final: rapid auth errors → single-flight (pas de storm séquentiel concurrent)", async () => {
+    process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver.example.test";
+    let resolveRecovery!: (v: string) => void;
+    const pending = new Promise<string>((r) => {
+      resolveRecovery = r;
+    });
+    mockRequestWarmAuthRecovery.mockReturnValue(pending);
+
+    realtimeManager.connect("driver:42", { enableSocket: true });
+    mockRequestWarmAuthRecovery.mockClear();
+    mockRequestWarmAuthRecovery.mockReturnValue(pending);
+
+    fireConnectError("Unauthorized");
+    fireConnectError("Forbidden");
+    fireConnectError("401");
+    await Promise.resolve();
+
+    expect(mockRequestWarmAuthRecovery).toHaveBeenCalledTimes(1);
+    expect(mockRequestWarmAuthRecovery).toHaveBeenCalledWith("socket_auth_failure");
+    resolveRecovery("recovered");
+    await Promise.resolve();
+  });
+
+  it("does not apply token after logout disconnect (generation/epoch)", async () => {
+    process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver.example.test";
     realtimeManager.connect("driver:42", { enableSocket: true });
     expect(mockIo).toHaveBeenCalledTimes(1);
 
@@ -398,11 +442,13 @@ describe("realtime manager", () => {
     expect(realtimeManager.getSnapshot().mode).toBe("idle");
     mockGetAuthAccessToken.mockClear();
 
-    resolveRefresh?.();
-    await Promise.resolve();
+    // reconnect_attempt sur ancien socket ne doit plus toucher l'auth
+    const reconnectAttempt = mockSocket.io.on.mock.calls.find(
+      (c) => c[0] === "reconnect_attempt"
+    )?.[1] as (() => void) | undefined;
+    reconnectAttempt?.();
     await Promise.resolve();
 
-    expect(mockGetAuthAccessToken).not.toHaveBeenCalled();
     expect(realtimeManager.getSnapshot().mode).toBe("idle");
   });
 

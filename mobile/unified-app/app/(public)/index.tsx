@@ -77,7 +77,7 @@ function splitSuggestionLabel(value: string): { primary: string; secondary: stri
  */
 export default function PublicHomeScreen() {
   const router = useRouter();
-  const { bootstrap } = useSession();
+  const { bootstrap, mobileSessionStatus } = useSession();
   const viewport = useAppViewport();
   const { landing: layout } = useResponsiveTokens();
   const { fontScale, isLargeText, isVeryLargeText } = useAccessibilityScale();
@@ -509,7 +509,9 @@ export default function PublicHomeScreen() {
   }
 
   if (bootstrap?.is_authenticated) {
-    return <Redirect href={resolveInitialRoute(bootstrap) as any} />;
+    return (
+      <Redirect href={resolveInitialRoute(bootstrap, null, mobileSessionStatus) as any} />
+    );
   }
 
   return (

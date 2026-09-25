@@ -13,6 +13,7 @@ const mockRemoveAppStateListener = jest.fn();
 
 const mockEmitTelemetry = jest.fn();
 const mockBootstrapSession = jest.fn();
+const mockRecoverAuthWarm = jest.fn();
 const mockRefreshAuthTokenNow = jest.fn();
 const mockSetResumeAttemptCorrelationId = jest.fn();
 const mockRealtimeConnect = jest.fn();
@@ -38,6 +39,7 @@ jest.mock("../../core/sessionProvider", () => ({
   useSession: () => ({
     status: "ready",
     bootstrapSession: () => mockBootstrapSession(),
+    recoverAuthWarm: (reason: string) => mockRecoverAuthWarm(reason),
   }),
 }));
 
@@ -45,10 +47,6 @@ jest.mock("../../core/api/client", () => ({
   refreshAuthTokenNow: () => mockRefreshAuthTokenNow(),
   setResumeAttemptCorrelationId: (value: string | null) =>
     mockSetResumeAttemptCorrelationId(value),
-}));
-
-jest.mock("../../core/auth/authTokenOrchestrator", () => ({
-  refreshAuthTokenSingleflight: () => mockRefreshAuthTokenNow(),
 }));
 
 jest.mock("../../core/realtime/realtimeManager", () => ({
@@ -94,6 +92,7 @@ describe("useDriverRuntimeResume", () => {
     mockRemoveAppStateListener.mockReset();
     mockEmitTelemetry.mockReset();
     mockBootstrapSession.mockReset();
+    mockRecoverAuthWarm.mockReset();
     mockRefreshAuthTokenNow.mockReset();
     mockSetResumeAttemptCorrelationId.mockReset();
     mockRealtimeConnect.mockReset();
@@ -101,6 +100,7 @@ describe("useDriverRuntimeResume", () => {
     mockOfflineFlush.mockReset();
     mockIsFeatureEnabled.mockReset();
 
+    mockRecoverAuthWarm.mockResolvedValue("recovered");
     mockRefreshAuthTokenNow.mockResolvedValue(true);
     mockReconcileDriverMissions.mockResolvedValue({ missions: [], queue: { sent: 0, dropped: 0, failed: 0 } });
     mockOfflineFlush.mockResolvedValue({ sent: 0, dropped: 0, failed: 0 });
@@ -134,7 +134,8 @@ describe("useDriverRuntimeResume", () => {
       await Promise.resolve();
     });
 
-    expect(mockRefreshAuthTokenNow).toHaveBeenCalledTimes(1);
+    expect(mockRecoverAuthWarm).toHaveBeenCalledTimes(1);
+    expect(mockRecoverAuthWarm).toHaveBeenCalledWith("foreground");
     expect(mockRealtimeConnect).toHaveBeenCalledWith("driver:42", { enableSocket: true });
     expect(mockReconcileDriverMissions).toHaveBeenCalledTimes(1);
     expect(mockOfflineFlush).toHaveBeenCalledTimes(1);

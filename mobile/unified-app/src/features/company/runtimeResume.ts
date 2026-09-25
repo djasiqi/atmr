@@ -3,7 +3,6 @@ import { AppState, AppStateStatus } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "../../core/sessionProvider";
 import { setResumeAttemptCorrelationId } from "../../core/api/client";
-import { refreshAuthTokenSingleflight } from "../../core/auth/authTokenOrchestrator";
 import { appendSessionJournalEvent } from "../../core/observability/sessionJournal";
 import { companyRealtimeBridge } from "./realtime/companyRealtimeBridge";
 import { performCompanyRecoveryResync } from "./realtime/useCompanyRecoveryListener";
@@ -36,7 +35,7 @@ function reconnectCompanyBridge(contextId: string) {
 export function useCompanyRuntimeResume(options: CompanyRuntimeResumeOptions) {
   const { contextId, enabled } = options;
   const queryClient = useQueryClient();
-  const { status, bootstrapSession } = useSession();
+  const { status, bootstrapSession, recoverAuthWarm } = useSession();
   const isResumingRef = useRef(false);
   const resumeAttemptRef = useRef(0);
 
@@ -68,25 +67,30 @@ export function useCompanyRuntimeResume(options: CompanyRuntimeResumeOptions) {
           }
           for (let attempt = 1; attempt <= RESUME_MAX_ATTEMPTS; attempt += 1) {
             try {
-              const refreshed = await refreshAuthTokenSingleflight("company_foreground_resume");
-              if (!refreshed) {
-                lastFailureReason = "refresh_returned_false";
+              // P0-5 : une seule décision auth (coordinateur), pas refresh nu
+              const outcome = await recoverAuthWarm("company_foreground");
+              if (outcome === "terminal") {
+                lastFailureReason = "auth_terminal";
+                break;
+              }
+              if (outcome === "no_action") {
+                lastFailureReason = "recovery_no_action";
                 if (attempt < RESUME_MAX_ATTEMPTS) {
-                  void appendSessionJournalEvent(
-                    "session.company.resume.retry",
-                    { attempt, reason: lastFailureReason, resume_attempt_id: resumeAttemptId },
-                    contextId
-                  );
                   await sleep(RETRY_DELAY_MS);
                   continue;
                 }
                 break;
               }
+              // recovered | keep_local : sockets après la décision auth
               reconnectCompanyBridge(contextId);
               performCompanyRecoveryResync(queryClient, contextId, "reconnect");
               void appendSessionJournalEvent(
                 "session.company.resume.success",
-                { retry_count: attempt - 1, resume_attempt_id: resumeAttemptId },
+                {
+                  retry_count: attempt - 1,
+                  resume_attempt_id: resumeAttemptId,
+                  recovery_outcome: outcome,
+                },
                 contextId
               );
               succeeded = true;
@@ -96,7 +100,11 @@ export function useCompanyRuntimeResume(options: CompanyRuntimeResumeOptions) {
               if (attempt < RESUME_MAX_ATTEMPTS) {
                 void appendSessionJournalEvent(
                   "session.company.resume.retry",
-                  { attempt, reason: lastFailureReason, resume_attempt_id: resumeAttemptId },
+                  {
+                    attempt,
+                    reason: lastFailureReason,
+                    resume_attempt_id: resumeAttemptId,
+                  },
                   contextId
                 );
                 await sleep(RETRY_DELAY_MS);
@@ -122,5 +130,5 @@ export function useCompanyRuntimeResume(options: CompanyRuntimeResumeOptions) {
     return () => {
       subscription.remove();
     };
-  }, [enabled, contextId, queryClient, status, bootstrapSession]);
+  }, [enabled, contextId, queryClient, status, bootstrapSession, recoverAuthWarm]);
 }

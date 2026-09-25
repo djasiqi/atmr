@@ -9,7 +9,7 @@ const mockRemoveAppStateListener = jest.fn();
 let appStateCallback: ((state: "active" | "inactive" | "background") => void) | null = null;
 
 const mockBootstrapSession = jest.fn();
-const mockRefreshAuthTokenSingleflight = jest.fn();
+const mockRecoverAuthWarm = jest.fn();
 const mockSetResumeAttemptCorrelationId = jest.fn();
 const mockAppendSessionJournalEvent = jest.fn();
 const mockBridgeConnect = jest.fn();
@@ -32,16 +32,13 @@ jest.mock("../../core/sessionProvider", () => ({
   useSession: () => ({
     status: "ready",
     bootstrapSession: () => mockBootstrapSession(),
+    recoverAuthWarm: (reason: string) => mockRecoverAuthWarm(reason),
   }),
 }));
 
 jest.mock("../../core/api/client", () => ({
   setResumeAttemptCorrelationId: (value: string | null) =>
     mockSetResumeAttemptCorrelationId(value),
-}));
-
-jest.mock("../../core/auth/authTokenOrchestrator", () => ({
-  refreshAuthTokenSingleflight: (reason: string) => mockRefreshAuthTokenSingleflight(reason),
 }));
 
 jest.mock("../../core/observability/sessionJournal", () => ({
@@ -71,7 +68,7 @@ describe("useCompanyRuntimeResume", () => {
     mockAddEventListener.mockReset();
     mockRemoveAppStateListener.mockReset();
     mockBootstrapSession.mockReset();
-    mockRefreshAuthTokenSingleflight.mockReset();
+    mockRecoverAuthWarm.mockReset();
     mockSetResumeAttemptCorrelationId.mockReset();
     mockAppendSessionJournalEvent.mockReset();
     mockBridgeConnect.mockReset();
@@ -79,7 +76,7 @@ describe("useCompanyRuntimeResume", () => {
     mockBridgeGetSnapshot.mockReset();
     mockPerformCompanyRecoveryResync.mockReset();
 
-    mockRefreshAuthTokenSingleflight.mockResolvedValue(true);
+    mockRecoverAuthWarm.mockResolvedValue("recovered");
     mockBridgeGetSnapshot.mockReturnValue({
       status: "failed",
       contextId: "company:99",
@@ -105,7 +102,7 @@ describe("useCompanyRuntimeResume", () => {
       await Promise.resolve();
     });
 
-    expect(mockRefreshAuthTokenSingleflight).toHaveBeenCalledWith("company_foreground_resume");
+    expect(mockRecoverAuthWarm).toHaveBeenCalledWith("company_foreground");
     expect(mockBridgeReconnect).toHaveBeenCalled();
     expect(mockPerformCompanyRecoveryResync).toHaveBeenCalledWith(
       queryClient,

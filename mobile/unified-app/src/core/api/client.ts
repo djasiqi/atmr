@@ -1021,13 +1021,22 @@ apiClient.interceptors.response.use(
       !isAuthEndpoint
     ) {
       try {
-        const refreshedToken = await ensureRefreshToken({ force: true });
-        if (!refreshedToken) {
-          return Promise.reject(error);
+        // P0-5 : recovery unique (refresh → session-resume → classification), pas refresh nu
+        const { requestWarmAuthRecovery } = require("../auth/authWarmRecoveryBridge") as {
+          requestWarmAuthRecovery: (
+            reason: string
+          ) => Promise<"recovered" | "terminal" | "keep_local" | "no_action">;
+        };
+        const outcome = await requestWarmAuthRecovery("api_401");
+        if (outcome === "recovered") {
+          const refreshedToken = getAuthAccessToken();
+          if (refreshedToken) {
+            originalForAuthRetry._authRetried = true;
+            originalForAuthRetry.headers.Authorization = `Bearer ${refreshedToken}`;
+            return await apiClient.request(originalForAuthRetry);
+          }
         }
-        originalForAuthRetry._authRetried = true;
-        originalForAuthRetry.headers.Authorization = `Bearer ${refreshedToken}`;
-        return await apiClient.request(originalForAuthRetry);
+        return Promise.reject(error);
       } catch {
         return Promise.reject(error);
       }

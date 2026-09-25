@@ -130,6 +130,7 @@ jest.mock("./auth/authCredentialStore", () => ({
       revocation_secret: "sec",
     },
   })),
+  readRefreshToken: jest.fn(async () => ({ status: "missing" as const })),
 }));
 
 jest.mock("./realtime/realtimeManager", () => ({
@@ -341,6 +342,62 @@ describe("session provider gates", () => {
     expect(mockAttemptRestRecovery).toHaveBeenCalledWith("cold_start");
     expect(handle.current?.status).toBe("ready");
     expect(handle.current?.activeContext).toBeNull();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("P0-4 bootstrap false + refresh local → attemptRestRecovery bootstrap_unauthenticated", async () => {
+    mockHasAuthToken.mockReturnValue(false);
+    mockAttemptRestRecovery
+      .mockResolvedValueOnce("no_action")
+      .mockResolvedValueOnce("recovered");
+    const store = jest.requireMock("./auth/authCredentialStore") as {
+      readRefreshToken: jest.Mock;
+    };
+    store.readRefreshToken.mockResolvedValueOnce({
+      status: "found",
+      value: "refresh-durable",
+    });
+    mockFetchBootstrap
+      .mockResolvedValueOnce(buildUnauthenticatedBootstrap())
+      .mockResolvedValueOnce(buildBootstrap("driver:42"));
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+
+    expect(mockAttemptRestRecovery).toHaveBeenCalledWith("cold_start");
+    expect(mockAttemptRestRecovery).toHaveBeenCalledWith("bootstrap_unauthenticated");
+    expect(handle.current?.status).toBe("ready");
+    expect(handle.current?.mobileSessionStatus).toBe("authenticated_online");
+    expect(handle.current?.activeContext?.context_id).toBe("driver:42");
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("P0-5 recoverAuthWarm keep_local → authenticated_offline sans purge", async () => {
+    mockHasAuthToken.mockReturnValue(true);
+    mockFetchBootstrap.mockResolvedValue(buildBootstrap("driver:42"));
+    mockAttemptRestRecovery.mockResolvedValue("keep_local");
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+    expect(handle.current?.mobileSessionStatus).toBe("authenticated_online");
+
+    let outcome: string | undefined;
+    await act(async () => {
+      outcome = await handle.current?.recoverAuthWarm("foreground");
+    });
+    expect(outcome).toBe("keep_local");
+    expect(handle.current?.mobileSessionStatus).toBe("authenticated_offline");
+    expect(handle.current?.status).toBe("ready");
     await act(async () => {
       renderer.unmount();
     });

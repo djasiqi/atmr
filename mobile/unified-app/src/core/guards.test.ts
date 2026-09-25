@@ -31,11 +31,25 @@ const bootstrapBase = {
 };
 
 describe("guard decision helpers", () => {
-  it("auth guard redirects when unauthenticated", () => {
-    expect(resolveAuthGuardRedirect({ ...bootstrapBase, is_authenticated: false })).toBe(
-      "/(public)"
-    );
-    expect(resolveAuthGuardRedirect(bootstrapBase as any)).toBeNull();
+  it("auth guard redirects only on terminal with mandatory status", () => {
+    expect(
+      resolveAuthGuardRedirect({ ...bootstrapBase, is_authenticated: false }, "anonymous")
+    ).toBe("/(public)");
+    expect(resolveAuthGuardRedirect(bootstrapBase as any, "authenticated_online")).toBeNull();
+  });
+
+  it("P0-4 auth guard: recovering/degraded/null bootstrap ne redirigent pas", () => {
+    expect(resolveAuthGuardRedirect(null, "initializing")).toBeNull();
+    expect(resolveAuthGuardRedirect(bootstrapBase as any, "auth_recovering")).toBeNull();
+    expect(
+      resolveAuthGuardRedirect(
+        { ...bootstrapBase, is_authenticated: false },
+        "authenticated_offline"
+      )
+    ).toBeNull();
+    expect(
+      resolveAuthGuardRedirect({ ...bootstrapBase, is_authenticated: false }, "revoked")
+    ).toBe("/(public)");
   });
 
   it("context guard redirects when context missing", () => {

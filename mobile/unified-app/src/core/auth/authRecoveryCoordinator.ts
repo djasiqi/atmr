@@ -34,17 +34,33 @@ import {
   revokeSessionPending,
   sessionResumeRequest,
   setAuthToken,
+  getLastRefreshErrorCode,
 } from "../api/client";
 import { getNetworkSnapshot } from "../network/networkState";
 import { readPendingResumeOperation } from "./pendingResumeOperation";
 
-const TERMINAL_ERROR_CODES = new Set(["session_revoked", "refresh_replay_detected", "account_disabled"]);
+const TERMINAL_ERROR_CODES = new Set([
+  "session_revoked",
+  "refresh_replay_detected",
+  "account_disabled",
+]);
 const KEEP_LOCAL_ERROR_CODES = new Set([
   "refresh_store_unavailable",
+  "store_unavailable",
   "session_validation_unavailable",
   "rotation_result_unavailable",
   "storage_unavailable",
   "storage_stale",
+  "service_unavailable",
+  "temporarily_unavailable",
+  "auth_store_unavailable",
+  "redis_unavailable",
+  "bootstrap_unavailable",
+  "rate_limited",
+  "csrf_temporary",
+  "timeout",
+  "ERR_NETWORK",
+  "err_network",
 ]);
 const ROTATION_RECOVERY_CODES = new Set([
   "rotation_recovery_required",
@@ -58,12 +74,50 @@ export function classifyAuthErrorCode(code: string | null | undefined): AuthErro
   if (TERMINAL_ERROR_CODES.has(code)) return "terminal";
   if (KEEP_LOCAL_ERROR_CODES.has(code)) return "keep_local";
   if (ROTATION_RECOVERY_CODES.has(code)) return "rotation_recovery";
+  // Messages / codes réseau génériques → keep_local (jamais purge)
+  const lower = code.toLowerCase();
+  if (
+    lower.includes("network") ||
+    lower.includes("timeout") ||
+    lower.includes("econn") ||
+    lower.includes("enotfound") ||
+    lower.includes("dns") ||
+    lower === "err_network" ||
+    lower.includes("503") ||
+    lower.includes("502") ||
+    lower.includes("504") ||
+    lower.includes("500") ||
+    lower.includes("429") ||
+    lower.includes("csrf") ||
+    lower.includes("temporarily_unavailable") ||
+    lower.includes("offline")
+  ) {
+    return "keep_local";
+  }
   return "unknown";
 }
 
 export type RecoveryOutcome = "recovered" | "terminal" | "keep_local" | "no_action";
 
+let recoveryInFlight: Promise<RecoveryOutcome> | null = null;
+
+/** Réservé aux tests — force le reset du single-flight. */
+export function __resetRecoveryInFlightForTests(): void {
+  recoveryInFlight = null;
+}
+
 export async function attemptRestRecovery(reason: string): Promise<RecoveryOutcome> {
+  if (recoveryInFlight) {
+    void appendSessionJournalEvent("auth.recovery.joined_inflight", { reason });
+    return recoveryInFlight;
+  }
+  recoveryInFlight = runRestRecovery(reason).finally(() => {
+    recoveryInFlight = null;
+  });
+  return recoveryInFlight;
+}
+
+async function runRestRecovery(reason: string): Promise<RecoveryOutcome> {
   void appendSessionJournalEvent("auth.recovery.attempt", { reason });
 
   // Une reprise commencée doit être réconciliée avant tout refresh normal.
@@ -108,7 +162,6 @@ export async function attemptRestRecovery(reason: string): Promise<RecoveryOutco
     return "recovered";
   }
 
-  const { getLastRefreshErrorCode } = await import("../api/client");
   const refreshErrorClass = classifyAuthErrorCode(getLastRefreshErrorCode());
   if (refreshErrorClass === "terminal") {
     void appendSessionJournalEvent("auth.recovery.terminal", {

@@ -71,8 +71,8 @@ Même contrat `/auth/login`, `/auth/refresh-token`, `/auth/session-resume`.
 | P0-1 | Écrire Redis dans `store_refresh_token` / `sync_refresh_token_to_redis` (login, OTP, resume, replace, switch, handoff, rotation) | Fini 401 post-resume | ✅ **Implémenté** (2026-09-25) + durcissement transactionnel : `publish_refresh_redis` / `rotate_refresh_redis` + `commit_db_after_redis` (compensation si commit SQL échoue) |
 | P0-3 | Incrémenter `refresh_generation` au resume + clear `PendingRefreshOperation` | Fini `refresh_replay_detected` post-resume | ✅ **Implémenté** (2026-09-25) |
 | P0-2 | Grâce Redis 300s + résoudre idempotence **avant** validate Redis | Rejeu crash-safe | ✅ **Implémenté** (2026-09-25) : `security/refresh_redis_rotation.py` + reorder `/refresh-token` ; previous ≠ re-rotate |
-| P0-4 | AuthGuard accepte `authenticated_offline` / `auth_recovering` ; ne pas écraser snapshot avec bootstrap anonyme | Plus d’écran login transitoire | Planifié (après P0-1…P0-3) |
-| P0-5 | Brancher `attemptRestRecovery` sur chemin chaud (401, foreground, socket auth) | Filet session chaude | Planifié (après P0-4) |
+| P0-4 | AuthGuard accepte `authenticated_offline` / `auth_recovering` ; ne pas écraser snapshot avec bootstrap anonyme | Plus d'écran login transitoire | ✅ **Implémenté** + **FINAL GATE** : `mobileSessionStatus` obligatoire ; warm recovery garde route app ; BootBrand cold-only |
+| P0-5 | Brancher `attemptRestRecovery` sur chemin chaud (401, foreground, socket auth) | Filet session chaude | ✅ **Implémenté** + **FINAL GATE** : socket recovery **uniquement** sur `connect_error` auth (`socket_auth_failure`) ; reconnect/backoff générique = 0 recovery |
 | P0-6 | Isolation du store refresh (éviction / instance dédiée) | Anti déconnexion de masse | Planifié |
 
 
@@ -95,7 +95,7 @@ La fiche `p0-mobile-session-push-evidence.md` interdit explicitement, avant preu
 - ouverture de la porte P1-C2
 - changement de TTL ad hoc
 
-**P0-1, P0-2, P0-3** ✅ implémentés (2026-09-25). P0-4 / P0-5 / P0-6 encore à venir — deploy **NO-GO**.
+**P0-1…P0-5** ✅ implémentés (2026-09-25). P0-6 encore à venir — deploy mobile/auth **NO-GO**.
 
 ## Preuve SQL (Docker uniquement)
 

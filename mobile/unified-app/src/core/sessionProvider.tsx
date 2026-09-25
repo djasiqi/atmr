@@ -40,6 +40,7 @@ import { flushPendingSessionConfirmation } from "./auth/pendingSessionConfirmati
 import {
   getSessionGenerationId,
   isCurrentSessionGeneration,
+  readRefreshToken,
   readSessionEnvelope,
   type SessionGenerationId,
 } from "./auth/authCredentialStore";
@@ -125,6 +126,8 @@ type SessionContextValue = {
   autoBootstrapAllowed: boolean;
   login: (email: string, password: string) => Promise<void>;
   bootstrapSession: (opts?: { trigger?: BootstrapTrigger }) => Promise<void>;
+  /** P0-5 : recovery session chaude (foreground / 401) — single-flight via coordinateur. */
+  recoverAuthWarm: (reason: string) => Promise<"recovered" | "keep_local" | "terminal" | "no_action">;
   changeContext: (targetContextId: string) => Promise<void>;
   contextSwitchInFlight: boolean;
   logout: () => Promise<void>;
@@ -560,11 +563,71 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setDriverSessionNetworkReady(true);
       startDriverLifecycleAttribution();
       armDriverForegroundResumeAfterSessionReady();
-      setMobileSessionStatus(
-        data.is_authenticated ? "authenticated_online" : "anonymous"
-      );
       if (data.is_authenticated) {
+        setMobileSessionStatus("authenticated_online");
         setAutoBootstrapAllowedSync(true);
+      } else {
+        // P0-4 : bootstrap false + preuves locales → RECOVERING, pas anonymous immédiat
+        const refreshLocal = await readRefreshToken().catch(() => ({
+          status: "missing" as const,
+        }));
+        const hasDurableLocal =
+          localSessionReady || refreshLocal.status === "found";
+        if (hasDurableLocal) {
+          setMobileSessionStatus("auth_recovering");
+          const outcome = await attemptRestRecovery("bootstrap_unauthenticated");
+          if (!isCurrentSessionGeneration(generation)) return;
+          if (outcome === "recovered") {
+            setMobileSessionStatus("authenticated_online");
+            setAutoBootstrapAllowedSync(true);
+            // Re-fetch bootstrap authentifié best-effort
+            try {
+              const again = await fetchBootstrap(
+                activeContextRef.current?.context_id ?? null
+              );
+              if (
+                isCurrentSessionGeneration(generation) &&
+                again.is_authenticated
+              ) {
+                setBootstrap(again);
+                const resolvedAgain = resolveDefaultContext(
+                  again.available_contexts,
+                  again.active_context_id
+                );
+                setActiveContext(resolvedAgain);
+                setActiveContextIdForApi(resolvedAgain?.context_id ?? null);
+              }
+            } catch {
+              /* keep recovered tokens ; bootstrap précédent non auth */
+            }
+          } else if (outcome === "terminal") {
+            await applyTerminalRevocationIfCurrent(
+              generation,
+              getLastRefreshErrorCode() ?? "session_revoked",
+              (terminalGeneration) => {
+                if (!isCurrentSessionGeneration(terminalGeneration)) return false;
+                setBootstrap(null);
+                setActiveContext(null);
+                activeContextRef.current = null;
+                setActiveContextIdForApi(null);
+                setRuntimeFeatureFlagOverrides(null);
+                contextRealtimeRouter.setActiveContext(null);
+                setMobileSessionStatus("revoked");
+                setStatus("idle");
+                setDriverSessionNetworkReady(false);
+                disarmDriverForegroundResumeAuthority();
+                setAutoBootstrapAllowedSync(false);
+                return true;
+              }
+            );
+            return;
+          } else {
+            // keep_local / no_action : conserver snapshot, mode dégradé
+            setMobileSessionStatus("authenticated_offline");
+          }
+        } else {
+          setMobileSessionStatus("anonymous");
+        }
       }
       void persistOfflineSnapshot(data, resolved).catch(() => undefined);
       void appendSessionJournalEvent(
@@ -680,6 +743,62 @@ export function SessionProvider({ children }: PropsWithChildren) {
     });
     return cycle;
   }, [resumeSessionIfPossible, setAutoBootstrapAllowedSync]);
+
+  const recoverAuthWarm = ReactRuntime.useCallback(
+    async (reason: string) => {
+      const generation = getSessionGenerationId();
+      setMobileSessionStatus("auth_recovering");
+      const outcome = await attemptRestRecovery(reason);
+      if (!isCurrentSessionGeneration(generation)) {
+        return "no_action" as const;
+      }
+      if (outcome === "recovered") {
+        setMobileSessionStatus("authenticated_online");
+        return outcome;
+      }
+      if (outcome === "keep_local") {
+        setMobileSessionStatus("authenticated_offline");
+        return outcome;
+      }
+      if (outcome === "terminal") {
+        await applyTerminalRevocationIfCurrent(
+          generation,
+          getLastRefreshErrorCode() ?? "session_revoked",
+          (terminalGeneration) => {
+            if (!isCurrentSessionGeneration(terminalGeneration)) return false;
+            setBootstrap(null);
+            setActiveContext(null);
+            activeContextRef.current = null;
+            setActiveContextIdForApi(null);
+            setRuntimeFeatureFlagOverrides(null);
+            contextRealtimeRouter.setActiveContext(null);
+            setMobileSessionStatus("revoked");
+            setStatus("idle");
+            setDriverSessionNetworkReady(false);
+            disarmDriverForegroundResumeAuthority();
+            setAutoBootstrapAllowedSync(false);
+            return true;
+          }
+        );
+        return outcome;
+      }
+      // no_action : rester en recovering/dégradé si on avait une session locale
+      setMobileSessionStatus((prev) =>
+        prev === "revoked" || prev === "anonymous" ? prev : "authenticated_offline"
+      );
+      return outcome;
+    },
+    [setAutoBootstrapAllowedSync]
+  );
+
+  ReactRuntime.useEffect(() => {
+    const { setWarmAuthRecoveryHandler } = require("./auth/authWarmRecoveryBridge") as {
+      setWarmAuthRecoveryHandler: (
+        handler: typeof recoverAuthWarm | null
+      ) => () => void;
+    };
+    return setWarmAuthRecoveryHandler(recoverAuthWarm);
+  }, [recoverAuthWarm]);
 
   const loginAndBootstrap = ReactRuntime.useCallback(async (email: string, password: string) => {
     setError(null);
@@ -1116,6 +1235,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       autoBootstrapAllowed,
       login: loginAndBootstrap,
       bootstrapSession,
+      recoverAuthWarm,
       changeContext,
       contextSwitchInFlight,
       logout,
@@ -1132,6 +1252,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       autoBootstrapAllowed,
       loginAndBootstrap,
       bootstrapSession,
+      recoverAuthWarm,
       changeContext,
       contextSwitchInFlight,
       logout,

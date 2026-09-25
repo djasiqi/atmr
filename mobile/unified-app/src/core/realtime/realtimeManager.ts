@@ -93,6 +93,8 @@ class RealtimeManager {
   private driverEventListeners = new Set<DriverEventListener>();
   private teamChatEventListeners = new Set<TeamChatEventListener>();
   private authExhaustedCallbacks = new Set<AuthExhaustedCallback>();
+  /** P0-5 : une recovery auth socket à la fois (erreurs auth rapprochées). */
+  private socketAuthRecoveryInFlight: Promise<string> | null = null;
   private socket: Socket | null = null;
   /** Incrémenté à chaque teardown pour invalider les callbacks d'un socket obsolète. */
   private socketGeneration = 0;
@@ -161,6 +163,31 @@ class RealtimeManager {
     } catch {
       return false;
     }
+  }
+
+  /** Recovery auth socket — single-flight local + bridge warm (erreurs auth seulement). */
+  private runSocketAuthRecovery(socket: Socket, generation: number): Promise<string> {
+    if (this.socketAuthRecoveryInFlight) {
+      return this.socketAuthRecoveryInFlight;
+    }
+    this.socketAuthRecoveryInFlight = (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { requestWarmAuthRecovery } = require("../auth/authWarmRecoveryBridge") as {
+          requestWarmAuthRecovery: (reason: string) => Promise<string>;
+        };
+        const outcome = await requestWarmAuthRecovery("socket_auth_failure");
+        if (this.isCurrentSocket(socket, generation)) {
+          this.applyFreshAuthToken(socket, generation);
+        }
+        return outcome;
+      } catch {
+        return "no_action";
+      } finally {
+        this.socketAuthRecoveryInFlight = null;
+      }
+    })();
+    return this.socketAuthRecoveryInFlight;
   }
 
   private clearDegradedHysteresisTimer() {
@@ -461,26 +488,12 @@ class RealtimeManager {
 
     const socketBeforeAwait = this.socket;
     const generationBeforeAwait = this.socketGeneration;
-    const epochAtStart = this.captureAuthEpoch();
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { refreshAuthTokenNow } = require("../api/client") as {
-        refreshAuthTokenNow: () => Promise<boolean>;
-        getAuthAccessToken: () => string | null;
-      };
-      await refreshAuthTokenNow().catch(() => false);
-
-      // disconnect() / connect() concurrent peuvent annuler this.socket pendant l'await
-      if (!this.isCurrentSocket(socketBeforeAwait, generationBeforeAwait)) {
-        if (!this.socket && this.state.activeContextId === contextId) {
-          this.connectSocket(contextId);
-        }
-        return;
+      // P0-5 final : reconnect transport générique → credentials courants uniquement
+      // (pas de requestWarmAuthRecovery / refresh storm).
+      if (!this.applyFreshAuthToken(socketBeforeAwait, generationBeforeAwait)) {
+        // Pas de token en mémoire : tenter une connexion quand même (handshake serveur).
       }
-      // Epoch changé pendant l'await (logout/login concurrent) : abandonner ce refresh.
-      if (!this.isAuthEpochStillCurrent(epochAtStart)) return;
-
-      if (!this.applyFreshAuthToken(socketBeforeAwait, generationBeforeAwait)) return;
       if (!socketBeforeAwait.connected) {
         socketBeforeAwait.connect();
       }
@@ -594,7 +607,6 @@ class RealtimeManager {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { getAuthAccessToken } = require("../api/client") as {
-        refreshAuthTokenNow: () => Promise<boolean>;
         getAuthAccessToken: () => string | null;
       };
       accessToken = getAuthAccessToken();
@@ -634,41 +646,13 @@ class RealtimeManager {
     const socket = io(socketUrl, socketOptions);
     this.socket = socket;
 
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { refreshAuthTokenNow } = require("../api/client") as {
-        refreshAuthTokenNow: () => Promise<boolean>;
-      };
-      const epochAtStart = this.captureAuthEpoch();
-      void refreshAuthTokenNow()
-        .then(() => {
-          if (!this.isCurrentSocket(socket, generation)) return;
-          if (!this.isAuthEpochStillCurrent(epochAtStart)) return;
-          this.applyFreshAuthToken(socket, generation);
-        })
-        .catch(() => undefined);
-    } catch {
-      // ignore: handshake utilise déjà le token courant
-    }
+    // Handshake : token courant uniquement (pas de recovery auth proactive au connect).
+    this.applyFreshAuthToken(socket, generation);
 
     socket.io.on("reconnect_attempt", () => {
       if (!this.isCurrentSocket(socket, generation)) return;
-      const epochAtStart = this.captureAuthEpoch();
-      void (async () => {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { refreshAuthTokenNow } = require("../api/client") as {
-            refreshAuthTokenNow: () => Promise<boolean>;
-            getAuthAccessToken: () => string | null;
-          };
-          await refreshAuthTokenNow();
-          if (!this.isCurrentSocket(socket, generation)) return;
-          if (!this.isAuthEpochStillCurrent(epochAtStart)) return;
-          this.applyFreshAuthToken(socket, generation);
-        } catch {
-          // ignore: reconnect continuera en mode degrade/polling
-        }
-      })();
+      // Transport reconnect générique : réappliquer le token courant, pas de recovery auth.
+      this.applyFreshAuthToken(socket, generation);
     });
 
     socket.on("connect", () => {
@@ -754,7 +738,14 @@ class RealtimeManager {
         errMessage.includes("401") ||
         errMessage.includes("403") ||
         errMessage.includes("Unauthorized") ||
-        errMessage.includes("Forbidden");
+        errMessage.includes("Forbidden") ||
+        errMessage.toLowerCase().includes("jwt") ||
+        errMessage.toLowerCase().includes("token") ||
+        errMessage.toLowerCase().includes("authentication") ||
+        TERMINAL_AUTH_CODES.has(errCode) ||
+        errCode === "token_expired" ||
+        errCode === "invalid_token" ||
+        errCode === "unauthorized";
       const isTerminal = TERMINAL_AUTH_CODES.has(errCode);
 
       this.setState({
@@ -805,6 +796,8 @@ class RealtimeManager {
         }
 
         this.setState({ authAttempts: nextAuthAttempts });
+        // P0-5 final : recovery auth uniquement sur signal auth réel (pas disconnect générique)
+        void this.runSocketAuthRecovery(socket, generation);
       }
 
       if (isFeatureEnabled("realtime_reconnect_circuit_breaker_enabled")) {
@@ -915,24 +908,12 @@ class RealtimeManager {
       if (!this.state.activeContextId || this.state.authExhausted) return;
       if (this.state.activeContextId !== contextId) return;
       if (this.socket?.connected) return;
-      void (async () => {
-        const reconnectGeneration = this.socketGeneration;
-        const epochAtStart = this.captureAuthEpoch();
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { refreshAuthTokenNow } = require("../api/client") as {
-            refreshAuthTokenNow: () => Promise<boolean>;
-          };
-          await refreshAuthTokenNow();
-        } catch {
-          // ignore: reconnect attempt still proceeds
-        }
-        if (this.state.activeContextId !== contextId || this.state.authExhausted) return;
-        if (this.socketGeneration !== reconnectGeneration && this.socket?.connected) return;
-        // Epoch changé pendant l'await (logout/login concurrent) : ne pas reconnecter avec un contexte obsolète.
-        if (!this.isAuthEpochStillCurrent(epochAtStart)) return;
-        this.connectSocket(contextId);
-      })();
+      const reconnectGeneration = this.socketGeneration;
+      const epochAtStart = this.captureAuthEpoch();
+      // P0-5 final : backoff reconnect = transport only (credentials courants)
+      if (!this.isAuthEpochStillCurrent(epochAtStart)) return;
+      if (this.socketGeneration !== reconnectGeneration && this.socket?.connected) return;
+      this.connectSocket(contextId);
     }, backoffMs);
   }
 

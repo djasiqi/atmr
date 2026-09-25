@@ -1,12 +1,20 @@
 import { AuthContext, BootstrapResponse } from "./contracts/auth";
+import type { MobileSessionStatus } from "./auth/mobileSessionStatus";
+import {
+  resolveAuthGuardDecisionState,
+  resolveAuthGuardRedirect as resolveAuthGuardRedirectCore,
+  shouldShowColdBootBrandSurface,
+} from "./auth/authGuardDecision";
+
+export { resolveAuthGuardDecisionState, shouldShowColdBootBrandSurface };
+export type { AuthGuardDecisionState, AuthGuardDecisionInput } from "./auth/authGuardDecision";
 
 export function resolveAuthGuardRedirect(
-  bootstrap: BootstrapResponse | null
+  bootstrap: BootstrapResponse | null,
+  mobileSessionStatus: MobileSessionStatus
 ): string | null {
-  if (!bootstrap?.is_authenticated) return "/(public)";
-  return null;
+  return resolveAuthGuardRedirectCore(bootstrap, mobileSessionStatus);
 }
-
 export function resolveContextGuardRedirect(activeContext: AuthContext | null): string | null {
   if (!activeContext) return "/(app)/context-selector";
   return null;
