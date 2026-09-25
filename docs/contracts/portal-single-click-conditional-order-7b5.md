@@ -23,8 +23,8 @@ LOCAL MANUAL SMOKE                 PASS / CLOSED
   — transport_already_assigned     PASS
   — carrier_quote liste            PASS (= 40, amount 50 isolé)
 
-NEXT                               COMMIT UNIQUE → CI SAME SHA → E2E
-COMMIT                             PENDING (cette étape)
+NEXT                               CI SAME SHA → E2E
+COMMIT                             ca215360 (poussé)
 BUILD / DEPLOY                     NOT YET
 PRODUCTION                         NO (flags défaut OFF / Terms 1.0)
 ```
