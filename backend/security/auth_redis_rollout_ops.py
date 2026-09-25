@@ -87,8 +87,12 @@ class ParityReport:
     mismatched_revoked: list[str] = field(default_factory=list)
     missing_user_zset_in_auth: list[str] = field(default_factory=list)
     extra_user_zset_in_auth: list[str] = field(default_factory=list)
-    mismatched_user_zset: list[str] = field(default_factory=list)
-    ttl_mismatches: list[str] = field(default_factory=list)
+    mismatched_user_zset_members: list[str] = field(default_factory=list)
+    mismatched_user_zset_scores: list[str] = field(default_factory=list)
+    ttl_mismatched_current: list[str] = field(default_factory=list)
+    ttl_mismatched_previous: list[str] = field(default_factory=list)
+    ttl_mismatched_revoked: list[str] = field(default_factory=list)
+    ttl_mismatched_user_zset: list[str] = field(default_factory=list)
     previous_expired_during_scan: list[str] = field(default_factory=list)
 
     # Alias rétrocompat (listes agrégées)
@@ -103,6 +107,23 @@ class ParityReport:
     @property
     def value_mismatches(self) -> list[str]:
         return self.mismatched_current + self.mismatched_previous
+
+    @property
+    def mismatched_user_zset(self) -> list[str]:
+        """Union membres + scores (rétrocompat tests / scripts)."""
+        return sorted(
+            set(self.mismatched_user_zset_members) | set(self.mismatched_user_zset_scores)
+        )
+
+    @property
+    def ttl_mismatches(self) -> list[str]:
+        """Union de tous les TTL mismatch (rétrocompat)."""
+        return (
+            self.ttl_mismatched_current
+            + self.ttl_mismatched_previous
+            + self.ttl_mismatched_revoked
+            + self.ttl_mismatched_user_zset
+        )
 
 
 def scan_keys(client: Any, match: str, *, count: int = 200) -> Iterator[str]:
@@ -229,9 +250,7 @@ def _remaining_pttl_ms(snap: KeySnapshot, *, now_mono: float | None = None) -> i
     if snap.captured_at_mono is None:
         return snap.pttl_ms
     now = _monotonic() if now_mono is None else now_mono
-    elapsed_ms = int((now - snap.captured_at_mono) * 1000)
-    if elapsed_ms < 0:
-        elapsed_ms = 0
+    elapsed_ms = max(int((now - snap.captured_at_mono) * 1000), 0)
     return snap.pttl_ms - elapsed_ms
 
 
@@ -402,7 +421,7 @@ def compare_parity(
     scan_count: int = 200,
     ttl_tolerance_ms: int = TTL_DRIFT_MS_TOLERANCE,
 ) -> ParityReport:
-    """Compare CURRENT/PREVIOUS/REVOKED/USER_ZSET (read-only), incl. EXTRA."""
+    """Compare CURRENT/PREVIOUS/REVOKED/USER_ZSET (read-only), incl. EXTRA + TTL + scores."""
     report = ParityReport()
     report.legacy_active = count_keys(legacy, f"{ACTIVE_PREFIX}*", count=scan_count)
     report.auth_active = count_keys(auth, f"{ACTIVE_PREFIX}*", count=scan_count)
@@ -436,7 +455,7 @@ def compare_parity(
             int(auth.pttl(key)),
             tolerance_ms=ttl_tolerance_ms,
         ):
-            report.ttl_mismatches.append(key)
+            report.ttl_mismatched_current.append(key)
 
     for key in sorted(legacy_prev_keys - auth_prev_keys):
         if not legacy.exists(key):
@@ -459,13 +478,20 @@ def compare_parity(
             int(auth.pttl(key)),
             tolerance_ms=ttl_tolerance_ms,
         ):
-            report.ttl_mismatches.append(key)
+            report.ttl_mismatched_previous.append(key)
 
     report.missing_revoked_in_auth = sorted(legacy_rev_keys - auth_rev_keys)
     report.extra_revoked_in_auth = sorted(auth_rev_keys - legacy_rev_keys)
     for key in sorted(legacy_rev_keys & auth_rev_keys):
         if legacy.get(key) != auth.get(key):
             report.mismatched_revoked.append(key)
+            continue
+        if not _ttl_close(
+            int(legacy.pttl(key)),
+            int(auth.pttl(key)),
+            tolerance_ms=ttl_tolerance_ms,
+        ):
+            report.ttl_mismatched_revoked.append(key)
 
     report.missing_user_zset_in_auth = sorted(legacy_zset_keys - auth_zset_keys)
     report.extra_user_zset_in_auth = sorted(auth_zset_keys - legacy_zset_keys)
@@ -479,13 +505,24 @@ def compare_parity(
             for m, s in (auth.zrange(key, 0, -1, withscores=True) or [])
         }
         if set(leg_members.keys()) != set(auth_members.keys()):
-            report.mismatched_user_zset.append(key)
+            report.mismatched_user_zset_members.append(key)
+            continue
+        # Scores exacts : ordre FIFO (limit_active_tokens) doit être identique.
+        if any(leg_members[m] != auth_members[m] for m in leg_members):
+            report.mismatched_user_zset_scores.append(key)
+            continue
+        if not _ttl_close(
+            int(legacy.pttl(key)),
+            int(auth.pttl(key)),
+            tolerance_ms=ttl_tolerance_ms,
+        ):
+            report.ttl_mismatched_user_zset.append(key)
 
     return report
 
 
 def parity_gate_pass(report: ParityReport) -> bool:
-    """Critère Phase E avant auth_primary — CURRENT/PREVIOUS/REVOKED/ZSET cohérents."""
+    """Critère Phase E avant auth_primary — values + TTL + scores ZSET stricts."""
     unexplained_missing_prev = [
         k
         for k in report.missing_previous_in_auth
@@ -500,13 +537,18 @@ def parity_gate_pass(report: ParityReport) -> bool:
         len(report.missing_current_in_auth) == 0
         and len(report.extra_current_in_auth) == 0
         and len(report.mismatched_current) == 0
+        and len(report.ttl_mismatched_current) == 0
         and len(unexplained_missing_prev) == 0
         and len(unexplained_extra_prev) == 0
         and len(report.mismatched_previous) == 0
+        and len(report.ttl_mismatched_previous) == 0
         and len(report.missing_revoked_in_auth) == 0
         and len(report.extra_revoked_in_auth) == 0
         and len(report.mismatched_revoked) == 0
+        and len(report.ttl_mismatched_revoked) == 0
         and len(report.missing_user_zset_in_auth) == 0
         and len(report.extra_user_zset_in_auth) == 0
-        and len(report.mismatched_user_zset) == 0
+        and len(report.mismatched_user_zset_members) == 0
+        and len(report.mismatched_user_zset_scores) == 0
+        and len(report.ttl_mismatched_user_zset) == 0
     )

@@ -147,12 +147,21 @@ Gate avant `auth_primary` :
 missing_current = 0
 extra_current = 0
 mismatched_current = 0
+ttl_mismatched_current = 0
 missing_previous inexpliqué = 0
 extra_previous inexpliqué = 0
 mismatched_previous = 0
+ttl_mismatched_previous = 0
+missing/extra/mismatched revoked = 0
+ttl_mismatched_revoked = 0
+missing/extra USER_ZSET = 0
+mismatched_user_zset_members = 0
+mismatched_user_zset_scores = 0
+ttl_mismatched_user_zset = 0
 ```
 
 Les expirations naturelles PREVIOUS sont distinguées (`previous_expired_during_scan`) des erreurs.
+`parity_gate_pass()` refuse aussi tout TTL divergent (tolérance `TTL_DRIFT_MS_TOLERANCE`) et tout score ZSET différent (ordre FIFO).
 
 ✅ **Exécuté (prod 2026-09-25)** : audit read-only. `GATE_PASS=false` — `extra_current_in_auth=6`. Forensic DB (reclassifié) :
 - 3× `revoke_cleanup_gap` (revoked dual ; delete CURRENT conditionné au GET legacy → CURRENT auth orphelin)
@@ -227,7 +236,7 @@ ROOT CAUSES
   TTL backfill defect              CONFIRMED / secondary (fix local)
 ROOT CAUSE COMPLETE YES
 
-LOCAL CORRECTIVES   TTL + REVOKE + OFF-MODE SEMANTICS (non déployé)
+LOCAL CORRECTIVES   TTL + REVOKE + OFF-MODE + PARITY GATE STRICT (TTL/scores)
 DEPLOY CORRECTIVE   NO-GO (attendre commit + gate tests verts)
 AUTH_PRIMARY        NO-GO
 

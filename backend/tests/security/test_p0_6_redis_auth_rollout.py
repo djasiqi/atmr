@@ -533,8 +533,83 @@ class TestParityExpandedFamilies:
         legacy.zadd("user_refresh_tokens:1", {"a": 1.0})
         auth.zadd("user_refresh_tokens:1", {"a": 1.0, "extra": 2.0})
         report2 = compare_parity(legacy, auth)
+        assert report2.mismatched_user_zset_members == ["user_refresh_tokens:1"]
         assert report2.mismatched_user_zset == ["user_refresh_tokens:1"]
         assert parity_gate_pass(report2) is False
+
+
+class TestParityGateHardening:
+    """A–F — TTL et scores ZSET doivent bloquer GATE_PASS."""
+
+    def test_a_current_ttl_divergent_fails_gate(self):
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        legacy.psetex(f"{ACTIVE_PREFIX}a", 100_000, "1")
+        auth.psetex(f"{ACTIVE_PREFIX}a", 10_000, "1")
+        report = compare_parity(legacy, auth)
+        assert report.ttl_mismatched_current == [f"{ACTIVE_PREFIX}a"]
+        assert report.mismatched_current == []
+        assert parity_gate_pass(report) is False
+
+    def test_b_previous_ttl_divergent_fails_gate(self):
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        legacy.psetex(f"{PREVIOUS_PREFIX}p", 50_000, "{}")
+        auth.psetex(f"{PREVIOUS_PREFIX}p", 5_000, "{}")
+        report = compare_parity(legacy, auth)
+        assert report.ttl_mismatched_previous == [f"{PREVIOUS_PREFIX}p"]
+        assert report.mismatched_previous == []
+        assert parity_gate_pass(report) is False
+
+    def test_c_revoked_ttl_divergent_fails_gate(self):
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        legacy.psetex("revoked_refresh_token:r", 80_000, "revoked")
+        auth.psetex("revoked_refresh_token:r", 8_000, "revoked")
+        report = compare_parity(legacy, auth)
+        assert report.ttl_mismatched_revoked == ["revoked_refresh_token:r"]
+        assert report.mismatched_revoked == []
+        assert parity_gate_pass(report) is False
+
+    def test_d_user_zset_scores_divergent_fails_gate(self):
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        legacy.zadd("user_refresh_tokens:1", {"a": 100.0, "b": 200.0})
+        legacy.pexpire("user_refresh_tokens:1", 60_000)
+        auth.zadd("user_refresh_tokens:1", {"a": 300.0, "b": 100.0})
+        auth.pexpire("user_refresh_tokens:1", 60_000)
+        report = compare_parity(legacy, auth)
+        assert report.mismatched_user_zset_members == []
+        assert report.mismatched_user_zset_scores == ["user_refresh_tokens:1"]
+        assert parity_gate_pass(report) is False
+
+    def test_e_user_zset_ttl_divergent_fails_gate(self):
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        legacy.zadd("user_refresh_tokens:2", {"a": 1.0, "b": 2.0})
+        legacy.pexpire("user_refresh_tokens:2", 90_000)
+        auth.zadd("user_refresh_tokens:2", {"a": 1.0, "b": 2.0})
+        auth.pexpire("user_refresh_tokens:2", 9_000)
+        report = compare_parity(legacy, auth)
+        assert report.mismatched_user_zset_members == []
+        assert report.mismatched_user_zset_scores == []
+        assert report.ttl_mismatched_user_zset == ["user_refresh_tokens:2"]
+        assert parity_gate_pass(report) is False
+
+    def test_f_full_parity_passes_gate(self):
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        for store in (legacy, auth):
+            store.psetex(f"{ACTIVE_PREFIX}c", 100_000, "42")
+            store.psetex(f"{PREVIOUS_PREFIX}p", 40_000, '{"s":"c"}')
+            store.psetex("revoked_refresh_token:x", 30_000, "revoked")
+            store.zadd("user_refresh_tokens:42", {"c": 10.0, "old": 5.0})
+            store.pexpire("user_refresh_tokens:42", 100_000)
+        report = compare_parity(legacy, auth)
+        assert report.ttl_mismatches == []
+        assert report.mismatched_user_zset_members == []
+        assert report.mismatched_user_zset_scores == []
+        assert parity_gate_pass(report) is True
 
 
 class TestResolveAuthRedisProduction:
