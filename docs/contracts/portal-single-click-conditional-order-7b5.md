@@ -96,7 +96,8 @@ Si les deux flags sont `true` → refus au boot.
 7B.5              PASS / CLOSED
 LOCAL SMOKE       PASS
 IMPLEMENTATION    CLOSED
+COMMIT            ca215360
 
-NEXT              RESTORE ENV (fait) → COMMIT UNIQUE → CI SAME SHA → E2E
+NEXT              CI SAME SHA (ca215360) → E2E
 BUILD / DEPLOY    NOT YET
 ```
