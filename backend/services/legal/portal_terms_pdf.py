@@ -174,7 +174,7 @@ def build_portal_terms_pdf_bytes(spec: PublishedTerms) -> bytes:
     title = portal_terms_pdf_title(spec)
     hash_short = (spec.terms_hash or "")[:16]
 
-    def _footer(canvas, doc) -> None:  # noqa: ANN001
+    def _footer(canvas, doc) -> None:
         canvas.saveState()
         canvas.setStrokeColor(_RULE)
         canvas.setLineWidth(0.4)

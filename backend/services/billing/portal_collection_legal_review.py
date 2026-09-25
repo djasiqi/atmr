@@ -68,14 +68,11 @@ def create_legal_review_pending(
 ) -> PortalCollectionLegalReview:
     """Ouvre une revue pending liée au hash actuel du draft."""
     del requested_by_user_id  # réservé audit futur (qui a ouvert la revue)
-    existing = (
-        PortalCollectionLegalReview.query.filter_by(
-            transmission_id=int(transmission.id),
-            dossier_hash=str(transmission.export_hash),
-            review_version=LEGAL_REVIEW_PROTOCOL_VERSION,
-        )
-        .one_or_none()
-    )
+    existing = PortalCollectionLegalReview.query.filter_by(
+        transmission_id=int(transmission.id),
+        dossier_hash=str(transmission.export_hash),
+        review_version=LEGAL_REVIEW_PROTOCOL_VERSION,
+    ).one_or_none()
     if existing is not None:
         return existing
     row = PortalCollectionLegalReview(
@@ -174,11 +171,9 @@ def resolve_transmission_eligibility(
 
     if receivable.status == RECEIVABLE_CANCELLED or receivable.cancelled_at is not None:
         _add_reason(reasons, "cancelled")
-    open_d = (
-        PortalReceivableDispute.query.filter_by(
-            receivable_id=int(receivable.id), status=DISPUTE_OPEN
-        ).first()
-    )
+    open_d = PortalReceivableDispute.query.filter_by(
+        receivable_id=int(receivable.id), status=DISPUTE_OPEN
+    ).first()
     if (
         receivable.status == RECEIVABLE_DISPUTED
         or receivable.disputed_at is not None
@@ -194,14 +189,11 @@ def resolve_transmission_eligibility(
 
     approval = latest_matching_approval(transmission)
     if approval is None:
-        rejected = (
-            PortalCollectionLegalReview.query.filter_by(
-                transmission_id=int(transmission.id),
-                dossier_hash=str(transmission.export_hash),
-                review_status=REVIEW_REJECTED,
-            )
-            .first()
-        )
+        rejected = PortalCollectionLegalReview.query.filter_by(
+            transmission_id=int(transmission.id),
+            dossier_hash=str(transmission.export_hash),
+            review_status=REVIEW_REJECTED,
+        ).first()
         if rejected is not None:
             _add_reason(reasons, REASON_LEGAL_REVIEW_REJECTED)
         else:

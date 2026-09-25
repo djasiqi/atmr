@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from models.booking import Booking
@@ -185,8 +186,6 @@ def attach_serialize_context_to_bookings(
                 booking, int(viewer_company_id)
             )
         except Exception as exc:
-            import logging
-
             logging.getLogger(__name__).warning(
                 "attach carrier_quote failed booking_id=%s company_id=%s: %s",
                 getattr(booking, "id", None),
@@ -196,8 +195,6 @@ def attach_serialize_context_to_bookings(
             )
             suggested = None
         booking._company_suggested_amount = suggested
-        import logging
-
         logging.getLogger(__name__).debug(
             "attach carrier_quote booking_id=%s viewer=%s suggested=%s flow=%s",
             getattr(booking, "id", None),

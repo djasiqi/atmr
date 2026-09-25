@@ -732,14 +732,11 @@ def _owned_transmission(
     company_id: int, receivable_id: int, transmission_id: int
 ) -> PortalReceivableCollectionTransmission:
     _owned_receivable(company_id, receivable_id)
-    row = (
-        PortalReceivableCollectionTransmission.query.filter_by(
-            id=int(transmission_id),
-            receivable_id=int(receivable_id),
-            creditor_company_id=int(company_id),
-        )
-        .one_or_none()
-    )
+    row = PortalReceivableCollectionTransmission.query.filter_by(
+        id=int(transmission_id),
+        receivable_id=int(receivable_id),
+        creditor_company_id=int(company_id),
+    ).one_or_none()
     if row is None:
         raise PortalReceivableError(
             "Draft introuvable.",
@@ -769,9 +766,7 @@ class PortalCollectionLegalReviewResource(Resource):
         try:
             tx = _owned_transmission(int(company.id), receivable_id, transmission_id)
             rows = (
-                PortalCollectionLegalReview.query.filter_by(
-                    transmission_id=int(tx.id)
-                )
+                PortalCollectionLegalReview.query.filter_by(transmission_id=int(tx.id))
                 .order_by(PortalCollectionLegalReview.id.asc())
                 .all()
             )
@@ -1052,9 +1047,7 @@ class PortalTransmissionRecordAcknowledgment(Resource):
                 acknowledgment_reference=str(
                     data.get("acknowledgment_reference") or ""
                 ),
-                acknowledgment_evidence=str(
-                    data.get("acknowledgment_evidence") or ""
-                ),
+                acknowledgment_evidence=str(data.get("acknowledgment_evidence") or ""),
             )
             db.session.commit()
             lifecycle = resolve_collection_transmission_status(int(tx.id))

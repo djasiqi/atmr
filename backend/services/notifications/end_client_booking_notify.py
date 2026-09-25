@@ -50,9 +50,7 @@ def _milestone_copy(
     if milestone == "carrier_offered":
         company = str(extra.get("company_name") or "Une entreprise").strip()
         amount = extra.get("offered_amount")
-        amount_txt = (
-            f" CHF {float(amount):.2f}" if amount is not None else ""
-        )
+        amount_txt = f" CHF {float(amount):.2f}" if amount is not None else ""
         return (
             "Une proposition de transport est disponible",
             (
@@ -65,9 +63,7 @@ def _milestone_copy(
     if milestone == "transport_confirmed":
         company = str(extra.get("company_name") or "le transporteur").strip()
         amount = extra.get("contractual_amount")
-        amount_txt = (
-            f" CHF {float(amount):.2f}" if amount is not None else ""
-        )
+        amount_txt = f" CHF {float(amount):.2f}" if amount is not None else ""
         return (
             "Votre transport est confirmé",
             (

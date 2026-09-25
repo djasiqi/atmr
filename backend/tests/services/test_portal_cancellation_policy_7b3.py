@@ -19,7 +19,6 @@ from services.legal.portal_cancellation_policy import (
     render_portal_cancellation_policy_text,
 )
 
-
 SAMPLE_POLICY = {
     "enabled": True,
     "apply_when_driver_assigned_only": True,
@@ -136,9 +135,7 @@ class TestPublishPortalPolicyFromBilling:
             company_name=company.name,
         )
         db.session.flush()
-        billing = CompanyBillingSettings.query.filter_by(
-            company_id=company.id
-        ).first()
+        billing = CompanyBillingSettings.query.filter_by(company_id=company.id).first()
         billing.cancellation_policy = {
             **SAMPLE_POLICY,
             "tiers": [
@@ -152,7 +149,8 @@ class TestPublishPortalPolicyFromBilling:
             company_name=company.name,
         )
         db.session.commit()
-        assert r1.ok and r2.ok
+        assert r1.ok
+        assert r2.ok
         assert r2.policy.version == "v2"
         assert "50 %" in r2.policy.body_text
         old = db.session.get(CompanyPortalCancellationPolicy, r1.policy.id)
@@ -186,9 +184,7 @@ class TestPublishPortalPolicyFromBilling:
         assert status1["policy"]["version"] == "v1"
         assert status1["has_unpublished_changes"] is False
 
-        billing = CompanyBillingSettings.query.filter_by(
-            company_id=company.id
-        ).first()
+        billing = CompanyBillingSettings.query.filter_by(company_id=company.id).first()
         billing.cancellation_policy = {
             **SAMPLE_POLICY,
             "tiers": [

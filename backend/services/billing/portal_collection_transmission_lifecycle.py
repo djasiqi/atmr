@@ -430,10 +430,7 @@ def _validate_channel_evidence(
     _ = evidence_type  # type dérivé du canal, pas du client
 
     if channel == CHANNEL_EMAIL:
-        msg_id = (
-            str(fields.get("provider_message_id") or "").strip()
-            or (ext_ref or "")
-        )
+        msg_id = str(fields.get("provider_message_id") or "").strip() or (ext_ref or "")
         sent_at = fields.get("sent_at") or transmitted_at.isoformat()
         if not msg_id:
             raise PortalReceivableError(
@@ -466,9 +463,8 @@ def _validate_channel_evidence(
         return EVIDENCE_RECEIPT, receipt, fields
 
     if channel == CHANNEL_REGISTERED_MAIL:
-        tracking = (
-            str(fields.get("postal_tracking_reference") or "").strip()
-            or (ext_ref or "")
+        tracking = str(fields.get("postal_tracking_reference") or "").strip() or (
+            ext_ref or ""
         )
         proof = str(fields.get("proof_of_deposit") or "").strip()
         if not tracking or not proof:
@@ -571,9 +567,10 @@ def record_external_transmission(
             "Juridiction de poursuite non confirmée.",
             code=REASON_JURISDICTION_REQUIRED,
         )
-    if kind == KIND_PRIVATE_COLLECTION and not (
-        transmission.recipient_contact or ""
-    ).strip():
+    if (
+        kind == KIND_PRIVATE_COLLECTION
+        and not (transmission.recipient_contact or "").strip()
+    ):
         raise PortalReceivableError(
             "Contact mandataire non confirmé.",
             code=REASON_RECIPIENT_REQUIRED,

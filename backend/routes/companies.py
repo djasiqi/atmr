@@ -2998,9 +2998,7 @@ class AcceptReservation(Resource):
                             recipient = None
                             try:
                                 client = getattr(booking, "client", None)
-                                user = (
-                                    getattr(client, "user", None) if client else None
-                                )
+                                user = getattr(client, "user", None) if client else None
                                 recipient = getattr(user, "email", None)
                             except Exception:
                                 recipient = None

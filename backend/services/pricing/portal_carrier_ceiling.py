@@ -160,9 +160,7 @@ def _admin_token(
     lon: float | None,
     text: str | None,
 ) -> str | None:
-    admin = resolve_pickup_admin(
-        lat=lat, lng=lon, pickup_zip=None, pickup_text=text
-    )
+    admin = resolve_pickup_admin(lat=lat, lng=lon, pickup_zip=None, pickup_text=text)
     token = (admin.get("token") or "").strip()
     if token:
         return token
@@ -227,9 +225,7 @@ def _eligible_companies(
     """
     excluded: list[ExcludedCarrier] = []
     priced = (
-        Company.query.join(
-            PricingProfile, PricingProfile.company_id == Company.id
-        )
+        Company.query.join(PricingProfile, PricingProfile.company_id == Company.id)
         .filter(
             Company.is_approved.is_(True),
             PricingProfile.is_active.is_(True),
@@ -353,9 +349,7 @@ def compute_portal_carrier_ceiling(
             # Aucune formule flat/distance/zone_count ici.
             amount, breakdown = compute_price(booking_payload, version, context)
             amount_dec = (
-                amount
-                if isinstance(amount, Decimal)
-                else Decimal(str(amount))
+                amount if isinstance(amount, Decimal) else Decimal(str(amount))
             ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             if amount_dec <= 0:
                 excluded.append(
@@ -474,9 +468,7 @@ def estimate_portal_carrier_offer_amount(
     try:
         amount, _breakdown = compute_price(booking_payload, version, context)
         amount_dec = (
-            amount
-            if isinstance(amount, Decimal)
-            else Decimal(str(amount or 0))
+            amount if isinstance(amount, Decimal) else Decimal(str(amount or 0))
         ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         if amount_dec <= 0:
             return None

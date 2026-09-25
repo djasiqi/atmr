@@ -115,9 +115,7 @@ def render_portal_cancellation_policy_text(
         [t for t in (policy.get("tiers") or []) if t.get("type") == "time"],
         key=lambda t: float(t.get("hours_before") or 0),
     )
-    status_tiers = [
-        t for t in (policy.get("tiers") or []) if t.get("type") == "status"
-    ]
+    status_tiers = [t for t in (policy.get("tiers") or []) if t.get("type") == "status"]
 
     if time_tiers:
         lines.append("Paliers selon le délai avant le départ :")
@@ -128,17 +126,11 @@ def render_portal_cancellation_policy_text(
             except (TypeError, ValueError):
                 continue
             label = (t.get("label") or "").strip() or f"Moins de {int(hours)} heures"
-            lines.append(
-                f"- {label} avant le départ : {pct} % du prix du transport."
-            )
+            lines.append(f"- {label} avant le départ : {pct} % du prix du transport.")
         lines.append("")
 
     en_route = next(
-        (
-            t
-            for t in status_tiers
-            if str(t.get("status") or "").upper() == "EN_ROUTE"
-        ),
+        (t for t in status_tiers if str(t.get("status") or "").upper() == "EN_ROUTE"),
         None,
     )
     if en_route is not None:

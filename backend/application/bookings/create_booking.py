@@ -84,9 +84,7 @@ def _portal_series_occurrences(
     *, validated_data: dict[str, Any], cmd_data: dict[str, Any]
 ) -> int:
     """N passages décrits sur une demande récurrence (1 si hors récurrence)."""
-    recurring = bool(
-        validated_data.get("is_recurring") or cmd_data.get("is_recurring")
-    )
+    recurring = bool(validated_data.get("is_recurring") or cmd_data.get("is_recurring"))
     if not recurring:
         return 1
     raw = (

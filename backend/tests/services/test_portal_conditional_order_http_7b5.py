@@ -9,7 +9,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from application.companies.accept_reservation import AcceptReservationUseCase
-from services.companies.booking_transfer_cache import attach_serialize_context_to_bookings
+from services.companies.booking_transfer_cache import (
+    attach_serialize_context_to_bookings,
+)
 from services.legal.portal_double_validation import (
     ERROR_TRANSPORT_ALREADY_ASSIGNED,
     FLOW_CONDITIONAL_ORDER_V1,
@@ -119,12 +121,14 @@ def test_attach_carrier_quote_for_conditional_order_not_booking_amount(app):
         portal_contract_flow=FLOW_CONDITIONAL_ORDER_V1,
         amount=50.0,
     )
-    with app.app_context():
-        with patch(
+    with (
+        app.app_context(),
+        patch(
             "services.pricing.portal_carrier_ceiling.estimate_portal_carrier_offer_amount",
             return_value=40.0,
-        ):
-            attach_serialize_context_to_bookings([booking], viewer_company_id=1)
+        ),
+    ):
+        attach_serialize_context_to_bookings([booking], viewer_company_id=1)
 
     assert booking._company_suggested_amount == 40.0
     assert float(booking._company_suggested_amount) != float(booking.amount)

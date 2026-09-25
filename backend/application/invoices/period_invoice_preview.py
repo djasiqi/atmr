@@ -342,9 +342,9 @@ def build_period_invoice_preview(
         crepo = ClientRepository()
         portfolio = crepo.find_model_by_id_and_company(int(client_id), company_id)
         if portfolio is None:
+            from ext import db
             from models.client import Client as ClientModel
             from services.auth.portal_phone_verification import is_portal_client
-            from ext import db
 
             portal_client = db.session.get(ClientModel, int(client_id))
             if (

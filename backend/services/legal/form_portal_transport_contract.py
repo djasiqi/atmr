@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from ext import db
@@ -98,10 +98,7 @@ def form_portal_transport_contract_on_accept(
     )
 
     locked = (
-        db.session.query(Booking)
-        .filter_by(id=int(booking.id))
-        .with_for_update()
-        .one()
+        db.session.query(Booking).filter_by(id=int(booking.id)).with_for_update().one()
     )
 
     existing = PortalTransportContractFormed.query.filter_by(
@@ -208,9 +205,7 @@ def form_portal_transport_contract_on_accept(
             ok=False,
             error={
                 "error": "portal_carrier_quote_unavailable",
-                "message": (
-                    "Impossible de calculer votre tarif pour cette course."
-                ),
+                "message": ("Impossible de calculer votre tarif pour cette course."),
             },
             status_code=409,
         )

@@ -220,12 +220,14 @@ def test_case4_no_quotes_raises_explicit_error():
             "services.pricing.portal_carrier_ceiling._build_pricing_context",
             return_value={},
         ),
+        pytest.raises(
+            ValueError, match=ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE
+        ) as exc,
     ):
-        with pytest.raises(ValueError) as exc:
-            compute_portal_carrier_ceiling(
-                pickup_location="Genève",
-                dropoff_location="HUG",
-            )
+        compute_portal_carrier_ceiling(
+            pickup_location="Genève",
+            dropoff_location="HUG",
+        )
     assert str(exc.value) == ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE
 
 
@@ -256,12 +258,14 @@ def test_case3b_all_non_positive_also_raises():
             "services.pricing.portal_carrier_ceiling.compute_price",
             return_value=(Decimal("0"), {"model": "flat"}),
         ),
+        pytest.raises(
+            ValueError, match=ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE
+        ) as exc,
     ):
-        with pytest.raises(ValueError) as exc:
-            compute_portal_carrier_ceiling(
-                pickup_location="Genève",
-                dropoff_location="HUG",
-            )
+        compute_portal_carrier_ceiling(
+            pickup_location="Genève",
+            dropoff_location="HUG",
+        )
     assert str(exc.value) == ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE
 
 
@@ -286,9 +290,7 @@ def test_case6_evidence_snapshot_is_self_contained():
     frozen_copy = {
         "pricing_ceiling": dict(frozen["pricing_ceiling"]),
     }
-    frozen_copy["pricing_ceiling"]["quotes"] = list(
-        frozen["pricing_ceiling"]["quotes"]
-    )
+    frozen_copy["pricing_ceiling"]["quotes"] = list(frozen["pricing_ceiling"]["quotes"])
     # Muter un nouveau calcul n'altère pas la copie figée
     new_ceiling = PortalCarrierCeiling(
         maximum_accepted_amount=60.0,
@@ -315,18 +317,14 @@ def test_eligible_companies_excludes_unapproved_keeps_manual():
 
     priced = [c_ok, c_manual, c_no]
     with (
-        patch(
-            "services.pricing.portal_carrier_ceiling.Company"
-        ) as CompanyMock,
+        patch("services.pricing.portal_carrier_ceiling.Company") as CompanyMock,
         patch(
             "services.pricing.portal_carrier_ceiling.PricingProfile",
             create=True,
         ),
     ):
         # Chaîne .join().filter().distinct().all()
-        CompanyMock.query.join.return_value.filter.return_value.distinct.return_value.all.return_value = (
-            priced
-        )
+        CompanyMock.query.join.return_value.filter.return_value.distinct.return_value.all.return_value = priced
         eligible, excluded = _eligible_companies(pickup_geo=None, dropoff_geo=None)
 
     assert {c.id for c in eligible} == {1, 3}

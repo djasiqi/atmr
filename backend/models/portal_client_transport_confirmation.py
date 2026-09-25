@@ -87,7 +87,7 @@ class PortalClientTransportConfirmation(db.Model):
 
 @event.listens_for(PortalClientTransportConfirmation, "before_update")
 def _portal_confirmation_before_update(
-    mapper, connection, target: PortalClientTransportConfirmation
+    _mapper, _connection, target: PortalClientTransportConfirmation
 ):
     state = inspect(target)
     changed = [attr.key for attr in state.attrs if attr.history.has_changes()]
@@ -99,6 +99,6 @@ def _portal_confirmation_before_update(
 
 @event.listens_for(PortalClientTransportConfirmation, "before_delete")
 def _portal_confirmation_before_delete(
-    mapper, connection, target: PortalClientTransportConfirmation
+    _mapper, _connection, _target: PortalClientTransportConfirmation
 ):
     raise PortalClientTransportConfirmationImmutabilityError("DELETE interdit")

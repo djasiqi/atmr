@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from ext import db
@@ -118,9 +118,7 @@ def create_portal_carrier_offer(
             ok=False,
             error={
                 "error": ERROR_PORTAL_OFFER_CONFLICT,
-                "message": (
-                    "Cette course a déjà été confirmée avec un transporteur."
-                ),
+                "message": ("Cette course a déjà été confirmée avec un transporteur."),
             },
             status_code=409,
         )
@@ -129,10 +127,7 @@ def create_portal_carrier_offer(
     from models.booking import Booking
 
     locked = (
-        db.session.query(Booking)
-        .filter_by(id=int(booking.id))
-        .with_for_update()
-        .one()
+        db.session.query(Booking).filter_by(id=int(booking.id)).with_for_update().one()
     )
 
     existing = (
@@ -216,9 +211,7 @@ def create_portal_carrier_offer(
             ok=False,
             error={
                 "error": ERROR_PORTAL_NO_CANCELLATION_POLICY,
-                "message": (
-                    "Publiez d'abord vos conditions d'annulation PORTAL."
-                ),
+                "message": ("Publiez d'abord vos conditions d'annulation PORTAL."),
             },
             status_code=409,
         )

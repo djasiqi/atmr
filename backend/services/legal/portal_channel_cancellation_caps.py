@@ -39,9 +39,7 @@ def _hash_body(body: str) -> str:
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
-def get_current_channel_cancellation_policy() -> (
-    LirieChannelCancellationPolicy | None
-):
+def get_current_channel_cancellation_policy() -> LirieChannelCancellationPolicy | None:
     return (
         LirieChannelCancellationPolicy.query.filter_by(is_current=True)
         .order_by(LirieChannelCancellationPolicy.id.desc())
@@ -170,8 +168,7 @@ def validate_company_policy_against_channel(
             ok=False,
             error=ERROR_DIMENSION,
             message=(
-                "Dimensions ou frais hors cadre canal : "
-                + ", ".join(sorted(unknown))
+                "Dimensions ou frais hors cadre canal : " + ", ".join(sorted(unknown))
             ),
         )
 
@@ -284,9 +281,7 @@ def validate_company_policy_against_channel(
                 return ChannelCapValidationResult(
                     ok=False,
                     error=ERROR_EXCEEDS_CAP,
-                    message=(
-                        f"Statut {status} : {pct} % dépasse le plafond canal."
-                    ),
+                    message=(f"Statut {status} : {pct} % dépasse le plafond canal."),
                 )
         else:
             return ChannelCapValidationResult(
@@ -345,9 +340,7 @@ def publish_channel_cancellation_policy(
 ) -> PublishChannelPolicyResult:
     """Publie une nouvelle version courante des caps canal (tests / admin)."""
     if not isinstance(body_json, dict) or not body_json.get("dimensions"):
-        return PublishChannelPolicyResult(
-            ok=False, error="body_json.dimensions requis"
-        )
+        return PublishChannelPolicyResult(ok=False, error="body_json.dimensions requis")
     text = render_channel_policy_text(body_json)
     content_hash = _hash_body(
         json.dumps(body_json, sort_keys=True, ensure_ascii=False) + "\n" + text

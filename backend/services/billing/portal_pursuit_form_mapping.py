@@ -72,7 +72,7 @@ PARTIAL_FIELDS: tuple[dict[str, str], ...] = (
     },
     {
         "form_field": "easygov_electronic_submission",
-        "lirie_source": None,
+        "lirie_source": "",
         "status": "not_implemented",
     },
 )

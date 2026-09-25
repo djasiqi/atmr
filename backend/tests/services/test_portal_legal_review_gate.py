@@ -94,7 +94,9 @@ def _portal_user(db, *, with_domicile: bool = False, with_billing: bool = True):
     return user, client
 
 
-def _company(db, *, name: str, legal_name: str | None = None, with_domicile: bool = True):
+def _company(
+    db, *, name: str, legal_name: str | None = None, with_domicile: bool = True
+):
     suffix = uuid.uuid4().hex[:8]
     owner = User()
     owner.username = f"cg6a_{suffix}"
@@ -204,9 +206,7 @@ def test_billing_address_alone_not_pursuit_ready(db) -> None:
 
 def test_explicit_domicile_and_creditor_legal_pass_address_gates(db) -> None:
     user, client = _portal_user(db, with_domicile=True, with_billing=True)
-    company, owner = _company(
-        db, name="Display Co", legal_name="Display Co SA"
-    )
+    company, owner = _company(db, name="Display Co", legal_name="Display Co SA")
     recv = _overdue(db, user, client, company, owner, invoice="G-DOM")
     assert recv.debtor_domicile_address_snapshot
     assert recv.debtor_domicile_semantics == "domicile"
@@ -322,9 +322,7 @@ def test_dispute_blocks_transmission_after_approval(db) -> None:
         reviewed_by_user_id=owner.id,
         approve=True,
     )
-    dispute_portal_receivable(
-        receivable=recv, reason="Litige", actor_user_id=user.id
-    )
+    dispute_portal_receivable(receivable=recv, reason="Litige", actor_user_id=user.id)
     elig = resolve_transmission_eligibility(draft.id)
     assert elig.state == TRANSMISSION_NOT_AUTHORIZED
     assert "disputed" in elig.reasons

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from decimal import Decimal
 from typing import Any
 
@@ -114,8 +115,6 @@ def ensure_paper_invoice_fee_line(
     current_meta["paper_invoice_fee_chf"] = float(fee)
     invoice.meta = current_meta
 
-    try:
+    with suppress(Exception):
         db.session.expire(invoice, ["lines"])
-    except Exception:
-        pass
     return True

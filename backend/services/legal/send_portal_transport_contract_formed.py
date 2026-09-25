@@ -65,9 +65,9 @@ def notify_portal_transport_contract_formed(
         )
         return False
     try:
-        sender = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get(
-            "MAIL_USERNAME"
-        )
+        sender = current_app.config.get(
+            "MAIL_DEFAULT_SENDER"
+        ) or current_app.config.get("MAIL_USERNAME")
         msg = Message(
             subject=(
                 f"Transport confirmé — LIRIE #{getattr(booking, 'id', '')} — "

@@ -76,10 +76,10 @@ def test_v2_prepared_hashes_stable_and_distinct():
 
 def test_v2_tamper_without_version_bump_rejected(tmp_path, monkeypatch):
     # Recharge via empreinte figée : un corps altéré lève CatalogIntegrityError.
+    from services.legal import portal_terms_catalog as cat
+
     monkeypatch.setenv("PORTAL_TERMS_EFFECTIVE_VERSION", "1.0")
     with pytest.raises(CatalogIntegrityError):
-        from services.legal import portal_terms_catalog as cat
-
         cat._load_frozen(  # noqa: SLF001 — test d'intégrité
             "terms_of_service_v2.0.txt",
             "0" * 64,

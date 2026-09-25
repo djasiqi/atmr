@@ -88,7 +88,7 @@ class PortalTransportContractFormed(db.Model):
 
 @event.listens_for(PortalTransportContractFormed, "before_update")
 def _portal_contract_formed_before_update(
-    mapper, connection, target: PortalTransportContractFormed
+    _mapper, _connection, target: PortalTransportContractFormed
 ):
     state = inspect(target)
     changed = [attr.key for attr in state.attrs if attr.history.has_changes()]
@@ -100,6 +100,6 @@ def _portal_contract_formed_before_update(
 
 @event.listens_for(PortalTransportContractFormed, "before_delete")
 def _portal_contract_formed_before_delete(
-    mapper, connection, target: PortalTransportContractFormed
+    _mapper, _connection, _target: PortalTransportContractFormed
 ):
     raise PortalTransportContractFormedImmutabilityError("DELETE interdit")

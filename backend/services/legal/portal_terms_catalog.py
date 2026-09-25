@@ -186,9 +186,7 @@ def effective_portal_terms_version() -> str:
         raw = os.getenv(_EFFECTIVE_PORTAL_TERMS_VERSION_ENV) or "1.0"
     raw = str(raw).strip()
     if raw not in ("1.0", "2.0", "2.1"):
-        raise CatalogIntegrityError(
-            f"PORTAL_TERMS_EFFECTIVE_VERSION invalide: {raw!r}"
-        )
+        raise CatalogIntegrityError(f"PORTAL_TERMS_EFFECTIVE_VERSION invalide: {raw!r}")
     return raw
 
 

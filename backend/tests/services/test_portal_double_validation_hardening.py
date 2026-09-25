@@ -372,9 +372,7 @@ def test_material_modification_stales_offer(db_session, enable_dv):
     assert refused.ok is False
     assert refused.error["error"] == ERROR_PORTAL_OFFER_STALE
     assert (
-        PortalClientTransportConfirmation.query.filter_by(
-            booking_id=booking.id
-        ).count()
+        PortalClientTransportConfirmation.query.filter_by(booking_id=booking.id).count()
         == 0
     )
     assert booking.company_id is None

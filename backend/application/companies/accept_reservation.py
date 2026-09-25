@@ -104,9 +104,7 @@ class AcceptReservationUseCase:
 
             amount = offered_amount
             if amount is None:
-                amount = estimate_portal_carrier_offer_amount(
-                    booking, int(company_id)
-                )
+                amount = estimate_portal_carrier_offer_amount(booking, int(company_id))
             result = form_portal_transport_contract_on_accept(
                 booking=booking,
                 company_id=int(company_id),
@@ -147,9 +145,7 @@ class AcceptReservationUseCase:
             amount = offered_amount
             if amount is None:
                 # Jamais booking.amount (estimation client) : grille du transporteur.
-                amount = estimate_portal_carrier_offer_amount(
-                    booking, int(company_id)
-                )
+                amount = estimate_portal_carrier_offer_amount(booking, int(company_id))
             if amount is None:
                 return AcceptReservationResult(
                     ok=False,

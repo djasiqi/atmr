@@ -122,9 +122,8 @@ class SendInvoiceByEmailUseCase:
             )
 
             recipient_email = (
-                (input_data.recipient_email or "").strip()
-                or resolve_invoice_recipient_email(invoice)
-            )
+                input_data.recipient_email or ""
+            ).strip() or resolve_invoice_recipient_email(invoice)
             if not recipient_email:
                 return SendInvoiceByEmailResult(
                     success=False,

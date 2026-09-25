@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from ext import db
@@ -69,10 +69,7 @@ def confirm_portal_transport(
     from models.booking import Booking
 
     locked = (
-        db.session.query(Booking)
-        .filter_by(id=int(booking.id))
-        .with_for_update()
-        .one()
+        db.session.query(Booking).filter_by(id=int(booking.id)).with_for_update().one()
     )
 
     existing_conf = PortalClientTransportConfirmation.query.filter_by(
@@ -105,7 +102,9 @@ def confirm_portal_transport(
             error={"error": ERROR_PORTAL_OFFER_STALE},
             status_code=409,
         )
-    if expected_offer_hash and str(offer.offer_content_hash) != str(expected_offer_hash):
+    if expected_offer_hash and str(offer.offer_content_hash) != str(
+        expected_offer_hash
+    ):
         return ConfirmTransportResult(
             ok=False,
             error={"error": ERROR_PORTAL_OFFER_STALE},
@@ -134,9 +133,7 @@ def confirm_portal_transport(
 
     debtor_user_id = resolve_portal_booking_debtor_user_id(locked)
     if debtor_user_id is not None:
-        hold = resolve_portal_payment_hold(
-            int(debtor_user_id), int(offer.company_id)
-        )
+        hold = resolve_portal_payment_hold(int(debtor_user_id), int(offer.company_id))
         if hold.is_hold:
             return ConfirmTransportResult(
                 ok=False,

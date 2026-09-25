@@ -43,6 +43,10 @@
 **/tests/**
 **/test_*.py
 
+# Smoke local 7B.5 (mot de passe fixture hors prod) — même classe que tests/
+**/scripts/smoke_7b5_*.py
+**/scripts/_smoke_7b5_*.py
+
 # ===== FIXPOINT TIMEOUTS SEMGREP - FAUX POSITIFS =====
 # Les fixpoint timeouts Semgrep sur la règle python.boto3.security.hardcoded-token.hardcoded-token
 # sont des faux positifs causés par l'analyse de flux de données sur des définitions de méthodes

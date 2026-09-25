@@ -8,6 +8,7 @@ from __future__ import annotations  # noqa: I001
 
 # pyright: reportUnusedImport=false, reportUnusedVariable=false, reportGeneralTypeIssues=false, reportUnusedFunction=false
 import logging
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -1484,10 +1485,8 @@ class GenerateInvoiceUseCase:
                 )
             # Recharger les lignes pour les totaux / PDF / aperçu HTML / eBill (QR)
             db.session.flush()
-            try:
+            with suppress(Exception):
                 db.session.expire(invoice, ["lines"])
-            except Exception:
-                pass
             subtotal = round_to_5_cents(subtotal + fee)
             total = round_to_5_cents(total + fee)
             paper_fee_applied = True

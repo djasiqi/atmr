@@ -2434,9 +2434,7 @@ class PortalPendingCarrierOffer(Resource):
             id=int(booking_id), client_id=int(client.id)
         ).one_or_none()
         if booking is None:
-            return APIErrorHandler.handle_not_found(
-                "Booking", booking_id, logger
-            )[0:2]
+            return APIErrorHandler.handle_not_found("Booking", booking_id, logger)[0:2]
 
         if not (
             is_portal_double_validation_enabled()
@@ -2509,9 +2507,7 @@ class PortalConfirmTransport(Resource):
             id=int(booking_id), client_id=int(client.id)
         ).one_or_none()
         if booking is None:
-            return APIErrorHandler.handle_not_found(
-                "Booking", booking_id, logger
-            )[0:2]
+            return APIErrorHandler.handle_not_found("Booking", booking_id, logger)[0:2]
         if not booking_uses_double_validation(booking):
             return {
                 "error": "portal_double_validation_inactive",
@@ -2718,9 +2714,13 @@ class PortalPricingCeilingEstimate(Resource):
                 pickup_location=pickup,
                 dropoff_location=dropoff,
                 pickup_lat=_f("pickup_lat"),
-                pickup_lon=_f("pickup_lon") if payload.get("pickup_lon") is not None else _f("pickup_lng"),
+                pickup_lon=_f("pickup_lon")
+                if payload.get("pickup_lon") is not None
+                else _f("pickup_lng"),
                 dropoff_lat=_f("dropoff_lat"),
-                dropoff_lon=_f("dropoff_lon") if payload.get("dropoff_lon") is not None else _f("dropoff_lng"),
+                dropoff_lon=_f("dropoff_lon")
+                if payload.get("dropoff_lon") is not None
+                else _f("dropoff_lng"),
                 scheduled_time=scheduled or datetime.utcnow(),
                 is_round_trip=bool(payload.get("is_round_trip")),
                 series_occurrences=series_occurrences,

@@ -1,8 +1,8 @@
 """PDF officiel des conditions PORTAL."""
 
 from services.legal.portal_terms_catalog import (
-    prepared_portal_terms_v2,
     portal_terms_v1,
+    prepared_portal_terms_v2,
 )
 from services.legal.portal_terms_pdf import (
     build_portal_terms_pdf_bytes,

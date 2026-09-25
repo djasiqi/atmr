@@ -253,7 +253,9 @@ def record_portal_booking_created_event(
         max_amount = getattr(booking, "_portal_maximum_accepted_amount", None)
     evidence_json = None
     if pricing_ceiling_evidence:
-        evidence_json = json.dumps(pricing_ceiling_evidence, ensure_ascii=False, sort_keys=True)
+        evidence_json = json.dumps(
+            pricing_ceiling_evidence, ensure_ascii=False, sort_keys=True
+        )
     event = ClientBookingContractEvent(
         booking_id=int(booking.id),
         sequence_number=1,

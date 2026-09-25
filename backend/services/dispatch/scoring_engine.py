@@ -175,19 +175,17 @@ def compute_candidates(
             .filter(PricingProfile.is_active.is_(True))
             .distinct()
         )
-        companies = (
-            Company.query.filter(
-                Company.is_approved.is_(True),
-                or_(
-                    Company.dispatch_enabled.is_(True),
-                    Company.id.in_(active_profile_company_ids),
-                    and_(
-                        Company.service_area.isnot(None),
-                        Company.service_area != "",
-                    ),
+        companies = Company.query.filter(
+            Company.is_approved.is_(True),
+            or_(
+                Company.dispatch_enabled.is_(True),
+                Company.id.in_(active_profile_company_ids),
+                and_(
+                    Company.service_area.isnot(None),
+                    Company.service_area != "",
                 ),
-            ).all()
-        )
+            ),
+        ).all()
     candidates: list[DispatchCandidate] = []
 
     for company in companies:

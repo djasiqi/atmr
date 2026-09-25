@@ -13,11 +13,11 @@ from unittest.mock import patch
 
 import pytest
 
-from services.pricing.pricing_engine import compute_price
 from services.pricing.portal_carrier_ceiling import (
     ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE,
     compute_portal_carrier_ceiling,
 )
+from services.pricing.pricing_engine import compute_price
 
 CEILING_SRC = (
     Path(__file__).resolve().parents[2]
@@ -42,9 +42,7 @@ class _DummyVersion:
 
 
 def _company(cid: int, name: str):
-    return SimpleNamespace(
-        id=cid, name=name, is_approved=True, dispatch_enabled=True
-    )
+    return SimpleNamespace(id=cid, name=name, is_approved=True, dispatch_enabled=True)
 
 
 def _run_ceiling_with_real_engine(
@@ -419,10 +417,12 @@ def test_series_occurrences_multiplies_ceiling():
             "services.pricing.portal_carrier_ceiling._build_pricing_context",
             return_value={},
         ),
+        pytest.raises(
+            ValueError, match=ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE
+        ) as exc,
     ):
-        with pytest.raises(ValueError) as exc:
-            compute_portal_carrier_ceiling(
-                pickup_location="Genève",
-                dropoff_location="HUG",
-            )
+        compute_portal_carrier_ceiling(
+            pickup_location="Genève",
+            dropoff_location="HUG",
+        )
     assert str(exc.value) == ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE

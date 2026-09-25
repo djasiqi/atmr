@@ -137,7 +137,9 @@ class PortalCarrierOffer(db.Model):
 
 
 @event.listens_for(PortalCarrierOffer, "before_update")
-def _portal_carrier_offer_before_update(mapper, connection, target: PortalCarrierOffer):
+def _portal_carrier_offer_before_update(
+    _mapper, _connection, target: PortalCarrierOffer
+):
     state = inspect(target)
     changed: set[str] = set()
     for attr in state.attrs:
@@ -160,5 +162,7 @@ def _portal_carrier_offer_before_update(mapper, connection, target: PortalCarrie
 
 
 @event.listens_for(PortalCarrierOffer, "before_delete")
-def _portal_carrier_offer_before_delete(mapper, connection, target: PortalCarrierOffer):
+def _portal_carrier_offer_before_delete(
+    _mapper, _connection, _target: PortalCarrierOffer
+):
     raise PortalCarrierOfferImmutabilityError("DELETE physique interdit")

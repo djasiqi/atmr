@@ -127,9 +127,7 @@ def _overdue(db, user, client, company, owner, *, invoice: str):
     booking.customer_name = f"{user.first_name} {user.last_name}"
     booking.pickup_location = "Hopital"
     booking.dropoff_location = "Clinique"
-    booking.scheduled_time = datetime.now(UTC).replace(tzinfo=None) + timedelta(
-        hours=2
-    )
+    booking.scheduled_time = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=2)
     booking.amount = 90.0
     booking.status = BookingStatus.COMPLETED
     booking.user_id = user.id
@@ -226,9 +224,7 @@ def _approved_draft(db, user, client, company, owner, *, invoice: str):
 def test_31_export_prepared_is_not_transmitted(db) -> None:
     user, client = _portal_user(db)
     company, owner = _company(db, name="Export Co")
-    _recv, draft = _approved_draft(
-        db, user, client, company, owner, invoice="GB-31"
-    )
+    _recv, draft = _approved_draft(db, user, client, company, owner, invoice="GB-31")
     prepare_export_artifact(transmission=draft, prepared_by_user_id=owner.id)
     db.session.flush()
     status = resolve_collection_transmission_status(draft.id)
@@ -246,9 +242,7 @@ def test_31_export_prepared_is_not_transmitted(db) -> None:
 def test_32_transmission_without_evidence_refused(db) -> None:
     user, client = _portal_user(db)
     company, owner = _company(db, name="NoEv Co")
-    _recv, draft = _approved_draft(
-        db, user, client, company, owner, invoice="GB-32"
-    )
+    _recv, draft = _approved_draft(db, user, client, company, owner, invoice="GB-32")
     with pytest.raises(PortalReceivableError) as exc:
         record_external_transmission(
             transmission=draft,
@@ -267,9 +261,7 @@ def test_32_transmission_without_evidence_refused(db) -> None:
 def test_33_transmission_with_evidence_ok(db) -> None:
     user, client = _portal_user(db)
     company, owner = _company(db, name="Ev Ok Co")
-    _recv, draft = _approved_draft(
-        db, user, client, company, owner, invoice="GB-33"
-    )
+    _recv, draft = _approved_draft(db, user, client, company, owner, invoice="GB-33")
     evidence = record_external_transmission(
         transmission=draft,
         recorded_by_user_id=owner.id,
@@ -297,9 +289,7 @@ def test_33_transmission_with_evidence_ok(db) -> None:
 def test_34_hash_mismatch_refused(db) -> None:
     user, client = _portal_user(db)
     company, owner = _company(db, name="Hash Co")
-    _recv, draft = _approved_draft(
-        db, user, client, company, owner, invoice="GB-34"
-    )
+    _recv, draft = _approved_draft(db, user, client, company, owner, invoice="GB-34")
     with pytest.raises(PortalReceivableError) as exc:
         record_external_transmission(
             transmission=draft,
@@ -318,9 +308,7 @@ def test_34_hash_mismatch_refused(db) -> None:
 def test_35_payment_before_transmission_blocks(db) -> None:
     user, client = _portal_user(db)
     company, owner = _company(db, name="Pay Tx Co")
-    recv, draft = _approved_draft(
-        db, user, client, company, owner, invoice="GB-35"
-    )
+    recv, draft = _approved_draft(db, user, client, company, owner, invoice="GB-35")
     add_portal_receivable_payment(
         receivable=recv,
         amount=Decimal("300.00"),
@@ -349,9 +337,7 @@ def test_35_payment_before_transmission_blocks(db) -> None:
 def test_36_dispute_before_transmission_blocks(db) -> None:
     user, client = _portal_user(db)
     company, owner = _company(db, name="Disp Tx Co")
-    recv, draft = _approved_draft(
-        db, user, client, company, owner, invoice="GB-36"
-    )
+    recv, draft = _approved_draft(db, user, client, company, owner, invoice="GB-36")
     dispute_portal_receivable(
         receivable=recv, reason="Montant contesté", actor_user_id=user.id
     )
@@ -374,9 +360,7 @@ def test_36_dispute_before_transmission_blocks(db) -> None:
 def test_37_acknowledged_without_evidence_refused(db) -> None:
     user, client = _portal_user(db)
     company, owner = _company(db, name="Ack Co")
-    _recv, draft = _approved_draft(
-        db, user, client, company, owner, invoice="GB-37"
-    )
+    _recv, draft = _approved_draft(db, user, client, company, owner, invoice="GB-37")
     record_external_transmission(
         transmission=draft,
         recorded_by_user_id=owner.id,
@@ -407,11 +391,9 @@ def test_38_cross_company_isolation(db) -> None:
         db, user, client, company_x, owner_x, invoice="GB-38"
     )
     assert draft.creditor_company_id == company_x.id
-    foreign = (
-        PortalReceivableCollectionTransmission.query.filter_by(
-            id=draft.id, creditor_company_id=company_y.id
-        ).one_or_none()
-    )
+    foreign = PortalReceivableCollectionTransmission.query.filter_by(
+        id=draft.id, creditor_company_id=company_y.id
+    ).one_or_none()
     assert foreign is None
     assert owner_y.id != owner_x.id
 
@@ -419,9 +401,7 @@ def test_38_cross_company_isolation(db) -> None:
 def test_39_health_data_not_in_export(db) -> None:
     user, client = _portal_user(db)
     company, owner = _company(db, name="Health Co")
-    recv, draft = _approved_draft(
-        db, user, client, company, owner, invoice="GB-39"
-    )
+    recv, draft = _approved_draft(db, user, client, company, owner, invoice="GB-39")
     blob = (draft.export_payload or "").lower()
     for banned in ("wheelchair", "notes_medical", "doctor", "medical_facility"):
         assert banned not in blob
@@ -438,9 +418,7 @@ def test_39_health_data_not_in_export(db) -> None:
 def test_40_no_implicit_external_connectors(db) -> None:
     user, client = _portal_user(db)
     company, owner = _company(db, name="NoApi Co")
-    _recv, draft = _approved_draft(
-        db, user, client, company, owner, invoice="GB-40"
-    )
+    _recv, draft = _approved_draft(db, user, client, company, owner, invoice="GB-40")
     for ch in FORBIDDEN_CHANNELS:
         with pytest.raises(PortalReceivableError) as exc:
             record_external_transmission(

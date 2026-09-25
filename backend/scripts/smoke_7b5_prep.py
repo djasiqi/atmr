@@ -1,4 +1,5 @@
 """Smoke prep: publish synthetic channel caps + print flag status."""
+
 from app import create_app
 from ext import db
 from services.legal.portal_channel_cancellation_caps import (

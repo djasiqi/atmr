@@ -79,7 +79,10 @@ def test_channel_caps_company_below_and_equal_pass():
     assert validate_company_policy_against_channel(
         company_policy=equal, channel_body=channel
     ).ok
-    zero = {"enabled": True, "tiers": [{"type": "time", "hours_before": 24, "percent": 0}]}
+    zero = {
+        "enabled": True,
+        "tiers": [{"type": "time", "hours_before": 24, "percent": 0}],
+    }
     assert validate_company_policy_against_channel(
         company_policy=zero, channel_body=channel
     ).ok
@@ -141,39 +144,35 @@ def test_form_contract_rejects_carrier_outside_pool(app):
         transport_terms_hash="u",
     )
 
-    with app.app_context():
-        with (
-            patch(
-                "services.legal.form_portal_transport_contract.db"
-            ) as mock_db,
-            patch(
-                "services.legal.form_portal_transport_contract.PortalTransportContractFormed"
-            ) as MockFormed,
-            patch(
-                "services.legal.form_portal_transport_contract.PortalClientConditionalOrder"
-            ) as MockOrder,
-            patch(
-                "services.legal.form_portal_transport_contract.booking_uses_conditional_order",
-                return_value=True,
-            ),
-        ):
-            mock_q = MagicMock()
-            mock_q.filter_by.return_value.with_for_update.return_value.one.return_value = (
-                booking
-            )
-            mock_db.session.query.return_value = mock_q
-            MockFormed.query.filter_by.return_value.one_or_none.return_value = None
-            MockOrder.query.filter_by.return_value.with_for_update.return_value.one_or_none.return_value = (
-                order
-            )
+    with (
+        app.app_context(),
+        patch("services.legal.form_portal_transport_contract.db") as mock_db,
+        patch(
+            "services.legal.form_portal_transport_contract.PortalTransportContractFormed"
+        ) as MockFormed,
+        patch(
+            "services.legal.form_portal_transport_contract.PortalClientConditionalOrder"
+        ) as MockOrder,
+        patch(
+            "services.legal.form_portal_transport_contract.booking_uses_conditional_order",
+            return_value=True,
+        ),
+    ):
+        mock_q = MagicMock()
+        mock_q.filter_by.return_value.with_for_update.return_value.one.return_value = (
+            booking
+        )
+        mock_db.session.query.return_value = mock_q
+        MockFormed.query.filter_by.return_value.one_or_none.return_value = None
+        MockOrder.query.filter_by.return_value.with_for_update.return_value.one_or_none.return_value = order
 
-            result = form_portal_transport_contract_on_accept(
-                booking=booking,
-                company_id=99,  # D hors pool
-                offered_amount=40,
-            )
-            assert not result.ok
-            assert result.error["error"] == ERROR_CARRIER_NOT_IN_ORDER_POOL
+        result = form_portal_transport_contract_on_accept(
+            booking=booking,
+            company_id=99,  # D hors pool
+            offered_amount=40,
+        )
+        assert not result.ok
+        assert result.error["error"] == ERROR_CARRIER_NOT_IN_ORDER_POOL
 
 
 def test_form_contract_idempotent_same_company(app):
@@ -189,32 +188,30 @@ def test_form_contract_idempotent_same_company(app):
     )
     existing = SimpleNamespace(company_id=7, carrier_quote=Decimal("40.00"), id=1)
 
-    with app.app_context():
-        with (
-            patch(
-                "services.legal.form_portal_transport_contract.db"
-            ) as mock_db,
-            patch(
-                "services.legal.form_portal_transport_contract.PortalTransportContractFormed"
-            ) as MockFormed,
-            patch(
-                "services.legal.form_portal_transport_contract.booking_uses_conditional_order",
-                return_value=True,
-            ),
-        ):
-            mock_q = MagicMock()
-            mock_q.filter_by.return_value.with_for_update.return_value.one.return_value = (
-                booking
-            )
-            mock_db.session.query.return_value = mock_q
-            MockFormed.query.filter_by.return_value.one_or_none.return_value = existing
+    with (
+        app.app_context(),
+        patch("services.legal.form_portal_transport_contract.db") as mock_db,
+        patch(
+            "services.legal.form_portal_transport_contract.PortalTransportContractFormed"
+        ) as MockFormed,
+        patch(
+            "services.legal.form_portal_transport_contract.booking_uses_conditional_order",
+            return_value=True,
+        ),
+    ):
+        mock_q = MagicMock()
+        mock_q.filter_by.return_value.with_for_update.return_value.one.return_value = (
+            booking
+        )
+        mock_db.session.query.return_value = mock_q
+        MockFormed.query.filter_by.return_value.one_or_none.return_value = existing
 
-            result = form_portal_transport_contract_on_accept(
-                booking=booking, company_id=7, offered_amount=40
-            )
-            assert result.ok
-            assert result.idempotent_replay
-            assert result.contract is existing
+        result = form_portal_transport_contract_on_accept(
+            booking=booking, company_id=7, offered_amount=40
+        )
+        assert result.ok
+        assert result.idempotent_replay
+        assert result.contract is existing
 
 
 def test_form_contract_other_company_already_assigned(app):
@@ -230,28 +227,26 @@ def test_form_contract_other_company_already_assigned(app):
     )
     existing = SimpleNamespace(company_id=7, carrier_quote=Decimal("40.00"), id=1)
 
-    with app.app_context():
-        with (
-            patch(
-                "services.legal.form_portal_transport_contract.db"
-            ) as mock_db,
-            patch(
-                "services.legal.form_portal_transport_contract.PortalTransportContractFormed"
-            ) as MockFormed,
-            patch(
-                "services.legal.form_portal_transport_contract.booking_uses_conditional_order",
-                return_value=True,
-            ),
-        ):
-            mock_q = MagicMock()
-            mock_q.filter_by.return_value.with_for_update.return_value.one.return_value = (
-                booking
-            )
-            mock_db.session.query.return_value = mock_q
-            MockFormed.query.filter_by.return_value.one_or_none.return_value = existing
+    with (
+        app.app_context(),
+        patch("services.legal.form_portal_transport_contract.db") as mock_db,
+        patch(
+            "services.legal.form_portal_transport_contract.PortalTransportContractFormed"
+        ) as MockFormed,
+        patch(
+            "services.legal.form_portal_transport_contract.booking_uses_conditional_order",
+            return_value=True,
+        ),
+    ):
+        mock_q = MagicMock()
+        mock_q.filter_by.return_value.with_for_update.return_value.one.return_value = (
+            booking
+        )
+        mock_db.session.query.return_value = mock_q
+        MockFormed.query.filter_by.return_value.one_or_none.return_value = existing
 
-            result = form_portal_transport_contract_on_accept(
-                booking=booking, company_id=8, offered_amount=38.40
-            )
-            assert not result.ok
-            assert result.error["error"] == ERROR_TRANSPORT_ALREADY_ASSIGNED
+        result = form_portal_transport_contract_on_accept(
+            booking=booking, company_id=8, offered_amount=38.40
+        )
+        assert not result.ok
+        assert result.error["error"] == ERROR_TRANSPORT_ALREADY_ASSIGNED

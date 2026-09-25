@@ -88,7 +88,9 @@ def _company(*, name: str) -> Company:
     return company
 
 
-def _v2_booking(*, user: User, client: Client, estimate: float, maximum: float) -> Booking:
+def _v2_booking(
+    *, user: User, client: Client, estimate: float, maximum: float
+) -> Booking:
     booking = Booking()
     booking.user_id = user.id
     booking.client_id = client.id
@@ -162,9 +164,7 @@ def test_offer_price_gate_and_no_assignment(db_session, enable_double_validation
     assert ok_edge.ok is True
     assert booking.company_id is None
     assert (
-        PortalClientTransportConfirmation.query.filter_by(
-            booking_id=booking.id
-        ).count()
+        PortalClientTransportConfirmation.query.filter_by(booking_id=booking.id).count()
         == 0
     )
 
@@ -282,9 +282,7 @@ def test_legacy_booking_no_fake_maximum(db_session):
     db.session.flush()
     event = record_portal_booking_created_event(booking=booking, user_id=user.id)
     assert event.maximum_accepted_amount_snapshot is None
-    assert (
-        PortalCarrierOffer.query.filter_by(booking_id=booking.id).count() == 0
-    )
+    assert PortalCarrierOffer.query.filter_by(booking_id=booking.id).count() == 0
     assert (
         PortalClientTransportConfirmation.query.filter_by(booking_id=booking.id).count()
         == 0

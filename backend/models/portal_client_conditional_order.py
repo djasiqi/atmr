@@ -74,7 +74,7 @@ class PortalClientConditionalOrder(db.Model):
 
 @event.listens_for(PortalClientConditionalOrder, "before_update")
 def _portal_conditional_order_before_update(
-    mapper, connection, target: PortalClientConditionalOrder
+    _mapper, _connection, target: PortalClientConditionalOrder
 ):
     state = inspect(target)
     changed = [attr.key for attr in state.attrs if attr.history.has_changes()]
@@ -86,6 +86,6 @@ def _portal_conditional_order_before_update(
 
 @event.listens_for(PortalClientConditionalOrder, "before_delete")
 def _portal_conditional_order_before_delete(
-    mapper, connection, target: PortalClientConditionalOrder
+    _mapper, _connection, _target: PortalClientConditionalOrder
 ):
     raise PortalClientConditionalOrderImmutabilityError("DELETE interdit")

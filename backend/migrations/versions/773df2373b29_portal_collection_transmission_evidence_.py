@@ -112,9 +112,7 @@ def upgrade():
     )
     op.add_column(
         "portal_receivable_collection_transmission",
-        sa.Column(
-            "recipient_confirmed_at", sa.DateTime(timezone=True), nullable=True
-        ),
+        sa.Column("recipient_confirmed_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.add_column(
         "portal_receivable_collection_transmission",
@@ -126,9 +124,7 @@ def upgrade():
     )
     op.add_column(
         "portal_receivable_collection_transmission",
-        sa.Column(
-            "export_prepared_at", sa.DateTime(timezone=True), nullable=True
-        ),
+        sa.Column("export_prepared_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.create_foreign_key(
         "fk_portal_coll_tx_recipient_confirmed_by",
@@ -180,12 +176,8 @@ def downgrade():
         "portal_receivable_collection_transmission",
         type_="foreignkey",
     )
-    op.drop_column(
-        "portal_receivable_collection_transmission", "export_prepared_at"
-    )
-    op.drop_column(
-        "portal_receivable_collection_transmission", "export_version"
-    )
+    op.drop_column("portal_receivable_collection_transmission", "export_prepared_at")
+    op.drop_column("portal_receivable_collection_transmission", "export_version")
     op.drop_column(
         "portal_receivable_collection_transmission",
         "recipient_confirmed_by_user_id",
@@ -197,12 +189,8 @@ def downgrade():
         "portal_receivable_collection_transmission",
         "recipient_summary_confirmed",
     )
-    op.drop_column(
-        "portal_receivable_collection_transmission", "recipient_contact"
-    )
-    op.drop_column(
-        "portal_receivable_collection_transmission", "recipient_label"
-    )
+    op.drop_column("portal_receivable_collection_transmission", "recipient_contact")
+    op.drop_column("portal_receivable_collection_transmission", "recipient_label")
 
     op.drop_index(
         "ix_portal_tx_evidence_transmission",

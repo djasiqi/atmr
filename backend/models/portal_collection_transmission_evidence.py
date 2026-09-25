@@ -88,9 +88,7 @@ class PortalCollectionTransmissionEvidence(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     transmission_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey(
-            "portal_receivable_collection_transmission.id", ondelete="CASCADE"
-        ),
+        ForeignKey("portal_receivable_collection_transmission.id", ondelete="CASCADE"),
         nullable=False,
     )
     receivable_id: Mapped[int] = mapped_column(

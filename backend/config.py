@@ -341,16 +341,14 @@ class Config:
     # 7B — Double validation contractuelle PORTAL (OFF par défaut jusqu'à 7D).
     # Activation explicite uniquement via env / config — jamais via migration.
     PORTAL_DOUBLE_VALIDATION_ENABLED: bool = (
-        (os.getenv("PORTAL_DOUBLE_VALIDATION_ENABLED") or "false").strip().lower()
-        in ("1", "true", "yes", "on")
-    )
+        os.getenv("PORTAL_DOUBLE_VALIDATION_ENABLED") or "false"
+    ).strip().lower() in ("1", "true", "yes", "on")
 
     # 7B.5 — Commande conditionnelle 1 clic (OFF par défaut).
     # Mutuellement exclusif avec PORTAL_DOUBLE_VALIDATION_ENABLED (boot refusal).
     PORTAL_CONDITIONAL_ORDER_ENABLED: bool = (
-        (os.getenv("PORTAL_CONDITIONAL_ORDER_ENABLED") or "false").strip().lower()
-        in ("1", "true", "yes", "on")
-    )
+        os.getenv("PORTAL_CONDITIONAL_ORDER_ENABLED") or "false"
+    ).strip().lower() in ("1", "true", "yes", "on")
 
     # 7C — Pointeur explicite des CGU/CGV PORTAL opposables (défaut 1.0).
     # 2.0 PREPARED ↔ DV ; 2.1 PREPARED ↔ conditional_order. Basculement coordonné.

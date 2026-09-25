@@ -27,7 +27,7 @@ def test_normalize_delivery_method_defaults_email():
 
 
 def test_paper_fee_constant_is_three_chf():
-    assert PAPER_INVOICE_FEE_CHF == Decimal("3.00")
+    assert Decimal("3.00") == PAPER_INVOICE_FEE_CHF
 
 
 def test_invoice_has_paper_fee_line_via_meta():

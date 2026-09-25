@@ -232,7 +232,7 @@ class ClientMyPortalTermsPdf(Resource):
             )
         except CatalogIntegrityError as exc:
             return APIErrorHandler.handle_exception(exc, logger)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return APIErrorHandler.handle_exception(exc, logger)
         return send_file(
             BytesIO(pdf_bytes),

@@ -309,7 +309,6 @@ def audit_debtor_identity(receivable: PortalReceivable) -> dict[str, FieldAvaila
     }
 
 
-
 def build_claim_reason(receivable: PortalReceivable) -> str:
     """Motif factuel — pas une qualification juridique."""
     issued = _format_date(receivable.issued_at)

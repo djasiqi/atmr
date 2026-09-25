@@ -56,9 +56,8 @@ def build_eligible_carriers_snapshot(ceiling_result: Any) -> list[dict[str, Any]
         uid = getattr(company, "uid_ide", None)
         if uid:
             row["uid_ide"] = str(uid)
-        addr = (
-            getattr(company, "domicile_address_line1", None)
-            or getattr(company, "address", None)
+        addr = getattr(company, "domicile_address_line1", None) or getattr(
+            company, "address", None
         )
         if addr:
             row["address"] = str(addr)

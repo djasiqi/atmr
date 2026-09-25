@@ -59,9 +59,7 @@ class PortalCollectionLegalReview(db.Model):
     )
     transmission_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey(
-            "portal_receivable_collection_transmission.id", ondelete="CASCADE"
-        ),
+        ForeignKey("portal_receivable_collection_transmission.id", ondelete="CASCADE"),
         nullable=False,
     )
     creditor_company_id: Mapped[int] = mapped_column(

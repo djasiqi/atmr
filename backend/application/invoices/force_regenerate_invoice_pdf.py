@@ -21,6 +21,7 @@ from application.invoices.invoice_pdf_state import (
     mark_pdf_ready,
     normalize_invoice_meta_dict,
 )
+from application.invoices.paper_invoice_fee import ensure_paper_invoice_fee_line
 from ext import db
 from models import Client, Invoice
 
@@ -162,13 +163,13 @@ class ForceRegenerateInvoicePdfUseCase:
         refresh_recipient_snapshot_meta(invoice)
 
         try:
-            from application.invoices.paper_invoice_fee import ensure_paper_invoice_fee_line
-
             if ensure_paper_invoice_fee_line(
                 invoice, client=getattr(invoice, "client", None)
             ):
                 db.session.flush()
-                invoice = reload_invoice_graph_for_pdf(invoice_id, company_id) or invoice
+                invoice = (
+                    reload_invoice_graph_for_pdf(invoice_id, company_id) or invoice
+                )
         except Exception:
             logger.exception(
                 "ensure_paper_invoice_fee_line échoué invoice_id=%s", invoice_id

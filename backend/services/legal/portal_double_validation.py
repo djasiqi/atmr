@@ -21,9 +21,7 @@ ERROR_CARRIER_NOT_IN_ORDER_POOL = "carrier_not_in_order_pool"
 ERROR_PORTAL_CANCELLATION_EXCEEDS_CHANNEL_CAP = (
     "portal_cancellation_exceeds_channel_cap"
 )
-ERROR_PORTAL_CANCELLATION_DIMENSION_REJECTED = (
-    "portal_cancellation_dimension_rejected"
-)
+ERROR_PORTAL_CANCELLATION_DIMENSION_REJECTED = "portal_cancellation_dimension_rejected"
 ERROR_PORTAL_CHANNEL_POLICY_REQUIRED = "portal_channel_cancellation_policy_required"
 
 
