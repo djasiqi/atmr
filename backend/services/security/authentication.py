@@ -250,6 +250,11 @@ class RefreshTokenService:
 
         Args:
             token: Le refresh token JWT en clair
+
+        Contrat dual-store (P0-6) : le CURRENT est toujours nettoyé des deux
+        stores via le client d'écriture, même si l'autorité de lecture (legacy
+        en dual_write) n'a déjà plus la clé. Le GET ne conditionne plus le
+        ``delete`` — uniquement la résolution du ``user_id`` pour le ZSET.
         """
         token_hash = self._hash_token(token)
 
@@ -268,9 +273,12 @@ class RefreshTokenService:
             "revoked",
         )
 
-        stored_user_id = self.redis_client.get(
-            f"{self.active_tokens_prefix}{token_hash}"
-        )
+        active_key = f"{self.active_tokens_prefix}{token_hash}"
+        stored_user_id = self._resolve_active_user_id_for_cleanup(token_hash)
+
+        # Cleanup CURRENT inconditionnel (idempotent) — les deux stores en dual_write
+        self.redis_client.delete(active_key)
+
         if stored_user_id:
             user_tokens_key = f"user_refresh_tokens:{stored_user_id}"
 
@@ -278,7 +286,6 @@ class RefreshTokenService:
                 self.redis_client.zrem(user_tokens_key, token_hash)
 
             _fix_wrongtype_and_retry(self.redis_client, user_tokens_key, _zrem)
-            self.redis_client.delete(f"{self.active_tokens_prefix}{token_hash}")
 
         logger.info("Token révoqué: %s...", token_hash[:8])
 
@@ -289,6 +296,48 @@ class RefreshTokenService:
             tokens_revoked_total.labels(token_type="refresh_token").inc()
         except Exception:
             pass  # Ne pas bloquer si métriques indisponibles
+
+    def _resolve_active_user_id_for_cleanup(self, token_hash: str) -> str | None:
+        """Résout user_id pour ZSET cleanup sans changer l'autorité de lecture.
+
+        En dual_write / auth_primary, peeks les stores bruts si le GET lecture
+        est déjà vide (ex. CURRENT legacy expiré, CURRENT auth encore présent).
+        """
+        active_key = f"{self.active_tokens_prefix}{token_hash}"
+        try:
+            stored = self.redis_client.get(active_key)
+            if stored is not None:
+                return str(stored)
+        except Exception:
+            pass
+
+        try:
+            from security.auth_redis import get_dedicated_auth_redis, get_legacy_redis
+            from security.auth_redis_migration import (
+                AuthRedisMigrationMode,
+                get_migration_mode,
+            )
+
+            mode = get_migration_mode()
+            if mode not in {
+                AuthRedisMigrationMode.DUAL_WRITE,
+                AuthRedisMigrationMode.AUTH_PRIMARY,
+            }:
+                return None
+            for client in (get_legacy_redis(), get_dedicated_auth_redis()):
+                try:
+                    stored = client.get(active_key)
+                    if stored is not None:
+                        return str(stored)
+                except Exception:
+                    continue
+        except Exception:
+            logger.debug(
+                "resolve_active_user_id_for_cleanup peek failed hash=%s",
+                token_hash[:8],
+                exc_info=True,
+            )
+        return None
 
     def store_token(
         self,

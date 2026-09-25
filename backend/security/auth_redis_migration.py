@@ -1,18 +1,22 @@
 """P0-6 rollout — modes de migration Redis auth (dual-write / auth-primary).
 
-Modes (``AUTH_REDIS_MIGRATION_MODE``) :
+Modes (``AUTH_REDIS_MIGRATION_MODE``) — contrat explicite :
 
-* ``off`` / ``legacy`` / vide — client unique via ``resolve_auth_redis_url()`` (comportement actuel)
-* ``dual_write`` — READ = Redis général (legacy) ; WRITE = legacy + redis-auth
-* ``auth_primary`` — READ = redis-auth uniquement (pas de fallback lecture legacy) ;
-  WRITE = redis-auth + legacy (rollback court)
-* ``auth_only`` — READ/WRITE = redis-auth uniquement
+* ``legacy`` — READ = legacy (``REDIS_URL``) ; WRITE = legacy
+  (jamais ``resolve_auth_redis_url()`` / redis-auth)
+* ``dual_write`` — READ = legacy ; WRITE = legacy + redis-auth
+* ``auth_primary`` — READ = redis-auth ; WRITE = redis-auth + legacy
+* ``auth_only`` — READ/WRITE = redis-auth
+* ``off`` — compat tests/dev uniquement ; **interdit en production** dès que
+  ``AUTH_REDIS_URL`` est défini et distinct de ``REDIS_URL``
+  (évite l'ancienne fenêtre silencieuse auth-only involontaire)
 
 Invariant Phase F : aucun ``auth missing → lire legacy`` par requête.
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from enum import Enum
@@ -49,7 +53,9 @@ def get_migration_mode() -> AuthRedisMigrationMode:
             from flask import current_app, has_app_context
 
             if has_app_context():
-                raw = (current_app.config.get("AUTH_REDIS_MIGRATION_MODE") or "").strip()
+                raw = (
+                    current_app.config.get("AUTH_REDIS_MIGRATION_MODE") or ""
+                ).strip()
         except Exception:
             pass
     normalized = raw.lower().replace("-", "_")
@@ -75,6 +81,46 @@ def migration_requires_dedicated_auth() -> bool:
         AuthRedisMigrationMode.AUTH_PRIMARY,
         AuthRedisMigrationMode.AUTH_ONLY,
     }
+
+
+def assert_prod_migration_mode_not_ambiguous() -> None:
+    """Refuse ``off`` + ``AUTH_REDIS_URL`` distinct en production.
+
+    Cette combinaison faisait écrire silencieusement uniquement vers redis-auth
+    via ``resolve_auth_redis_url()`` — cause des CURRENT auth-only observés.
+    """
+    from security.auth_redis import (
+        _flask_env_name,
+        resolve_dedicated_auth_redis_url,
+        resolve_legacy_redis_url,
+    )
+
+    flask_env = _flask_env_name()
+    is_prod = flask_env in ("production", "prod")
+    try:
+        from flask import current_app, has_app_context
+
+        if has_app_context() and bool(current_app.config.get("TESTING")):
+            return
+    except Exception:
+        pass
+    if not is_prod:
+        return
+
+    mode = get_migration_mode()
+    dedicated = resolve_dedicated_auth_redis_url()
+    legacy = resolve_legacy_redis_url()
+    if (
+        mode == AuthRedisMigrationMode.OFF
+        and dedicated
+        and dedicated != legacy
+    ):
+        raise RuntimeError(
+            "AUTH_REDIS_MIGRATION_MODE=off est interdit en production lorsque "
+            "AUTH_REDIS_URL est défini et distinct de REDIS_URL. "
+            "Choisir explicitement: legacy|dual_write|auth_primary|auth_only "
+            "(évite l'écriture silencieuse auth-only)."
+        )
 
 
 def read_authority_is_auth() -> bool:
@@ -175,7 +221,9 @@ class DualWriteRedisClient:
     ) -> Any:
         return self._read.scan(cursor=cursor, match=match, count=count, **kwargs)
 
-    def scan_iter(self, match: str | None = None, count: int | None = None, **kwargs: Any):
+    def scan_iter(
+        self, match: str | None = None, count: int | None = None, **kwargs: Any
+    ):
         return self._read.scan_iter(match=match, count=count, **kwargs)
 
     # --- écritures ---
@@ -232,10 +280,8 @@ class DualWriteRedisClient:
         for client in (self._read, self._primary, self._secondary):
             if client is None:
                 continue
-            try:
+            with contextlib.suppress(Exception):
                 client.close()
-            except Exception:
-                pass
 
     def __getattr__(self, item: str) -> Any:
         # Délégation lecture pour méthodes redis-py non listées

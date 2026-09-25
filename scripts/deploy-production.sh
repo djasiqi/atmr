@@ -723,6 +723,21 @@ if [ -z "${AUTH_REDIS_URL:-}" ]; then
   echo "   Ordre obligatoire : provisionner redis-auth → AUTH_REDIS_URL → backend."
   exit 1
 fi
+# P0-6 : mode de migration explicite obligatoire (pas de off ambigu avec 2 Redis).
+_MIG_MODE="$(echo "${AUTH_REDIS_MIGRATION_MODE:-off}" | tr '[:upper:]' '[:lower:]' | tr '-' '_')"
+case "${_MIG_MODE}" in
+  legacy|dual_write|dualwrite|auth_primary|authprimary|auth_only|authonly)
+    echo "✅ AUTH_REDIS_MIGRATION_MODE=${AUTH_REDIS_MIGRATION_MODE}"
+    ;;
+  *)
+    echo "❌ AUTH_REDIS_MIGRATION_MODE='${AUTH_REDIS_MIGRATION_MODE:-}' invalide ou ambigu."
+    echo "   Avec AUTH_REDIS_URL distinct, choisir explicitement:"
+    echo "   legacy | dual_write | auth_primary | auth_only"
+    echo "   (off interdit — évite l'écriture silencieuse auth-only)."
+    exit 1
+    ;;
+esac
+unset _MIG_MODE
 compose_prod up -d postgres pgbouncer redis redis-auth osrm
 
 echo "⏳ Stabilisation infra (5 secondes)..."

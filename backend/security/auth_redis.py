@@ -3,14 +3,15 @@
 Autorité unique pour CURRENT / PREVIOUS / revoked refresh.
 Ne pas utiliser ``ext.redis_client`` (cache / Celery / sockets) pour ces clés.
 
-``AUTH_REDIS_URL`` prime ; fallback temporaire ``REDIS_URL`` pour compat tests/legacy
-(log warning). En production, ``AUTH_REDIS_URL`` doit pointer vers ``redis-auth``.
-
-Rollout (``AUTH_REDIS_MIGRATION_MODE``) : voir ``auth_redis_migration.py``.
+Modes (``AUTH_REDIS_MIGRATION_MODE``) : voir ``auth_redis_migration.py``.
+``legacy`` → toujours ``REDIS_URL`` ; ``dual_write`` / ``auth_primary`` /
+``auth_only`` → clients dédiés. ``off`` + ``AUTH_REDIS_URL`` distinct est
+interdit en production.
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import threading
@@ -33,7 +34,9 @@ T = TypeVar("T")
 
 
 def _flask_env_name() -> str:
-    flask_env = (os.getenv("FLASK_CONFIG") or os.getenv("FLASK_ENV") or "").strip().lower()
+    flask_env = (
+        (os.getenv("FLASK_CONFIG") or os.getenv("FLASK_ENV") or "").strip().lower()
+    )
     try:
         from flask import current_app, has_app_context
 
@@ -72,11 +75,10 @@ def resolve_dedicated_auth_redis_url() -> str:
 
 
 def resolve_auth_redis_url() -> str:
-    """Résout l'URL du store auth refresh (client unique / mode off).
+    """Résout l'URL pour le client unique historique (mode ``off`` hors prod ambigü).
 
-    Production : ``AUTH_REDIS_URL`` obligatoire (pas de fallback silencieux vers
-    ``REDIS_URL`` / allkeys-lru). Dev/test : fallback autorisé, ou via
-    ``AUTH_REDIS_ALLOW_LEGACY_FALLBACK=1``.
+    Ne pas utiliser pour le mode ``legacy`` (``get_legacy_redis`` obligatoire).
+    Production : ``AUTH_REDIS_URL`` obligatoire si pas de fallback flag.
     """
     dedicated = resolve_dedicated_auth_redis_url()
     general = resolve_legacy_redis_url()
@@ -85,7 +87,9 @@ def resolve_auth_redis_url() -> str:
     if dedicated:
         return dedicated
 
-    allow_legacy = (os.getenv("AUTH_REDIS_ALLOW_LEGACY_FALLBACK") or "").strip().lower() in (
+    allow_legacy = (
+        os.getenv("AUTH_REDIS_ALLOW_LEGACY_FALLBACK") or ""
+    ).strip().lower() in (
         "1",
         "true",
         "yes",
@@ -149,11 +153,18 @@ def get_auth_redis(*, force_new: bool = False) -> Any:
     from security.auth_redis_migration import (
         AuthRedisMigrationMode,
         DualWriteRedisClient,
+        assert_prod_migration_mode_not_ambiguous,
         get_migration_mode,
         migration_requires_dedicated_auth,
     )
 
     mode = get_migration_mode()
+    # Garde runtime (prod) : off + AUTH_REDIS_URL distinct = refuse
+    assert_prod_migration_mode_not_ambiguous()
+
+    # legacy : READ/WRITE = REDIS_URL uniquement (jamais resolve_auth_redis_url)
+    if mode == AuthRedisMigrationMode.LEGACY:
+        return get_legacy_redis(force_new=force_new)
 
     if migration_requires_dedicated_auth():
         dedicated_url = resolve_dedicated_auth_redis_url()
@@ -193,7 +204,7 @@ def get_auth_redis(*, force_new: bool = False) -> Any:
             secondary_label="redis-legacy",
         )
 
-    # Mode off/legacy : client unique (comportement historique)
+    # Mode off : compat tests/dev (prod déjà bloqué si AUTH_REDIS_URL distinct)
     global _client, _client_url
     url = resolve_auth_redis_url()
     if force_new:
@@ -209,14 +220,18 @@ def get_auth_redis(*, force_new: bool = False) -> Any:
 
 def reset_auth_redis_client() -> None:
     """Invalide les singletons (tests / reconfig)."""
-    global _client, _client_url, _legacy_client, _legacy_url, _dedicated_client, _dedicated_url
+    global \
+        _client, \
+        _client_url, \
+        _legacy_client, \
+        _legacy_url, \
+        _dedicated_client, \
+        _dedicated_url
     with _lock:
         for client in (_client, _legacy_client, _dedicated_client):
             if client is not None:
-                try:
+                with contextlib.suppress(Exception):
                     client.close()
-                except Exception:
-                    pass
         _client = None
         _client_url = None
         _legacy_client = None

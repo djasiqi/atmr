@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import uuid
@@ -19,7 +20,10 @@ from security.auth_redis import (
     reset_auth_redis_client,
     resolve_auth_redis_url,
 )
-from security.refresh_token_service import RefreshStoreUnavailableError, update_token_last_used
+from security.refresh_token_service import (
+    RefreshStoreUnavailableError,
+    update_token_last_used,
+)
 
 
 def _sha(token: str) -> str:
@@ -59,13 +63,23 @@ class TestAuthRedisResolver:
         monkeypatch.setenv("FLASK_ENV", "production")
         monkeypatch.delenv("AUTH_REDIS_URL", raising=False)
         with app.app_context():
-            app.config["AUTH_REDIS_URL"] = ""
-            app.config["REDIS_URL"] = "redis://general:6379/0"
-            app.config["ENV"] = "production"
-            app.config["TESTING"] = False
-            app.config["DEBUG"] = False
-            with pytest.raises(RuntimeError, match="AUTH_REDIS_URL"):
-                resolve_auth_redis_url()
+            prev_env = app.config.get("ENV")
+            prev_testing = app.config.get("TESTING")
+            prev_debug = app.config.get("DEBUG")
+            prev_auth = app.config.get("AUTH_REDIS_URL")
+            try:
+                app.config["AUTH_REDIS_URL"] = ""
+                app.config["REDIS_URL"] = "redis://general:6379/0"
+                app.config["ENV"] = "production"
+                app.config["TESTING"] = False
+                app.config["DEBUG"] = False
+                with pytest.raises(RuntimeError, match="AUTH_REDIS_URL"):
+                    resolve_auth_redis_url()
+            finally:
+                app.config["ENV"] = prev_env
+                app.config["TESTING"] = prev_testing
+                app.config["DEBUG"] = prev_debug
+                app.config["AUTH_REDIS_URL"] = prev_auth
 
     def test_production_legacy_fallback_flag_allows(self, app, monkeypatch):
         reset_auth_redis_client()
@@ -73,11 +87,19 @@ class TestAuthRedisResolver:
         monkeypatch.setenv("FLASK_ENV", "production")
         monkeypatch.delenv("AUTH_REDIS_URL", raising=False)
         with app.app_context():
-            app.config["AUTH_REDIS_URL"] = ""
-            app.config["REDIS_URL"] = "redis://general:6379/0"
-            app.config["ENV"] = "production"
-            app.config["TESTING"] = False
-            assert resolve_auth_redis_url() == "redis://general:6379/0"
+            prev_env = app.config.get("ENV")
+            prev_testing = app.config.get("TESTING")
+            prev_auth = app.config.get("AUTH_REDIS_URL")
+            try:
+                app.config["AUTH_REDIS_URL"] = ""
+                app.config["REDIS_URL"] = "redis://general:6379/0"
+                app.config["ENV"] = "production"
+                app.config["TESTING"] = False
+                assert resolve_auth_redis_url() == "redis://general:6379/0"
+            finally:
+                app.config["ENV"] = prev_env
+                app.config["TESTING"] = prev_testing
+                app.config["AUTH_REDIS_URL"] = prev_auth
 
 
 class TestOomFailClosed:
@@ -209,10 +231,8 @@ class TestP0_6RealAuthRedis:
 
             reset_auth_redis_client()
             client = get_auth_redis(force_new=True)
-            try:
+            with contextlib.suppress(Exception):
                 client.bgrewriteaof()
-            except Exception:
-                pass
             reset_auth_redis_client()
             assert (
                 classify_refresh_in_redis(r1, user_id=uid).state
@@ -242,10 +262,8 @@ class TestP0_6RealAuthRedis:
 
             # Assurer de la tête sur auth (tests précédents peuvent saturer)
             auth = get_auth_redis()
-            try:
+            with contextlib.suppress(Exception):
                 auth.config_set("maxmemory", str(2 * 1024 * 1024))
-            except Exception:
-                pass
 
             r0 = f"r0-press-{uuid.uuid4()}"
             publish_refresh_redis(999001, r0, ttl_seconds=600)

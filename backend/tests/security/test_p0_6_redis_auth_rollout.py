@@ -118,7 +118,9 @@ class FakeRedis:
                 n += 1
         return n
 
-    def zrange(self, name: str, start: int, end: int, withscores: bool = False, **kwargs: Any):
+    def zrange(
+        self, name: str, start: int, end: int, withscores: bool = False, **kwargs: Any
+    ):
         bucket = self.zsets.get(name) or {}
         items = sorted(bucket.items(), key=lambda x: x[1])
         if end == -1:
@@ -306,9 +308,7 @@ class TestBackfillAntiResurrection:
             auth.setex(prev_key, 300, '{"successor":"r1"}')
             # R0 absent des deux stores
 
-        stats = backfill_refresh_keys(
-            legacy, auth, dry_run=False, race_hook=race_hook
-        )
+        stats = backfill_refresh_keys(legacy, auth, dry_run=False, race_hook=race_hook)
         assert late_backfill_attempted["n"] >= 1
         assert stats["skipped_stale_race"] >= 1
         assert auth.get(r0_key) is None  # pas de résurrection CURRENT
@@ -337,6 +337,205 @@ class TestBackfillAntiResurrection:
         assert status == "rolled_back_stale"
         assert auth.get(r0_key) is None
 
+    def test_ttl_absolute_not_prolonged_after_elapsed(self, monkeypatch):
+        """PTTL capturé puis écrit plus tard → durée restante, jamais prolongée."""
+        import security.auth_redis_rollout_ops as ops
+
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        key = f"{ACTIVE_PREFIX}ttlskew"
+        legacy.psetex(key, 500, "1")
+
+        clock = {"t": 1000.0}
+        monkeypatch.setattr(ops, "_monotonic", lambda: clock["t"])
+        # Capture à t=1000
+        snap_time = clock["t"]
+        # 300 ms plus tard
+        clock["t"] = snap_time + 0.300
+
+        # Relecture manuelle du chemin copy : forcer capture puis elapsed
+        clock["t"] = snap_time
+        status = copy_key_preserve_ttl(legacy, auth, key, dry_run=False)
+        # Sans avancer l'horloge pendant copy, remaining≈500
+        assert status == "copied"
+        assert auth.pttl(key) == 500
+
+        # Nouveau scénario : snapshot puis écriture différée via monkeypatch interne
+        auth.delete(key)
+        clock["t"] = snap_time
+        snap = ops._read_snapshot(legacy, key)
+        assert snap is not None
+        clock["t"] = snap_time + 0.300
+        remaining = ops._remaining_pttl_ms(snap)
+        assert 199 <= remaining <= 201
+        ops._write_snapshot(auth, snap)
+        assert 199 <= auth.pttl(key) <= 201
+        assert auth.pttl(key) < snap.pttl_ms
+
+    def test_source_expires_before_write_skips(self, monkeypatch):
+        import security.auth_redis_rollout_ops as ops
+
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        key = f"{ACTIVE_PREFIX}expirebefore"
+        legacy.psetex(key, 100, "1")
+        clock = {"t": 0.0}
+        monkeypatch.setattr(ops, "_monotonic", lambda: clock["t"])
+
+        def race_hook(_key: str) -> None:
+            clock["t"] = 0.150  # 150 ms > 100 ms PTTL
+            # Source encore présente pour le test remaining (FakeRedis ne décroît pas)
+            # On simule expiration source :
+            legacy.delete(key)
+
+        status = copy_key_preserve_ttl(
+            legacy, auth, key, dry_run=False, race_hook=race_hook
+        )
+        assert status == "skipped_stale_race"
+        assert auth.get(key) is None
+
+    def test_remaining_zero_skips_expired_without_write(self, monkeypatch):
+        import security.auth_redis_rollout_ops as ops
+
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        key = f"{ACTIVE_PREFIX}expireremain"
+        legacy.psetex(key, 100, "1")
+        clock = {"t": 0.0}
+        monkeypatch.setattr(ops, "_monotonic", lambda: clock["t"])
+        snap = ops._read_snapshot(legacy, key)
+        assert snap is not None
+        clock["t"] = 0.150
+        assert ops._remaining_pttl_ms(snap) <= 0
+        status = copy_key_preserve_ttl(legacy, auth, key, dry_run=False)
+        # copy re-reads snapshot at new time → pttl still 100 in FakeRedis → would copy
+        # Force via direct remaining check path: inject race that advances clock only
+        auth.delete(key)
+
+        def race_hook(_k: str) -> None:
+            clock["t"] = 0.150
+
+        clock["t"] = 0.0
+        status = copy_key_preserve_ttl(
+            legacy, auth, key, dry_run=False, race_hook=race_hook
+        )
+        assert status == "skipped_expired"
+        assert auth.get(key) is None
+
+
+class TestRevokeDualStoreCleanup:
+    def test_revoke_legacy_missing_auth_present_cleans_both(self, app, monkeypatch):
+        """GET legacy vide + CURRENT auth présent → delete auth + revoked dual."""
+        import hashlib
+        from datetime import timedelta
+
+        from services.security.authentication import RefreshTokenService
+
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        token = "revoke-canary-token-xyz"
+        th = hashlib.sha256(token.encode()).hexdigest()
+        uid = "99"
+        # Legacy déjà sans CURRENT ; auth a encore CURRENT + zset
+        auth.setex(f"{ACTIVE_PREFIX}{th}", 3600, uid)
+        auth.zadd(f"user_refresh_tokens:{uid}", {th: 1.0})
+
+        proxy = DualWriteRedisClient(
+            read_client=legacy,
+            write_primary=legacy,
+            write_secondary=auth,
+            mode=AuthRedisMigrationMode.DUAL_WRITE,
+            secondary_label="redis-auth",
+        )
+
+        monkeypatch.setenv("AUTH_REDIS_MIGRATION_MODE", "dual_write")
+        monkeypatch.setenv("AUTH_REDIS_URL", "redis://auth-test:6379/0")
+        monkeypatch.setenv("REDIS_URL", "redis://legacy-test:6379/0")
+        import security.auth_redis as ar
+
+        monkeypatch.setattr(ar, "get_legacy_redis", lambda **kw: legacy)
+        monkeypatch.setattr(ar, "get_dedicated_auth_redis", lambda **kw: auth)
+        monkeypatch.setattr(ar, "get_auth_redis", lambda **kw: proxy)
+        monkeypatch.setattr(ar, "reset_auth_redis_client", lambda: None)
+
+        with app.app_context():
+            app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
+            app.config["AUTH_REDIS_MIGRATION_MODE"] = "dual_write"
+            app.config["AUTH_REDIS_URL"] = "redis://auth-test:6379/0"
+            app.config["REDIS_URL"] = "redis://legacy-test:6379/0"
+            svc = RefreshTokenService()
+            svc.redis_client = proxy
+            svc.revoke_token(token)
+
+        assert legacy.get(f"revoked_refresh_token:{th}") == "revoked"
+        assert auth.get(f"revoked_refresh_token:{th}") == "revoked"
+        assert legacy.get(f"{ACTIVE_PREFIX}{th}") is None
+        assert auth.get(f"{ACTIVE_PREFIX}{th}") is None
+        assert auth.zscore(f"user_refresh_tokens:{uid}", th) is None
+
+    def test_revoke_both_present_normal(self, app, monkeypatch):
+        import hashlib
+        from datetime import timedelta
+
+        from services.security.authentication import RefreshTokenService
+
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        token = "revoke-normal-token"
+        th = hashlib.sha256(token.encode()).hexdigest()
+        uid = "7"
+        for store in (legacy, auth):
+            store.setex(f"{ACTIVE_PREFIX}{th}", 3600, uid)
+            store.zadd(f"user_refresh_tokens:{uid}", {th: 1.0})
+
+        proxy = DualWriteRedisClient(
+            read_client=legacy,
+            write_primary=legacy,
+            write_secondary=auth,
+            mode=AuthRedisMigrationMode.DUAL_WRITE,
+            secondary_label="redis-auth",
+        )
+        monkeypatch.setenv("AUTH_REDIS_MIGRATION_MODE", "dual_write")
+        monkeypatch.setenv("AUTH_REDIS_URL", "redis://auth-test:6379/0")
+        monkeypatch.setenv("REDIS_URL", "redis://legacy-test:6379/0")
+        import security.auth_redis as ar
+
+        monkeypatch.setattr(ar, "get_legacy_redis", lambda **kw: legacy)
+        monkeypatch.setattr(ar, "get_dedicated_auth_redis", lambda **kw: auth)
+        monkeypatch.setattr(ar, "get_auth_redis", lambda **kw: proxy)
+        with app.app_context():
+            app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
+            app.config["AUTH_REDIS_URL"] = "redis://auth-test:6379/0"
+            app.config["REDIS_URL"] = "redis://legacy-test:6379/0"
+            svc = RefreshTokenService()
+            svc.redis_client = proxy
+            svc.revoke_token(token)
+
+        for store in (legacy, auth):
+            assert store.get(f"revoked_refresh_token:{th}") == "revoked"
+            assert store.get(f"{ACTIVE_PREFIX}{th}") is None
+            assert store.zscore(f"user_refresh_tokens:{uid}", th) is None
+
+
+class TestParityExpandedFamilies:
+    def test_parity_gate_includes_revoked_and_zset(self):
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        legacy.setex(f"{ACTIVE_PREFIX}a", 100, "1")
+        auth.setex(f"{ACTIVE_PREFIX}a", 100, "1")
+        legacy.setex("revoked_refresh_token:x", 100, "revoked")
+        # missing revoked in auth
+        report = compare_parity(legacy, auth)
+        assert report.missing_revoked_in_auth == ["revoked_refresh_token:x"]
+        assert parity_gate_pass(report) is False
+
+        auth.setex("revoked_refresh_token:x", 100, "revoked")
+        legacy.zadd("user_refresh_tokens:1", {"a": 1.0})
+        auth.zadd("user_refresh_tokens:1", {"a": 1.0, "extra": 2.0})
+        report2 = compare_parity(legacy, auth)
+        assert report2.mismatched_user_zset == ["user_refresh_tokens:1"]
+        assert parity_gate_pass(report2) is False
+
 
 class TestResolveAuthRedisProduction:
     def test_prod_missing_raises(self, app, monkeypatch):
@@ -347,13 +546,23 @@ class TestResolveAuthRedisProduction:
         monkeypatch.setenv("FLASK_ENV", "production")
         monkeypatch.delenv("AUTH_REDIS_URL", raising=False)
         with app.app_context():
-            app.config["AUTH_REDIS_URL"] = ""
-            app.config["REDIS_URL"] = "redis://general:6379/0"
-            app.config["ENV"] = "production"
-            app.config["TESTING"] = False
-            app.config["DEBUG"] = False
-            with pytest.raises(RuntimeError, match="AUTH_REDIS_URL"):
-                resolve_auth_redis_url()
+            prev_env = app.config.get("ENV")
+            prev_testing = app.config.get("TESTING")
+            prev_debug = app.config.get("DEBUG")
+            prev_auth = app.config.get("AUTH_REDIS_URL")
+            try:
+                app.config["AUTH_REDIS_URL"] = ""
+                app.config["REDIS_URL"] = "redis://general:6379/0"
+                app.config["ENV"] = "production"
+                app.config["TESTING"] = False
+                app.config["DEBUG"] = False
+                with pytest.raises(RuntimeError, match="AUTH_REDIS_URL"):
+                    resolve_auth_redis_url()
+            finally:
+                app.config["ENV"] = prev_env
+                app.config["TESTING"] = prev_testing
+                app.config["DEBUG"] = prev_debug
+                app.config["AUTH_REDIS_URL"] = prev_auth
 
     def test_get_auth_redis_dual_write_requires_distinct_urls(self, app, monkeypatch):
         from security.auth_redis import get_auth_redis, reset_auth_redis_client
@@ -363,11 +572,20 @@ class TestResolveAuthRedisProduction:
         monkeypatch.setenv("AUTH_REDIS_URL", "redis://same:6379/0")
         monkeypatch.setenv("REDIS_URL", "redis://same:6379/0")
         with app.app_context():
-            app.config["AUTH_REDIS_MIGRATION_MODE"] = "dual_write"
-            app.config["AUTH_REDIS_URL"] = "redis://same:6379/0"
-            app.config["REDIS_URL"] = "redis://same:6379/0"
-            with pytest.raises(RuntimeError, match="distincts"):
-                get_auth_redis(force_new=True)
+            prev_mode = app.config.get("AUTH_REDIS_MIGRATION_MODE")
+            prev_auth = app.config.get("AUTH_REDIS_URL")
+            prev_redis = app.config.get("REDIS_URL")
+            try:
+                app.config["AUTH_REDIS_MIGRATION_MODE"] = "dual_write"
+                app.config["AUTH_REDIS_URL"] = "redis://same:6379/0"
+                app.config["REDIS_URL"] = "redis://same:6379/0"
+                with pytest.raises(RuntimeError, match="distincts"):
+                    get_auth_redis(force_new=True)
+            finally:
+                app.config["AUTH_REDIS_MIGRATION_MODE"] = prev_mode
+                app.config["AUTH_REDIS_URL"] = prev_auth
+                app.config["REDIS_URL"] = prev_redis
+                reset_auth_redis_client()
 
 
 class TestP02CompensationDualRedis:
@@ -418,15 +636,12 @@ class TestP02CompensationDualRedis:
         svc.redis_client = proxy
         svc._hash_token = self._sha
 
-        with patch("security.refresh_redis_rotation._svc", return_value=svc):
-            with patch(
-                "security.auth_redis.get_legacy_redis", return_value=legacy
-            ):
-                with patch(
-                    "security.auth_redis.get_dedicated_auth_redis",
-                    return_value=auth,
-                ):
-                    compensate_redis_issuance(handle)
+        with (
+            patch("security.refresh_redis_rotation._svc", return_value=svc),
+            patch("security.auth_redis.get_legacy_redis", return_value=legacy),
+            patch("security.auth_redis.get_dedicated_auth_redis", return_value=auth),
+        ):
+            compensate_redis_issuance(handle)
 
         assert legacy.get(f"{ACTIVE_PREFIX}{h0}") == str(uid)
         assert auth.get(f"{ACTIVE_PREFIX}{h0}") == str(uid)
@@ -454,9 +669,9 @@ class TestP02CompensationDualRedis:
         assert legacy.get(f"{ACTIVE_PREFIX}ok") == "1"
         report = compare_parity(legacy, BoomRedis())
         # Divergence attendue (extra/missing) — gate parité échouerait
-        assert parity_gate_pass(report) is False or legacy.get(
-            f"{ACTIVE_PREFIX}ok"
-        ) == "1"
+        assert (
+            parity_gate_pass(report) is False or legacy.get(f"{ACTIVE_PREFIX}ok") == "1"
+        )
 
     def test_auth_primary_legacy_secondary_fail_refresh_ok(self):
         auth = FakeRedis()
@@ -514,20 +729,233 @@ class TestP02CompensationDualRedis:
         svc.redis_client = proxy
         svc._hash_token = self._sha
 
-        with patch("security.refresh_redis_rotation._svc", return_value=svc):
-            with patch(
-                "security.auth_redis.get_legacy_redis", return_value=legacy
-            ):
-                with patch(
-                    "security.auth_redis.get_dedicated_auth_redis",
-                    return_value=auth,
-                ):
-                    compensate_redis_issuance(handle)
+        with (
+            patch("security.refresh_redis_rotation._svc", return_value=svc),
+            patch("security.auth_redis.get_legacy_redis", return_value=legacy),
+            patch("security.auth_redis.get_dedicated_auth_redis", return_value=auth),
+        ):
+            compensate_redis_issuance(handle)
 
         assert auth.get(f"{ACTIVE_PREFIX}{h0}") == str(uid)
         assert legacy.get(f"{ACTIVE_PREFIX}{h0}") == str(uid)
         assert auth.get(f"{ACTIVE_PREFIX}{h1}") is None
         assert legacy.get(f"{ACTIVE_PREFIX}{h1}") is None
+
+
+class TestLegacyModeIsolation:
+    """A/B — mode=legacy : READ/WRITE uniquement REDIS_URL (jamais redis-auth)."""
+
+    @staticmethod
+    def _sha(token: str) -> str:
+        import hashlib
+
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    def test_a_legacy_store_token_writes_legacy_only(self, app, monkeypatch):
+        from datetime import timedelta
+
+        from services.security.authentication import RefreshTokenService
+
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        token = "legacy-store-token-abc"
+        th = self._sha(token)
+        uid = 55
+
+        monkeypatch.setenv("AUTH_REDIS_MIGRATION_MODE", "legacy")
+        monkeypatch.setenv("AUTH_REDIS_URL", "redis://auth-isolated:6379/0")
+        monkeypatch.setenv("REDIS_URL", "redis://legacy-isolated:6379/0")
+        import security.auth_redis as ar
+
+        ar.reset_auth_redis_client()
+        monkeypatch.setattr(ar, "get_legacy_redis", lambda **kw: legacy)
+        monkeypatch.setattr(ar, "get_dedicated_auth_redis", lambda **kw: auth)
+
+        with app.app_context():
+            app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
+            app.config["AUTH_REDIS_MIGRATION_MODE"] = "legacy"
+            app.config["AUTH_REDIS_URL"] = "redis://auth-isolated:6379/0"
+            app.config["REDIS_URL"] = "redis://legacy-isolated:6379/0"
+            client = ar.get_auth_redis(force_new=True)
+            assert client is legacy
+            svc = RefreshTokenService()
+            svc.redis_client = client
+            svc.store_token(uid, token, ttl_seconds=3600)
+
+        assert legacy.get(f"{ACTIVE_PREFIX}{th}") == str(uid)
+        assert auth.get(f"{ACTIVE_PREFIX}{th}") is None
+        assert auth.kv == {}
+
+    def test_b_legacy_revoke_operates_legacy_only(self, app, monkeypatch):
+        from datetime import timedelta
+
+        from services.security.authentication import RefreshTokenService
+
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        token = "legacy-revoke-token-xyz"
+        th = self._sha(token)
+        uid = "12"
+        legacy.setex(f"{ACTIVE_PREFIX}{th}", 3600, uid)
+        legacy.zadd(f"user_refresh_tokens:{uid}", {th: 1.0})
+        # auth a une clé « fantôme » : ne doit pas être touchée
+        auth.setex(f"{ACTIVE_PREFIX}{th}", 3600, uid)
+        auth.zadd(f"user_refresh_tokens:{uid}", {th: 1.0})
+
+        monkeypatch.setenv("AUTH_REDIS_MIGRATION_MODE", "legacy")
+        monkeypatch.setenv("AUTH_REDIS_URL", "redis://auth-isolated:6379/0")
+        monkeypatch.setenv("REDIS_URL", "redis://legacy-isolated:6379/0")
+        import security.auth_redis as ar
+
+        ar.reset_auth_redis_client()
+        monkeypatch.setattr(ar, "get_legacy_redis", lambda **kw: legacy)
+        monkeypatch.setattr(ar, "get_dedicated_auth_redis", lambda **kw: auth)
+
+        with app.app_context():
+            app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
+            app.config["AUTH_REDIS_MIGRATION_MODE"] = "legacy"
+            app.config["AUTH_REDIS_URL"] = "redis://auth-isolated:6379/0"
+            app.config["REDIS_URL"] = "redis://legacy-isolated:6379/0"
+            client = ar.get_auth_redis(force_new=True)
+            assert client is legacy
+            svc = RefreshTokenService()
+            svc.redis_client = client
+            svc.revoke_token(token)
+
+        assert legacy.get(f"revoked_refresh_token:{th}") == "revoked"
+        assert legacy.get(f"{ACTIVE_PREFIX}{th}") is None
+        assert legacy.zscore(f"user_refresh_tokens:{uid}", th) is None
+        # auth inchangé (jamais contacté)
+        assert auth.get(f"{ACTIVE_PREFIX}{th}") == uid
+        assert auth.zscore(f"user_refresh_tokens:{uid}", th) == 1.0
+        assert auth.get(f"revoked_refresh_token:{th}") is None
+
+
+class TestProdOffAmbiguousGuard:
+    """C — production + off + AUTH_REDIS_URL distinct → refuse."""
+
+    def test_c_assert_prod_off_distinct_raises(self, monkeypatch):
+        from security.auth_redis import reset_auth_redis_client
+        from security.auth_redis_migration import (
+            assert_prod_migration_mode_not_ambiguous,
+        )
+
+        reset_auth_redis_client()
+        monkeypatch.setenv("FLASK_ENV", "production")
+        monkeypatch.setenv("FLASK_CONFIG", "production")
+        monkeypatch.setenv("AUTH_REDIS_MIGRATION_MODE", "off")
+        monkeypatch.setenv("AUTH_REDIS_URL", "redis://auth-prod:6379/0")
+        monkeypatch.setenv("REDIS_URL", "redis://legacy-prod:6379/0")
+        with pytest.raises(RuntimeError, match="off est interdit"):
+            assert_prod_migration_mode_not_ambiguous()
+
+    def test_c_validate_required_env_vars_rejects_off(self, monkeypatch):
+        from app import validate_required_env_vars
+
+        monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-for-guard")
+        monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@db:5432/atmr")
+        monkeypatch.setenv("REDIS_URL", "redis://legacy-prod:6379/0")
+        monkeypatch.setenv("AUTH_REDIS_URL", "redis://auth-prod:6379/0")
+        monkeypatch.setenv("AUTH_REDIS_MIGRATION_MODE", "off")
+        monkeypatch.setenv(
+            "SOCKETIO_CORS_ORIGINS", "https://app.example.com"
+        )
+        with pytest.raises(RuntimeError, match="off interdit"):
+            validate_required_env_vars("production")
+
+    def test_c_dev_off_distinct_allowed(self, monkeypatch):
+        from security.auth_redis_migration import (
+            assert_prod_migration_mode_not_ambiguous,
+        )
+
+        monkeypatch.setenv("FLASK_ENV", "development")
+        monkeypatch.setenv("FLASK_CONFIG", "development")
+        monkeypatch.setenv("AUTH_REDIS_MIGRATION_MODE", "off")
+        monkeypatch.setenv("AUTH_REDIS_URL", "redis://auth-dev:6379/0")
+        monkeypatch.setenv("REDIS_URL", "redis://legacy-dev:6379/0")
+        # Ne doit pas lever hors production
+        assert_prod_migration_mode_not_ambiguous()
+
+
+class TestModeContractGetAuthRedis:
+    """D/E/F — dual_write / auth_primary / auth_only inchangés via get_auth_redis."""
+
+    def test_d_dual_write_read_legacy_write_both(self, app, monkeypatch):
+        import security.auth_redis as ar
+        from security.auth_redis_migration import DualWriteRedisClient
+
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        monkeypatch.setenv("AUTH_REDIS_MIGRATION_MODE", "dual_write")
+        monkeypatch.setenv("AUTH_REDIS_URL", "redis://auth-dw:6379/0")
+        monkeypatch.setenv("REDIS_URL", "redis://legacy-dw:6379/0")
+        ar.reset_auth_redis_client()
+        monkeypatch.setattr(ar, "get_legacy_redis", lambda **kw: legacy)
+        monkeypatch.setattr(ar, "get_dedicated_auth_redis", lambda **kw: auth)
+
+        with app.app_context():
+            app.config["AUTH_REDIS_MIGRATION_MODE"] = "dual_write"
+            app.config["AUTH_REDIS_URL"] = "redis://auth-dw:6379/0"
+            app.config["REDIS_URL"] = "redis://legacy-dw:6379/0"
+            client = ar.get_auth_redis(force_new=True)
+            assert isinstance(client, DualWriteRedisClient)
+            client.setex(f"{ACTIVE_PREFIX}dw", 10, "1")
+
+        assert legacy.get(f"{ACTIVE_PREFIX}dw") == "1"
+        assert auth.get(f"{ACTIVE_PREFIX}dw") == "1"
+        legacy.set(f"{ACTIVE_PREFIX}only_l", "x")
+        assert client.get(f"{ACTIVE_PREFIX}only_l") == "x"
+        assert auth.get(f"{ACTIVE_PREFIX}only_l") is None
+
+    def test_e_auth_primary_read_auth_write_both(self, app, monkeypatch):
+        import security.auth_redis as ar
+        from security.auth_redis_migration import DualWriteRedisClient
+
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        monkeypatch.setenv("AUTH_REDIS_MIGRATION_MODE", "auth_primary")
+        monkeypatch.setenv("AUTH_REDIS_URL", "redis://auth-ap:6379/0")
+        monkeypatch.setenv("REDIS_URL", "redis://legacy-ap:6379/0")
+        ar.reset_auth_redis_client()
+        monkeypatch.setattr(ar, "get_legacy_redis", lambda **kw: legacy)
+        monkeypatch.setattr(ar, "get_dedicated_auth_redis", lambda **kw: auth)
+
+        with app.app_context():
+            app.config["AUTH_REDIS_MIGRATION_MODE"] = "auth_primary"
+            app.config["AUTH_REDIS_URL"] = "redis://auth-ap:6379/0"
+            app.config["REDIS_URL"] = "redis://legacy-ap:6379/0"
+            client = ar.get_auth_redis(force_new=True)
+            assert isinstance(client, DualWriteRedisClient)
+            client.setex(f"{ACTIVE_PREFIX}ap", 10, "7")
+
+        assert auth.get(f"{ACTIVE_PREFIX}ap") == "7"
+        assert legacy.get(f"{ACTIVE_PREFIX}ap") == "7"
+        # lecture = auth uniquement (pas de fallback legacy)
+        legacy.setex(f"{ACTIVE_PREFIX}legacy_only", 60, "99")
+        assert client.get(f"{ACTIVE_PREFIX}legacy_only") is None
+
+    def test_f_auth_only_writes_auth_not_legacy(self, app, monkeypatch):
+        import security.auth_redis as ar
+
+        legacy = FakeRedis()
+        auth = FakeRedis()
+        monkeypatch.setenv("AUTH_REDIS_MIGRATION_MODE", "auth_only")
+        monkeypatch.setenv("AUTH_REDIS_URL", "redis://auth-ao:6379/0")
+        monkeypatch.setenv("REDIS_URL", "redis://legacy-ao:6379/0")
+        ar.reset_auth_redis_client()
+        monkeypatch.setattr(ar, "get_legacy_redis", lambda **kw: legacy)
+        monkeypatch.setattr(ar, "get_dedicated_auth_redis", lambda **kw: auth)
+
+        with app.app_context():
+            app.config["AUTH_REDIS_MIGRATION_MODE"] = "auth_only"
+            app.config["AUTH_REDIS_URL"] = "redis://auth-ao:6379/0"
+            app.config["REDIS_URL"] = "redis://legacy-ao:6379/0"
+            client = ar.get_auth_redis(force_new=True)
+            assert client is auth
+            client.setex(f"{ACTIVE_PREFIX}ao", 10, "3")
+
+        assert auth.get(f"{ACTIVE_PREFIX}ao") == "3"
+        assert legacy.get(f"{ACTIVE_PREFIX}ao") is None
 
 
 class TestDeployBootstrapGuard:
@@ -551,9 +979,9 @@ class TestDeployBootstrapGuard:
         assert "wait_redis_auth_ready" in text
         assert "AUTH_REDIS_URL absent" in text
         assert "NE JAMAIS déployer le backend fail-closed" in text
-        idx_auth = text.find(
-            "compose_prod up -d postgres pgbouncer redis redis-auth"
-        )
+        assert "AUTH_REDIS_MIGRATION_MODE" in text
+        assert "off interdit" in text
+        idx_auth = text.find("compose_prod up -d postgres pgbouncer redis redis-auth")
         idx_backend = text.find("compose_prod up -d backend")
         assert idx_auth > 0
         assert idx_backend > idx_auth
