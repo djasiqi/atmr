@@ -42,7 +42,7 @@
     "react-select": "^5.10.1",
     "react-slick": "^0.30.3",
     "react-toastify": "^11.0.5",
-    "react-window": "^2.2.1",
+    "react-window": "^2.2.7",
     "react-yearly-calendar": "^1.2.6",
     "recharts": "^2.15.1",
     "redux": "^5.0.1",
