@@ -70,17 +70,25 @@ class TestRefreshEndpoint:
         )
         assert login.status_code == 200
         rt = login.get_json()["refresh_token"]
-        with patch("routes.auth.RefreshTokenService") as svc_cls:
-            instance = svc_cls.return_value
-            instance.is_token_valid.side_effect = RefreshStoreUnavailableError(
-                "redis_unavailable"
-            )
-            instance.store_token = lambda *a, **k: None
-            instance.touch_token_score = lambda *a, **k: None
-            instance.limit_active_tokens = lambda *a, **k: None
+        with patch(
+            "routes.auth.classify_refresh_in_redis",
+            create=True,
+        ):
+            pass
+        from security.refresh_redis_rotation import RedisClassifyResult, RedisRefreshState
+
+        with patch(
+            "security.refresh_redis_rotation.classify_refresh_in_redis",
+            return_value=RedisClassifyResult(state=RedisRefreshState.UNAVAILABLE),
+        ):
             resp = client.post(
                 "/api/v1/auth/refresh-token",
                 json={"refresh_token": rt},
-                headers={"X-Requested-With": "Expo"},
+                headers={
+                    "X-Requested-With": "Expo",
+                    "X-Device-ID": "dev-test",
+                    "X-Auth-Contract-Version": "mobile-device-session-v1",
+                    "Idempotency-Key": "idem-503-test",
+                },
             )
         assert resp.status_code == 503

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Callable, Protocol
@@ -151,14 +150,13 @@ class SwitchToEnterpriseUseCase:
 
         storer = self._store_refresh_token
         if storer is not None:
-            with contextlib.suppress(Exception):
-                storer(
-                    token=refresh_token,
-                    user_id=company_user.id,
-                    expires_at=self._now_utc() + cmd.refresh_expires_delta,
-                    device_id=cmd.device_id,
-                    device_name=cmd.device_name,
-                )
+            storer(
+                token=refresh_token,
+                user_id=company_user.id,
+                expires_at=self._now_utc() + cmd.refresh_expires_delta,
+                device_id=cmd.device_id,
+                device_name=cmd.device_name,
+            )
 
         return SwitchToEnterpriseResult(
             response={

@@ -255,23 +255,32 @@ def create_web_handoff_session_response(
     )
 
     refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
-    store_refresh_token(
-        token=refresh_token,
-        user_id=user.id,
-        expires_at=refresh_expires_at,
-        device_id=None,
-        device_name="Web handoff",
-        commit=False,
-    )
-    db.session.commit()
+    try:
+        store_refresh_token(
+            token=refresh_token,
+            user_id=user.id,
+            expires_at=refresh_expires_at,
+            device_id=None,
+            device_name="Web handoff",
+            commit=False,
+            sync_redis=False,
+        )
+        from security.refresh_redis_rotation import (
+            commit_db_after_redis,
+            publish_refresh_redis,
+        )
 
-    token_service = RefreshTokenService()
-    with suppress(Exception):
-        token_service.store_token(
+        handle = publish_refresh_redis(
             user.id,
             refresh_token,
             ttl_seconds=int(refresh_expires_delta.total_seconds()),
         )
+        commit_db_after_redis(handle)
+    except Exception:
+        db.session.rollback()
+        raise
+
+    token_service = RefreshTokenService()
     with suppress(Exception):
         token_service.limit_active_tokens(
             user.id, _resolve_max_active_refresh_tokens(user)

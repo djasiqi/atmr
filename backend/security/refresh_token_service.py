@@ -55,6 +55,46 @@ def _hash_refresh_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def sync_refresh_token_to_redis(
+    user_id: int,
+    token: str,
+    *,
+    ttl_seconds: int | None = None,
+) -> None:
+    """Écrit le refresh dans Redis (clés actives).
+
+    Contrat P0-1 : en fail-closed (prod / ``REFRESH_FAIL_CLOSED``), toute
+    indisponibilité Redis lève ``RefreshStoreUnavailableError`` — l'appelant
+    ne doit **pas** remettre le JWT au client. Hors fail-closed : best-effort
+    (log + retour silencieux).
+    """
+    from services.security.authentication import RefreshTokenService
+
+    try:
+        RefreshTokenService().store_token(
+            user_id, token, ttl_seconds=ttl_seconds
+        )
+    except RefreshStoreUnavailableError:
+        raise
+    except Exception as exc:
+        logger.error(
+            "sync_refresh_token_to_redis failed user_id=%s err=%s",
+            user_id,
+            type(exc).__name__,
+        )
+        if refresh_fail_closed_enabled():
+            raise RefreshStoreUnavailableError("redis_unavailable") from exc
+        logger.warning(
+            "Redis sync skipped (fail-open) user_id=%s: %s", user_id, exc
+        )
+
+
+def _ttl_seconds_until(expires_at: datetime) -> int:
+    now = datetime.now(UTC)
+    exp = expires_at if expires_at.tzinfo else expires_at.replace(tzinfo=UTC)
+    return max(int((exp - now).total_seconds()), 1)
+
+
 def store_refresh_token(
     token: str,
     user_id: int,
@@ -64,8 +104,10 @@ def store_refresh_token(
     *,
     web_session_id: str | None = None,
     commit: bool = True,
+    sync_redis: bool | None = None,
+    redis_ttl_seconds: int | None = None,
 ) -> RefreshToken:
-    """Stocke un refresh token dans la base de données.
+    """Stocke un refresh token en DB, et synchronise Redis selon le contrat P0-1.
 
     Args:
         token: Le refresh token JWT en clair
@@ -74,9 +116,18 @@ def store_refresh_token(
         device_id: ID de l'appareil (optionnel)
         device_name: Nom de l'appareil (optionnel)
         commit: Si False, n'appelle pas db.session.commit() (transaction atomique F1b)
+        sync_redis: Si None, suit ``commit`` (True⇒sync après commit, False⇒pas de
+            sync — l'appelant doit appeler ``sync_refresh_token_to_redis`` avant
+            de considérer l'émission réussie). Passer True avec commit=False pour
+            sync Redis **avant** le commit appelant (rollback possible si échec).
+        redis_ttl_seconds: TTL Redis explicite ; sinon dérivé de ``expires_at``.
 
     Returns:
         L'objet RefreshToken créé
+
+    Raises:
+        RefreshStoreUnavailableError: sync Redis requis en fail-closed a échoué.
+            Si ``commit=True``, la ligne DB vient d'être révoquée avant la raise.
     """
     token_hash = _hash_refresh_token(token)
 
@@ -96,15 +147,61 @@ def store_refresh_token(
     refresh_token.is_revoked = False
 
     db.session.add(refresh_token)
+
+    do_sync = commit if sync_redis is None else bool(sync_redis)
+    ttl = redis_ttl_seconds if redis_ttl_seconds is not None else _ttl_seconds_until(
+        expires_at
+    )
+
+    if not commit and do_sync:
+        # Redis avant commit appelant : échec → raise, TX peut rollback.
+        sync_refresh_token_to_redis(user_id, token, ttl_seconds=ttl)
+
     if commit:
         db.session.commit()
+        if do_sync:
+            try:
+                sync_refresh_token_to_redis(user_id, token, ttl_seconds=ttl)
+            except RefreshStoreUnavailableError:
+                # Ne pas laisser un refresh « DB ok / Redis absent » au client.
+                try:
+                    revoke_refresh_token(token, reason="redis_sync_failed")
+                except Exception:
+                    logger.exception(
+                        "revoke après échec Redis sync impossible user_id=%s",
+                        user_id,
+                    )
+                raise
+
     logger.debug(
-        "Refresh token stocké pour user_id=%d (device_id=%s)", user_id, device_id
+        "Refresh token stocké pour user_id=%d (device_id=%s sync_redis=%s)",
+        user_id,
+        device_id,
+        do_sync,
     )
     return refresh_token
 
 
-ROTATION_GRACE_WINDOW_SECONDS = 300  # 5 minutes (mobile-safe)
+ROTATION_GRACE_WINDOW_SECONDS = 300  # 5 minutes (mobile-safe) — défaut P0-2
+
+
+def rotation_grace_seconds() -> int:
+    """Alias configurable (REFRESH_ROTATION_GRACE_SECONDS, défaut 300)."""
+    from security.refresh_redis_rotation import rotation_grace_seconds as _grace
+
+    return _grace()
+
+
+def _within_rotation_grace(anchor: datetime | None, now: datetime | None = None) -> bool:
+    """True si age < grâce (convention : 299s OK, 300s rejeté)."""
+    if anchor is None:
+        return False
+    now = now or datetime.now(UTC)
+    if anchor.tzinfo is None:
+        anchor = anchor.replace(tzinfo=UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    return (now - anchor).total_seconds() < float(rotation_grace_seconds())
 
 
 def mark_token_rotated(old_token: str, new_token: str, *, commit: bool = True) -> bool:
@@ -221,31 +318,40 @@ def is_token_revoked(
         if (
             grace_window
             and token_record.revoked_reason == "Rotation automatique du token"
-            and token_record.revoked_at is not None
-            and (now - token_record.revoked_at).total_seconds()
-            < ROTATION_GRACE_WINDOW_SECONDS
+            and _within_rotation_grace(token_record.revoked_at, now)
         ):
             logger.info(
                 "Token revoked by legacy rotation but in grace window (%ds) — accepted (user_id=%d)",
-                ROTATION_GRACE_WINDOW_SECONDS,
+                rotation_grace_seconds(),
                 token_record.user_id,
             )
             return False
 
+        # P0-2 : same-device superseded ≠ acceptation indéfinie.
+        # Uniquement dans la fenêtre de grâce → recovery du successeur (pas re-rotate).
         if (
             token_record.revoked_reason == "Superseded (new token used)"
             and effective_device_id
             and token_record.device_id
             and token_record.device_id == effective_device_id
         ):
+            if _within_rotation_grace(token_record.revoked_at, now):
+                logger.warning(
+                    "refresh_reuse_same_device: superseded within grace "
+                    "(user_id=%d, hash=%s, device_id=%s, action=recover_only)",
+                    token_record.user_id,
+                    token_hash[:8],
+                    effective_device_id,
+                )
+                return False
             logger.warning(
-                "refresh_reuse_same_device: superseded token reused on same device "
-                "(user_id=%d, hash=%s, device_id=%s, action=accept)",
+                "refresh_reuse_same_device: superseded outside grace — rejected "
+                "(user_id=%d, hash=%s, device_id=%s)",
                 token_record.user_id,
                 token_hash[:8],
                 effective_device_id,
             )
-            return False
+            return True
 
         logger.debug(
             "Token révoqué (user_id=%d, reason=%s)",
@@ -282,21 +388,31 @@ def is_token_revoked(
 
         if new_record.last_used_at is not None:
             # Le nouveau token a deja ete utilise → reuse detection
+            grace_anchor = token_record.rotated_at or new_record.last_used_at
             if (
                 effective_device_id
                 and token_record.device_id
                 and token_record.device_id == effective_device_id
             ):
+                if _within_rotation_grace(grace_anchor, now):
+                    logger.warning(
+                        "refresh_reuse_same_device: old token within grace after new used "
+                        "(user_id=%d, old=%s, new=%s, device_id=%s, action=recover_only)",
+                        token_record.user_id,
+                        token_hash[:8],
+                        token_record.rotated_to_hash[:8],
+                        effective_device_id,
+                    )
+                    # Ne pas _supersede ici : laisse le lien rotated_to_hash pour recovery.
+                    return False
                 logger.warning(
-                    "refresh_reuse_same_device: old token reused after new was used "
-                    "(user_id=%d, old=%s, new=%s, device_id=%s, action=supersede_only)",
+                    "refresh_reuse_same_device: old token outside grace after new used "
+                    "(user_id=%d, old=%s, action=reject)",
                     token_record.user_id,
                     token_hash[:8],
-                    token_record.rotated_to_hash[:8],
-                    effective_device_id,
                 )
                 _supersede_old_token(token_record)
-                return False
+                return True
 
             logger.warning(
                 "refresh_reuse_detected: old token reused after new was used "
@@ -311,12 +427,19 @@ def is_token_revoked(
             )
             return True
 
-        # Le nouveau n'a pas encore ete utilise → ancien accepte
+        # Nouveau pas encore utilisé : ancien accepté uniquement dans la grâce.
+        if _within_rotation_grace(token_record.rotated_at, now):
+            logger.info(
+                "refresh_soft_rotated: new token not yet used — old accepted in grace "
+                "(user_id=%d)",
+                token_record.user_id,
+            )
+            return False
         logger.info(
-            "refresh_soft_rotated: new token not yet used — old accepted (user_id=%d)",
+            "refresh_soft_rotated: grace expired — old rejected (user_id=%d)",
             token_record.user_id,
         )
-        return False
+        return True
 
     return False
 
@@ -517,7 +640,7 @@ def get_user_active_sessions(user_id: int) -> list[RefreshToken]:
     )
 
 
-def update_token_last_used(token: str) -> None:
+def update_token_last_used(token: str, *, commit: bool = True) -> None:
     """Met a jour la date de derniere utilisation d'un token.
 
     Supersede automatiquement tout ancien token qui a ete rotate vers celui-ci
@@ -525,6 +648,8 @@ def update_token_last_used(token: str) -> None:
 
     Args:
         token: Le refresh token JWT en clair
+        commit: Si False, laisse le commit à l'appelant (ex. transaction FOR UPDATE
+            refresh mobile — un commit anticipé libérerait le verrou de session).
     """
     token_hash = _hash_refresh_token(token)
 
@@ -539,7 +664,8 @@ def update_token_last_used(token: str) -> None:
         for old in old_tokens:
             _supersede_old_token(old, commit=False)
 
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
 
 def revoke_refresh_tokens_for_web_session(

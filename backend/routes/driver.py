@@ -33,6 +33,7 @@ from middleware.trace_id import get_trace_id
 from models import DelayEvent, Driver
 from models.enums import BookingStatus, DriverType, UserRole
 from routes.db_error_utils import format_integrity_error
+from security.refresh_token_service import RefreshStoreUnavailableError
 from services.company_driver_location_freshness import (
     last_seen_seconds_from_location_fields,
 )
@@ -4440,7 +4441,7 @@ class SwitchToEnterprise(Resource):
                     device_id: str | None,
                     device_name: str | None,
                 ) -> None:
-                    from routes.auth import store_refresh_token
+                    from security.refresh_token_service import store_refresh_token
 
                     store_refresh_token(
                         token=token,
@@ -4479,6 +4480,14 @@ class SwitchToEnterprise(Resource):
                 result = uc_res.response
                 status_code = uc_res.status_code
 
+        except RefreshStoreUnavailableError:
+            result = {
+                "error": "service_unavailable",
+                "error_code": "store_unavailable",
+                "retryable": True,
+                "message": "Stockage session indisponible. Réessayez.",
+            }
+            status_code = 503
         except (ValueError, TypeError, AttributeError) as e:
             logger.warning(
                 "❌ Erreur validation lors switch-to-enterprise: %s - %s",

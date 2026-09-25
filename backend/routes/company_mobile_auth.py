@@ -1072,8 +1072,6 @@ class SwitchToDriver(Resource):
             create_refresh_token,
         )
 
-        from routes.auth import store_refresh_token
-
         user_public_id = get_jwt_identity()
         logger.info("[SwitchToDriver] user_public_id=%s", user_public_id)
         # ✅ DDD: Utilise use-case au lieu de service directement
@@ -1200,13 +1198,19 @@ class SwitchToDriver(Resource):
             ),
         )
 
-        # Stocker le refresh token dans la DB (comme pour le login normal)
+        # Stocker le refresh token dans la DB + Redis (contrat P0-1)
         try:
             # ✅ PHASE 4 : Augmentation de la durée du refresh token à 90 jours
             refresh_expires_delta = current_app.config.get(
                 "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=90)
             )
             refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
+            from security.refresh_token_service import (
+                RefreshStoreUnavailableError,
+                refresh_fail_closed_enabled,
+                store_refresh_token,
+            )
+
             store_refresh_token(
                 token=refresh_token,
                 user_id=driver_user.id,  # Utiliser le user_id du driver_user
@@ -1214,8 +1218,23 @@ class SwitchToDriver(Resource):
                 device_id=request.headers.get("X-Device-ID"),
                 device_name=request.headers.get("X-Device-Name"),
             )
+        except RefreshStoreUnavailableError:
+            return {
+                "error": "service_unavailable",
+                "error_code": "store_unavailable",
+                "retryable": True,
+                "message": "Stockage session indisponible. Réessayez.",
+            }, 503
         except Exception as store_error:
             logger.warning("Échec stockage refresh token driver: %s", store_error)
+            from security.refresh_token_service import refresh_fail_closed_enabled
+
+            if refresh_fail_closed_enabled():
+                return {
+                    "error": "service_unavailable",
+                    "error_code": "store_unavailable",
+                    "retryable": True,
+                }, 503
 
         return (
             {

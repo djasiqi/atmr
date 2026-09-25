@@ -106,6 +106,7 @@ from security.refresh_token_service import (
     revoke_refresh_token,
     revoke_tokens_for_session,
     store_refresh_token,
+    sync_refresh_token_to_redis,
     update_token_last_used,
 )
 from security.security_metrics import (
@@ -1627,6 +1628,7 @@ def _login_post_body():
             device_name=device_name,
             web_session_id=str(web_session.id) if web_session is not None else None,
             commit=False,
+            sync_redis=False,
         )
         if mobile_session is not None and hasattr(
             stored_refresh_token_row, "session_id"
@@ -1635,15 +1637,21 @@ def _login_post_body():
             stored_refresh_token_row.session_generation = int(
                 getattr(mobile_session, "session_epoch", mobile_session.generation) or 1
             )
-        db.session.commit()
+        # P0-1 : Redis avant commit — pas de token client si Redis fail-closed.
+        from security.refresh_redis_rotation import (
+            commit_db_after_redis,
+            publish_refresh_redis,
+        )
 
-        # Redis best-effort après commit SQL
-        with suppress(Exception):
-            token_service.store_token(
-                user.id,
-                refresh_token,
-                ttl_seconds=int(refresh_expires_delta.total_seconds()),
-            )
+        redis_handle = publish_refresh_redis(
+            user.id,
+            refresh_token,
+            ttl_seconds=int(refresh_expires_delta.total_seconds()),
+        )
+        try:
+            commit_db_after_redis(redis_handle)
+        except Exception:
+            raise
 
         # Sessions provisional reaped pendant create/reuse → marqueur négatif post-commit
         if mobile_reaped_session_ids:
@@ -1658,16 +1666,31 @@ def _login_post_body():
         if not is_mobile_request:
             max_active_tokens = _resolve_max_active_refresh_tokens(user)
             token_service.limit_active_tokens(user.id, max_active_tokens)
+    except RefreshStoreUnavailableError as store_error:
+        db.session.rollback()
+        logger.error(
+            "Échec stockage refresh token (Redis fail-closed): %s",
+            store_error,
+        )
+        return {
+            "error": "service_unavailable",
+            "error_code": "store_unavailable",
+            "message": "Stockage session indisponible. Réessayez.",
+            "retryable": True,
+        }, 503
     except Exception as store_error:
+        db.session.rollback()
         logger.error(
             "Échec stockage refresh token: %s - %s",
             type(store_error).__name__,
             str(store_error),
         )
-        if refresh_fail_closed_enabled() and not current_app.config.get("TESTING"):
+        if refresh_fail_closed_enabled():
             return {
                 "error": "service_unavailable",
+                "error_code": "store_unavailable",
                 "message": "Stockage session indisponible. Réessayez.",
+                "retryable": True,
             }, 503
 
     # ✅ Priorité 7: Audit logging pour login réussi
@@ -2400,19 +2423,16 @@ def _resolve_max_active_refresh_tokens(user: User) -> int:
 
 def _validate_refresh_token(
     refresh_token: str,
+    *,
+    skip_store_checks: bool = False,
 ) -> tuple[str | None, dict[str, str] | None]:
     """Valide un refresh token et retourne l'user_public_id ou une erreur.
 
     Vérifie aussi que le mot de passe n'a pas changé depuis l'émission du token
-    et que le token n'est pas révoqué dans la DB.
+    et (sauf ``skip_store_checks``) que le token n'est pas révoqué Redis/DB.
 
-    Args:
-        refresh_token: Le token JWT à valider
-
-    Returns:
-        Tuple (user_public_id, error_response):
-        - Si valide: (user_public_id, None)
-        - Si invalide: (None, {error: "...", status_code: 401})
+    P0-2 : le chemin ``/refresh-token`` utilise ``skip_store_checks=True`` pour
+    faire JWT → session → idempotence **avant** le rejet Redis.
     """
     try:
         decoded = decode_token(refresh_token, allow_expired=False)
@@ -2456,6 +2476,9 @@ def _validate_refresh_token(
                         return None, {
                             "error": "Refresh token invalide (mot de passe modifié)"
                         }
+
+        if skip_store_checks:
+            return user_public_id, None
 
         # Lot 1-C : validation Redis (fail-closed si indisponible)
         if refresh_fail_closed_enabled() and user_dto:
@@ -2765,8 +2788,10 @@ class RefreshToken(Resource):
                     "trace_id": trace_id,
                 }, 401
 
-            # 4. Valider le refresh token (inclut vérification révocation, pwd_hash, etc.)
-            user_public_id, error_response = _validate_refresh_token(refresh_token)
+            # 4. Valider JWT / pwd_hash uniquement (P0-2 : Redis après idempotence)
+            user_public_id, error_response = _validate_refresh_token(
+                refresh_token, skip_store_checks=True
+            )
             if error_response or not user_public_id:
                 trace_id = get_trace_id()
                 http_status = 401
@@ -2938,6 +2963,127 @@ class RefreshToken(Resource):
                     if mapped is not None:
                         return mapped
 
+                # P0-2 : classification Redis APRÈS idempotence (pas avant).
+                from security.refresh_redis_rotation import (
+                    RedisRefreshState,
+                    classify_refresh_in_redis,
+                )
+                from security.mobile_device_session_service import (
+                    find_refresh_successor_response,
+                )
+
+                redis_class = classify_refresh_in_redis(
+                    refresh_token, user_id=user.id
+                )
+                if redis_class.state == RedisRefreshState.UNAVAILABLE:
+                    return {
+                        "error": "service_unavailable",
+                        "error_code": "store_unavailable",
+                        "message": "Store refresh indisponible",
+                        "retryable": True,
+                    }, 503
+                if redis_class.state == RedisRefreshState.PREVIOUS_WITHIN_GRACE:
+                    device_id_for_recover = (
+                        request.headers.get("X-Device-ID")
+                        or request.headers.get("X-Device-Installation-Id")
+                        or ""
+                    )
+                    recovered = find_refresh_successor_response(
+                        mobile_session_for_rotation.session_id,
+                        predecessor_token=refresh_token,
+                        device_installation_id=str(device_id_for_recover),
+                        successor_hash=redis_class.successor_hash,
+                    )
+                    if recovered:
+                        recovered = dict(recovered)
+                        recovered["error_code"] = "refresh_duplicate"
+                        return recovered, 200
+                    # Crash Redis→DB : previous sans receipt / sans R1 en DB → réparer.
+                    from security.refresh_redis_rotation import (
+                        try_repair_orphan_redis_previous,
+                    )
+
+                    repair = try_repair_orphan_redis_previous(
+                        predecessor_token=refresh_token,
+                        user_id=user.id,
+                        session_id=str(mobile_session_for_rotation.session_id),
+                        claimed_refresh_generation=(
+                            int(old_refresh_generation)
+                            if old_refresh_generation is not None
+                            else None
+                        ),
+                        db_refresh_generation=int(
+                            getattr(
+                                mobile_session_for_rotation,
+                                "refresh_generation",
+                                1,
+                            )
+                            or 1
+                        ),
+                        successor_hash=redis_class.successor_hash,
+                    )
+                    if repair.repaired:
+                        # R0 est CURRENT à nouveau → poursuivre vers rotation normale.
+                        redis_class = classify_refresh_in_redis(
+                            refresh_token, user_id=user.id
+                        )
+                        if redis_class.state != RedisRefreshState.CURRENT:
+                            return {
+                                "error": "rotation_recovery_required",
+                                "error_code": "rotation_recovery_required",
+                                "retryable": False,
+                            }, 401
+                    elif repair.ambiguous:
+                        return {
+                            "error": "rotation_recovery_required",
+                            "error_code": "rotation_recovery_required",
+                            "retryable": False,
+                        }, 401
+                    else:
+                        return {
+                            "error": "rotation_recovery_required",
+                            "error_code": "rotation_recovery_required",
+                            "retryable": False,
+                        }, 401
+                if redis_class.state in (
+                    RedisRefreshState.EXPIRED_PREVIOUS,
+                    RedisRefreshState.UNKNOWN,
+                ):
+                    # Fallback DB soft-rotation dans la grâce (sans Redis previous).
+                    try:
+                        if is_token_revoked(
+                            refresh_token,
+                            grace_window=True,
+                            request_device_id=request.headers.get("X-Device-ID"),
+                        ):
+                            return {
+                                "error": "refresh_token_revoked",
+                                "error_code": "session_expired",
+                                "message": "Session expirée. Veuillez vous reconnecter.",
+                            }, 401
+                    except RefreshStoreUnavailableError:
+                        return {
+                            "error": "service_unavailable",
+                            "error_code": "store_unavailable",
+                            "retryable": True,
+                        }, 503
+                    # Token encore soft-valid DB mais pas CURRENT Redis :
+                    # hors PREVIOUS Redis → pas de restitution, pas de nouvelle branche.
+                    if redis_class.state == RedisRefreshState.EXPIRED_PREVIOUS:
+                        return {
+                            "error": "refresh_token_revoked",
+                            "error_code": "session_expired",
+                            "message": "Session expirée. Veuillez vous reconnecter.",
+                        }, 401
+                    # UNKNOWN + fail-closed : rejet (évite R2 depuis un R0 fantôme).
+                    if refresh_fail_closed_enabled():
+                        return {
+                            "error": "refresh_token_revoked",
+                            "error_code": "session_expired",
+                            "message": "Session expirée. Veuillez vous reconnecter.",
+                        }, 401
+                # CURRENT (ou fail-open UNKNOWN) → contrôles session puis rotation
+
                 err_code, _retryable = validate_mobile_session(
                     session_id=str(old_session_id),
                     session_epoch=(
@@ -3023,6 +3169,73 @@ class RefreshToken(Resource):
                         "retryable": False,
                         "trace_id": trace_id,
                     }, 401
+
+            # Web / sans MobileDeviceSession : contrôles store après JWT (P0-2 allégé).
+            if mobile_session_for_rotation is None:
+                from security.refresh_redis_rotation import (
+                    RedisRefreshState,
+                    classify_refresh_in_redis,
+                )
+
+                redis_class = classify_refresh_in_redis(
+                    refresh_token, user_id=user.id
+                )
+                if redis_class.state == RedisRefreshState.UNAVAILABLE:
+                    return {
+                        "error": "service_unavailable",
+                        "error_code": "store_unavailable",
+                        "retryable": True,
+                    }, 503
+                if redis_class.state != RedisRefreshState.CURRENT:
+                    if refresh_fail_closed_enabled() or redis_class.state in (
+                        RedisRefreshState.EXPIRED_PREVIOUS,
+                        RedisRefreshState.UNKNOWN,
+                        RedisRefreshState.PREVIOUS_WITHIN_GRACE,
+                    ):
+                        # PREVIOUS sans session mobile : pas de receipt → rejet (pas R2).
+                        try:
+                            if is_token_revoked(
+                                refresh_token,
+                                grace_window=True,
+                                request_device_id=request.headers.get("X-Device-ID"),
+                            ):
+                                return {
+                                    "error": "refresh_token_revoked",
+                                    "error_code": "session_expired",
+                                }, 401
+                        except RefreshStoreUnavailableError:
+                            return {
+                                "error": "service_unavailable",
+                                "retryable": True,
+                            }, 503
+                        if redis_class.state != RedisRefreshState.CURRENT:
+                            return {
+                                "error": "refresh_token_revoked",
+                                "error_code": "session_expired",
+                            }, 401
+                try:
+                    if is_token_revoked(
+                        refresh_token,
+                        grace_window=True,
+                        request_device_id=request.headers.get("X-Device-ID"),
+                    ):
+                        return {
+                            "error": "refresh_token_revoked",
+                            "error_code": "session_expired",
+                        }, 401
+                except RefreshStoreUnavailableError:
+                    return {
+                        "error": "service_unavailable",
+                        "retryable": True,
+                    }, 503
+
+            # Sous FOR UPDATE session mobile : ne pas commit ici (sinon le verrou
+            # est libéré avant la rotation → fork concurrent R0→R1/R2).
+            with suppress(Exception):
+                update_token_last_used(
+                    refresh_token,
+                    commit=mobile_session_for_rotation is None,
+                )
 
             if old_web_sid and mobile_session_for_rotation is None:
                 from security.web_session_service import (
@@ -3111,6 +3324,7 @@ class RefreshToken(Resource):
                 token_service.touch_token_score(user.id, refresh_token)
 
             # Transaction SQL atomique : mark + store + AuthRotationResult → 1 commit
+            redis_handle = None
             try:
                 mark_token_rotated(refresh_token, new_refresh_token, commit=False)
 
@@ -3219,25 +3433,50 @@ class RefreshToken(Resource):
                             "retryable": False,
                         }, 401
 
-                db.session.commit()
+                # P0-1/P0-2 : transition Redis atomique current=R1 + previous=R0 (grâce).
+                from security.refresh_redis_rotation import (
+                    commit_db_after_redis,
+                    compensate_redis_issuance,
+                    rotate_refresh_redis,
+                )
 
-                # Redis best-effort après commit SQL
-                with suppress(Exception):
-                    token_service.revoke_token(refresh_token)
-                with suppress(Exception):
-                    token_service.store_token(
-                        user.id,
-                        new_refresh_token,
-                        ttl_seconds=int(refresh_expires_delta.total_seconds()),
-                    )
+                redis_handle = rotate_refresh_redis(
+                    user.id,
+                    refresh_token,
+                    new_refresh_token,
+                    ttl_seconds=int(refresh_expires_delta.total_seconds()),
+                    session_id=(
+                        str(mobile_session_for_rotation.session_id)
+                        if mobile_session_for_rotation is not None
+                        else None
+                    ),
+                )
+                try:
+                    commit_db_after_redis(redis_handle)
+                except Exception:
+                    # commit_db_after_redis a déjà rollback + compensé
+                    raise
 
                 if not is_mobile_request:
                     max_active_tokens = _resolve_max_active_refresh_tokens(user)
                     token_service.limit_active_tokens(user.id, max_active_tokens)
+            except RefreshStoreUnavailableError as store_error:
+                db.session.rollback()
+                logger.error(
+                    "Échec Redis sync refresh rotation (fail-closed): %s", store_error
+                )
+                return {
+                    "error": "service_unavailable",
+                    "error_code": "store_unavailable",
+                    "retryable": True,
+                    "message": "Stockage session indisponible. Réessayez.",
+                }, 503
             except Exception as store_error:
                 if is_rotation_idempotency_conflict(store_error):
                     logger.warning("refresh-token idempotency IntegrityError recovered")
                     db.session.rollback()
+                    if "redis_handle" in locals() and redis_handle is not None:
+                        compensate_redis_issuance(redis_handle)
                     if (
                         idempotency_key
                         and mobile_session_for_rotation is not None
@@ -3261,12 +3500,14 @@ class RefreshToken(Resource):
                     str(store_error),
                 )
                 db.session.rollback()
-                if refresh_fail_closed_enabled() and not current_app.config.get(
-                    "TESTING"
-                ):
+                if "redis_handle" in locals() and redis_handle is not None:
+                    compensate_redis_issuance(redis_handle)
+                if refresh_fail_closed_enabled():
                     return {
                         "error": "service_unavailable",
+                        "error_code": "store_unavailable",
                         "message": "Stockage session indisponible. Réessayez.",
+                        "retryable": True,
                     }, 503
 
             # 8. ✅ Priorité 7: Audit logging pour token refresh
@@ -4771,7 +5012,7 @@ class PasswordlessOtpVerify(Resource):
                 },
                 expires_delta=current_app.config["JWT_REFRESH_TOKEN_EXPIRES"],
             )
-            with suppress(Exception):
+            try:
                 refresh_expires_at = (
                     datetime.now(UTC) + current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
                 )
@@ -4782,6 +5023,13 @@ class PasswordlessOtpVerify(Resource):
                     device_id=request.headers.get("X-Device-ID"),
                     device_name=request.headers.get("X-Device-Name"),
                 )
+            except RefreshStoreUnavailableError:
+                return {
+                    "error": "service_unavailable",
+                    "error_code": "store_unavailable",
+                    "retryable": True,
+                    "message": "Stockage session indisponible. Réessayez.",
+                }, 503
             _public_cache_delete(cache_key)
             return {
                 "access_token": access_token,
@@ -5677,6 +5925,7 @@ class ResendActivationEmail(Resource):
             from models.activation_session import EMAIL_DELIVERY_KIND_RESEND
             from services.notifications.activation_email_delivery import (
                 can_start_new_delivery_snapshot,
+                compute_email_resend_retry_after_seconds,
                 try_enqueue_activation_email,
             )
             from services.notifications.activation_email_policy import (
@@ -5687,12 +5936,15 @@ class ResendActivationEmail(Resource):
             # Précontrôles indicatifs (non mutatifs) — autorité = service sous verrou
             can_send, block_reason = can_start_new_delivery_snapshot(activation_session)
             if not can_send:
+                retry_after = compute_email_resend_retry_after_seconds(
+                    activation_session
+                ) or ACTIVATION_RESEND_COOLDOWN_SECONDS
                 return auth_error(
                     AuthErrorCodes.RATE_LIMITED,
-                    "Envoi déjà en cours. Veuillez patienter.",
+                    "Un envoi a déjà été demandé. Vous pourrez renvoyer après le délai indiqué.",
                     429,
                     details={
-                        "retry_after_seconds": ACTIVATION_RESEND_COOLDOWN_SECONDS,
+                        "retry_after_seconds": retry_after,
                         "reason": block_reason,
                     },
                 )
@@ -5733,12 +5985,15 @@ class ResendActivationEmail(Resource):
                 is_testing=bool(current_app.config.get("TESTING")),
             )
             if enqueue_result.get("error") == "email_delivery_in_progress":
+                retry_after = compute_email_resend_retry_after_seconds(
+                    activation_session
+                ) or ACTIVATION_RESEND_COOLDOWN_SECONDS
                 return auth_error(
                     AuthErrorCodes.RATE_LIMITED,
-                    "Envoi déjà en cours. Veuillez patienter.",
+                    "Un envoi a déjà été demandé. Vous pourrez renvoyer après le délai indiqué.",
                     429,
                     details={
-                        "retry_after_seconds": ACTIVATION_RESEND_COOLDOWN_SECONDS,
+                        "retry_after_seconds": retry_after,
                         "reason": "email_delivery_in_progress",
                     },
                 )
@@ -5767,7 +6022,8 @@ class ResendActivationEmail(Resource):
 
             response_body: dict[str, object] = {
                 "message": (
-                    "Email d'activation en cours d'envoi."
+                    "Un lien d'activation a été envoyé. "
+                    "Vérifiez votre boîte de réception et vos courriers indésirables."
                     if enqueue_result.get("queued")
                     else "Préparation de l'email d'activation."
                 ),
@@ -6093,11 +6349,18 @@ class ActivationStatus(Resource):
         if not activation_session:
             return {"error": "Session d'activation introuvable."}, 404
         user = User.query.get(activation_session.user_id)
+        from services.notifications.activation_email_delivery import (
+            compute_email_resend_retry_after_seconds,
+        )
+
         return {
             "activation_session_id": activation_session.activation_session_id,
             "masked_email": mask_email(user.email or "") if user else None,
             "masked_phone": _mask_phone(user.phone) if user else None,
             "activation_status": _build_activation_status(activation_session),
+            "email_resend_retry_after_seconds": compute_email_resend_retry_after_seconds(
+                activation_session
+            ),
         }, 200
 
 
@@ -7095,16 +7358,27 @@ class TOTPChallenge(Resource):
             )
 
             device_id = request.headers.get("X-Device-Id")
+            from security.refresh_token_service import (
+                RefreshStoreUnavailableError as _RSU,
+            )
             from security.refresh_token_service import store_refresh_token
             from shared.security_helpers import parse_device
 
-            store_refresh_token(
-                token=refresh_token,
-                user_id=user.id,
-                expires_at=datetime.now(UTC) + timedelta(days=30),
-                device_id=device_id,
-                device_name=parse_device(request.headers.get("User-Agent")),
-            )
+            try:
+                store_refresh_token(
+                    token=refresh_token,
+                    user_id=user.id,
+                    expires_at=datetime.now(UTC) + timedelta(days=30),
+                    device_id=device_id,
+                    device_name=parse_device(request.headers.get("User-Agent")),
+                )
+            except _RSU:
+                return {
+                    "error": "service_unavailable",
+                    "error_code": "store_unavailable",
+                    "retryable": True,
+                    "message": "Stockage session indisponible. Réessayez.",
+                }, 503
 
             db.session.commit()
 
@@ -7165,6 +7439,11 @@ class TOTPChallenge(Resource):
 # ========================
 # Endpoint : Obtenir un token CSRF
 # ========================
+# Quota large : chaque POST/PUT/PATCH/DELETE (y compris refresh-token en CSRF_STRICT)
+# consomme un jeton. 50/h provoquait 429 → refresh sans CSRF → 403 → déconnexion.
+_RATELIMIT_CSRF_TOKEN = os.getenv("RATELIMIT_CSRF_TOKEN", "120 per minute; 2000 per hour")
+
+
 @auth_ns.route("/csrf-token")
 @auth_ns.doc(
     security=None,  # Endpoint public (pas besoin d'authentification)
@@ -7175,9 +7454,9 @@ class CSRFTokenResource(Resource):
 
     @auth_ns.marshal_with(csrf_token_response_model)
     @auth_ns.response(200, "Token CSRF généré avec succès")
+    @auth_ns.response(429, "Trop de requêtes")
     @auth_ns.response(500, "Erreur interne")
-    # ✅ S2: Rate limiting plus strict pour endpoint CSRF (protection contre abus)
-    @limiter.limit("50 per hour")
+    @limiter.limit(_RATELIMIT_CSRF_TOKEN)
     def get(self):
         """Génère et retourne un token CSRF.
 

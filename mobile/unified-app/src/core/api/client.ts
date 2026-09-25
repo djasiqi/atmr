@@ -2040,6 +2040,12 @@ export async function sessionResumeRequest(): Promise<{
         throw new Error("envelope_write_failed");
       }
       await clearPendingResumeOperation();
+      // P0-3 : invalider l'Idempotency-Key de refresh de l'ancienne génération
+      // pour éviter un faux refresh_replay_detected au prochain refresh.
+      const {
+        clearPendingRefreshOperation,
+      } = require("../auth/pendingRefreshOperation") as typeof import("../auth/pendingRefreshOperation");
+      await clearPendingRefreshOperation();
       return true;
     });
 

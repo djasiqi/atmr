@@ -43,7 +43,14 @@ from security.mobile_device_session_service import (
     store_rotation_result,
     verify_recovery_credential,
 )
-from security.refresh_token_service import store_refresh_token
+from security.refresh_token_service import (
+    RefreshStoreUnavailableError,
+    store_refresh_token,
+)
+from security.refresh_redis_rotation import (
+    commit_db_after_redis,
+    publish_refresh_redis,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +59,28 @@ def _user_token_version(user: User) -> int:
     return int(getattr(user, "token_version", 0) or 0)
 
 
-def _issue_token_pair(user: User, session) -> dict:
+def _issue_token_pair(
+    user: User,
+    session,
+    *,
+    bump_refresh_gen: bool = False,
+    sync_redis: bool = False,
+) -> dict:
+    """Émet access+refresh rattachés à la session mobile.
+
+    Args:
+        bump_refresh_gen: P0-3 — incrémenter ``refresh_generation`` avant émission
+            (session-resume). Ne pas activer sur replace (nouvelle session gen=1).
+        sync_redis: P0-1 — écrire Redis avant retour (échec → raise, TX rollback).
+            Passer False si l'appelant synchronise lui-même juste avant commit.
+    """
     epoch = int(getattr(session, "session_epoch", 1) or 1)
-    refresh_gen = int(getattr(session, "refresh_generation", 1) or 1)
+    if bump_refresh_gen:
+        from security.mobile_device_session_service import bump_refresh_generation
+
+        refresh_gen = bump_refresh_generation(session)
+    else:
+        refresh_gen = int(getattr(session, "refresh_generation", 1) or 1)
     cred_gen = int(getattr(session, "credential_generation", session.generation) or 1)
     claims = {
         "role": getattr(user, "role", None),
@@ -86,7 +112,10 @@ def _issue_token_pair(user: User, session) -> dict:
         },
     )
     expires_at = datetime.now(UTC) + timedelta(days=90)
+    redis_ttl = int(timedelta(days=90).total_seconds())
     # Fail-closed : jamais remettre un refresh JWT sans ligne DB garantie.
+    # sync_redis=False ici : l'appelant sync juste avant commit (évite orphelin
+    # Redis si IntegrityError / rollback ultérieur sur le receipt).
     row = store_refresh_token(
         token=refresh,
         user_id=user.id,
@@ -94,11 +123,16 @@ def _issue_token_pair(user: User, session) -> dict:
         device_id=session.device_installation_id,
         device_name=session.device_name,
         commit=False,
+        sync_redis=False,
+        redis_ttl_seconds=redis_ttl,
     )
     if hasattr(row, "session_id"):
         row.session_id = str(session.session_id)
         row.session_generation = epoch
         db.session.add(row)
+
+    if sync_redis:
+        publish_refresh_redis(user.id, refresh, ttl_seconds=redis_ttl)
 
     return {
         "token": access,
@@ -111,6 +145,21 @@ def _issue_token_pair(user: User, session) -> dict:
         "session_generation": epoch,
         **auth_capabilities(),
     }
+
+
+def _redis_ttl_refresh_days(days: int = 90) -> int:
+    return int(timedelta(days=days).total_seconds())
+
+
+def _sync_issued_refresh_or_rollback(user_id: int, refresh_token: str):
+    """P0-1 : publish Redis ; retourne handle pour compensation au commit."""
+    try:
+        return publish_refresh_redis(
+            user_id, refresh_token, ttl_seconds=_redis_ttl_refresh_days()
+        )
+    except RefreshStoreUnavailableError:
+        db.session.rollback()
+        raise
 
 
 def _session_resume_proof(
@@ -225,7 +274,8 @@ def register_mobile_session_routes(auth_ns) -> None:
 
             apply_session_metadata(session, _resolve_device_session_metadata())
             new_recovery = rotate_recovery_credential(session)
-            tokens = _issue_token_pair(user, session)
+            # P0-3 : bump refresh_generation avant émission du nouveau refresh.
+            tokens = _issue_token_pair(user, session, bump_refresh_gen=True)
             tokens["recovery_credential"] = new_recovery
 
             if idempotency_key:
@@ -264,17 +314,30 @@ def register_mobile_session_routes(auth_ns) -> None:
                         "retryable": False,
                     }, 401
 
+            # P0-1 : Redis avant commit — échec ⇒ rollback (recovery non rotaté côté client).
             try:
-                db.session.commit()
+                redis_handle = _sync_issued_refresh_or_rollback(
+                    user.id, tokens["refresh_token"]
+                )
+            except RefreshStoreUnavailableError:
+                return {
+                    "error": "service_unavailable",
+                    "error_code": "store_unavailable",
+                    "retryable": True,
+                    "message": "Stockage session indisponible. Réessayez.",
+                }, 503
+
+            try:
+                commit_db_after_redis(redis_handle)
             except IntegrityError as exc:
                 if not is_rotation_idempotency_conflict(exc):
-                    db.session.rollback()
+                    # commit_db_after_redis a déjà compensé + rollback
                     raise
                 logger.warning(
                     "session-resume idempotency IntegrityError recovered session_id=%s",
                     session_id,
                 )
-                db.session.rollback()
+                # Compensation déjà faite par commit_db_after_redis
                 session = get_session_by_id(session_id, for_update=True)
                 if session is None or not idempotency_key:
                     return {
@@ -293,6 +356,9 @@ def register_mobile_session_routes(auth_ns) -> None:
                     "error_code": "rotation_recovery_required",
                     "retryable": False,
                 }, 401
+            except Exception:
+                # Déjà compensé si commit_db_after_redis a levé
+                raise
 
             return tokens, 200
 
@@ -561,7 +627,24 @@ def register_mobile_session_routes(auth_ns) -> None:
                     )
                 )
                 tokens = _issue_token_pair(user, mobile_session)
-                db.session.commit()
+                # P0-1 : Redis avant commit.
+                try:
+                    redis_handle = _sync_issued_refresh_or_rollback(
+                        user.id, tokens["refresh_token"]
+                    )
+                except RefreshStoreUnavailableError:
+                    release_device_session_resolution_claim(token=resolution_token)
+                    return {
+                        "error": "service_unavailable",
+                        "error_code": "store_unavailable",
+                        "retryable": True,
+                        "message": "Stockage session indisponible. Réessayez.",
+                    }, 503
+                try:
+                    commit_db_after_redis(redis_handle)
+                except Exception:
+                    release_device_session_resolution_claim(token=resolution_token)
+                    raise
             except DeviceSessionResolutionError as exc:
                 db.session.rollback()
                 release_device_session_resolution_claim(token=resolution_token)

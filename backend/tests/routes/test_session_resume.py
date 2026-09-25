@@ -390,7 +390,8 @@ def test_session_resume_concurrent_same_idempotency_key(app, db, resume_session)
         assert session_after is not None
         assert session_after.credential_generation == initial_credential_generation + 1
         assert session_after.generation == initial_generation + 1
-        assert session_after.refresh_generation == initial_refresh_generation
+        # P0-3 : session-resume incrémente refresh_generation.
+        assert session_after.refresh_generation == initial_refresh_generation + 1
         assert session_after.session_epoch == initial_session_epoch
 
         key_hash = svc.hash_idempotency_key(payload["idempotency_key"])
