@@ -984,6 +984,12 @@ def mock_external_services(monkeypatch):
 
         # Mock redis.from_url pour retourner notre mock
         monkeypatch.setattr(redis, "from_url", lambda *args, **kwargs: mock_redis)
+        try:
+            from security.auth_redis import reset_auth_redis_client
+
+            reset_auth_redis_client()
+        except ImportError:
+            pass
     except ImportError:
         pass
 

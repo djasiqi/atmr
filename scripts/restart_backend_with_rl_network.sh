@@ -32,6 +32,17 @@ echo "🗑️  Suppression du conteneur backend (pour recréer avec nouvelle con
 docker compose -f docker-compose.production.yml rm -f backend
 
 echo "🚀 Démarrage du backend avec nouvelle configuration..."
+# P0-6 : ne pas démarrer un backend fail-closed sans redis-auth healthy
+if ! docker compose -f docker-compose.production.yml ps redis-auth --format json 2>/dev/null | grep -q '"State":"running"'; then
+  echo "❌ redis-auth non running — NE JAMAIS démarrer le backend fail-closed sans redis-auth + AUTH_REDIS_URL"
+  docker compose -f docker-compose.production.yml up -d redis-auth
+  sleep 5
+fi
+HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-redis-auth 2>/dev/null || echo "none")
+if [ "$HEALTH" != "healthy" ]; then
+  echo "❌ redis-auth health=$HEALTH — abort backend restart (P0-6)"
+  exit 1
+fi
 docker compose -f docker-compose.production.yml up -d backend
 
 echo "⏳ Attente de 10 secondes pour le démarrage..."

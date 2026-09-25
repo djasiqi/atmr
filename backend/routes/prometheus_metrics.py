@@ -74,6 +74,17 @@ class PrometheusMetrics(Resource):
                         e,
                     )
 
+                # P0-6 : gauges Redis auth (used/max/evicted)
+                try:
+                    from security.auth_redis_metrics import refresh_redis_auth_gauges
+
+                    refresh_redis_auth_gauges()
+                except Exception as e:
+                    logger.debug(
+                        "[PrometheusMetrics] gauges redis-auth skip: %s",
+                        e,
+                    )
+
                 metrics_output, content_type_latest = generate_prometheus_latest()
 
                 # Ajouter les métriques SLO personnalisées

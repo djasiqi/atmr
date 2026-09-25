@@ -165,6 +165,27 @@ wait_redis_ready() {
   return 0
 }
 
+wait_redis_auth_ready() {
+  # P0-6 : redis-auth doit être healthy AVANT le backend fail-closed.
+  local label="${1:-Redis-auth}"
+  local max="${2:-90}"
+  local i
+  for i in $(seq 1 "$max"); do
+    RD_STATUS=$(compose_prod ps redis-auth --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+    if [ "$RD_STATUS" = "running" ]; then
+      HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-redis-auth 2>/dev/null || echo "none")
+      if [ "$HEALTH" = "healthy" ]; then
+        echo "✅ ${label} prêt (healthy — noeviction/AOF attendus)"
+        return 0
+      fi
+    fi
+    sleep 2
+  done
+  echo "❌ Timeout attente ${label} (healthy) — NE PAS démarrer le backend sans redis-auth"
+  compose_prod logs redis-auth --tail=80 || true
+  return 1
+}
+
 wait_pgbouncer_ready() {
   local max="${1:-40}"
   local i
@@ -412,6 +433,10 @@ export SQLALCHEMY_DATABASE_URI="${DATABASE_URL}"
 export DATABASE_URL_DIRECT="${DATABASE_URL}"
 ESCAPED_REDIS_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${REDIS_PASSWORD}")
 export REDIS_URL="redis://:${ESCAPED_REDIS_PASSWORD}@redis:6379/0"
+# P0-6 : même mot de passe par défaut ; instance dédiée noeviction
+AUTH_REDIS_PASSWORD_RAW="${REDIS_AUTH_PASSWORD:-${REDIS_PASSWORD}}"
+ESCAPED_AUTH_REDIS_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${AUTH_REDIS_PASSWORD_RAW}")
+export AUTH_REDIS_URL="redis://:${ESCAPED_AUTH_REDIS_PASSWORD}@redis-auth:6379/0"
 
 # Pull avec retry. `timeout` ne peut pas invoquer une fonction shell.
 pull_with_retry() {
@@ -476,6 +501,7 @@ fi
   echo "POSTGRES_HOST=${POSTGRES_HOST}"
   echo "REDIS_PASSWORD=${REDIS_PASSWORD}"
   echo "REDIS_URL=${REDIS_URL}"
+  echo "AUTH_REDIS_URL=${AUTH_REDIS_URL}"
   echo "SECRET_KEY=${SECRET_KEY}"
   echo "JWT_SECRET_KEY=${JWT_SECRET_KEY}"
   echo "APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}"
@@ -688,15 +714,42 @@ else
   fi
 fi
 
-# Phase 1 : infra + backend uniquement (Celery différé après migrations — évite
-# expire_pending_change_requests et autres tâches contre un schéma non migré).
-echo "🚀 Démarrage infra + backend (Celery différé jusqu'aux migrations)..."
-# Pas de --remove-orphans : avec le même répertoire projet, Compose traiterait Grafana /
-# Prometheus / Alertmanager comme « orphelins » (absents de ce fichier) et les supprimerait.
-compose_prod up -d postgres pgbouncer redis osrm backend
+# Phase 1 : infra critique AVANT backend.
+# P0-6 : redis-auth + AUTH_REDIS_URL sont des PRÉCONDITIONS au backend fail-closed.
+# NE JAMAIS déployer le backend avant redis-auth healthy + AUTH_REDIS_URL.
+echo "🚀 Démarrage infra (postgres/redis/redis-auth) AVANT backend..."
+if [ -z "${AUTH_REDIS_URL:-}" ]; then
+  echo "❌ AUTH_REDIS_URL absent — refuse le démarrage backend (P0-6 fail-closed)."
+  echo "   Ordre obligatoire : provisionner redis-auth → AUTH_REDIS_URL → backend."
+  exit 1
+fi
+compose_prod up -d postgres pgbouncer redis redis-auth osrm
+
+echo "⏳ Stabilisation infra (5 secondes)..."
+sleep 5
+
+wait_postgres_ready "PostgreSQL (pre-backend)" 60
+wait_pgbouncer_ready 40 || true
+wait_redis_ready "Redis legacy (pre-backend)" 90 || true
+if ! wait_redis_auth_ready "Redis-auth (précondition P0-6)" 90; then
+  echo "❌ Précondition P0-6 KO : redis-auth non healthy."
+  echo "   NE JAMAIS déployer le backend fail-closed avant redis-auth + AUTH_REDIS_URL."
+  exit 1
+fi
+
+# Smoke connectivité AUTH_REDIS_URL depuis le réseau compose (sans démarrer backend app)
+echo "🔍 Vérification connectivité AUTH_REDIS_URL..."
+if ! compose_prod run --rm --no-deps -e AUTH_REDIS_URL="${AUTH_REDIS_URL}" backend \
+  python -c "import os,redis; c=redis.from_url(os.environ['AUTH_REDIS_URL'], decode_responses=True); assert c.ping(); print('AUTH_REDIS_URL ping OK')"; then
+  echo "❌ Impossible de joindre redis-auth via AUTH_REDIS_URL — abort backend."
+  exit 1
+fi
+
+echo "🚀 Démarrage backend (préconditions redis-auth OK)..."
+compose_prod up -d backend
 
 # Laisser le temps aux conteneurs de se stabiliser
-echo "⏳ Stabilisation des conteneurs (5 secondes)..."
+echo "⏳ Stabilisation backend (5 secondes)..."
 sleep 5
 
 # Postgres + PgBouncer avant de solliciter le backend (évite bruit dans les logs et clarifie les échecs Alembic)

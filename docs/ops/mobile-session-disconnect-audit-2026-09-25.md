@@ -73,7 +73,7 @@ Même contrat `/auth/login`, `/auth/refresh-token`, `/auth/session-resume`.
 | P0-2 | Grâce Redis 300s + résoudre idempotence **avant** validate Redis | Rejeu crash-safe | ✅ **Implémenté** (2026-09-25) : `security/refresh_redis_rotation.py` + reorder `/refresh-token` ; previous ≠ re-rotate |
 | P0-4 | AuthGuard accepte `authenticated_offline` / `auth_recovering` ; ne pas écraser snapshot avec bootstrap anonyme | Plus d'écran login transitoire | ✅ **Implémenté** + **FINAL GATE** : `mobileSessionStatus` obligatoire ; warm recovery garde route app ; BootBrand cold-only |
 | P0-5 | Brancher `attemptRestRecovery` sur chemin chaud (401, foreground, socket auth) | Filet session chaude | ✅ **Implémenté** + **FINAL GATE** : socket recovery **uniquement** sur `connect_error` auth (`socket_auth_failure`) ; reconnect/backoff générique = 0 recovery |
-| P0-6 | Isolation du store refresh (éviction / instance dédiée) | Anti déconnexion de masse | Planifié |
+| P0-6 | Redis refresh `noeviction` / instance dédiée `redis-auth` + `AUTH_REDIS_URL` + alerte `evicted_keys` | Anti déconnexion de masse | ✅ **CODE CLOSED** ; **ROLLOUT PREPARATION READY** (pre-commit gate A–D) — exécution prod **NOT READY**, DEPLOY **NO-GO**, PUSH **NO** |
 
 
 **Tests P0-1/P0-3 :** `tests/security/test_p0_refresh_issuance_contract.py` (A/B/D) + `pendingRefreshOperation.test.ts` (C) + non-régression `test_refresh_fail_closed` / `test_session_resume`.
@@ -95,7 +95,7 @@ La fiche `p0-mobile-session-push-evidence.md` interdit explicitement, avant preu
 - ouverture de la porte P1-C2
 - changement de TTL ad hoc
 
-**P0-1…P0-5** ✅ implémentés (2026-09-25). P0-6 encore à venir — deploy mobile/auth **NO-GO**.
+**P0-1…P0-5** ✅ ; **P0-6 CODE CLOSED** + rollout preparation READY (2026-09-25) — deploy/cutover **NO-GO** jusqu'à exécution prod.
 
 ## Preuve SQL (Docker uniquement)
 

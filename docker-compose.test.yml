@@ -30,6 +30,26 @@ services:
       retries: 10
     restart: "no"
 
+  # P0-6 : Redis auth de test (noeviction, petite mémoire pour tests OOM)
+  redis_auth_test:
+    image: redis:7-alpine
+    ports:
+      - "6383:6379"
+    volumes:
+      - redis_auth_test_data:/data
+    command: >-
+      redis-server
+      --appendonly yes
+      --maxmemory 2mb
+      --maxmemory-policy noeviction
+      --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: "no"
+
   backend_tests:
     build:
       context: ./backend
@@ -40,9 +60,12 @@ services:
         condition: service_healthy
       redis_test:
         condition: service_healthy
+      redis_auth_test:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://test:test@postgres_test:5432/atmr_test
       REDIS_URL: redis://redis_test:6379/0
+      AUTH_REDIS_URL: redis://redis_auth_test:6379/0
       FLASK_CONFIG: testing
       SECRET_KEY: test-secret-key
       JWT_SECRET_KEY: test-jwt-secret
@@ -64,3 +87,4 @@ services:
 volumes:
   pg_test_data:
   redis_test_data:
+  redis_auth_test_data:

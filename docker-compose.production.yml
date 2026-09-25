@@ -149,6 +149,59 @@ services:
           memory: 512M # ✅ AUDIT 100 USERS: Augmenté de 256M à 512M
           cpus: "0.25"
 
+  # P0-6 : Redis auth dédié — refresh CURRENT/PREVIOUS (noeviction + AOF)
+  # Dimensionnement : voir docs/ops/mobile-session-disconnect-audit (AUTH KEY MEMORY).
+  # 256mb = ~10k sessions × (CURRENT+PREVIOUS) × overhead × marge ×10 ; revoir après MEMORY USAGE prod.
+  redis-auth:
+    image: redis:7-alpine
+    container_name: atmr-redis-auth
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        REDIS_REQUIREPASS_ARG=""
+        if [ -n "$${REDIS_AUTH_PASSWORD:-$${REDIS_PASSWORD}}" ]; then
+          REDIS_REQUIREPASS_ARG="--requirepass $${REDIS_AUTH_PASSWORD:-$${REDIS_PASSWORD}}"
+        fi
+        redis-server \
+          $${REDIS_REQUIREPASS_ARG} \
+          --appendonly yes \
+          --maxmemory 256mb \
+          --maxmemory-policy noeviction \
+          --save "" \
+          --tcp-backlog 511 \
+          --tcp-keepalive 60 \
+          --bind 0.0.0.0 \
+          --protected-mode yes
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      REDIS_AUTH_PASSWORD: ${REDIS_AUTH_PASSWORD:-${REDIS_PASSWORD}}
+    volumes:
+      - redis_auth_data:/data
+    expose:
+      - "6379"
+    networks:
+      - atmr-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'PASS="$${REDIS_AUTH_PASSWORD:-$${REDIS_PASSWORD}}"; if [ -n "$$PASS" ]; then redis-cli -a "$$PASS" ping | grep -q PONG; else redis-cli ping | grep -q PONG; fi || exit 1',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.25"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+
   # Service OSRM pour le routage
   osrm:
     image: osrm/osrm-backend:latest
@@ -212,6 +265,8 @@ services:
       # Le code Python (celery_app.py) peut aussi construire les URLs depuis REDIS_PASSWORD si nécessaire
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       REDIS_URL: ${REDIS_URL:-}
+      # P0-6 : store refresh dédié (noeviction). Déployé via deploy-production.sh.
+      AUTH_REDIS_URL: ${AUTH_REDIS_URL:-}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: "0"
@@ -396,6 +451,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      redis-auth:
+        condition: service_healthy
       osrm:
         condition: service_started
     healthcheck:
@@ -557,6 +614,7 @@ services:
       REDIS_PORT: 6379
       REDIS_DB: "0"
       REDIS_URL: ${REDIS_URL:-}
+      AUTH_REDIS_URL: ${AUTH_REDIS_URL:-}
       # ✅ Forcer explicitement CELERY_BROKER_URL et CELERY_RESULT_BACKEND pour éviter AMQP par défaut
       # Utiliser REDIS_URL si disponible, sinon laisser vide pour que celery_app.py construise depuis REDIS_PASSWORD
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-${REDIS_URL}}
@@ -962,6 +1020,7 @@ services:
       REDIS_PORT: 6379
       REDIS_DB: "0"
       REDIS_URL: ${REDIS_URL:-}
+      AUTH_REDIS_URL: ${AUTH_REDIS_URL:-}
       # ✅ Forcer explicitement CELERY_BROKER_URL et CELERY_RESULT_BACKEND pour éviter AMQP par défaut
       # Utiliser REDIS_URL si disponible, sinon laisser vide pour que celery_app.py construise depuis REDIS_PASSWORD
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-${REDIS_URL}}
@@ -1097,6 +1156,8 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  redis_auth_data:
     driver: local
   backend_logs:
     driver: local

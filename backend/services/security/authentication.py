@@ -140,10 +140,11 @@ class RefreshTokenService:
     """
 
     def __init__(self) -> None:
-        """Initialise le service avec une connexion Redis."""
+        """Initialise le service avec le Redis auth dédié (P0-6)."""
         super().__init__()
-        redis_url = current_app.config.get("REDIS_URL", "redis://127.0.0.1:6379/0")
-        self.redis_client: Any = redis.from_url(redis_url, decode_responses=True)
+        from security.auth_redis import get_auth_redis
+
+        self.redis_client: Any = get_auth_redis()
         self.revoked_tokens_prefix = "revoked_refresh_token:"
         self.active_tokens_prefix = "active_refresh_token:"
 
@@ -318,20 +319,24 @@ class RefreshTokenService:
             except Exception:
                 ttl = 30 * 24 * 3600
 
-        self.redis_client.setex(
-            f"{self.active_tokens_prefix}{token_hash}",
-            ttl,
-            str(user_id),
-        )
+        from security.auth_redis import auth_redis_write
 
-        # ZSET ordonné par timestamp (score) pour éviction FIFO déterministe
-        user_tokens_key = f"user_refresh_tokens:{user_id}"
+        def _write() -> None:
+            self.redis_client.setex(
+                f"{self.active_tokens_prefix}{token_hash}",
+                ttl,
+                str(user_id),
+            )
+            # ZSET ordonné par timestamp (score) pour éviction FIFO déterministe
+            user_tokens_key = f"user_refresh_tokens:{user_id}"
 
-        def _zadd() -> Any:
-            self.redis_client.zadd(user_tokens_key, {token_hash: time.time()})
+            def _zadd() -> Any:
+                self.redis_client.zadd(user_tokens_key, {token_hash: time.time()})
 
-        _fix_wrongtype_and_retry(self.redis_client, user_tokens_key, _zadd)
-        self.redis_client.expire(user_tokens_key, ttl)
+            _fix_wrongtype_and_retry(self.redis_client, user_tokens_key, _zadd)
+            self.redis_client.expire(user_tokens_key, ttl)
+
+        auth_redis_write(_write)
 
         logger.info("Token stocké: user_id=%s, hash=%s...", user_id, token_hash[:8])
 

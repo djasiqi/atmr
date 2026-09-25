@@ -33,6 +33,18 @@ sleep 5
 echo ""
 echo "3️⃣  Redémarrage du backend avec configuration Traefik..."
 cd "$ATMR_DIR"
+# P0-6 : redis-auth doit être healthy avant backend fail-closed
+docker compose -f docker-compose.production.yml up -d redis-auth
+for i in $(seq 1 30); do
+  H=$(docker inspect --format='{{.State.Health.Status}}' atmr-redis-auth 2>/dev/null || echo "none")
+  [ "$H" = "healthy" ] && break
+  sleep 2
+done
+H=$(docker inspect --format='{{.State.Health.Status}}' atmr-redis-auth 2>/dev/null || echo "none")
+if [ "$H" != "healthy" ]; then
+  echo "❌ redis-auth non healthy ($H) — NE JAMAIS démarrer backend sans redis-auth + AUTH_REDIS_URL"
+  exit 1
+fi
 docker compose -f docker-compose.production.yml up -d backend
 echo "✅ Backend redémarré"
 sleep 5

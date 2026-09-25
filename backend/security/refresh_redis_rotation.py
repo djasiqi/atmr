@@ -117,6 +117,7 @@ def rotate_refresh_redis(
 
     Ne place **pas** R0 dans ``revoked_refresh_token`` pendant la grâce.
     """
+    from security.auth_redis import raise_refresh_store_unavailable
     from security.refresh_token_service import (
         RefreshStoreUnavailableError,
         refresh_fail_closed_enabled,
@@ -171,7 +172,7 @@ def rotate_refresh_redis(
             type(exc).__name__,
         )
         if refresh_fail_closed_enabled():
-            raise RefreshStoreUnavailableError("redis_unavailable") from exc
+            raise_refresh_store_unavailable(exc)
         logger.warning("rotate_refresh_redis fail-open user_id=%s: %s", user_id, exc)
         previous_payload = None
 
@@ -201,12 +202,18 @@ def rotate_refresh_redis(
 
 
 def compensate_redis_issuance(handle: RedisIssuanceHandle | None) -> None:
-    """Annule une mutation Redis si le commit SQL a échoué (P0-1 hardening)."""
+    """Annule une mutation Redis si le commit SQL a échoué (P0-1 hardening).
+
+    En mode dual_write / auth_primary, applique aussi la compensation sur les
+    deux stores bruts (legacy + auth) pour éviter un R1 orphelin sur le secondaire
+    si le DualWrite a partiellement échoué.
+    """
     if handle is None:
         return
     try:
         svc = _svc()
         _apply_compensation_ops(svc.redis_client, handle)
+        _mirror_compensation_both_stores(handle)
 
         new_hash = _hash(handle.new_token)
         logger.error(
@@ -256,6 +263,35 @@ def _apply_compensation_ops(client: Any, handle: RedisIssuanceHandle) -> None:
                 client.zadd(user_tokens_key, {old_hash: time.time()})
             except Exception:
                 pass
+
+
+def _mirror_compensation_both_stores(handle: RedisIssuanceHandle) -> None:
+    """Force la compensation sur legacy + auth dédié (modes migration)."""
+    try:
+        from security.auth_redis_migration import AuthRedisMigrationMode, get_migration_mode
+
+        mode = get_migration_mode()
+        if mode not in {
+            AuthRedisMigrationMode.DUAL_WRITE,
+            AuthRedisMigrationMode.AUTH_PRIMARY,
+        }:
+            return
+        from security.auth_redis import get_dedicated_auth_redis, get_legacy_redis
+
+        for label, client in (
+            ("legacy", get_legacy_redis()),
+            ("auth", get_dedicated_auth_redis()),
+        ):
+            try:
+                _apply_compensation_ops(client, handle)
+            except Exception:
+                logger.exception(
+                    "auth_redis_compensation_peer_failed peer=%s kind=%s",
+                    label,
+                    handle.kind,
+                )
+    except Exception:
+        logger.debug("mirror compensation skipped", exc_info=True)
 
 
 def commit_db_after_redis(handle: RedisIssuanceHandle) -> None:

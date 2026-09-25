@@ -145,6 +145,7 @@ services:
       - GUNICORN_WORKER_CLASS=${GUNICORN_WORKER_CLASS:-gevent}
       - SIO_DISABLE_UPGRADES=false
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - AUTH_REDIS_URL=${AUTH_REDIS_URL:-redis://redis-auth:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       - CELERY_TIMEZONE=${CELERY_TIMEZONE:-Europe/Zurich}
@@ -210,6 +211,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      redis-auth:
+        condition: service_started
       osrm:
         condition: service_started
     networks:
@@ -267,6 +270,7 @@ services:
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
       - PYTHONPATH=/app
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - AUTH_REDIS_URL=${AUTH_REDIS_URL:-redis://redis-auth:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       - CELERY_TIMEZONE=${CELERY_TIMEZONE:-Europe/Zurich}
@@ -352,6 +356,7 @@ services:
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
       - PYTHONPATH=/app
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - AUTH_REDIS_URL=${AUTH_REDIS_URL:-redis://redis-auth:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       - CELERY_TIMEZONE=${CELERY_TIMEZONE:-Europe/Zurich}
@@ -485,6 +490,34 @@ services:
           cpus: "0.25"
           memory: 256M
 
+  # P0-6 : store refresh CURRENT/PREVIOUS — isolation mémoire (noeviction)
+  redis-auth:
+    image: redis:7-alpine
+    ports:
+      - "6382:6379"
+    volumes:
+      - redis-auth-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    command: >-
+      redis-server
+      --appendonly yes
+      --maxmemory 128mb
+      --maxmemory-policy noeviction
+      --save ""
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 192M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
   osrm:
     image: osrm/osrm-backend:latest
     volumes:
@@ -613,6 +646,7 @@ services:
 volumes:
   pg_data:
   redis-data:
+  redis-auth-data:
   prometheus-data:
   grafana-data:
 

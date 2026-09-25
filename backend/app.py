@@ -164,6 +164,39 @@ def validate_required_env_vars(config_name: str) -> None:
                 + "Fournissez soit REDIS_URL, soit REDIS_PASSWORD."
             )
 
+        # P0-6 rollout : AUTH_REDIS_URL obligatoire (pas de fallback silencieux).
+        auth_redis = (os.getenv("AUTH_REDIS_URL") or "").strip()
+        allow_legacy = (os.getenv("AUTH_REDIS_ALLOW_LEGACY_FALLBACK") or "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        if not auth_redis and not allow_legacy:
+            raise RuntimeError(
+                "AUTH_REDIS_URL manquant en production (P0-6). "
+                + "Le store refresh ne doit pas partager REDIS_URL (allkeys-lru). "
+                + "Définir AUTH_REDIS_URL vers redis-auth, ou temporairement "
+                + "AUTH_REDIS_ALLOW_LEGACY_FALLBACK=1 pendant le cutover."
+            )
+
+        # P0-6 rollout : modes dual_write / auth_primary exigent AUTH_REDIS_URL distinct.
+        migration_mode = (
+            os.getenv("AUTH_REDIS_MIGRATION_MODE") or "off"
+        ).strip().lower().replace("-", "_")
+        if migration_mode in {"dual_write", "dualwrite", "auth_primary", "authprimary", "auth_only", "authonly"}:
+            if not auth_redis:
+                raise RuntimeError(
+                    f"AUTH_REDIS_MIGRATION_MODE={migration_mode} exige AUTH_REDIS_URL."
+                )
+            redis_general = (os.getenv("REDIS_URL") or "").strip()
+            if migration_mode in {"dual_write", "dualwrite", "auth_primary", "authprimary"}:
+                if not redis_general or redis_general == auth_redis:
+                    raise RuntimeError(
+                        f"AUTH_REDIS_MIGRATION_MODE={migration_mode} exige REDIS_URL "
+                        "distinct de AUTH_REDIS_URL (legacy + redis-auth)."
+                    )
+
         # ✅ S1: Valider CORS en production - rejeter configuration "*"
         cors_origins_env = os.getenv("SOCKETIO_CORS_ORIGINS", default="")
         if not cors_origins_env or cors_origins_env.strip() == "*":

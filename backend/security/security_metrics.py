@@ -144,6 +144,55 @@ tokens_rotation_total = Counter(
     "Nombre total de rotations de refresh tokens",
 )
 
+# ========================
+# P0-6 : Redis auth (refresh CURRENT/PREVIOUS)
+# ========================
+
+redis_auth_memory_used_bytes = Gauge(
+    "redis_auth_memory_used_bytes",
+    "Mémoire utilisée (bytes) du Redis auth refresh",
+)
+
+redis_auth_memory_max_bytes = Gauge(
+    "redis_auth_memory_max_bytes",
+    "maxmemory configuré (bytes) du Redis auth refresh ; 0 = illimité",
+)
+
+redis_auth_memory_utilization = Gauge(
+    "redis_auth_memory_utilization",
+    "Ratio used_memory / maxmemory du Redis auth (0 si maxmemory=0)",
+)
+
+redis_auth_evicted_keys_total = Gauge(
+    "redis_auth_evicted_keys_total",
+    "Compteur Redis INFO evicted_keys sur redis-auth (invariant: doit rester 0)",
+)
+
+redis_auth_rejected_writes_total = Counter(
+    "redis_auth_rejected_writes_total",
+    "Écritures Redis auth refusées (OOM / maxmemory)",
+)
+
+redis_auth_store_unavailable_total = Counter(
+    "redis_auth_store_unavailable_total",
+    "Passages fail-closed store refresh (Redis auth indisponible / OOM)",
+)
+
+auth_redis_dual_write_errors_total = Counter(
+    "auth_redis_dual_write_errors_total",
+    "Échecs d'écriture secondaire pendant dual-write / auth_primary (P0-6 rollout)",
+)
+
+auth_redis_migration_missing_total = Counter(
+    "auth_redis_migration_missing_total",
+    "Clés absentes côté redis-auth détectées par l'audit de parité (P0-6)",
+)
+
+auth_redis_migration_mismatch_total = Counter(
+    "auth_redis_migration_mismatch_total",
+    "Écarts valeur/TTL détectés par l'audit de parité (P0-6)",
+)
+
 # Compteur des échecs de validation CSRF
 csrf_validation_failures_total = Counter(
     "security_csrf_validation_failures_total",
