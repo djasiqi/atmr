@@ -50,6 +50,11 @@ const SignupActivation = () => {
   const [openTermsDoc, setOpenTermsDoc] = useState(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
+  /** Requête HTTP de renvoi email réellement en vol (≠ cooldown). */
+  const [emailSending, setEmailSending] = useState(false);
+  const [smsSending, setSmsSending] = useState(false);
+  /** Le serveur a accepté au moins un envoi (2xx / file d'attente). */
+  const [activationEmailAccepted, setActivationEmailAccepted] = useState(false);
   const [infoMessage, setInfoMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [debugActivationLink, setDebugActivationLink] = useState('');
@@ -94,6 +99,19 @@ const SignupActivation = () => {
       setMaskedPhone(response.data.masked_phone);
     }
     updateStatus(response?.data?.activation_status);
+    const retryAfter = Number(response?.data?.email_resend_retry_after_seconds || 0);
+    if (retryAfter > 0) {
+      setEmailCooldown(retryAfter);
+    }
+    const delivery = response?.data?.activation_status?.email_delivery_status;
+    if (
+      delivery === 'queued' ||
+      delivery === 'sending' ||
+      delivery === 'sent' ||
+      delivery === 'delivered'
+    ) {
+      setActivationEmailAccepted(true);
+    }
   };
 
   useEffect(() => {
@@ -199,47 +217,78 @@ const SignupActivation = () => {
     const retryAfter = Number(error?.response?.data?.details?.retry_after_seconds || 0);
     if (retryAfter > 0) {
       setCooldown(retryAfter);
+      return retryAfter;
     }
+    return 0;
   };
 
+  const isEmailDeliveryInProgressError = (error) => {
+    const reason = String(error?.response?.data?.details?.reason || '');
+    const message = String(
+      error?.response?.data?.message || error?.response?.data?.error || ''
+    ).toLowerCase();
+    return (
+      reason === 'email_delivery_in_progress' ||
+      message.includes('envoi déjà') ||
+      message.includes('déjà été demandé')
+    );
+  };
+
+  const recipientLabel = maskedEmail || prefillEmail || 'votre adresse email';
+
   const handleResendEmail = async () => {
-    if (!activationSessionId) return;
+    if (!activationSessionId || emailSending || emailCooldown > 0) return;
     setErrorMessage('');
     setInfoMessage('');
     setDebugActivationLink('');
     setDebugSmsCode('');
-    setLoading(true);
+    setEmailSending(true);
     try {
       const response = await apiClient.post('/auth/activation/resend-email', {
         activation_session_id: activationSessionId,
       });
+      setActivationEmailAccepted(true);
       setEmailCooldown(DEFAULT_COOLDOWN_SECONDS);
+      if (response?.data?.activation_status) {
+        updateStatus(response.data.activation_status);
+      }
       const fallbackLink = String(response?.data?.debug_activation_link || '').trim();
       if (fallbackLink) {
         setInfoMessage(
           "Service email indisponible en local. Utilisez le lien d'activation ci-dessous."
         );
         setDebugActivationLink(fallbackLink);
-      } else if (response?.data?.activation_email_queued || response?.data?.email_sent === null) {
-        setInfoMessage("Email en cours d'envoi. Vérifiez votre boîte de réception.");
       } else {
-        setInfoMessage('Email renvoyé. Vérifiez votre boîte de réception.');
+        setInfoMessage(
+          `Un lien d'activation a été envoyé à ${recipientLabel}. Vérifiez votre boîte de réception et vos courriers indésirables.`
+        );
       }
     } catch (error) {
-      markCooldownFromError(error, setEmailCooldown);
-      setErrorMessage(parseApiMessage(error, "Impossible d'envoyer l'email."));
+      const retryAfter = markCooldownFromError(error, setEmailCooldown);
+      if (isEmailDeliveryInProgressError(error)) {
+        setActivationEmailAccepted(true);
+        if (retryAfter <= 0) {
+          setEmailCooldown(DEFAULT_COOLDOWN_SECONDS);
+        }
+        setInfoMessage(
+          `Un lien d'activation a déjà été demandé pour ${recipientLabel}. Vérifiez votre boîte de réception ; vous pourrez renvoyer après le délai.`
+        );
+        setErrorMessage('');
+      } else {
+        setErrorMessage(parseApiMessage(error, "Impossible d'envoyer l'email."));
+      }
     } finally {
-      setLoading(false);
+      setEmailSending(false);
     }
   };
 
   const handleResendSms = async () => {
-    if (!activationSessionId) return;
+    if (!activationSessionId || smsSending || smsCooldown > 0) return;
     setErrorMessage('');
     setInfoMessage('');
     setDebugActivationLink('');
     setDebugSmsCode('');
-    setLoading(true);
+    setSmsSending(true);
     try {
       const response = await apiClient.post('/auth/activation/resend-sms', {
         activation_session_id: activationSessionId,
@@ -258,7 +307,7 @@ const SignupActivation = () => {
       markCooldownFromError(error, setSmsCooldown);
       setErrorMessage(parseApiMessage(error, "Impossible d'envoyer le SMS."));
     } finally {
-      setLoading(false);
+      setSmsSending(false);
     }
   };
 
@@ -487,12 +536,17 @@ const SignupActivation = () => {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Email</h2>
           <p className={styles.sectionHint}>
-            Un lien a été envoyé à {maskedEmail || prefillEmail || 'votre adresse email'}.
+            {activationEmailAccepted || status.email_verified
+              ? `Un lien d'activation a été envoyé à ${recipientLabel}.`
+              : `Un lien sera envoyé à ${recipientLabel}.`}
           </p>
-          {!status.email_verified &&
-          (status.email_delivery_status === 'queued' ||
-            status.email_delivery_status === 'sending') ? (
-            <p className={styles.sectionHint}>Email en cours d&apos;envoi…</p>
+          {(activationEmailAccepted || status.email_verified) && !status.email_verified ? (
+            <p className={styles.sectionHint}>
+              Vérifiez votre boîte de réception et vos courriers indésirables.
+            </p>
+          ) : null}
+          {emailSending ? (
+            <p className={styles.sectionHint}>Envoi de l&apos;e-mail…</p>
           ) : null}
           <span className={`${styles.badge} ${status.email_verified ? styles.badgeDone : styles.badgePending}`}>
             {status.email_verified ? 'Email confirmé' : 'En attente de confirmation'}
@@ -502,9 +556,19 @@ const SignupActivation = () => {
               type="button"
               className={`${styles.button} ${styles.buttonSecondary}`}
               onClick={handleResendEmail}
-              disabled={loading || status.email_verified || emailCooldown > 0 || !activationSessionId}
+              disabled={
+                loading ||
+                emailSending ||
+                status.email_verified ||
+                emailCooldown > 0 ||
+                !activationSessionId
+              }
             >
-              {emailCooldown > 0 ? `Renvoyer (${emailCooldown}s)` : "Renvoyer l'email"}
+              {emailSending
+                ? "Envoi…"
+                : emailCooldown > 0
+                  ? `Renvoyer dans ${emailCooldown}s`
+                  : "Renvoyer l'email"}
             </button>
           </div>
         </section>
@@ -577,9 +641,19 @@ const SignupActivation = () => {
               type="button"
               className={`${styles.button} ${styles.buttonSecondary}`}
               onClick={handleResendSms}
-              disabled={loading || status.phone_verified || smsCooldown > 0 || !activationSessionId}
+              disabled={
+                loading ||
+                smsSending ||
+                status.phone_verified ||
+                smsCooldown > 0 ||
+                !activationSessionId
+              }
             >
-              {smsCooldown > 0 ? `Renvoyer (${smsCooldown}s)` : 'Renvoyer le code'}
+              {smsSending
+                ? 'Envoi…'
+                : smsCooldown > 0
+                  ? `Renvoyer dans ${smsCooldown}s`
+                  : 'Renvoyer le code'}
             </button>
           </div>
         </section>
@@ -636,7 +710,9 @@ const SignupActivation = () => {
           </button>
         </div>
 
-        {loading ? <p className={styles.subtitle}>Traitement en cours...</p> : null}
+        {loading && !emailSending && !smsSending ? (
+          <p className={styles.subtitle}>Traitement en cours...</p>
+        ) : null}
       </div>
     </div>
   );

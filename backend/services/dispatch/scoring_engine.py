@@ -147,12 +147,47 @@ def compute_candidates(
     *,
     pickup_geo_unit: GeoUnit | None,
     drop_geo_unit: GeoUnit | None,
+    require_dispatch_enabled: bool = True,
 ) -> list[DispatchCandidate]:
+    """Calcule les candidats zone pour une mission.
+
+    ``require_dispatch_enabled`` :
+      True (défaut) — pool auto-dispatch flotte (SEMI/FULLY_AUTO).
+      False — entreprises **approuvées** y compris MANUAL
+      (réception missions LIRIE ; ``dispatch_enabled`` = auto-assign interne).
+      Pour la perf, on ne charge pas toutes les sociétés approved (dizaines
+      de milliers en local) : union dispatch_enabled + grille tarifaire active
+      + service_area renseignée.
+    """
     pickup_chain = geo_chain(pickup_geo_unit)
     drop_chain = geo_chain(drop_geo_unit)
     same_canton = _pickup_drop_same_canton(pickup_chain, drop_chain)
     intra_strict_drop = same_canton is True
-    companies = Company.query.filter(Company.dispatch_enabled.is_(True)).all()
+    if require_dispatch_enabled:
+        companies = Company.query.filter(Company.dispatch_enabled.is_(True)).all()
+    else:
+        from sqlalchemy import and_, or_
+
+        from models import PricingProfile
+
+        active_profile_company_ids = (
+            db.session.query(PricingProfile.company_id)
+            .filter(PricingProfile.is_active.is_(True))
+            .distinct()
+        )
+        companies = (
+            Company.query.filter(
+                Company.is_approved.is_(True),
+                or_(
+                    Company.dispatch_enabled.is_(True),
+                    Company.id.in_(active_profile_company_ids),
+                    and_(
+                        Company.service_area.isnot(None),
+                        Company.service_area != "",
+                    ),
+                ),
+            ).all()
+        )
     candidates: list[DispatchCandidate] = []
 
     for company in companies:

@@ -1211,6 +1211,7 @@ const InvoicesRegistry = () => {
         <Suspense fallback={null}>
           <SendEmailModal
             invoice={sendEmailModal.invoice}
+            companyId={company?.id}
             isReminder={sendEmailModal.isReminder}
             reminderId={sendEmailModal.reminderId}
             onClose={() => setSendEmailModal({ open: false, invoice: null, isReminder: false, reminderId: null })}

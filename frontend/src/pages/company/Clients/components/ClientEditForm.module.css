@@ -301,6 +301,26 @@
   font-size: 11px;
 }
 
+.radioRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.radioLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-primary, #0f172a);
+  cursor: pointer;
+}
+
+.radioLabel input {
+  margin: 0;
+}
+
 /* ── Checkbox ── */
 .checkboxGroup {
   margin: 8px 0;

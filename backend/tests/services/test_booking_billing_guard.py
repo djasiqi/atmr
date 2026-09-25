@@ -8,6 +8,7 @@ import pytest
 
 from domain.billing.errors import BillingValidationError
 from services.billing.booking_billing_guard import (
+    INCOMPLETE_CLINIC_BILLING_PARTY_USER_MESSAGE,
     INCOMPLETE_CLINIC_PAYER_USER_MESSAGE,
     assert_non_patient_billing_complete,
     billing_type_normalized,
@@ -28,8 +29,12 @@ def test_clinic_requires_company_and_bp():
         billed_to_company_id=39947,
         billing_party_id=None,
     )
-    with pytest.raises(BillingValidationError, match="billing_party_id"):
+    with pytest.raises(BillingValidationError, match="billing_party_id") as excinfo:
         validate_booking_billing_ready_for_write(booking)
+    assert (
+        user_message_for_incomplete_billing(excinfo.value)
+        == INCOMPLETE_CLINIC_BILLING_PARTY_USER_MESSAGE
+    )
 
 
 def test_clinic_requires_company_id():

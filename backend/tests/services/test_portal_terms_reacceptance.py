@@ -268,8 +268,8 @@ def test_substantial_transport_version_then_reacceptance_relinks_new_booking(
     cgu, _transport = current_portal_terms()
     transport_v2 = _spec(
         DOCUMENT_TRANSPORT_TERMS,
-        "2.0",
-        "LIRIE — CGV transport\nterms_version: 2.0\nVersion substantielle de test.\n",
+        "2.1",
+        "LIRIE — CGV transport\nterms_version: 2.1\nVersion substantielle de test.\n",
         required=True,
     )
     _publish(monkeypatch, cgu, transport_v2)
@@ -300,13 +300,13 @@ def test_substantial_transport_version_then_reacceptance_relinks_new_booking(
         [row for row in stored if row.document_type == DOCUMENT_TRANSPORT_TERMS],
         key=lambda row: int(row.id),
     )
-    assert [row.terms_version for row in transport_rows] == ["1.0", "2.0"]
+    assert [row.terms_version for row in transport_rows] == ["1.0", "2.1"]
     fresh_v1 = db.session.get(ClientTermsAcceptance, transport_v1.id)
     assert fresh_v1 is not None
     assert fresh_v1.terms_version == "1.0"
     assert fresh_v1.verification_method == VERIFICATION_NOT_VERIFIED
     assert fresh_v1.phone_verified_at_snapshot is None
-    new_transport = next(row for row in transport_rows if row.terms_version == "2.0")
+    new_transport = next(row for row in transport_rows if row.terms_version == "2.1")
     assert new_transport.terms_hash == transport_v2.terms_hash
     assert new_transport.verification_method == VERIFICATION_OTP_SMS
     assert new_transport.phone_verified_at_snapshot is not None

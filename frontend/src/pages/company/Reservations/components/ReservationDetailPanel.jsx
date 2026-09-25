@@ -17,8 +17,11 @@ import { toast } from 'sonner';
 import BookingChat from './BookingChat';
 import { isBookingChatClosed } from '../../../../utils/bookingChat';
 import { buildIdentityFromApi, isInstitutionCompanyBooking } from '../../../../utils/bookingIdentity';
-import { extractWallClockDate, extractWallClockTime } from '../../../../utils/missionTimeDisplay';
 import {
+  isPortalDoubleValidationFlow,
+  portalCarrierFacingAmountDisplay,
+} from '../../../../utils/portalDoubleValidationUi';
+import { extractWallClockDate, extractWallClockTime } from '../../../../utils/missionTimeDisplay';import {
   formatAppointmentShiftLead,
   normalizeHhmm,
   resolveAppointmentShift,
@@ -1666,10 +1669,21 @@ const ReservationDetailPanel = ({
                     {renderBookingDateTime(reservation)}
                   </span>
                 </div>
-                <div className={s.summaryItem}>
-                  <span className={s.summaryLabel}>Montant</span>
-                  <span className={s.summaryValue}>{formatCurrency(reservation.amount)}</span>
-                </div>
+                {(() => {
+                  const amtDisp = portalCarrierFacingAmountDisplay(reservation);
+                  return (
+                    <div className={s.summaryItem}>
+                      <span className={s.summaryLabel}>{amtDisp.label}</span>
+                      <span className={s.summaryValue}>
+                        {amtDisp.amount != null
+                          ? formatCurrency(amtDisp.amount)
+                          : amtDisp.mode === 'awaiting_quote'
+                            ? 'Selon votre grille tarifaire'
+                            : '—'}
+                      </span>
+                    </div>
+                  );
+                })()}
                 {driverDisplayName && (
                   <div className={s.summaryItem}>
                     <span className={s.summaryLabel}>Chauffeur</span>
@@ -2101,6 +2115,14 @@ const ReservationDetailPanel = ({
 
                     if (canAdjustBilling) {
                       return billingAdjustForm;
+                    }
+
+                    if (isPortalDoubleValidationFlow(reservation)) {
+                      return (
+                        <div className={`${s.billingStatus} ${s.billingStatusPatient}`}>
+                          Facturation client par votre entreprise (hors encaissement LIRIE)
+                        </div>
+                      );
                     }
 
                     return (

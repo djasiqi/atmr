@@ -241,6 +241,10 @@ const ClientEditForm = ({
     show_billing_info: !!(client.billing_address && String(client.billing_address).trim()),
     default_billed_to_type: client.default_billing?.billed_to_type ?? client.default_billed_to_type ?? '',
     default_billed_to_contact: client.default_billing?.billed_to_contact ?? client.default_billed_to_contact ?? '',
+    invoice_delivery_method:
+      client.invoice_delivery_method ||
+      client.default_billing?.invoice_delivery_method ||
+      'email',
     preferential_rate: client.preferential_rate || '',
     is_active: client.is_active !== false,
   });
@@ -307,6 +311,10 @@ const ClientEditForm = ({
       show_billing_info: !!(client.billing_address && String(client.billing_address).trim()),
       default_billed_to_type: client.default_billing?.billed_to_type ?? client.default_billed_to_type ?? '',
       default_billed_to_contact: client.default_billing?.billed_to_contact ?? client.default_billed_to_contact ?? '',
+      invoice_delivery_method:
+        client.invoice_delivery_method ||
+        client.default_billing?.invoice_delivery_method ||
+        'email',
       preferential_rate: client.preferential_rate || '',
       is_active: client.is_active !== false,
     };
@@ -447,6 +455,8 @@ const ClientEditForm = ({
         gp_phone: normalizedGpPhone,
         default_billed_to_type: formData.default_billed_to_type || null,
         default_billed_to_contact: formData.default_billed_to_contact?.trim() || null,
+        invoice_delivery_method:
+          formData.invoice_delivery_method === 'paper' ? 'paper' : 'email',
       };
 
       if (!formData.is_institution) {
@@ -1061,6 +1071,40 @@ const ClientEditForm = ({
                   )}
                 </>
               )}
+              <div className={styles.formGroup} data-testid="client-invoice-delivery-method">
+                <span className={styles.label}>Mode d’envoi de la facture</span>
+                <div className={styles.radioRow} role="radiogroup" aria-label="Mode d’envoi de la facture">
+                  <label className={styles.radioLabel}>
+                    <input
+                      type="radio"
+                      name="invoice_delivery_method"
+                      value="email"
+                      checked={formData.invoice_delivery_method !== 'paper'}
+                      onChange={() =>
+                        setFormData((prev) => ({ ...prev, invoice_delivery_method: 'email' }))
+                      }
+                      disabled={loading}
+                    />
+                    Email — sans supplément
+                  </label>
+                  <label className={styles.radioLabel}>
+                    <input
+                      type="radio"
+                      name="invoice_delivery_method"
+                      value="paper"
+                      checked={formData.invoice_delivery_method === 'paper'}
+                      onChange={() =>
+                        setFormData((prev) => ({ ...prev, invoice_delivery_method: 'paper' }))
+                      }
+                      disabled={loading}
+                    />
+                    Facture papier — + CHF 3.00
+                  </label>
+                </div>
+                <small className={styles.hint}>
+                  Choix appliqué à la création de chaque facture Direct patient. Par défaut : email.
+                </small>
+              </div>
               <div className={styles.formGroup}>
                 <label htmlFor="preferential_rate" className={styles.label}>
                   {formData.is_institution

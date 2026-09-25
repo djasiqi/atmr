@@ -306,6 +306,21 @@ def _resolve_draft_invoice(
     conflict = _expected_updated_at_conflict(inv, expected_updated_at)
     if conflict:
         return None, conflict.status_code or 409, conflict.error or {"error": "Conflit"}
+
+    # Frais papier : ligne distincte si mode papier (meta ou préférence client)
+    try:
+        from application.invoices.paper_invoice_fee import ensure_paper_invoice_fee_line
+        from models.client import Client as ClientModel
+
+        pref_client = None
+        if getattr(inv, "client_id", None):
+            pref_client = db.session.get(ClientModel, int(inv.client_id))
+        if ensure_paper_invoice_fee_line(inv, client=pref_client):
+            db.session.flush()
+            db.session.refresh(inv)
+    except Exception:
+        pass
+
     if repair_draft_invoice_if_line_totals_inconsistent(inv):
         db.session.flush()
         db.session.refresh(inv)

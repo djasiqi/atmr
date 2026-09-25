@@ -203,6 +203,12 @@ class UpdateCompanyClientUseCase:
         if "default_billed_to_contact" in data:
             client.default_billed_to_contact = data["default_billed_to_contact"] or None
 
+        if "invoice_delivery_method" in data:
+            raw = (data["invoice_delivery_method"] or "").strip().lower()
+            client.invoice_delivery_method = (
+                raw if raw in ("email", "paper") else "email"
+            )
+
         # Champs User (first_name, last_name, phone)
         user = getattr(client, "user", None)
         if user is not None:

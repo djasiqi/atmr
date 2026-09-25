@@ -139,6 +139,7 @@ class GenerateInvoiceInput:
         institution_patient_id: Bénéficiaire institutionnel (batch patients)
         strict_reservation_ids: Ne pas élargir la sélection via le DSU A/R
         invoice_meta_extra: Métadonnées fusionnées à la création (idempotence)
+        delivery_method: ``email`` (défaut) ou ``paper`` (+ CHF 3 ligne distincte)
     """
 
     company_id: int
@@ -157,6 +158,7 @@ class GenerateInvoiceInput:
     institution_patient_id: int | None = None
     strict_reservation_ids: bool = False
     invoice_meta_extra: dict[str, Any] | None = None
+    delivery_method: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -960,6 +962,17 @@ class GenerateInvoiceUseCase:
             client = self.client_repo.find_model_by_id_with_user(
                 effective_client_id, input_data.company_id
             )
+            # Clients PORTAL : company_id NULL — hors filtre multi-tenant entreprise
+            if client is None and effective_client_id is not None:
+                from sqlalchemy.orm import joinedload as _jl
+
+                from models.client import Client as ClientModel
+
+                client = (
+                    ClientModel.query.options(_jl(ClientModel.user))
+                    .filter_by(id=int(effective_client_id))
+                    .first()
+                )
             patient_name = ""
             if opportunity_meta and isinstance(
                 opportunity_meta.get("billing_subject_snapshot"), dict
@@ -1429,6 +1442,56 @@ class GenerateInvoiceUseCase:
                 if vat_total < 0:
                     vat_total = Decimal("0.00")
 
+            # Frais facture papier : ligne distincte, hors plafond / hors remise transport
+            from application.invoices.paper_invoice_fee import (
+                DELIVERY_PAPER,
+                PAPER_FEE_DESCRIPTION,
+                PAPER_FEE_LINE_META_KEY,
+                PAPER_INVOICE_FEE_CHF,
+                invoice_has_paper_fee_line,
+                normalize_delivery_method,
+            )
+
+            delivery_method = normalize_delivery_method(
+                getattr(client, "invoice_delivery_method", None)
+                if client is not None
+                else None
+            )
+            # Préférence client uniquement — l'entreprise ne choisit pas le mode d'envoi.
+            paper_fee_applied = False
+            if delivery_method == DELIVERY_PAPER and not invoice_has_paper_fee_line(
+                invoice
+            ):
+                fee = PAPER_INVOICE_FEE_CHF
+                self.invoice_line_repo.create(
+                    {
+                        "invoice_id": invoice.id,
+                        "type": InvoiceLineType.CUSTOM,
+                        "description": PAPER_FEE_DESCRIPTION,
+                        "qty": Decimal("1"),
+                        "unit_price": fee,
+                        "line_total": fee,
+                        "vat_rate": None,
+                        "vat_amount": Decimal("0.00"),
+                        "total_with_vat": fee,
+                        "adjustment_note": None,
+                        "reservation_id": None,
+                        "line_meta": {
+                            PAPER_FEE_LINE_META_KEY: True,
+                            "amount_chf": float(fee),
+                        },
+                    }
+                )
+            # Recharger les lignes pour les totaux / PDF / aperçu HTML / eBill (QR)
+            db.session.flush()
+            try:
+                db.session.expire(invoice, ["lines"])
+            except Exception:
+                pass
+            subtotal = round_to_5_cents(subtotal + fee)
+            total = round_to_5_cents(total + fee)
+            paper_fee_applied = True
+
             invoice.subtotal_amount = subtotal
             invoice.vat_total_amount = vat_total
             invoice.total_amount = total
@@ -1454,6 +1517,9 @@ class GenerateInvoiceUseCase:
             }
             if global_discount_meta is not None:
                 current_meta["global_discount"] = global_discount_meta
+            current_meta["delivery_method"] = delivery_method
+            if paper_fee_applied or delivery_method == DELIVERY_PAPER:
+                current_meta["paper_invoice_fee_chf"] = float(PAPER_INVOICE_FEE_CHF)
             invoice.meta = cast(Any, current_meta)
 
             # 11. Générer et sauvegarder la référence QR (si pas déjà présente)

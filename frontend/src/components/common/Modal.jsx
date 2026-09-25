@@ -1,5 +1,6 @@
 // src/components/common/Modal.jsx
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 const FOCUSABLE_SELECTORS =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
@@ -75,7 +76,11 @@ const Modal = ({ children, onClose, size = 'lg', className = '', ariaLabel = 'Fe
 
   const overlayClasses = ['modal-overlay', `modal-${size}`, className].filter(Boolean).join(' ');
 
-  return (
+  if (typeof document === 'undefined' || !document.body) {
+    return null;
+  }
+
+  return createPortal(
     <div className={overlayClasses} onClick={handleClickOutside} role="presentation">
       <div
         className="modal-content"
@@ -87,7 +92,8 @@ const Modal = ({ children, onClose, size = 'lg', className = '', ariaLabel = 'Fe
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

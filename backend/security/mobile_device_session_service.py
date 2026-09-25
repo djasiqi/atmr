@@ -1363,6 +1363,66 @@ def is_rotation_idempotency_conflict(exc: BaseException) -> bool:
     )
 
 
+def find_refresh_successor_response(
+    session_id: uuid.UUID,
+    *,
+    predecessor_token: str,
+    device_installation_id: str,
+    successor_hash: str | None = None,
+) -> dict[str, Any] | None:
+    """Retrouve la réponse de rotation R0→R1 sans nouvelle branche (P0-2).
+
+    Cherche les receipts ``operation_type=refresh`` de la session dont le proof
+    correspond au prédécesseur (hash du refresh R0) et au device binding.
+    Si ``successor_hash`` (SHA256 Redis du JWT R1) est fourni, il doit matcher.
+    """
+    from models.mobile_device_session import AuthRotationResult
+
+    proof_hash = hash_credential(str(predecessor_token))
+    rows = (
+        AuthRotationResult.query.filter_by(
+            session_id=session_id,
+            operation_type="refresh",
+        )
+        .order_by(AuthRotationResult.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    for row in rows:
+        if row.expires_at and row.expires_at < _now():
+            continue
+        try:
+            stored = decrypt_rotation_response(
+                row.response_ciphertext, row.encryption_key_id
+            )
+        except Exception:
+            continue
+        if not isinstance(stored, dict):
+            continue
+        meta = stored.get(ROTATION_META_KEY)
+        public = strip_rotation_meta(stored)
+        proof = RotationProof(
+            proof_hash=proof_hash,
+            device_installation_id=str(device_installation_id or ""),
+            operation_type="refresh",
+        )
+        if not _proof_matches(
+            meta if isinstance(meta, dict) else None,
+            proof,
+            stored_payload=public,
+        ):
+            continue
+        if successor_hash:
+            succ = public.get("refresh_token")
+            if not isinstance(succ, str) or not succ:
+                continue
+            got = hashlib.sha256(succ.encode()).hexdigest()
+            if got != str(successor_hash):
+                continue
+        return public
+    return None
+
+
 def store_rotation_result(
     *,
     session: MobileDeviceSession,

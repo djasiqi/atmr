@@ -26,6 +26,18 @@ class _DummyVersion:
         self.pricing_profile = _DummyProfile(model_type)
 
 
+def test_compute_price_flat_round_trip_doubles():
+    version = _DummyVersion({"model": "flat", "base_fee": 45.0}, "flat")
+    amount, breakdown = compute_price(
+        {},
+        version,
+        {"pickup_local_time": "14:00", "is_round_trip": True},
+    )
+    assert amount == Decimal("90.00")
+    assert breakdown["round_trip"]["applied"] is True
+    assert breakdown["total"] == "90.00"
+
+
 def test_compute_price_flat_is_deterministic():
     version = _DummyVersion(
         {

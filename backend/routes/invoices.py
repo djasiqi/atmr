@@ -990,8 +990,12 @@ class EligibleClients(Resource):
             .join(unbilled_subquery, Client.id == unbilled_subquery.c.client_id)
             .options(joinedload(Client.user))
             .filter(
-                Client.company_id == company_id,
-                Client.client_type != ClientType.PORTAL,
+                # Portefeuille classique OU client PORTAL (ownership via Booking.company_id
+                # déjà filtré dans unbilled_subquery).
+                or_(
+                    Client.company_id == company_id,
+                    Client.client_type == ClientType.PORTAL,
+                ),
             )
         )
 
@@ -2412,6 +2416,7 @@ class GenerateInvoice(Resource):
                     global_discount_note=validated_data.get("global_discount_note"),
                     billing_opportunity_key=billing_opportunity_key,
                     excluded_booking_ids=excluded_booking_ids,
+                    delivery_method=validated_data.get("delivery_method"),
                 )
                 invoice_result = uc.execute(input_data)
                 if not invoice_result.success:
@@ -2566,6 +2571,7 @@ class GenerateInvoice(Resource):
                             global_discount_note=validated_data.get(
                                 "global_discount_note"
                             ),
+                            delivery_method=validated_data.get("delivery_method"),
                         )
                         invoice_result = uc.execute(input_data)
                         if not invoice_result.success:
@@ -2622,6 +2628,7 @@ class GenerateInvoice(Resource):
                             "global_discount_percent"
                         ),
                         global_discount_note=validated_data.get("global_discount_note"),
+                        delivery_method=validated_data.get("delivery_method"),
                     )
                     invoice_result = uc.execute(input_data)
                     if not invoice_result.success:

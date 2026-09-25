@@ -17,10 +17,21 @@ INCOMPLETE_CLINIC_PAYER_USER_MESSAGE = (
     "Choisissez la clinique cible puis validez."
 )
 
+INCOMPLETE_CLINIC_BILLING_PARTY_USER_MESSAGE = (
+    "Facturation incomplète : la clinique payeuse est définie, "
+    "mais aucun destinataire de facturation n’est lié. "
+    "Configurez le mapping clinique → destinataire (Paramètres), "
+    "ou réenregistrez l’ajustement de facturation sur la course, "
+    "puis réessayez l’assignation."
+)
+
 
 def user_message_for_incomplete_billing(exc: BillingValidationError) -> str:
-    if getattr(exc, "field", None) == "billed_to_company_id":
+    field = getattr(exc, "field", None)
+    if field == "billed_to_company_id":
         return INCOMPLETE_CLINIC_PAYER_USER_MESSAGE
+    if field == "billing_party_id":
+        return INCOMPLETE_CLINIC_BILLING_PARTY_USER_MESSAGE
     return str(exc)
 
 

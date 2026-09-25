@@ -64,6 +64,7 @@ class PatientOpportunity:
     client_id: int
     transports_count: int
     estimated_total: float
+    invoice_delivery_method: str = "email"
 
 
 @dataclass(frozen=True, slots=True)
@@ -472,6 +473,22 @@ def load_eligible_bookings_for_opportunity(
     return sorted(out, key=booking_schedule_sort_key)
 
 
+def _client_billable_under_company(client: Client | None, company_id: int) -> bool:
+    """True si le client peut apparaître en Direct patient pour cette entreprise.
+
+    - Portefeuille : ``client.company_id == company_id``
+    - PORTAL : ``client_type=PORTAL`` et ``company_id`` NULL (propriété via booking)
+    """
+    if client is None:
+        return False
+    client_company = getattr(client, "company_id", None)
+    if client_company is not None and int(client_company) == int(company_id):
+        return True
+    from services.auth.portal_phone_verification import is_portal_client
+
+    return bool(is_portal_client(client) and client_company is None)
+
+
 def list_billing_opportunities(
     *,
     company_id: int,
@@ -536,16 +553,24 @@ def list_billing_opportunities(
         if carrier:
             if carrier not in carrier_ok:
                 sample_client = getattr(sample, "client", None)
-                if (
-                    sample_client is not None
-                    and int(getattr(sample_client, "company_id", 0) or 0) == company_id
-                ):
+                if _client_billable_under_company(sample_client, company_id):
                     carrier_ok[carrier] = True
                 else:
                     # Fallback rare si relation absente / hors session
-                    carrier_ok[carrier] = bool(
-                        crepo.find_model_by_id_and_company(carrier, company_id)
-                    )
+                    portfolio = crepo.find_model_by_id_and_company(carrier, company_id)
+                    if portfolio is not None:
+                        carrier_ok[carrier] = True
+                    else:
+                        from services.auth.portal_phone_verification import (
+                            is_portal_client,
+                        )
+
+                        fallback = db.session.get(Client, carrier)
+                        carrier_ok[carrier] = bool(
+                            fallback is not None
+                            and is_portal_client(fallback)
+                            and getattr(fallback, "company_id", None) is None
+                        )
             if not carrier_ok[carrier]:
                 continue
 
@@ -654,6 +679,18 @@ def list_billing_opportunities(
             and segments > 0
         )
 
+        delivery_pref = "email"
+        carrier_client = db.session.get(Client, int(carrier)) if carrier else None
+        if carrier_client is not None:
+            raw_pref = (
+                getattr(carrier_client, "invoice_delivery_method", None) or "email"
+            )
+            delivery_pref = (
+                str(raw_pref).strip().lower()
+                if str(raw_pref).strip().lower() in ("email", "paper")
+                else "email"
+            )
+
         patient_items.append(
             PatientOpportunity(
                 opportunity_key=opportunity_key,
@@ -674,6 +711,7 @@ def list_billing_opportunities(
                 client_id=carrier,
                 transports_count=segments,
                 estimated_total=total,
+                invoice_delivery_method=delivery_pref,
             )
         )
 
@@ -787,6 +825,7 @@ def opportunities_to_dict(res: BillingOpportunitiesResult) -> dict[str, Any]:
                 "unbilled_total_amount": p.unbilled_total_amount,
                 "estimated_total": p.estimated_total,
                 "currency": p.currency,
+                "invoice_delivery_method": p.invoice_delivery_method or "email",
             }
             for p in res.patient_items
         ],

@@ -54,6 +54,11 @@ function mapClientResponseToForm(data) {
     profile_image: u.profile_image || null,
     force_password_change: Boolean(u.force_password_change),
     phone_verified: Boolean(data.phone_verified || u.phone_verified),
+    invoice_delivery_method:
+      data.invoice_delivery_method === 'paper' ||
+      data.default_billing?.invoice_delivery_method === 'paper'
+        ? 'paper'
+        : 'email',
   };
 }
 
@@ -142,6 +147,9 @@ function buildClientUpdatePayload(form) {
   p.floor = (form.floor ?? '').trim();
   p.door_code = (form.door_code ?? '').trim();
   p.access_notes = (form.access_notes ?? '').trim();
+  if (form.invoice_delivery_method === 'paper' || form.invoice_delivery_method === 'email') {
+    p.invoice_delivery_method = form.invoice_delivery_method;
+  }
   return p;
 }
 
@@ -1034,6 +1042,74 @@ const AccountUser = () => {
                       />
                       <span className="privacy-toggleSlider" aria-hidden="true" />
                     </label>
+                  </div>
+
+                  <div className="privacy-row">
+                    <div className="privacy-rowMain">
+                      <div className="privacy-rowTitle">Mode d’envoi de la facture</div>
+                      <p className="privacy-rowDesc">
+                        Par défaut e-mail (sans frais). Facture papier : + CHF 3.00 par facture émise.
+                      </p>
+                      <div
+                        className="privacy-deliveryRadios"
+                        role="radiogroup"
+                        aria-label="Mode d’envoi de la facture"
+                        data-testid="account-invoice-delivery-method"
+                      >
+                        <label>
+                          <input
+                            type="radio"
+                            name="invoice_delivery_method"
+                            value="email"
+                            checked={updatedProfile.invoice_delivery_method !== 'paper'}
+                            onChange={() => {
+                              setUpdatedProfile((prev) => ({
+                                ...prev,
+                                invoice_delivery_method: 'email',
+                              }));
+                              setPrivacyHint(null);
+                            }}
+                          />
+                          Email — sans supplément
+                        </label>
+                        <label>
+                          <input
+                            type="radio"
+                            name="invoice_delivery_method"
+                            value="paper"
+                            checked={updatedProfile.invoice_delivery_method === 'paper'}
+                            onChange={() => {
+                              setUpdatedProfile((prev) => ({
+                                ...prev,
+                                invoice_delivery_method: 'paper',
+                              }));
+                              setPrivacyHint(null);
+                            }}
+                          />
+                          Facture papier — + CHF 3.00
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        className="privacy-rowAction"
+                        style={{ marginTop: 8 }}
+                        onClick={async () => {
+                          try {
+                            await apiClient.put(
+                              `/clients/${public_id}`,
+                              buildClientUpdatePayload(updatedProfile)
+                            );
+                            setPrivacyHint('Préférence d’envoi de facture enregistrée.');
+                          } catch (err) {
+                            setPrivacyHint(
+                              getApiErrorMessage(err, 'Impossible d’enregistrer la préférence.')
+                            );
+                          }
+                        }}
+                      >
+                        Enregistrer le mode d’envoi
+                      </button>
+                    </div>
                   </div>
 
                   <div className="privacy-row privacy-row--last">

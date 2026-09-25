@@ -178,6 +178,8 @@ export const apiSocket = axios.create({
 // ✅ Gestion du token CSRF pour les requêtes mutantes
 let csrfToken = null;
 let csrfTokenExpiry = null;
+/** Single-flight : évite une rafale GET /auth/csrf-token (StrictMode / POSTs parallèles). */
+let csrfTokenInFlight = null;
 
 const getCsrfToken = async (baseURLForCsrf = baseApiRest) => {
   // Vérifier si le token est encore valide
@@ -185,23 +187,33 @@ const getCsrfToken = async (baseURLForCsrf = baseApiRest) => {
     return csrfToken;
   }
 
-  try {
-    // Récupérer un nouveau token CSRF en utilisant axios directement pour éviter les dépendances circulaires
-    const response = await axios.get(`${baseURLForCsrf}/auth/csrf-token`, {
-      withCredentials: true,
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-    });
-    csrfToken = response.data.csrf_token;
-    const ttl = response.data.ttl || 3600; // TTL en secondes
-    csrfTokenExpiry = Date.now() + (ttl * 1000) - 60000; // Expirer 1 minute avant pour éviter les problèmes
-    return csrfToken;
-  } catch (error) {
-    console.warn('⚠️ Impossible de récupérer le token CSRF:', error);
-    return null;
+  if (csrfTokenInFlight) {
+    return csrfTokenInFlight;
   }
+
+  csrfTokenInFlight = (async () => {
+    try {
+      // Récupérer un nouveau token CSRF en utilisant axios directement pour éviter les dépendances circulaires
+      const response = await axios.get(`${baseURLForCsrf}/auth/csrf-token`, {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      });
+      csrfToken = response.data.csrf_token;
+      const ttl = response.data.ttl || 3600; // TTL en secondes
+      csrfTokenExpiry = Date.now() + (ttl * 1000) - 60000; // Expirer 1 minute avant pour éviter les problèmes
+      return csrfToken;
+    } catch (error) {
+      console.warn('⚠️ Impossible de récupérer le token CSRF:', error);
+      return null;
+    } finally {
+      csrfTokenInFlight = null;
+    }
+  })();
+
+  return csrfTokenInFlight;
 };
 
 const addAuthHeader = async (cfg = {}) => {
@@ -422,13 +434,23 @@ export const isRevokedRefreshErrorPayload = (errorData = {}) => {
   );
 };
 
-/** Échec de refresh réellement terminal (auth morte) — pas réseau / 5xx / 429. */
+/** Échec de refresh réellement terminal (auth morte) — pas réseau / 5xx / 429 / CSRF. */
+export const isCsrfFailurePayload = (data) => {
+  if (!data || typeof data !== 'object') return false;
+  const raw = `${data.error || ''} ${data.message || ''} ${data.error_message || ''}`.toLowerCase();
+  return raw.includes('csrf');
+};
+
 export const isTerminalRefreshFailure = (error) => {
   const status = error?.response?.status;
   if (status == null) {
     return false;
   }
   if (status === 429 || status >= 500) {
+    return false;
+  }
+  // Quota CSRF saturé → refresh sans jeton → 403 CSRF : session encore valide.
+  if (status === 403 && isCsrfFailurePayload(error?.response?.data)) {
     return false;
   }
   return status === 401 || status === 400 || status === 403;

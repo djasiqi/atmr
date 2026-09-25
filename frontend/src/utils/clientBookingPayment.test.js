@@ -16,6 +16,21 @@ describe('requiresPrivateOnlinePaymentAtBooking', () => {
     ).toBe(false);
   });
 
+  it('retourne false pour un client PORTAL (pas de Saferpay)', () => {
+    expect(
+      requiresPrivateOnlinePaymentAtBooking({
+        billed_to_type: 'patient',
+        client: { client_type: 'PORTAL' },
+      })
+    ).toBe(false);
+    expect(
+      requiresPrivateOnlinePaymentAtBooking({
+        billed_to_type: 'patient',
+        portal_contract_flow: 'double_validation_v2',
+      })
+    ).toBe(false);
+  });
+
   it('par défaut (données absentes) considère le paiement client', () => {
     expect(requiresPrivateOnlinePaymentAtBooking(null)).toBe(true);
     expect(requiresPrivateOnlinePaymentAtBooking(undefined)).toBe(true);

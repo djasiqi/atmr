@@ -6,7 +6,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: var(--z-modal-app);
+  /* Au-dessus de BillPeriodModal / brouillon (même --z-modal-app) */
+  z-index: calc(var(--z-modal-app, 10001) + 50);
   padding: var(--modal-overlay-padding);
   animation: fadeIn 0.2s ease;
 }

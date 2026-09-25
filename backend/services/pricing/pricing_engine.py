@@ -46,6 +46,35 @@ def _apply_minimum(
     return total
 
 
+def _apply_round_trip_if_needed(
+    total: Decimal,
+    breakdown: OrderedDict[str, Any],
+    context: dict[str, Any],
+) -> Decimal:
+    """Aller-retour pour flat / distance / zone_count / hybrid_stack.
+
+    Aligné sur le portail client (indicatif ×2). Le modèle legacy ``zone``
+    a déjà des grilles ``one_way`` / ``round_trip`` — ne pas appeler ici.
+    """
+    if not context.get("is_round_trip"):
+        return total
+    doubled = (total * Decimal("2")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    breakdown["extras"].append(
+        OrderedDict(
+            [
+                ("type", "round_trip"),
+                ("qty", 2),
+                ("unit", f"{total:.2f}"),
+                ("amount", f"{doubled:.2f}"),
+            ]
+        )
+    )
+    breakdown["round_trip"] = OrderedDict(
+        [("applied", True), ("multiplier", 2), ("one_way_total", f"{total:.2f}")]
+    )
+    return doubled
+
+
 def _is_after_time(pickup_local_time: str | None, threshold: str | None) -> bool:
     if not pickup_local_time or not threshold:
         return False
@@ -147,6 +176,7 @@ def _compute_flat(
         else rules.get("minimum", 0)
     )
     total = _apply_minimum(total, minimum, breakdown)
+    total = _apply_round_trip_if_needed(total, breakdown, context)
     breakdown["total"] = f"{total:.2f}"
     return total, breakdown
 
@@ -548,6 +578,7 @@ def _compute_distance(
 
     minimum = _to_decimal(rules.get("minimum", 0))
     total = _apply_minimum(total, minimum, breakdown)
+    total = _apply_round_trip_if_needed(total, breakdown, context)
     breakdown["total"] = f"{total:.2f}"
     return total, breakdown
 
@@ -724,6 +755,7 @@ def _compute_zone_count_v1(
         else rules.get("minimum", 0)
     )
     total = _apply_minimum(total, minimum, breakdown)
+    total = _apply_round_trip_if_needed(total, breakdown, context)
     breakdown["total"] = f"{total:.2f}"
     return total, breakdown
 
@@ -776,6 +808,7 @@ def _compute_distance_v1(
         else rules.get("minimum", 0)
     )
     total = _apply_minimum(total, minimum, breakdown)
+    total = _apply_round_trip_if_needed(total, breakdown, context)
     breakdown["total"] = f"{total:.2f}"
     return total, breakdown
 
@@ -869,6 +902,7 @@ def _compute_hybrid_stack_v1(
         else rules.get("minimum", 0)
     )
     total = _apply_minimum(total, minimum, breakdown)
+    total = _apply_round_trip_if_needed(total, breakdown, context)
     breakdown["total"] = f"{total:.2f}"
     return total, breakdown
 

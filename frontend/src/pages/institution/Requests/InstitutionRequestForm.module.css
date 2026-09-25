@@ -1815,8 +1815,10 @@
 .missionSegment {
   display: inline-flex;
   gap: 0;
-  min-height: 35px;
-  height: auto;
+  box-sizing: border-box;
+  height: var(--input-h, 35px);
+  min-height: var(--input-h, 35px);
+  max-height: var(--input-h, 35px);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-pill);
   overflow: hidden;
@@ -1862,6 +1864,7 @@
 
 .missionBtn {
   height: 100%;
+  min-height: 0;
   padding: 0 16px;
   border: none;
   background: transparent;
@@ -1875,6 +1878,8 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  line-height: 1;
+  box-sizing: border-box;
 }
 
 .missionBtn:hover { color: var(--text-primary); }

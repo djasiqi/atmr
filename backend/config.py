@@ -338,6 +338,26 @@ class Config:
         (os.getenv("PORTAL_CLIENT_PREVIEW_COMPANY_ID") or "0").strip() or "0"
     )
 
+    # 7B — Double validation contractuelle PORTAL (OFF par défaut jusqu'à 7D).
+    # Activation explicite uniquement via env / config — jamais via migration.
+    PORTAL_DOUBLE_VALIDATION_ENABLED: bool = (
+        (os.getenv("PORTAL_DOUBLE_VALIDATION_ENABLED") or "false").strip().lower()
+        in ("1", "true", "yes", "on")
+    )
+
+    # 7B.5 — Commande conditionnelle 1 clic (OFF par défaut).
+    # Mutuellement exclusif avec PORTAL_DOUBLE_VALIDATION_ENABLED (boot refusal).
+    PORTAL_CONDITIONAL_ORDER_ENABLED: bool = (
+        (os.getenv("PORTAL_CONDITIONAL_ORDER_ENABLED") or "false").strip().lower()
+        in ("1", "true", "yes", "on")
+    )
+
+    # 7C — Pointeur explicite des CGU/CGV PORTAL opposables (défaut 1.0).
+    # 2.0 PREPARED ↔ DV ; 2.1 PREPARED ↔ conditional_order. Basculement coordonné.
+    PORTAL_TERMS_EFFECTIVE_VERSION: str = (
+        os.getenv("PORTAL_TERMS_EFFECTIVE_VERSION") or "1.0"
+    ).strip()
+
     # --- Redis / Socket.IO ---
     REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
     # Liste d'origines autorisées pour Socket.IO (séparées par des virgules).

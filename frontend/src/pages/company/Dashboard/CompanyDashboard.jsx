@@ -23,6 +23,7 @@ import DispatchModeStatusBar from './components/DispatchModeStatusBar';
 import InstitutionOffersTable from './components/InstitutionOffersTable';
 import ReservationFilterBar, { TIME_RANGES } from './components/ReservationFilterBar';
 import QuickAssignPanel from './components/QuickAssignPanel';
+import { portalCarrierAcceptOfferedAmount } from '../../../utils/portalDoubleValidationUi';
 import {
   acceptReservation,
   rejectReservation,
@@ -921,9 +922,18 @@ const CompanyDashboard = () => {
     criticalDataReady,
   ]);
 
-  const handleAccept = async (id) => {
+  const handleAccept = async (idOrReservation) => {
     try {
-      await acceptReservation(id);
+      const reservation =
+        idOrReservation && typeof idOrReservation === 'object'
+          ? idOrReservation
+          : (reservations || []).find((r) => Number(r.id) === Number(idOrReservation));
+      const id = reservation?.id ?? idOrReservation;
+      const offered = portalCarrierAcceptOfferedAmount(reservation);
+      await acceptReservation(
+        id,
+        offered != null ? { offered_amount: offered } : null
+      );
       startTransition(() => {
         reloadReservations();
       });

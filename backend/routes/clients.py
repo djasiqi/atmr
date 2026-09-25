@@ -400,6 +400,10 @@ class ManageClientProfile(Resource):
                 client_data["door_code"] = validated_data["door_code"]
             if "access_notes" in validated_data:
                 client_data["access_notes"] = validated_data["access_notes"]
+            if "invoice_delivery_method" in validated_data:
+                client_data["invoice_delivery_method"] = validated_data[
+                    "invoice_delivery_method"
+                ]
 
             # Utiliser le use case pour les champs Client
             if client_data:
@@ -2387,6 +2391,351 @@ class ListPayments(Resource):
             sentry_sdk.capture_exception(e)
             logger.error("❌ ERREUR list_payments: %s - %s", type(e).__name__, str(e))
             return APIErrorHandler.handle_exception(e, logger)
+
+
+# -------------------------------------------------------------------
+# 7B — Offre transporteur + confirmation client (double validation)
+# -------------------------------------------------------------------
+
+
+@clients_ns.route("/me/bookings/<int:booking_id>/pending-offer")
+class PortalPendingCarrierOffer(Resource):
+    @jwt_required()
+    @role_required(UserRole.client)
+    def get(self, booking_id):
+        """Offre transporteur active en attente de second clic."""
+        from models.booking import Booking
+        from models.client_booking_contract_event import (
+            EVENT_BOOKING_CREATED,
+            ClientBookingContractEvent,
+        )
+        from models.portal_carrier_offer import (
+            OFFER_STATUS_OFFERED,
+            PortalCarrierOffer,
+        )
+        from services.legal.portal_double_validation import (
+            booking_uses_double_validation,
+            is_portal_double_validation_enabled,
+        )
+
+        current_user = get_current_user_via_use_case()
+        if not current_user:
+            return APIErrorHandler.handle_permission_error(
+                "User not found or invalid token",
+                logger_instance=logger,
+            )
+        client = client_repo.find_by_user_id_with_user(current_user.id)
+        if not client:
+            return APIErrorHandler.handle_permission_error(
+                "Client profile not found",
+                logger_instance=logger,
+            )
+        booking = Booking.query.filter_by(
+            id=int(booking_id), client_id=int(client.id)
+        ).one_or_none()
+        if booking is None:
+            return APIErrorHandler.handle_not_found(
+                "Booking", booking_id, logger
+            )[0:2]
+
+        if not (
+            is_portal_double_validation_enabled()
+            and booking_uses_double_validation(booking)
+        ):
+            return {"offer": None, "double_validation": False}, 200
+
+        offer = PortalCarrierOffer.query.filter_by(
+            booking_id=int(booking.id), status=OFFER_STATUS_OFFERED
+        ).one_or_none()
+        if offer is None:
+            return {"offer": None, "double_validation": True}, 200
+
+        created = ClientBookingContractEvent.query.filter_by(
+            booking_id=int(booking.id),
+            event_type=EVENT_BOOKING_CREATED,
+        ).one_or_none()
+        maximum = (
+            float(created.maximum_accepted_amount_snapshot)
+            if created is not None
+            and created.maximum_accepted_amount_snapshot is not None
+            else None
+        )
+        # Défense : jamais présenter une offre > plafond comme confirmable.
+        if maximum is not None and float(offer.offered_amount) > float(maximum):
+            return {"offer": None, "double_validation": True}, 200
+        return {
+            "double_validation": True,
+            "offer": {
+                "id": int(offer.id),
+                "company_name": offer.company_name_snapshot,
+                "offered_amount": float(offer.offered_amount),
+                "currency": offer.currency,
+                "maximum_accepted_amount": maximum,
+                "cancellation_policy_version": offer.cancellation_policy_version,
+                "cancellation_policy_text": offer.cancellation_policy_snapshot,
+                "offer_content_hash": offer.offer_content_hash,
+                "offered_at": offer.offered_at.isoformat()
+                if offer.offered_at
+                else None,
+            },
+        }, 200
+
+
+@clients_ns.route("/me/bookings/<int:booking_id>/confirm-transport")
+class PortalConfirmTransport(Resource):
+    @jwt_required()
+    @role_required(UserRole.client)
+    def post(self, booking_id):
+        """Second clic : Confirmer le transport à CHF X."""
+        from models.booking import Booking
+        from services.legal.confirm_portal_transport import confirm_portal_transport
+        from services.legal.portal_double_validation import (
+            booking_uses_double_validation,
+        )
+
+        current_user = get_current_user_via_use_case()
+        if not current_user:
+            return APIErrorHandler.handle_permission_error(
+                "User not found or invalid token",
+                logger_instance=logger,
+            )
+        client = client_repo.find_by_user_id_with_user(current_user.id)
+        if not client:
+            return APIErrorHandler.handle_permission_error(
+                "Client profile not found",
+                logger_instance=logger,
+            )
+        booking = Booking.query.filter_by(
+            id=int(booking_id), client_id=int(client.id)
+        ).one_or_none()
+        if booking is None:
+            return APIErrorHandler.handle_not_found(
+                "Booking", booking_id, logger
+            )[0:2]
+        if not booking_uses_double_validation(booking):
+            return {
+                "error": "portal_double_validation_inactive",
+                "message": "Cette réservation n'utilise pas la double validation.",
+            }, 400
+
+        data = request.get_json(silent=True) or {}
+        offer_id = data.get("carrier_offer_id")
+        if offer_id is None:
+            return {
+                "error": "carrier_offer_id_required",
+                "message": "Identifiant d'offre requis.",
+            }, 400
+
+        idempotency_key = None
+        try:
+            from services.security.idempotency import IdempotencyService
+
+            idempotency_key = IdempotencyService.get_idempotency_key_from_request()
+            if idempotency_key:
+                cached = IdempotencyService.check_key(idempotency_key)
+                if cached[0]:
+                    payload = cached[1] or {}
+                    if isinstance(payload, dict) and "response" in payload:
+                        return (
+                            payload["response"],
+                            payload.get("status_code", 200),
+                        )
+                    return payload, 200
+        except Exception:
+            idempotency_key = None
+
+        result = confirm_portal_transport(
+            booking=booking,
+            user_id=int(current_user.id),
+            carrier_offer_id=int(offer_id),
+            expected_offer_hash=data.get("offer_content_hash"),
+        )
+        if not result.ok:
+            err = result.error or {}
+            return {
+                "error": err.get("error") or "confirm_failed",
+                "message": err.get("message") or err.get("error"),
+            }, int(result.status_code or 409)
+
+        db.session.commit()
+        conf = result.confirmation
+        response = {
+            "message": "Transport confirmé.",
+            "confirmation": {
+                "id": int(conf.id) if conf else None,
+                "contractual_amount": float(conf.contractual_amount) if conf else None,
+                "currency": conf.currency if conf else "CHF",
+                "company_name": conf.company_name_snapshot if conf else None,
+                "company_id": int(conf.company_id) if conf else None,
+            },
+            "reservation": booking.serialize
+            if hasattr(booking, "serialize")
+            else {"id": booking.id},
+        }
+        if idempotency_key:
+            try:
+                from services.security.idempotency import IdempotencyService
+
+                IdempotencyService.store_response(
+                    idempotency_key,
+                    {"response": response, "status_code": 200},
+                )
+            except Exception:
+                pass
+        try:
+            from services.notifications.end_client_booking_notify import (
+                notify_end_client_booking_milestone,
+            )
+
+            notify_end_client_booking_milestone(
+                booking,
+                milestone="transport_confirmed",
+                send_push=True,
+                extra={
+                    "company_name": conf.company_name_snapshot if conf else None,
+                    "contractual_amount": float(conf.contractual_amount)
+                    if conf
+                    else None,
+                },
+            )
+        except Exception:
+            logger.debug("transport_confirmed notify failed", exc_info=True)
+        return response, 200
+
+
+@clients_ns.route("/me/contract-flow")
+class PortalContractFlowStatus(Resource):
+    @jwt_required()
+    @role_required(UserRole.client)
+    def get(self):
+        """Indique le flux contractuel PORTAL actif (feature flags exclusifs)."""
+        from services.legal.portal_double_validation import (
+            FLOW_CONDITIONAL_ORDER_V1,
+            FLOW_DOUBLE_VALIDATION_V2,
+            FLOW_LEGACY,
+            is_portal_conditional_order_enabled,
+            is_portal_double_validation_enabled,
+        )
+
+        co = is_portal_conditional_order_enabled()
+        dv = is_portal_double_validation_enabled()
+        if co:
+            flow = FLOW_CONDITIONAL_ORDER_V1
+        elif dv:
+            flow = FLOW_DOUBLE_VALIDATION_V2
+        else:
+            flow = FLOW_LEGACY
+        return {
+            "portal_double_validation_enabled": dv,
+            "portal_conditional_order_enabled": co,
+            "flow_version": flow,
+        }, 200
+
+
+@clients_ns.route("/me/portal-pricing-ceiling")
+class PortalPricingCeilingEstimate(Resource):
+    """Plafond PORTAL 7B.2 = MAX(tarifs transporteurs éligibles), calcul serveur."""
+
+    @jwt_required()
+    @role_required(UserRole.client)
+    @limiter.limit("60 per hour")
+    def post(self):
+        from datetime import datetime
+
+        from services.auth.portal_phone_verification import is_portal_client
+        from services.legal.portal_double_validation import (
+            is_portal_conditional_order_enabled,
+            is_portal_double_validation_enabled,
+        )
+        from services.pricing.portal_carrier_ceiling import (
+            ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE,
+            compute_portal_carrier_ceiling,
+        )
+        from shared.time_utils import api_scheduled_iso_to_naive_geneva
+
+        current_user = get_current_user_via_use_case()
+        if not current_user:
+            return APIErrorHandler.handle_permission_error(
+                "Utilisateur introuvable ou jeton invalide",
+                logger_instance=logger,
+            )
+        client = client_repo.find_by_user_id(current_user.id)
+        if client is None or not is_portal_client(client):
+            return APIErrorHandler.handle_permission_error(
+                "Réservé au compte client privé.",
+                logger_instance=logger,
+            )
+        if not (
+            is_portal_double_validation_enabled()
+            or is_portal_conditional_order_enabled()
+        ):
+            return {
+                "error": "portal_pricing_ceiling_disabled",
+                "message": (
+                    "Le plafond transporteur n’est disponible qu’avec "
+                    "la double validation ou la commande conditionnelle."
+                ),
+            }, 400
+
+        payload = request.get_json(silent=True) or {}
+        pickup = (payload.get("pickup_location") or "").strip()
+        dropoff = (payload.get("dropoff_location") or "").strip()
+        if not pickup or not dropoff:
+            return APIErrorHandler.handle_validation_error(
+                "Lieu de prise en charge et destination requis.",
+                logger_instance=logger,
+            )
+
+        def _f(key: str):
+            raw = payload.get(key)
+            if raw is None or raw == "":
+                return None
+            try:
+                return float(raw)
+            except (TypeError, ValueError):
+                return None
+
+        scheduled = None
+        raw_sched = payload.get("scheduled_time")
+        if raw_sched:
+            try:
+                scheduled = api_scheduled_iso_to_naive_geneva(raw_sched)
+            except Exception:
+                scheduled = None
+
+        try:
+            raw_occ = (
+                payload.get("series_occurrences")
+                if payload.get("series_occurrences") is not None
+                else payload.get("recurrence_series_length")
+            )
+            series_occurrences = max(1, min(52, int(raw_occ or 1)))
+        except (TypeError, ValueError):
+            series_occurrences = 1
+
+        try:
+            ceiling = compute_portal_carrier_ceiling(
+                pickup_location=pickup,
+                dropoff_location=dropoff,
+                pickup_lat=_f("pickup_lat"),
+                pickup_lon=_f("pickup_lon") if payload.get("pickup_lon") is not None else _f("pickup_lng"),
+                dropoff_lat=_f("dropoff_lat"),
+                dropoff_lon=_f("dropoff_lon") if payload.get("dropoff_lon") is not None else _f("dropoff_lng"),
+                scheduled_time=scheduled or datetime.utcnow(),
+                is_round_trip=bool(payload.get("is_round_trip")),
+                series_occurrences=series_occurrences,
+            )
+        except ValueError as exc:
+            if str(exc) == ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE:
+                return {
+                    "error": ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE,
+                    "message": (
+                        "Impossible de calculer un prix maximum : aucune grille "
+                        "transporteur éligible n’est exploitable pour cette course."
+                    ),
+                }, 422
+            raise
+        return {"data": ceiling.to_api_dict()}, 200
 
 
 # -------------------------------------------------------------------

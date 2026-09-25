@@ -3,18 +3,27 @@
 from __future__ import annotations
 
 import logging
+from io import BytesIO
 
-from flask import request
+from flask import request, send_file
 from flask_jwt_extended import jwt_required
 from flask_restx import Resource
 
 from ext import db, limiter, role_required
+from models.client_terms_acceptance import (
+    DOCUMENT_TERMS_OF_SERVICE,
+    DOCUMENT_TRANSPORT_TERMS,
+)
 from models.enums import UserRole
 from repositories.client_repository import ClientRepository
 from routes.clients import clients_ns
 from services.legal.portal_terms_catalog import (
     CatalogIntegrityError,
     current_portal_terms,
+)
+from services.legal.portal_terms_pdf import (
+    build_portal_terms_pdf_bytes,
+    portal_terms_pdf_filename,
 )
 from services.legal.portal_terms_status import (
     accept_current_required_portal_terms,
@@ -166,6 +175,70 @@ class ClientMyPortalTerms(Resource):
                 }
                 for spec in documents
             ]
+        )
+
+
+@clients_ns.route("/me/portal-terms/<string:document_type>/pdf")
+class ClientMyPortalTermsPdf(Resource):
+    """PDF officiel du document courant (logo LIRIE + texte canonique)."""
+
+    @jwt_required()
+    @role_required(UserRole.client)
+    @limiter.limit("60 per hour")
+    def get(self, document_type: str):
+        current_user = get_current_user_via_use_case()
+        if not current_user:
+            return APIErrorHandler.handle_permission_error(
+                "Utilisateur introuvable ou jeton invalide",
+                logger_instance=logger,
+            )
+        client = client_repo.find_by_user_id(current_user.id)
+        if client is None:
+            return APIErrorHandler.handle_permission_error(
+                "Profil client introuvable",
+                logger_instance=logger,
+            )
+        if document_type not in (
+            DOCUMENT_TERMS_OF_SERVICE,
+            DOCUMENT_TRANSPORT_TERMS,
+        ):
+            return APIErrorHandler.handle_validation_error(
+                "Type de document inconnu.",
+                logger_instance=logger,
+            )
+        try:
+            from services.auth.portal_phone_verification import is_portal_client
+
+            if not is_portal_client(client):
+                raise PortalTermsContextError(
+                    "Ces conditions concernent le compte client privé."
+                )
+            specs = current_portal_terms()
+            match = next(
+                (spec for spec in specs if spec.document_type == document_type),
+                None,
+            )
+            if match is None:
+                return APIErrorHandler.handle_not_found_error(
+                    "Document introuvable.",
+                    logger_instance=logger,
+                )
+            pdf_bytes = build_portal_terms_pdf_bytes(match)
+            filename = portal_terms_pdf_filename(match)
+        except PortalTermsContextError as exc:
+            return APIErrorHandler.handle_permission_error(
+                str(exc),
+                logger_instance=logger,
+            )
+        except CatalogIntegrityError as exc:
+            return APIErrorHandler.handle_exception(exc, logger)
+        except Exception as exc:  # noqa: BLE001
+            return APIErrorHandler.handle_exception(exc, logger)
+        return send_file(
+            BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=filename,
         )
 
 

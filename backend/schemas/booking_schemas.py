@@ -43,6 +43,11 @@ class BookingCreateSchema(Schema):
         validate=validate.Range(min=0.5, error="Le montant minimum accepté est 0.5"),
     )
 
+    # 7B.2 : champs acceptés puis ignorés — le plafond est recalculé côté serveur.
+    # maximum_accepted_amount client ne fait jamais autorité (cas test payload 9999).
+    maximum_accepted_amount = fields.Float(load_default=None, allow_none=True)
+    accept_pricing_ceiling = fields.Bool(load_default=False)
+
     # Champs optionnels
     medical_facility = fields.Str(load_default="", validate=validate.Length(max=200))
     doctor_name = fields.Str(load_default="", validate=validate.Length(max=200))

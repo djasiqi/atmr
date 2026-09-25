@@ -1625,6 +1625,7 @@ const BillPeriodModal = ({
     () => clients.find((c) => String(c.id) === String(clientId)) || null,
     [clients, clientId]
   );
+
   const selectedPartner = useMemo(
     () =>
       billablePartners.find((p) => String(p.partnership_id) === String(partnershipId)) ||
@@ -2119,7 +2120,7 @@ const BillPeriodModal = ({
               )}
             </div>
 
-            {payerType === 'patient' && clientId ? (
+            {payerType === 'patient' && clientId && !draftInvoiceStub ? (
               <div className={styles.detectedPlan} data-testid="patient-invoice-summary">
                 <div
                   className={styles.institutionSummary}
@@ -2133,20 +2134,22 @@ const BillPeriodModal = ({
                     {periodLabelFr(periodYear, periodMonth)}
                   </div>
                   {patientSummary.hasBillable ? (
-                    <>
-                      <div className={styles.institutionSummaryTotals}>
-                        <span data-testid="patient-summary-count">
-                          {patientSummary.transportsCount} prestation
-                          {patientSummary.transportsCount !== 1 ? 's' : ''}
-                        </span>
-                        <strong data-testid="patient-summary-amount">
-                          {formatCurrencyCHF(patientSummary.totalHt)}
-                        </strong>
-                      </div>
-                      <p className={styles.institutionSummaryNote}>
-                        Toutes les prestations à charge de ce patient sont incluses.
-                      </p>
-                    </>
+                    <div className={styles.institutionSummaryTotals}>
+                      <span data-testid="patient-summary-count">
+                        {patientSummary.transportsCount} prestation
+                        {patientSummary.transportsCount !== 1 ? 's' : ''}
+                        {patientSummary.invoiceDeliveryMethod === 'paper'
+                          ? ' · papier'
+                          : ''}
+                      </span>
+                      <strong data-testid="patient-summary-amount">
+                        {formatCurrencyCHF(
+                          patientSummary.invoiceDeliveryMethod === 'paper'
+                            ? Number(patientSummary.totalHt) + 3
+                            : patientSummary.totalHt
+                        )}
+                      </strong>
+                    </div>
                   ) : (
                     <p className={styles.institutionSummaryNote}>
                       {patientSummary.blocked

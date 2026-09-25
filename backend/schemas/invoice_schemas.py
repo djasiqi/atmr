@@ -151,3 +151,9 @@ class InvoiceGenerateSchema(Schema):
         allow_none=True,
         load_default=None,
     )
+    # Mode d'envoi Direct patient : email (0 CHF) ou paper (+ CHF 3 ligne distincte)
+    delivery_method = fields.Str(
+        allow_none=True,
+        load_default="email",
+        validate=validate.OneOf(["email", "paper"]),
+    )

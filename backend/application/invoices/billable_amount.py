@@ -11,8 +11,55 @@ from infrastructure.invoices.invoice_calculator import round_to_5_cents
 
 _TWO = Decimal("0.01")
 SOURCE_BOOKING_AMOUNT = "booking.amount"
+SOURCE_PORTAL_CONTRACTUAL = "portal.contractual_amount"
 SOURCE_CANCELLATION_FEE = "cancellation_fee_amount"
 SOURCE_CANCELLATION_UNRESOLVED = "cancellation_fee_unresolved"
+
+
+def _portal_contractual_amount(booking: Any) -> Decimal | None:
+    """Montant contractuel PORTAL (DV confirmation ou 7B.5 formation)."""
+    try:
+        from services.legal.portal_double_validation import (
+            booking_uses_conditional_order,
+            booking_uses_double_validation,
+        )
+
+        bid = getattr(booking, "id", None)
+        if bid is None:
+            return None
+
+        if booking_uses_conditional_order(booking):
+            from models.portal_transport_contract_formed import (
+                PortalTransportContractFormed,
+            )
+
+            formed = PortalTransportContractFormed.query.filter_by(
+                booking_id=int(bid)
+            ).one_or_none()
+            if formed is None or getattr(formed, "carrier_quote", None) is None:
+                return None
+            amount = Decimal(str(formed.carrier_quote)).quantize(_TWO)
+            if amount <= 0:
+                return None
+            return amount
+
+        if not booking_uses_double_validation(booking):
+            return None
+        from models.portal_client_transport_confirmation import (
+            PortalClientTransportConfirmation,
+        )
+
+        conf = PortalClientTransportConfirmation.query.filter_by(
+            booking_id=int(bid)
+        ).one_or_none()
+        if conf is None or getattr(conf, "contractual_amount", None) is None:
+            return None
+        amount = Decimal(str(conf.contractual_amount)).quantize(_TWO)
+        if amount <= 0:
+            return None
+        return amount
+    except Exception:
+        return None
 
 
 @dataclass(frozen=True)
@@ -68,8 +115,13 @@ def calculate_billable_booking_amount(
             source = SOURCE_CANCELLATION_UNRESOLVED
             resolved = False
     else:
-        amount = catalog
-        source = SOURCE_BOOKING_AMOUNT
+        contractual = _portal_contractual_amount(booking)
+        if contractual is not None:
+            amount = contractual
+            source = SOURCE_PORTAL_CONTRACTUAL
+        else:
+            amount = catalog
+            source = SOURCE_BOOKING_AMOUNT
 
     if override and override.get("amount") is not None:
         try:

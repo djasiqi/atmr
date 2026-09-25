@@ -7,7 +7,13 @@ from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
-_EndClientMilestone = Literal["company_accepted", "driver_assigned", "en_route"]
+_EndClientMilestone = Literal[
+    "company_accepted",
+    "carrier_offered",
+    "transport_confirmed",
+    "driver_assigned",
+    "en_route",
+]
 
 
 def _client_user_public_id_for_booking(booking: Any) -> str | None:
@@ -37,11 +43,43 @@ def _client_user_public_id_for_booking(booking: Any) -> str | None:
     return str(pid).strip() or None
 
 
-def _milestone_copy(milestone: _EndClientMilestone) -> tuple[str, str]:
-    if milestone == "company_accepted":
+def _milestone_copy(
+    milestone: _EndClientMilestone, *, extra: dict[str, Any] | None = None
+) -> tuple[str, str]:
+    extra = extra or {}
+    if milestone == "carrier_offered":
+        company = str(extra.get("company_name") or "Une entreprise").strip()
+        amount = extra.get("offered_amount")
+        amount_txt = (
+            f" CHF {float(amount):.2f}" if amount is not None else ""
+        )
         return (
-            "Transport confirmé",
-            "Une entreprise a accepté votre demande de transport.",
+            "Une proposition de transport est disponible",
+            (
+                f"{company} propose un transport{amount_txt}. "
+                "Consultez le prix et les conditions d'annulation, "
+                "puis confirmez si vous acceptez. Ce n'est pas encore "
+                "un transport confirmé."
+            ),
+        )
+    if milestone == "transport_confirmed":
+        company = str(extra.get("company_name") or "le transporteur").strip()
+        amount = extra.get("contractual_amount")
+        amount_txt = (
+            f" CHF {float(amount):.2f}" if amount is not None else ""
+        )
+        return (
+            "Votre transport est confirmé",
+            (
+                f"Transport confirmé avec {company}{amount_txt}. "
+                "Les conditions d'annulation présentées s'appliquent."
+            ),
+        )
+    if milestone == "company_accepted":
+        # Legacy / non double-validation : entreprise assignée.
+        return (
+            "Entreprise trouvée pour votre demande",
+            "Une entreprise a pris en charge votre demande de transport.",
         )
     if milestone == "driver_assigned":
         return (
@@ -59,13 +97,14 @@ def notify_end_client_booking_milestone(
     *,
     milestone: _EndClientMilestone,
     send_push: bool = True,
+    extra: dict[str, Any] | None = None,
 ) -> None:
     """Émet ``client_booking_updated`` (room utilisateur) + push Expo si token présent."""
     public_id = _client_user_public_id_for_booking(booking)
     if not public_id:
         return
 
-    title, body = _milestone_copy(milestone)
+    title, body = _milestone_copy(milestone, extra=extra)
     booking_id = int(getattr(booking, "id", 0) or 0)
     try:
         payload: dict[str, Any] = {
@@ -74,6 +113,8 @@ def notify_end_client_booking_milestone(
             "title": title,
             "body": body,
         }
+        if extra:
+            payload["extra"] = extra
         if hasattr(booking, "serialize"):
             try:
                 payload["booking"] = booking.serialize

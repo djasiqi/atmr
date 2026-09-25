@@ -19,6 +19,7 @@ import {
   resolveRespondTargetBooking,
 } from '../../../../utils/transportActionPending';
 import { useSearchParams } from 'react-router-dom';
+import { portalCarrierFacingAmountDisplay, portalCarrierAcceptButtonLabel } from '../../../../utils/portalDoubleValidationUi';
 
 /** Boutons Valider/Départ immédiat/Planifier/Refuser pour une offre institution (branche `__institutionOffer`). */
 const renderInstitutionOfferActionButtons = (r, handlers) => (
@@ -55,6 +56,23 @@ function findReturnBookingForOutbound(allReservations, outboundId) {
 
 /** Montants aller-retour : total sur l’aller, libellé explicite sur le retour si montant 0. */
 function renderAmountCell(r, allReservations) {
+  const carrierAmt = portalCarrierFacingAmountDisplay(r);
+  if (carrierAmt.mode === 'company_quote' || carrierAmt.mode === 'awaiting_quote') {
+    return (
+      <div className={styles.amountCellStack}>
+        {carrierAmt.amount != null ? (
+          <>
+            <span className={styles.amountValue}>{carrierAmt.amount.toFixed(2)}</span>
+            <span className={styles.amountCurrency}> CHF</span>
+          </>
+        ) : (
+          <span className={styles.amountLegLabel}>Selon grille</span>
+        )}
+        <span className={styles.amountSub}>{carrierAmt.label}</span>
+      </div>
+    );
+  }
+
   const amt = Number(r.amount || 0);
   const parent = r.is_return ? findParentBooking(allReservations, r.parent_booking_id) : null;
   const parentAmt = parent != null ? Number(parent.amount || 0) : null;
@@ -464,9 +482,15 @@ const ReservationTable = ({
                             <button
                               type="button"
                               data-tour-id="pending-accept-action"
-                              onClick={() => onAccept?.(r.id)}
-                              title={r.is_transferred ? "Accepter (prendre en charge)" : "Accepter"}
-                              aria-label={r.is_transferred ? "Accepter (prendre en charge)" : "Accepter"}
+                              onClick={() => onAccept?.(r)}
+                              title={
+                                portalCarrierAcceptButtonLabel(r) ||
+                                (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
+                              }
+                              aria-label={
+                                portalCarrierAcceptButtonLabel(r) ||
+                                (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
+                              }
                               className={`${styles.actionButton} ${styles.acceptButton} ${styles.touchTarget}`}
                             >
                               <FiCheckCircle size={16} aria-hidden />
@@ -638,9 +662,15 @@ const ReservationTable = ({
                       <button
                         type="button"
                         data-tour-id="pending-accept-action-mobile"
-                        onClick={() => onAccept?.(r.id)}
-                        title={r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter'}
-                        aria-label={r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter'}
+                        onClick={() => onAccept?.(r)}
+                        title={
+                          portalCarrierAcceptButtonLabel(r) ||
+                          (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
+                        }
+                        aria-label={
+                          portalCarrierAcceptButtonLabel(r) ||
+                          (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
+                        }
                         className={`${styles.actionButton} ${styles.acceptButton} ${styles.touchTarget}`}
                       >
                         <FiCheckCircle size={16} aria-hidden />

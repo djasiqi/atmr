@@ -167,13 +167,36 @@ export const fetchCompanyReservationById = async (bookingId) => {
   return (data?.reservations || []).find((r) => r.id === id) || null;
 };
 
-export const acceptReservation = async (reservationId) => {
+export const acceptReservation = async (reservationId, options = null) => {
+  const body = {};
+  if (options && typeof options === 'object') {
+    if (options.offered_amount != null && options.offered_amount !== '') {
+      body.offered_amount = Number(options.offered_amount);
+    }
+  }
   try {
-    const { data } = await apiClient.post(`/companies/me/reservations/${reservationId}/accept`);
+    const { data } = await apiClient.post(
+      `/companies/me/reservations/${reservationId}/accept`,
+      Object.keys(body).length > 0 ? body : undefined
+    );
     return data;
   } catch (error) {
     throw error;
   }
+};
+
+/** Statut publication conditions d'annulation PORTAL (clients privés). */
+export const fetchPortalCancellationPolicyStatus = async () => {
+  const { data } = await apiClient.get('/companies/me/portal-cancellation-policy');
+  return data;
+};
+
+/** Publie la config frais d'annulation actuelle comme version PORTAL immuable. */
+export const publishPortalCancellationPolicyFromBilling = async () => {
+  const { data } = await apiClient.post('/companies/me/portal-cancellation-policy', {
+    from_billing_settings: true,
+  });
+  return data;
 };
 
 export const rejectReservation = async (reservationId) => {

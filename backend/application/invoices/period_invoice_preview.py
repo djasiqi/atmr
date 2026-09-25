@@ -340,8 +340,19 @@ def build_period_invoice_preview(
 
     if client_id is not None:
         crepo = ClientRepository()
-        if not crepo.find_model_by_id_and_company(int(client_id), company_id):
-            raise ValueError("Client introuvable pour cette entreprise")
+        portfolio = crepo.find_model_by_id_and_company(int(client_id), company_id)
+        if portfolio is None:
+            from models.client import Client as ClientModel
+            from services.auth.portal_phone_verification import is_portal_client
+            from ext import db
+
+            portal_client = db.session.get(ClientModel, int(client_id))
+            if (
+                portal_client is None
+                or not is_portal_client(portal_client)
+                or getattr(portal_client, "company_id", None) is not None
+            ):
+                raise ValueError("Client introuvable pour cette entreprise")
 
         repo = BookingRepository()
         eligible_b = repo.find_models_eligible_for_billing_period_by_company_and_client(

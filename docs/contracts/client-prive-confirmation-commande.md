@@ -243,3 +243,15 @@ Chaque étape attend que la précédente soit en place. L’étape 5 est la seul
 ## Reste à faire
 
 Étape 6 : impayés et suspension des nouvelles réservations. Les étapes 1 à 5 sont en place.
+
+## Suite contractuelle (7A+)
+
+✅ **Implémenté** (audit seul) : [portal-contract-reality-audit-7a.md](portal-contract-reality-audit-7a.md) — écart entre le code PORTAL actuel et la cible verrouillée **double validation client** (plafond distinct au 1er clic → `CARRIER_OFFERED` si prix ≤ plafond → `CLIENT_TRANSPORT_CONFIRMED` au 2e clic). Pas de modification des canoniques 1.0.
+
+✅ **Implémenté** (7B, flag OFF) : [portal-double-validation-7b.md](portal-double-validation-7b.md) — modèles + flux + tests ; `PORTAL_DOUBLE_VALIDATION_ENABLED=false` par défaut.
+
+✅ **Implémenté** (7C, textes 2.0 PREPARED) : [portal-terms-2-0-7c.md](portal-terms-2-0-7c.md) — CGU + transport_terms 2.0 ; `PORTAL_TERMS_EFFECTIVE_VERSION=1.0` ; pas d'activation prod.
+
+✅ **Implémenté** (7D release gate, build non démarré) : [portal-coordinated-activation-7d.md](portal-coordinated-activation-7d.md) — anti-hybride au boot, `/conditions` corrigé, LEGAL REVIEW PENDING.
+
+✅ **Implémenté** (7D-L package juriste, sans changement produit) : [portal-legal-review-package-7d-l.md](portal-legal-review-package-7d-l.md) — dossier + checklist SECO/CO + livrable à remplir. Suite : revue humaine puis lot CI / E2E / Build & Deploy.

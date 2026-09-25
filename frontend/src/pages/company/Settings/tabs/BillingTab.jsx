@@ -22,10 +22,15 @@ import {
   fetchPricingZoneSetsMap,
   updateBillingSettings,
 } from '../../../../services/settingsService';
+import {
+  fetchPortalCancellationPolicyStatus,
+  publishPortalCancellationPolicyFromBilling,
+} from '../../../../services/companyService';
 import { isFeatureEnabled } from '../../../../utils/featureFlags';
 import EmailConfigSection from './EmailConfigSection';
 import CancellationPolicyEditor from './components/CancellationPolicyEditor';
 import ZoneSetReadonlyMap from './components/ZoneSetReadonlyMap';
+import { toast } from 'sonner';
 
 const generateSignaturePreviewHtml = (formData) => {
   const escapeHtml = (text) => {
@@ -284,6 +289,8 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
   const [isHydrated, setIsHydrated] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [portalPolicyStatus, setPortalPolicyStatus] = useState(null);
+  const [publishingPortalPolicy, setPublishingPortalPolicy] = useState(false);
   const [showSignaturePreview, setShowSignaturePreview] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     payment: true,
@@ -318,10 +325,12 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
   const loadSettings = useCallback(async () => {
     try {
       setLoading(true);
-      const [data, zoneSetsResponse] = await Promise.all([
+      const [data, zoneSetsResponse, portalStatus] = await Promise.all([
         fetchBillingSettings(),
         pricingZoneSetsEnabled ? fetchPricingZoneSets().catch(() => []) : Promise.resolve([]),
+        fetchPortalCancellationPolicyStatus().catch(() => null),
       ]);
+      setPortalPolicyStatus(portalStatus);
       const payload = (
         data
         && typeof data === 'object'
@@ -562,6 +571,29 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
     await loadSettings();
   }, [form, buildCleanedData, pricingRules, pricingZoneSetsEnabled, loadSettings]);
 
+  const publishPortalCancellation = useCallback(async () => {
+    try {
+      setPublishingPortalPolicy(true);
+      // Toujours persister le brouillon éditeur avant snapshot (évite de publier
+      // une config absente / obsolète en base alors que l'UI montre des paliers).
+      await saveBilling();
+      const data = await publishPortalCancellationPolicyFromBilling();
+      const version = data?.policy?.version || '';
+      toast.success(
+        version
+          ? `Conditions d'annulation PORTAL publiées (${version})`
+          : "Conditions d'annulation PORTAL publiées"
+      );
+      const status = await fetchPortalCancellationPolicyStatus().catch(() => null);
+      setPortalPolicyStatus(status);
+    } catch (err) {
+      console.error(err);
+      toast.error("Impossible de publier les conditions d'annulation PORTAL");
+    } finally {
+      setPublishingPortalPolicy(false);
+    }
+  }, [saveBilling]);
+
   const resetBilling = useCallback(() => {
     if (serverFormRef.current) {
       setForm(serverFormRef.current);
@@ -692,7 +724,13 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
       case 'format': return generatePreview();
       case 'vat': return form.vat_applicable ? `${form.vat_rate || 0}%` : 'Inactive';
       case 'banking': return form.iban ? 'IBAN renseigne' : 'IBAN manquant';
-      case 'cancellation': return form.cancellation_policy?.enabled ? 'Actif' : 'Inactif';
+      case 'cancellation': {
+        const cfg = form.cancellation_policy?.enabled ? 'Config. active' : 'Config. inactive';
+        const pub = portalPolicyStatus?.policy?.version
+          ? `PORTAL ${portalPolicyStatus.policy.version}`
+          : 'PORTAL non publiée';
+        return `${cfg} · ${pub}`;
+      }
       case 'emailConfig': return form.smtp_enabled ? 'Configure' : 'Non configure';
       default: return '';
     }
@@ -1007,7 +1045,7 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
               />
             ) : (
               <div className={styles.fieldGrid}>
-                <ReadonlyField label="Frais d'annulation" value={form.cancellation_policy?.enabled ? 'Actif' : 'Inactif'} />
+                <ReadonlyField label="Configuration" value={form.cancellation_policy?.enabled ? 'Active' : 'Inactive'} />
                 {form.cancellation_policy?.enabled && (
                   <>
                     <ReadonlyField label="Base" value={form.cancellation_policy?.basis === 'booking_amount' ? 'Montant course' : form.cancellation_policy?.basis} />
@@ -1016,6 +1054,56 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
                 )}
               </div>
             )}
+
+            <div
+              style={{
+                marginTop: 16,
+                paddingTop: 16,
+                borderTop: '1px solid var(--border-primary, #e5e7eb)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              <ReadonlyField
+                label="Version PORTAL publiée"
+                value={
+                  portalPolicyStatus?.policy?.version
+                    ? `${portalPolicyStatus.policy.version}${
+                        portalPolicyStatus.policy.effective_at
+                          ? ` · ${new Date(portalPolicyStatus.policy.effective_at).toLocaleString('fr-CH')}`
+                          : ''
+                      }`
+                    : 'Aucune'
+                }
+              />
+              {portalPolicyStatus?.has_unpublished_changes ? (
+                <p className={styles.hint} style={{ margin: 0 }}>
+                  Modifications non publiées — les clients privés ne verront pas encore cette configuration.
+                </p>
+              ) : portalPolicyStatus?.policy ? (
+                <p className={styles.hint} style={{ margin: 0 }}>
+                  Version synchronisée avec la configuration actuelle.
+                </p>
+              ) : (
+                <p className={styles.hint} style={{ margin: 0 }}>
+                  Publiez une version pour pouvoir proposer des courses aux clients privés (même si les frais sont à zéro).
+                </p>
+              )}
+              <button
+                type="button"
+                className={styles.button}
+                disabled={publishingPortalPolicy}
+                onClick={publishPortalCancellation}
+                style={{ alignSelf: 'flex-start', marginTop: 4 }}
+              >
+                {publishingPortalPolicy
+                  ? 'Publication…'
+                  : portalPolicyStatus?.policy
+                    ? 'Publier une nouvelle version pour les clients privés'
+                    : 'Publier les conditions pour les clients privés'}
+              </button>
+            </div>
           </SectionCard>
 
         </div>

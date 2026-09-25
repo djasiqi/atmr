@@ -61,6 +61,7 @@ def mock_invoice():
     # Collection réelle : sinon Mock.lines est truthy mais non itérable
     # (assert_invoice_booking_link_integrity fait list(invoice.lines)).
     invoice.lines = []
+    invoice.client = None
     invoice.mark_as_sent = Mock()
     return invoice
 
@@ -196,6 +197,8 @@ class TestSendInvoiceByEmailUseCase:
         """Test envoi d'une facture à un client sans email."""
         use_case = SendInvoiceByEmailUseCase()
         mock_client.contact_email = None
+        mock_client.user = Mock(email=None)
+        mock_invoice.client = mock_client
 
         with (
             patch(
@@ -207,6 +210,10 @@ class TestSendInvoiceByEmailUseCase:
             patch(
                 "application.invoices.send_invoice_by_email.Company.query"
             ) as mock_company_query,
+            patch(
+                "services.billing.invoice_recipient_email.resolve_invoice_recipient_email",
+                return_value=None,
+            ),
         ):
             mock_invoice_query.get.return_value = mock_invoice
             mock_client_query.get.return_value = mock_client

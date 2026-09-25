@@ -36,6 +36,12 @@ from .client import Client
 from .client_stay import ClientStay
 from .client_booking_contract_event import ClientBookingContractEvent
 from .portal_booking_confirmation_email import PortalBookingConfirmationEmail
+from .company_portal_cancellation_policy import CompanyPortalCancellationPolicy
+from .lirie_channel_cancellation_policy import LirieChannelCancellationPolicy
+from .portal_carrier_offer import PortalCarrierOffer
+from .portal_client_conditional_order import PortalClientConditionalOrder
+from .portal_client_transport_confirmation import PortalClientTransportConfirmation
+from .portal_transport_contract_formed import PortalTransportContractFormed
 from .portal_receivable import (
     PortalReceivable,
     PortalReceivableDispute,

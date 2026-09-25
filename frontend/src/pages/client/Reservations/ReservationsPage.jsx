@@ -22,12 +22,20 @@ import {
 import { getActivePublicId } from '../../../utils/webAuthSession';
 import { trackClientKpiEvent } from '../../../utils/clientKpi';
 import { requiresPrivateOnlinePaymentAtBooking } from '../../../utils/clientBookingPayment';
+import {
+  isPortalDoubleValidationFlow,
+  isPortalContractFlow,
+  portalReservationAmountDisplay,
+} from '../../../utils/portalDoubleValidationUi';
 import { useClientBookingSocketRefresh } from '../../../hooks/useClientBookingSocketRefresh';
 import ClientBookingLiveTrackModal from '../../../components/client/ClientBookingLiveTrackModal';
 import ClientTransportContactModal from '../../../components/client/ClientTransportContactModal';
 
 /** Libellé facturation / couverture (sans répéter le montant affiché à côté). */
 function getBillingCoverageLabel(booking) {
+  if (isPortalContractFlow(booking)) {
+    return 'Client — facturation par le transporteur';
+  }
   const raw = String(
     booking?.payer_label ||
       booking?.coverage_label ||
@@ -39,6 +47,12 @@ function getBillingCoverageLabel(booking) {
   if (n.includes('assur')) return 'Assurance';
   if (n.includes('instit')) return 'Institution / tiers payeur';
   if (requiresPrivateOnlinePaymentAtBooking(booking)) return 'Client — règlement en ligne';
+  const clientType = String(booking?.client?.client_type || booking?.client_type || '')
+    .trim()
+    .toUpperCase();
+  if (clientType === 'PORTAL') {
+    return 'Client — facturation par le transporteur';
+  }
   if (raw) return raw;
   return 'Client';
 }
@@ -175,14 +189,12 @@ function bookingNeedsClientOnlinePayment(booking) {
 }
 
 /**
- * Flux LIRIE (réservation) :
+ * Flux compte TRANSPORT (Saferpay) :
  * 1. Paiement en ligne exigé en premier ;
- * 2. Après paiement validé, la demande est transmise aux entreprises de transport ;
- * 3. La première entreprise qui accepte devient exécutante ;
- * 4. L’entreprise désigne le chauffeur ;
- * 5. Le chauffeur de l’entreprise exécute la course (en route puis terminée).
+ * 2. Après paiement validé, la demande est transmise aux entreprises ;
+ * 3. Entreprise retenue → chauffeur → en route → terminée.
  */
-const TIMELINE_BASE = [
+const TIMELINE_PAYMENT_FIRST = [
   { id: 'payment', label: 'Paiement requis' },
   { id: 'broadcast', label: 'Demande transmise aux entreprises' },
   { id: 'company', label: 'Entreprise retenue' },
@@ -191,47 +203,91 @@ const TIMELINE_BASE = [
   { id: 'done', label: 'Terminée' },
 ];
 
+/**
+ * Flux PORTAL double_validation_v2 — aucun paiement LIRIE.
+ * 1. Demande enregistrée ;
+ * 2. Transmission aux entreprises ;
+ * 3. Proposition transporteur ;
+ * 4. Confirmation client ;
+ * 5. Chauffeur → en route → terminée.
+ */
+const TIMELINE_PORTAL_DV = [
+  { id: 'recorded', label: 'Demande enregistrée' },
+  { id: 'broadcast', label: 'Transmission aux entreprises' },
+  { id: 'offer', label: 'Proposition d’une entreprise' },
+  { id: 'confirmed', label: 'Confirmation du client' },
+  { id: 'driver', label: 'Chauffeur désigné' },
+  { id: 'moving', label: 'En route' },
+  { id: 'done', label: 'Terminée' },
+];
+
 function getTimelineSteps(booking) {
   const displayNorm = normalizeClientBookingStatus(
     resolveClientBookingDisplayStatus(booking)
   );
+  const isPortalDv = isPortalContractFlow(booking);
+  const base = isPortalDv ? TIMELINE_PORTAL_DV : TIMELINE_PAYMENT_FIRST;
+
   if (displayNorm === 'cancelled') {
     return [{ id: 'cancelled', label: 'Course annulée', state: 'cancelled' }];
   }
   if (displayNorm === 'completed') {
-    return TIMELINE_BASE.map((s) => ({ ...s, state: 'done' }));
+    return base.map((s) => ({ ...s, state: 'done' }));
   }
   if (displayNorm === 'round_trip_return_pending') {
-    return TIMELINE_BASE.map((s, i) => ({
+    const last = base.length - 1;
+    return base.map((s, i) => ({
       ...s,
-      state: i < 5 ? 'done' : i === 5 ? 'current' : 'upcoming',
-      label: i === 5 ? 'Retour à venir' : s.label,
+      state: i < last ? 'done' : i === last ? 'current' : 'upcoming',
+      label: i === last ? 'Retour à venir' : s.label,
     }));
   }
 
-  const needsPay = bookingNeedsClientOnlinePayment(booking);
   let currentIndex = 0;
 
-  switch (displayNorm) {
-    case 'awaiting_payment':
-      currentIndex = 0;
-      break;
-    case 'pending':
-      currentIndex = needsPay ? 0 : 1;
-      break;
-    case 'confirmed':
-      currentIndex = hasDriverAssigned(booking) ? 3 : 2;
-      break;
-    case 'driver_on_the_way':
-    case 'in_progress':
-      currentIndex = 4;
-      break;
-    default:
-      currentIndex = needsPay ? 0 : 1;
-      break;
+  if (isPortalDv) {
+    // Indices TIMELINE_PORTAL_DV
+    switch (displayNorm) {
+      case 'pending':
+        currentIndex = booking?.company_id ? 3 : 1;
+        if (!booking?.company_id && booking?.has_pending_portal_offer) {
+          currentIndex = 2;
+        }
+        break;
+      case 'confirmed':
+        currentIndex = hasDriverAssigned(booking) ? 4 : 3;
+        break;
+      case 'driver_on_the_way':
+      case 'in_progress':
+        currentIndex = 5;
+        break;
+      default:
+        currentIndex = booking?.company_id ? 3 : 1;
+        break;
+    }
+  } else {
+    const needsPay = bookingNeedsClientOnlinePayment(booking);
+    switch (displayNorm) {
+      case 'awaiting_payment':
+        currentIndex = 0;
+        break;
+      case 'pending':
+        currentIndex = needsPay ? 0 : 1;
+        break;
+      case 'confirmed':
+        currentIndex = hasDriverAssigned(booking) ? 3 : 2;
+        break;
+      case 'driver_on_the_way':
+      case 'in_progress':
+        currentIndex = 4;
+        break;
+      default:
+        currentIndex = needsPay ? 0 : 1;
+        break;
+    }
   }
 
-  return TIMELINE_BASE.map((s, i) => {
+  return base.map((s, i) => {
     let state = 'upcoming';
     if (i < currentIndex) state = 'done';
     else if (i === currentIndex) state = 'current';
@@ -628,7 +684,33 @@ function PastBookingRow({
 }
 
 /** Règles affichées sur les réservations « à venir » (modification / annulation). */
-function ModificationAnnulationPolicy() {
+function ModificationAnnulationPolicy({ portalDoubleValidation = false }) {
+  if (portalDoubleValidation) {
+    return (
+      <details className={styles.bookingPolicyDetails}>
+        <summary className={styles.bookingPolicySummary}>Modification et annulation</summary>
+        <div className={styles.bookingPolicyBody}>
+          <p className={styles.bookingPolicyLead}>
+            Tant que le chauffeur n’est pas <strong>en route</strong> et que la course n’est pas{' '}
+            <strong>en cours</strong>, vous pouvez <strong>modifier</strong> ou <strong>annuler</strong> depuis
+            cette page.
+          </p>
+          <p className={styles.bookingPolicyP}>
+            <strong>Modification</strong> : lieux de prise en charge et de destination, date et heure. Si le nouveau
+            prix maximum est <strong>identique ou inférieur</strong>, aucun complément n’est dû. S’il est{' '}
+            <strong>supérieur</strong>, vous devez accepter le nouveau plafond avant validation. LIRIE n’encaisse
+            pas la course : le transporteur facture après la prestation.
+          </p>
+          <p className={styles.bookingPolicyP}>
+            <strong>Annulation</strong> : les éventuels frais ou avoirs suivent les conditions du transporteur
+            retenues au moment de votre confirmation (pas de remboursement via un paiement en ligne LIRIE, car aucun
+            encaissement plateforme n’a lieu sur ce parcours).
+          </p>
+        </div>
+      </details>
+    );
+  }
+
   return (
     <details className={styles.bookingPolicyDetails}>
       <summary className={styles.bookingPolicySummary}>Modification et annulation</summary>
@@ -885,6 +967,7 @@ function ReservationCard({
   const rbAmount = rb != null ? Number(rb.amount || 0) : 0;
   const splitRoundTripAmounts =
     isRoundTripCard && Number.isFinite(rbAmount) && rbAmount > 0;
+  const amountDisplay = portalReservationAmountDisplay(booking);
   const returnScheduled = rb?.scheduled_time;
   const returnDateTimeAttr =
     returnScheduled && Number.isFinite(Date.parse(returnScheduled))
@@ -1006,7 +1089,7 @@ function ReservationCard({
             <span className={styles.metaDtIcon} aria-hidden>
               <SvgIconCreditCard size={11} />
             </span>
-            Montant
+            {amountDisplay.label}
           </dt>
           <dd>
             {splitRoundTripAmounts ? (
@@ -1023,9 +1106,27 @@ function ReservationCard({
                   Total dossier : {formatAmount(clientRoundTripTotalChf(booking))}
                 </div>
               </>
+            ) : amountDisplay.isCeiling && amountDisplay.lines.length > 0 ? (
+              <>
+                {amountDisplay.lines.map((line) => (
+                  <div key={line.key}>
+                    {line.primary ? (
+                      <>
+                        <strong>{formatAmount(line.amount)}</strong>
+                        <span className={styles.metaAmountHint}> — {line.label}</span>
+                      </>
+                    ) : (
+                      <>
+                        {formatAmount(line.amount)}
+                        <span className={styles.metaAmountHint}> — {line.label}</span>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </>
             ) : (
               <>
-                {formatAmount(booking.amount)}
+                {formatAmount(amountDisplay.amount)}
                 {isRoundTripCard ? (
                   <span className={styles.metaAmountHint}> (total aller + retour)</span>
                 ) : null}
@@ -1055,7 +1156,11 @@ function ReservationCard({
         </div>
       </dl>
 
-      {showClientBookingPolicy ? <ModificationAnnulationPolicy /> : null}
+      {showClientBookingPolicy ? (
+        <ModificationAnnulationPolicy
+          portalDoubleValidation={isPortalContractFlow(booking)}
+        />
+      ) : null}
 
       {inlineEditPanel}
 

@@ -162,3 +162,46 @@ def attach_serialize_context_to_bookings(
     attach_return_leg_topology_to_bookings(bookings)
     for booking in bookings:
         booking._serialize_viewer_company_id = viewer_company_id
+
+    if viewer_company_id is None:
+        return
+
+    from services.legal.portal_double_validation import (
+        booking_uses_portal_contract_flow,
+    )
+    from services.pricing.portal_carrier_ceiling import (
+        estimate_portal_carrier_offer_amount,
+    )
+
+    for booking in bookings:
+        # DV v2 + conditional_order_v1 : tarif grille du viewer authentifié.
+        # Jamais booking.amount (estimation) ni plafond client.
+        if not booking_uses_portal_contract_flow(booking):
+            continue
+        if getattr(booking, "company_id", None) is not None:
+            continue
+        try:
+            suggested = estimate_portal_carrier_offer_amount(
+                booking, int(viewer_company_id)
+            )
+        except Exception as exc:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "attach carrier_quote failed booking_id=%s company_id=%s: %s",
+                getattr(booking, "id", None),
+                viewer_company_id,
+                exc,
+                exc_info=True,
+            )
+            suggested = None
+        booking._company_suggested_amount = suggested
+        import logging
+
+        logging.getLogger(__name__).debug(
+            "attach carrier_quote booking_id=%s viewer=%s suggested=%s flow=%s",
+            getattr(booking, "id", None),
+            viewer_company_id,
+            suggested,
+            getattr(booking, "portal_contract_flow", None),
+        )

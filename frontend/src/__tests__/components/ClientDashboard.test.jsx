@@ -597,8 +597,18 @@ describe('ClientDashboard', () => {
     await openPortalReview();
 
     expect(screen.getAllByText('Jean Dupont').length).toBeGreaterThan(1);
-    expect(screen.getByText(/Estimation actuelle : CHF/i)).toBeInTheDocument();
-    expect(screen.getByText(/Indicative — le montant final/i)).toBeInTheDocument();
+    // Hors DV : estimation indicative. Avec DV : uniquement le plafond (pas les deux).
+    const hasEstimate = screen.queryByText(/Estimation indicative : CHF/i);
+    const hasCeiling = screen.queryByText(/Prix maximum accepté \(pas le prix final\)/i);
+    expect(hasEstimate || hasCeiling).toBeTruthy();
+    if (hasCeiling) {
+      expect(screen.queryByText(/Estimation indicative : CHF/i)).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/Ce plafond n’est pas le prix à payer/i)
+      ).toBeInTheDocument();
+    } else {
+      expect(screen.getByText(/Indicative — le montant final/i)).toBeInTheDocument();
+    }
     expect(screen.getByText(/Attribué après confirmation/i)).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Confirmer la demande de transport' })
@@ -713,8 +723,25 @@ describe('ClientDashboard', () => {
 
     render(<ClientDashboard />, { wrapper: createWrapper() });
     expect(await screen.findByRole('heading', { name: 'Mise à jour des conditions' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Conditions générales de transport 2.0/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Conditions générales d’utilisation 1.0/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Une nouvelle acceptation est requise avant toute nouvelle demande de transport/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: /Conditions de réservation et de transport/i,
+      })
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Conditions de réservation et de transport/i,
+      })
+    );
+    expect(screen.getByRole('button', { name: 'PDF' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Imprimer' })).toBeInTheDocument();
+    expect(screen.getByText('CORPS CGV 2.0')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Conditions générales d’utilisation — version 1\.0/i })
+    ).not.toBeInTheDocument();
     const checkbox = screen.getByRole('checkbox');
     expect(checkbox).not.toBeChecked();
     const accept = screen.getByRole('button', { name: 'Accepter les conditions' });
@@ -750,6 +777,192 @@ describe('ClientDashboard', () => {
     });
     await waitFor(() => {
       expect(screen.queryByRole('heading', { name: 'Mise à jour des conditions' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('PORTAL double_validation_v2 — happy path offre → confirmation', async () => {
+    const { toast } = require('sonner');
+    const pendingBooking = {
+      id: 501,
+      status: 'pending',
+      company_id: null,
+      pickup_location: 'Gare',
+      dropoff_location: 'HUG',
+      amount: 85,
+      scheduled_time: toIso(3_600_000),
+    };
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/clients/client-123') {
+        return Promise.resolve({ data: mockProfile });
+      }
+      if (url === '/clients/me/contract-flow') {
+        return Promise.resolve({ data: { portal_double_validation_enabled: true } });
+      }
+      if (url === '/clients/me/portal-terms-status') {
+        return Promise.resolve({
+          data: { requires_reacceptance: false, missing_documents: [] },
+        });
+      }
+      if (String(url).includes('/pending-offer')) {
+        return Promise.resolve({
+          data: {
+            double_validation: true,
+            offer: {
+              id: 77,
+              company_name: 'Trans SA',
+              offered_amount: 82,
+              maximum_accepted_amount: 95,
+              cancellation_policy_text: 'Annulation >24h gratuite',
+              offer_content_hash: 'hash-77',
+            },
+          },
+        });
+      }
+      if (String(url).includes('/bookings')) {
+        return Promise.resolve({ data: [pendingBooking] });
+      }
+      return Promise.resolve({ data: {} });
+    });
+    apiClient.post.mockResolvedValue({ data: { ok: true } });
+    const reloadSpy = jest.fn();
+    const originalLocation = window.location;
+    delete window.location;
+    window.location = { ...originalLocation, reload: reloadSpy };
+
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+
+    expect(
+      await screen.findByRole('heading', { name: /proposition de transport est disponible/i })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Trans SA')).toBeInTheDocument();
+    expect(screen.getAllByText(/CHF 82\.00/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/CHF 95\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/Annulation >24h gratuite/)).toBeInTheDocument();
+
+    const confirmBtn = screen.getByRole('button', { name: /Confirmer le transport à CHF 82/i });
+    fireEvent.click(confirmBtn);
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      const confirms = apiClient.post.mock.calls.filter((c) =>
+        String(c[0]).includes('/confirm-transport')
+      );
+      expect(confirms).toHaveLength(1);
+      expect(confirms[0][1]).toEqual({
+        carrier_offer_id: 77,
+        offer_content_hash: 'hash-77',
+      });
+      expect(toast.success).toHaveBeenCalledWith('Votre transport est confirmé.');
+    });
+
+    window.location = originalLocation;
+  });
+
+  it('PORTAL double_validation_v2 — offre > plafond non présentée', async () => {
+    const pendingBooking = {
+      id: 502,
+      status: 'pending',
+      company_id: null,
+      pickup_location: 'Gare',
+      dropoff_location: 'HUG',
+      amount: 85,
+      scheduled_time: toIso(3_600_000),
+    };
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/clients/client-123') {
+        return Promise.resolve({ data: mockProfile });
+      }
+      if (url === '/clients/me/contract-flow') {
+        return Promise.resolve({ data: { portal_double_validation_enabled: true } });
+      }
+      if (url === '/clients/me/portal-terms-status') {
+        return Promise.resolve({
+          data: { requires_reacceptance: false, missing_documents: [] },
+        });
+      }
+      if (String(url).includes('/pending-offer')) {
+        return Promise.resolve({
+          data: {
+            double_validation: true,
+            offer: {
+              id: 88,
+              company_name: 'Cher SA',
+              offered_amount: 120,
+              maximum_accepted_amount: 95,
+              cancellation_policy_text: 'x',
+              offer_content_hash: 'hash-88',
+            },
+          },
+        });
+      }
+      if (String(url).includes('/bookings')) {
+        return Promise.resolve({ data: [pendingBooking] });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+    await screen.findByTestId('header-dashboard');
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', { name: /proposition de transport/i })
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('PORTAL double_validation_v2 — stale : confirmation refusée, UI non confirmée', async () => {
+    const { toast } = require('sonner');
+    const pendingBooking = {
+      id: 503,
+      status: 'pending',
+      company_id: null,
+      pickup_location: 'Gare',
+      dropoff_location: 'HUG',
+      amount: 85,
+      scheduled_time: toIso(3_600_000),
+    };
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/clients/client-123') {
+        return Promise.resolve({ data: mockProfile });
+      }
+      if (url === '/clients/me/contract-flow') {
+        return Promise.resolve({ data: { portal_double_validation_enabled: true } });
+      }
+      if (url === '/clients/me/portal-terms-status') {
+        return Promise.resolve({
+          data: { requires_reacceptance: false, missing_documents: [] },
+        });
+      }
+      if (String(url).includes('/pending-offer')) {
+        return Promise.resolve({
+          data: {
+            double_validation: true,
+            offer: {
+              id: 99,
+              company_name: 'Stale SA',
+              offered_amount: 80,
+              maximum_accepted_amount: 95,
+              cancellation_policy_text: 'policy',
+              offer_content_hash: 'hash-99',
+            },
+          },
+        });
+      }
+      if (String(url).includes('/bookings')) {
+        return Promise.resolve({ data: [pendingBooking] });
+      }
+      return Promise.resolve({ data: {} });
+    });
+    apiClient.post.mockRejectedValue({
+      response: { status: 409, data: { error: 'portal_offer_stale', message: 'Offre obsolète' } },
+    });
+
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+    expect(await screen.findByText('Stale SA')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Confirmer le transport/i }));
+
+    await waitFor(() => {
+      expect(toast.success).not.toHaveBeenCalledWith('Votre transport est confirmé.');
     });
   });
 });

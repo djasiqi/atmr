@@ -2798,8 +2798,19 @@ class AcceptReservation(Resource):
                 logger,
             )
 
-        # Si pas de transfert actif, vérifier que le statut est PENDING
-        if not active_transfer_check and booking.status != BookingStatus.PENDING:
+        # Si pas de transfert actif, vérifier que le statut est PENDING.
+        # 7B.5 conditional_order_v1 : le UseCase transactionnel possède
+        # l'idempotence (même company) et transport_already_assigned (autre).
+        # Ne pas court-circuiter avant d'y entrer.
+        from services.legal.portal_double_validation import (
+            booking_uses_conditional_order,
+        )
+
+        if (
+            not active_transfer_check
+            and booking.status != BookingStatus.PENDING
+            and not booking_uses_conditional_order(booking)
+        ):
             return APIErrorHandler.handle_validation_error(
                 f"Cette réservation ne peut pas être acceptée. Statut actuel: {booking.status.value if hasattr(booking.status, 'value') else booking.status}",
                 logger_instance=logger,
@@ -2900,8 +2911,29 @@ class AcceptReservation(Resource):
 
         from application.companies.accept_reservation import AcceptReservationUseCase
 
+        req_json = request.get_json(silent=True) or {}
+        offered_amount = req_json.get("offered_amount", req_json.get("amount"))
+        actor_user_id = None
+        try:
+            from flask_jwt_extended import get_jwt_identity
+
+            identity = get_jwt_identity()
+            if identity is not None:
+                from models import User as UserModel
+
+                actor = UserModel.query.filter_by(public_id=str(identity)).first()
+                if actor is not None:
+                    actor_user_id = int(actor.id)
+        except Exception:
+            actor_user_id = None
+
         uc = AcceptReservationUseCase()
-        uc_result = uc.execute(booking, company_id=company_id)
+        uc_result = uc.execute(
+            booking,
+            company_id=company_id,
+            offered_amount=offered_amount,
+            actor_user_id=actor_user_id,
+        )
         if not uc_result.ok:
             err = uc_result.error or {}
             code = str(err.get("error") or "")
@@ -2910,7 +2942,19 @@ class AcceptReservation(Resource):
                 or err.get("error")
                 or "Reservation not found or cannot be accepted"
             )
-            if code == "portal_client_payment_hold":
+            if code in (
+                "portal_client_payment_hold",
+                "portal_offer_above_client_limit",
+                "portal_offer_conflict",
+                "portal_cancellation_policy_required",
+                "portal_maximum_missing",
+                "portal_carrier_quote_unavailable",
+                "transport_already_assigned",
+                "carrier_not_in_order_pool",
+                "portal_cancellation_exceeds_channel_cap",
+                "portal_cancellation_dimension_rejected",
+                "portal_channel_cancellation_policy_required",
+            ):
                 return {
                     "error": code,
                     "message": message,
@@ -2922,12 +2966,112 @@ class AcceptReservation(Resource):
 
         try:
             db.session.commit()
-            _maybe_trigger_dispatch(company_id, "update")
+            if uc_result.should_trigger_dispatch:
+                _maybe_trigger_dispatch(company_id, "update")
             from services.reservations_summary_cache import (
                 invalidate_summary_cache_for_booking,
             )
 
             invalidate_summary_cache_for_booking(company_id, booking)
+            # 7B.5 : notification contrat après commit uniquement.
+            try:
+                from services.legal.portal_double_validation import (
+                    booking_uses_conditional_order,
+                )
+                from models.portal_transport_contract_formed import (
+                    PortalTransportContractFormed,
+                )
+
+                if booking_uses_conditional_order(booking):
+                    formed = PortalTransportContractFormed.query.filter_by(
+                        booking_id=int(booking.id)
+                    ).one_or_none()
+                    if formed is not None and int(formed.company_id) == int(company_id):
+                        if not uc_result.idempotent_replay:
+                            from services.legal.send_portal_transport_contract_formed import (
+                                notify_portal_transport_contract_formed,
+                            )
+                            from services.notifications.end_client_booking_notify import (
+                                notify_end_client_booking_milestone,
+                            )
+
+                            recipient = None
+                            try:
+                                client = getattr(booking, "client", None)
+                                user = (
+                                    getattr(client, "user", None) if client else None
+                                )
+                                recipient = getattr(user, "email", None)
+                            except Exception:
+                                recipient = None
+                            notify_portal_transport_contract_formed(
+                                booking=booking,
+                                contract=formed,
+                                recipient_email=recipient,
+                            )
+                            notify_end_client_booking_milestone(
+                                booking,
+                                milestone="company_accepted",
+                                send_push=True,
+                                extra={
+                                    "company_name": formed.carrier_legal_name,
+                                    "contractual_amount": float(formed.carrier_quote),
+                                },
+                            )
+                        return {
+                            "message": (
+                                "Transport déjà confirmé."
+                                if uc_result.idempotent_replay
+                                else "Transport accepté — contrat formé."
+                            ),
+                            "transport_contract_formed": True,
+                            "idempotent_replay": bool(uc_result.idempotent_replay),
+                            "contractual_amount": float(formed.carrier_quote),
+                            "contract_id": int(formed.id),
+                        }, 200
+            except Exception:
+                logger.debug(
+                    "[AcceptReservation] conditional_order notify failed",
+                    exc_info=True,
+                )
+            if uc_result.portal_offer_pending_client:
+                try:
+                    from models.portal_carrier_offer import PortalCarrierOffer
+                    from services.notifications.end_client_booking_notify import (
+                        notify_end_client_booking_milestone,
+                    )
+
+                    offer_extra: dict = {}
+                    if uc_result.portal_offer_id:
+                        offer_row = PortalCarrierOffer.query.get(
+                            int(uc_result.portal_offer_id)
+                        )
+                        if offer_row is not None:
+                            offer_extra = {
+                                "company_name": offer_row.company_name_snapshot,
+                                "offered_amount": float(offer_row.offered_amount),
+                                "offer_id": int(offer_row.id),
+                            }
+                    notify_end_client_booking_milestone(
+                        booking,
+                        milestone="carrier_offered",
+                        send_push=True,
+                        extra=offer_extra,
+                    )
+                except Exception:
+                    logger.debug(
+                        "[AcceptReservation] carrier_offered notify failed",
+                        exc_info=True,
+                    )
+                return {
+                    "message": (
+                        "Proposition de transport envoyée. "
+                        "En attente de confirmation client."
+                    ),
+                    "portal_offer_pending_client": True,
+                    "portal_offer_id": uc_result.portal_offer_id,
+                    "reservation": cast("Any", booking).serialize,
+                }, 200
             try:
                 from services.notifications.end_client_booking_notify import (
                     notify_end_client_booking_milestone,
@@ -2950,6 +3094,83 @@ class AcceptReservation(Resource):
             db.session.rollback()
 
             return APIErrorHandler.handle_exception(e, logger)
+
+
+# ======================================================
+# 2b. Politique d'annulation PORTAL (versionnée)
+# ======================================================
+
+
+@companies_ns.route("/me/portal-cancellation-policy")
+class CompanyPortalCancellationPolicyResource(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        from services.legal.portal_cancellation_policy import (
+            get_portal_policy_publication_status,
+        )
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response:
+            return error_response, status_code
+        status = get_portal_policy_publication_status(
+            company_id=int(company.id),
+            company_name=str(getattr(company, "name", "") or ""),
+        )
+        return status, 200
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        from services.legal.portal_cancellation_policy import (
+            publish_cancellation_policy,
+            publish_portal_policy_from_billing_settings,
+        )
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response:
+            return error_response, status_code
+        data = request.get_json(silent=True) or {}
+        version = str(data.get("version") or "").strip()
+        body_text = str(data.get("body_text") or "").strip()
+        from_billing_raw = data.get("from_billing_settings", True)
+        # Bridge produit par défaut. Le chemin manuel (version+body) n'est utilisé
+        # que si from_billing_settings est explicitement faux ET que les deux
+        # champs sont fournis — sinon on évite version_and_body_required.
+        explicit_manual = (
+            version
+            and body_text
+            and (
+                from_billing_raw is False
+                or str(from_billing_raw).lower() in ("0", "false", "no")
+            )
+        )
+        if explicit_manual:
+            result = publish_cancellation_policy(
+                company_id=int(company.id),
+                version=version,
+                body_text=body_text,
+            )
+        else:
+            result = publish_portal_policy_from_billing_settings(
+                company_id=int(company.id),
+                company_name=str(getattr(company, "name", "") or ""),
+            )
+        if not result.ok:
+            return {"error": result.error or "publish_failed"}, 400
+        db.session.commit()
+        policy = result.policy
+        return {
+            "policy": {
+                "id": int(policy.id),
+                "version": policy.version,
+                "body_text": policy.body_text,
+                "content_hash": policy.content_hash,
+                "effective_at": policy.effective_at.isoformat()
+                if policy.effective_at
+                else None,
+            }
+        }, 201
 
 
 # ======================================================
@@ -3352,8 +3573,12 @@ class AssignDriver(Resource):
             validate_booking_billing_ready_for_write(booking)
         except BillingValidationError as billing_err:
             db.session.rollback()
+            from services.billing.booking_billing_guard import (
+                user_message_for_incomplete_billing,
+            )
+
             return APIErrorHandler.handle_billing_validation_error(
-                str(billing_err),
+                user_message_for_incomplete_billing(billing_err),
                 field=billing_err.field,
                 logger_instance=logger,
             )

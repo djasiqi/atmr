@@ -109,12 +109,127 @@ def _return_booking_client_summary(ret: Any) -> dict[str, Any]:
     }
 
 
+def _portal_ceiling_by_booking_id(
+    booking_ids: list[int],
+) -> dict[int, tuple[float | None, float | None]]:
+    """Map booking_id → (estimated_amount_snapshot, maximum_accepted_amount_snapshot).
+
+    Source : événement ``BOOKING_CREATED`` (plafond figé à la création PORTAL DV).
+    """
+    if not booking_ids:
+        return {}
+    from models.client_booking_contract_event import (
+        EVENT_BOOKING_CREATED,
+        ClientBookingContractEvent,
+    )
+
+    rows = (
+        ClientBookingContractEvent.query.filter(
+            ClientBookingContractEvent.booking_id.in_(booking_ids),
+            ClientBookingContractEvent.event_type == EVENT_BOOKING_CREATED,
+        )
+        .order_by(ClientBookingContractEvent.id.asc())
+        .all()
+    )
+    out: dict[int, tuple[float | None, float | None]] = {}
+    for ev in rows:
+        bid = int(getattr(ev, "booking_id", 0) or 0)
+        if bid <= 0 or bid in out:
+            continue
+        est = getattr(ev, "estimated_amount_snapshot", None)
+        mx = getattr(ev, "maximum_accepted_amount_snapshot", None)
+        out[bid] = (
+            float(est) if est is not None else None,
+            float(mx) if mx is not None else None,
+        )
+    return out
+
+
+def _pending_portal_offer_booking_ids(booking_ids: list[int]) -> set[int]:
+    """Bookings ayant une ``PortalCarrierOffer`` active (offered) non expirée côté liste client."""
+    if not booking_ids:
+        return set()
+    try:
+        from models.portal_carrier_offer import (
+            OFFER_STATUS_OFFERED,
+            PortalCarrierOffer,
+        )
+    except Exception:
+        return set()
+    rows = (
+        PortalCarrierOffer.query.filter(
+            PortalCarrierOffer.booking_id.in_(booking_ids),
+            PortalCarrierOffer.status == OFFER_STATUS_OFFERED,
+        )
+        .with_entities(PortalCarrierOffer.booking_id)
+        .all()
+    )
+    return {int(r[0]) for r in rows if r[0] is not None}
+
+
+def _portal_contractual_by_booking_id(
+    booking_ids: list[int],
+) -> dict[int, float]:
+    """Montant contractuel : formation 7B.5 ou confirmation DV."""
+    if not booking_ids:
+        return {}
+    out: dict[int, float] = {}
+    try:
+        from models.portal_transport_contract_formed import (
+            PortalTransportContractFormed,
+        )
+
+        for row in PortalTransportContractFormed.query.filter(
+            PortalTransportContractFormed.booking_id.in_(booking_ids)
+        ).all():
+            bid = int(row.booking_id)
+            out[bid] = float(row.carrier_quote)
+    except Exception:
+        pass
+    try:
+        from models.portal_client_transport_confirmation import (
+            PortalClientTransportConfirmation,
+        )
+
+        for row in PortalClientTransportConfirmation.query.filter(
+            PortalClientTransportConfirmation.booking_id.in_(booking_ids)
+        ).all():
+            bid = int(row.booking_id)
+            if bid not in out:
+                out[bid] = float(row.contractual_amount)
+    except Exception:
+        pass
+    return out
+
+
 def enrich_client_bookings_list(bookings: list[Any]) -> list[dict[str, Any]]:
+    booking_ids = [
+        int(getattr(b, "id", 0) or 0)
+        for b in bookings
+        if getattr(b, "id", None) is not None
+    ]
+    ids = [i for i in booking_ids if i > 0]
+    ceilings = _portal_ceiling_by_booking_id(ids)
+    pending_offer_ids = _pending_portal_offer_booking_ids(ids)
+    contractual = _portal_contractual_by_booking_id(ids)
+
     out: list[dict[str, Any]] = []
     for b in bookings:
         ser = b.serialize
         base: dict[str, Any] = ser if isinstance(ser, dict) else {}
         data = enrich_booking_dict_with_client_live(b, base)
+        bid = int(getattr(b, "id", 0) or 0)
+        if bid in ceilings:
+            est, mx = ceilings[bid]
+            if est is not None:
+                data["estimated_amount_snapshot"] = est
+            if mx is not None:
+                data["maximum_accepted_amount"] = mx
+                data["maximum_accepted_amount_snapshot"] = mx
+        if bid in contractual:
+            data["contractual_amount"] = contractual[bid]
+        if bid in pending_offer_ids:
+            data["has_pending_portal_offer"] = True
         if not bool(getattr(b, "is_return", False)):
             ret = getattr(b, "return_trip", None)
             if ret is None and (

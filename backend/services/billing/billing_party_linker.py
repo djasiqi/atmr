@@ -62,7 +62,11 @@ def _best_effort_address_from_client(client: Client) -> str:
 
 
 def _best_effort_contacts_from_client(client: Client) -> tuple[str | None, str | None]:
+    """E-mail : contact_email facturation, sinon compte utilisateur (PORTAL)."""
     email = (getattr(client, "contact_email", None) or "").strip() or None
+    user = getattr(client, "user", None)
+    if not email and user is not None:
+        email = (getattr(user, "email", None) or "").strip() or None
     phone = ""
     try:
         phone = getattr(client, "contact_phone_secure", None) or ""
@@ -70,7 +74,6 @@ def _best_effort_contacts_from_client(client: Client) -> tuple[str | None, str |
         phone = getattr(client, "contact_phone", "") or ""
     phone = phone.strip()
     if not phone:
-        user = getattr(client, "user", None)
         phone = (getattr(user, "phone", None) or "").strip() if user is not None else ""
     return email, (phone or None)
 
@@ -146,6 +149,9 @@ def get_or_create_billing_party_for_direct_patient(
     n'est créée. L'UI peut donc continuer d'afficher « Aucun tiers payeur configuré ».
 
     Idempotence via ``external_ref = patient_client:{client.id}`` (scopé company_id).
+
+    Clients PORTAL / sans ``company_id`` : autorisés — le BP est rattaché à
+    l'entreprise exécutante (créancier), pas au « portefeuille » du client.
     """
     if client is None or getattr(client, "id", None) is None:
         raise ValueError(
@@ -153,7 +159,11 @@ def get_or_create_billing_party_for_direct_patient(
         )
 
     client_id = int(client.id)
-    if int(getattr(client, "company_id", 0) or 0) != int(company_id):
+    # Portefeuille : le client doit appartenir à l'entreprise.
+    # PORTAL / marché ouvert : client.company_id est NULL — le BP est créé
+    # sous l'entreprise exécutante (créancier de la course).
+    client_company_id = getattr(client, "company_id", None)
+    if client_company_id is not None and int(client_company_id) != int(company_id):
         raise ValueError(
             "client.company_id ne correspond pas à company_id "
             f"(client={client_id}, company={company_id})"

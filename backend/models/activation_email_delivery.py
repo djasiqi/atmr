@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime
 
@@ -86,6 +87,8 @@ WEBHOOK_ADVANCED_STATUSES = frozenset(
 )
 
 SENDING_LEASE_MINUTES = 5
+# File Celery bloquée / worker lent : autoriser un nouvel envoi après ce délai.
+QUEUED_LEASE_MINUTES = int(os.getenv("ACTIVATION_EMAIL_QUEUED_LEASE_MINUTES", "2"))
 
 
 class ActivationEmailDelivery(db.Model):

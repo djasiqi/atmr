@@ -133,10 +133,13 @@ def _notify_companies_new_dispatch_offers(booking_id: int) -> None:
 
 
 def booking_open_market_has_dispatch_candidates(booking: Booking) -> bool:
-    """Vrai si au moins une entreprise avec dispatch activé est candidate pour cette course.
+    """Vrai si au moins une entreprise approuvée est candidate pour cette course.
+
+    Inclut les entreprises en mode MANUAL (``dispatch_enabled=false``) :
+    MANUAL coupe l'auto-assign flotte, pas la réception de missions LIRIE.
 
     Réservé au **marché ouvert** (``company_id`` absent) : avant paiement en ligne, évite
-    d'encaisser si aucun transporteur ne peut être sollicité par le moteur de dispatch.
+    d'encaisser si aucun transporteur ne peut être sollicité.
     """
     if getattr(booking, "company_id", None) is not None:
         return True
@@ -147,6 +150,7 @@ def booking_open_market_has_dispatch_candidates(booking: Booking) -> bool:
     candidates = compute_candidates(
         pickup_geo_unit=pickup_gu,
         drop_geo_unit=drop_gu,
+        require_dispatch_enabled=False,
     )
     return len(candidates) > 0
 
@@ -156,6 +160,7 @@ def seed_dispatch_offers_for_unassigned_booking(booking_id: int) -> int:
 
     Réutilise la même logique que ``POST .../scoring/dispatch/<booking_id>`` mais
     sans exiger que le booking soit déjà rattaché à une entreprise.
+    Inclut les entreprises MANUAL approuvées (réception missions LIRIE).
 
     Returns:
         Nombre d'offres créées (0 si booking déjà assigné ou introuvable).
@@ -169,9 +174,17 @@ def seed_dispatch_offers_for_unassigned_booking(booking_id: int) -> int:
 
     ensure_booking_dispatch_geo_units(booking)
 
+    if getattr(booking, "pickup_geo_unit_id", None) is None:
+        logger.warning(
+            "[open_booking_offers] pickup_geo_unit_id absent après ensure "
+            "(booking_id=%s) — compute_candidates sera vide ; vérifier geo_unit / reverse géo",
+            booking_id,
+        )
+
     candidates = compute_candidates(
         pickup_geo_unit=booking.pickup_geo_unit,
         drop_geo_unit=booking.dropoff_geo_unit,
+        require_dispatch_enabled=False,
     )
     from services.platform_billing.capabilities import (
         BillingCapability,

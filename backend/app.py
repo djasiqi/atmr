@@ -478,6 +478,13 @@ def create_app(config_name: str | None = None):
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
 
+    # 7D — fail-fast anti-hybride terms 2.0 ↔ double validation
+    from services.legal.portal_terms_catalog import (
+        enforce_portal_activation_coordination_at_startup,
+    )
+
+    enforce_portal_activation_coordination_at_startup(app)
+
     # Guard fail-fast demo/prod au runtime
     snapshot = build_demo_environment_snapshot()
     enforce_demo_environment_or_raise(snapshot)

@@ -9,6 +9,7 @@ export const presentPatientInvoiceSummary = (opportunity) => {
       transportsCount: 0,
       totalHt: 0,
       blocked: false,
+      invoiceDeliveryMethod: 'email',
     };
   }
   const transportsCount =
@@ -22,6 +23,11 @@ export const presentPatientInvoiceSummary = (opportunity) => {
     opportunity.display_name ||
     `${opportunity.first_name || ''} ${opportunity.last_name || ''}`.trim() ||
     'Patient';
+  const rawDelivery = String(
+    opportunity.invoice_delivery_method || 'email'
+  )
+    .trim()
+    .toLowerCase();
   return {
     visible: true,
     displayName,
@@ -29,6 +35,7 @@ export const presentPatientInvoiceSummary = (opportunity) => {
     totalHt,
     hasBillable: !blocked && (transportsCount > 0 || totalHt > 0),
     blocked,
+    invoiceDeliveryMethod: rawDelivery === 'paper' ? 'paper' : 'email',
   };
 };
 

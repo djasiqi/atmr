@@ -19,6 +19,7 @@ import {
   getDispatchRowDelayInfo,
   normalizeDispatchDelayMapKey,
 } from '../../../../utils/dispatchDelayMapKey';
+import { portalCarrierAcceptButtonLabel } from '../../../../utils/portalDoubleValidationUi';
 import {
   getPendingActionBadge,
   indexPendingActionsByRouteGroup,
@@ -347,8 +348,9 @@ const DispatchTable = ({
                       {status === 'pending' && (
                         <>
                           <button
-                            onClick={() => onAccept?.(r.id)}
-                            title="Accepter"
+                            onClick={() => onAccept?.(r)}
+                            title={portalCarrierAcceptButtonLabel(r)}
+                            aria-label={portalCarrierAcceptButtonLabel(r)}
                             className={`${styles.actionButton} ${styles.acceptButton}`}
                           >
                             <FiCheckCircle />

@@ -223,8 +223,102 @@ describe('SignupActivation', () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByText(/renvoyer \(12s\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/renvoyer dans 12s/i)).toBeInTheDocument();
     });
+  });
+
+  it('apres resend 2xx : message envoyé + cooldown, pas « en cours d\'envoi »', async () => {
+    apiClient.get.mockResolvedValueOnce({
+      data: {
+        masked_email: 's***@a***.com',
+        email_resend_retry_after_seconds: 0,
+        activation_status: {
+          email_verified: false,
+          phone_verified: false,
+          requires_email: true,
+          requires_phone: false,
+          is_complete: false,
+          is_finalized: false,
+          email_delivery_status: 'queued',
+        },
+      },
+    });
+    apiClient.post.mockResolvedValueOnce({
+      data: {
+        activation_email_queued: true,
+        email_sent: null,
+        message: "Un lien d'activation a été envoyé.",
+        activation_status: {
+          email_verified: false,
+          requires_email: true,
+          email_delivery_status: 'queued',
+        },
+      },
+    });
+
+    renderActivation('/activate-account?activation_session_id=sess-sent-ok');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /renvoyer l'email/i })).toBeEnabled();
+    });
+    expect(screen.queryByText(/email en cours d'envoi/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/un lien d'activation a été envoyé à s\*\*\*@a\*\*\*\.com/i)
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /renvoyer l'email/i }));
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith('/auth/activation/resend-email', {
+        activation_session_id: 'sess-sent-ok',
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/renvoyer dans 60s/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/email en cours d'envoi/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/envoi déjà en cours/i)).not.toBeInTheDocument();
+  });
+
+  it('429 email_delivery_in_progress → info + cooldown, pas erreur rouge « déjà en cours »', async () => {
+    apiClient.get.mockResolvedValueOnce({
+      data: {
+        masked_email: 's***@a***.com',
+        activation_status: {
+          email_verified: false,
+          requires_email: true,
+          is_complete: false,
+          is_finalized: false,
+          email_delivery_status: 'queued',
+        },
+      },
+    });
+    apiClient.post.mockRejectedValueOnce({
+      response: {
+        status: 429,
+        data: {
+          message: 'Envoi déjà en cours. Veuillez patienter.',
+          details: {
+            retry_after_seconds: 46,
+            reason: 'email_delivery_in_progress',
+          },
+        },
+      },
+    });
+
+    renderActivation('/activate-account?activation_session_id=sess-in-progress');
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /renvoyer l'email/i })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /renvoyer l'email/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/renvoyer dans 46s/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/envoi déjà en cours\. veuillez patienter/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/un lien d'activation a déjà été demandé/i)
+    ).toBeInTheDocument();
   });
 
   it('affiche le lien de secours si resend-email renvoie debug_activation_link', async () => {

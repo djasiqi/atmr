@@ -1,9 +1,22 @@
 # Créance PORTAL — source de vérité hors `Invoice`
 
-Décision d’architecture (étape 6B) :
+> **⚠️ ARCHITECTURE FACTURATION LOCKED (2026-09-24)**  
+> UX = **`Invoice` Direct patient** uniquement (portefeuille **ou** client PORTAL).  
+> `PortalReceivable` = **interne / dérivé** (hold, litige, relances, recouvrement) —  
+> jamais une action métier séparée.  
+> Voir : [portal-direct-patient-invoice-unify.md](portal-direct-patient-invoice-unify.md)  
+> ```text
+> 6B CORE RECEIVABLE : conservé
+> 6B UX              : REOPENED
+> ```
+
+Décision d’architecture **initiale** (étape 6B) — conservée comme historique
+d’implémentation :
 
 ```text
-IMPLEMENTATION STRATEGY : NEW PortalReceivable
+IMPLEMENTATION STRATEGY : NEW PortalReceivable   ← historique 6B
+USER-FACING BILLING (cible) : Invoice Direct patient (unifié)
+PortalReceivable (cible)    : interne / dérivé
 ```
 
 `Invoice` reste le moteur S1/S2 entreprise / institution. Il recalcule souvent

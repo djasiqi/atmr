@@ -22,8 +22,8 @@ import { reconcileInstitutionOffersResponse } from '../../../utils/institutionOf
 import { useInstitutionOfferMutations } from '../../../hooks/useInstitutionOfferMutations';
 import { computeAcceptNowPickupIso } from '../../../utils/institutionOfferActions';
 import { resolveReturnPickupConflict } from '../../../utils/roundTripTemporal';
-import ReservationTable from '../Dashboard/components/ReservationTable';
-import ReservationTableSkeleton from '../Dashboard/components/ReservationTableSkeleton';
+import { portalCarrierAcceptOfferedAmount } from '../../../utils/portalDoubleValidationUi';
+import ReservationTable from '../Dashboard/components/ReservationTable';import ReservationTableSkeleton from '../Dashboard/components/ReservationTableSkeleton';
 import ProposeOfferTimeModal from '../Dashboard/components/ProposeOfferTimeModal';
 import ReservationStats from './components/ReservationStats';
 import ReservationFilters from './components/ReservationFilters';
@@ -838,16 +838,34 @@ const CompanyReservations = () => {
     afterListMutation();
   };
 
-  const handleAccept = async (reservationId) => {
+  const handleAccept = async (idOrReservation) => {
     try {
-      const result = await acceptReservation(reservationId);
+      const reservation =
+        idOrReservation && typeof idOrReservation === 'object'
+          ? idOrReservation
+          : null;
+      const id = reservation?.id ?? idOrReservation;
+      const offered = portalCarrierAcceptOfferedAmount(reservation);
+      const result = await acceptReservation(
+        id,
+        offered != null ? { offered_amount: offered } : null
+      );
       const patch = result?.reservation || result || { status: 'accepted' };
-      liriePatchCompanyReservationLists(queryClient, reservationId, patch);
+      liriePatchCompanyReservationLists(queryClient, id, patch);
       void queryClient.invalidateQueries({
         queryKey: [LIRIE_QK_PREFIX, 'company-reservations-stats'],
       });
+      if (result?.portal_offer_pending_client || result?.data?.portal_offer_pending_client) {
+        const amt = offered ?? result?.offered_amount;
+        toast.success(
+          amt != null
+            ? `Proposition envoyée au client à CHF ${Number(amt).toFixed(2)}`
+            : 'Proposition envoyée au client'
+        );
+      }
     } catch (err) {
       console.error("Erreur lors de l'acceptation:", err);
+      toast.error("Impossible d'accepter cette demande");
     }
   };
 

@@ -390,6 +390,28 @@ class Invoice(db.Model):
             except Exception:
                 pass
 
+        contact_email = getattr(client, "contact_email", None)
+        user = getattr(client, "user", None) if hasattr(client, "user") else None
+        user_email = getattr(user, "email", None) if user is not None else None
+        # Si la relation user n'est pas chargée, recharger (cas PORTAL / stub)
+        if not user_email and getattr(client, "id", None):
+            try:
+                from sqlalchemy.orm import joinedload as _jl2
+
+                from models.client import Client as ClientModel2
+
+                reloaded = (
+                    ClientModel2.query.options(_jl2(ClientModel2.user))
+                    .filter_by(id=int(client.id))
+                    .first()
+                )
+                if reloaded is not None:
+                    ru = getattr(reloaded, "user", None)
+                    user_email = getattr(ru, "email", None) if ru is not None else None
+                    if contact_email is None:
+                        contact_email = getattr(reloaded, "contact_email", None)
+            except Exception:
+                pass
         return {
             "id": client.id,
             "first_name": first_name,
@@ -398,6 +420,8 @@ class Invoice(db.Model):
             "is_institution": is_institution,
             "institution_name": institution_name,
             "patient_display_name": patient_display_name,
+            "contact_email": contact_email,
+            "email": user_email or contact_email,
         }
 
     def to_dict(
@@ -560,10 +584,22 @@ class Invoice(db.Model):
                 "legacy_bill_to_client_id": self.bill_to_client_id,
                 "legacy_billed_to_company_id": self.billed_to_company_id,
             },
+            "default_recipient_email": self._default_recipient_email(),
             "lines": lines_out,
             "payments": payments_out,
             "reminders": reminder_payload,
         }
+
+    def _default_recipient_email(self) -> str | None:
+        """E-mail prérempli pour SendEmailModal (chaîne PORTAL / Direct patient)."""
+        try:
+            from services.billing.invoice_recipient_email import (
+                resolve_invoice_recipient_email,
+            )
+
+            return resolve_invoice_recipient_email(self)
+        except Exception:
+            return None
 
 
 class InvoiceLine(db.Model):

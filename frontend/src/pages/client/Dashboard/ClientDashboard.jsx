@@ -23,6 +23,7 @@ import polyline from '@mapbox/polyline';
 // UI
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
 import Footer from '../../../components/layout/Footer/Footer';
+import Modal from '../../../components/common/Modal';
 import AddressAutocomplete from '../../../components/common/AddressAutocomplete';
 import { getApiErrorMessage } from '../../../utils/apiErrorMessage';
 import { toast } from 'sonner';
@@ -36,6 +37,17 @@ import {
   resolveClientBookingDisplayStatus,
 } from '../../../utils/clientBookingUx';
 import { trackClientKpiEvent } from '../../../utils/clientKpi';
+import {
+  formatPortalCancellationPolicyForDisplay,
+  formatPortalOfferChf,
+  isPortalOfferConfirmable,
+  PORTAL_DV_COPY,
+} from '../../../utils/portalDoubleValidationUi';
+import {
+  downloadPortalTermsDocument,
+  portalTermsDocumentLabel,
+  printPortalTermsDocument,
+} from '../../../utils/portalTermsDocument';
 import {
   getActiveAccessToken,
   getActivePublicId,
@@ -366,6 +378,16 @@ const ClientDashboard = () => {
   const [termsAcceptChecked, setTermsAcceptChecked] = useState(false);
   const [termsAccepting, setTermsAccepting] = useState(false);
   const [openTermsDoc, setOpenTermsDoc] = useState(null);
+  const [doubleValidationEnabled, setDoubleValidationEnabled] = useState(false);
+  const [conditionalOrderEnabled, setConditionalOrderEnabled] = useState(false);
+  const [maximumAcceptedAmount, setMaximumAcceptedAmount] = useState('');
+  const [pricingCeiling, setPricingCeiling] = useState(null);
+  const [eligibleCarriers, setEligibleCarriers] = useState([]);
+  const [pricingCeilingLoading, setPricingCeilingLoading] = useState(false);
+  const [pricingCeilingError, setPricingCeilingError] = useState('');
+  const [pendingCarrierOffer, setPendingCarrierOffer] = useState(null);
+  const [confirmingTransport, setConfirmingTransport] = useState(false);
+  const portalCeilingFlowEnabled = doubleValidationEnabled || conditionalOrderEnabled;
   const submitLockRef = useRef(false);
   const portalIdempotencyKeyRef = useRef(null);
   const [payOffer, setPayOffer] = useState(null);
@@ -411,7 +433,9 @@ const ClientDashboard = () => {
   );
 
   useEffect(() => {
-    if (String(profile?.client_type || '').toUpperCase() !== 'PORTAL') {
+    // Même règle que isPortalPrivateClient (défaut PORTAL). Ne pas exiger
+    // client_type déjà peuplé sinon le GET statut CGU n'est jamais lancé.
+    if (!profile || !isPortalPrivateClient) {
       return undefined;
     }
     let cancelled = false;
@@ -422,14 +446,112 @@ const ClientDashboard = () => {
           setTermsStatus(res.data?.data || null);
           setTermsAcceptChecked(false);
         }
-      } catch {
+      } catch (err) {
+        console.warn('Impossible de charger le statut des conditions PORTAL:', err);
         if (!cancelled) setTermsStatus(null);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [profile]);
+  }, [profile, isPortalPrivateClient]);
+
+  useEffect(() => {
+    if (!isPortalPrivateClient) {
+      setDoubleValidationEnabled(false);
+      setConditionalOrderEnabled(false);
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiClient.get('/clients/me/contract-flow');
+        if (!cancelled) {
+          setDoubleValidationEnabled(Boolean(res.data?.portal_double_validation_enabled));
+          setConditionalOrderEnabled(Boolean(res.data?.portal_conditional_order_enabled));
+        }
+      } catch {
+        if (!cancelled) {
+          setDoubleValidationEnabled(false);
+          setConditionalOrderEnabled(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isPortalPrivateClient]);
+
+  useEffect(() => {
+    if (!isPortalPrivateClient || !doubleValidationEnabled || conditionalOrderEnabled) {
+      setPendingCarrierOffer(null);
+      return undefined;
+    }
+    const candidates = [...(upcomingBookings || []), ...(ongoingBookings || [])];
+    if (!candidates.length) {
+      setPendingCarrierOffer(null);
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const pending = candidates.find((b) => {
+          const st = String(b.status || '').toUpperCase();
+          return st === 'PENDING' && !b.company_id && !b.company_name;
+        });
+        if (!pending?.id) {
+          if (!cancelled) setPendingCarrierOffer(null);
+          return;
+        }
+        const res = await apiClient.get(`/clients/me/bookings/${pending.id}/pending-offer`);
+        if (!cancelled) {
+          const offer = res.data?.offer || null;
+          if (offer && isPortalOfferConfirmable(offer)) {
+            setPendingCarrierOffer({ ...offer, bookingId: pending.id });
+          } else {
+            setPendingCarrierOffer(null);
+          }
+        }
+      } catch {
+        if (!cancelled) setPendingCarrierOffer(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isPortalPrivateClient, doubleValidationEnabled, conditionalOrderEnabled, upcomingBookings, ongoingBookings]);
+
+  const handleConfirmTransportOffer = async () => {
+    if (
+      !pendingCarrierOffer?.id ||
+      !pendingCarrierOffer.bookingId ||
+      confirmingTransport ||
+      !isPortalOfferConfirmable(pendingCarrierOffer)
+    ) {
+      return;
+    }
+    setConfirmingTransport(true);
+    setFormError(null);
+    try {
+      await apiClient.post(
+        `/clients/me/bookings/${pendingCarrierOffer.bookingId}/confirm-transport`,
+        {
+          carrier_offer_id: pendingCarrierOffer.id,
+          offer_content_hash: pendingCarrierOffer.offer_content_hash,
+        }
+      );
+      setPendingCarrierOffer(null);
+      toast.success(PORTAL_DV_COPY.transportConfirmed);
+      // Recharge via invalidation habituelle si disponible
+      window.location.reload();
+    } catch (err) {
+      setFormError(
+        getApiErrorMessage(err, 'Impossible de confirmer cette proposition de transport.')
+      );
+    } finally {
+      setConfirmingTransport(false);
+    }
+  };
 
   useEffect(() => {
     const saved = readAndConsumeSaferpayPayResume();
@@ -923,6 +1045,109 @@ const ClientDashboard = () => {
     recurrenceDays,
   ]);
 
+  // Après recurrenceSeriesMultiplier (évite TDZ / ReferenceError).
+  useEffect(() => {
+    if (!isPortalPrivateClient || !portalCeilingFlowEnabled) {
+      setPricingCeiling(null);
+      setPricingCeilingError('');
+      setMaximumAcceptedAmount('');
+      setEligibleCarriers([]);
+      return undefined;
+    }
+    const pickupText = String(pickup || '').trim();
+    const dropoffText = String(destination || '').trim();
+    if (!pickupText || !dropoffText) {
+      setPricingCeiling(null);
+      setPricingCeilingError('');
+      setMaximumAcceptedAmount('');
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setPricingCeilingLoading(true);
+      setPricingCeilingError('');
+      try {
+        const res = await apiClient.post('/clients/me/portal-pricing-ceiling', {
+          pickup_location: pickupText,
+          dropoff_location: dropoffText,
+          pickup_lat: pickupSelection?.lat ?? pickupSelection?.latitude ?? null,
+          pickup_lon: pickupSelection?.lng ?? pickupSelection?.lon ?? pickupSelection?.longitude ?? null,
+          dropoff_lat: destinationSelection?.lat ?? destinationSelection?.latitude ?? null,
+          dropoff_lon:
+            destinationSelection?.lng ??
+            destinationSelection?.lon ??
+            destinationSelection?.longitude ??
+            null,
+          is_round_trip: Boolean(roundTripEnabled),
+          series_occurrences: recurrenceEnabled
+            ? Math.max(1, Math.min(52, Number(recurrenceSeriesMultiplier) || 1))
+            : 1,
+          scheduled_time: asapMode
+            ? null
+            : selectedDate && selectedTime
+              ? `${selectedDate}T${selectedTime}:00`
+              : null,
+        });
+        if (cancelled) return;
+        const data = res.data?.data || res.data || null;
+        const max = Number(data?.maximum_accepted_amount);
+        if (!Number.isFinite(max) || max <= 0) {
+          setPricingCeiling(null);
+          setMaximumAcceptedAmount('');
+          setPricingCeilingError(
+            'Impossible de calculer un prix maximum pour cette course.'
+          );
+          return;
+        }
+        setPricingCeiling(data);
+        setMaximumAcceptedAmount(max.toFixed(2));
+        setEligibleCarriers(
+          Array.isArray(data?.eligible_carriers) ? data.eligible_carriers : []
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setPricingCeiling(null);
+        setMaximumAcceptedAmount('');
+        setEligibleCarriers([]);
+        // Timeout / API restart : message métier plafond, pas le bandeau « maintenance ».
+        const status = err?.response?.status;
+        const timedOut =
+          err?.code === 'ECONNABORTED' ||
+          err?.code === 'ERR_NETWORK' ||
+          status === 502 ||
+          status === 503 ||
+          status === 504;
+        setPricingCeilingError(
+          timedOut
+            ? 'Calcul du prix maximum trop long ou service momentanément saturé. Réessayez dans quelques secondes.'
+            : getApiErrorMessage(
+                err,
+                'Impossible de calculer un prix maximum pour cette course.'
+              )
+        );
+      } finally {
+        if (!cancelled) setPricingCeilingLoading(false);
+      }
+    }, 450);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    isPortalPrivateClient,
+    portalCeilingFlowEnabled,
+    pickup,
+    destination,
+    pickupSelection,
+    destinationSelection,
+    roundTripEnabled,
+    recurrenceEnabled,
+    recurrenceSeriesMultiplier,
+    asapMode,
+    selectedDate,
+    selectedTime,
+  ]);
+
   const indicativeAmountForDisplay = useMemo(() => {
     if (indicativeAmount == null) return null;
     let v = indicativeAmount;
@@ -1035,9 +1260,73 @@ const ClientDashboard = () => {
   };
 
   const termsDocumentTitle = (documentType) =>
-    documentType === 'transport_terms'
-      ? 'Conditions générales de transport'
-      : 'Conditions générales d’utilisation';
+    portalTermsDocumentLabel(documentType, { variant: 'order' });
+
+  const toggleOpenTermsDoc = (doc) => {
+    setOpenTermsDoc((current) =>
+      current?.document_type === doc.document_type ? null : doc
+    );
+  };
+
+  const renderPortalTermsDocPanel = (doc, { variant = 'update' } = {}) => {
+    const version = doc.current_version || doc.terms_version;
+    const label = portalTermsDocumentLabel(doc.document_type, { variant });
+    const title = version ? `${label} — version ${version}` : label;
+    const isOpen = openTermsDoc?.document_type === doc.document_type;
+    return (
+      <div
+        key={doc.document_type}
+        className={`portalTermsUpdateDoc${isOpen ? ' is-open' : ''}`}
+        role="listitem"
+      >
+        <button
+          type="button"
+          className="portalTermsDocToggle"
+          aria-expanded={isOpen}
+          onClick={() => toggleOpenTermsDoc(doc)}
+        >
+          <span className="portalTermsDocToggleMain">
+            <span className="portalTermsDocToggleLabel">{label}</span>
+            {version ? (
+              <span className="portalTermsDocVersion">v{version}</span>
+            ) : null}
+          </span>
+          <span className="portalTermsDocToggleHint" aria-hidden="true">
+            <span className="portalTermsDocChevron" />
+          </span>
+        </button>
+        {isOpen ? (
+          <div className="portalTermsDocPanel">
+            <div className="portalTermsDocToolbar">
+              <button
+                type="button"
+                className="portalTermsDocAction"
+                onClick={() => {
+                  void downloadPortalTermsDocument(doc).then((ok) => {
+                    if (!ok) {
+                      toast.error('Impossible de télécharger le PDF des conditions.');
+                    }
+                  });
+                }}
+              >
+                PDF
+              </button>
+              <button
+                type="button"
+                className="portalTermsDocAction"
+                onClick={() => printPortalTermsDocument(doc, { label: title })}
+              >
+                Imprimer
+              </button>
+            </div>
+            <pre className="portalTermsBody" tabIndex={0}>
+              {doc.canonical_body}
+            </pre>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   const requiredTermsAcceptLabel = () => {
     const labels = requiredTermsDocs.map((doc) => termsDocumentTitle(doc.document_type));
@@ -1208,6 +1497,7 @@ const ClientDashboard = () => {
         destination,
         scheduledTimeIso,
         amount: amountForApi,
+        maximum: portalCeilingFlowEnabled ? maximumAcceptedAmount : '',
         roundTripEnabled,
         returnDate: returnDate || '',
         returnTimeIso,
@@ -1230,8 +1520,23 @@ const ClientDashboard = () => {
         }
       }
       portalIdempotencyKeyRef.current = key;
+      const estimateNum = Number(amountForApi);
+      if (portalCeilingFlowEnabled) {
+        const maxNum = Number(String(maximumAcceptedAmount).replace(',', '.'));
+        if (!Number.isFinite(maxNum) || maxNum <= 0) {
+          setFormError(
+            pricingCeilingError ||
+              'Le prix maximum de cette demande n’est pas encore disponible. Vérifiez les adresses.'
+          );
+          return;
+        }
+      }
       setPortalReview({
         amountLabel: Number(amountForApi).toFixed(2),
+        maximumLabel: portalCeilingFlowEnabled
+          ? Number(String(maximumAcceptedAmount).replace(',', '.')).toFixed(2)
+          : null,
+        eligibleCarriers: conditionalOrderEnabled ? eligibleCarriers : [],
         debtorName: buildCustomerName(profile),
         billingAddress: String(profile?.billing_address || '').trim(),
         scheduledLabel: asapMode ? 'Dès que possible' : `${selectedDate} ${selectedTime}`,
@@ -1246,6 +1551,17 @@ const ClientDashboard = () => {
       return;
     }
 
+    if (portalCeilingFlowEnabled && isPortalPrivateClient && confirm) {
+      const maxNum = Number(String(maximumAcceptedAmount).replace(',', '.'));
+      if (!Number.isFinite(maxNum) || maxNum <= 0) {
+        setFormError(
+          pricingCeilingError ||
+            'Le prix maximum de cette demande n’est pas encore disponible.'
+        );
+        return;
+      }
+    }
+
     const bookingData = {
       customer_name: buildCustomerName(profile),
       pickup_location: pickup,
@@ -1253,6 +1569,12 @@ const ClientDashboard = () => {
       scheduled_time: scheduledTimeIso,
       asap: asapMode,
       amount: amountForApi,
+      ...(portalCeilingFlowEnabled
+        ? {
+            // 7B.2 : le serveur recalcule le plafond ; valeur affichée non autoritaire.
+            accept_pricing_ceiling: true,
+          }
+        : {}),
       medical_facility: medicalFacility,
       doctor_name: doctorName,
       ...(clientNotePayload ? { client_note: clientNotePayload } : {}),
@@ -1380,6 +1702,13 @@ const ClientDashboard = () => {
         toast.success('Demande enregistrée. Finalisez le paiement Saferpay dans le formulaire ci-dessous.', {
           duration: 7000,
         });
+      } else if (conditionalOrderEnabled && isPortalPrivateClient) {
+        toast.success(
+          'Commande transmise. Aucun transporteur n’a encore accepté. Le contrat n’est pas encore formé.',
+          { duration: 8000 }
+        );
+      } else if (doubleValidationEnabled && isPortalPrivateClient) {
+        toast.success(PORTAL_DV_COPY.firstClick, { duration: 8000 });
       } else if (previewWorkflow.transmission_requires_client_action) {
         toast.success(
           "Demande enregistrée. Une action de votre part est encore requise avant transmission à l'entreprise.",
@@ -1774,14 +2103,6 @@ const ClientDashboard = () => {
         return <HeaderDashboard userName={userName} />;
       })()}
 
-      <div
-        className="mobileCanonWebHint"
-        role="status"
-        title="Réservations et suivi : l’application mobile LIRIE complète ce portail web (canon multi-surface)."
-      >
-        Astuce : l&apos;app mobile LIRIE complète ce portail pour le suivi au quotidien.
-      </div>
-
       <div className="clientDashboardContentStack">
         {loadingProfile && <p>Chargement du profil…</p>}
         {loadingBookings && <div className="loadingSkeleton" aria-hidden />}
@@ -1847,50 +2168,6 @@ const ClientDashboard = () => {
                 </div>
               </div>
               <div className="cardBody">
-                {termsReacceptanceRequired ? (
-                  <section
-                    className="portalTermsUpdate"
-                    aria-labelledby="portal-terms-update-title"
-                  >
-                    <h2 id="portal-terms-update-title" className="portalTermsUpdateTitle">
-                      Mise à jour des conditions
-                    </h2>
-                    <p>
-                      Une nouvelle acceptation est nécessaire avant une nouvelle réservation.
-                    </p>
-                    {requiredTermsDocs.map((doc) => (
-                      <div key={doc.document_type} className="portalTermsUpdateDoc">
-                        <button
-                          type="button"
-                          className="portalOrderTermsLink"
-                          onClick={() => setOpenTermsDoc(doc)}
-                        >
-                          {termsDocumentTitle(doc.document_type)} {doc.current_version}
-                        </button>
-                        {openTermsDoc?.document_type === doc.document_type ? (
-                          <pre className="portalTermsBody">{doc.canonical_body}</pre>
-                        ) : null}
-                      </div>
-                    ))}
-                    <label className="portalTermsAccept" htmlFor="portal-terms-reaccept">
-                      <input
-                        id="portal-terms-reaccept"
-                        type="checkbox"
-                        checked={termsAcceptChecked}
-                        onChange={(event) => setTermsAcceptChecked(event.target.checked)}
-                      />
-                      <span>{requiredTermsAcceptLabel()}</span>
-                    </label>
-                    <button
-                      type="button"
-                      className={homeFieldStyles.ctaButton}
-                      onClick={handleAcceptRequiredTerms}
-                      disabled={!termsAcceptChecked || termsAccepting}
-                    >
-                      {termsAccepting ? 'Enregistrement…' : 'Accepter les conditions'}
-                    </button>
-                  </section>
-                ) : null}
                 <form className="form formDense">
                   {reservationFeedback ? (
                     <div className="bookingFeedback" role="status" aria-live="polite">
@@ -2476,6 +2753,31 @@ const ClientDashboard = () => {
                     </div>
                   ) : null}
 
+                  {portalCeilingFlowEnabled &&
+                  isPortalPrivateClient &&
+                  !portalReview ? (
+                    <div className="portalMaximumField">
+                      <div className="portalMaximumFieldLabel">
+                        Prix maximum de la demande
+                      </div>
+                      <div className="portalMaximumFieldValue" aria-live="polite">
+                        {pricingCeilingLoading
+                          ? 'Calcul…'
+                          : maximumAcceptedAmount
+                            ? `CHF ${Number(maximumAcceptedAmount).toFixed(2)}`
+                            : '—'}
+                      </div>
+                      <p id="portal-maximum-accepted-hint" className="portalMaximumFieldHint">
+                        {pricingCeilingError ||
+                          (Number(pricingCeiling?.series_occurrences) > 1
+                            ? `Calculé selon les tarifs applicables (trajet × ${Number(
+                                pricingCeiling.series_occurrences
+                              )} passages décrits sur cette demande). Le prix définitif sera celui de l’entreprise que vous confirmerez et ne dépassera pas ce montant.`
+                            : 'Calculé selon les tarifs applicables des entreprises de transport susceptibles de prendre en charge cette demande. Le prix définitif sera celui de l’entreprise que vous confirmerez et ne dépassera pas ce montant.')}
+                      </p>
+                    </div>
+                  ) : null}
+
                   {formError ? (
                     <p className="error" role="alert">
                       {formError}
@@ -2591,16 +2893,60 @@ const ClientDashboard = () => {
                           <dd>Attribué après confirmation</dd>
                         </div>
                       </dl>
-                      <p className="portalOrderEstimate">
-                        Estimation actuelle : CHF {portalReview.amountLabel}
-                      </p>
-                      <p className="portalOrderEstimateNote">
-                        Indicative — le montant final sera facturé par l’entreprise de transport.
-                      </p>
+                      {portalCeilingFlowEnabled && portalReview.maximumLabel ? (
+                        <p className="portalOrderEstimate">
+                          Prix maximum accepté (pas le prix final) : CHF{' '}
+                          {portalReview.maximumLabel}
+                        </p>
+                      ) : (
+                        <p className="portalOrderEstimate">
+                          Estimation indicative : CHF {portalReview.amountLabel}
+                        </p>
+                      )}
+                      {conditionalOrderEnabled &&
+                      Array.isArray(portalReview.eligibleCarriers) &&
+                      portalReview.eligibleCarriers.length > 0 ? (
+                        <details className="portalOrderEstimate">
+                          <summary>
+                            Entreprises susceptibles de prendre en charge cette demande
+                          </summary>
+                          <ul>
+                            {portalReview.eligibleCarriers.map((c) => (
+                              <li key={c.company_id || c.legal_name}>
+                                {c.legal_name}
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="portalOrderEstimateNote">
+                            Le premier transporteur qui accepte dans les conditions de
+                            votre commande deviendra votre cocontractant.
+                          </p>
+                        </details>
+                      ) : null}
+                      {conditionalOrderEnabled && portalReview.maximumLabel ? (
+                        <p className="portalOrderEstimateNote">
+                          Cette commande vous engage si une entreprise de transport
+                          l’accepte. Le contrat sera alors automatiquement conclu avec
+                          cette entreprise à son propre tarif, dans la limite de CHF{' '}
+                          {portalReview.maximumLabel}. Le montant de CHF{' '}
+                          {portalReview.maximumLabel} est un plafond et non le prix de
+                          la course.
+                        </p>
+                      ) : (
+                        <p className="portalOrderEstimateNote">
+                          {doubleValidationEnabled
+                            ? 'Ce plafond n’est pas le prix à payer. Le montant définitif sera celui proposé par l’entreprise que vous confirmerez (≤ plafond).'
+                            : 'Indicative — le montant final sera facturé par l’entreprise de transport.'}
+                        </p>
+                      )}
                       <p className="portalOrderLegal">
                         {termsAcceptances.some((row) => row.document_type === 'terms_of_service') &&
                         termsAcceptances.some((row) => row.document_type === 'transport_terms')
-                          ? 'En confirmant cette demande, vous passez une commande de transport soumise aux conditions acceptées pour votre compte.'
+                          ? conditionalOrderEnabled
+                            ? 'En commandant, vous autorisez LIRIE à transmettre cette demande aux entreprises éligibles. Le contrat se forme à l’acceptation du premier transporteur éligible — pas au moment de votre clic.'
+                            : doubleValidationEnabled
+                              ? 'En confirmant, vous enregistrez une demande de transport (pas encore un contrat). Le contrat se forme au second clic après proposition du transporteur.'
+                              : 'En confirmant cette demande, vous passez une commande de transport soumise aux conditions acceptées pour votre compte.'
                           : 'Aucune acceptation des conditions n’est enregistrée pour ce compte. Confirmer cette demande n’en crée pas.'}
                       </p>
                       <p className="portalOrderLegalLinks">
@@ -2609,18 +2955,23 @@ const ClientDashboard = () => {
                             key={doc.document_type}
                             type="button"
                             className="portalOrderTermsLink"
-                            onClick={() => setOpenTermsDoc(doc)}
+                            onClick={() => toggleOpenTermsDoc(doc)}
                           >
-                            {doc.document_type === 'transport_terms'
-                              ? 'Conditions générales de transport'
-                              : 'Conditions générales d’utilisation'}
+                            {portalTermsDocumentLabel(doc.document_type, {
+                              variant: 'order',
+                            })}
                             {doc.terms_version ? ` ${doc.terms_version}` : ''}
                           </button>
                         ))}
                       </p>
-                      {openTermsDoc ? (
-                        <pre className="portalTermsBody">{openTermsDoc.canonical_body}</pre>
-                      ) : null}
+                      {openTermsDoc &&
+                      termsCatalog.some(
+                        (doc) => doc.document_type === openTermsDoc.document_type
+                      )
+                        ? renderPortalTermsDocPanel(openTermsDoc, {
+                            variant: 'order',
+                          })
+                        : null}
                       <div className="formActions formActionsPrimary">
                         <button
                           type="button"
@@ -2629,7 +2980,11 @@ const ClientDashboard = () => {
                           disabled={bookingSubmitting}
                           aria-busy={bookingSubmitting}
                         >
-                          {bookingSubmitting ? 'Confirmation en cours…' : 'Confirmer la demande de transport'}
+                          {bookingSubmitting
+                            ? 'Envoi en cours…'
+                            : conditionalOrderEnabled && portalReview?.maximumLabel
+                              ? `Commander jusqu’à CHF ${portalReview.maximumLabel}.–`
+                              : 'Confirmer la demande de transport'}
                         </button>
                         <button
                           type="button"
@@ -2653,7 +3008,12 @@ const ClientDashboard = () => {
                         loadingProfile ||
                         loadingBookings ||
                         !effectiveClientId ||
-                        termsReacceptanceRequired
+                        termsReacceptanceRequired ||
+                        (doubleValidationEnabled &&
+                          isPortalPrivateClient &&
+                          (pricingCeilingLoading ||
+                            !maximumAcceptedAmount ||
+                            Boolean(pricingCeilingError)))
                       }
                       aria-busy={bookingSubmitting}
                       hidden={isPortalPrivateClient && Boolean(portalReview)}
@@ -2932,6 +3292,133 @@ const ClientDashboard = () => {
       </div>
 
       <Footer />
+
+      {termsReacceptanceRequired ? (
+        <Modal
+          size="lg"
+          ariaLabel="Mise à jour des conditions"
+          onClose={() => {}}
+          className="portalTermsUpdateModal"
+        >
+          <section
+            className="portalTermsUpdate"
+            aria-labelledby="portal-terms-update-title"
+          >
+            <h2 id="portal-terms-update-title" className="portalTermsUpdateTitle">
+              Mise à jour des conditions
+            </h2>
+            <p className="portalTermsUpdateLead">
+              Une nouvelle acceptation est requise avant toute nouvelle demande de
+              transport.
+            </p>
+            <div className="portalTermsUpdateList" role="list">
+              {requiredTermsDocs.map((doc) => renderPortalTermsDocPanel(doc))}
+            </div>
+            <label className="portalTermsAccept" htmlFor="portal-terms-reaccept">
+              <input
+                id="portal-terms-reaccept"
+                type="checkbox"
+                checked={termsAcceptChecked}
+                onChange={(event) => setTermsAcceptChecked(event.target.checked)}
+              />
+              <span>{requiredTermsAcceptLabel()}</span>
+            </label>
+            <button
+              type="button"
+              className={`${homeFieldStyles.ctaButton} portalTermsAcceptBtn`}
+              onClick={handleAcceptRequiredTerms}
+              disabled={!termsAcceptChecked || termsAccepting}
+            >
+              {termsAccepting ? 'Enregistrement…' : 'Accepter les conditions'}
+            </button>
+          </section>
+        </Modal>
+      ) : null}
+
+      {pendingCarrierOffer ? (
+        <Modal
+          size="md"
+          ariaLabel="Proposition de transport"
+          onClose={() => {}}
+          className="portalCarrierOfferModal"
+        >
+          <section
+            className="portalCarrierOffer"
+            aria-labelledby="portal-carrier-offer-title"
+          >
+            <header className="portalCarrierOfferHeader">
+              <p className="portalCarrierOfferEyebrow">Proposition reçue</p>
+              <h2 id="portal-carrier-offer-title">
+                {PORTAL_DV_COPY.carrierOfferedTitle}
+              </h2>
+              <p className="portalCarrierOfferLead">
+                Vérifiez le prix et les conditions d’annulation avant de
+                confirmer. Ce n’est pas encore un transport confirmé.
+              </p>
+            </header>
+
+            <div className="portalCarrierOfferPriceCard">
+              <div className="portalCarrierOfferPriceMain">
+                <span className="portalCarrierOfferPriceLabel">Prix proposé</span>
+                <span className="portalCarrierOfferPriceValue">
+                  {formatPortalOfferChf(pendingCarrierOffer.offered_amount)}
+                </span>
+              </div>
+              <dl className="portalCarrierOfferMeta">
+                <div>
+                  <dt>Entreprise de transport</dt>
+                  <dd>{pendingCarrierOffer.company_name}</dd>
+                </div>
+                {pendingCarrierOffer.maximum_accepted_amount != null ? (
+                  <div>
+                    <dt>Prix maximum de la demande</dt>
+                    <dd>
+                      {formatPortalOfferChf(
+                        pendingCarrierOffer.maximum_accepted_amount
+                      )}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            </div>
+
+            <details className="portalCarrierOfferPolicy" open>
+              <summary className="portalCarrierOfferPolicySummary">
+                Conditions d’annulation / no-show / attente
+              </summary>
+              <div
+                className="portalCarrierOfferPolicyBody"
+                tabIndex={0}
+                role="region"
+                aria-label="Texte des conditions d’annulation"
+              >
+                {formatPortalCancellationPolicyForDisplay(
+                  pendingCarrierOffer.cancellation_policy_text
+                )}
+              </div>
+            </details>
+
+            <div className="portalCarrierOfferActions">
+              <button
+                type="button"
+                className={`${homeFieldStyles.ctaButton} portalCarrierOfferConfirmBtn`}
+                onClick={handleConfirmTransportOffer}
+                disabled={confirmingTransport}
+              >
+                {confirmingTransport
+                  ? 'Confirmation…'
+                  : `Confirmer le transport à ${formatPortalOfferChf(
+                      pendingCarrierOffer.offered_amount
+                    )}`}
+              </button>
+              <p className="portalCarrierOfferFootnote">
+                En confirmant, vous acceptez ce prix et les conditions ci-dessus.
+                Le contrat de transport est alors formé.
+              </p>
+            </div>
+          </section>
+        </Modal>
+      ) : null}
     </div>
   );
 };

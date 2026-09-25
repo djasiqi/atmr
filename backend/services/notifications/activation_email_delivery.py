@@ -20,6 +20,7 @@ from models.activation_email_delivery import (
     EMAIL_DELIVERY_QUEUED,
     EMAIL_DELIVERY_SENDING,
     EMAIL_DELIVERY_SENT,
+    QUEUED_LEASE_MINUTES,
     SENDING_LEASE_MINUTES,
     WEBHOOK_ADVANCED_STATUSES,
     ActivationEmailDelivery,
@@ -120,6 +121,70 @@ def is_sending_lease_expired(delivery: ActivationEmailDelivery) -> bool:
     return datetime.now(UTC) - started > timedelta(minutes=SENDING_LEASE_MINUTES)
 
 
+def is_queued_lease_expired(delivery: ActivationEmailDelivery) -> bool:
+    """queued sans worker / broker lent : ne pas bloquer le renvoi indéfiniment."""
+    if delivery.status != EMAIL_DELIVERY_QUEUED:
+        return False
+    created = delivery.created_at
+    if created is None:
+        return True
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    return datetime.now(UTC) - created > timedelta(minutes=QUEUED_LEASE_MINUTES)
+
+
+def delivery_in_progress_retry_after_seconds(
+    delivery: ActivationEmailDelivery,
+) -> int:
+    """Secondes restantes avant qu'un nouvel envoi soit autorisé (lease)."""
+    now = datetime.now(UTC)
+    if delivery.status == EMAIL_DELIVERY_QUEUED:
+        created = delivery.created_at
+        if created is None:
+            return 0
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=UTC)
+        expires = created + timedelta(minutes=QUEUED_LEASE_MINUTES)
+        return max(0, int((expires - now).total_seconds()))
+    if delivery.status == EMAIL_DELIVERY_SENDING:
+        started = delivery.sending_started_at or delivery.created_at
+        if started is None:
+            return 0
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=UTC)
+        expires = started + timedelta(minutes=SENDING_LEASE_MINUTES)
+        return max(0, int((expires - now).total_seconds()))
+    return 0
+
+
+def compute_email_resend_retry_after_seconds(session: ActivationSession) -> int:
+    """Cooldown UI : livraison en cours (lease) ou politique anti-spam."""
+    can_send, block_reason = can_start_new_delivery_snapshot(session)
+    if not can_send and block_reason == "email_delivery_in_progress":
+        delivery = (
+            get_delivery_by_id(session.email_delivery_id)
+            if session.email_delivery_id
+            else None
+        )
+        if delivery is not None:
+            return delivery_in_progress_retry_after_seconds(delivery)
+        return 0
+
+    daily_count = int(session.resend_count_email or 0)
+    now = datetime.now(UTC)
+    if session.last_email_sent_at and not is_same_utc_day(
+        session.last_email_sent_at, now
+    ):
+        daily_count = 0
+    allowed, _policy_error, retry_after = enforce_resend_policy(
+        last_sent_at=session.last_email_sent_at,
+        resend_count=daily_count,
+    )
+    if not allowed:
+        return int(retry_after or 0)
+    return 0
+
+
 def can_start_new_delivery_snapshot(
     session: ActivationSession,
 ) -> tuple[bool, str | None]:
@@ -132,6 +197,8 @@ def can_start_new_delivery_snapshot(
     if delivery.superseded_at is not None:
         return True, None
     if delivery.status == EMAIL_DELIVERY_QUEUED:
+        if is_queued_lease_expired(delivery):
+            return True, None
         return False, "email_delivery_in_progress"
     if delivery.status == EMAIL_DELIVERY_SENDING and not is_sending_lease_expired(
         delivery

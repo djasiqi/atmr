@@ -95,7 +95,8 @@ def build_confirmation_body(
     )
     lines = [
         "Votre demande de transport a été enregistrée.",
-        "Cet e-mail confirme l'enregistrement. Il ne constitue pas la commande.",
+        "Votre demande a été transmise aux entreprises de transport disponibles.",
+        "Cet e-mail confirme l'enregistrement. Il ne constitue pas un transport confirmé.",
         "",
         f"Référence : #{getattr(booking, 'id', '')}",
         f"Date et heure : {when}",
@@ -103,11 +104,38 @@ def build_confirmation_body(
         f"Destination : {dropoff}",
         f"Type de trajet : {trip}",
         f"Estimation affichée : CHF {amount} — indicative, non contractuelle.",
-        "Le montant final sera facturé par l'entreprise de transport.",
-        f"Facturé à : {debtor}",
-        f"Statut : {status}",
-        "Transporteur : attribué après confirmation.",
     ]
+    max_amount = (
+        getattr(event, "maximum_accepted_amount_snapshot", None)
+        if event is not None
+        else None
+    )
+    if max_amount is not None:
+        lines.append(
+            f"Prix maximum de la demande : CHF {max_amount} — plafond calculé, pas le prix dû."
+        )
+    flow = getattr(booking, "portal_contract_flow", None) or ""
+    if flow == "conditional_order_v1":
+        lines.extend(
+            [
+                "Commande transmise. Aucun transporteur n'a encore accepté.",
+                "Le contrat de transport n'est pas encore formé.",
+                "Le prix définitif sera celui du premier transporteur éligible "
+                "qui accepte, sans dépasser le plafond.",
+                f"Facturé à : {debtor}",
+                f"Statut : {status}",
+                "Transporteur : non encore attribué.",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "Le prix contractuel sera celui proposé par l'entreprise, après votre confirmation.",
+                f"Facturé à : {debtor}",
+                f"Statut : {status}",
+                "Transporteur : non encore attribué.",
+            ]
+        )
     terms = _terms_lines(event)
     if terms:
         lines.append("")

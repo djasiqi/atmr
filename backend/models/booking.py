@@ -153,6 +153,10 @@ class Booking(db.Model):
     )
 
     amount: Mapped[float] = mapped_column(Float, nullable=False)
+    # Flux contractuel PORTAL : legacy | double_validation_v2 (jamais backfillé).
+    portal_contract_flow: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, default=None
+    )
     status: Mapped[BookingStatus] = mapped_column(
         SAEnum(BookingStatus, name="booking_status"),
         index=True,
@@ -598,6 +602,21 @@ class Booking(db.Model):
                 "price_breakdown_json": self.price_breakdown_json,
                 "pricing_profile_id": self.pricing_profile_id,
                 "pricing_profile_version_id": self.pricing_profile_version_id,
+                "portal_contract_flow": _as_str(
+                    getattr(self, "portal_contract_flow", None)
+                )
+                or None,
+                # Tarif grille viewer (PORTAL DV / conditional_order) — jamais amount.
+                "company_suggested_amount": (
+                    float(getattr(self, "_company_suggested_amount", None))
+                    if getattr(self, "_company_suggested_amount", None) is not None
+                    else None
+                ),
+                "carrier_quote": (
+                    float(getattr(self, "_company_suggested_amount", None))
+                    if getattr(self, "_company_suggested_amount", None) is not None
+                    else None
+                ),
                 "scheduled_time": (
                     iso_utc_z(to_utc_from_db(scheduled_dt)) if scheduled_dt else None
                 ),
@@ -884,6 +903,23 @@ class Booking(db.Model):
                 or None,
                 "wheelchair_need": _as_bool(self.wheelchair_need),
                 "amount": round(_as_float(self.amount), 2),
+                "portal_contract_flow": _as_str(
+                    getattr(self, "portal_contract_flow", None)
+                )
+                or None,
+                # Tarif grille du transporteur viewer (marché ouvert PORTAL DV / 7B.5).
+                # Jamais le plafond client ni l'estimation indicative seule.
+                "company_suggested_amount": (
+                    float(getattr(self, "_company_suggested_amount", None))
+                    if getattr(self, "_company_suggested_amount", None) is not None
+                    else None
+                ),
+                # Alias explicite 7B.5 (même source que company_suggested_amount).
+                "carrier_quote": (
+                    float(getattr(self, "_company_suggested_amount", None))
+                    if getattr(self, "_company_suggested_amount", None) is not None
+                    else None
+                ),
                 "billed_to_type": (_as_str(self.billed_to_type) or "patient"),
                 "billed_to_company_id": self.billed_to_company_id,
                 "route_group_id": getattr(self, "route_group_id", None),

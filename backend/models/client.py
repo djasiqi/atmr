@@ -110,6 +110,11 @@ class Client(db.Model):
     )
     default_billed_to_contact: Mapped[str] = mapped_column(String(120), nullable=True)
 
+    # Mode d'envoi de facture Direct patient : email (défaut) | paper (+ CHF 3)
+    invoice_delivery_method: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="email"
+    )
+
     # Support institutions
     is_institution = Column(Boolean, nullable=False, server_default="false")
     institution_name: Mapped[str] = mapped_column(String(200), nullable=True)
@@ -460,7 +465,17 @@ class Client(db.Model):
                     else None
                 ),
                 "billed_to_contact": self.default_billed_to_contact,
+                "invoice_delivery_method": (
+                    (self.invoice_delivery_method or "email").strip().lower()
+                    if getattr(self, "invoice_delivery_method", None)
+                    else "email"
+                ),
             },
+            "invoice_delivery_method": (
+                (self.invoice_delivery_method or "email").strip().lower()
+                if getattr(self, "invoice_delivery_method", None)
+                else "email"
+            ),
             "is_institution": _as_bool(self.is_institution),
             "institution_name": self.institution_name,
             "linked_institution_id": self.linked_institution_id,

@@ -150,6 +150,9 @@ class ClientBookingContractEvent(db.Model):
     )
     wheelchair_need_snapshot: Mapped[bool] = mapped_column(Boolean, nullable=False)
     estimated_amount_snapshot: Mapped[float] = mapped_column(Float, nullable=False)
+    maximum_accepted_amount_snapshot: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )
     pricing_status: Mapped[str] = mapped_column(String(16), nullable=False)
     amount_is_contractual: Mapped[bool] = mapped_column(Boolean, nullable=False)
     terms_of_service_acceptance_id: Mapped[int | None] = mapped_column(

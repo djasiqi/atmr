@@ -15,10 +15,12 @@ from models.activation_email_delivery import (
     EMAIL_DELIVERY_QUEUED,
     EMAIL_DELIVERY_SENDING,
     EMAIL_DELIVERY_SENT,
+    QUEUED_LEASE_MINUTES,
     ActivationEmailDelivery,
 )
 from models.activation_session import ActivationSession
 from services.notifications.activation_email_delivery import (
+    can_start_new_delivery_snapshot,
     cas_claim_sending,
     finalize_after_provider_accepted,
     sanitize_email_error,
@@ -85,6 +87,26 @@ class TestSanitizeEmailError:
         assert "user@example.com" not in cleaned
         assert "[url]" in cleaned
         assert "[email]" in cleaned
+
+
+class TestQueuedLeaseAllowsResend:
+    def test_fresh_queued_blocks_new_delivery(self, db):
+        session = _make_session(db)
+        _make_delivery(db, session, status=EMAIL_DELIVERY_QUEUED)
+        ok, reason = can_start_new_delivery_snapshot(session)
+        assert ok is False
+        assert reason == "email_delivery_in_progress"
+
+    def test_stale_queued_allows_new_delivery(self, db):
+        session = _make_session(db)
+        delivery = _make_delivery(db, session, status=EMAIL_DELIVERY_QUEUED)
+        delivery.created_at = datetime.now(UTC) - timedelta(
+            minutes=QUEUED_LEASE_MINUTES + 1
+        )
+        db.session.commit()
+        ok, reason = can_start_new_delivery_snapshot(session)
+        assert ok is True
+        assert reason is None
 
 
 class TestHmacToken:

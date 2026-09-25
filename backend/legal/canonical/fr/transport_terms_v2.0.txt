@@ -1,0 +1,109 @@
+LIRIE — Conditions générales de réservation et de transport
+Client privé
+document_type: transport_terms
+terms_version: 2.0
+locale: fr-CH
+
+1. Objet
+
+Les présentes conditions générales de réservation et de transport régissent le parcours de demande et de conclusion d'un transport pour le client privé (ClientType PORTAL) sur la plateforme LIRIE. Elles complètent les Conditions générales d'utilisation du compte client privé.
+
+2. Acteurs
+
+Client : titulaire du compte authentifié à l'origine de la demande. Dans le parcours actuel, le débiteur nominal est le titulaire du compte, sauf évolution future explicitement prévue.
+
+Passager : personne effectivement transportée, lorsqu'elle diffère du client.
+
+Entreprise de transport / Transporteur : entreprise indépendante qui propose puis réalise la prestation.
+
+LIRIE : plateforme de coordination et de mise en relation. LIRIE n'est pas transporteur, ne fixe pas le prix du transporteur, ne facture pas et n'encaisse pas le prix du transport dans ce parcours, et n'est pas le créancier de la prestation.
+
+3. Première validation — demande de transport
+
+Le client vérifie les informations du trajet, consulte l'estimation éventuelle, détermine son plafond maximal accepté, puis clique pour transmettre la demande.
+
+Cette action crée une demande et autorise sa transmission aux entreprises de transport disponibles. Elle n'identifie pas encore le transporteur. Elle ne constitue pas le prix du transport. Elle ne constitue pas encore le contrat de transport. À ce stade, la demande n'est pas une réservation définitivement confirmée.
+
+4. Estimation LIRIE
+
+L'estimation affichée par LIRIE est informative. Elle n'est ni le plafond, ni l'offre du transporteur, ni le prix contractuel, ni une facture, ni une dette. Elle ne lie pas le transporteur.
+
+5. Plafond client
+
+Le plafond est le montant maximal jusqu'auquel le client accepte qu'une proposition lui soit présentée dans le parcours concerné. Il n'est ni le prix du transport, ni un montant automatiquement dû, ni une facture, ni une reconnaissance de dette. Le transporteur ne fixe pas son prix à partir du plafond. Les présentes conditions ne garantissent pas que le transporteur voit ce plafond.
+
+6. Offre du transporteur
+
+Chaque entreprise de transport fixe librement son propre prix selon ses conditions applicables. LIRIE ne fixe pas ce prix.
+
+Une proposition admissible présentée comme confirmable contient au minimum : l'identité de l'entreprise, le prix proposé, les conditions d'annulation applicables, les conditions de no-show applicables, et les conditions d'attente ou suppléments prévus lorsqu'ils existent.
+
+Dans le parcours actuel, une offre n'est présentée comme confirmable que si le prix proposé est inférieur ou égal au plafond du client. Une offre supérieure n'engage pas le client.
+
+7. Deuxième validation — formation du contrat de transport
+
+Le contrat de transport est formé lorsque le client voit l'entreprise de transport, voit son prix, voit les conditions applicables, puis clique sur « Confirmer le transport à CHF X ».
+
+Cette action correspond, dans le système, à CLIENT_TRANSPORT_CONFIRMED.
+
+Avant ce clic : aucun contrat de transport n'est formé.
+
+Après ce clic : le transporteur est identifié, le prix contractuel est déterminé, les conditions applicables sont figées, et le contrat de transport est conclu entre le client et l'entreprise de transport. LIRIE n'est pas partie à ce contrat en qualité de transporteur.
+
+8. Confirmation électronique
+
+Après le second clic, le client reçoit une confirmation électronique résumant notamment le transporteur, le trajet, la date et l'heure, le prix contractuel et les conditions applicables. Cette confirmation documente le contrat déjà conclu par le second clic ; elle ne crée pas rétroactivement le contrat.
+
+9. Prix contractuel
+
+Le prix contractuel est le prix proposé par l'entreprise de transport et explicitement accepté au second clic. Il n'est ni l'estimation LIRIE ni le plafond client.
+
+10. Suppléments
+
+Aucun supplément non annoncé n'est automatiquement dû. Des éléments supplémentaires peuvent être facturés uniquement lorsqu'ils étaient prévus dans les conditions présentées avant le second clic et qu'ils sont effectivement applicables (par exemple attente, no-show, annulation tardive ou prestation complémentaire selon la politique du transporteur). Aucun taux ni montant générique n'est fixé par LIRIE.
+
+11. Annulation
+
+Les règles d'annulation appartiennent à l'entreprise de transport. Avant le second clic, il n'existe pas encore de contrat de transport. Après le second clic, la politique présentée et figée s'applique. Les éventuels frais sont déterminés par cette politique. LIRIE ne crée aucun tarif d'annulation ni pourcentage générique.
+
+12. No-show et attente
+
+Les conditions de no-show et d'attente sont définies par le transporteur, affichées par LIRIE et acceptées par le client au second clic. Toute somme éventuellement due repose sur les conditions effectivement présentées avant la conclusion.
+
+13. Modification
+
+Avant le second clic, une modification matérielle de la demande peut rendre une proposition existante caduque ; une nouvelle proposition cohérente peut alors être nécessaire.
+
+Après le second clic, une modification substantielle du transport confirmé peut nécessiter une nouvelle validation, une nouvelle offre ou un accord spécifique, selon les fonctionnalités effectivement supportées. Les présentes conditions ne promettent aucun mécanisme non implémenté.
+
+14. Facturation
+
+La facture est émise par l'entreprise de transport après l'exécution de la prestation. LIRIE ne facture pas la prestation PORTAL. Le fait que la facture soit émise après le trajet ne remet pas en cause le prix convenu au second clic.
+
+15. Paiement
+
+Le paiement est dû au transporteur selon la facture, son échéance et ses moyens de paiement applicables.
+
+16. Impayé et disponibilité
+
+Si une facture échue reste due à une entreprise de transport donnée, cette entreprise peut ne plus être disponible pour de nouvelles prestations au même client jusqu'à régularisation. La dette envers cette entreprise ne bloque pas automatiquement les autres transporteurs. Il ne s'agit pas d'une suspension globale du compte. La connexion et l'accès aux réservations existantes restent distincts de cette disponibilité.
+
+17. Contestation
+
+Le client peut contester une facture via le mécanisme proposé sur la plateforme. Une contestation ouverte suspend le blocage de disponibilité associé selon le fonctionnement de la plateforme. Une contestation n'entraîne pas automatiquement l'annulation de la créance.
+
+18. Rappels et recouvrement
+
+Le transporteur reste le créancier. Une facture impayée peut faire l'objet de rappels, d'une mise en demeure ou d'un recouvrement par ou pour le compte du transporteur. LIRIE peut fournir des outils techniques de suivi et de préparation. LIRIE n'est pas le créancier, ne dépose pas automatiquement une poursuite et n'obtient pas automatiquement une mainlevée. Aucune transmission automatique de poursuite n'est affirmée par les présentes.
+
+19. Responsabilité
+
+LIRIE est responsable de sa prestation numérique dans les limites du droit applicable. L'entreprise de transport est responsable de l'exécution du transport sous sa responsabilité professionnelle et réglementaire. Aucune clause n'exclut une responsabilité qui ne peut être écartée en vertu du droit suisse applicable aux consommateurs.
+
+20. Données personnelles
+
+Le traitement des données est décrit dans la Politique de confidentialité. Les données nécessaires à l'organisation du transport sont communiquées aux acteurs concernés.
+
+21. Droit applicable et for
+
+Le droit suisse s'applique. Les fors impératifs applicables sont réservés, notamment ceux protégeant les consommateurs.

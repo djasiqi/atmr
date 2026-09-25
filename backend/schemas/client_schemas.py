@@ -51,3 +51,8 @@ class ClientUpdateSchema(Schema):
     floor = fields.Str(validate=validate.Length(max=20), allow_none=True)
     door_code = fields.Str(validate=validate.Length(max=50), allow_none=True)
     access_notes = fields.Str(validate=validate.Length(max=4000), allow_none=True)
+    # Mode d'envoi facture : email (défaut) ou papier (+ CHF 3 à la création)
+    invoice_delivery_method = fields.Str(
+        allow_none=True,
+        validate=validate.OneOf(["email", "paper"]),
+    )

@@ -430,8 +430,11 @@ const TermsOfService = () => {
               </ul>
               <p>
                 Selon les profils, certaines dispositions peuvent s&apos;appliquer de manière différenciée (obligations
-                professionnelles, accès restreints). L&apos;utilisation de la Plateforme vaut acceptation des présentes
-                CGU dans la mesure où elles sont opposables à la catégorie d&apos;Utilisateur concernée.
+                professionnelles, accès restreints). Pour les comptes <strong>professionnels et institutionnels</strong>,
+                l&apos;utilisation de la Plateforme peut valoir acceptation des présentes CGU dans la mesure où elles
+                leur sont opposables. Pour le <strong>compte client privé PORTAL</strong>, l&apos;acceptation des
+                documents contractuels applicables au compte est <strong>explicite</strong> (enregistrement serveur) ;
+                la seule poursuite d&apos;utilisation ne suffit pas.
               </p>
             </section>
 
@@ -490,10 +493,13 @@ const TermsOfService = () => {
                 distinctes).
               </p>
               <p>
-                Lorsqu&apos;une réservation ou une commande est passée par un <strong>utilisateur final</strong> (client,
-                patient, accompagnant) via un parcours dédié, le contrat de transport ou les conditions applicables à la
-                prestation sont ceux de l&apos;entreprise partenaire exécutante et/ou de l&apos;institution, selon les
-                informations fournies au moment de la commande et les accords en vigueur.
+                Lorsqu&apos;une réservation ou une commande est passée par un <strong>utilisateur final</strong> via un
+                parcours dédié, le contrat de transport ou les conditions applicables à la prestation sont ceux de
+                l&apos;entreprise partenaire exécutante et/ou de l&apos;institution, selon les informations fournies au
+                moment de la commande et les accords en vigueur. Pour le parcours <strong>client privé PORTAL</strong>{' '}
+                à double validation, le contrat de transport se forme uniquement lorsque le client confirme
+                expressément l&apos;offre du transporteur (prix et conditions présentés) ; la première transmission
+                d&apos;une demande ne constitue pas encore ce contrat.
               </p>
             </section>
 
@@ -534,9 +540,12 @@ const TermsOfService = () => {
               <SectionHead num={9} title="Gestion des missions de transport" Icon={IcoTruck} />
               <p>
                 La Plateforme permet la création, la modification, l&apos;assignation et le suivi des missions. Sauf
-                mention contraire dans l&apos;interface ou dans les accords entre les parties, une mission est considérée
-                comme confirmée ou exécutable <strong>uniquement après acceptation ou validation</strong> par
-                l&apos;entreprise partenaire habilitée.
+                mention contraire dans l&apos;interface ou dans les accords entre les parties, une mission professionnelle
+                ou institutionnelle est considérée comme confirmée ou exécutable{' '}
+                <strong>uniquement après acceptation ou validation</strong> par l&apos;entreprise partenaire habilitée.
+                Pour le parcours <strong>client privé PORTAL</strong> à double validation, la confirmation du transport
+                par le client sur l&apos;offre du transporteur (second clic) forme le contrat ; l&apos;acceptation
+                unilatérale d&apos;une offre par l&apos;entreprise ne suffit pas à elle seule.
               </p>
               <p>
                 Les horaires, durées et itinéraires affichés peuvent être <strong>indicatifs</strong> et dépendre du
@@ -609,7 +618,9 @@ const TermsOfService = () => {
                 dans les accords conclus entre l&apos;institution cliente et l&apos;entreprise partenaire (ou grilles
                 contractuelles en vigueur). Les montants éventuellement affichés dans la Plateforme peuvent être{' '}
                 <strong>indicatifs</strong> tant qu&apos;ils ne sont pas confirmés selon les règles métier ou contractuelles
-                affichées à l&apos;Utilisateur.
+                affichées à l&apos;Utilisateur. Pour le client privé PORTAL à double validation : l&apos;estimation LIRIE,
+                le plafond maximal accepté par le client et le prix proposé par le transporteur sont des notions
+                distinctes ; seul le prix expressément confirmé au second clic est le prix contractuel.
               </p>
               <div className={`${styles.callout} ${styles.calloutInfo}`}>
                 Les redevances liées à l&apos;abonnement ou à la licence d&apos;utilisation de la Plateforme par les
@@ -621,11 +632,13 @@ const TermsOfService = () => {
             <section id="paiement" className={styles.section}>
               <SectionHead num={14} title="Paiement" Icon={IcoCreditCard} />
               <p>
-                Lorsque des paiements en ligne sont proposés, ils sont traités par un <strong>prestataire de paiement
-                certifié</strong> (par exemple flux de type Saferpay dans l&apos;écosystème des solutions Worldline).
-                Lirie n&apos;a pas accès aux numéros complets de carte bancaire ni au cryptogramme visuel. Les relations
-                de paiement entre parties (client, institution, transporteur) suivent les termes affichés au moment de la
-                transaction et les contrats applicables.
+                Lorsque des paiements en ligne sont proposés sur certains parcours (notamment clients facturés via
+                flux de type Saferpay / Worldline), ils sont traités par un <strong>prestataire de paiement
+                certifié</strong>. Lirie n&apos;a pas accès aux numéros complets de carte bancaire ni au cryptogramme
+                visuel. Les relations de paiement entre parties (client, institution, transporteur) suivent les termes
+                affichés au moment de la transaction et les contrats applicables. Le parcours{' '}
+                <strong>client privé PORTAL</strong> actuel prévoit une facturation et un paiement dus au transporteur
+                après la prestation ; il ne repose pas sur Saferpay pour le prix du transport.
               </p>
             </section>
 
@@ -635,7 +648,9 @@ const TermsOfService = () => {
                 Toute modification ou annulation d&apos;une mission doit être communiquée <strong>dès que possible</strong>{' '}
                 via la Plateforme ou selon les canaux convenus entre les parties. Des frais, pénalités ou conditions
                 particulières peuvent s&apos;appliquer conformément aux accords entre institution et entreprise
-                partenaire, ou aux règles affichées dans l&apos;interface.
+                partenaire, ou aux règles affichées dans l&apos;interface. Pour le client privé PORTAL à double
+                validation, les éventuels frais d&apos;annulation, de no-show ou d&apos;attente après formation du
+                contrat relèvent de la politique du transporteur présentée et figée avant confirmation client.
               </p>
               <p className={styles.note}>
                 Lirie peut fournir des outils de notification ou d&apos;historisation, mais la gestion opérationnelle et
@@ -734,9 +749,12 @@ const TermsOfService = () => {
                 Lirie peut modifier les présentes CGU pour tenir compte de l&apos;évolution du service ou du cadre légal.
                 Les modifications <strong>substantielles</strong> seront portées à la connaissance des Utilisateurs par
                 des moyens appropriés (notification dans l&apos;application, courriel aux contacts enregistrés, ou avis
-                sur le site). La poursuite de l&apos;utilisation après notification peut valoir acceptation lorsque la
-                loi le permet ; pour les comptes institutionnels, des voies contractuelles spécifiques peuvent
-                s&apos;appliquer.
+                sur le site). Pour les comptes institutionnels et professionnels, la poursuite de l&apos;utilisation
+                après notification peut valoir acceptation lorsque la loi le permet, ou selon des voies contractuelles
+                spécifiques. Pour le <strong>compte client privé PORTAL</strong>, les modifications substantielles
+                exigées par le registre contractuel doivent faire l&apos;objet d&apos;une{' '}
+                <strong>nouvelle acceptation explicite</strong> avant toute nouvelle demande de transport ; la seule
+                poursuite d&apos;utilisation ne suffit pas.
               </p>
             </section>
 

@@ -1,0 +1,50 @@
+LIRIE — Conditions générales d'utilisation du compte client privé
+document_type: terms_of_service
+terms_version: 2.0
+locale: fr-CH
+
+1. Objet et champ d'application
+
+Les présentes conditions générales d'utilisation (CGU) régissent l'accès et l'usage du compte client privé (ClientType PORTAL) sur la plateforme numérique LIRIE. Elles ne constituent pas les conditions générales professionnelles ou institutionnelles publiées séparément sur le site.
+
+2. Identité et rôle de LIRIE
+
+LIRIE fournit une plateforme numérique qui permet notamment :
+- la création et le suivi des demandes de transport ;
+- la transmission des demandes aux entreprises de transport disponibles ;
+- la présentation des propositions émises par ces entreprises ;
+- la conservation d'éléments de traçabilité liés au parcours ;
+- le suivi de certaines factures et contestations lorsqu'ils sont proposés.
+
+LIRIE n'exécute pas le transport. LIRIE ne fixe pas les prix des entreprises de transport. LIRIE ne facture pas la prestation de transport au client privé PORTAL dans ce parcours. LIRIE n'encaisse pas le prix du transport dans ce parcours. LIRIE n'est pas le créancier de la prestation de transport. L'entreprise de transport demeure juridiquement indépendante.
+
+3. Compte client
+
+La création du compte suppose des données exactes (identité, adresse e-mail, numéro de téléphone). Le titulaire du compte est responsable de la confidentialité de ses identifiants et de l'usage personnel de son compte. Il doit tenir à jour ses coordonnées.
+
+Parcours d'activation applicable :
+vérification de l'adresse e-mail, puis vérification téléphonique par OTP unique lors de l'activation, puis acceptation des documents contractuels exigés, puis compte actif. Une nouvelle demande de transport n'exige pas un OTP à chaque réservation.
+
+4. Authentification et sécurité
+
+L'accès au compte nécessite une authentification. Le titulaire doit signaler sans délai toute utilisation non autorisée suspectée. LIRIE met en œuvre des mesures techniques proportionnées ; le titulaire reste responsable de la protection de ses moyens d'accès.
+
+5. Documents contractuels applicables aux demandes
+
+Avant toute demande de transport, le client peut consulter les documents applicables à son compte. L'acceptation expressément enregistrée des documents exigés est requise pour créer une nouvelle demande. Les conditions de réservation et de transport (document distinct) décrivent le parcours de formation du contrat de transport.
+
+6. Modification des conditions
+
+Les modifications substantielles nécessitant une nouvelle acceptation doivent être acceptées avant toute nouvelle demande de transport. Les modifications ne nécessitant pas une nouvelle acceptation peuvent être publiées sans réécrire les acceptations historiques. Les acceptations antérieures restent conservées. Les réservations déjà formées ne sont pas réécrites rétroactivement.
+
+7. Données personnelles
+
+Le traitement des données personnelles est décrit dans la Politique de confidentialité. Les données nécessaires à l'organisation du transport peuvent être communiquées aux acteurs concernés (notamment l'entreprise de transport choisie).
+
+8. Responsabilité
+
+LIRIE est responsable de sa prestation numérique dans les limites du droit applicable. Cette responsabilité ne s'étend pas à l'exécution du transport, qui relève de l'entreprise de transport. Aucune clause du présent document n'exclut une responsabilité qui ne peut être écartée en vertu du droit suisse applicable aux consommateurs.
+
+9. Droit applicable et for
+
+Le droit suisse s'applique. Les fors impératifs applicables sont réservés, notamment ceux protégeant les consommateurs. Aucune clause des présentes ne saurait supprimer un for impératif au domicile du consommateur lorsque la loi l'impose.

@@ -173,6 +173,24 @@ class UpdatePendingBookingUseCase:
         if norm == "pending":
             _set_status(booking, "pending")
 
+        material_keys = {
+            "pickup_location",
+            "dropoff_location",
+            "scheduled_time",
+            "amount",
+            "is_round_trip",
+            "wheelchair_need",
+            "maximum_accepted_amount",
+        }
+        if material_keys.intersection(validated_data.keys()):
+            from services.legal.portal_carrier_offer import mark_active_offers_stale
+            from services.legal.portal_double_validation import (
+                booking_uses_double_validation,
+            )
+
+            if booking_uses_double_validation(booking):
+                mark_active_offers_stale(int(booking.id))
+
         return UpdatePendingBookingOutput(
             success=True,
             addresses_changed=addresses_changed,

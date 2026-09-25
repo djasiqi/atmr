@@ -162,6 +162,19 @@ class ForceRegenerateInvoicePdfUseCase:
         refresh_recipient_snapshot_meta(invoice)
 
         try:
+            from application.invoices.paper_invoice_fee import ensure_paper_invoice_fee_line
+
+            if ensure_paper_invoice_fee_line(
+                invoice, client=getattr(invoice, "client", None)
+            ):
+                db.session.flush()
+                invoice = reload_invoice_graph_for_pdf(invoice_id, company_id) or invoice
+        except Exception:
+            logger.exception(
+                "ensure_paper_invoice_fee_line échoué invoice_id=%s", invoice_id
+            )
+
+        try:
             pdf_result = GenerateInvoicePdfUseCase().execute(
                 invoice=invoice, force_regenerate=True
             )

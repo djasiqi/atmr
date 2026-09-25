@@ -84,8 +84,16 @@ describe('companyService', () => {
 
       const result = await acceptReservation(123);
 
-      expect(apiClient.post).toHaveBeenCalledWith('/companies/me/reservations/123/accept');
+      expect(apiClient.post).toHaveBeenCalledWith('/companies/me/reservations/123/accept', undefined);
       expect(result).toEqual(mockResponse);
+    });
+
+    it('envoie offered_amount pour une acceptation PORTAL DV', async () => {
+      apiClient.post.mockResolvedValue({ data: { portal_offer_pending_client: true } });
+      await acceptReservation(46759, { offered_amount: 40 });
+      expect(apiClient.post).toHaveBeenCalledWith('/companies/me/reservations/46759/accept', {
+        offered_amount: 40,
+      });
     });
   });
 

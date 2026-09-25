@@ -189,6 +189,49 @@ def test_patient_bp_isolated_by_company(db, company, portfolio_client):
     assert bp_b.company_id == other.id
 
 
+def test_portal_client_without_company_can_get_bp_under_carrier(db, company):
+    """Client PORTAL (company_id NULL) → BP sous l'entreprise exécutante."""
+    from models.enums import ClientType
+
+    suffix = uuid.uuid4().hex[:8]
+    user = User()
+    user.username = f"portal_{suffix}"
+    user.email = f"portal-{suffix}@test.ch"
+    user.role = UserRole.client
+    user.first_name = "Alice"
+    user.last_name = "Portal"
+    user.public_id = str(uuid.uuid4())
+    user.set_password("password123", force_change=False)
+    db.session.add(user)
+    db.session.flush()
+
+    client = Client()
+    client.user_id = user.id
+    client.company_id = None
+    client.client_type = ClientType.PORTAL
+    client.domicile_address = "Rue Portal 1"
+    client.domicile_zip = "1200"
+    client.domicile_city = "Genève"
+    client.default_billed_to_type = "patient"
+    db.session.add(client)
+    db.session.flush()
+
+    bp = get_or_create_billing_party_for_direct_patient(
+        company_id=company.id, client=client
+    )
+    assert bp.company_id == company.id
+    assert bp.type == BillingPartyType.PATIENT
+    assert bp.external_ref == f"patient_client:{client.id}"
+
+
+def test_portfolio_client_wrong_company_still_rejected(db, company, portfolio_client):
+    other = _make_company(db, suffix=uuid.uuid4().hex[:8])
+    with pytest.raises(ValueError, match="ne correspond pas"):
+        get_or_create_billing_party_for_direct_patient(
+            company_id=other.id, client=portfolio_client
+        )
+
+
 def test_resolve_portfolio_patient_prefers_third_party(db, company, portfolio_client):
     curator = BillingParty()
     curator.company_id = company.id

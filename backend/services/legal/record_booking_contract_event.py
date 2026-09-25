@@ -236,6 +236,8 @@ def record_portal_booking_created_event(
     booking: Any,
     user_id: int,
     return_scheduled_time: datetime | None = None,
+    maximum_accepted_amount: float | None = None,
+    pricing_ceiling_evidence: dict[str, Any] | None = None,
 ) -> ClientBookingContractEvent:
     """Insère l'événement BOOKING_CREATED. N'altère aucune preuve existante."""
     user = db.session.get(User, user_id)
@@ -246,6 +248,12 @@ def record_portal_booking_created_event(
     company_id = getattr(booking, "company_id", None)
     terms = _latest_acceptance(user_id, DOCUMENT_TERMS_OF_SERVICE)
     transport = _latest_acceptance(user_id, DOCUMENT_TRANSPORT_TERMS)
+    max_amount = maximum_accepted_amount
+    if max_amount is None:
+        max_amount = getattr(booking, "_portal_maximum_accepted_amount", None)
+    evidence_json = None
+    if pricing_ceiling_evidence:
+        evidence_json = json.dumps(pricing_ceiling_evidence, ensure_ascii=False, sort_keys=True)
     event = ClientBookingContractEvent(
         booking_id=int(booking.id),
         sequence_number=1,
@@ -276,6 +284,9 @@ def record_portal_booking_created_event(
         return_scheduled_time_snapshot=return_scheduled_time,
         wheelchair_need_snapshot=bool(getattr(booking, "wheelchair_need", False)),
         estimated_amount_snapshot=float(getattr(booking, "amount", 0) or 0),
+        maximum_accepted_amount_snapshot=(
+            float(max_amount) if max_amount is not None else None
+        ),
         pricing_status=PRICING_ESTIMATED,
         amount_is_contractual=False,
         terms_of_service_acceptance_id=terms.id if terms is not None else None,
@@ -283,7 +294,8 @@ def record_portal_booking_created_event(
         status_before=None,
         status_after=None,
         cancellation_reason=None,
-        changed_fields=None,
+        # 7B.2 : preuve du calcul MAX(quotes) figée avec le plafond.
+        changed_fields=evidence_json,
     )
     db.session.add(event)
     db.session.flush()

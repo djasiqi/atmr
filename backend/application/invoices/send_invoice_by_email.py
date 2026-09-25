@@ -116,8 +116,15 @@ class SendInvoiceByEmailUseCase:
                     status_code=404,
                 )
 
-            # 3. Déterminer l'email du destinataire
-            recipient_email = input_data.recipient_email or client.contact_email
+            # 3. Déterminer l'email du destinataire (facture → user PORTAL → snapshot)
+            from services.billing.invoice_recipient_email import (
+                resolve_invoice_recipient_email,
+            )
+
+            recipient_email = (
+                (input_data.recipient_email or "").strip()
+                or resolve_invoice_recipient_email(invoice)
+            )
             if not recipient_email:
                 return SendInvoiceByEmailResult(
                     success=False,
@@ -626,8 +633,29 @@ class SendInvoiceByEmailUseCase:
                     status_code=500,
                 )
 
-            # 11. Marquer la facture comme envoyée
+            # 11. Marquer la facture comme envoyée + historique destinataire
+            sent_at = datetime.now()
             invoice.mark_as_sent()
+            current_meta: dict[str, Any] = {}
+            if isinstance(invoice.meta, dict):
+                current_meta = dict(invoice.meta)
+            deliveries = list(current_meta.get("email_deliveries") or [])
+            deliveries.append(
+                {
+                    "invoice_id": invoice.id,
+                    "recipient_email": recipient_email,
+                    "sent_at": sent_at.isoformat(),
+                    "sender_company_id": invoice.company_id,
+                    "delivery_method": "email",
+                }
+            )
+            current_meta["email_deliveries"] = deliveries
+            current_meta["last_recipient_email"] = recipient_email
+            current_meta["last_email_sent_at"] = sent_at.isoformat()
+            # Ne pas écraser delivery_method=paper si la facture a été créée papier
+            if current_meta.get("delivery_method") != "paper":
+                current_meta["delivery_method"] = "email"
+            invoice.meta = current_meta
             db.session.commit()
 
             logger.info(
@@ -641,7 +669,7 @@ class SendInvoiceByEmailUseCase:
                 success=True,
                 invoice_id=input_data.invoice_id,
                 recipient=recipient_email,
-                sent_at=datetime.now(),
+                sent_at=sent_at,
             )
 
         except Exception as e:

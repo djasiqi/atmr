@@ -71,6 +71,35 @@ def _to_positive_amount(value: Any) -> float | None:
     return parsed if parsed > 0 else None
 
 
+def _to_optional_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _portal_series_occurrences(
+    *, validated_data: dict[str, Any], cmd_data: dict[str, Any]
+) -> int:
+    """N passages décrits sur une demande récurrence (1 si hors récurrence)."""
+    recurring = bool(
+        validated_data.get("is_recurring") or cmd_data.get("is_recurring")
+    )
+    if not recurring:
+        return 1
+    raw = (
+        validated_data.get("recurrence_series_length")
+        or cmd_data.get("recurrence_series_length")
+        or 1
+    )
+    try:
+        return max(1, min(52, int(raw)))
+    except (TypeError, ValueError):
+        return 1
+
+
 class ClientRepoPort(Protocol):
     def find_by_id(self, client_id: int) -> ClientDTO | None: ...
 
@@ -265,6 +294,71 @@ class CreateBookingUseCase:
         )
 
         assert_portal_phone_verified(user_id=cmd.user_id, client=client_dto)
+
+        from services.legal.portal_double_validation import (
+            FLOW_CONDITIONAL_ORDER_V1,
+            FLOW_DOUBLE_VALIDATION_V2,
+            FLOW_LEGACY,
+            resolve_portal_contract_flow,
+        )
+
+        portal_flow = resolve_portal_contract_flow(client=client_dto)
+        maximum_accepted: float | None = None
+        pricing_ceiling_evidence: dict | None = None
+        eligible_carriers_snapshot: list | None = None
+        if portal_flow in (FLOW_DOUBLE_VALIDATION_V2, FLOW_CONDITIONAL_ORDER_V1):
+            # Plafond = MAX(tarifs transporteurs éligibles), calcul serveur.
+            # Toute valeur client (maximum_accepted_amount dans le payload) est ignorée.
+            from services.pricing.portal_carrier_ceiling import (
+                ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE,
+                compute_portal_carrier_ceiling,
+            )
+
+            try:
+                ceiling = compute_portal_carrier_ceiling(
+                    pickup_location=validated_data.get("pickup_location")
+                    or (cmd.data or {}).get("pickup_location"),
+                    dropoff_location=validated_data.get("dropoff_location")
+                    or (cmd.data or {}).get("dropoff_location"),
+                    pickup_lat=_to_optional_float(
+                        validated_data.get("pickup_lat")
+                        or (cmd.data or {}).get("pickup_lat")
+                    ),
+                    pickup_lon=_to_optional_float(
+                        validated_data.get("pickup_lon")
+                        or (cmd.data or {}).get("pickup_lon")
+                        or (cmd.data or {}).get("pickup_lng")
+                    ),
+                    dropoff_lat=_to_optional_float(
+                        validated_data.get("dropoff_lat")
+                        or (cmd.data or {}).get("dropoff_lat")
+                    ),
+                    dropoff_lon=_to_optional_float(
+                        validated_data.get("dropoff_lon")
+                        or (cmd.data or {}).get("dropoff_lon")
+                        or (cmd.data or {}).get("dropoff_lng")
+                    ),
+                    scheduled_time=scheduled_time,
+                    is_round_trip=bool(
+                        validated_data.get("is_round_trip")
+                        or (cmd.data or {}).get("is_round_trip")
+                    ),
+                    series_occurrences=_portal_series_occurrences(
+                        validated_data=validated_data, cmd_data=cmd.data or {}
+                    ),
+                )
+            except ValueError as exc:
+                if str(exc) == ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE:
+                    raise ValueError(ERROR_PORTAL_PRICING_CEILING_UNAVAILABLE) from exc
+                raise
+            maximum_accepted = float(ceiling.maximum_accepted_amount)
+            pricing_ceiling_evidence = ceiling.to_evidence_dict()
+            if portal_flow == FLOW_CONDITIONAL_ORDER_V1:
+                from services.legal.record_portal_conditional_order import (
+                    build_eligible_carriers_snapshot,
+                )
+
+                eligible_carriers_snapshot = build_eligible_carriers_snapshot(ceiling)
 
         company_id = resolve_booking_owner_company_id_for_create(client_dto)
         if company_id is not None and company_id > 0:
@@ -503,11 +597,47 @@ class CreateBookingUseCase:
                     record_portal_booking_created_event,
                 )
 
+                if portal_flow == FLOW_CONDITIONAL_ORDER_V1:
+                    new_booking.portal_contract_flow = FLOW_CONDITIONAL_ORDER_V1
+                elif portal_flow == FLOW_DOUBLE_VALIDATION_V2:
+                    new_booking.portal_contract_flow = FLOW_DOUBLE_VALIDATION_V2
+                else:
+                    new_booking.portal_contract_flow = FLOW_LEGACY
+                db.session.flush()
+
                 record_portal_booking_created_event(
                     booking=new_booking,
                     user_id=cmd.user_id,
                     return_scheduled_time=return_scheduled_time,
+                    maximum_accepted_amount=maximum_accepted,
+                    pricing_ceiling_evidence=pricing_ceiling_evidence,
                 )
+                if portal_flow == FLOW_CONDITIONAL_ORDER_V1:
+                    from services.legal.record_portal_conditional_order import (
+                        record_portal_conditional_order,
+                    )
+
+                    if not eligible_carriers_snapshot:
+                        raise ValueError("portal_eligible_carriers_required")
+                    if maximum_accepted is None:
+                        raise ValueError("portal_maximum_accepted_required")
+                    record_portal_conditional_order(
+                        booking=new_booking,
+                        user_id=cmd.user_id,
+                        maximum_accepted_amount=float(maximum_accepted),
+                        estimated_amount=float(getattr(new_booking, "amount", 0) or 0)
+                        or None,
+                        eligible_carriers_snapshot=eligible_carriers_snapshot,
+                        trip_snapshot={
+                            "pickup_location": validated_data.get("pickup_location"),
+                            "dropoff_location": validated_data.get("dropoff_location"),
+                            "scheduled_time": (
+                                scheduled_time.isoformat()
+                                if scheduled_time is not None
+                                else None
+                            ),
+                        },
+                    )
 
         booking_id = int(getattr(new_booking, "id", 0) or 0)
         if booking_id <= 0:
