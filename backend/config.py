@@ -363,8 +363,8 @@ class Config:
     AUTH_REDIS_URL = (os.getenv("AUTH_REDIS_URL") or "").strip()
     # Rollout : off|legacy|dual_write|auth_primary|auth_only (voir auth_redis_migration).
     AUTH_REDIS_MIGRATION_MODE = (
-        os.getenv("AUTH_REDIS_MIGRATION_MODE") or "off"
-    ).strip().lower()
+        (os.getenv("AUTH_REDIS_MIGRATION_MODE") or "off").strip().lower()
+    )
     # Liste d'origines autorisées pour Socket.IO (séparées par des virgules).
     # Exemple: SOCKETIO_CORS_ORIGINS="https://app.example.com,
     # https://admin.example.com,http://localhost:3000"

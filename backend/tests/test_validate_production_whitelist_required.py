@@ -10,6 +10,7 @@ def prod_env_minimal(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test-jwt-secret-key-min-32-chars-xx")
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@localhost:5432/db")
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("AUTH_REDIS_ALLOW_LEGACY_FALLBACK", "1")
     monkeypatch.setenv("SOCKETIO_CORS_ORIGINS", "https://app.example.com")
     monkeypatch.setenv("PDF_BASE_URL", "https://api.example.com")
     monkeypatch.setenv(

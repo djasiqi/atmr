@@ -351,7 +351,7 @@ def _patch_mobile_refresh(monkeypatch, sample_user, mobile_session):
         ),
     )
     monkeypatch.setattr(
-        auth, "_validate_refresh_token", lambda _token: ("user-1", None)
+        auth, "_validate_refresh_token", lambda _token, **_kw: ("user-1", None)
     )
     monkeypatch.setattr(auth, "_check_user_profile_active", lambda _user: (True, None))
     # Le refresh lit session_id / refresh_generation via decode_token(refresh),
@@ -798,7 +798,7 @@ def test_refresh_erreurs_validation_et_comptes(client, monkeypatch):
     monkeypatch.setattr(
         auth,
         "_validate_refresh_token",
-        lambda _token: (None, {"error": "store", "_http_status": 503}),
+        lambda _token, **_kw: (None, {"error": "store", "_http_status": 503}),
     )
     unavailable = client.post(
         "/api/v1/auth/refresh-token", json={"refresh_token": "token"}
@@ -806,7 +806,7 @@ def test_refresh_erreurs_validation_et_comptes(client, monkeypatch):
     assert unavailable.status_code == 503
 
     monkeypatch.setattr(
-        auth, "_validate_refresh_token", lambda _token: ("user-1", None)
+        auth, "_validate_refresh_token", lambda _token, **_kw: ("user-1", None)
     )
     monkeypatch.setattr(auth.user_repo, "find_by_public_id", lambda _pid: None)
     missing_dto = client.post(
@@ -2012,6 +2012,16 @@ def test_refresh_collisions_idempotence_et_stockage(
     monkeypatch.setattr(auth, "is_rotation_idempotency_conflict", lambda _error: False)
     monkeypatch.setattr(auth, "refresh_fail_closed_enabled", lambda: True)
     monkeypatch.setattr(auth, "resolve_rotation_idempotency", lambda *_a, **_kw: None)
+    # Forcer CURRENT pour atteindre le except storage (sinon UNKNOWN+fail-closed → 401).
+    from security.refresh_redis_rotation import RedisRefreshState
+
+    monkeypatch.setattr(
+        "security.refresh_redis_rotation.classify_refresh_in_redis",
+        lambda *_a, **_kw: SimpleNamespace(
+            state=RedisRefreshState.CURRENT,
+            successor_hash=None,
+        ),
+    )
     monkeypatch.setitem(app.config, "TESTING", False)
     unavailable = client.post(
         "/api/v1/auth/refresh-token",

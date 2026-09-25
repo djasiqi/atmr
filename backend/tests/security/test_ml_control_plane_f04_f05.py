@@ -339,6 +339,7 @@ class TestBootWhitelistValidation:
         monkeypatch.setenv("JWT_SECRET_KEY", "x" * 32)
         monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@localhost/db")
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+        monkeypatch.setenv("AUTH_REDIS_ALLOW_LEGACY_FALLBACK", "1")
         monkeypatch.setenv("SOCKETIO_CORS_ORIGINS", "https://app.lirie.ch")
         monkeypatch.setenv("PDF_BASE_URL", "https://api.lirie.ch")
         with pytest.raises(RuntimeError, match="ADMIN_IP_WHITELIST"):
@@ -352,6 +353,7 @@ class TestBootWhitelistValidation:
         monkeypatch.setenv("JWT_SECRET_KEY", "x" * 32)
         monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@localhost/db")
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+        monkeypatch.setenv("AUTH_REDIS_ALLOW_LEGACY_FALLBACK", "1")
         monkeypatch.setenv("SOCKETIO_CORS_ORIGINS", "https://app.lirie.ch")
         monkeypatch.setenv("PDF_BASE_URL", "https://api.lirie.ch")
         with pytest.raises(RuntimeError, match="ADMIN_IP_WHITELIST"):

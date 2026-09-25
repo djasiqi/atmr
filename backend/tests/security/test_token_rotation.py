@@ -131,11 +131,22 @@ class FakeRedis:
             return True
         return False
 
+    def ping(self) -> bool:
+        return True
+
+    def ttl(self, key: str) -> int:
+        if key not in self._data and key not in self._sets and key not in self._zsets:
+            return -2
+        return int(self._ttl.get(key, -1))
+
 
 @pytest.fixture(autouse=True)
 def mock_redis(monkeypatch, app):
     """Fixture qui remplace le mock Redis global par un mock plus complet."""
     fake_redis = FakeRedis()
+    # Compat P0-6 : tests historiques sans AUTH_REDIS_URL dédié.
+    monkeypatch.setenv("AUTH_REDIS_ALLOW_LEGACY_FALLBACK", "1")
+    monkeypatch.delenv("AUTH_REDIS_MIGRATION_MODE", raising=False)
 
     # Patcher redis.from_url pour retourner notre fake Redis
     try:

@@ -112,7 +112,8 @@ class ParityReport:
     def mismatched_user_zset(self) -> list[str]:
         """Union membres + scores (rétrocompat tests / scripts)."""
         return sorted(
-            set(self.mismatched_user_zset_members) | set(self.mismatched_user_zset_scores)
+            set(self.mismatched_user_zset_members)
+            | set(self.mismatched_user_zset_scores)
         )
 
     @property

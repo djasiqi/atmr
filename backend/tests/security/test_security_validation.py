@@ -231,6 +231,7 @@ class TestFlaskSecurityConfig:
                 "SKIP_ROUTES_INIT": "true",
                 "SOCKETIO_CORS_ORIGINS": "https://app.example.test",
                 "INTERNAL_TRACKING_INGEST_ENABLED": "false",
+                "AUTH_REDIS_ALLOW_LEGACY_FALLBACK": "1",
             },
         ):
             from app import create_app
@@ -262,6 +263,7 @@ class TestFlaskSecurityConfig:
                 "SKIP_ROUTES_INIT": "true",
                 "SOCKETIO_CORS_ORIGINS": "https://app.example.test",
                 "INTERNAL_TRACKING_INGEST_ENABLED": "false",
+                "AUTH_REDIS_ALLOW_LEGACY_FALLBACK": "1",
             },
         ):
             from app import create_app
@@ -280,6 +282,7 @@ class TestFlaskSecurityConfig:
                 "SKIP_ROUTES_INIT": "true",
                 "SOCKETIO_CORS_ORIGINS": "https://app.example.test",
                 "INTERNAL_TRACKING_INGEST_ENABLED": "false",
+                "AUTH_REDIS_ALLOW_LEGACY_FALLBACK": "1",
             },
         ):
             from app import create_app

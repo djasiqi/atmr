@@ -110,11 +110,7 @@ def assert_prod_migration_mode_not_ambiguous() -> None:
     mode = get_migration_mode()
     dedicated = resolve_dedicated_auth_redis_url()
     legacy = resolve_legacy_redis_url()
-    if (
-        mode == AuthRedisMigrationMode.OFF
-        and dedicated
-        and dedicated != legacy
-    ):
+    if mode == AuthRedisMigrationMode.OFF and dedicated and dedicated != legacy:
         raise RuntimeError(
             "AUTH_REDIS_MIGRATION_MODE=off est interdit en production lorsque "
             "AUTH_REDIS_URL est défini et distinct de REDIS_URL. "

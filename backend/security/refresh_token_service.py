@@ -71,9 +71,7 @@ def sync_refresh_token_to_redis(
     from services.security.authentication import RefreshTokenService
 
     try:
-        RefreshTokenService().store_token(
-            user_id, token, ttl_seconds=ttl_seconds
-        )
+        RefreshTokenService().store_token(user_id, token, ttl_seconds=ttl_seconds)
     except RefreshStoreUnavailableError:
         raise
     except Exception as exc:
@@ -84,9 +82,7 @@ def sync_refresh_token_to_redis(
         )
         if refresh_fail_closed_enabled():
             raise RefreshStoreUnavailableError("redis_unavailable") from exc
-        logger.warning(
-            "Redis sync skipped (fail-open) user_id=%s: %s", user_id, exc
-        )
+        logger.warning("Redis sync skipped (fail-open) user_id=%s: %s", user_id, exc)
 
 
 def _ttl_seconds_until(expires_at: datetime) -> int:
@@ -149,8 +145,10 @@ def store_refresh_token(
     db.session.add(refresh_token)
 
     do_sync = commit if sync_redis is None else bool(sync_redis)
-    ttl = redis_ttl_seconds if redis_ttl_seconds is not None else _ttl_seconds_until(
-        expires_at
+    ttl = (
+        redis_ttl_seconds
+        if redis_ttl_seconds is not None
+        else _ttl_seconds_until(expires_at)
     )
 
     if not commit and do_sync:
@@ -192,7 +190,9 @@ def rotation_grace_seconds() -> int:
     return _grace()
 
 
-def _within_rotation_grace(anchor: datetime | None, now: datetime | None = None) -> bool:
+def _within_rotation_grace(
+    anchor: datetime | None, now: datetime | None = None
+) -> bool:
     """True si age < grâce (convention : 299s OK, 300s rejeté)."""
     if anchor is None:
         return False

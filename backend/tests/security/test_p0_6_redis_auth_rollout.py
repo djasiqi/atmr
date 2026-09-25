@@ -932,9 +932,7 @@ class TestProdOffAmbiguousGuard:
         monkeypatch.setenv("REDIS_URL", "redis://legacy-prod:6379/0")
         monkeypatch.setenv("AUTH_REDIS_URL", "redis://auth-prod:6379/0")
         monkeypatch.setenv("AUTH_REDIS_MIGRATION_MODE", "off")
-        monkeypatch.setenv(
-            "SOCKETIO_CORS_ORIGINS", "https://app.example.com"
-        )
+        monkeypatch.setenv("SOCKETIO_CORS_ORIGINS", "https://app.example.com")
         with pytest.raises(RuntimeError, match="off interdit"):
             validate_required_env_vars("production")
 
