@@ -1,9 +1,9 @@
 # P0-6 — Rollout Redis auth (cutover sans invalidation des sessions)
 
-**Statut :** Phase A/B **PASS** · Phase C **PASS** (`dual_write` actif) — backfill / auth_primary **NOT STARTED**
-**Date :** 2026-09-25
+**Statut :** Phase A/B/C **PASS** · **PROD RESTORED** `dual_write` (deploy `ec915c06` PASS) · Phase D rattrapage / E / F **NOT STARTED**
+**Date :** 2026-09-26
 **Dépendances fermées :** P0-1…P0-5 CLOSED · P0-6 CODE CLOSED
-**Interdits :** backfill / auth_primary / auth_only tant que Phase D/E non validées
+**Interdits :** backfill / auth_primary / auth_only tant que Phase D/E non validées ; ne pas lancer D tant que restore gate PASS (atteint)
 
 ---
 
