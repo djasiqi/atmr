@@ -290,14 +290,15 @@ def send_sms_notification(
             create_kwargs["from_"] = cfg.phone_number
 
         tw_message = client.messages.create(**create_kwargs)
-        sid_masked = mask_secret_id(getattr(tw_message, "sid", None))
+        raw_sid = getattr(tw_message, "sid", None)
         provider_status = getattr(tw_message, "status", None)
+        # Ne jamais logger le SID (même partiellement) : CodeQL py/clear-text-logging.
         logger.info(
             "sms_verification_provider_accepted phone=%s type=%s "
-            "message_sid=%s provider_status=%s sender_mode=%s provider=%s",
+            "has_message_sid=%s provider_status=%s sender_mode=%s provider=%s",
             mask_phone_for_log(destination),
             notification_type,
-            sid_masked,
+            bool(raw_sid),
             provider_status,
             cfg.sender_mode,
             PROVIDER_NAME,
@@ -305,7 +306,7 @@ def send_sms_notification(
         return _result(
             ok=True,
             error_class=ERROR_SUCCESS,
-            message_sid=getattr(tw_message, "sid", None),
+            message_sid=raw_sid,
             provider_status=str(provider_status) if provider_status else None,
             destination=destination,
         )

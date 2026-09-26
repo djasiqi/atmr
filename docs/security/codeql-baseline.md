@@ -92,6 +92,13 @@ hash Werkzeug est le préfixe d’algorithme, pas un signal de changement
 de mot de passe. L’autorité d’invalidation reste `token_version` +
 révocation des sessions. **Ne pas « réparer » sans besoin produit.**
 
+## Régressions post-baseline (corrigées)
+
+| IDs | Règle | Cause | Correctif |
+|-----|-------|-------|-----------|
+| #386 #387 #388 | `py/clear-text-logging-sensitive-data` | AUTH-SMS : log / print de `message_sid` (même masqué) et libellés `TWILIO_PHONE_*` | `sms.py` : log `has_message_sid` booléen uniquement ; `probe_sms_provider.py` : présence agrégée, jamais SID ni labels d’env secrets |
+| Dependabot #381 #382 | `image-size` DoS ICNS/JXL/HEIF | override `1.2.1` (archivé, CVE-2025-71329/71330) | override `npm:image-size-next@2.1.1` ; patch local retiré |
+
 ## Politique pour une nouvelle alerte
 
 Ne pas corriger « parce que CodeQL a parlé ».

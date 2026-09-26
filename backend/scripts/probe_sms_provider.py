@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Sonde isolée du provider SMS (Twilio Programmable Messaging).
 
-Ne log jamais : OTP, AUTH_TOKEN, SID complet, numéro complet.
+Ne log jamais : OTP, AUTH_TOKEN, SID (même partiel), numéro complet,
+ni les noms d'env secrets associés à une valeur.
 
 Usage (dans le container backend) :
     python -m scripts.probe_sms_provider
@@ -26,17 +27,28 @@ from services.notifications.sms import (
 
 
 def _print_config() -> dict:
+    """Affiche uniquement des indicateurs de présence (pas de secrets)."""
     snapshot = describe_sms_config()
+    credentials = (
+        "PRESENT"
+        if snapshot["twilio_account_sid"] == "PRESENT"
+        and snapshot["twilio_auth_token"] == "PRESENT"
+        else "MISSING"
+    )
+    sender = (
+        "PRESENT"
+        if snapshot["twilio_phone_number"] == "PRESENT"
+        or snapshot["twilio_messaging_service_sid"] == "PRESENT"
+        else "MISSING"
+    )
     print("SMS PROVIDER PROBE")
     print("==================")
-    print(f"TWILIO MODE                 : {snapshot['twilio_mode']}")
-    print(f"SMS_NOTIFICATIONS_ENABLED   : {snapshot['enabled']}")
-    print(f"TWILIO_ACCOUNT_SID          : {snapshot['twilio_account_sid']}")
-    print(f"TWILIO_AUTH_TOKEN           : {snapshot['twilio_auth_token']}")
-    print(f"TWILIO_PHONE_NUMBER         : {snapshot['twilio_phone_number']}")
-    print(f"TWILIO_MESSAGING_SERVICE_SID: {snapshot['twilio_messaging_service_sid']}")
-    print(f"SENDER MODE                 : {snapshot['sender_mode']}")
-    print(f"PROVIDER READY              : {snapshot['ready']}")
+    print(f"mode                        : {snapshot['twilio_mode']}")
+    print(f"enabled                     : {snapshot['enabled']}")
+    print(f"credentials                 : {credentials}")
+    print(f"sender                      : {sender}")
+    print(f"sender_mode                 : {snapshot['sender_mode']}")
+    print(f"ready                       : {snapshot['ready']}")
     return snapshot
 
 
@@ -77,13 +89,25 @@ def main() -> int:
         "LIRIE: test de canal SMS. Ignorez ce message.",
         notification_type="sms_provider_probe",
     )
+    # Presence uniquement — jamais le SID (même masqué).
+    has_message_sid = bool(result.get("message_sid"))
     print(f"error_class                 : {result.get('error_class')}")
     print(f"provider_status             : {result.get('provider_status') or '-'}")
     print(f"provider_error_code         : {result.get('provider_error_code') or '-'}")
-    print(f"message_sid                 : {result.get('message_sid') or '-'}")
+    print(f"message_sid_present         : {'yes' if has_message_sid else 'no'}")
     print(f"RESULT                      : {result.get('error_class')}")
     print(
-        json.dumps({**snapshot, "probe": result.get("error_class")}, ensure_ascii=True)
+        json.dumps(
+            {
+                "enabled": snapshot["enabled"],
+                "ready": snapshot["ready"],
+                "sender_mode": snapshot["sender_mode"],
+                "twilio_mode": snapshot["twilio_mode"],
+                "probe": result.get("error_class"),
+                "message_sid_present": has_message_sid,
+            },
+            ensure_ascii=True,
+        )
     )
     return 0 if result.get("ok") else 4
 
