@@ -227,7 +227,7 @@ P0-6 CODE          CLOSED
 PHASE A             PASS
 PHASE B             PASS
 PHASE C DUAL_WRITE  PASS
-PHASE D BACKFILL    PASS
+PHASE D BACKFILL    PASS (1er run 2026-09-25) — rattrapage post-correctif NOT STARTED
 PHASE E PARITY      FAIL (6 EXTRA CURRENT — evidence retained)
 
 ROOT CAUSES
@@ -237,16 +237,24 @@ ROOT CAUSES
 ROOT CAUSE COMPLETE YES
 
 LOCAL CORRECTIVES   TTL + REVOKE + OFF-MODE + PARITY GATE STRICT (TTL/scores)
-DEPLOY CORRECTIVE   NO-GO (attendre commit + gate tests verts)
+DEPLOY CORRECTIVE   FAIL 36234607541 — AUTH_REDIS_MIGRATION_MODE vide (garde P0-6 OK)
+PROD RESTORE        PASS 2026-09-26 — dual_write forcé runtime + stack remountée
+  SHA image         sha-ca15de6c781c
+  migration_mode    dual_write
+  read authority    legacy
+  redis-auth        noeviction / evicted_keys=0
+DEPLOY SCRIPT FIX   ec915c06 — write+export AUTH_REDIS_MIGRATION_MODE (défaut dual_write)
 AUTH_PRIMARY        NO-GO
 
 PROD                dual_write / legacy read
 manual cleanup      NO
-STOP                ACTIVE — avant deploy correctif
+PHASE D rattrapage  NO-GO tant que redeploy officiel PASS
+STOP                ACTIVE — après restore ; pas D/E/F
 ```
 
 ✅ **Implémenté (local)** : contrat modes explicite (`legacy` → `get_legacy_redis` uniquement) ; refuse prod `off` + `AUTH_REDIS_URL` distinct (`assert_prod_migration_mode_not_ambiguous`, `validate_required_env_vars`, `deploy-production.sh`) ; tests A–F isolation legacy / garde prod / dual_write / auth_primary / auth_only.
-**Reste à faire (ops)** : commit → deploy correctif en restant `dual_write` → réconcilier les 6 extras → Phase E → seulement ensuite envisager `auth_primary`.
+✅ **Implémenté (ops 2026-09-26)** : restore prod après FAIL deploy — `AUTH_REDIS_MIGRATION_MODE=dual_write` dans `.env.production` + `.env.production.local` ; backend `sha-ca15de6c` healthy ; cause racine = script ne persistait pas le mode (corrigé `ec915c06`).
+**Reste à faire (ops)** : redeploy officiel PASS sur fix deploy → Phase D rattrapage → Phase E → seulement ensuite `auth_primary`.
 
 ---
 
