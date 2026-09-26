@@ -20,6 +20,8 @@ const INSTALLATION_KEY = "atmr.auth.installation_id";
 const TOMBSTONE_KEY = "atmr.auth.revocation_tombstone";
 const PENDING_REVOCATIONS_KEY = "atmr.auth.pending_revocations";
 const ENVELOPE_KEY = "atmr.auth.session_envelope";
+/** Dual-write historique — non autoritatif ; purge avec le strict. */
+export const LEGACY_REFRESH_TOKEN_KEY = "auth_refresh_token";
 
 /** Exporté pour tests de non-régression (format de clé SecureStore). */
 export const AUTH_SECURE_STORE_KEYS = [
@@ -512,11 +514,26 @@ async function clearPendingAuthOperationMarkers(): Promise<void> {
   }
 }
 
-/** Purge credentials locaux sans bump — appelant sous verrou / mutation de session. */
+/**
+ * Purge credentials locaux sans bump — appelant sous verrou / mutation de session.
+ *
+ * Ordre crash-safe : envelope d'abord pour qu'un kill mid-purge
+ * ne puisse plus produire kind=restored (restore exige envelope + refresh).
+ * installation_id est volontairement conservé (identité physique d'installation).
+ */
 export async function clearLocalAuthCredentialsLocked(): Promise<void> {
+  await deleteSessionEnvelope();
   await deleteRefreshToken();
   await deleteRecoveryCredential();
-  await deleteSessionEnvelope();
+  try {
+    if (isNative()) {
+      await SecureStore.deleteItemAsync(LEGACY_REFRESH_TOKEN_KEY);
+    } else {
+      webMemory.delete(LEGACY_REFRESH_TOKEN_KEY);
+    }
+  } catch {
+    /* best-effort legacy */
+  }
   await clearPendingAuthOperationMarkers();
 }
 

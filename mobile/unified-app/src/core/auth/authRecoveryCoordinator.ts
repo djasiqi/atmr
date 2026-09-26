@@ -201,7 +201,8 @@ export type ColdStartRestoreResult =
   | { kind: "anonymous" }
   | { kind: "storage_locked" }
   | { kind: "revoked" }
-  | { kind: "incoherent" }
+  /** Credentials locaux incomplets — pas de restored, pas de tombstone serveur. */
+  | { kind: "incoherent_local" }
   | {
       kind: "interrupted_logout";
       pending: PendingRevocation;
@@ -211,6 +212,11 @@ export type ColdStartRestoreResult =
 /**
  * Restauration offline.
  * PendingRevocation ≠ preuve revoked ; permanently_invalidated → revoked.
+ *
+ * Invariant RESTORABLE_AUTH_SESSION :
+ *   installation FOUND + envelope FOUND + match + strict refresh FOUND
+ *   (+ recovery FOUND pour cohérence contrat v1)
+ * MISSING ≠ TEMPORARILY_UNAVAILABLE ≠ PERMANENTLY_INVALIDATED
  */
 export async function restoreOfflineSessionSnapshot(): Promise<ColdStartRestoreResult> {
   const refresh = await readRefreshToken();
@@ -262,7 +268,7 @@ export async function restoreOfflineSessionSnapshot(): Promise<ColdStartRestoreR
   }
 
   if (recovery.status !== "found") {
-    return { kind: "incoherent" };
+    return { kind: "incoherent_local" };
   }
 
   const installation = await readInstallationId();
@@ -270,10 +276,15 @@ export async function restoreOfflineSessionSnapshot(): Promise<ColdStartRestoreR
     return { kind: "storage_locked" };
   }
   if (installation.status !== "found") {
-    return { kind: "incoherent" };
+    return { kind: "incoherent_local" };
   }
   if (installation.value !== envelope.value.device_installation_id) {
-    return { kind: "incoherent" };
+    return { kind: "incoherent_local" };
+  }
+
+  // Refresh strict obligatoire — jamais restored sans credential cryptographique.
+  if (refresh.status !== "found") {
+    return { kind: "incoherent_local" };
   }
 
   return {

@@ -24,6 +24,7 @@ import {
   hasAuthToken,
   login,
   setActiveContextIdForApi,
+  setAuthToken,
   switchContext,
 } from "./api/client";
 import {
@@ -38,12 +39,14 @@ import {
 import { canEnterFromLocalSession } from "./auth/canEnterFromLocalSession";
 import { flushPendingSessionConfirmation } from "./auth/pendingSessionConfirmation";
 import {
+  clearLocalAuthCredentialsLocked,
   getSessionGenerationId,
   isCurrentSessionGeneration,
   readRefreshToken,
   readSessionEnvelope,
   type SessionGenerationId,
 } from "./auth/authCredentialStore";
+import { withCredentialStoreLock } from "./auth/sessionCredentialMutex";
 import {
   clearContextSwitchOperationIfCurrent,
   isCurrentContextSwitchOperation,
@@ -332,6 +335,31 @@ export function SessionProvider({ children }: PropsWithChildren) {
     }
     if (offline.kind === "revoked") {
       setMobileSessionStatus("revoked");
+      setAutoBootstrapAllowedSync(false);
+      return { localSessionReady: false };
+    }
+    if (offline.kind === "incoherent_local") {
+      // Credential cryptographique absent / bundle incohérent : cleanup local sans
+      // tombstone ni révocation serveur. Pas de attemptRestRecovery / session-resume repair.
+      void appendSessionJournalEvent("session.resume.incoherent_local");
+      try {
+        setAuthToken(null);
+        await withCredentialStoreLock(async () => {
+          await clearLocalAuthCredentialsLocked();
+        });
+      } catch {
+        /* best-effort */
+      }
+      setBootstrap(null);
+      setActiveContext(null);
+      activeContextRef.current = null;
+      setActiveContextIdForApi(null);
+      setRuntimeFeatureFlagOverrides(null);
+      contextRealtimeRouter.setActiveContext(null);
+      setMobileSessionStatus("anonymous");
+      setStatus("idle");
+      setDriverSessionNetworkReady(false);
+      disarmDriverForegroundResumeAuthority();
       setAutoBootstrapAllowedSync(false);
       return { localSessionReady: false };
     }

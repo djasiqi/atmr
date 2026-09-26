@@ -53,6 +53,7 @@ jest.mock("./api/client", () => ({
   switchContext: (...args: unknown[]) =>
     mockSwitchContext(...(args as Parameters<typeof mockSwitchContext>)),
   setActiveContextIdForApi: (contextId: string | null) => mockSetActiveContextIdForApi(contextId),
+  setAuthToken: jest.fn(),
   getLastRefreshErrorCode: () => null,
 }));
 
@@ -122,6 +123,7 @@ jest.mock("./auth/authRecoveryCoordinator", () => ({
 jest.mock("./auth/authCredentialStore", () => ({
   getSessionGenerationId: () => 1,
   isCurrentSessionGeneration: () => true,
+  clearLocalAuthCredentialsLocked: jest.fn(async () => undefined),
   readSessionEnvelope: jest.fn(async () => ({
     status: "found",
     value: {
@@ -131,6 +133,10 @@ jest.mock("./auth/authCredentialStore", () => ({
     },
   })),
   readRefreshToken: jest.fn(async () => ({ status: "missing" as const })),
+}));
+
+jest.mock("./auth/sessionCredentialMutex", () => ({
+  withCredentialStoreLock: jest.fn(async (fn: () => Promise<unknown>) => fn()),
 }));
 
 jest.mock("./realtime/realtimeManager", () => ({

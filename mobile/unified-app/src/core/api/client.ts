@@ -685,19 +685,34 @@ async function refreshAuthToken(): Promise<string | null> {
   try {
     const applyResult = await withSessionCredentialMutation(epochAtStart, async () => {
       if (nextRefreshToken) {
+        // Serveur a déjà rotaté OLD→NEW : NEW est autoritatif dès réception.
+        // JAMAIS restaurer OLD après un write NEW réussi (ni en compensation envelope).
         await writeRefreshToken(nextRefreshToken);
         if (envelope.status === "found") {
           const nextGen =
             typeof data?.refresh_generation === "number"
               ? data.refresh_generation
               : envelope.value.refresh_generation + 1;
-          await (
-            require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore")
-          ).writeSessionEnvelope({
+          const store =
+            require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+          const envelopeWrite = await store.writeSessionEnvelope({
             ...envelope.value,
             refresh_generation: nextGen,
             last_authenticated_at: new Date().toISOString(),
           });
+          if (envelopeWrite.status !== "ok") {
+            // NEW reste en SecureStore. Invalider l'envelope locale incohérente
+            // pour empêcher un faux restored (NEW + envelope stale).
+            try {
+              await store.deleteSessionEnvelope();
+            } catch {
+              /* best-effort */
+            }
+            // Ne pas publier access durable dans ce mutate (throw avant setAuthToken).
+            throw new RefreshTokenPersistError(
+              envelopeWrite.cause || "envelope_write_failed_after_refresh_rotation"
+            );
+          }
         }
         await clearPendingRefreshOperation();
       }
@@ -2018,6 +2033,9 @@ export async function sessionResumeRequest(): Promise<{
     }
 
     const epochAtStart = store.getSessionGenerationId();
+    // Snapshot pré-mutation pour rollback UNIQUEMENT si NEW n'a pas encore été persisté.
+    const previousRecovery = recovery.value;
+
     const applyResult = await withSessionCredentialMutation(epochAtStart, async () => {
       const recoveryWrite = await store.writeRecoveryCredential(nextRecovery);
       if (recoveryWrite.status !== "ok") {
@@ -2025,6 +2043,13 @@ export async function sessionResumeRequest(): Promise<{
       }
       const refreshWrite = await store.writeRefreshToken(refreshToken);
       if (refreshWrite.status !== "ok") {
+        // NEW refresh jamais persisté : rollback recovery local pour réaligner sur OLD refresh encore en store.
+        // (PRE-SERVER-ACCEPTANCE côté refresh — pas de résurrection OLD refresh.)
+        try {
+          await store.writeRecoveryCredential(previousRecovery);
+        } catch {
+          await store.clearLocalAuthCredentialsLocked();
+        }
         throw new Error("refresh_write_failed");
       }
       try {
@@ -2046,6 +2071,14 @@ export async function sessionResumeRequest(): Promise<{
         last_authenticated_at: new Date().toISOString(),
       });
       if (envelopeWrite.status !== "ok") {
+        // Serveur a déjà émis NEW refresh (+ NEW recovery). NEW reste autoritatif.
+        // JAMAIS restaurer previousRefresh / previousEnvelope / previousRecovery.
+        // Supprimer l'envelope stale pour éviter un faux restored.
+        try {
+          await store.deleteSessionEnvelope();
+        } catch {
+          /* best-effort */
+        }
         throw new Error("envelope_write_failed");
       }
       await clearPendingResumeOperation();

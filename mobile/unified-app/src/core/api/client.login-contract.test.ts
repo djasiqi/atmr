@@ -257,6 +257,33 @@ describe("login contrat session durable P0", () => {
     });
   });
 
+  it("T7 échec envelope après refresh OK → compensation delete refresh+recovery", async () => {
+    mockPost.mockResolvedValue({
+      data: {
+        access_token: "access",
+        refresh_token: "refresh",
+        recovery_credential: "recovery",
+        revocation_secret: "revocation",
+        session_id: "session-1",
+        refresh_generation: 1,
+        user: { public_id: "u1", role: "driver" },
+      },
+    });
+    mockWriteSessionEnvelope.mockResolvedValue({
+      status: "failed",
+      cause: "envelope_write_failed",
+    });
+
+    const { login, hasAuthToken } = require("./client") as typeof import("./client");
+    await expect(login("a@b.ch", "x")).rejects.toMatchObject({
+      code: "STORAGE_UNAVAILABLE",
+    });
+    expect(mockWriteRefreshToken).toHaveBeenCalled();
+    expect(mockDeleteRefreshToken).toHaveBeenCalled();
+    expect(mockDeleteRecoveryCredential).toHaveBeenCalled();
+    expect(hasAuthToken()).toBe(false);
+  });
+
   it("login complet persiste avant publication access", async () => {
     mockPost.mockResolvedValue({
       data: {
