@@ -437,6 +437,9 @@ export REDIS_URL="redis://:${ESCAPED_REDIS_PASSWORD}@redis:6379/0"
 AUTH_REDIS_PASSWORD_RAW="${REDIS_AUTH_PASSWORD:-${REDIS_PASSWORD}}"
 ESCAPED_AUTH_REDIS_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${AUTH_REDIS_PASSWORD_RAW}")
 export AUTH_REDIS_URL="redis://:${ESCAPED_AUTH_REDIS_PASSWORD}@redis-auth:6379/0"
+# P0-6 : mode explicite obligatoire (shell + .env). Défaut dual_write = Phase C–E.
+# Ne jamais laisser vide avec AUTH_REDIS_URL distinct (écriture auth-only silencieuse).
+export AUTH_REDIS_MIGRATION_MODE="${AUTH_REDIS_MIGRATION_MODE:-dual_write}"
 
 # Pull avec retry. `timeout` ne peut pas invoquer une fonction shell.
 pull_with_retry() {
@@ -502,6 +505,7 @@ fi
   echo "REDIS_PASSWORD=${REDIS_PASSWORD}"
   echo "REDIS_URL=${REDIS_URL}"
   echo "AUTH_REDIS_URL=${AUTH_REDIS_URL}"
+  echo "AUTH_REDIS_MIGRATION_MODE=${AUTH_REDIS_MIGRATION_MODE}"
   echo "SECRET_KEY=${SECRET_KEY}"
   echo "JWT_SECRET_KEY=${JWT_SECRET_KEY}"
   echo "APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}"
