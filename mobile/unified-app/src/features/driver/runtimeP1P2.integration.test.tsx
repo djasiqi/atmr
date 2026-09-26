@@ -25,6 +25,8 @@ const mockOfflineFlush = jest.fn();
 const mockFlushTrackingQueue = jest.fn();
 const mockEmitDriverTelemetry = jest.fn();
 const mockIsFeatureEnabled = jest.fn();
+const mockRecoverAuthWarm = jest.fn();
+const mockBootstrapSession = jest.fn();
 
 let mockAppStateHandlers: ((state: "active" | "inactive" | "background") => void)[] = [];
 let mockNotificationResponseHandler: ((response: any) => void) | null = null;
@@ -103,12 +105,14 @@ jest.mock("../../core/sessionProvider", () => ({
     status: mockSessionState.status,
     activeContext: mockSessionState.activeContext,
     bootstrap: mockSessionState.bootstrap,
-    bootstrapSession: jest.fn().mockResolvedValue(undefined),
+    bootstrapSession: (...args: unknown[]) => mockBootstrapSession(...args),
+    recoverAuthWarm: (reason: string) => mockRecoverAuthWarm(reason),
   }),
 }));
 
 jest.mock("../../core/featureFlags/registry", () => ({
   isFeatureEnabled: (flag: string) => mockIsFeatureEnabled(flag),
+  getRuntimeFlagsVersion: () => "test-flags",
 }));
 
 jest.mock("../../core/api/client", () => ({
@@ -253,10 +257,14 @@ describe("P1->P2 lightweight integration", () => {
     mockRegisterDriverPushToken.mockReset();
     mockEmitDriverTelemetry.mockReset();
     mockIsFeatureEnabled.mockReset();
+    mockRecoverAuthWarm.mockReset();
+    mockBootstrapSession.mockReset();
 
     mockHandleDriverPushQuickAction.mockResolvedValue(undefined);
     mockRegisterDriverPushToken.mockResolvedValue(undefined);
     mockRefreshAuthTokenNow.mockResolvedValue(true);
+    mockRecoverAuthWarm.mockResolvedValue("recovered");
+    mockBootstrapSession.mockResolvedValue(undefined);
     mockReconcileDriverMissions.mockResolvedValue({
       missions: [],
       queue: { sent: 0, dropped: 0, failed: 0 },

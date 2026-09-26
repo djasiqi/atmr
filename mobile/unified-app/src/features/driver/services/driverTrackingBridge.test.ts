@@ -132,10 +132,16 @@ jest.mock("../../../core/featureFlags/registry", () => ({
     flag === "tracking_background_enabled",
 }));
 
-jest.mock("@sentry/react-native", () => ({
-  addBreadcrumb: jest.fn(),
-  captureMessage: jest.fn(),
-}));
+jest.mock(
+  "@sentry/react-native",
+  () => ({
+    addBreadcrumb: jest.fn(),
+    captureMessage: jest.fn(),
+    captureException: jest.fn(),
+    withScope: jest.fn((cb: (scope: unknown) => void) => cb({})),
+  }),
+  { virtual: true }
+);
 
 jest.mock("../../../core/realtime/realtimeManager", () => ({
   realtimeManager: {
