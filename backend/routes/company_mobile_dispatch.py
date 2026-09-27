@@ -1496,6 +1496,11 @@ class MobileRideDetail(Resource):
         try:
             active_assignment = _get_active_assignment(booking)
             summary = _build_ride_summary(booking, current_company_id=company_id)
+            from application.companies.reservations.company_mission import (
+                apply_company_mission_mobile_read,
+            )
+
+            apply_company_mission_mobile_read(summary, booking)
             suggestions = _compute_driver_suggestions(company_id, booking)
             history = _build_ride_history(booking, active_assignment)
             conflicts = _build_ride_conflicts(booking)

@@ -267,6 +267,31 @@ class CreateManualBookingUseCase:
                 details=payload,
             ) from exc
 
+        if validated_data.get("route_steps"):
+            from .company_mission import (
+                commit_or_replay_idempotency,
+                create_canonical_series,
+                hash_canonical_request,
+            )
+
+            outbounds, returns = create_canonical_series(
+                company_id=cid,
+                client=client,
+                user=user,
+                validated_data=validated_data,
+            )
+            replay = commit_or_replay_idempotency(
+                company_id=cid,
+                idempotency_key=str(validated_data.get("idempotency_key") or ""),
+                payload_hash=hash_canonical_request(validated_data),
+            )
+            if replay is not None:
+                outbounds, returns = replay
+            return CreateManualBookingResult(
+                created_outbounds=outbounds,
+                created_returns=returns,
+            )
+
         def _norm_str(x: Any, default: str | None = None) -> str | None:
             if isinstance(x, str):
                 return x.strip()

@@ -215,6 +215,11 @@ from .service_area_pricing import (
     PricingProfileVersion,
     ServiceArea,
 )
+from .company_booking_mission import (
+    CompanyBookingRouteStep,
+    CompanyManualBookingRequest,
+    CompanyManualBookingRequestOccurrence,
+)
 from .transport_request import TransportRequest
 from .transport_request_leg import TransportRequestLeg
 from .transport_timeline_event import TransportTimelineEvent
@@ -530,6 +535,9 @@ __all__ = [
     "ShiftStatus",
     "ShiftType",
     "TaskFailure",
+    "CompanyBookingRouteStep",
+    "CompanyManualBookingRequest",
+    "CompanyManualBookingRequestOccurrence",
     "TransportRequest",  # ✅ Demandes transport institution
     "TransportRequestLeg",
     "TransportTimelineEvent",

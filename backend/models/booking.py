@@ -357,6 +357,17 @@ class Booking(db.Model):
         index=True,
     )
 
+    # Mission entreprise canonique. Null = réservation legacy.
+    # customer_name reste le nom client ; passenger_name est distinct.
+    passenger_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    external_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    needs_assistance = Column(Boolean, nullable=False, server_default=text("false"))
+    requester_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    requester_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    requester_service: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    pricing_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    preferential_amount = Column(Numeric(10, 2), nullable=True)
+
     # ✅ Source de la décision de facturation (traçabilité)
     billing_source: Mapped[BillingSource | None] = mapped_column(
         SAEnum(
@@ -992,7 +1003,20 @@ class Booking(db.Model):
         from services.companies.booking_display import build_booking_display_blocks
 
         viewer_id = getattr(self, "_serialize_viewer_company_id", None)
-        return build_booking_display_blocks(self, viewer_company_id=viewer_id)
+        payload = build_booking_display_blocks(self, viewer_company_id=viewer_id)
+        try:
+            from application.companies.reservations.company_mission import (
+                company_mission_read_payload,
+            )
+
+            payload.update(company_mission_read_payload(self))
+        except Exception:
+            logger.warning(
+                "lecture mission entreprise indisponible booking_id=%s",
+                getattr(self, "id", None),
+                exc_info=True,
+            )
+        return payload
 
     def _resolve_source_transport_request(self):
         """Demande institution source (directe, parent A/R ou route_group_id)."""

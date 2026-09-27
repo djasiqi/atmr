@@ -29,18 +29,28 @@ class ManualBookingCreateSchema(Schema):
 
     # Champs requis
     client_id = fields.Int(required=True, validate=validate.Range(min=1))
-    pickup_location = fields.Str(
-        required=True, validate=validate.Length(min=1, max=500)
-    )
-    dropoff_location = fields.Str(
-        required=True, validate=validate.Length(min=1, max=500)
-    )
+    pickup_location = fields.Str(validate=validate.Length(min=1, max=500))
+    dropoff_location = fields.Str(validate=validate.Length(min=1, max=500))
     scheduled_time = fields.Str(
-        required=True,
         validate=validate.Regexp(
             ISO8601_DATETIME_REGEX, error="scheduled_time doit être au format ISO 8601"
         ),
     )
+    route_steps = fields.List(fields.Dict(), load_default=None)
+    segment_amounts = fields.List(fields.Dict(), load_default=None)
+    pricing_mode = fields.Str(
+        validate=validate.OneOf(["automatic", "manual", "preferential"]),
+        allow_none=True,
+    )
+    preferential_amount = fields.Decimal(as_string=True, allow_none=True)
+    idempotency_key = fields.Str(validate=validate.Length(max=80), allow_none=True)
+    passenger_name = fields.Str(validate=validate.Length(max=200), allow_none=True)
+    external_reference = fields.Str(validate=validate.Length(max=120), allow_none=True)
+    needs_assistance = fields.Bool(load_default=False)
+    requester_name = fields.Str(validate=validate.Length(max=200), allow_none=True)
+    requester_phone = fields.Str(validate=validate.Length(max=30), allow_none=True)
+    requester_service = fields.Str(validate=validate.Length(max=120), allow_none=True)
+    is_urgent = fields.Bool(load_default=False)
 
     # Champs optionnels
     customer_first_name = fields.Str(validate=validate.Length(max=100))
@@ -125,6 +135,42 @@ class ManualBookingCreateSchema(Schema):
         validate=validate.Regexp(ISO8601_DATE_REGEX), allow_none=True
     )
     occurrences = fields.Int(validate=validate.Range(min=1), allow_none=True)
+
+    @validates_schema
+    def validate_contract_path(self, data, **_kwargs):
+        """Legacy et canonique sont exclusifs."""
+        from marshmallow import ValidationError
+
+        steps = data.get("route_steps")
+        legacy_keys = (
+            "pickup_location",
+            "dropoff_location",
+            "scheduled_time",
+            "return_date",
+            "return_time",
+        )
+        if steps:
+            present = [key for key in legacy_keys if data.get(key)]
+            if present or data.get("is_round_trip"):
+                raise ValidationError(
+                    "Le parcours canonique n'accepte pas les champs de trajet historiques."
+                )
+            if not data.get("pricing_mode"):
+                raise ValidationError(
+                    {"pricing_mode": ["Le mode de tarification est obligatoire."]}
+                )
+            if not (data.get("idempotency_key") or "").strip():
+                raise ValidationError(
+                    {"idempotency_key": ["La clé d'idempotence est obligatoire."]}
+                )
+            return
+        missing = [
+            key
+            for key in ("pickup_location", "dropoff_location", "scheduled_time")
+            if not data.get(key)
+        ]
+        if missing:
+            raise ValidationError({key: ["Champ obligatoire."] for key in missing})
 
     @validates_schema
     def validate_delivery_description(self, data, **_kwargs):

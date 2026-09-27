@@ -6,6 +6,7 @@ import { AppText } from "../../../../design/ui/AppText";
 import { E } from "../../theme/enterpriseOpsTheme";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 import type {
+  MissionTimelineView,
   RideBillingSummary,
   RideDetailInfoRow,
   RideDestinationDetails,
@@ -121,6 +122,100 @@ export function RideDetailRouteSection({
           </View>
         </View>
       </View>
+    </RideDetailSection>
+  );
+}
+
+export function RideDetailMissionSection({ view }: { view: MissionTimelineView }) {
+  return (
+    <RideDetailSection title="Parcours" icon="map-outline">
+      <AppText variant="caption" style={styles.missionKicker}>
+        {view.missionLabel}
+      </AppText>
+      <AppText variant="sectionTitle" style={styles.missionSegment}>
+        {view.segmentLabel}
+      </AppText>
+      <View style={styles.routeCard}>
+        <View style={styles.missionStops}>
+          {view.stops.map((stop, index) => (
+            <View key={stop.key}>
+              {stop.showCurrentSegmentMarker ? (
+                <AppText variant="caption" style={styles.currentSegmentMarker}>
+                  Trajet actuel
+                </AppText>
+              ) : null}
+              <View style={styles.missionStopRow}>
+                <View style={styles.routeTrackCol}>
+                  <View
+                    style={[
+                      styles.routeDot,
+                      stop.onCurrentSegment ? styles.routeDotEnd : styles.routeDotStart,
+                    ]}
+                  />
+                  {index < view.stops.length - 1 ? <View style={styles.routeLine} /> : null}
+                </View>
+                <View style={[styles.missionStopBody, stop.onCurrentSegment ? styles.missionStopCurrent : null]}>
+                  <AppText variant="caption" style={styles.routeStopLabel}>
+                    {stop.title}
+                  </AppText>
+                  {stop.arrivalLabel ? (
+                    <AppText variant="caption" style={styles.missionTime}>
+                      {stop.arrivalLabel}
+                    </AppText>
+                  ) : null}
+                  {stop.departureLabel ? (
+                    <AppText variant="caption" style={styles.missionTime}>
+                      {stop.departureLabel}
+                    </AppText>
+                  ) : null}
+                  <AppText variant="body" style={styles.routeStopAddress}>
+                    {stop.location}
+                  </AppText>
+                  {stop.details.map((line) => (
+                    <AppText key={line} variant="caption" style={styles.routeStopDetails}>
+                      {line}
+                    </AppText>
+                  ))}
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+      {view.currentSegment ? (
+        <View style={styles.currentSegmentCard}>
+          <AppText variant="caption" style={styles.routeStopLabel}>
+            Segment actuel
+          </AppText>
+          <AppText variant="body" style={styles.routeStopAddress}>
+            {view.currentSegment.fromTitle} → {view.currentSegment.toTitle}
+          </AppText>
+          {view.currentSegment.departureLabel ? (
+            <AppText variant="caption" style={styles.missionTime}>
+              Départ : {view.currentSegment.departureLabel}
+            </AppText>
+          ) : null}
+          {view.currentSegment.arrivalLabel ? (
+            <AppText variant="caption" style={styles.missionTime}>
+              Arrivée : {view.currentSegment.arrivalLabel}
+            </AppText>
+          ) : null}
+        </View>
+      ) : null}
+      {view.missionLevel.length > 0 ? (
+        <View style={styles.missionLevel}>
+          {view.missionLevel.map((row) => (
+            <View key={`${row.label}-${row.value}`} style={styles.detailItem}>
+              <AppText variant="bodyMuted" style={styles.detailLabel}>
+                {row.label}
+              </AppText>
+              <AppText variant="body" style={styles.detailValue}>
+                {row.value}
+              </AppText>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </RideDetailSection>
   );
 }
@@ -290,6 +385,32 @@ const styles = StyleSheet.create({
   },
   routeStopAddress: { color: E.TEXT_SEC, fontSize: FONT_SIZE.px13, lineHeight: 19 },
   routeStopDetails: { color: E.TEXT_MUTED, fontSize: FONT_SIZE.px12, lineHeight: 17 },
+  missionKicker: { color: E.TEXT_MUTED, marginBottom: 2 },
+  missionSegment: { color: E.TEXT, marginBottom: 12 },
+  missionStops: { flex: 1, gap: 0 },
+  missionStopRow: { flexDirection: "row", gap: 12 },
+  missionStopBody: { flex: 1, gap: 2, paddingBottom: 12 },
+  missionStopCurrent: {
+    backgroundColor: "rgba(0, 121, 107, 0.08)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  missionTime: { color: E.TEXT_SEC, fontSize: FONT_SIZE.px12 },
+  currentSegmentMarker: {
+    color: E.BRAND,
+    fontWeight: "700" as const,
+    marginLeft: 26,
+    marginBottom: 4,
+  },
+  currentSegmentCard: {
+    marginTop: 12,
+    gap: 4,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: E.BORDER,
+  },
+  missionLevel: { marginTop: 12 },
   detailItem: {
     marginBottom: 10,
     paddingBottom: 10,

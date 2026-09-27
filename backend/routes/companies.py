@@ -502,9 +502,17 @@ manual_booking_model = companies_ns.model(
         "client_id": fields.Integer(
             required=True, description="L'ID du client sélectionné"
         ),
-        "pickup_location": fields.String(required=True),
-        "dropoff_location": fields.String(required=True),
-        "scheduled_time": fields.String(required=True, description="ISO 8601"),
+        "pickup_location": fields.String(required=False),
+        "dropoff_location": fields.String(required=False),
+        "scheduled_time": fields.String(required=False, description="ISO 8601"),
+        "route_steps": fields.List(fields.Raw, required=False),
+        "segment_amounts": fields.List(fields.Raw, required=False),
+        "pricing_mode": fields.String(required=False),
+        "preferential_amount": fields.String(required=False),
+        "idempotency_key": fields.String(required=False),
+        "passenger_name": fields.String(required=False),
+        "is_urgent": fields.Boolean(required=False),
+        "needs_assistance": fields.Boolean(required=False),
         # Tous les autres champs sont optionnels
         "customer_first_name": fields.String(
             description="Prénom (normalement non utilisé)"
@@ -4716,6 +4724,39 @@ class DriverVacationsResource(Resource):
 # ======================================================
 # 15. Création manuelle d'une réservation (aller simple ou A/R)
 # ======================================================
+
+
+@companies_ns.route("/me/reservations/manual/pricing-preview")
+class ManualReservationPricingPreview(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self):
+        """Aperçu tarifaire. Même resolver que la création, sans persistance."""
+        company, err, code = _get_current_company_via_use_case()
+        if err:
+            return err, code
+        cid = int(getattr(company, "id", 0) or 0)
+        data = request.get_json() or {}
+        from application.companies.reservations.company_mission import (
+            CompanyMissionError,
+            preview_company_mission_pricing,
+        )
+        from repositories.client_repository import ClientRepository
+
+        client = ClientRepository().find_model_by_id_and_company(
+            int(data.get("client_id") or 0), cid
+        )
+        if client is None:
+            return {"error": "Client introuvable."}, 404
+        try:
+            payload = preview_company_mission_pricing(
+                company_id=cid,
+                client=client,
+                validated_data=data,
+            )
+        except CompanyMissionError as exc:
+            return {"error": exc.message}, exc.status_code
+        return payload, 200
 
 
 @companies_ns.route("/me/reservations/manual")

@@ -32,10 +32,12 @@ import {
   RideDetailBillingSection,
   RideDetailDestinationSection,
   RideDetailInfoSection,
+  RideDetailMissionSection,
   RideDetailRouteSection,
   RideDetailTimelineSection,
 } from "../../../src/features/company/components/rides/CompanyRideDetailSections";
 import {
+  buildMissionTimelineView,
   buildRideBillingSummary,
   buildRideDetailInfoRows,
   buildRideTimeline,
@@ -484,6 +486,7 @@ export default function CompanyRideDetailsScreen() {
   const showUrgentAction = d ? canMarkRideUrgent(d as unknown as CompanyDispatchMission) : false;
   const billingSummary = d ? buildRideBillingSummary(d, linkedInvoice) : null;
   const destinationDetails = d ? readRideDestinationDetails(d) : null;
+  const missionTimeline = d && detailView.source === "server" ? buildMissionTimelineView(d) : null;
   const timelineItems = d ? buildRideTimeline(d, driverLabel) : [];
   const infoRows =
     d && billingSummary
@@ -568,18 +571,22 @@ export default function CompanyRideDetailsScreen() {
                 </AppText>
               </View>
             </View>
+            {missionTimeline ? <RideDetailMissionSection view={missionTimeline} /> : null}
             <RideDetailInfoSection rows={infoRows} />
-            <RideDetailRouteSection
-              pickup={pickup}
-              dropoff={drop}
-              clinicalLine={destinationDetails?.clinicalLine ?? null}
-            />
-            {destinationDetails &&
+            {missionTimeline ? null : (
+              <RideDetailRouteSection
+                pickup={pickup}
+                dropoff={drop}
+                clinicalLine={destinationDetails?.clinicalLine ?? null}
+              />
+            )}
+            {!missionTimeline &&
+            destinationDetails &&
             (destinationDetails.establishment ||
               destinationDetails.service ||
               destinationDetails.doctor) ? (
               <RideDetailDestinationSection destination={destinationDetails} />
-            ) : detailView.awaitingServer ? (
+            ) : !missionTimeline && detailView.awaitingServer ? (
               <View style={styles.sectionSkeleton} accessibilityLabel="Destination, actualisation" />
             ) : null}
             {detailView.source === "server" && billingSummary ? (

@@ -45,6 +45,7 @@ import {
   sendCompanyDispatchMessage,
   transferCompanyRide,
 } from "./api/companyApi";
+import { unwrapCompanyRideDetail } from "./utils/companyRideDetailPayload";
 import {
   getCompanyInboxNotifications,
   markAllCompanyNotificationsRead,
@@ -392,38 +393,7 @@ export function useCompanyRideDetailsQuery(params: { date: string; rideId: numbe
         missionId: params.rideId as number,
         date: params.date,
       });
-      if (detailPayload && typeof detailPayload === "object") {
-        const payload = detailPayload as Record<string, unknown>;
-        const directCandidate = payload.summary ?? payload.data ?? payload.item ?? payload.ride ?? payload.mission;
-        if (directCandidate && typeof directCandidate === "object") {
-          const directMission = directCandidate as Record<string, unknown>;
-          const directMissionId = Number.parseInt(
-            String(directMission.mission_id ?? directMission.booking_id ?? directMission.id ?? "NaN"),
-            10
-          );
-          if (Number.isFinite(directMissionId) && directMissionId === params.rideId) {
-            return directMission;
-          }
-        }
-        const rowsCandidate =
-          (Array.isArray(payload.items) && payload.items) ||
-          (Array.isArray(payload.missions) && payload.missions) ||
-          (Array.isArray(payload.data) && payload.data) ||
-          [];
-        if (Array.isArray(rowsCandidate)) {
-          const match = rowsCandidate.find((entry) => {
-            if (!entry || typeof entry !== "object") return false;
-            const row = entry as Record<string, unknown>;
-            const missionId = Number.parseInt(
-              String(row.mission_id ?? row.booking_id ?? row.id ?? "NaN"),
-              10
-            );
-            return Number.isFinite(missionId) && missionId === params.rideId;
-          });
-          if (match) return match;
-        }
-      }
-      return null;
+      return unwrapCompanyRideDetail(detailPayload, params.rideId as number);
     },
     enabled: useCompanyNetworkQueriesEnabled(params.rideId != null),
     ...queryCacheOptions("detail"),

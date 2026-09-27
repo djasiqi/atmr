@@ -76,6 +76,16 @@ class UpdateCompanyReservationUseCase:
 
         updated_fields: list[str] = []
 
+        from .company_mission import reject_canonical_contract_update
+
+        blocked = reject_canonical_contract_update(booking, validated_data)
+        if blocked:
+            return UpdateCompanyReservationResult(
+                ok=False,
+                error={"error": blocked},
+                status_code=400,
+            )
+
         try:
             normalized_desc = require_delivery_description_on_write(
                 mission_type=validated_data.get("mission_type"),

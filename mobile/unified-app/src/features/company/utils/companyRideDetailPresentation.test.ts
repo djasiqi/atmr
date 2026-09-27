@@ -1,4 +1,5 @@
 import {
+  buildMissionTimelineView,
   buildRideBillingSummary,
   buildRideDetailInfoRows,
   buildRideTimeline,
@@ -124,6 +125,67 @@ describe("companyRideDetailPresentation", () => {
     });
     expect(rows.find((r) => r.label === "Téléphone")?.pending).toBe(true);
     expect(rows.some((r) => r.label === "Facturation")).toBe(false);
+  });
+
+  it("place le trajet actuel entre les deux étapes du segment, sans comparer les adresses", () => {
+    const view = buildMissionTimelineView({
+      mission_type: "patient_transport",
+      mission_segment_index: 2,
+      mission_segment_count: 3,
+      needs_assistance: true,
+      requester_name: "Camille",
+      requester_phone: "0220000000",
+      notes_medical: "Aide à la marche",
+      route_steps: [
+        { kind: "pickup", location: "EMS", departure_at: "2026-09-28T09:00:00" },
+        {
+          kind: "destination",
+          location: "HUG",
+          arrival_at: "2026-09-28T09:30:00",
+          departure_at: "2026-09-28T10:00:00",
+          establishment: "HUG",
+          service: "Cardiologie",
+        },
+        {
+          kind: "destination",
+          location: "Clinique",
+          arrival_at: "2026-09-28T11:00:00",
+          departure_at: "2026-09-28T11:30:00",
+          access_notes: "Entrée principale",
+        },
+        { kind: "return", location: "EMS", arrival_at: "2026-09-28T12:30:00" },
+      ],
+    });
+    expect(view?.segmentLabel).toBe("Trajet 2 / 3");
+    expect(view?.missionLabel).toBe("Transport");
+    expect(view?.stops.map((stop) => stop.title)).toEqual([
+      "Départ",
+      "Destination 1",
+      "Destination 2",
+      "Retour",
+    ]);
+    expect(view?.stops.filter((stop) => stop.onCurrentSegment).map((stop) => stop.title)).toEqual([
+      "Destination 1",
+      "Destination 2",
+    ]);
+    expect(view?.stops.find((stop) => stop.showCurrentSegmentMarker)?.title).toBe("Destination 2");
+    expect(view?.currentSegment).toEqual({
+      fromTitle: "Destination 1",
+      toTitle: "Destination 2",
+      departureLabel: "10:00",
+      arrivalLabel: "11:00",
+    });
+    expect(view?.stops[1]?.details).toEqual(["HUG", "Cardiologie"]);
+    expect(view?.stops[2]?.details).toEqual(["Entrée principale"]);
+    expect(view?.missionLevel).toEqual([
+      { label: "Assistance", value: "Oui" },
+      { label: "Contact", value: "Camille · 0220000000" },
+      { label: "Notes", value: "Aide à la marche" },
+    ]);
+  });
+
+  it("ignore un détail sans route_steps", () => {
+    expect(buildMissionTimelineView({ pickup_location: "A", dropoff_location: "B" })).toBeNull();
   });
 
   it("construit l'historique opérationnel", () => {

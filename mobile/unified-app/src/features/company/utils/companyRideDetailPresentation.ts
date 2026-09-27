@@ -419,6 +419,126 @@ export function buildRideDetailInfoRows(
   return rows;
 }
 
+export type MissionTimelineStopView = {
+  key: string;
+  title: string;
+  location: string;
+  arrivalLabel: string | null;
+  departureLabel: string | null;
+  details: string[];
+  onCurrentSegment: boolean;
+  showCurrentSegmentMarker: boolean;
+};
+
+export type MissionLevelRow = {
+  label: string;
+  value: string;
+};
+
+export type MissionTimelineView = {
+  missionLabel: string;
+  segmentLabel: string;
+  stops: MissionTimelineStopView[];
+  currentSegment: {
+    fromTitle: string;
+    toTitle: string;
+    departureLabel: string | null;
+    arrivalLabel: string | null;
+  } | null;
+  missionLevel: MissionLevelRow[];
+};
+
+function clockLabel(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed.format("HH:mm") : null;
+}
+
+function textOrEmpty(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function buildMissionTimelineView(
+  data: Record<string, unknown>
+): MissionTimelineView | null {
+  const raw = data.route_steps;
+  if (!Array.isArray(raw) || raw.length < 2) return null;
+  const steps = raw.filter((item) => item && typeof item === "object") as Record<string, unknown>[];
+  if (steps.length < 2) return null;
+
+  const index = Number(data.mission_segment_index);
+  const count = Number(data.mission_segment_count);
+  const segmentIndex = Number.isFinite(index) && index >= 1 ? Math.floor(index) : 1;
+  const segmentCount = Number.isFinite(count) && count >= 1 ? Math.floor(count) : 1;
+  const fromPos = segmentIndex - 1;
+  const toPos = segmentIndex;
+
+  let destinationOrdinal = 0;
+  const titles = steps.map((step) => {
+    const kind = String(step.kind || "");
+    if (kind === "return") return "Retour";
+    if (kind === "pickup") return "Départ";
+    destinationOrdinal += 1;
+    return `Destination ${destinationOrdinal}`;
+  });
+
+  const stops: MissionTimelineStopView[] = steps.map((step, position) => {
+    const details = [step.establishment, step.service, step.doctor, step.access_notes]
+      .map(textOrEmpty)
+      .filter(Boolean);
+    const arrival = clockLabel(step.arrival_at);
+    const departure = clockLabel(step.departure_at);
+    return {
+      key: `${position}-${String(step.kind || "step")}`,
+      title: titles[position] || "Étape",
+      location: textOrEmpty(step.location) || "—",
+      arrivalLabel: arrival ? `arrivée ${arrival}` : null,
+      departureLabel: departure ? `départ ${departure}` : null,
+      details,
+      onCurrentSegment: position === fromPos || position === toPos,
+      showCurrentSegmentMarker: position === toPos && toPos < steps.length,
+    };
+  });
+
+  const currentSegment =
+    fromPos >= 0 && toPos < steps.length
+      ? {
+          fromTitle: titles[fromPos] || "Départ",
+          toTitle: titles[toPos] || "Arrivée",
+          departureLabel: clockLabel(steps[fromPos]?.departure_at),
+          arrivalLabel: clockLabel(steps[toPos]?.arrival_at),
+        }
+      : null;
+
+  const missionType = String(data.mission_type || "").trim().toLowerCase();
+  const missionLevel: MissionLevelRow[] = [];
+  if (data.wheelchair_client_has === true) {
+    missionLevel.push({ label: "Mobilité", value: "En chaise" });
+  }
+  if (data.wheelchair_need === true) {
+    missionLevel.push({ label: "Mobilité", value: "Fournir chaise" });
+  }
+  if (data.needs_assistance === true) {
+    missionLevel.push({ label: "Assistance", value: "Oui" });
+  }
+  const contact = [textOrEmpty(data.requester_name), textOrEmpty(data.requester_phone)]
+    .filter(Boolean)
+    .join(" · ");
+  if (contact) missionLevel.push({ label: "Contact", value: contact });
+  const notes = textOrEmpty(data.notes_medical);
+  if (notes) missionLevel.push({ label: "Notes", value: notes });
+  const delivery = textOrEmpty(data.delivery_description);
+  if (delivery) missionLevel.push({ label: "Livraison", value: delivery });
+
+  return {
+    missionLabel: missionType === "material_delivery" ? "Livraison" : "Transport",
+    segmentLabel: `Trajet ${segmentIndex} / ${segmentCount}`,
+    stops,
+    currentSegment,
+    missionLevel,
+  };
+}
+
 function metadataFrom(data: Record<string, unknown>): Record<string, unknown> | null {
   const meta = data.metadata_json;
   return meta && typeof meta === "object" ? (meta as Record<string, unknown>) : null;
