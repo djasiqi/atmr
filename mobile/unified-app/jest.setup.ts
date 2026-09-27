@@ -47,6 +47,32 @@ jest.mock("expo-updates", () => ({
   useUpdates: () => ({ isUpdatePending: false, isUpdateAvailable: false }),
 }));
 
+// Le pont natif RNSentry n'existe pas sous Jest. Sans ce mock, un
+// `jest.mock("react-native")` incomplet fait planter l'import de Sentry.
+jest.mock("@sentry/react-native", () => ({
+  __esModule: true,
+  init: jest.fn(),
+  wrap: (component: unknown) => component,
+  addBreadcrumb: jest.fn(),
+  captureException: jest.fn(),
+  captureMessage: jest.fn(),
+  setTag: jest.fn(),
+  setContext: jest.fn(),
+  setUser: jest.fn(),
+  setExtra: jest.fn(),
+  withScope: (callback: (scope: {
+    setTag: () => void;
+    setContext: () => void;
+    setExtra: () => void;
+  }) => void) => {
+    callback({
+      setTag: jest.fn(),
+      setContext: jest.fn(),
+      setExtra: jest.fn(),
+    });
+  },
+}));
+
 jest.mock("expo-font", () => ({
   __esModule: true,
   loadAsync: () => Promise.resolve(),

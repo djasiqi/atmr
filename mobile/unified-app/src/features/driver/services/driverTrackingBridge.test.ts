@@ -1,4 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+
+// Avant l'import du pont : le wrapper Sentry lit NativeModules.RNSentry
+// dès son évaluation. Un mock plus bas, ou `{ virtual: true }`, laisse
+// charger le module réel sous Jest Linux.
+jest.mock("@sentry/react-native", () => ({
+  __esModule: true,
+  init: jest.fn(),
+  addBreadcrumb: jest.fn(),
+  captureMessage: jest.fn(),
+  captureException: jest.fn(),
+  setTag: jest.fn(),
+  withScope: jest.fn((cb: (scope: unknown) => void) => cb({})),
+}));
+
 import {
   getDriverTrackingBridgeSnapshot,
   hardStopDriverContextRuntime,
@@ -72,11 +86,6 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
   default: mockAsyncStorage,
 }));
 
-jest.mock("@sentry/react-native", () => ({
-  __esModule: true,
-  addBreadcrumb: jest.fn(),
-}));
-
 jest.mock("expo-battery", () => ({
   __esModule: true,
   getBatteryLevelAsync: jest.fn().mockResolvedValue(0.85),
@@ -96,6 +105,7 @@ jest.mock("expo-location", () => ({
 }));
 
 jest.mock("react-native", () => ({
+  NativeModules: { RNSentry: {} },
   AppState: {
     get currentState() {
       return __appStateTest.currentState;
@@ -136,17 +146,6 @@ jest.mock("../../../core/featureFlags/registry", () => ({
     flag === "tracking_http_fallback_enabled" ||
     flag === "tracking_background_enabled",
 }));
-
-jest.mock(
-  "@sentry/react-native",
-  () => ({
-    addBreadcrumb: jest.fn(),
-    captureMessage: jest.fn(),
-    captureException: jest.fn(),
-    withScope: jest.fn((cb: (scope: unknown) => void) => cb({})),
-  }),
-  { virtual: true }
-);
 
 jest.mock("../../../core/realtime/realtimeManager", () => ({
   realtimeManager: {
