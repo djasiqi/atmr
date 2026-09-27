@@ -842,7 +842,7 @@ export default function Home() {
 
                   <div className={`${styles.fieldBlock} ${styles.tripKindFieldScope}`}>
                     <span id="home-schedule-mode-label" className={styles.fieldLabelCompact}>Type de départ</span>
-                    <div className={institutionStyles.missionSegment} role="radiogroup" aria-labelledby="home-schedule-mode-label">
+                    <div className={`${institutionStyles.missionSegment} ${styles.tripKindSegment}`} role="radiogroup" aria-labelledby="home-schedule-mode-label">
                       <button
                         type="button"
                         className={`${institutionStyles.missionBtn} ${styles.tripKindBtn} ${scheduleMode === 'imminent' ? institutionStyles.missionBtnActive : ''}`}
@@ -895,7 +895,7 @@ export default function Home() {
                       <div className={`${styles.dateField} ${styles.tripKindFieldScope}`}>
                         <span id="home-trip-kind-label" className={styles.fieldLabelCompact}>Type de trajet</span>
                         <div
-                          className={institutionStyles.missionSegment}
+                          className={`${institutionStyles.missionSegment} ${styles.tripKindSegment}`}
                           role="radiogroup"
                           aria-labelledby="home-trip-kind-label"
                         >

@@ -88,16 +88,27 @@
   color: var(--text-secondary);
 }
 
-.modeSwitchSegment {
+.modeSwitchFieldScope .modeSwitchSegment {
   width: 100%;
   display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: var(--input-h);
+  min-height: var(--input-h);
+  max-height: var(--input-h);
 }
 
-.modeSwitchBtn {
+.modeSwitchFieldScope .modeSwitchBtn {
   flex: 1 1 0;
+  align-self: stretch;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
   min-width: 0;
   justify-content: center;
   text-decoration: none;
+  line-height: 1;
 }
 
 .modeSwitchBtn:focus-visible {

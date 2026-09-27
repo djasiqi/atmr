@@ -71,9 +71,12 @@ const Contact = () => {
             <span className={styles.miniTag}>Contact direct</span>
             <h3>Coordonnees generales</h3>
             <p>
+              <a href="tel:+41225520302">022 552 03 02</a>
+            </p>
+            <p>
               <a href="mailto:info@lirie.ch">info@lirie.ch</a>
             </p>
-            <p>Lun-Ven 08:00-18:00 (CET)</p>
+            <p>Lun-Ven 08:00-18:00</p>
             <p>Geneve, Suisse</p>
           </div>
         </div>
