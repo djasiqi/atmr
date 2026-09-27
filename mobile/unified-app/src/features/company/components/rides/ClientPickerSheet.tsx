@@ -30,10 +30,9 @@ export function CreateClientTrigger({
   onClear,
   leftSlot,
 }: CreateClientTriggerProps) {
-  const t = useResponsiveTokens();
   if (selectedId != null && selectedLabel.trim().length > 0) {
     return (
-      <View style={[s.card, { minHeight: Math.max(t.fieldShellMinHeight, 48) }]}>
+      <View style={[s.card, { minHeight: 35 }]}>
         <Pressable
           onPress={onPress}
           style={s.cardMain}
@@ -70,7 +69,7 @@ export function CreateClientTrigger({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="Rechercher un client"
-      style={[s.emptyField, { minHeight: Math.max(t.fieldShellMinHeight, 48) }]}
+      style={[s.emptyField, { minHeight: 35 }]}
     >
       {leftSlot}
       <AppText variant="body" style={s.emptyPlaceholder} numberOfLines={1}>

@@ -994,6 +994,9 @@ export function useRideFormState() {
   const [dropoffAccessNotes, setDropoffAccessNotes] = useState("");
   const [wheelchairClient, setWheelchairClient] = useState(false);
   const [wheelchairProvide, setWheelchairProvide] = useState(false);
+  const [needsAssistance, setNeedsAssistance] = useState(false);
+  const [requesterName, setRequesterName] = useState("");
+  const [requesterPhone, setRequesterPhone] = useState("");
   const [isMaterialDelivery, setIsMaterialDelivery] = useState(false);
   const [deliveryDescription, setDeliveryDescription] = useState("");
   const [returnScheduledAt, setReturnScheduledAt] = useState("");
@@ -1053,6 +1056,9 @@ export function useRideFormState() {
     setDropoffAccessNotes("");
     setWheelchairClient(false);
     setWheelchairProvide(false);
+    setNeedsAssistance(false);
+    setRequesterName("");
+    setRequesterPhone("");
     setIsMaterialDelivery(false);
     setDeliveryDescription("");
     setReturnScheduledAt("");
@@ -1110,6 +1116,12 @@ export function useRideFormState() {
     setWheelchairClient,
     wheelchairProvide,
     setWheelchairProvide,
+    needsAssistance,
+    setNeedsAssistance,
+    requesterName,
+    setRequesterName,
+    requesterPhone,
+    setRequesterPhone,
     isMaterialDelivery,
     setIsMaterialDelivery,
     deliveryDescription,

@@ -8,7 +8,11 @@ import {
   EnterpriseRoundIconAction,
 } from "../EnterpriseActionChip";
 import { E } from "../../theme/enterpriseOpsTheme";
-import { isDispatchCompleted, isDispatchCancelled } from "../../utils/companyDispatchStatus";
+import {
+  canManualCompleteRide,
+  isDispatchCompleted,
+  isDispatchCancelled,
+} from "../../utils/companyDispatchStatus";
 import { canMarkRideUrgent } from "../../utils/pickupSentinel";
 import type { CompanyDispatchMission } from "../../api/contracts";
 import { Ionicons } from "@expo/vector-icons";
@@ -56,6 +60,7 @@ export type CompanyRidesMissionFlatListProps = {
   onSchedule: (missionId: number) => void;
   onTransfer: (missionId: number) => void;
   onCancel: (missionId: number) => void;
+  onComplete: (missionId: number) => void;
   onMarkUrgent: (missionId: number) => void;
 };
 
@@ -79,10 +84,13 @@ const CompanyRidesMissionRow = memo(function CompanyRidesMissionRow({
   onSchedule,
   onTransfer,
   onCancel,
+  onComplete,
   onMarkUrgent,
 }: CompanyRidesMissionRowProps) {
   const completed = isDispatchCompleted(mission);
   const cancelled = isDispatchCancelled(mission);
+  const showActions = !completed && !cancelled;
+  const showComplete = canManualCompleteRide(mission);
   const showUrgent = canMarkRideUrgent(mission);
   const unassigned = mission.driver_id == null;
 
@@ -113,6 +121,10 @@ const CompanyRidesMissionRow = memo(function CompanyRidesMissionRow({
   const handleCancel = useCallback(() => {
     void onCancel(mission.mission_id);
   }, [mission.mission_id, onCancel]);
+
+  const handleComplete = useCallback(() => {
+    void onComplete(mission.mission_id);
+  }, [mission.mission_id, onComplete]);
 
   const handleMarkUrgent = useCallback(() => {
     void onMarkUrgent(mission.mission_id);
@@ -145,52 +157,64 @@ const CompanyRidesMissionRow = memo(function CompanyRidesMissionRow({
       unassignedPressDisabled={!contextId || !canAssignRide}
       footer={
         isExpanded ? (
-          <EnterpriseFooterActionRow>
+          <EnterpriseFooterActionRow columns={3}>
             <EnterpriseActionChip
               icon="open-outline"
               label="Détails"
               tone="details"
               onPress={handleGoDetails}
             />
-            {!completed && !cancelled ? (
-              <>
-                {mission.driver_id != null ? (
-                  <EnterpriseActionChip
-                    icon="person-add-outline"
-                    label="Réassigner"
-                    onPress={handleOpenAssign}
-                    disabled={!contextId || !canAssignRide}
-                  />
-                ) : null}
-                <EnterpriseActionChip
-                  icon="create-outline"
-                  label="Éditer"
-                  onPress={handleEdit}
-                  disabled={!contextId || !canEditRide}
-                />
-                <EnterpriseActionChip
-                  icon="time-outline"
-                  label={isActionPending ? "Planif…" : "Planifier"}
-                  onPress={handleSchedule}
-                  disabled={!contextId || isActionPending || !canScheduleRide}
-                  showSpinner={isActionPending}
-                  spinnerColor={E.BRAND}
-                />
-                <EnterpriseActionChip
-                  icon="swap-horizontal-outline"
-                  label="Transférer"
-                  tone="transfer"
-                  onPress={handleTransfer}
-                  disabled={!contextId || !canTransferRide}
-                />
-                <EnterpriseActionChip
-                  icon="close-circle-outline"
-                  label={isActionPending ? "Annulation…" : "Annuler"}
-                  tone="danger"
-                  onPress={handleCancel}
-                  disabled={!contextId || isActionPending || !canCancelRide}
-                />
-              </>
+            {showActions && mission.driver_id != null ? (
+              <EnterpriseActionChip
+                icon="person-add-outline"
+                label="Réassigner"
+                onPress={handleOpenAssign}
+                disabled={!contextId || !canAssignRide}
+              />
+            ) : null}
+            {showActions ? (
+              <EnterpriseActionChip
+                icon="create-outline"
+                label="Éditer"
+                onPress={handleEdit}
+                disabled={!contextId || !canEditRide}
+              />
+            ) : null}
+            {showActions ? (
+              <EnterpriseActionChip
+                icon="time-outline"
+                label={isActionPending ? "Planif…" : "Planifier"}
+                onPress={handleSchedule}
+                disabled={!contextId || isActionPending || !canScheduleRide}
+                showSpinner={isActionPending}
+                spinnerColor={E.BRAND}
+              />
+            ) : null}
+            {showActions ? (
+              <EnterpriseActionChip
+                icon="swap-horizontal-outline"
+                label="Transférer"
+                tone="transfer"
+                onPress={handleTransfer}
+                disabled={!contextId || !canTransferRide}
+              />
+            ) : null}
+            {showActions && showComplete ? (
+              <EnterpriseActionChip
+                icon="checkmark-circle-outline"
+                label="Valider"
+                onPress={handleComplete}
+                disabled={!contextId || isActionPending || !canEditRide}
+              />
+            ) : null}
+            {showActions ? (
+              <EnterpriseActionChip
+                icon="close-circle-outline"
+                label={isActionPending ? "Annulation…" : "Annuler"}
+                tone="danger"
+                onPress={handleCancel}
+                disabled={!contextId || isActionPending || !canCancelRide}
+              />
             ) : null}
           </EnterpriseFooterActionRow>
         ) : null
@@ -229,6 +253,7 @@ export function CompanyRidesMissionFlatList({
   onSchedule,
   onTransfer,
   onCancel,
+  onComplete,
   onMarkUrgent,
 }: CompanyRidesMissionFlatListProps) {
   const renderItem: ListRenderItem<CompanyDispatchMission> = useCallback(
@@ -261,6 +286,7 @@ export function CompanyRidesMissionFlatList({
         onSchedule={onSchedule}
         onTransfer={onTransfer}
         onCancel={onCancel}
+        onComplete={onComplete}
         onMarkUrgent={onMarkUrgent}
       />
     ),
@@ -277,6 +303,7 @@ export function CompanyRidesMissionFlatList({
       expandedMissionId,
       missionActionPendingId,
       onCancel,
+      onComplete,
       onEdit,
       onGoDetails,
       onMarkUrgent,

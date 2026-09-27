@@ -14,6 +14,20 @@ export function formatRideDistance(meters: number | null | undefined): string {
   return `${Math.round(km)} km`;
 }
 
+/**
+ * Même durée que le formulaire réservations web : `duration_typical`
+ * (OSRM ajusté par l'historique), uniquement sur un vrai itinéraire routier.
+ * Le brut `duration` et le fallback haversine sont ignorés.
+ */
+export function reservationRouteDurationSeconds(
+  payload: { fallback?: unknown; duration?: unknown; duration_typical?: unknown } | null | undefined,
+): number | null {
+  if (!payload || payload.fallback) return null;
+  const typicalSeconds = Number(payload.duration_typical);
+  if (!Number.isFinite(typicalSeconds) || typicalSeconds <= 0) return null;
+  return typicalSeconds;
+}
+
 /** Format compact pour l'aperçu de course (`24 min`, `1 h 12`, ou `—`). */
 export function formatRideDuration(seconds: number | null | undefined): string {
   if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return "—";

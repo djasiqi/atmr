@@ -17,7 +17,7 @@ function parseTime(val) {
 
 const InlineTimePicker = forwardRef(function InlineTimePicker({
   value, onChange, placeholder: _placeholder, className, inputId, onSelectNow, title, ariaLabel,
-  invalid = false, describedBy,
+  invalid = false, describedBy, required = false,
 }, ref) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
@@ -188,6 +188,8 @@ const InlineTimePicker = forwardRef(function InlineTimePicker({
           maxLength={5}
           title={title}
           aria-label={ariaLabel}
+          aria-required={required || undefined}
+          required={required || undefined}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
         />

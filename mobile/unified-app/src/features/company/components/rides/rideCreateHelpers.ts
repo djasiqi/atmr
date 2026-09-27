@@ -9,6 +9,21 @@ export function backendWeekdayFromScheduledIso(raw: string): number | null {
   return (d.getDay() + 6) % 7;
 }
 
+/** Libellés de tronçons, alignés sur le formulaire réservations (`Départ → Destination 1`). */
+export function routeSegmentLabels(destinationCount: number, isRoundTrip: boolean): string[] {
+  const names = ["Départ"];
+  const count = Math.max(0, Math.floor(Number(destinationCount)) || 0);
+  for (let index = 1; index <= count; index += 1) {
+    names.push(`Destination ${index}`);
+  }
+  if (isRoundTrip) names.push("Retour");
+  const labels: string[] = [];
+  for (let index = 0; index < names.length - 1; index += 1) {
+    labels.push(`${names[index]} → ${names[index + 1]}`);
+  }
+  return labels;
+}
+
 /** Tarif préférentiel client = CHF / trajet ; en A/R le formulaire porte le total. */
 export function resolvePreferentialBookingAmount(
   perLegRate: number,
@@ -366,6 +381,9 @@ type BuildRidePayloadInput = {
   dropoffAccessNotes: string;
   wheelchairClient: boolean;
   wheelchairProvide: boolean;
+  needsAssistance?: boolean;
+  requesterName?: string;
+  requesterPhone?: string;
   internalNotes: string;
   notesMax: number;
   amountInput: string;
@@ -492,6 +510,9 @@ export function buildRideCreatePayload(input: BuildRidePayloadInput): Record<str
   if (input.dropoffAccessNotes.trim()) payload.dropoff_access_notes = input.dropoffAccessNotes.trim();
   if (input.wheelchairClient) payload.wheelchair_client_has = true;
   if (input.wheelchairProvide) payload.wheelchair_need = true;
+  if (input.needsAssistance) payload.needs_assistance = true;
+  if (input.requesterName?.trim()) payload.requester_name = input.requesterName.trim();
+  if (input.requesterPhone?.trim()) payload.requester_phone = input.requesterPhone.trim();
   if (input.internalNotes.trim()) payload.notes = input.internalNotes.trim().slice(0, input.notesMax);
 
   const amount = parseOptionalAmount(input.amountInput);

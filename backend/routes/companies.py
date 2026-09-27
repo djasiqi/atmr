@@ -6572,6 +6572,7 @@ class SingleReservation(Resource):
             )
 
             uc = DeleteOrCancelCompanyReservationUseCase()
+            assigned_driver_id = getattr(booking, "driver_id", None)
             uc_result = uc.execute(
                 booking,
                 now_utc=datetime.now(UTC),
@@ -6847,6 +6848,11 @@ class SingleReservation(Resource):
                     ).delete(synchronize_session=False)
                     # Expunger le return_booking de la session avant suppression SQL
                     db.session.expunge(return_booking)
+                    from application.companies.reservations.company_mission import (
+                        detach_company_mission_anchor,
+                    )
+
+                    detach_company_mission_anchor(int(return_booking.id))
                     # ✅ FIX: Utiliser une requête SQL directe pour supprimer le return_booking
                     # pour éviter les validations ORM
                     from sqlalchemy import text
@@ -6882,6 +6888,11 @@ class SingleReservation(Resource):
                 # Toutes les suppressions des enregistrements liés ont déjà été faites ci-dessus.
                 from sqlalchemy import text
 
+                from application.companies.reservations.company_mission import (
+                    detach_company_mission_anchor,
+                )
+
+                detach_company_mission_anchor(int(reservation_id))
                 delete_count = db.session.execute(
                     text("DELETE FROM booking WHERE id = :booking_id"),
                     {"booking_id": reservation_id},
@@ -7016,7 +7027,7 @@ class SingleReservation(Resource):
                 publish_event(
                     BookingCancelledEvent(
                         booking_id=reservation_id,
-                        driver_id=getattr(booking, "driver_id", None),
+                        driver_id=assigned_driver_id,
                         company_id=cid,
                         actor_role="company",
                         actor_id=cid,

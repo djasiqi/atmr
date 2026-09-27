@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import {
   cancelCompanyRide,
+  completeCompanyRide,
   simulateCompanyPricing,
   getDispatchStatus,
   getCompanyDispatchMessages,
@@ -391,6 +392,41 @@ describe("company api normalization", () => {
           "X-Active-Context-Id": "company:42",
         }),
       })
+    );
+  });
+
+  it("clôture une course via le endpoint entreprise", async () => {
+    mockPost.mockResolvedValueOnce({ data: { ok: true } });
+
+    await completeCompanyRide({
+      contextId: "company:42",
+      missionId: 46792,
+    });
+
+    expect(mockPost).toHaveBeenCalledWith(
+      "/companies/me/reservations/46792/complete",
+      {},
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "X-Active-Context-Id": "company:42",
+        }),
+      })
+    );
+  });
+
+  it("envoie le motif quand la course est en route", async () => {
+    mockPost.mockResolvedValueOnce({ data: { ok: true } });
+
+    await completeCompanyRide({
+      contextId: "company:42",
+      missionId: 12,
+      reason: "  Patient déjà arrivé  ",
+    });
+
+    expect(mockPost).toHaveBeenCalledWith(
+      "/companies/me/reservations/12/complete",
+      { reason: "Patient déjà arrivé" },
+      expect.any(Object)
     );
   });
 

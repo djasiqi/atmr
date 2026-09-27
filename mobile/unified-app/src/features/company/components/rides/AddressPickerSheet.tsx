@@ -28,6 +28,8 @@ type AddressFieldTriggerProps = {
   onPress: () => void;
   onClear: () => void;
   leftSlot?: ReactNode;
+  /** Horaire collé sous l’adresse, dans la même carte. */
+  footer?: ReactNode;
 };
 
 /** Carte adresse fermée — la saisie se fait dans le sheet clavier. */
@@ -38,12 +40,13 @@ export function AddressFieldTrigger({
   onPress,
   onClear,
   leftSlot,
+  footer,
 }: AddressFieldTriggerProps) {
-  const t = useResponsiveTokens();
   const trimmed = value.trim();
-  if (trimmed.length > 0) {
-    return (
-      <View style={[s.card, { minHeight: Math.max(t.fieldShellMinHeight, 48) }]}>
+  const minHeight = 35;
+  const addressRow =
+    trimmed.length > 0 ? (
+      <View style={[s.card, footer ? s.cardFlat : null, { minHeight }]}>
         <Pressable
           onPress={onPress}
           style={s.cardMain}
@@ -51,7 +54,7 @@ export function AddressFieldTrigger({
           accessibilityLabel={`${placeholder} ${trimmed}. Toucher pour changer`}
         >
           {leftSlot}
-          <AppText variant="body" numberOfLines={2} style={s.cardTitle}>
+          <AppText variant="body" numberOfLines={1} style={s.cardTitle}>
             {trimmed}
           </AppText>
         </Pressable>
@@ -65,26 +68,33 @@ export function AddressFieldTrigger({
           <Ionicons name="close" size={18} color={E.TEXT_SEC} />
         </Pressable>
       </View>
+    ) : (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={placeholder}
+        style={[s.emptyField, footer ? s.cardFlat : null, { minHeight }]}
+      >
+        {leftSlot}
+        <AppText variant="body" style={s.emptyPlaceholder} numberOfLines={1}>
+          {placeholder}
+        </AppText>
+        {required ? (
+          <AppText variant="label" accessibilityLabel="Champ obligatoire" style={s.requiredMark}>
+            *
+          </AppText>
+        ) : null}
+      </Pressable>
     );
-  }
+
+  if (!footer) return addressRow;
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={placeholder}
-      style={[s.emptyField, { minHeight: Math.max(t.fieldShellMinHeight, 48) }]}
-    >
-      {leftSlot}
-      <AppText variant="body" style={s.emptyPlaceholder} numberOfLines={1}>
-        {placeholder}
-      </AppText>
-      {required ? (
-        <AppText variant="label" accessibilityLabel="Champ obligatoire" style={s.requiredMark}>
-          *
-        </AppText>
-      ) : null}
-    </Pressable>
+    <View style={s.cardStack}>
+      {addressRow}
+      <View style={s.cardDivider} />
+      <View style={s.cardFooter}>{footer}</View>
+    </View>
   );
 }
 
@@ -228,13 +238,35 @@ const s = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: ROW_RADIUS,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(145, 165, 157, 0.38)",
+    borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 10,
-    paddingVertical: 8,
     gap: 8,
+  },
+  cardFlat: {
+    borderWidth: 0,
+    borderRadius: 0,
+    backgroundColor: "transparent",
+    paddingHorizontal: 10,
+  },
+  cardStack: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.08)",
+    marginHorizontal: 10,
+  },
+  cardFooter: {
+    minHeight: 35,
+    paddingHorizontal: 10,
+    justifyContent: "center",
   },
   cardMain: {
     flex: 1,
@@ -243,10 +275,16 @@ const s = StyleSheet.create({
     gap: 8,
     minWidth: 0,
   },
-  cardTitle: { flex: 1, color: E.TEXT, fontWeight: "600" },
+  cardTitle: {
+    flex: 1,
+    color: E.TEXT,
+    fontWeight: "600",
+    fontSize: FONT_SIZE.px12,
+    lineHeight: 15,
+  },
   clearHit: {
-    width: 36,
-    height: 36,
+    width: 28,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -254,21 +292,23 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderRadius: ROW_RADIUS,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(145, 165, 157, 0.38)",
+    borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 10,
   },
   emptyPlaceholder: {
     flex: 1,
-    color: "rgba(100, 116, 139, 0.92)",
+    color: "#475569",
+    fontSize: FONT_SIZE.px13,
+    lineHeight: 16,
   },
   requiredMark: {
     color: "#DC2626",
     fontWeight: "700",
-    fontSize: FONT_SIZE.px16,
-    lineHeight: 18,
+    fontSize: FONT_SIZE.px13,
+    lineHeight: 16,
     width: 16,
     textAlign: "center",
   },

@@ -32,6 +32,7 @@ export default function EstablishmentSelect({
   inputClassName,
   inputId,
   name = 'establishment',
+  required = false,
 }) {
   const [q, setQ] = React.useState(value || '');
   const [items, setItems] = React.useState([]);
@@ -185,6 +186,8 @@ export default function EstablishmentSelect({
             open && activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined
           }
           placeholder={placeholder}
+          required={required}
+          aria-required={required || undefined}
           className={
             inputClassName ||
             `w-full border rounded px-3 py-2 pr-9 ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`

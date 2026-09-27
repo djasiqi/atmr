@@ -100,7 +100,7 @@ export function RideCreateSection({
         )}
       </View>
       <View style={s.titleCol}>
-        <AppText variant="sectionTitle" style={s.title}>{title}</AppText>
+        <AppText variant="sectionTitle" numberOfLines={1} style={s.title}>{title}</AppText>
         {subtitle ? <AppText variant="caption" style={s.subtitle}>{subtitle}</AppText> : null}
       </View>
       {badge && badgeTone ? (

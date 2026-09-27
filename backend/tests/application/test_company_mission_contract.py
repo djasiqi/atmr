@@ -187,6 +187,21 @@ def test_chronology_and_delivery_rules():
     assert normalized[1]["destination_kind"] is None
 
 
+def test_undefined_return_time_is_accepted():
+    start = _next_slot(14)
+    steps = _steps(start, with_return=True)
+    steps[1]["departure_at"] = None
+    steps[1]["establishment"] = "HUG"
+    steps[1]["service"] = "Radiologie"
+    steps[1]["doctor"] = "Docteur Dupont"
+    steps[1]["destination_kind"] = "medical"
+    steps[-1]["arrival_at"] = None
+    normalized = normalize_route_steps(steps, mission_type="patient_transport")
+    assert normalized[1]["departure_at"] is None
+    assert normalized[-1]["arrival_at"] is None
+    assert normalized[-1]["location"] == "Rue du Départ 1"
+
+
 def test_return_address_is_replaced_and_hashes_match():
     start = _next_slot()
     first = _steps(start, with_return=True)
@@ -652,6 +667,125 @@ def _assert_put_blocked(booking):
     )
     assert updated.ok is False
     assert updated.status_code == 400
+
+
+def test_undefined_return_keeps_time_open_and_swaps_place_details(db, monkeypatch):
+    company, client, user = _company_and_client(db)
+    client.domicile_address = "Rue du Départ 1"
+    client.floor = "3"
+    client.door_code = "A12"
+    db.session.flush()
+    monkeypatch.setattr(
+        "application.companies.reservations.company_mission._price_one_way_segment",
+        lambda **_kwargs: (Decimal("45.00"), False),
+    )
+    start = _next_slot(14)
+    steps = _steps(start, with_return=True)
+    steps[0]["access_notes"] = "Sonnette"
+    steps[1]["departure_at"] = None
+    steps[1]["establishment"] = "HUG"
+    steps[1]["service"] = "Radiologie"
+    steps[1]["doctor"] = "Docteur Dupont"
+    steps[1]["destination_kind"] = "medical"
+    steps[1]["access_notes"] = "Entrée principale"
+    steps[-1]["arrival_at"] = None
+    steps[-1]["access_notes"] = "Sonnette"
+    created = _execute(
+        company,
+        client,
+        user,
+        {
+            "client_id": client.id,
+            "route_steps": steps,
+            "pricing_mode": "manual",
+            "idempotency_key": f"open-return-{uuid.uuid4().hex}",
+            "segment_amounts": [
+                {"from_position": 0, "to_position": 1, "amount": "45.00"},
+                {"from_position": 1, "to_position": 2, "amount": "45.00"},
+            ],
+        },
+    )
+    outbound = created.created_outbounds[0]
+    retour = created.created_returns[0]
+    assert outbound.time_confirmed is True
+    assert outbound.scheduled_time is not None
+    assert outbound.medical_facility == "HUG"
+    assert outbound.pickup_floor == "3"
+    assert outbound.pickup_door_code == "A12"
+    assert retour.time_confirmed is False
+    assert retour.scheduled_time is None
+    assert retour.medical_facility == "HUG"
+    assert retour.hospital_service == "Radiologie"
+    assert retour.doctor_name == "Docteur Dupont"
+    assert retour.pickup_access_notes == "Entrée principale"
+    assert retour.dropoff_access_notes == "Sonnette"
+    assert retour.dropoff_floor == "3"
+    assert retour.dropoff_door_code == "A12"
+    assert retour.pickup_floor is None
+
+
+def test_detach_anchor_lets_round_trip_be_deleted(db, monkeypatch):
+    from sqlalchemy import text
+
+    company, client, user = _company_and_client(db)
+    monkeypatch.setattr(
+        "application.companies.reservations.company_mission._price_one_way_segment",
+        lambda **_kwargs: (Decimal("45.00"), False),
+    )
+    created = _execute(
+        company,
+        client,
+        user,
+        {
+            "client_id": client.id,
+            "route_steps": _steps(_next_slot(14), with_return=True),
+            "pricing_mode": "manual",
+            "idempotency_key": f"del-{uuid.uuid4().hex}",
+            "segment_amounts": [
+                {"from_position": 0, "to_position": 1, "amount": "45.00"},
+                {"from_position": 1, "to_position": 2, "amount": "45.00"},
+            ],
+        },
+    )
+    anchor = created.created_outbounds[0]
+    retour = created.created_returns[0]
+    anchor_id = int(anchor.id)
+    return_id = int(retour.id)
+    company_id = int(company.id)
+    assert (
+        CompanyManualBookingRequestOccurrence.query.filter_by(
+            anchor_booking_id=anchor_id
+        ).count()
+        == 1
+    )
+    from application.companies.reservations.company_mission import (
+        detach_company_mission_anchor,
+    )
+
+    detach_company_mission_anchor(anchor_id)
+    db.session.execute(text("DELETE FROM booking WHERE id = :id"), {"id": return_id})
+    db.session.execute(text("DELETE FROM booking WHERE id = :id"), {"id": anchor_id})
+    db.session.flush()
+    left = db.session.execute(
+        text("SELECT COUNT(*) FROM booking WHERE id IN (:a, :b)"),
+        {"a": anchor_id, "b": return_id},
+    ).scalar()
+    assert int(left or 0) == 0
+    occurrences = db.session.execute(
+        text(
+            "SELECT COUNT(*) FROM company_manual_booking_request_occurrences "
+            "WHERE anchor_booking_id = :id"
+        ),
+        {"id": anchor_id},
+    ).scalar()
+    assert int(occurrences or 0) == 0
+    requests_left = db.session.execute(
+        text(
+            "SELECT COUNT(*) FROM company_manual_booking_requests WHERE company_id = :id"
+        ),
+        {"id": company_id},
+    ).scalar()
+    assert int(requests_left or 0) == 0
 
 
 def test_route_shapes_legacy_simple_and_secondary_reads(db, monkeypatch):

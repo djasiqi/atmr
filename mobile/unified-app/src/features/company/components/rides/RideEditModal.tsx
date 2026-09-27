@@ -18,6 +18,7 @@ import { scheduledTimeToFormNaiveIso } from "../../utils/companyDateUtils";
 import { AddressSelector } from "./AddressSelector";
 import { suggestionOverlayFieldStyle } from "./suggestionOverlayStyles";
 import { ClientSelector } from "./ClientSelector";
+import { RideCreateSection } from "./RideCreateSection";
 import { TimeDatePicker } from "./TimeDatePicker";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 
@@ -58,6 +59,10 @@ const BACK_BOX = {
 };
 
 const OUTLINE_SECONDARY = {
+  height: 40,
+  minHeight: 40,
+  paddingVertical: 0,
+  borderRadius: 12,
   borderColor: "rgba(0, 121, 107, 0.28)",
   backgroundColor: "#fff",
 } as const;
@@ -71,43 +76,48 @@ const s = StyleSheet.create({
     color: E.TEXT,
     marginBottom: 2,
   },
-  sectionHelper: {
-    fontSize: FONT_SIZE.px12,
-    color: E.TEXT_MUTED,
-    lineHeight: 17,
-  },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "rgba(148, 163, 184, 0.24)",
     marginVertical: 0,
   },
-  card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(145, 165, 157, 0.35)",
-    backgroundColor: "#FAFBFA",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  pickupDropoffRow: {
+  routeStep: {
     flexDirection: "row" as const,
-    alignItems: "flex-start" as const,
-    columnGap: 4,
-  },
-  addressFieldsColumn: {
-    width: "82%",
-    minWidth: 0,
     gap: 10,
   },
-  swapColumn: {
-    width: "18%",
-    minWidth: 52,
-    maxWidth: 64,
+  rail: {
+    width: 16,
     alignItems: "center" as const,
-    justifyContent: "flex-start" as const,
-    paddingTop: 50,
-    marginLeft: 0,
+  },
+  railDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: E.BRAND,
+    marginTop: 4,
+  },
+  railLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: "rgba(0, 121, 107, 0.28)",
+    marginTop: 4,
+  },
+  routeBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+    paddingBottom: 12,
+  },
+  routeTitleRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+  },
+  routeTitle: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "600" as const,
+    color: E.TEXT,
   },
   swapBtn: {
     width: 32,
@@ -162,15 +172,6 @@ const s = StyleSheet.create({
     flexDirection: "row" as const,
     gap: 8,
   },
-  tertiaryCard: {
-    borderRadius: ROW_RADIUS,
-    borderWidth: 1,
-    borderColor: "rgba(145, 165, 157, 0.35)",
-    backgroundColor: "#FAFBFA",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    gap: 8,
-  },
   wheelchairRow: {
     flexDirection: "row" as const,
     gap: 8,
@@ -203,15 +204,18 @@ const s = StyleSheet.create({
   },
   footerBtn: {
     flex: 1,
-    minHeight: 48,
+    height: 40,
+    minHeight: 40,
+    paddingVertical: 0,
     borderRadius: 12,
   },
   compactAddressContainer: { gap: 8 },
   compactAddressShell: {
-    minHeight: 32,
-    paddingHorizontal: 4,
+    minHeight: 35,
+    paddingHorizontal: 10,
     borderRadius: 12,
     borderColor: "rgba(145, 165, 157, 0.38)",
+    backgroundColor: "#FFFFFF",
   },
   compactAddressInput: {
     fontSize: FONT_SIZE.px13,
@@ -232,6 +236,7 @@ export function RideEditModal({
   const editRide = useRideEdit();
   const form = useRideFormState();
   const [error, setError] = useState<string | null>(null);
+  const [extraOpen, setExtraOpen] = useState(false);
   const addressSuggestionsOpenRef = useRef(new Set<string>());
   const [addressSuggestionsOpen, setAddressSuggestionsOpen] = useState(false);
   const medicalHydratedMissionRef = useRef<number | null>(null);
@@ -269,6 +274,7 @@ export function RideEditModal({
   useEffect(() => {
     if (!visible) {
       formHydratedMissionRef.current = null;
+      setExtraOpen(false);
       return;
     }
     if (!initial || missionId == null) return;
@@ -431,6 +437,14 @@ export function RideEditModal({
   };
 
   const clientHeaderLabel = initial?.clientLabel?.trim() ?? "";
+  const section1Complete = Boolean(
+    form.pickup.trim() && form.dropoff.trim() && (isGuestMission || form.clientId),
+  );
+  const fieldShell = {
+    borderRadius: ROW_RADIUS,
+    minHeight: 35,
+    backgroundColor: "#FFFFFF",
+  } as const;
 
   const header = () => (
     <View style={s.headerRow}>
@@ -465,7 +479,7 @@ export function RideEditModal({
       ) : null}
       <View style={s.footerButtons}>
         <AppButton
-          title="Fermer"
+          title="Annuler"
           variant="secondary"
           onPress={onClose}
           style={{ ...s.footerBtn, ...OUTLINE_SECONDARY }}
@@ -477,13 +491,6 @@ export function RideEditModal({
           disabled={!canSubmit || editRide.isPending}
           loading={editRide.isPending}
           style={s.footerBtn}
-          leftIcon={
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={20}
-              color={!canSubmit || editRide.isPending ? "rgba(255,255,255,0.85)" : "#fff"}
-            />
-          }
         />
       </View>
       {error ? <AppText variant="error">{error}</AppText> : null}
@@ -501,48 +508,73 @@ export function RideEditModal({
       sheetBodyMaxHeightRatio={0.74}
     >
       <View style={s.form}>
-        {!isGuestMission ? (
-          <View style={s.sectionBlock}>
-            <AppText style={s.sectionLabel}>Client</AppText>
-            <ClientSelector value={form.clientId} onChange={form.setClientId} />
-          </View>
-        ) : null}
-        <View style={s.card}>
-          <View
-            style={[
-              s.pickupDropoffRow,
-              addressSuggestionsOpen ? suggestionOverlayFieldStyle : null,
-            ]}
-          >
-            <View style={s.addressFieldsColumn}>
-              <View style={s.sectionBlock}>
-                <AppText style={s.sectionLabel}>Prise en charge</AppText>
+        <RideCreateSection
+          number={1}
+          title="Informations essentielles"
+          gap={0}
+          complete={section1Complete}
+        >
+          {!isGuestMission ? (
+            <ClientSelector
+              value={form.clientId}
+              onChange={form.setClientId}
+              showFieldLabel={false}
+              shellMinHeight={35}
+              placeholder="Rechercher un client…"
+              leftSlot={<Ionicons name="person-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
+            />
+          ) : null}
+          <View style={s.sectionDivider} />
+          <View style={addressSuggestionsOpen ? suggestionOverlayFieldStyle : undefined}>
+            <View style={s.routeStep}>
+              <View style={s.rail}>
+                <View style={s.railDot} />
+                <View style={s.railLine} />
+              </View>
+              <View style={s.routeBody}>
+                <AppText style={s.routeTitle}>Départ</AppText>
                 <AddressSelector
                   label=""
                   value={form.pickup}
                   onChange={form.setPickup}
                   onSelectAddress={form.selectPickupAddress}
-                  onSuggestionsVisibilityChange={(visible) =>
-                    handleAddressSuggestionsVisibility("pickup", visible)
+                  onSuggestionsVisibilityChange={(open) =>
+                    handleAddressSuggestionsVisibility("pickup", open)
                   }
-                  placeholder="Adresse de prise en charge"
+                  placeholder="Adresse de départ…"
                   leftSlot={<Ionicons name="navigate-outline" size={16} color={E.TEXT_SEC} />}
                   containerStyle={s.compactAddressContainer}
                   shellStyle={s.compactAddressShell}
                   inputStyle={s.compactAddressInput}
                 />
+                <TimeDatePicker value={form.scheduledAt} onChange={form.setScheduledAt} />
               </View>
-              <View style={s.sectionBlock}>
-                <AppText style={s.sectionLabel}>Destination</AppText>
+            </View>
+            <View style={s.routeStep}>
+              <View style={s.rail}>
+                <View style={s.railDot} />
+              </View>
+              <View style={s.routeBody}>
+                <View style={s.routeTitleRow}>
+                  <AppText style={s.routeTitle}>Destination</AppText>
+                  <Pressable
+                    onPress={form.swapAddresses}
+                    style={s.swapBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Inverser prise en charge et destination"
+                  >
+                    <Ionicons name="swap-vertical-outline" size={16} color={E.BRAND} />
+                  </Pressable>
+                </View>
                 <AddressSelector
                   label=""
                   value={form.dropoff}
                   onChange={form.setDropoff}
                   onSelectAddress={form.selectDropoffAddress}
-                  onSuggestionsVisibilityChange={(visible) =>
-                    handleAddressSuggestionsVisibility("dropoff", visible)
+                  onSuggestionsVisibilityChange={(open) =>
+                    handleAddressSuggestionsVisibility("dropoff", open)
                   }
-                  placeholder="Adresse de destination"
+                  placeholder="Adresse de destination…"
                   leftSlot={<Ionicons name="location-outline" size={16} color={E.TEXT_SEC} />}
                   containerStyle={s.compactAddressContainer}
                   shellStyle={s.compactAddressShell}
@@ -550,42 +582,40 @@ export function RideEditModal({
                 />
               </View>
             </View>
-            <View style={s.swapColumn}>
-              <Pressable
-                onPress={form.swapAddresses}
-                style={s.swapBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Inverser prise en charge et destination"
-              >
-                <Ionicons name="swap-vertical-outline" size={16} color={E.BRAND} />
-              </Pressable>
-            </View>
           </View>
-        </View>
-        <View style={s.card}>
-          <TimeDatePicker value={form.scheduledAt} onChange={form.setScheduledAt} />
-        </View>
-        <View style={s.tertiaryCard}>
+        </RideCreateSection>
+
+        <View style={s.sectionDivider} />
+
+        <RideCreateSection
+          number={2}
+          title="Informations complémentaires"
+          subtitle="Accès, mobilité, contact"
+          open={extraOpen}
+          hideBody={!extraOpen}
+          onTogglePress={() => setExtraOpen((open) => !open)}
+          gap={8}
+        >
           <AppInput
             value={form.establishment}
             onChangeText={form.setEstablishment}
             placeholder="Établissement (optionnel)"
             leftSlot={<Ionicons name="business-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
-            shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
+            shellStyle={fieldShell}
           />
           <AppInput
             value={form.hospitalService}
             onChangeText={form.setHospitalService}
             placeholder="Service hospitalier (optionnel)"
             leftSlot={<Ionicons name="medkit-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
-            shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
+            shellStyle={fieldShell}
           />
           <AppInput
             value={form.doctorName}
             onChangeText={form.setDoctorName}
             placeholder="Médecin référent (optionnel)"
             leftSlot={<Ionicons name="person-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
-            shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
+            shellStyle={fieldShell}
           />
           <AppInput
             value={form.notesMedical}
@@ -608,7 +638,7 @@ export function RideEditModal({
               onChangeText={form.setPickupAccessNotes}
               placeholder="Ex: entrée arrière, sonner à…, appeler avant…"
               leftSlot={<Ionicons name="navigate-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
-              shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
+              shellStyle={fieldShell}
             />
           </View>
           <View style={s.sectionBlock}>
@@ -618,7 +648,7 @@ export function RideEditModal({
               onChangeText={form.setDropoffAccessNotes}
               placeholder="Ex: entrée B, étage 2, service…, appeler secrétariat…"
               leftSlot={<Ionicons name="location-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
-              shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
+              shellStyle={fieldShell}
             />
           </View>
           <AppText style={s.sectionLabel}>Chaise roulante</AppText>
@@ -644,20 +674,19 @@ export function RideEditModal({
               </AppText>
             </Pressable>
           </View>
-        </View>
-        <View style={s.sectionDivider} />
-        <View style={s.sectionBlock}>
-          <AppText style={s.sectionLabel}>Remarques</AppText>
-          <AppInput
-            value={form.internalNotes}
-            onChangeText={form.setInternalNotes}
-            placeholder="Remarques (optionnel)"
-            multiline
-            textAlignVertical="top"
-            shellStyle={{ borderRadius: 14, minHeight: 100, alignItems: "flex-start" }}
-            style={{ minHeight: 80 }}
-          />
-        </View>
+          <View style={s.sectionBlock}>
+            <AppText style={s.sectionLabel}>Remarques</AppText>
+            <AppInput
+              value={form.internalNotes}
+              onChangeText={form.setInternalNotes}
+              placeholder="Remarques (optionnel)"
+              multiline
+              textAlignVertical="top"
+              shellStyle={{ borderRadius: 14, minHeight: 100, alignItems: "flex-start", backgroundColor: "#FFFFFF" }}
+              style={{ minHeight: 80 }}
+            />
+          </View>
+        </RideCreateSection>
       </View>
     </Modal>
   );

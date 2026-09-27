@@ -21,6 +21,7 @@ const stableHandlers: Pick<
   | "onSchedule"
   | "onTransfer"
   | "onCancel"
+  | "onComplete"
   | "onMarkUrgent"
 > = {
   onToggleExpand: () => undefined,
@@ -30,6 +31,7 @@ const stableHandlers: Pick<
   onSchedule: () => undefined,
   onTransfer: () => undefined,
   onCancel: () => undefined,
+  onComplete: () => undefined,
   onMarkUrgent: () => undefined,
 };
 

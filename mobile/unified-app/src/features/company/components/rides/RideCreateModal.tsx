@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Keyboard, Platform, Pressable, StyleSheet, View } from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Keyboard, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { AxiosError } from "axios";
 import { AppButton, Modal, ModalFooterActions, useAccessibilityScale } from "../../../../design/responsive";
 import { AppInput } from "../../../../design/ui/AppInput";
@@ -20,7 +20,18 @@ import {
 import type { RideAddressOption, RideClientOption } from "../../useRideForms";
 import { useActiveCompanyContextId } from "../../hooks";
 import { searchCompanyAddresses } from "../../api/companyApi";
-import { AddressFieldTrigger, AddressPickerSheet } from "./AddressPickerSheet";
+import { AddressPickerSheet } from "./AddressPickerSheet";
+import {
+  clinicalSubmitErrors,
+  createRouteDraft,
+  isLegacySubmitShape,
+  patchStepDetails,
+  projectLegacyRideFields,
+  setMissionType,
+  setStepLocation,
+  type CanonicalRouteDraft,
+} from "../../utils/canonicalRouteBuilder";
+import { formatNaiveIsoInZurich } from "../../utils/companyDateUtils";
 import { ClientPickerSheet, CreateClientTrigger } from "./ClientPickerSheet";
 import {
   applyCreateRideActiveField,
@@ -29,9 +40,12 @@ import {
 } from "./createRideActiveField";
 import { RecurrenceSelector } from "./RecurrenceSelector";
 import { TimeDatePicker } from "./TimeDatePicker";
+import { CanonicalRouteEditor } from "./CanonicalRouteEditor";
 import { ClientCreateModal } from "./ClientCreateModal";
 import { RideCreateSection } from "./RideCreateSection";
+import { RouteClinicalDetails } from "./RouteClinicalDetails";
 import { RideRoutePreview } from "./RideRoutePreview";
+import { reservationRouteDurationSeconds } from "./rideRoutePreviewFormat";
 import {
   analyzePricingSimulation,
   backendWeekdayFromScheduledIso,
@@ -40,6 +54,7 @@ import {
   parseMedicalHintsFromAddress,
   parseSimulationAmount,
   resolvePreferentialBookingAmount,
+  routeSegmentLabels,
 } from "./rideCreateHelpers";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 import { createShadow } from "../../../../styles/shadowStyles";
@@ -49,6 +64,24 @@ type RideCreateModalProps = {
   onClose: () => void;
   onCreated?: () => void;
 };
+
+function fillEmptyClinical(
+  draft: CanonicalRouteDraft,
+  index: number,
+  field: "accessNotes" | "establishment" | "service" | "doctor",
+  value: string,
+): CanonicalRouteDraft {
+  const step = draft.routeSteps[index];
+  if (!step || !value.trim() || step[field].trim()) return draft;
+  return patchStepDetails(draft, index, { [field]: value });
+}
+
+function lastDestinationIndex(draft: CanonicalRouteDraft): number {
+  for (let index = draft.routeSteps.length - 1; index >= 0; index -= 1) {
+    if (draft.routeSteps[index]?.kind === "destination") return index;
+  }
+  return -1;
+}
 
 const NOTES_MAX = 500;
 const SIM_DEBOUNCE_MS = 180;
@@ -163,8 +196,8 @@ const s = StyleSheet.create({
     justifyContent: "center" as const,
   },
   actionRoundBtn: {
-    width: 36,
-    height: 36,
+    width: 35,
+    height: 35,
     borderRadius: 18,
     borderWidth: 1,
     alignItems: "center" as const,
@@ -179,8 +212,8 @@ const s = StyleSheet.create({
     backgroundColor: E.BRAND,
   },
   actionRoundBtnSpacer: {
-    width: 36,
-    height: 36,
+    width: 35,
+    height: 35,
   },
   inlineActionRow: {
     flexDirection: "row" as const,
@@ -195,103 +228,104 @@ const s = StyleSheet.create({
   },
   dateTimeSlot: { flex: 1, minWidth: 0 },
 
-  /* ---------- Section Prix ---------- */
-  priceRow: {
+  /* ---------- Tarification (même schéma que les réservations) ---------- */
+  pricingModeGroup: {
     flexDirection: "row" as const,
-    gap: 6,
     alignItems: "stretch" as const,
+    width: "100%" as const,
+    height: 30,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 8,
   },
-  priceCardEstimate: {
-    flex: 1.4,
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "rgba(0, 121, 107, 0.20)",
-    backgroundColor: "rgba(0, 121, 107, 0.04)",
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    gap: 1,
-    justifyContent: "center" as const,
-  },
-  priceCardManual: {
+  pricingModeBtn: {
     flex: 1,
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.32)",
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingHorizontal: 4,
+  },
+  pricingModeBtnActive: {
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+  },
+  pricingModeBtnText: {
+    fontSize: FONT_SIZE.px12,
+    fontWeight: "600" as const,
+    lineHeight: 16,
+    color: "#475569",
+  },
+  pricingModeBtnTextActive: {
+    color: "#0F766E",
+  },
+  segmentList: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    paddingTop: 8,
+  },
+  segmentRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    gap: 4,
+    gap: 12,
+    paddingVertical: 4,
   },
-  priceCardManualActive: {
-    borderColor: E.BRAND,
-    backgroundColor: "rgba(0, 121, 107, 0.04)",
-  },
-  priceCardLabelRow: {
+  segmentTotal: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: 5,
-    flexWrap: "wrap" as const,
+    justifyContent: "space-between" as const,
+    gap: 12,
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
   },
-  priceCardLabel: {
-    fontSize: FONT_SIZE.px10,
-    color: E.TEXT_SEC,
-    fontWeight: "700" as const,
-    letterSpacing: 0.3,
-    textTransform: "uppercase" as const,
-    lineHeight: 12,
-  },
-  priceCardLabelActive: { color: E.BRAND_DARK },
-  priceCardBadgeRecommended: {
-    paddingHorizontal: 4,
-    paddingVertical: 0,
-    borderRadius: 999,
-    backgroundColor: "rgba(0, 121, 107, 0.12)",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(0, 121, 107, 0.22)",
-  },
-  priceCardBadgeRecommendedText: {
-    color: E.BRAND_DARK,
-    fontSize: FONT_SIZE.px10,
-    fontWeight: "700" as const,
-    lineHeight: 12,
-  },
-  priceCardAmountRow: {
-    flexDirection: "row" as const,
-    alignItems: "baseline" as const,
-    gap: 3,
-  },
-  priceCardAmount: {
-    color: E.BRAND_DARK,
-    fontSize: FONT_SIZE.px15,
-    fontWeight: "800" as const,
+  segmentLabel: {
+    flex: 1,
+    minWidth: 0,
+    color: "#0F172A",
+    fontSize: 13,
     lineHeight: 18,
   },
-  priceCardAmountUnit: {
-    color: E.BRAND_DARK,
-    fontSize: FONT_SIZE.px10,
+  segmentLabelStrong: {
     fontWeight: "700" as const,
   },
-  priceCardSubtext: {
-    color: E.TEXT_MUTED,
-    fontSize: FONT_SIZE.px10,
-    lineHeight: 12,
+  segmentAmountRead: {
+    color: "#94A3B8",
+    fontWeight: "500" as const,
+    fontSize: 13,
+    lineHeight: 18,
   },
-  priceCardManualCol: { flex: 1, minWidth: 0 },
-  priceCardManualLabel: {
-    fontSize: FONT_SIZE.px12,
-    fontWeight: "700" as const,
-    color: E.TEXT,
-    lineHeight: 14,
+  segmentAmountValue: {
+    color: "#0F172A",
+    fontWeight: "600" as const,
+    fontSize: 13,
+    lineHeight: 18,
   },
-  priceCardManualLabelActive: { color: E.BRAND_DARK },
-  priceCardManualHint: {
-    color: E.TEXT_MUTED,
-    fontSize: FONT_SIZE.px10,
-    lineHeight: 12,
-    marginTop: 0,
+  segmentAmountInput: {
+    width: 104,
+    height: 30,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    textAlign: "right" as const,
+    color: "#0F172A",
+    fontSize: 13,
+    backgroundColor: "#FFFFFF",
+  },
+  amountHint: {
+    color: "#64748B",
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 6,
+  },
+  amountHintRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    flexWrap: "wrap" as const,
+    gap: 8,
+    marginTop: 6,
   },
 
   /* ---------- Section 4 : accordéon ---------- */
@@ -621,25 +655,6 @@ const s = StyleSheet.create({
   },
 
   /* ---------- Notes ---------- */
-  /* ---------- Amount meta ---------- */
-  amountMetaRow: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    gap: 6,
-    alignItems: "center" as const,
-    marginTop: 2,
-  },
-  amountBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  amountBadgeText: {
-    fontSize: FONT_SIZE.px12,
-    fontWeight: "700" as const,
-  },
-
   /* ---------- Footer ---------- */
   footerCol: { gap: 10 },
   summaryPanel: {
@@ -734,12 +749,22 @@ const s = StyleSheet.create({
     textAlign: "left" as const,
   },
   footerBtnSecondary: {
-    minHeight: 48,
-    borderRadius: 13,
+    flex: 1,
+    width: "100%",
+    alignSelf: "stretch" as const,
+    height: 40,
+    minHeight: 40,
+    paddingVertical: 0,
+    borderRadius: COMPACT_CONTROL_RADIUS,
   },
   footerBtnPrimary: {
-    minHeight: 52,
-    borderRadius: 14,
+    flex: 1,
+    width: "100%",
+    alignSelf: "stretch" as const,
+    height: 40,
+    minHeight: 40,
+    paddingVertical: 0,
+    borderRadius: COMPACT_CONTROL_RADIUS,
     ...createShadow({
       shadowColor: E.BRAND_DARK,
       shadowOffset: { width: 0, height: 6 },
@@ -760,7 +785,9 @@ const s = StyleSheet.create({
 });
 
 const OUTLINE_SECONDARY = {
-  minHeight: COMPACT_ACTION_HEIGHT,
+  height: 40,
+  minHeight: 40,
+  paddingVertical: 0,
   borderRadius: COMPACT_CONTROL_RADIUS,
   borderColor: "rgba(0, 121, 107, 0.32)",
 } as const;
@@ -1010,19 +1037,47 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   const [createClientVisible, setCreateClientVisible] = useState(false);
   const [extraInfoOpen, setExtraInfoOpen] = useState(false);
   const [priceOpen, setPriceOpen] = useState(false);
-  const [manualPriceOpen, setManualPriceOpen] = useState(false);
+  const [pricingMode, setPricingMode] = useState<"automatic" | "manual" | "preferential">("automatic");
+  const [segmentAmounts, setSegmentAmounts] = useState<string[]>([]);
+  const [lastPricingUpdateAt, setLastPricingUpdateAt] = useState<Date | null>(null);
   const [routePointsForPricing, setRoutePointsForPricing] = useState<{ lat: number; lng: number }[]>([]);
   const [routeDistanceMeters, setRouteDistanceMeters] = useState<number | null>(null);
   const [routeDurationSeconds, setRouteDurationSeconds] = useState<number | null>(null);
   const [routePricingReady, setRoutePricingReady] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [activeField, setActiveField] = useState<CreateRideActiveField>(null);
+  const [routeAddressIndex, setRouteAddressIndex] = useState<number | null>(null);
+  const [routeDraft, setRouteDraft] = useState<CanonicalRouteDraft>(() =>
+    createRouteDraft({ missionDate: formatNaiveIsoInZurich(new Date()).slice(0, 10) }),
+  );
   const priceAutoOpenedRef = useRef(false);
-  const swapRotation = useRef(new Animated.Value(0)).current;
-  const swapRotationTargetRef = useRef(0);
+  const wasVisibleRef = useRef(false);
+  const routeSeedRef = useRef({
+    pickup: "",
+    dropoff: "",
+    pickupLatitude: null as number | null,
+    pickupLongitude: null as number | null,
+    dropoffLatitude: null as number | null,
+    dropoffLongitude: null as number | null,
+    scheduledAt: "",
+    isRoundTrip: false,
+    returnScheduledAt: "",
+    isMaterialDelivery: false,
+  });
+  routeSeedRef.current = {
+    pickup: form.pickup,
+    dropoff: form.dropoff,
+    pickupLatitude: form.pickupAddress?.latitude ?? null,
+    pickupLongitude: form.pickupAddress?.longitude ?? null,
+    dropoffLatitude: form.dropoffAddress?.latitude ?? null,
+    dropoffLongitude: form.dropoffAddress?.longitude ?? null,
+    scheduledAt: form.scheduledAt,
+    isRoundTrip: form.isRoundTrip,
+    returnScheduledAt: form.returnScheduledAt,
+    isMaterialDelivery: form.isMaterialDelivery,
+  };
 
-  const pickerSheetOpen =
-    activeField === "client" || activeField === "pickup" || activeField === "dropoff";
+  const pickerSheetOpen = activeField === "client" || routeAddressIndex != null;
   const parentKeyboardActive = keyboardVisible && !pickerSheetOpen;
 
   const setFieldActive = useCallback(
@@ -1030,32 +1085,6 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       setActiveField((prev) => applyCreateRideActiveField(prev, field, open));
     },
     []
-  );
-
-  const handleSwapAddresses = useCallback(() => {
-    form.swapAddresses();
-    swapRotationTargetRef.current += 180;
-    Animated.timing(swapRotation, {
-      toValue: swapRotationTargetRef.current,
-      duration: 280,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [form, swapRotation]);
-
-  const swapRotateStyle = useMemo(
-    () => ({
-      transform: [
-        {
-          rotate: swapRotation.interpolate({
-            inputRange: [0, 360],
-            outputRange: ["0deg", "360deg"],
-            extrapolate: "extend" as const,
-          }),
-        },
-      ],
-    }),
-    [swapRotation],
   );
 
   useEffect(() => {
@@ -1074,8 +1103,86 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   useEffect(() => {
     if (!visible) {
       setActiveField(null);
+      setRouteAddressIndex(null);
+      wasVisibleRef.current = false;
+      return;
     }
+    if (wasVisibleRef.current) return;
+    wasVisibleRef.current = true;
+    const seed = routeSeedRef.current;
+    const missionDate = seed.scheduledAt.slice(0, 10) || formatNaiveIsoInZurich(new Date()).slice(0, 10);
+    setRouteDraft(
+      createRouteDraft({
+        missionDate,
+        missionType: seed.isMaterialDelivery ? "material_delivery" : "patient_transport",
+        pickupLocation: seed.pickup,
+        pickupLatitude: seed.pickupLatitude,
+        pickupLongitude: seed.pickupLongitude,
+        pickupDepartureAt: seed.scheduledAt || null,
+        destinationLocation: seed.dropoff,
+        destinationLatitude: seed.dropoffLatitude,
+        destinationLongitude: seed.dropoffLongitude,
+        isRoundTrip: seed.isRoundTrip,
+        returnArrivalAt: seed.returnScheduledAt || null,
+      }),
+    );
   }, [visible]);
+
+  useEffect(() => {
+    setRouteDraft((current) =>
+      setMissionType(current, form.isMaterialDelivery ? "material_delivery" : "patient_transport"),
+    );
+  }, [form.isMaterialDelivery]);
+
+  const commitRouteDraft = useCallback((next: CanonicalRouteDraft) => {
+    setRouteDraft(next);
+    const pickupStep = next.routeSteps[0];
+    const destination = next.routeSteps.find((step) => step.kind === "destination");
+    const legacy = projectLegacyRideFields(next);
+    if (pickupStep) {
+      const samePickup =
+        form.pickup === pickupStep.location &&
+        (form.pickupAddress?.latitude ?? null) === pickupStep.latitude &&
+        (form.pickupAddress?.longitude ?? null) === pickupStep.longitude;
+      if (!samePickup) {
+        if (pickupStep.latitude != null && pickupStep.longitude != null) {
+          form.selectPickupAddress({
+            id: 0,
+            label: pickupStep.location,
+            placeId: null,
+            latitude: pickupStep.latitude,
+            longitude: pickupStep.longitude,
+          });
+        } else {
+          form.setPickup(pickupStep.location);
+        }
+      }
+    }
+    if (destination) {
+      const sameDropoff =
+        form.dropoff === destination.location &&
+        (form.dropoffAddress?.latitude ?? null) === destination.latitude &&
+        (form.dropoffAddress?.longitude ?? null) === destination.longitude;
+      if (!sameDropoff) {
+        if (destination.latitude != null && destination.longitude != null) {
+          form.selectDropoffAddress({
+            id: 0,
+            label: destination.location,
+            placeId: null,
+            latitude: destination.latitude,
+            longitude: destination.longitude,
+          });
+        } else {
+          form.setDropoff(destination.location);
+        }
+      }
+    }
+    if (form.isRoundTrip !== legacy.isRoundTrip) form.setIsRoundTrip(legacy.isRoundTrip);
+    if (form.scheduledAt !== legacy.scheduledAt) form.setScheduledAt(legacy.scheduledAt);
+    if (form.returnScheduledAt !== legacy.returnScheduledAt) {
+      form.setReturnScheduledAt(legacy.returnScheduledAt);
+    }
+  }, [form]);
   const clientDetailHydrationKeyRef = useRef<string>("");
   const completedSimulationKeyRef = useRef<string>("");
   const activeSimulationKeyRef = useRef<string>("");
@@ -1118,6 +1225,12 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     setDoctorName,
     setWheelchairClient,
     setWheelchairProvide,
+    needsAssistance,
+    setNeedsAssistance,
+    requesterName,
+    setRequesterName,
+    requesterPhone,
+    setRequesterPhone,
     setAmountInput,
     recurrenceDays,
     setRecurrenceDays,
@@ -1128,6 +1241,23 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     recurrenceIntervalWeeks,
     setRecurrenceIntervalWeeks,
   } = form;
+
+  const syncLegacyClinical = useCallback((draft: CanonicalRouteDraft) => {
+    const pickupStep = draft.routeSteps[0];
+    const last = [...draft.routeSteps].reverse().find((step) => step.kind === "destination");
+    if (pickupStep) setPickupAccessNotes(pickupStep.accessNotes);
+    if (last) {
+      setDropoffAccessNotes(last.accessNotes);
+      setEstablishment(last.establishment);
+      setHospitalService(last.service);
+      setDoctorName(last.doctor);
+    }
+  }, [setDoctorName, setDropoffAccessNotes, setEstablishment, setHospitalService, setPickupAccessNotes]);
+
+  const commitClinicalDraft = useCallback((next: CanonicalRouteDraft) => {
+    setRouteDraft(next);
+    syncLegacyClinical(next);
+  }, [syncLegacyClinical]);
 
   const scheduledOk = useMemo(() => {
     const n = normalizeScheduledTimeIso(form.scheduledAt);
@@ -1275,7 +1405,21 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   };
 
   const amountValue = parseOptionalAmount(form.amountInput);
-  const amountValid = amountValue != null && amountValue > 0;
+  const destinationCount = routeDraft.routeSteps.filter((step) => step.kind === "destination").length;
+  const pricingSegmentLabels = useMemo(
+    () => routeSegmentLabels(destinationCount, isRoundTrip),
+    [destinationCount, isRoundTrip],
+  );
+  const manualSegmentsValid =
+    pricingMode !== "manual" ||
+    (pricingSegmentLabels.length > 0 &&
+      pricingSegmentLabels.every((_, index) => {
+        const raw = String(segmentAmounts[index] ?? "").trim().replace(",", ".");
+        const value = Number(raw);
+        return Number.isFinite(value) && value > 0;
+      }));
+  const amountValid =
+    pricingMode === "manual" ? manualSegmentsValid : amountValue != null && amountValue > 0;
 
   const canSubmit =
     Boolean(form.clientId) &&
@@ -1285,7 +1429,8 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     (form.isMaterialDelivery || amountValid) &&
     form.internalNotes.length <= NOTES_MAX &&
     (!form.isMaterialDelivery || form.deliveryDescription.trim().length > 0) &&
-    recurrenceValid;
+    recurrenceValid &&
+    isLegacySubmitShape(routeDraft);
 
   const section1Complete =
     Boolean(form.clientId) &&
@@ -1305,20 +1450,32 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
 
   const handlePickupAddressSelected = useCallback(async (address: RideAddressOption) => {
     form.selectPickupAddress(address);
+    setRouteDraft((current) =>
+      setStepLocation(current, 0, address.label, address.latitude, address.longitude),
+    );
     setActiveField(null);
     const enriched = await enrichAddressWithPlaceDetails(address);
     if (enriched !== address && hasValidCoords(enriched)) {
       form.selectPickupAddress(enriched);
+      setRouteDraft((current) =>
+        setStepLocation(current, 0, enriched.label, enriched.latitude, enriched.longitude),
+      );
       completedSimulationKeyRef.current = "";
     }
   }, [form]);
 
   const handleDropoffAddressSelected = useCallback(async (address: RideAddressOption) => {
     form.selectDropoffAddress(address);
+    setRouteDraft((current) =>
+      setStepLocation(current, 1, address.label, address.latitude, address.longitude),
+    );
     setActiveField(null);
     const enriched = await enrichAddressWithPlaceDetails(address);
     if (enriched !== address && hasValidCoords(enriched)) {
       form.selectDropoffAddress(enriched);
+      setRouteDraft((current) =>
+        setStepLocation(current, 1, enriched.label, enriched.latitude, enriched.longitude),
+      );
       completedSimulationKeyRef.current = "";
     }
   }, [form]);
@@ -1338,22 +1495,35 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     }
     if (form.pickupAccessNotes.trim().length === 0 && client.pickupAccessNotes) {
       form.setPickupAccessNotes(client.pickupAccessNotes);
+      setRouteDraft((current) => fillEmptyClinical(current, 0, "accessNotes", client.pickupAccessNotes ?? ""));
     }
     if (form.dropoffAccessNotes.trim().length === 0 && client.dropoffAccessNotes) {
       form.setDropoffAccessNotes(client.dropoffAccessNotes);
+      setRouteDraft((current) =>
+        fillEmptyClinical(current, lastDestinationIndex(current), "accessNotes", client.dropoffAccessNotes ?? ""),
+      );
     }
     if (form.notesMedical.trim().length === 0 && client.notesMedical) {
       form.setNotesMedical(client.notesMedical);
     }
     if (form.establishment.trim().length === 0 && client.establishment) {
       form.setEstablishment(client.establishment);
+      setRouteDraft((current) =>
+        fillEmptyClinical(current, lastDestinationIndex(current), "establishment", client.establishment ?? ""),
+      );
       setExtraInfoOpen(true);
     }
     if (form.hospitalService.trim().length === 0 && client.hospitalService) {
       form.setHospitalService(client.hospitalService);
+      setRouteDraft((current) =>
+        fillEmptyClinical(current, lastDestinationIndex(current), "service", client.hospitalService ?? ""),
+      );
     }
     if (form.doctorName.trim().length === 0 && client.doctorName) {
       form.setDoctorName(client.doctorName);
+      setRouteDraft((current) =>
+        fillEmptyClinical(current, lastDestinationIndex(current), "doctor", client.doctorName ?? ""),
+      );
     }
     if (!form.wheelchairClient && client.wheelchairClient) {
       form.setWheelchairClient(true);
@@ -1387,14 +1557,25 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     clientDetailHydrationKeyRef.current = hydrationKey;
     if (detail.hasActiveStay && !billToPatient && detail.clinicAddress) {
       void handlePickupAddressSelected(detail.clinicAddress);
-      if (establishment.trim().length === 0 && detail.clinicName) setEstablishment(detail.clinicName);
+      if (establishment.trim().length === 0 && detail.clinicName) {
+        setEstablishment(detail.clinicName);
+        setRouteDraft((current) =>
+          fillEmptyClinical(current, lastDestinationIndex(current), "establishment", detail.clinicName ?? ""),
+        );
+      }
       if (hospitalService.trim().length === 0 && detail.clinicService) {
         setHospitalService(detail.clinicService);
+        setRouteDraft((current) =>
+          fillEmptyClinical(current, lastDestinationIndex(current), "service", detail.clinicService ?? ""),
+        );
       }
       const accessHint = [detail.clinicFloor ? `Étage ${detail.clinicFloor}` : "", detail.clinicRoom ? `Chambre ${detail.clinicRoom}` : ""]
         .filter(Boolean)
         .join(" · ");
-      if (pickupAccessNotes.trim().length === 0 && accessHint) setPickupAccessNotes(accessHint);
+      if (pickupAccessNotes.trim().length === 0 && accessHint) {
+        setPickupAccessNotes(accessHint);
+        setRouteDraft((current) => fillEmptyClinical(current, 0, "accessNotes", accessHint));
+      }
       setExtraInfoOpen(true);
     }
     if ((!detail.hasActiveStay || billToPatient) && detail.pickupAddressCandidate) {
@@ -1402,22 +1583,35 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     }
     if (pickupAccessNotes.trim().length === 0 && detail.pickupAccessNotes) {
       setPickupAccessNotes(detail.pickupAccessNotes);
+      setRouteDraft((current) => fillEmptyClinical(current, 0, "accessNotes", detail.pickupAccessNotes ?? ""));
     }
     if (dropoffAccessNotes.trim().length === 0 && detail.dropoffAccessNotes) {
       setDropoffAccessNotes(detail.dropoffAccessNotes);
+      setRouteDraft((current) =>
+        fillEmptyClinical(current, lastDestinationIndex(current), "accessNotes", detail.dropoffAccessNotes ?? ""),
+      );
     }
     if (notesMedical.trim().length === 0 && detail.notesMedical) {
       setNotesMedical(detail.notesMedical);
     }
     if (establishment.trim().length === 0 && detail.establishment) {
       setEstablishment(detail.establishment);
+      setRouteDraft((current) =>
+        fillEmptyClinical(current, lastDestinationIndex(current), "establishment", detail.establishment ?? ""),
+      );
       setExtraInfoOpen(true);
     }
     if (hospitalService.trim().length === 0 && detail.hospitalService) {
       setHospitalService(detail.hospitalService);
+      setRouteDraft((current) =>
+        fillEmptyClinical(current, lastDestinationIndex(current), "service", detail.hospitalService ?? ""),
+      );
     }
     if (doctorName.trim().length === 0 && detail.doctorName) {
       setDoctorName(detail.doctorName);
+      setRouteDraft((current) =>
+        fillEmptyClinical(current, lastDestinationIndex(current), "doctor", detail.doctorName ?? ""),
+      );
     }
     if (!wheelchairClient && !wheelchairProvide) {
       if (detail.wheelchairClient) setWheelchairClient(true);
@@ -1530,9 +1724,8 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
         setRoutePointsForPricing(route);
 
         const distanceRaw = Number(data?.distance);
-        const durationRaw = Number(data?.duration);
         setRouteDistanceMeters(Number.isFinite(distanceRaw) && distanceRaw > 0 ? distanceRaw : null);
-        setRouteDurationSeconds(Number.isFinite(durationRaw) && durationRaw > 0 ? durationRaw : null);
+        setRouteDurationSeconds(reservationRouteDurationSeconds(data));
       } catch {
         if (cancelled) return;
         setRoutePointsForPricing([]);
@@ -1663,32 +1856,35 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   ]);
 
   useEffect(() => {
-    if (isMaterialDelivery) return;
-    if (activePreferentialAmount != null) {
-      if (!amountLocked) {
-        setAmountInput(
-          resolvePreferentialBookingAmount(activePreferentialAmount, isRoundTrip).toFixed(2),
-        );
-        setAmountSource("preferential");
-        setPricingWarning("");
+    if (isMaterialDelivery || pricingMode !== "preferential") {
+      if (!amountLocked && amountSource === "preferential") {
+        setAmountInput("");
+        setAmountSource(null);
       }
       return;
     }
-    if (!amountLocked && amountSource === "preferential") {
-      setAmountInput("");
-      setAmountSource(null);
-    }
+    if (activePreferentialAmount == null) return;
+    if (amountSource === "preferential" && parseOptionalAmount(form.amountInput) != null) return;
+    setAmountInput(
+      resolvePreferentialBookingAmount(activePreferentialAmount, isRoundTrip).toFixed(2),
+    );
+    setAmountSource("preferential");
+    setAmountLocked(true);
+    setPricingWarning("");
+    setLastPricingUpdateAt(new Date());
   }, [
     activePreferentialAmount,
     amountLocked,
     amountSource,
+    form.amountInput,
     isMaterialDelivery,
     isRoundTrip,
+    pricingMode,
     setAmountInput,
   ]);
 
   useEffect(() => {
-    if (isMaterialDelivery || amountLocked || amountSource === "preferential") return;
+    if (isMaterialDelivery || pricingMode !== "automatic" || amountLocked || amountSource === "preferential") return;
     if (!pickupAddress || !dropoffAddress || !scheduledOk) return;
     if (!routePricingReady) return;
     if (pricingContextQuery.isLoading) return;
@@ -1728,6 +1924,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     if (cached && Date.now() - cached.cachedAt <= SIM_CACHE_TTL_MS) {
       setAmountInput(cached.amount.toFixed(2));
       setAmountSource("simulated");
+      setLastPricingUpdateAt(new Date());
       setPricingWarning(cached.warningMessage || "");
       completedSimulationKeyRef.current = simulationKey;
       return;
@@ -1781,6 +1978,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
           }
           setAmountInput(amount.toFixed(2));
           setAmountSource("simulated");
+          setLastPricingUpdateAt(new Date());
           completedSimulationKeyRef.current = simulationKey;
           simulationCacheRef.current.set(simulationKey, {
             amount,
@@ -1807,6 +2005,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   }, [
     amountLocked,
     amountSource,
+    pricingMode,
     dropoffAddress,
     isMaterialDelivery,
     isRoundTrip,
@@ -1830,6 +2029,17 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       } else {
         setError("Renseignez le client, les lieux, la date/heure et respectez la limite des notes.");
       }
+      return;
+    }
+    const clinicalError = clinicalSubmitErrors(routeDraft)[0];
+    if (clinicalError) {
+      setError(clinicalError);
+      setExtraInfoOpen(true);
+      return;
+    }
+    if (needsAssistance && form.notesMedical.trim().length === 0) {
+      setError("Veuillez indiquer les notes d'assistance");
+      setExtraInfoOpen(true);
       return;
     }
     try {
@@ -1913,6 +2123,9 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
         dropoffAccessNotes: form.dropoffAccessNotes,
         wheelchairClient: form.wheelchairClient,
         wheelchairProvide: form.wheelchairProvide,
+        needsAssistance,
+        requesterName,
+        requesterPhone,
         internalNotes: form.internalNotes,
         notesMax: NOTES_MAX,
         amountInput: form.amountInput,
@@ -1954,11 +2167,13 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       setSelectedClientSubtitle("");
       setAmountSource(null);
       setAmountLocked(false);
+      setPricingMode("automatic");
+      setSegmentAmounts([]);
+      setLastPricingUpdateAt(null);
       setPricingWarning("");
       setBillToPatient(false);
       setExtraInfoOpen(false);
       setPriceOpen(false);
-      setManualPriceOpen(false);
       priceAutoOpenedRef.current = false;
       setRouteDistanceMeters(null);
       setRouteDurationSeconds(null);
@@ -1970,17 +2185,26 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     }
   };
 
-  const footerSummaryText = useMemo(
-    () =>
-      createRideMissingHint({
-        hasClient: Boolean(form.clientId),
-        hasPickup: form.pickup.trim().length > 0,
-        hasDropoff: form.dropoff.trim().length > 0,
-        hasSchedule: scheduledOk,
-        hasAmount: form.isMaterialDelivery || amountValid,
-      }),
-    [amountValid, form.clientId, form.dropoff, form.isMaterialDelivery, form.pickup, scheduledOk]
-  );
+  const footerSummaryText = useMemo(() => {
+    if (!isLegacySubmitShape(routeDraft)) {
+      return "Le parcours à plusieurs destinations n’est pas encore envoyé.";
+    }
+    return createRideMissingHint({
+      hasClient: Boolean(form.clientId),
+      hasPickup: form.pickup.trim().length > 0,
+      hasDropoff: form.dropoff.trim().length > 0,
+      hasSchedule: scheduledOk,
+      hasAmount: form.isMaterialDelivery || amountValid,
+    });
+  }, [
+    amountValid,
+    form.clientId,
+    form.dropoff,
+    form.isMaterialDelivery,
+    form.pickup,
+    routeDraft,
+    scheduledOk,
+  ]);
 
   const summaryData = useMemo(() => {
     const clientLabel = selectedClientLabel || (form.clientId ? `Client #${form.clientId}` : "");
@@ -2011,60 +2235,52 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     selectedClientLabel,
   ]);
 
-  const amountBadgeMeta = useMemo(() => {
-    if (!amountSource) return null;
-    if (amountSource === "preferential") {
-      return {
-        label: isRoundTrip ? "Tarif préférentiel · total A/R" : "Tarif préférentiel",
-        borderColor: "rgba(14, 116, 144, 0.34)",
-        backgroundColor: "rgba(14, 116, 144, 0.10)",
-        textColor: "#0E7490",
-      };
-    }
-    if (amountSource === "simulated") {
-      return {
-        label: "Calculé automatiquement",
-        borderColor: "rgba(0, 121, 107, 0.34)",
-        backgroundColor: "rgba(0, 121, 107, 0.10)",
-        textColor: E.BRAND,
-      };
-    }
-    return {
-      label: "Modifié manuellement",
-      borderColor: "rgba(249, 115, 22, 0.36)",
-      backgroundColor: "rgba(249, 115, 22, 0.10)",
-      textColor: "#C2410C",
-    };
-  }, [amountSource, isRoundTrip]);
+  const formatPricingAmount = (value: number | null | undefined): string => {
+    if (value == null || !Number.isFinite(value) || value <= 0) return "À calculer";
+    return `${value.toFixed(2)} CHF`;
+  };
 
-  const priceEstimateSubtext = useMemo(() => {
-    if (amountSource === "preferential") {
-      if (isRoundTrip && activePreferentialAmount != null) {
-        const perLeg = activePreferentialAmount.toFixed(2).replace(".", ",");
-        return `Tarif préférentiel · ${perLeg} CHF × 2 trajets`;
-      }
-      return "Tarif préférentiel · par trajet";
+  const manualTotal = segmentAmounts.reduce((sum, raw) => {
+    const value = Number(String(raw ?? "").trim().replace(",", "."));
+    return sum + (Number.isFinite(value) ? value : 0);
+  }, 0);
+
+  const selectPricingMode = (mode: "automatic" | "manual" | "preferential") => {
+    setPricingMode(mode);
+    setPricingWarning("");
+    if (mode === "automatic") {
+      setAmountLocked(false);
+      setAmountSource(null);
+      completedSimulationKeyRef.current = "";
+      activeSimulationKeyRef.current = "";
+      return;
     }
-    if (amountSource === "simulated") return "Tarif conseillé";
-    if (pricingSimulation.isPending && !amountLocked) return "Calcul en cours…";
-    if (pricingWarning.trim().length > 0) return pricingWarning;
-    if (section1Complete && !routePricingReady) return "Calcul de l'itinéraire…";
-    if (!scheduledOk) return "Renseignez la date et l'heure de départ";
-    if (!pickupAddress || !dropoffAddress) return "Renseignez les adresses";
-    return "En attente du calcul";
-  }, [
-    activePreferentialAmount,
-    amountLocked,
-    amountSource,
-    isRoundTrip,
-    pickupAddress,
-    dropoffAddress,
-    pricingSimulation.isPending,
-    pricingWarning,
-    routePricingReady,
-    scheduledOk,
-    section1Complete,
-  ]);
+    setAmountLocked(true);
+    setAmountSource(mode);
+    if (mode === "preferential" && activePreferentialAmount != null) {
+      setAmountInput(
+        resolvePreferentialBookingAmount(activePreferentialAmount, isRoundTrip).toFixed(2),
+      );
+      setLastPricingUpdateAt(new Date());
+    }
+  };
+
+  const updateSegmentAmount = (index: number, value: string) => {
+    setSegmentAmounts((current) => {
+      const next = pricingSegmentLabels.map((_, itemIndex) => current[itemIndex] ?? "");
+      next[index] = value;
+      const sum = next.reduce((total, raw) => {
+        const parsed = Number(String(raw).trim().replace(",", "."));
+        return total + (Number.isFinite(parsed) ? parsed : 0);
+      }, 0);
+      setAmountInput(sum > 0 ? sum.toFixed(2) : "");
+      return next;
+    });
+    setPricingMode("manual");
+    setAmountSource("manual");
+    setAmountLocked(true);
+    setPricingWarning("");
+  };
 
   const header = () => (
     <View style={s.headerRow}>
@@ -2158,7 +2374,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       </View>
       )}
       <ModalFooterActions
-        stacked={shouldStackRows}
+        stacked={false}
         hint={
           !canSubmit && !createRide.isPending && !parentKeyboardActive ? (
             <AppText variant="caption" style={s.footerHint}>
@@ -2182,13 +2398,6 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
             loading={createRide.isPending}
             onPress={() => void submit()}
             style={s.footerBtnPrimary}
-            leftIcon={
-              <Ionicons
-                name="checkmark-circle-outline"
-                size={20}
-                color={!canSubmit || createRide.isPending ? "rgba(255,255,255,0.85)" : "#fff"}
-              />
-            }
           />
         }
       />
@@ -2334,72 +2543,21 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
 
             <View style={s.formGroupDivider} />
 
-            <View style={s.pickupDropoffSplit}>
-              <View style={s.addressColumnLeft}>
-                <AddressFieldTrigger
-                  value={form.pickup}
-                  placeholder="Adresse de départ…"
-                  required
-                  onPress={() => setFieldActive("pickup", true)}
-                  onClear={() => form.setPickup("")}
-                  leftSlot={<Ionicons name="navigate-outline" size={16} color={E.TEXT_SEC} />}
-                />
-                <AddressFieldTrigger
-                  value={form.dropoff}
-                  placeholder="Adresse de destination…"
-                  required
-                  onPress={() => setFieldActive("dropoff", true)}
-                  onClear={() => form.setDropoff("")}
-                  leftSlot={<Ionicons name="location-outline" size={16} color={E.TEXT_SEC} />}
-                />
-              </View>
-              <View style={s.addressActionsColumn}>
-                <Animated.View style={swapRotateStyle}>
-                  <Pressable
-                    onPress={handleSwapAddresses}
-                    style={s.swapBtnRound}
-                    accessibilityRole="button"
-                    accessibilityLabel="Inverser pickup/destination"
-                    hitSlop={6}
-                  >
-                    <Ionicons name="swap-vertical-outline" size={18} color={E.BRAND} />
-                  </Pressable>
-                </Animated.View>
-                <Pressable
-                  onPress={() => {
-                    const nextRound = !form.isRoundTrip;
-                    form.setIsRoundTrip(nextRound);
-                    if (nextRound) setExtraInfoOpen(true);
-                    if (
-                      !amountLocked &&
-                      amountSource === "preferential" &&
-                      activePreferentialAmount != null
-                    ) {
-                      setAmountInput(
-                        resolvePreferentialBookingAmount(
-                          activePreferentialAmount,
-                          nextRound,
-                        ).toFixed(2),
-                      );
-                    }
-                  }}
-                  style={[
-                    s.actionRoundBtn,
-                    form.isRoundTrip ? s.actionRoundBtnActive : s.actionRoundBtnInactive,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: form.isRoundTrip }}
-                  accessibilityLabel="Aller-retour"
-                  hitSlop={6}
-                >
-                  <Ionicons
-                    name="repeat-outline"
-                    size={18}
-                    color={form.isRoundTrip ? "#FFFFFF" : E.TEXT_SEC}
-                  />
-                </Pressable>
-              </View>
-            </View>
+            <CanonicalRouteEditor
+              draft={routeDraft}
+              onChange={(next) => {
+                const enablingReturn = !form.isRoundTrip && projectLegacyRideFields(next).isRoundTrip;
+                commitRouteDraft(next);
+                if (enablingReturn) setExtraInfoOpen(true);
+              }}
+              onPickAddress={(index) => {
+                if (routeDraft.routeSteps[index]?.kind === "return") return;
+                setRouteAddressIndex(index);
+              }}
+              onClearAddress={(index) => {
+                commitRouteDraft(setStepLocation(routeDraft, index, "", null, null));
+              }}
+            />
 
             <View style={{ marginTop: 10 }}>
               <RideRoutePreview
@@ -2414,69 +2572,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
               />
             </View>
 
-            <View style={s.formGroupDivider} />
-
             <View style={s.formGroup}>
-            <View style={s.inlineActionRow}>
-              <View style={s.inlineActionGrow}>
-                <TimeDatePicker
-                  value={form.scheduledAt}
-                  onChange={form.setScheduledAt}
-                  label=""
-                  display="split"
-                  required
-                />
-              </View>
-              <Pressable
-                onPress={() => {
-                  if (recurringOn) {
-                    form.setRecurrence("none");
-                  } else {
-                    form.setRecurrence("daily");
-                    setExtraInfoOpen(true);
-                  }
-                }}
-                style={[
-                  s.actionRoundBtn,
-                  recurringOn ? s.actionRoundBtnActive : s.actionRoundBtnInactive,
-                ]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: recurringOn }}
-                accessibilityLabel="Course récurrente"
-                hitSlop={6}
-              >
-                <Ionicons
-                  name="calendar-outline"
-                  size={18}
-                  color={recurringOn ? "#FFFFFF" : E.TEXT_SEC}
-                />
-              </Pressable>
-            </View>
-
-            {form.isRoundTrip ? (
-              <View style={s.inlineActionRow}>
-                <View style={s.inlineActionGrow}>
-                  <TimeDatePicker
-                    value={form.returnScheduledAt}
-                    onChange={form.setReturnScheduledAt}
-                    label=""
-                    display="split"
-                    emptyLabel="À définir"
-                    emptyPreviewReferenceIso={form.scheduledAt}
-                    modalTitle="Heure de retour"
-                    accessibilityLabel="Choisir la date et l’heure de retour"
-                    timeAccessibilityLabel="Choisir l’heure de retour"
-                    tonal
-                  />
-                </View>
-                <View
-                  style={s.actionRoundBtnSpacer}
-                  accessibilityElementsHidden
-                  importantForAccessibility="no"
-                />
-              </View>
-            ) : null}
-
             {recurringOn ? (
               <View style={[s.subCard, s.tonalGroup]}>
                 <RecurrenceSelector
@@ -2753,143 +2849,156 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
           <View style={s.sectionDivider} />
 
           {/* ============================================== */}
-          {/* Section 2 — Prix de la course                  */}
+          {/* Section 2 — Tarification                       */}
           {/* ============================================== */}
           {!form.isMaterialDelivery ? (
             <RideCreateSection
               number={2}
-              title="Prix de la course"
+              title="Tarification"
               gap={10}
               complete={section3Complete}
               open={priceOpen}
               hideBody={!priceOpen}
               onTogglePress={() => setPriceOpen((v) => !v)}
             >
-              <View style={s.priceRow}>
-                <Pressable
-                  onPress={() => {
-                    setManualPriceOpen(false);
-                    if (amountLocked) {
-                      setAmountLocked(false);
-                      setAmountSource(null);
-                    }
-                    completedSimulationKeyRef.current = "";
-                    activeSimulationKeyRef.current = "";
-                    setPricingWarning("");
-                  }}
-                  style={s.priceCardEstimate}
-                  accessibilityRole="button"
-                  accessibilityLabel="Utiliser l'estimation automatique"
-                  hitSlop={4}
-                >
-                  <View style={s.priceCardLabelRow}>
-                    <AppText variant="label" style={[s.priceCardLabel, s.priceCardLabelActive]}>
-                      Estimation auto
-                    </AppText>
-                    {amountSource !== "manual" ? (
-                      <View style={s.priceCardBadgeRecommended}>
-                        <AppText variant="label" style={s.priceCardBadgeRecommendedText}>Recommandé</AppText>
-                      </View>
-                    ) : null}
-                  </View>
-                  <View style={s.priceCardAmountRow}>
-                    <AppText variant="sectionTitle" style={s.priceCardAmount}>
-                      {amountValue != null ? amountValue.toFixed(2).replace(".", ",") : "—"}
-                    </AppText>
-                    <AppText variant="label" style={s.priceCardAmountUnit}>CHF</AppText>
-                  </View>
-                  <AppText variant="caption" style={s.priceCardSubtext} numberOfLines={2}>
-                    {priceEstimateSubtext}
-                  </AppText>
-                </Pressable>
-                <Pressable
-                  onPress={() => setManualPriceOpen((v) => !v)}
-                  style={[s.priceCardManual, manualPriceOpen && s.priceCardManualActive]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Saisir un montant manuellement"
-                  hitSlop={4}
-                >
-                  <View style={s.priceCardManualCol}>
-                    <AppText
-                      variant="body"
-                      style={[s.priceCardManualLabel, manualPriceOpen && s.priceCardManualLabelActive]}
-                      numberOfLines={1}
-                    >
-                      Saisie manuelle
-                    </AppText>
-                    <AppText variant="caption" style={s.priceCardManualHint} numberOfLines={1}>
-                      Définir un montant
-                    </AppText>
-                  </View>
-                  <Ionicons
-                    name={manualPriceOpen ? "chevron-up" : "chevron-forward"}
-                    size={14}
-                    color={manualPriceOpen ? E.BRAND_DARK : E.TEXT_SEC}
-                  />
-                </Pressable>
-              </View>
-              {manualPriceOpen ? (
-                <View style={s.manualEditWrap}>
-                  <AppInput
-                    label="Montant *"
-                    value={form.amountInput}
-                    onChangeText={(value) => {
-                      form.setAmountInput(value);
-                      setAmountSource("manual");
-                      setAmountLocked(true);
-                    }}
-                    placeholder="Ex : 45.00"
-                    keyboardType="decimal-pad"
-                    leftSlot={<Ionicons name="cash-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
-                    shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
-                  />
-                  {amountLocked ? (
+              <View
+                style={s.pricingModeGroup}
+                accessibilityRole="tablist"
+                accessibilityLabel="Tarification"
+              >
+                {(
+                  [
+                    { value: "automatic" as const, label: "Automatique" },
+                    { value: "manual" as const, label: "Manuel" },
+                    { value: "preferential" as const, label: "Préférentiel" },
+                  ]
+                ).map((mode) => {
+                  const active = pricingMode === mode.value;
+                  return (
                     <Pressable
-                      onPress={() => {
-                        setAmountLocked(false);
-                        setAmountSource(null);
-                        completedSimulationKeyRef.current = "";
-                      }}
-                      style={s.linkNewClient}
+                      key={mode.value}
+                      onPress={() => selectPricingMode(mode.value)}
+                      style={[
+                        s.pricingModeBtn,
+                        active ? s.pricingModeBtnActive : null,
+                        active
+                          ? createShadow({
+                              shadowColor: "#0F172A",
+                              shadowOffset: { width: 0, height: 1 },
+                              shadowOpacity: 0.08,
+                              shadowRadius: 2,
+                              elevation: 1,
+                            })
+                          : null,
+                      ]}
                       accessibilityRole="button"
-                      accessibilityLabel="Réactiver le calcul automatique du montant"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={mode.label}
                     >
-                      <AppText variant="label" style={{ color: E.BRAND, fontWeight: "600" }}>
-                        Recalculer automatiquement
+                      <AppText
+                        variant="label"
+                        style={[s.pricingModeBtnText, active ? s.pricingModeBtnTextActive : null]}
+                        numberOfLines={1}
+                      >
+                        {mode.label}
                       </AppText>
                     </Pressable>
-                  ) : null}
+                  );
+                })}
+              </View>
+              <View style={s.segmentList}>
+                {pricingSegmentLabels.map((label, index) => {
+                  const known =
+                    pricingMode === "automatic" &&
+                    pricingSegmentLabels.length === 1 &&
+                    amountSource === "simulated" &&
+                    amountValue != null;
+                  return (
+                    <View key={label} style={s.segmentRow}>
+                      <AppText variant="body" style={s.segmentLabel} numberOfLines={1}>
+                        {label}
+                      </AppText>
+                      {pricingMode === "manual" ? (
+                        <TextInput
+                          value={segmentAmounts[index] ?? ""}
+                          onChangeText={(value) => updateSegmentAmount(index, value)}
+                          keyboardType="decimal-pad"
+                          placeholder="0.00"
+                          placeholderTextColor="#94A3B8"
+                          accessibilityLabel={`Montant ${label}`}
+                          style={s.segmentAmountInput}
+                        />
+                      ) : (
+                        <AppText
+                          variant="body"
+                          style={known ? s.segmentAmountValue : s.segmentAmountRead}
+                        >
+                          {known ? `${amountValue.toFixed(2)} CHF` : "À calculer"}
+                        </AppText>
+                      )}
+                    </View>
+                  );
+                })}
+                <View style={s.segmentTotal}>
+                  <AppText variant="body" style={[s.segmentLabel, s.segmentLabelStrong]}>
+                    Total
+                  </AppText>
+                  <AppText variant="body" style={[s.segmentAmountValue, s.segmentLabelStrong]}>
+                    {pricingMode === "manual"
+                      ? `${manualTotal.toFixed(2)} CHF`
+                      : pricingMode === "preferential"
+                        ? `${Number(amountValue || 0).toFixed(2)} CHF`
+                        : amountSource === "simulated"
+                          ? formatPricingAmount(amountValue)
+                          : "À calculer"}
+                  </AppText>
                 </View>
+              </View>
+              {pricingMode === "preferential" ? (
+                <AppInput
+                  label="Forfait *"
+                  value={form.amountInput}
+                  onChangeText={(value) => {
+                    form.setAmountInput(value);
+                    setAmountSource("preferential");
+                    setAmountLocked(true);
+                    setPricingWarning("");
+                  }}
+                  placeholder="Ex: 150.00"
+                  keyboardType="decimal-pad"
+                  shellStyle={{ borderRadius: 8, backgroundColor: "#FFFFFF" }}
+                />
               ) : null}
-              {amountBadgeMeta ? (
-                <View style={s.amountMetaRow}>
-                  <View
-                    style={[
-                      s.amountBadge,
-                      {
-                        borderColor: amountBadgeMeta.borderColor,
-                        backgroundColor: amountBadgeMeta.backgroundColor,
-                      },
-                    ]}
+              {amountLocked ? (
+                <View style={s.amountHintRow}>
+                  <AppText variant="caption" style={[s.amountHint, { marginTop: 0 }]}>
+                    Montant verrouillé manuellement.
+                  </AppText>
+                  <Pressable
+                    onPress={() => selectPricingMode("automatic")}
+                    accessibilityRole="button"
+                    accessibilityLabel="Recalculer"
                   >
-                    <AppText
-                      variant="caption"
-                      style={[s.amountBadgeText, { color: amountBadgeMeta.textColor }]}
-                    >
-                      {amountBadgeMeta.label}
+                    <AppText variant="label" style={{ color: E.BRAND, fontWeight: "600" }}>
+                      Recalculer
                     </AppText>
-                  </View>
+                  </Pressable>
                 </View>
               ) : null}
-              {pricingSimulation.isPending && !amountLocked ? (
-                <AppText variant="caption" style={s.sectionHelper}>
+              {pricingSimulation.isPending && pricingMode === "automatic" && !amountLocked ? (
+                <AppText variant="caption" style={s.amountHint}>
                   {amountSource === "simulated" && form.amountInput.trim().length > 0
                     ? "Mise à jour du montant exact en cours…"
                     : "Calcul du montant en cours…"}
                 </AppText>
               ) : null}
-              {pricingWarning && amountSource != null ? (
-                <AppText variant="caption" style={s.sectionHelper}>{pricingWarning}</AppText>
+              {pricingWarning ? (
+                <AppText variant="caption" style={s.amountHint}>{pricingWarning}</AppText>
+              ) : null}
+              {lastPricingUpdateAt ? (
+                <AppText variant="caption" style={s.amountHint}>
+                  {`Dernière mise à jour: ${lastPricingUpdateAt.toLocaleTimeString("fr-CH")}`}
+                </AppText>
               ) : null}
             </RideCreateSection>
           ) : null}
@@ -2902,120 +3011,29 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
           <RideCreateSection
             number={3}
             title="Informations complémentaires"
-            subtitle="Médical, notes internes…"
+            subtitle="Accès, mobilité, contact"
             open={extraInfoOpen}
             hideBody={!extraInfoOpen}
             onTogglePress={() => setExtraInfoOpen((v) => !v)}
-            gap={14}
+            gap={0}
           >
-            <View style={s.subCard}>
-              <View style={{ gap: 8 }}>
-                  <AppInput
-                    value={form.establishment}
-                    onChangeText={form.setEstablishment}
-                    placeholder="Établissement (optionnel)"
-                    leftSlot={<Ionicons name="business-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
-                    shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
-                  />
-                  <AppInput
-                    value={form.hospitalService}
-                    onChangeText={form.setHospitalService}
-                    placeholder="Service hospitalier (optionnel)"
-                    leftSlot={<Ionicons name="medkit-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
-                    shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
-                  />
-                  <AppInput
-                    value={form.doctorName}
-                    onChangeText={form.setDoctorName}
-                    placeholder="Médecin référent (optionnel)"
-                    leftSlot={<Ionicons name="person-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
-                    shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
-                  />
-                  <AppInput
-                    value={form.notesMedical}
-                    onChangeText={form.setNotesMedical}
-                    placeholder="Instructions particulières, bâtiment, étage…"
-                    multiline
-                    textAlignVertical="top"
-                    shellStyle={{
-                      borderRadius: ROW_RADIUS,
-                      minHeight: COMPACT_MULTILINE_MEDIUM_HEIGHT,
-                      alignItems: "flex-start",
-                      backgroundColor: "#FFFFFF",
-                    }}
-                    style={{ minHeight: COMPACT_MULTILINE_MEDIUM_INPUT_HEIGHT }}
-                  />
-                  <AppInput
-                    value={form.pickupAccessNotes}
-                    onChangeText={form.setPickupAccessNotes}
-                    placeholder="Comment accéder au point de départ ?"
-                    accessibilityLabel="Accès au point de départ"
-                    leftSlot={<Ionicons name="navigate-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
-                    shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
-                  />
-                  <AppInput
-                    value={form.dropoffAccessNotes}
-                    onChangeText={form.setDropoffAccessNotes}
-                    placeholder="Comment accéder à la destination ?"
-                    accessibilityLabel="Accès à la destination"
-                    leftSlot={<Ionicons name="location-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
-                    shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
-                  />
-                <View style={s.wheelchairRow}>
-                  <Pressable
-                    onPress={() => form.setWheelchairClient(!form.wheelchairClient)}
-                    style={[
-                      s.chip,
-                      form.wheelchairClient ? s.chipBlueOn : s.chipBlueOff,
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: form.wheelchairClient }}
-                    accessibilityLabel="Client en chaise roulante"
-                  >
-                    <MaterialCommunityIcons
-                      name="human-wheelchair"
-                      size={17}
-                      color={form.wheelchairClient ? E.TRANSFER : E.TEXT_SEC}
-                    />
-                    <AppText
-                      variant="label"
-                      style={
-                        form.wheelchairClient ? s.chipBlueLabelOn : s.chipLabelOff
-                      }
-                    >
-                      En chaise
-                    </AppText>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => form.setWheelchairProvide(!form.wheelchairProvide)}
-                    style={[
-                      s.chip,
-                      form.wheelchairProvide ? s.chipOrangeOn : s.chipOrangeOff,
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: form.wheelchairProvide }}
-                    accessibilityLabel="Fournir une chaise roulante"
-                  >
-                    <MaterialCommunityIcons
-                      name="wheelchair"
-                      size={17}
-                      color={form.wheelchairProvide ? E.URGENT : E.TEXT_SEC}
-                    />
-                    <AppText
-                      variant="label"
-                      style={
-                        form.wheelchairProvide
-                          ? s.chipOrangeLabelOn
-                          : s.chipLabelOff
-                      }
-                    >
-                      Fournir chaise
-                    </AppText>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-
+            <RouteClinicalDetails
+              draft={routeDraft}
+              isMaterialDelivery={form.isMaterialDelivery}
+              notesMedical={form.notesMedical}
+              needsAssistance={needsAssistance}
+              requesterName={requesterName}
+              requesterPhone={requesterPhone}
+              wheelchairClient={wheelchairClient}
+              wheelchairProvide={wheelchairProvide}
+              onChangeDraft={commitClinicalDraft}
+              onNotesMedical={setNotesMedical}
+              onNeedsAssistance={setNeedsAssistance}
+              onRequesterName={setRequesterName}
+              onRequesterPhone={setRequesterPhone}
+              onWheelchairClient={setWheelchairClient}
+              onWheelchairProvide={setWheelchairProvide}
+            />
           </RideCreateSection>
 
           {error ? (
@@ -3039,40 +3057,57 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
         }}
       />
       <AddressPickerSheet
-        visible={activeField === "pickup"}
-        title="Adresse de départ"
-        value={form.pickup}
-        onClose={() => setFieldActive("pickup", false)}
-        onChange={form.setPickup}
-        onSelect={(address) => {
-          Keyboard.dismiss();
-          void handlePickupAddressSelected(address);
+        visible={routeAddressIndex != null}
+        title={routeAddressIndex === 0 ? "Adresse de départ" : "Adresse de destination"}
+        value={
+          routeAddressIndex == null ? "" : routeDraft.routeSteps[routeAddressIndex]?.location ?? ""
+        }
+        onClose={() => setRouteAddressIndex(null)}
+        onChange={(text) => {
+          if (routeAddressIndex == null) return;
+          setRouteDraft((current) => setStepLocation(current, routeAddressIndex, text, null, null));
+          if (routeAddressIndex === 0) form.setPickup(text);
+          if (routeAddressIndex === 1) form.setDropoff(text);
         }}
-      />
-      <AddressPickerSheet
-        visible={activeField === "dropoff"}
-        title="Adresse de destination"
-        value={form.dropoff}
-        onClose={() => setFieldActive("dropoff", false)}
-        onChange={form.setDropoff}
         onSelect={(address) => {
           Keyboard.dismiss();
-          void handleDropoffAddressSelected(address);
-          const hints = parseMedicalHintsFromAddress(address.label);
-          if (hints.establishment && form.establishment.trim().length === 0) {
-            form.setEstablishment(hints.establishment);
-            setExtraInfoOpen(true);
+          const index = routeAddressIndex;
+          setRouteAddressIndex(null);
+          if (index === 0) {
+            void handlePickupAddressSelected(address);
+            return;
           }
-          if (hints.doctorName && form.doctorName.trim().length === 0) {
-            form.setDoctorName(hints.doctorName);
-            setExtraInfoOpen(true);
+          if (index === 1) {
+            void handleDropoffAddressSelected(address);
+            const hints = parseMedicalHintsFromAddress(address.label);
+            if (hints.establishment && form.establishment.trim().length === 0) {
+              form.setEstablishment(hints.establishment);
+              setRouteDraft((current) =>
+                fillEmptyClinical(current, index, "establishment", hints.establishment ?? ""),
+              );
+              setExtraInfoOpen(true);
+            }
+            if (hints.doctorName && form.doctorName.trim().length === 0) {
+              form.setDoctorName(hints.doctorName);
+              setRouteDraft((current) => fillEmptyClinical(current, index, "doctor", hints.doctorName ?? ""));
+              setExtraInfoOpen(true);
+            }
+            if (hints.hospitalService && form.hospitalService.trim().length === 0) {
+              form.setHospitalService(hints.hospitalService);
+              setRouteDraft((current) =>
+                fillEmptyClinical(current, index, "service", hints.hospitalService ?? ""),
+              );
+              setExtraInfoOpen(true);
+            }
+            if (hints.notesMedical && form.notesMedical.trim().length === 0) {
+              form.setNotesMedical(hints.notesMedical);
+            }
+            return;
           }
-          if (hints.hospitalService && form.hospitalService.trim().length === 0) {
-            form.setHospitalService(hints.hospitalService);
-            setExtraInfoOpen(true);
-          }
-          if (hints.notesMedical && form.notesMedical.trim().length === 0) {
-            form.setNotesMedical(hints.notesMedical);
+          if (index != null) {
+            setRouteDraft((current) =>
+              setStepLocation(current, index, address.label, address.latitude, address.longitude),
+            );
           }
         }}
       />

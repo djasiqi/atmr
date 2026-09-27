@@ -34,6 +34,8 @@ type ClientSelectorProps = {
   placeholder?: string;
   helperText?: string;
   leftSlot?: ReactNode;
+  /** Hauteur minimale du champ. Par défaut, le gabarit tactile standard. */
+  shellMinHeight?: number;
   /** Notifie le parent lorsque la liste de résultats s’ouvre ou se ferme (empilement z-index). */
   onSuggestionsVisibilityChange?: (visible: boolean) => void;
 };
@@ -48,6 +50,7 @@ export function ClientSelector({
   placeholder = "Rechercher un client…",
   helperText,
   leftSlot,
+  shellMinHeight,
   onSuggestionsVisibilityChange,
 }: ClientSelectorProps) {
   const t = useResponsiveTokens();
@@ -126,7 +129,7 @@ export function ClientSelector({
         }
         shellStyle={{
           borderRadius: ROW_RADIUS,
-          minHeight: Math.max(t.fieldShellMinHeight, 48),
+          minHeight: shellMinHeight ?? Math.max(t.fieldShellMinHeight, 48),
           paddingHorizontal: 10,
         }}
         helperText={helperText}

@@ -20,6 +20,7 @@ export type CompanyRidesMissionRowProps = {
   onSchedule: (missionId: number) => void;
   onTransfer: (missionId: number) => void;
   onCancel: (missionId: number) => void;
+  onComplete: (missionId: number) => void;
   onMarkUrgent: (missionId: number) => void;
 };
 
@@ -48,6 +49,7 @@ export function areCompanyRidesMissionRowPropsEqual(
     previous.onSchedule === next.onSchedule &&
     previous.onTransfer === next.onTransfer &&
     previous.onCancel === next.onCancel &&
+    previous.onComplete === next.onComplete &&
     previous.onMarkUrgent === next.onMarkUrgent
   );
 }

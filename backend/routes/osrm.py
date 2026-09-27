@@ -14,8 +14,13 @@ from config import Config
 from ext import redis_client
 from schemas.osrm_schemas import OSRMRouteQuerySchema
 from schemas.validation_utils import validate_request
+from services.geolocation.historical_eta import get_improved_duration_estimate
 from services.geolocation.osrm import route_info
 from shared.error_handlers import APIErrorHandler
+
+# OSRM donne le temps à vide. Sans historique de courses, ce facteur rapproche
+# l'estimation d'un trajet urbain réel (feux, circulation), sans service externe.
+_URBAN_TRAFFIC_FACTOR = 1.55
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +86,7 @@ class OSRMRoute(Resource):
                 destination=(dropoff_lat, dropoff_lon),
                 base_url=osrm_base_url,
                 profile="driving",
-                timeout=4,  # ⚡ Réduit à 4s pour fail-fast (cohérent avec frontend)
+                timeout=8,
                 redis_client=redis_client,
                 cache_ttl_s=1,
                 overview="full",  # Géométrie complète
@@ -101,8 +106,24 @@ class OSRMRoute(Resource):
                     # Leaflet
                     route_coords = [[coord[1], coord[0]] for coord in coordinates]
 
+            is_fallback = bool(result.get("fallback"))
+            road_duration = float(result.get("duration") or 0)
+            typical_duration = None
+            duration_source = "haversine" if is_fallback else "osrm"
+            if not is_fallback and road_duration > 0:
+                typical_duration, duration_source = get_improved_duration_estimate(
+                    (pickup_lat, pickup_lon),
+                    (dropoff_lat, dropoff_lon),
+                    road_duration,
+                    traffic_factor=_URBAN_TRAFFIC_FACTOR,
+                    use_weather=False,
+                )
+
             return {
-                "duration": result.get("duration", 0),
+                "duration": road_duration,
+                "duration_typical": typical_duration,
+                "duration_source": duration_source,
+                "fallback": is_fallback,
                 "distance": result.get("distance", 0),
                 "route": route_coords,
             }, 200

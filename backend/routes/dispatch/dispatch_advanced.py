@@ -880,6 +880,7 @@ class ResetAssignmentsResource(Resource):
             # Remettre les bookings au statut ACCEPTED et nettoyer driver_id
             # (uniquement ceux dont l'assignation vient d'être supprimée).
             bookings_count = 0
+            released_drivers: list[tuple[int, int]] = []
             if booking_ids:
                 bookings_query = booking_repo.find_models_by_company_with_filters_query(
                     company_id=company_id,
@@ -890,11 +891,35 @@ class ResetAssignmentsResource(Resource):
                 for booking in bookings_query.all():
                     # Remettre au statut ACCEPTED si actuellement ASSIGNED
                     if booking.status == BookingStatus.ASSIGNED:
+                        previous_driver_id = getattr(booking, "driver_id", None)
                         booking.status = BookingStatus.ACCEPTED
                         booking.driver_id = None
                         bookings_count += 1
+                        if previous_driver_id:
+                            released_drivers.append(
+                                (int(booking.id), int(previous_driver_id))
+                            )
 
             db.session.commit()
+            if released_drivers:
+                try:
+                    from application.events.event_bus import publish_event
+                    from domain.events.events import DriverBookingReassignedEvent
+
+                    for released_booking_id, released_driver_id in released_drivers:
+                        publish_event(
+                            DriverBookingReassignedEvent(
+                                booking_id=released_booking_id,
+                                old_driver_id=released_driver_id,
+                                new_driver_id=None,
+                                company_id=company_id,
+                            )
+                        )
+                except Exception:
+                    logger.exception(
+                        "[RESET] Publication DRIVER_UNASSIGNED échouée company_id=%s",
+                        company_id,
+                    )
 
             logger.info(
                 "[RESET] ✅ Réinitialisation effectuée pour company_id=%s: %d assignations supprimées, %d protégées, %d bookings réinitialisés",

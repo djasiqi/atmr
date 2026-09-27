@@ -1644,6 +1644,14 @@ export const deleteVehicle = async (vehicleId, hardDelete = false) => {
 
 /* ------------------------------- CRÉATION MANUELLE ---------------------------- */
 
+export const previewManualBookingPricing = async (bookingData) => {
+  const { data } = await apiClient.post(
+    '/companies/me/reservations/manual/pricing-preview',
+    bookingData
+  );
+  return data;
+};
+
 export const createManualBooking = async (bookingData) => {
   try {
     const { data } = await apiClient.post('/companies/me/reservations/manual', bookingData);

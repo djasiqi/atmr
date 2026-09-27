@@ -306,6 +306,58 @@ function allowBillingAdjustByCreatedVia(res) {
   return v === 'dispatcher' || v === 'legacy' || v === 'institution_portal';
 }
 
+function compactAddress(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/** Vrai si l'arrêt est le domicile du client (rue + numéro). */
+function isClientHomeAddress(address, client) {
+  const street = compactAddress(client?.domicile_address);
+  const stop = compactAddress(address);
+  if (street.length < 8 || !/\d/.test(street) || !stop) return false;
+  return stop.includes(street) || street.includes(stop);
+}
+
+function cleanClinicalLabel(value) {
+  if (!value || value === 'Non spécifié') return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+/** Établissement / service / médecin : booking, sinon étape destination du parcours. */
+function resolveClinicalPlace(reservation) {
+  const steps = Array.isArray(reservation?.route_steps) ? reservation.route_steps : [];
+  const destination = [...steps].reverse().find((step) => step?.kind === 'destination');
+  const leg = reservation?.institution_leg || null;
+  return {
+    establishment: cleanClinicalLabel(reservation?.medical_facility)
+      || cleanClinicalLabel(destination?.establishment)
+      || cleanClinicalLabel(leg?.establishment),
+    service: cleanClinicalLabel(reservation?.hospital_service)
+      || cleanClinicalLabel(destination?.service)
+      || cleanClinicalLabel(leg?.service),
+    doctor: cleanClinicalLabel(reservation?.doctor_name)
+      || cleanClinicalLabel(destination?.doctor)
+      || cleanClinicalLabel(leg?.doctor),
+  };
+}
+
+/** Étage, code porte et notes du client, seulement sur son domicile. */
+function clientHomeAccessItems(reservation, address) {
+  if (!isClientHomeAddress(address, reservation?.client)) return [];
+  const client = reservation.client || {};
+  const items = [];
+  if (client.floor) items.push(`Étage ${client.floor}`);
+  if (client.door_code) items.push(`Code ${client.door_code}`);
+  if (client.access_notes) items.push(String(client.access_notes));
+  return items;
+}
+
 const ReservationDetailPanel = ({
   reservation,
   linkedBookings = [],
@@ -845,20 +897,32 @@ const ReservationDetailPanel = ({
       || null)
     : (reservation.client?.birth_date || bookingIdentity.passenger?.birth_date || null);
 
-  const resolveClinicalLabel = (value) => {
-    if (!value || value === 'Non spécifié') return null;
-    return value;
-  };
-  const legClinical = reservation.institution_leg || null;
-  const arrivalEstablishment = resolveClinicalLabel(reservation.medical_facility)
-    || resolveClinicalLabel(legClinical?.establishment);
-  const arrivalService = resolveClinicalLabel(reservation.hospital_service)
-    || resolveClinicalLabel(legClinical?.service);
-  const arrivalDoctor = resolveClinicalLabel(reservation.doctor_name)
-    || resolveClinicalLabel(legClinical?.doctor);
+  const isReturnTrip = Boolean(reservation.is_return);
+  const clinicalPlace = resolveClinicalPlace(reservation);
+  const arrivalEstablishment = clinicalPlace.establishment;
+  const arrivalService = clinicalPlace.service;
+  const arrivalDoctor = clinicalPlace.doctor;
   const arrivalClinicalLine = [arrivalEstablishment, arrivalService, arrivalDoctor]
     .filter(Boolean)
     .join(' · ');
+  const hospitalAccessNotes = isReturnTrip
+    ? reservation.pickup_access_notes
+    : reservation.dropoff_access_notes;
+  const homeTripNotes = isReturnTrip
+    ? reservation.dropoff_access_notes
+    : reservation.pickup_access_notes;
+  const renderStopAccess = (address, tripNotes) => {
+    const homeItems = clientHomeAccessItems(reservation, address);
+    const extra = tripNotes && !homeItems.includes(String(tripNotes)) ? String(tripNotes) : null;
+    if (!homeItems.length && !extra) return null;
+    return (
+      <div className={s.routeStopMeta}>
+        {homeItems.map((item) => <span key={item}>{item}</span>)}
+        {extra ? <span>{extra}</span> : null}
+      </div>
+    );
+  };
+  const legClinical = reservation.institution_leg || null;
   const arrivalAppointmentLabel = (() => {
     if (!legClinical?.appointment_time) return null;
     const d = new Date(legClinical.appointment_time);
@@ -1741,16 +1805,15 @@ const ReservationDetailPanel = ({
                   <div className={s.routeStop}>
                     <div className={s.routeStopLabel}>Départ</div>
                     <div className={s.routeStopAddress}>{reservation.pickup_location || '-'}</div>
-                    {/* Access details départ */}
-                    {(reservation.client?.floor || reservation.client?.door_code || reservation.client?.access_notes || reservation.pickup_access_notes) && (
+                    {isReturnTrip && arrivalClinicalLine && (
+                      <div className={s.routeStopDetails}>{arrivalClinicalLine}</div>
+                    )}
+                    {isReturnTrip && hospitalAccessNotes && (
                       <div className={s.routeStopMeta}>
-                        {reservation.client?.floor && <span>Étage {reservation.client.floor}</span>}
-                        {reservation.client?.door_code && <span>Code {reservation.client.door_code}</span>}
-                        {(reservation.pickup_access_notes || reservation.client?.access_notes) && (
-                          <span>{reservation.pickup_access_notes || reservation.client.access_notes}</span>
-                        )}
+                        <span>{hospitalAccessNotes}</span>
                       </div>
                     )}
+                    {!isReturnTrip && renderStopAccess(reservation.pickup_location, homeTripNotes)}
                   </div>
                   <div className={s.routeStop}>
                     <div className={s.routeStopLabel}>
@@ -1760,14 +1823,15 @@ const ReservationDetailPanel = ({
                       )}
                     </div>
                     <div className={s.routeStopAddress}>{reservation.dropoff_location || '-'}</div>
-                    {arrivalClinicalLine && (
+                    {!isReturnTrip && arrivalClinicalLine && (
                       <div className={s.routeStopDetails}>{arrivalClinicalLine}</div>
                     )}
-                    {reservation.dropoff_access_notes && (
+                    {!isReturnTrip && hospitalAccessNotes && (
                       <div className={s.routeStopMeta}>
-                        <span>{reservation.dropoff_access_notes}</span>
+                        <span>{hospitalAccessNotes}</span>
                       </div>
                     )}
+                    {isReturnTrip && renderStopAccess(reservation.dropoff_location, homeTripNotes)}
                   </div>
                 </div>
               </div>
@@ -1786,7 +1850,7 @@ const ReservationDetailPanel = ({
                 <div className={s.section}>
                   <div className={s.sectionHeader}>
                     <div className={`${s.sectionIcon} ${s.sectionIconBlue}`}><FiHome size={13} /></div>
-                    <h3 className={s.sectionTitle}>Destination</h3>
+                    <h3 className={s.sectionTitle}>{isReturnTrip ? 'Lieu de départ' : 'Destination'}</h3>
                   </div>
                   <div className={s.detailGrid}>
                     {facility && (

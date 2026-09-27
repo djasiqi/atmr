@@ -671,6 +671,13 @@ class Booking(db.Model):
                     "door_code": getattr(cli, "door_code", None) if cli else None,
                     "floor": getattr(cli, "floor", None) if cli else None,
                     "access_notes": getattr(cli, "access_notes", None) if cli else None,
+                    "domicile_address": getattr(cli, "domicile_address", None)
+                    if cli
+                    else None,
+                    "domicile_zip": getattr(cli, "domicile_zip", None) if cli else None,
+                    "domicile_city": getattr(cli, "domicile_city", None)
+                    if cli
+                    else None,
                     "is_institution": bool(getattr(cli, "is_institution", False))
                     if cli
                     else False,
@@ -895,6 +902,16 @@ class Booking(db.Model):
                     "linked_institution_id": (
                         getattr(cli, "linked_institution_id", None) if cli else None
                     ),
+                    "door_code": getattr(cli, "door_code", None) if cli else None,
+                    "floor": getattr(cli, "floor", None) if cli else None,
+                    "access_notes": getattr(cli, "access_notes", None) if cli else None,
+                    "domicile_address": getattr(cli, "domicile_address", None)
+                    if cli
+                    else None,
+                    "domicile_zip": getattr(cli, "domicile_zip", None) if cli else None,
+                    "domicile_city": getattr(cli, "domicile_city", None)
+                    if cli
+                    else None,
                 },
                 "is_return": _as_bool(self.is_return),
                 "is_round_trip": _as_bool(self.is_round_trip),

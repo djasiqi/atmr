@@ -1,5 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
-import { formatRideDistance, formatRideDuration } from "./rideRoutePreviewFormat";
+import {
+  formatRideDistance,
+  formatRideDuration,
+  reservationRouteDurationSeconds,
+} from "./rideRoutePreviewFormat";
 
 describe("formatRideDistance", () => {
   it("returns em dash for nullish or non-positive values", () => {
@@ -23,6 +27,21 @@ describe("formatRideDistance", () => {
   it("formats kilometers above 10 km without decimals", () => {
     expect(formatRideDistance(18000)).toBe("18 km");
     expect(formatRideDistance(123456)).toBe("123 km");
+  });
+});
+
+describe("reservationRouteDurationSeconds", () => {
+  it("reprend la durée typique du formulaire réservations", () => {
+    expect(
+      reservationRouteDurationSeconds({ fallback: false, duration_typical: 720, duration: 480 }),
+    ).toBe(720);
+    expect(formatRideDuration(720)).toBe("12 min");
+  });
+
+  it("ignore la durée brute et le fallback haversine", () => {
+    expect(reservationRouteDurationSeconds({ fallback: true, duration_typical: 720, duration: 480 })).toBeNull();
+    expect(reservationRouteDurationSeconds({ fallback: false, duration: 480 })).toBeNull();
+    expect(reservationRouteDurationSeconds(null)).toBeNull();
   });
 });
 

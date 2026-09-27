@@ -5,9 +5,24 @@ import {
   parseMedicalHintsFromAddress,
   parseSimulationAmount,
   resolvePreferentialBookingAmount,
+  routeSegmentLabels,
 } from "./rideCreateHelpers";
 
 describe("rideCreateHelpers", () => {
+  describe("routeSegmentLabels", () => {
+    it("décrit chaque tronçon comme le formulaire réservations", () => {
+      expect(routeSegmentLabels(1, false)).toEqual(["Départ → Destination 1"]);
+      expect(routeSegmentLabels(1, true)).toEqual([
+        "Départ → Destination 1",
+        "Destination 1 → Retour",
+      ]);
+      expect(routeSegmentLabels(2, false)).toEqual([
+        "Départ → Destination 1",
+        "Destination 1 → Destination 2",
+      ]);
+    });
+  });
+
   describe("resolvePreferentialBookingAmount", () => {
     it("conserve le tarif par trajet en aller simple", () => {
       expect(resolvePreferentialBookingAmount(35, false)).toBe(35);

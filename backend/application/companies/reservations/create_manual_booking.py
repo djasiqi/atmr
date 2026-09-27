@@ -905,6 +905,9 @@ class CreateManualBookingUseCase:
             outbound.doctor_name = validated_data.get("doctor_name")
             outbound.hospital_service = validated_data.get("hospital_service")
             outbound.notes_medical = validated_data.get("notes_medical")
+            outbound.needs_assistance = bool(validated_data.get("needs_assistance"))
+            outbound.requester_name = validated_data.get("requester_name")
+            outbound.requester_phone = validated_data.get("requester_phone")
             outbound.pickup_access_notes = validated_data.get("pickup_access_notes")
             outbound.dropoff_access_notes = validated_data.get("dropoff_access_notes")
             outbound.pickup_floor = validated_data.get("pickup_floor")
@@ -978,6 +981,9 @@ class CreateManualBookingUseCase:
                 return_booking.doctor_name = validated_data.get("doctor_name")
                 return_booking.hospital_service = validated_data.get("hospital_service")
                 return_booking.notes_medical = validated_data.get("notes_medical")
+                return_booking.needs_assistance = bool(validated_data.get("needs_assistance"))
+                return_booking.requester_name = validated_data.get("requester_name")
+                return_booking.requester_phone = validated_data.get("requester_phone")
                 return_booking.pickup_access_notes = validated_data.get(
                     "dropoff_access_notes"
                 )

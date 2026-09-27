@@ -120,6 +120,13 @@ async function requestWithFallback<T>(
       return await requests[index]();
     } catch (error) {
       lastError = error;
+      const gateCode = (error as { code?: string } | null)?.code;
+      if (
+        gateCode === "ERR_COMPANY_SESSION_NOT_READY" ||
+        gateCode === "ERR_DRIVER_SESSION_NOT_READY"
+      ) {
+        throw error;
+      }
       const status =
         typeof (error as AxiosError)?.response?.status === "number"
           ? (error as AxiosError).response?.status
@@ -1132,6 +1139,32 @@ export async function reassignCompanyRide(
     }
   } catch (e) {
     throw new Error(getDispatchApiErrorMessage(e, "Réassignation impossible."));
+  }
+}
+
+export async function completeCompanyRide(
+  options: CompanyRequestOptions & { missionId: number; reason?: string | null }
+) {
+  const id = options.missionId;
+  const reason = typeof options.reason === "string" ? options.reason.trim() : "";
+  const payload = reason.length > 0 ? { reason } : {};
+  try {
+    await apiClient.post(
+      `/companies/me/reservations/${id}/complete`,
+      payload,
+      withContextHeaders(options)
+    );
+  } catch (error) {
+    const body = (error as AxiosError<{ message?: unknown; error?: unknown }>)?.response?.data;
+    const fromBody =
+      body && typeof body === "object"
+        ? typeof body.message === "string" && body.message.trim().length > 0
+          ? body.message.trim()
+          : typeof body.error === "string" && body.error.trim().length > 0
+            ? body.error.trim()
+            : null
+        : null;
+    throw new Error(fromBody ?? getDispatchApiErrorMessage(error, "Clôture de la course impossible."));
   }
 }
 

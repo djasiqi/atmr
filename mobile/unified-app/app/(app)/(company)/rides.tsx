@@ -1,6 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   Platform,
   RefreshControl,
@@ -43,6 +44,7 @@ import {
   recordScreenRender,
 } from "../../../src/core/observability/perfResponsiveness";
 import { useCompanyBackgroundBootReady } from "../../../src/features/company/boot/companyColdStartPhase";
+import { useCompanySessionNetworkReady } from "../../../src/features/company/sessionNetworkGate";
 import { markCompanyScreenUsable } from "../../../src/features/company/observability/companyDashboardPhases";
 import { EnterpriseHeader } from "../../../src/features/company/components/EnterpriseHeader";
 import { DayPickerSheet } from "../../../src/features/company/components/DayPickerSheet";
@@ -73,42 +75,23 @@ import {
 import { hasConfirmedPickupTime, missionHasRenderableSchedule } from "../../../src/features/company/utils/pickupSentinel";
 import {
   cancelCompanyRide,
+  completeCompanyRide,
   getCompanyAvailableDrivers,
   getCompanyPartnershipsForTransfer,
   getDispatchApiErrorMessage,
   markCompanyRideUrgent,
   transferCompanyRide,
 } from "../../../src/features/company/api/companyApi";
+import { AssignDriverModal } from "../../../src/features/company/components/rides/AssignDriverModal";
+import { CompleteRideReasonModal } from "../../../src/features/company/components/rides/CompleteRideReasonModal";
 import { MaybeCompanyRidesEngineActions } from "../../../src/features/company/components/rides/MaybeCompanyRidesEngineActions";
+import { RideCreateModal } from "../../../src/features/company/components/rides/RideCreateModal";
+import { RideEditModal } from "../../../src/features/company/components/rides/RideEditModal";
+import { RideScheduleModal } from "../../../src/features/company/components/rides/RideScheduleModal";
+import { TransferRideModal } from "../../../src/features/company/components/transfers/TransferRideModal";
 import type { CompanyDispatchMission } from "../../../src/features/company/api/contracts";
 import { createShadow } from "../../../src/styles/shadowStyles";
 import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
-
-const RideCreateModal = lazy(() =>
-  import("../../../src/features/company/components/rides/RideCreateModal").then((m) => ({
-    default: m.RideCreateModal,
-  }))
-);
-const RideEditModal = lazy(() =>
-  import("../../../src/features/company/components/rides/RideEditModal").then((m) => ({
-    default: m.RideEditModal,
-  }))
-);
-const AssignDriverModal = lazy(() =>
-  import("../../../src/features/company/components/rides/AssignDriverModal").then((m) => ({
-    default: m.AssignDriverModal,
-  }))
-);
-const RideScheduleModal = lazy(() =>
-  import("../../../src/features/company/components/rides/RideScheduleModal").then((m) => ({
-    default: m.RideScheduleModal,
-  }))
-);
-const TransferRideModal = lazy(() =>
-  import("../../../src/features/company/components/transfers/TransferRideModal").then((m) => ({
-    default: m.TransferRideModal,
-  }))
-);
 
 const searchBarShadowOps = createShadow({
   shadowColor: "#000000",
@@ -465,6 +448,9 @@ export default function CompanyRidesScreen() {
   const [editMissionId, setEditMissionId] = useState<number | null>(null);
   const [scheduleMissionId, setScheduleMissionId] = useState<number | null>(null);
   const [missionActionPendingId, setMissionActionPendingId] = useState<number | null>(null);
+  const [completeReasonMissionId, setCompleteReasonMissionId] = useState<number | null>(null);
+  const [completeReason, setCompleteReason] = useState("");
+  const [completeError, setCompleteError] = useState<string | null>(null);
   const [expandedMissionId, setExpandedMissionId] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState(() => getTodayIsoDateInZurich());
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
@@ -488,6 +474,7 @@ export default function CompanyRidesScreen() {
   const queryClient = useQueryClient();
   const ridesFocused = useIsFocused();
   const backgroundReady = useCompanyBackgroundBootReady();
+  const networkReady = useCompanySessionNetworkReady();
   const networkOffline = useCompanyNetworkOffline();
   useRetainDispatchQueryCache("rides", contextId, selectedDate);
   const rideActions = useCompanyRideActions();
@@ -527,16 +514,18 @@ export default function CompanyRidesScreen() {
   }, [createParam, params.filter, router]);
 
   const refresh = useCallback(async () => {
+    if (!networkReady) return;
     setStickyRidesFetchReason("manual");
     await Promise.all([missionsRefetch(), delaysRefetch()]);
-  }, [missionsRefetch, delaysRefetch]);
+  }, [delaysRefetch, missionsRefetch, networkReady]);
 
   const refreshStaleOnly = useCallback(async () => {
+    if (!networkReady) return;
     // OPT-04E : J se réconcilie via refetchOnWindowFocus (si stale), pas un 2e GET ici.
     if (Date.now() - dispatchDelaysQuery.dataUpdatedAt > STALE_DATA_MS) {
       await delaysRefetch();
     }
-  }, [delaysRefetch, dispatchDelaysQuery.dataUpdatedAt]);
+  }, [delaysRefetch, dispatchDelaysQuery.dataUpdatedAt, networkReady]);
 
   const clearRouteFilterOverride = useCallback(() => {
     if (filterNorm === "exceptions" || filterNorm === "delayed" || filterNorm === "urgent") {
@@ -619,13 +608,21 @@ export default function CompanyRidesScreen() {
   );
 
   useEffect(() => {
-    if (!contextId || !missionsQuery.isSuccess) return;
+    if (!networkReady || !contextId || !missionsQuery.isSuccess) return;
     if (!ridesFocused && !backgroundReady) return;
     const handle = setTimeout(() => {
       prefetchAdjacentDispatchMissions(queryClient, contextId, selectedDate);
     }, 220);
     return () => clearTimeout(handle);
-  }, [backgroundReady, contextId, missionsQuery.isSuccess, queryClient, ridesFocused, selectedDate]);
+  }, [
+    backgroundReady,
+    contextId,
+    missionsQuery.isSuccess,
+    networkReady,
+    queryClient,
+    ridesFocused,
+    selectedDate,
+  ]);
 
   const dayMissions = useMemo(() => {
     const raw = missionsQuery.data?.missions ?? [];
@@ -900,6 +897,46 @@ export default function CompanyRidesScreen() {
     [contextId, refresh]
   );
 
+  const completeRideNow = useCallback(
+    async (missionId: number, reason?: string) => {
+      if (!contextId) return;
+      const mission = missions.find((item) => item.mission_id === missionId);
+      const rideStatus = (mission?.status ?? "").toLowerCase();
+      const trimmedReason = reason?.trim() ?? "";
+      if (rideStatus === "en_route" && trimmedReason.length === 0) {
+        setCompleteReason("");
+        setCompleteError(null);
+        setCompleteReasonMissionId(missionId);
+        return;
+      }
+      setMissionActionPendingId(missionId);
+      try {
+        await completeCompanyRide({
+          contextId,
+          missionId,
+          reason: trimmedReason.length > 0 ? trimmedReason : undefined,
+        });
+        setCompleteReasonMissionId(null);
+        setCompleteReason("");
+        setCompleteError(null);
+        await refresh();
+      } catch (error) {
+        const message = getDispatchApiErrorMessage(
+          error,
+          "Clôture de la course impossible."
+        );
+        if (rideStatus === "en_route") {
+          setCompleteError(message);
+        } else {
+          Alert.alert("Clôture impossible", message);
+        }
+      } finally {
+        setMissionActionPendingId(null);
+      }
+    },
+    [contextId, missions, refresh]
+  );
+
   const cancelRideNow = useCallback(
     async (missionId: number) => {
       if (!contextId) return;
@@ -1143,6 +1180,9 @@ export default function CompanyRidesScreen() {
           onSchedule={openScheduleModal}
           onTransfer={openTransferModal}
           onCancel={cancelRideNow}
+          onComplete={(missionId) => {
+            void completeRideNow(missionId);
+          }}
           onMarkUrgent={markUrgentNow}
           listFooterComponent={
             missionsQuery.error && !missionsQuery.data && dayEmptyKind !== "offline_unavailable" ? (
@@ -1185,8 +1225,7 @@ export default function CompanyRidesScreen() {
         />
 
       </Screen>
-      <Suspense fallback={null}>
-        {assignModalMissionId != null ? (
+      {assignModalMissionId != null ? (
           <AssignDriverModal
             visible
             pending={modalPending}
@@ -1224,6 +1263,21 @@ export default function CompanyRidesScreen() {
             onCreated={() => void refresh()}
           />
         ) : null}
+        {completeReasonMissionId != null ? (
+          <CompleteRideReasonModal
+            visible
+            pending={missionActionPendingId === completeReasonMissionId}
+            reason={completeReason}
+            error={completeError}
+            onChangeReason={setCompleteReason}
+            onConfirm={() => void completeRideNow(completeReasonMissionId, completeReason)}
+            onClose={() => {
+              if (missionActionPendingId === completeReasonMissionId) return;
+              setCompleteReasonMissionId(null);
+              setCompleteError(null);
+            }}
+          />
+        ) : null}
         {scheduleMissionId != null ? (
           <RideScheduleModal
             visible
@@ -1244,7 +1298,6 @@ export default function CompanyRidesScreen() {
             onSaved={() => void refresh()}
           />
         ) : null}
-      </Suspense>
       <DayPickerSheet
         visible={dateSheetOpen}
         selectedDate={selectedDate}

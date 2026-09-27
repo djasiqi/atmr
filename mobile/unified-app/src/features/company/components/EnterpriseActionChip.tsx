@@ -1,4 +1,12 @@
-import type { ComponentProps, ReactNode } from "react";
+import {
+  Children,
+  Fragment,
+  cloneElement,
+  isValidElement,
+  type ComponentProps,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "../../../design/ui/AppText";
@@ -23,6 +31,8 @@ type EnterpriseActionChipProps = {
   compact?: boolean;
   /** Icône légèrement plus visible */
   iconSize?: number;
+  /** Étend la puce sur toute la cellule d’une grille 3 colonnes */
+  fill?: boolean;
 };
 
 const toneToColors = (tone: EnterpriseActionChipProps["tone"]) => {
@@ -57,6 +67,7 @@ export function EnterpriseActionChip({
   tone = "brand",
   compact = false,
   iconSize: iconSizeOverride,
+  fill = false,
 }: EnterpriseActionChipProps) {
   const t = toneToColors(tone);
   const iconColor = iconColorOverride ?? t.icon;
@@ -69,6 +80,7 @@ export function EnterpriseActionChip({
       style={({ pressed }) => [
         s.chip,
         compact && s.chipCompact,
+        fill && s.chipFill,
         tone === "details" && s.chipDetailsCase,
         { backgroundColor: t.bg, borderColor: t.border },
         tone === "urgentCta" && s.chipUrgentCtaShadow,
@@ -87,9 +99,10 @@ export function EnterpriseActionChip({
           s.txt,
           compact && s.txtCompact,
           tone === "details" && s.txtDetailsCase,
+          fill && s.txtFill,
           { color: textColor },
         ]}
-        numberOfLines={1}
+        numberOfLines={fill ? 2 : 1}
       >
         {label}
       </AppText>
@@ -97,11 +110,43 @@ export function EnterpriseActionChip({
   );
 }
 
+function flattenActionNodes(children: ReactNode): ReactElement<{ fill?: boolean }>[] {
+  const items: ReactElement<{ fill?: boolean }>[] = [];
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return;
+    if (child.type === Fragment) {
+      items.push(...flattenActionNodes((child.props as { children?: ReactNode }).children));
+      return;
+    }
+    items.push(child as ReactElement<{ fill?: boolean }>);
+  });
+  return items;
+}
+
 /**
  * Remplace `footerActions` operations : rangée de puces qui wrap.
+ * `columns={3}` force deux lignes de trois boutons de même largeur.
  */
-export function EnterpriseFooterActionRow({ children }: { children: ReactNode }) {
-  return <View style={s.row}>{children}</View>;
+export function EnterpriseFooterActionRow({
+  children,
+  columns,
+}: {
+  children: ReactNode;
+  columns?: 3;
+}) {
+  if (columns !== 3) {
+    return <View style={s.row}>{children}</View>;
+  }
+  const items = flattenActionNodes(children);
+  return (
+    <View style={s.grid}>
+      {items.map((child, index) => (
+        <View key={index} style={s.gridCell}>
+          {cloneElement(child, { fill: true })}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 type PriorityRowProps = { children: ReactNode; /** Dans la même ligne que la pastille / chevron */ inline?: boolean };
@@ -174,6 +219,19 @@ export function EnterpriseRoundIconAction({
 
 const s = StyleSheet.create({
   row: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 0 },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginHorizontal: -4,
+  },
+  gridCell: {
+    width: "33.33%",
+    maxWidth: "33.33%",
+    flexGrow: 0,
+    flexShrink: 0,
+    paddingHorizontal: 4,
+    paddingBottom: 8,
+  },
   priorityRow: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
@@ -218,12 +276,19 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   chipCompact: { paddingVertical: 5, paddingHorizontal: 9, borderRadius: 8, gap: 3 },
+  chipFill: {
+    width: "100%",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    minHeight: 36,
+  },
   /** Puce « Détails » (operations / capture) */
   chipDetailsCase: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, gap: 6, alignItems: "center" as const },
   chipUrgentCtaShadow: { elevation: 2, shadowColor: E.URGENT, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.22, shadowRadius: 2 },
   chipDim: { opacity: 0.9 },
   chipOff: { opacity: 0.5 },
   txt: { fontWeight: "600" as const, flexShrink: 1 as const },
+  txtFill: { textAlign: "center" as const, flexGrow: 1 as const, flexShrink: 1 as const },
   txtCompact: { fontWeight: "700" as const },
   txtDetailsCase: { fontWeight: "600" as const, letterSpacing: 0.2 },
 });

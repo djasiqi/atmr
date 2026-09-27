@@ -226,7 +226,12 @@ def normalize_route_steps(
         if step["kind"] == "destination":
             if step["arrival_at"] is None:
                 raise CompanyMissionError("Une destination a une heure d'arrivée.")
-            if not is_last and step["departure_at"] is None:
+            followed_by_return = has_return and index == len(steps) - 2
+            if (
+                not is_last
+                and step["departure_at"] is None
+                and not followed_by_return
+            ):
                 raise CompanyMissionError(
                     "Une destination suivie d'une étape a une heure de départ."
                 )
@@ -247,8 +252,16 @@ def normalize_route_steps(
             step["service"] = None
             step["doctor"] = None
         if step["kind"] == "return":
-            if step["arrival_at"] is None or step["departure_at"] is not None:
-                raise CompanyMissionError("Le retour a une heure d'arrivée, sans départ.")
+            if step["departure_at"] is not None:
+                raise CompanyMissionError("Le retour n'a pas d'heure de départ.")
+            previous = steps[index - 1]
+            if previous.get("departure_at") is None:
+                if step["arrival_at"] is not None:
+                    raise CompanyMissionError(
+                        "L'heure de retour est à définir : pas d'arrivée tant que le départ n'est pas fixé."
+                    )
+            elif step["arrival_at"] is None:
+                raise CompanyMissionError("Le retour a une heure d'arrivée.")
             step["location"] = pickup["location"]
             step["latitude"] = pickup["latitude"]
             step["longitude"] = pickup["longitude"]
@@ -421,6 +434,31 @@ def _synthesize_legacy_steps(
             }
         )
     return steps
+
+
+def detach_company_mission_anchor(booking_id: int) -> None:
+    """Retire l'ancre des occurrences d'idempotence avant suppression du booking.
+
+    La clé étrangère est ON DELETE RESTRICT : sans ce détachement, supprimer
+    l'aller d'une mission canonique est refusé par PostgreSQL.
+    """
+    rows = CompanyManualBookingRequestOccurrence.query.filter_by(
+        anchor_booking_id=int(booking_id)
+    ).all()
+    if not rows:
+        return
+    request_ids = {int(row.request_id) for row in rows}
+    CompanyManualBookingRequestOccurrence.query.filter_by(
+        anchor_booking_id=int(booking_id)
+    ).delete(synchronize_session=False)
+    for request_id in request_ids:
+        remaining = CompanyManualBookingRequestOccurrence.query.filter_by(
+            request_id=request_id
+        ).count()
+        if remaining == 0:
+            CompanyManualBookingRequest.query.filter_by(id=request_id).delete(
+                synchronize_session=False
+            )
 
 
 def company_mission_read_payload(booking: Any) -> dict[str, Any]:
@@ -877,6 +915,42 @@ def _assert_pricing_mode_exclusive(mode: str, validated_data: dict[str, Any]) ->
         raise CompanyMissionError("Mode de tarification inconnu.")
 
 
+def _compact_address(value: Any) -> str:
+    import re
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _address_is_client_home(address: Any, home_address: Any) -> bool:
+    """Vrai si l'arrêt reprend le domicile (rue + numéro), pas seulement la ville."""
+    street = _compact_address(home_address)
+    stop = _compact_address(address)
+    if len(street) < 8 or not any(ch.isdigit() for ch in street) or not stop:
+        return False
+    return street in stop or stop in street
+
+
+def _apply_home_access(booking: Booking, mission: dict[str, Any]) -> None:
+    floor = mission.get("client_floor") or None
+    door = mission.get("client_door_code") or None
+    if not floor and not door:
+        return
+    home = mission.get("client_home_address")
+    if _address_is_client_home(booking.pickup_location, home):
+        if floor:
+            booking.pickup_floor = floor
+        if door:
+            booking.pickup_door_code = door
+    if _address_is_client_home(booking.dropoff_location, home):
+        if floor:
+            booking.dropoff_floor = floor
+        if door:
+            booking.dropoff_door_code = door
+
+
 def _apply_mission_fields(booking: Booking, anchor_values: dict[str, Any]) -> None:
     booking.client_id = anchor_values["client_id"]
     booking.customer_name = anchor_values["customer_name"]
@@ -930,15 +1004,23 @@ def _materialize_occurrence(
         booking.pickup_lon = origin.get("longitude")
         booking.dropoff_lat = dest.get("latitude")
         booking.dropoff_lon = dest.get("longitude")
-        booking.scheduled_time = origin.get("departure_at")
-        booking.time_confirmed = origin.get("departure_at") is not None
-        booking.is_return = dest["kind"] == "return"
+        is_return_leg = dest["kind"] == "return"
+        departure_at = origin.get("departure_at")
+        booking.is_return = is_return_leg
+        if departure_at is None:
+            booking.time_confirmed = False
+            booking.scheduled_time = None
+        else:
+            booking.scheduled_time = departure_at
+            booking.time_confirmed = True
         booking.amount = float(amount_by_pair[(index, index + 1)])
         booking.pickup_access_notes = origin.get("access_notes")
         booking.dropoff_access_notes = dest.get("access_notes")
-        booking.medical_facility = dest.get("establishment")
-        booking.hospital_service = dest.get("service")
-        booking.doctor_name = dest.get("doctor")
+        clinical = origin if is_return_leg else dest
+        booking.medical_facility = clinical.get("establishment")
+        booking.hospital_service = clinical.get("service")
+        booking.doctor_name = clinical.get("doctor")
+        _apply_home_access(booking, mission)
         booking.notes_medical = mission["notes_medical"]
         booking.is_round_trip = any(step["kind"] == "return" for step in steps) and index == 0
         if group_id:
@@ -1123,6 +1205,9 @@ def _create_canonical_series(
         ),
         "external_reference": validated_data.get("external_reference"),
         "notes_medical": validated_data.get("notes_medical"),
+        "client_home_address": getattr(client, "domicile_address", None),
+        "client_floor": getattr(client, "floor", None),
+        "client_door_code": getattr(client, "door_code", None),
     }
 
     first_departure = steps[0]["departure_at"]
