@@ -68,7 +68,9 @@ _LEGACY_STRUCTURAL = frozenset(
 
 
 class CompanyMissionError(Exception):
-    def __init__(self, message: str, status_code: int = 400, *, error_code: str | None = None):
+    def __init__(
+        self, message: str, status_code: int = 400, *, error_code: str | None = None
+    ):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
@@ -89,7 +91,9 @@ def _iso_dt(value: datetime | None) -> str | None:
 def _coord(value: Any) -> float | None:
     if value in (None, ""):
         return None
-    return float(Decimal(str(value)).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP))
+    return float(
+        Decimal(str(value)).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+    )
 
 
 def _stable_step(step: dict[str, Any]) -> dict[str, Any]:
@@ -123,7 +127,9 @@ def _stable_value(value: Any) -> Any:
 
 def hash_canonical_request(validated_data: dict[str, Any]) -> str:
     """Hash stable : retour dérivé, décimaux et horaires normalisés."""
-    mission_type = (validated_data.get("mission_type") or "patient_transport").strip().lower()
+    mission_type = (
+        (validated_data.get("mission_type") or "patient_transport").strip().lower()
+    )
     steps = normalize_route_steps(
         list(validated_data.get("route_steps") or []),
         mission_type=mission_type,
@@ -183,7 +189,9 @@ def normalize_route_steps(
             raise CompanyMissionError("Étape de parcours invalide.")
         position = raw.get("position", index)
         if int(position) != index:
-            raise CompanyMissionError("Les positions doivent être continues à partir de 0.")
+            raise CompanyMissionError(
+                "Les positions doivent être continues à partir de 0."
+            )
         kind = str(raw.get("kind") or "").strip()
         location = str(raw.get("location") or "").strip()
         if not location:
@@ -218,7 +226,9 @@ def normalize_route_steps(
 
     pickup = steps[0]
     if pickup["arrival_at"] is not None or pickup["departure_at"] is None:
-        raise CompanyMissionError("Le départ a une heure de départ, sans heure d'arrivée.")
+        raise CompanyMissionError(
+            "Le départ a une heure de départ, sans heure d'arrivée."
+        )
 
     has_return = kinds[-1] == "return"
     for index, step in enumerate(steps):
@@ -227,16 +237,14 @@ def normalize_route_steps(
             if step["arrival_at"] is None:
                 raise CompanyMissionError("Une destination a une heure d'arrivée.")
             followed_by_return = has_return and index == len(steps) - 2
-            if (
-                not is_last
-                and step["departure_at"] is None
-                and not followed_by_return
-            ):
+            if not is_last and step["departure_at"] is None and not followed_by_return:
                 raise CompanyMissionError(
                     "Une destination suivie d'une étape a une heure de départ."
                 )
             if is_last and step["departure_at"] is not None:
-                raise CompanyMissionError("La destination finale n'a pas d'heure de départ.")
+                raise CompanyMissionError(
+                    "La destination finale n'a pas d'heure de départ."
+                )
             if mission_type == "patient_transport" and step["destination_kind"] not in (
                 "medical",
                 "other",
@@ -271,9 +279,17 @@ def normalize_route_steps(
         arrival = step["arrival_at"]
         departure = step["departure_at"]
         if arrival is not None and departure is not None and departure < arrival:
-            raise CompanyMissionError("L'heure de départ d'une étape précède son arrivée.")
-        if previous_depart is not None and arrival is not None and arrival < previous_depart:
-            raise CompanyMissionError("Les étapes ne sont pas dans l'ordre chronologique.")
+            raise CompanyMissionError(
+                "L'heure de départ d'une étape précède son arrivée."
+            )
+        if (
+            previous_depart is not None
+            and arrival is not None
+            and arrival < previous_depart
+        ):
+            raise CompanyMissionError(
+                "Les étapes ne sont pas dans l'ordre chronologique."
+            )
         if departure is not None:
             previous_depart = departure
         elif arrival is not None:
@@ -328,7 +344,9 @@ def resolve_company_mission_anchor(booking: Any) -> Any | None:
     return None
 
 
-def reject_canonical_contract_update(booking: Any, validated_data: dict[str, Any]) -> str | None:
+def reject_canonical_contract_update(
+    booking: Any, validated_data: dict[str, Any]
+) -> str | None:
     """Message d'erreur si un PUT toucherait le contrat d'une mission canonique."""
     touched = _CONTRACT_PUT_FIELDS.intersection(validated_data)
     if not touched:
@@ -487,7 +505,9 @@ def company_mission_read_payload(booking: Any) -> dict[str, Any]:
             "billed_to_type": anchor.billed_to_type,
         }
     return {
-        "mission_anchor_booking_id": int(booking.id) if getattr(booking, "id", None) else None,
+        "mission_anchor_booking_id": int(booking.id)
+        if getattr(booking, "id", None)
+        else None,
         "route_steps_source": "legacy_synthesized",
         "route_steps": _synthesize_legacy_steps(booking),
         "passenger_name": None,
@@ -606,7 +626,9 @@ def company_mission_mobile_read(booking: Any) -> dict[str, Any]:
         payload = company_mission_read_payload(booking)
     else:
         payload = {
-            "mission_anchor_booking_id": int(booking.id) if getattr(booking, "id", None) else None,
+            "mission_anchor_booking_id": int(booking.id)
+            if getattr(booking, "id", None)
+            else None,
             "route_steps_source": "legacy_synthesized",
             "route_steps": _synthesize_legacy_steps(booking, company_id=company_id),
             "passenger_name": None,
@@ -620,17 +642,32 @@ def company_mission_mobile_read(booking: Any) -> dict[str, Any]:
     payload["needs_assistance"] = bool(getattr(mission, "needs_assistance", False))
     payload["requester_name"] = getattr(mission, "requester_name", None)
     payload["requester_phone"] = getattr(mission, "requester_phone", None)
-    payload["mission_type"] = getattr(mission, "mission_type", None) or payload.get("mission_type")
+    payload["mission_type"] = getattr(mission, "mission_type", None) or payload.get(
+        "mission_type"
+    )
     payload["delivery_description"] = getattr(mission, "delivery_description", None)
     payload["notes_medical"] = getattr(mission, "notes_medical", None)
-    payload["wheelchair_client_has"] = bool(getattr(mission, "wheelchair_client_has", False))
+    payload["wheelchair_client_has"] = bool(
+        getattr(mission, "wheelchair_client_has", False)
+    )
     payload["wheelchair_need"] = bool(getattr(mission, "wheelchair_need", False))
     return payload
 
 
-def apply_company_mission_mobile_read(summary: dict[str, Any], booking: Any) -> dict[str, Any]:
+def apply_company_mission_mobile_read(
+    summary: dict[str, Any], booking: Any
+) -> dict[str, Any]:
     """Ajoute la mission au summary sans remplacer le segment ouvert."""
-    protected = {"id", "route", "status", "driver", "time", "client", "transfer", "flags"}
+    protected = {
+        "id",
+        "route",
+        "status",
+        "driver",
+        "time",
+        "client",
+        "transfer",
+        "flags",
+    }
     read = company_mission_mobile_read(booking)
     for key, value in read.items():
         if key in protected:
@@ -681,7 +718,9 @@ def _price_one_way_segment(
     version = None
     if profile is not None:
         version = profile.current_version or (
-            sorted(profile.versions, key=lambda item: int(item.version), reverse=True)[0]
+            sorted(profile.versions, key=lambda item: int(item.version), reverse=True)[
+                0
+            ]
             if profile.versions
             else None
         )
@@ -714,7 +753,10 @@ def resolve_company_mission_pricing(
     if pricing_mode == "manual":
         if not segment_amounts or len(segment_amounts) != len(pairs):
             raise CompanyMissionError("Chaque tronçon doit avoir un montant.")
-        seen = {(int(row["from_position"]), int(row["to_position"])): row for row in segment_amounts}
+        seen = {
+            (int(row["from_position"]), int(row["to_position"])): row
+            for row in segment_amounts
+        }
         if len(seen) != len(pairs):
             raise CompanyMissionError("Les montants de tronçons sont incomplets.")
         priced = []
@@ -820,7 +862,9 @@ def _within_recurrence_end(moment: datetime, end_raw: Any) -> bool:
     return moment <= end_date
 
 
-def _recurrence_dates(first_departure: datetime, validated_data: dict[str, Any]) -> list[datetime]:
+def _recurrence_dates(
+    first_departure: datetime, validated_data: dict[str, Any]
+) -> list[datetime]:
     """Même calendrier que la création historique (jour, semaine, jours choisis)."""
     dates = [first_departure]
     if not validated_data.get("is_recurring"):
@@ -990,7 +1034,9 @@ def _materialize_occurrence(
         for row in amounts
     }
     group_id = (
-        str(uuid.uuid4()) if len(pairs) > 1 and not is_simple_round_trip(steps) else None
+        str(uuid.uuid4())
+        if len(pairs) > 1 and not is_simple_round_trip(steps)
+        else None
     )
 
     created: list[Booking] = []
@@ -1022,7 +1068,9 @@ def _materialize_occurrence(
         booking.doctor_name = clinical.get("doctor")
         _apply_home_access(booking, mission)
         booking.notes_medical = mission["notes_medical"]
-        booking.is_round_trip = any(step["kind"] == "return" for step in steps) and index == 0
+        booking.is_round_trip = (
+            any(step["kind"] == "return" for step in steps) and index == 0
+        )
         if group_id:
             booking.route_group_id = group_id
             booking.route_sequence_number = index + 1
@@ -1052,7 +1100,9 @@ def _materialize_occurrence(
                     longitude=step.get("longitude"),
                     arrival_at=step.get("arrival_at"),
                     departure_at=step.get("departure_at"),
-                    time_confirmed=bool(step.get("departure_at") or step.get("arrival_at")),
+                    time_confirmed=bool(
+                        step.get("departure_at") or step.get("arrival_at")
+                    ),
                     destination_kind=step.get("destination_kind"),
                     establishment=step.get("establishment"),
                     service=step.get("service"),
@@ -1064,7 +1114,9 @@ def _materialize_occurrence(
     return anchor, returns
 
 
-def _replay_request(request_row: CompanyManualBookingRequest) -> tuple[list[Booking], list[Booking]]:
+def _replay_request(
+    request_row: CompanyManualBookingRequest,
+) -> tuple[list[Booking], list[Booking]]:
     occurrences = (
         CompanyManualBookingRequestOccurrence.query.filter_by(request_id=request_row.id)
         .order_by(CompanyManualBookingRequestOccurrence.occurrence_index.asc())
@@ -1077,7 +1129,9 @@ def _replay_request(request_row: CompanyManualBookingRequest) -> tuple[list[Book
         if anchor is None:
             continue
         anchors.append(anchor)
-        children = Booking.query.filter_by(parent_booking_id=anchor.id, is_return=True).all()
+        children = Booking.query.filter_by(
+            parent_booking_id=anchor.id, is_return=True
+        ).all()
         returns.extend(children)
         if anchor.route_group_id:
             siblings = (
@@ -1139,7 +1193,9 @@ def _create_canonical_series(
             "Le parcours canonique n'accepte pas les champs de trajet historiques."
         )
 
-    mission_type = (validated_data.get("mission_type") or "patient_transport").strip().lower()
+    mission_type = (
+        (validated_data.get("mission_type") or "patient_transport").strip().lower()
+    )
     steps = normalize_route_steps(
         list(validated_data.get("route_steps") or []),
         mission_type=mission_type,
@@ -1168,7 +1224,9 @@ def _create_canonical_series(
     first = (getattr(user, "first_name", None) or "").strip()
     last = (getattr(user, "last_name", None) or "").strip()
     full_name = f"{first} {last}".strip()
-    if bool(getattr(client, "is_institution", False)) and getattr(client, "institution_name", None):
+    if bool(getattr(client, "is_institution", False)) and getattr(
+        client, "institution_name", None
+    ):
         customer_name = client.institution_name
     else:
         customer_name = full_name or (getattr(user, "username", "") or "Client")
@@ -1186,7 +1244,9 @@ def _create_canonical_series(
         "mission_type": mission_type,
         "delivery_description": " ".join(raw_desc.split()) if raw_desc else None,
         "is_urgent": bool(validated_data.get("is_urgent", False)),
-        "wheelchair_client_has": bool(validated_data.get("wheelchair_client_has", False)),
+        "wheelchair_client_has": bool(
+            validated_data.get("wheelchair_client_has", False)
+        ),
         "wheelchair_need": bool(validated_data.get("wheelchair_need", False)),
         "needs_assistance": bool(validated_data.get("needs_assistance", False)),
         "requester_name": validated_data.get("requester_name"),
@@ -1325,7 +1385,9 @@ def preview_company_mission_pricing(
     validated_data: dict[str, Any],
 ) -> dict[str, Any]:
     """Aperçu sans écriture. Même calendrier et même resolver que la création."""
-    mission_type = (validated_data.get("mission_type") or "patient_transport").strip().lower()
+    mission_type = (
+        (validated_data.get("mission_type") or "patient_transport").strip().lower()
+    )
     steps = normalize_route_steps(
         list(validated_data.get("route_steps") or []),
         mission_type=mission_type,

@@ -60,7 +60,10 @@ def test_schedule_change_is_one_push() -> None:
         before_driver_id=18,
         after_driver_id=18,
         changes={
-            "scheduled_time": {"from": "2026-09-27T14:30:00", "to": "2026-09-27T15:00:00"}
+            "scheduled_time": {
+                "from": "2026-09-27T14:30:00",
+                "to": "2026-09-27T15:00:00",
+            }
         },
     )
     assert len(planned) == 1
@@ -87,7 +90,10 @@ def test_route_and_schedule_are_coalesced() -> None:
         after_driver_id=18,
         changes={
             "pickup_location": {"from": "A", "to": "B"},
-            "scheduled_time": {"from": "2026-09-27T14:30:00", "to": "2026-09-27T15:00:00"},
+            "scheduled_time": {
+                "from": "2026-09-27T14:30:00",
+                "to": "2026-09-27T15:00:00",
+            },
         },
     )
     assert len(planned) == 1

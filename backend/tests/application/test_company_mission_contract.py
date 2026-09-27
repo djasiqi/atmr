@@ -49,7 +49,9 @@ def _iso(moment: datetime) -> str:
     return moment.strftime("%Y-%m-%dT%H:%M:%S")
 
 
-def _steps(start: datetime, *, destinations: int = 1, with_return: bool = False) -> list[dict]:
+def _steps(
+    start: datetime, *, destinations: int = 1, with_return: bool = False
+) -> list[dict]:
     steps: list[dict] = [
         {
             "position": 0,
@@ -224,9 +226,9 @@ def test_return_address_is_replaced_and_hashes_match():
         {"from_position": 1, "to_position": 2, "amount": "45"},
     ]
     assert hash_canonical_request(payload_a) == hash_canonical_request(payload_b)
-    assert canonical_payload_hash({"idempotency_key": "x", "a": 1}) == canonical_payload_hash(
-        {"a": 1}
-    )
+    assert canonical_payload_hash(
+        {"idempotency_key": "x", "a": 1}
+    ) == canonical_payload_hash({"a": 1})
 
 
 def test_schema_discriminator():
@@ -294,7 +296,11 @@ def test_pricing_modes_and_preview_series(monkeypatch):
             "mission_type": "patient_transport",
         },
     )
-    assert [row["total"] for row in preview["occurrences"]] == ["90.00", "90.00", "100.00"]
+    assert [row["total"] for row in preview["occurrences"]] == [
+        "90.00",
+        "90.00",
+        "100.00",
+    ]
     assert preview["series_total"] == "280.00"
     with pytest.raises(CompanyMissionError):
         preview_company_mission_pricing(
@@ -314,7 +320,9 @@ def test_pricing_modes_and_preview_series(monkeypatch):
     priced = resolve_company_mission_pricing(
         company_id=1,
         client=client,
-        steps=normalize_route_steps(_steps(start, destinations=3), mission_type="patient_transport"),
+        steps=normalize_route_steps(
+            _steps(start, destinations=3), mission_type="patient_transport"
+        ),
         pricing_mode="manual",
         segment_amounts=[
             {"from_position": 0, "to_position": 1, "amount": "45"},
@@ -419,7 +427,9 @@ def _company_and_client(db):
 
 def _execute(company, client, user, payload):
     with (
-        patch("services.platform_billing.capabilities.assert_billing_capability_allowed"),
+        patch(
+            "services.platform_billing.capabilities.assert_billing_capability_allowed"
+        ),
         patch(
             "services.billing.client_stay_resolver.find_active_stay_for_client",
             return_value=None,
@@ -475,7 +485,9 @@ def test_canonical_create_read_update_and_idempotency(db, monkeypatch):
     assert anchor.customer_name == "Ada Lovelace"
     assert anchor.pricing_mode == "automatic"
     assert result.created_outbounds[1].pricing_mode is None
-    persisted = CompanyBookingRouteStep.query.filter_by(anchor_booking_id=anchor.id).count()
+    persisted = CompanyBookingRouteStep.query.filter_by(
+        anchor_booking_id=anchor.id
+    ).count()
     assert persisted == 4
 
     secondary = result.created_outbounds[1]
@@ -492,7 +504,10 @@ def test_canonical_create_read_update_and_idempotency(db, monkeypatch):
         )
         assert updated.ok is False
         assert updated.status_code == 400
-    assert CompanyBookingRouteStep.query.filter_by(anchor_booking_id=anchor.id).count() == 4
+    assert (
+        CompanyBookingRouteStep.query.filter_by(anchor_booking_id=anchor.id).count()
+        == 4
+    )
 
     replay = _execute(company, client, user, payload)
     assert [row.id for row in replay.created_outbounds] == [
@@ -530,7 +545,9 @@ def test_manual_preferential_return_and_legacy(db):
         "passenger_name": "Manuel",
     }
     created = _execute(company, client, user, manual)
-    amounts = sorted(float(row.amount) for row in created.created_outbounds + created.created_returns)
+    amounts = sorted(
+        float(row.amount) for row in created.created_outbounds + created.created_returns
+    )
     assert amounts == [45.0, 45.0, 60.0]
     retour = created.created_returns[0]
     assert retour.is_return is True
@@ -595,7 +612,10 @@ def test_manual_preferential_return_and_legacy(db):
         validated_data={"pickup_location": "Aller A modifié"},
     )
     assert legacy_edit.ok is True
-    assert Booking.query.get(legacy.created_outbounds[0].id).pickup_location == "Aller A modifié"
+    assert (
+        Booking.query.get(legacy.created_outbounds[0].id).pickup_location
+        == "Aller A modifié"
+    )
 
 
 def test_recurrence_is_one_transaction(db, monkeypatch):
@@ -641,7 +661,9 @@ def test_recurrence_is_one_transaction(db, monkeypatch):
         real,
     )
     company, client, user = _company_and_client(db)
-    payload = dict(payload, client_id=client.id, idempotency_key=f"rec-{uuid.uuid4().hex}")
+    payload = dict(
+        payload, client_id=client.id, idempotency_key=f"rec-{uuid.uuid4().hex}"
+    )
     created = _execute(company, client, user, payload)
     assert len(created.created_outbounds) == 4
     assert (
@@ -654,7 +676,9 @@ def test_recurrence_is_one_transaction(db, monkeypatch):
         idempotency_key=payload["idempotency_key"]
     ).one()
     assert (
-        CompanyManualBookingRequestOccurrence.query.filter_by(request_id=request_row.id).count()
+        CompanyManualBookingRequestOccurrence.query.filter_by(
+            request_id=request_row.id
+        ).count()
         == 4
     )
     replay = _execute(company, client, user, payload)
@@ -818,7 +842,10 @@ def test_route_shapes_legacy_simple_and_secondary_reads(db, monkeypatch):
     assert direct.created_returns == []
     anchor_ab = direct.created_outbounds[0]
     assert anchor_ab.route_group_id is None
-    assert CompanyBookingRouteStep.query.filter_by(anchor_booking_id=anchor_ab.id).count() == 2
+    assert (
+        CompanyBookingRouteStep.query.filter_by(anchor_booking_id=anchor_ab.id).count()
+        == 2
+    )
     assert anchor_ab.requester_name == "Contact AB"
     _assert_put_blocked(anchor_ab)
 
@@ -840,10 +867,15 @@ def test_route_shapes_legacy_simple_and_secondary_reads(db, monkeypatch):
     assert len(round_trip.created_outbounds) == 1
     assert len(round_trip.created_returns) == 1
     assert round_trip.created_outbounds[0].route_group_id is None
-    assert round_trip.created_returns[0].parent_booking_id == round_trip.created_outbounds[0].id
+    assert (
+        round_trip.created_returns[0].parent_booking_id
+        == round_trip.created_outbounds[0].id
+    )
     return_read = company_mission_read_payload(round_trip.created_returns[0])
     assert return_read["route_steps_source"] == "canonical"
-    assert return_read["mission_anchor_booking_id"] == round_trip.created_outbounds[0].id
+    assert (
+        return_read["mission_anchor_booking_id"] == round_trip.created_outbounds[0].id
+    )
     assert [step["kind"] for step in return_read["route_steps"]] == [
         "pickup",
         "destination",
@@ -869,7 +901,10 @@ def test_route_shapes_legacy_simple_and_secondary_reads(db, monkeypatch):
     assert len(multi.created_outbounds) == 2
     assert multi.created_returns == []
     assert multi.created_outbounds[0].route_group_id
-    assert multi.created_outbounds[1].route_group_id == multi.created_outbounds[0].route_group_id
+    assert (
+        multi.created_outbounds[1].route_group_id
+        == multi.created_outbounds[0].route_group_id
+    )
     secondary = company_mission_read_payload(multi.created_outbounds[1])
     assert secondary["mission_anchor_booking_id"] == multi.created_outbounds[0].id
     assert len(secondary["route_steps"]) == 3
@@ -930,7 +965,10 @@ def test_route_shapes_legacy_simple_and_secondary_reads(db, monkeypatch):
         validated_data={"dropoff_location": "Legacy B modifié"},
     )
     assert edited.ok is True
-    assert Booking.query.get(legacy.created_outbounds[0].id).dropoff_location == "Legacy B modifié"
+    assert (
+        Booking.query.get(legacy.created_outbounds[0].id).dropoff_location
+        == "Legacy B modifié"
+    )
 
 
 def _read_mission(company, client, user, monkeypatch, steps):
@@ -992,8 +1030,14 @@ def test_mobile_read_covers_one_way_round_trip_and_group(db, monkeypatch):
         "destination",
         "return",
     ]
-    assert (read_out["mission_segment_index"], read_out["mission_segment_count"]) == (1, 2)
-    assert (read_back["mission_segment_index"], read_back["mission_segment_count"]) == (2, 2)
+    assert (read_out["mission_segment_index"], read_out["mission_segment_count"]) == (
+        1,
+        2,
+    )
+    assert (read_back["mission_segment_index"], read_back["mission_segment_count"]) == (
+        2,
+        2,
+    )
 
     grouped = _read_mission(
         company,
@@ -1005,7 +1049,9 @@ def test_mobile_read_covers_one_way_round_trip_and_group(db, monkeypatch):
     first, second = grouped.created_outbounds
     third = grouped.created_returns[0]
     assert first.route_group_id
-    before_steps = CompanyBookingRouteStep.query.filter_by(anchor_booking_id=first.id).count()
+    before_steps = CompanyBookingRouteStep.query.filter_by(
+        anchor_booking_id=first.id
+    ).count()
     second.notes_medical = "Note du segment, pas de la mission"
     db.session.flush()
     reads = [
@@ -1025,7 +1071,10 @@ def test_mobile_read_covers_one_way_round_trip_and_group(db, monkeypatch):
     ]
     assert reads[1]["notes_medical"] == "Note d'ancre"
     assert reads[1]["requester_name"] == "Camille"
-    assert CompanyBookingRouteStep.query.filter_by(anchor_booking_id=first.id).count() == before_steps
+    assert (
+        CompanyBookingRouteStep.query.filter_by(anchor_booking_id=first.id).count()
+        == before_steps
+    )
     assert not any(isinstance(obj, CompanyBookingRouteStep) for obj in db.session.new)
 
     second.status = BookingStatus.CANCELED
@@ -1131,12 +1180,23 @@ def test_mobile_legacy_read_synthesizes_without_writing(db, monkeypatch):
         },
     )
     booking = simple.created_outbounds[0]
-    before = CompanyBookingRouteStep.query.filter_by(anchor_booking_id=booking.id).count()
+    before = CompanyBookingRouteStep.query.filter_by(
+        anchor_booking_id=booking.id
+    ).count()
     read_simple = company_mission_mobile_read(booking)
     assert read_simple["route_steps_source"] == "legacy_synthesized"
-    assert [step["kind"] for step in read_simple["route_steps"]] == ["pickup", "destination"]
-    assert (read_simple["mission_segment_index"], read_simple["mission_segment_count"]) == (1, 1)
-    assert CompanyBookingRouteStep.query.filter_by(anchor_booking_id=booking.id).count() == before
+    assert [step["kind"] for step in read_simple["route_steps"]] == [
+        "pickup",
+        "destination",
+    ]
+    assert (
+        read_simple["mission_segment_index"],
+        read_simple["mission_segment_count"],
+    ) == (1, 1)
+    assert (
+        CompanyBookingRouteStep.query.filter_by(anchor_booking_id=booking.id).count()
+        == before
+    )
 
     round_trip = _execute(
         company,
@@ -1165,5 +1225,11 @@ def test_mobile_legacy_read_synthesizes_without_writing(db, monkeypatch):
         "return",
     ]
     assert read_out["route_steps"] == read_back["route_steps"]
-    assert (read_out["mission_segment_index"], read_out["mission_segment_count"]) == (1, 2)
-    assert (read_back["mission_segment_index"], read_back["mission_segment_count"]) == (2, 2)
+    assert (read_out["mission_segment_index"], read_out["mission_segment_count"]) == (
+        1,
+        2,
+    )
+    assert (read_back["mission_segment_index"], read_back["mission_segment_count"]) == (
+        2,
+        2,
+    )

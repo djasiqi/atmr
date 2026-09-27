@@ -843,7 +843,9 @@ def fanout_booking_updated(
                 reason="non_operational_change",
                 driver_id=driver_id,
                 booking_id=booking_id,
-                changes_keys=sorted(changes.keys()) if isinstance(changes, dict) else [],
+                changes_keys=sorted(changes.keys())
+                if isinstance(changes, dict)
+                else [],
             )
             inc_driver_push_skipped(reason="non_operational_change")
             return

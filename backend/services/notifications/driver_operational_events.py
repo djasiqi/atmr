@@ -93,7 +93,9 @@ def stable_event_id(
     booking_id: int,
 ) -> str:
     """Même mutation + même destinataire = même event_id, y compris au retry."""
-    raw = f"lirie:driver-operational:{mutation_id}:{event_type}:{driver_id}:{booking_id}"
+    raw = (
+        f"lirie:driver-operational:{mutation_id}:{event_type}:{driver_id}:{booking_id}"
+    )
     return str(uuid.uuid5(uuid.NAMESPACE_URL, raw))
 
 
@@ -169,7 +171,9 @@ def render_operational_copy(
 
     if event_type == EVENT_SCHEDULE_CHANGED:
         if old_when and new_when:
-            body = f"Votre transport prévu à {old_when} est désormais prévu à {new_when}."
+            body = (
+                f"Votre transport prévu à {old_when} est désormais prévu à {new_when}."
+            )
         elif new_when:
             body = f"Votre transport est désormais prévu à {new_when}."
         else:
