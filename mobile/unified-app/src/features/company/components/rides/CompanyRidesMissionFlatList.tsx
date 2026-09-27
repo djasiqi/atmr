@@ -204,6 +204,7 @@ const CompanyRidesMissionRow = memo(function CompanyRidesMissionRow({
               <EnterpriseActionChip
                 icon="checkmark-circle-outline"
                 label="Valider"
+                tone="confirm"
                 onPress={handleComplete}
                 disabled={!contextId || isActionPending || !canEditRide}
               />

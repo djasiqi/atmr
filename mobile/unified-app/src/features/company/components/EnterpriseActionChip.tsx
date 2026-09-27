@@ -25,8 +25,8 @@ type EnterpriseActionChipProps = {
   textColor?: string;
   showSpinner?: boolean;
   spinnerColor?: string;
-  /** `muted` = neutre ; `details` = puce Détails (fond, bordure) comme l’appli de référence */
-  tone?: "brand" | "muted" | "transfer" | "urgent" | "danger" | "urgentCta" | "details";
+  /** `muted` = neutre ; `details` = puce Détails ; `confirm` = action principale (Valider) */
+  tone?: "brand" | "muted" | "transfer" | "urgent" | "danger" | "urgentCta" | "details" | "confirm";
   /** Moins haut, pour barre prioritaire fixe */
   compact?: boolean;
   /** Icône légèrement plus visible */
@@ -35,7 +35,26 @@ type EnterpriseActionChipProps = {
   fill?: boolean;
 };
 
-const toneToColors = (tone: EnterpriseActionChipProps["tone"]) => {
+const toneToColors = (tone: EnterpriseActionChipProps["tone"], fill: boolean) => {
+  if (fill) {
+    switch (tone) {
+      case "details":
+      case "muted":
+        return { icon: "#475569", text: "#334155", bg: "#FFFFFF", border: "rgba(100, 116, 139, 0.28)" };
+      case "transfer":
+        return { icon: "#0284C7", text: "#0369A1", bg: "#F0F9FF", border: "rgba(14, 165, 233, 0.4)" };
+      case "danger":
+        return { icon: "#DC3545", text: "#B91C1C", bg: "#FEF2F2", border: "rgba(220, 53, 69, 0.35)" };
+      case "confirm":
+        return { icon: "#FFFFFF", text: "#FFFFFF", bg: E.BRAND, border: E.BRAND_DARK };
+      case "urgent":
+      case "urgentCta":
+        return { icon: "#B45309", text: "#92400E", bg: "#FFFBEB", border: "rgba(245, 158, 11, 0.45)" };
+      case "brand":
+      default:
+        return { icon: E.BRAND, text: E.BRAND_DARK, bg: "#F0FDFA", border: "rgba(0, 121, 107, 0.32)" };
+    }
+  }
   switch (tone) {
     case "muted":
       return { icon: E.TEXT_SEC, text: E.TEXT_SEC, bg: E.BG, border: E.BORDER };
@@ -47,6 +66,8 @@ const toneToColors = (tone: EnterpriseActionChipProps["tone"]) => {
       return { icon: "#FFFFFF", text: "#FFFFFF", bg: E.URGENT, border: "#D97706" };
     case "details":
       return { icon: E.TEXT_SEC, text: E.TEXT_SEC, bg: E.BG, border: E.BORDER };
+    case "confirm":
+      return { icon: "#FFFFFF", text: "#FFFFFF", bg: E.BRAND, border: E.BRAND_DARK };
     case "danger":
       return { icon: E.DANGER, text: E.DANGER, bg: E.BG, border: E.BORDER };
     case "brand":
@@ -69,10 +90,11 @@ export function EnterpriseActionChip({
   iconSize: iconSizeOverride,
   fill = false,
 }: EnterpriseActionChipProps) {
-  const t = toneToColors(tone);
+  const t = toneToColors(tone, fill);
   const iconColor = iconColorOverride ?? t.icon;
   const textColor = textColorOverride ?? t.text;
-  const iconSize = iconSizeOverride ?? (tone === "urgentCta" || compact || tone === "details" ? 16 : 14);
+  const iconSize =
+    iconSizeOverride ?? (fill ? 13 : tone === "urgentCta" || compact || tone === "details" ? 16 : 14);
   return (
     <Pressable
       onPress={onPress}
@@ -81,7 +103,7 @@ export function EnterpriseActionChip({
         s.chip,
         compact && s.chipCompact,
         fill && s.chipFill,
-        tone === "details" && s.chipDetailsCase,
+        !fill && tone === "details" && s.chipDetailsCase,
         { backgroundColor: t.bg, borderColor: t.border },
         tone === "urgentCta" && s.chipUrgentCtaShadow,
         (disabled || pressed) && s.chipDim,
@@ -98,11 +120,11 @@ export function EnterpriseActionChip({
         style={[
           s.txt,
           compact && s.txtCompact,
-          tone === "details" && s.txtDetailsCase,
+          !fill && tone === "details" && s.txtDetailsCase,
           fill && s.txtFill,
           { color: textColor },
         ]}
-        numberOfLines={fill ? 2 : 1}
+        numberOfLines={1}
       >
         {label}
       </AppText>
@@ -222,15 +244,15 @@ const s = StyleSheet.create({
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginHorizontal: -4,
+    marginHorizontal: -3,
   },
   gridCell: {
     width: "33.33%",
     maxWidth: "33.33%",
     flexGrow: 0,
     flexShrink: 0,
-    paddingHorizontal: 4,
-    paddingBottom: 8,
+    paddingHorizontal: 3,
+    paddingBottom: 6,
   },
   priorityRow: {
     flexDirection: "row" as const,
@@ -278,9 +300,15 @@ const s = StyleSheet.create({
   chipCompact: { paddingVertical: 5, paddingHorizontal: 9, borderRadius: 8, gap: 3 },
   chipFill: {
     width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 8,
-    minHeight: 36,
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 0,
+    minHeight: 28,
+    height: 28,
+    borderRadius: 8,
   },
   /** Puce « Détails » (operations / capture) */
   chipDetailsCase: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, gap: 6, alignItems: "center" as const },
@@ -288,7 +316,15 @@ const s = StyleSheet.create({
   chipDim: { opacity: 0.9 },
   chipOff: { opacity: 0.5 },
   txt: { fontWeight: "600" as const, flexShrink: 1 as const },
-  txtFill: { textAlign: "center" as const, flexGrow: 1 as const, flexShrink: 1 as const },
+  txtFill: {
+    textAlign: "center" as const,
+    flexGrow: 0,
+    flexShrink: 1,
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: "700" as const,
+    letterSpacing: 0,
+  },
   txtCompact: { fontWeight: "700" as const },
   txtDetailsCase: { fontWeight: "600" as const, letterSpacing: 0.2 },
 });
