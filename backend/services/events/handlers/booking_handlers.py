@@ -565,10 +565,11 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
         )
         _log_notification_dispatched("booking_cancelled", booking_id, targets)
 
-        # Driver : push + socket (sauf si acteur)
-        if targets.notify_driver_push and ctx.driver_id:
+        # Chauffeur capturé avant l'annulation : le booking peut déjà avoir driver_id vide.
+        cancelled_driver_id = ctx.driver_id or driver_id
+        if targets.notify_driver_push and cancelled_driver_id:
             notify_booking_cancelled(
-                int(ctx.driver_id),
+                int(cancelled_driver_id),
                 int(booking_id),
                 booking_data=booking_data,
             )

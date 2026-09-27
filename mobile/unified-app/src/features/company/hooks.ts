@@ -24,6 +24,7 @@ import {
   recordQueryCacheAccess,
 } from "../../core/observability/perfResponsiveness";
 import { useCompanySessionNetworkReady } from "./sessionNetworkGate";
+import { isCompanySessionNetworkReady } from "../../core/network/companySessionNetworkGate";
 import { contextScopedKey } from "../../core/cache/contextCache";
 import {
   assignCompanyRide,
@@ -665,6 +666,7 @@ export function useCompanyFallbackPolling(refetch: () => Promise<unknown>) {
     );
     if (!intervalMs) return;
     const intervalId = setInterval(() => {
+      if (!isCompanySessionNetworkReady()) return;
       void refetch();
     }, intervalMs);
     return () => clearInterval(intervalId);

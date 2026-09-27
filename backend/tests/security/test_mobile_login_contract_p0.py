@@ -105,6 +105,28 @@ class TestMobileLoginContractP0:
         assert isinstance(data.get("revocation_secret"), str)
         assert len(data["revocation_secret"]) > 0
 
+    def test_web_v1_with_device_id_returns_bearer_contract(self, client, sample_user):
+        """L'app unifiée dans le navigateur envoie le contrat v1 sans UA mobile."""
+        resp = client.post(
+            "/api/v1/auth/login",
+            json=_login_payload(sample_user),
+            headers={
+                "X-Client-Platform": "web",
+                "X-Auth-Contract-Version": CONTRACT_V1,
+                "X-Device-ID": "web-installation-id",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data.get("access_token") or data.get("token")
+        assert data.get("refresh_token")
+        assert data.get("session_id")
+        assert isinstance(data.get("recovery_credential"), str)
+        assert len(data["recovery_credential"]) > 0
+        assert isinstance(data.get("revocation_secret"), str)
+        assert len(data["revocation_secret"]) > 0
+
     def test_legacy_mobile_without_contract_still_200(self, client, sample_user):
         """Sans X-Auth-Contract-Version : anciens clients restent compatibles."""
         resp = client.post(

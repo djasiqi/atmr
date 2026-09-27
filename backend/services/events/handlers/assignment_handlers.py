@@ -47,6 +47,22 @@ def handle_assignment_cancelled(event: dict[str, Any]) -> None:
             booking_id=booking_id_int,
             driver_id=driver_id_int,
         )
+        try:
+            from services.events.fanout import fanout_driver_booking_reassigned
+
+            fanout_driver_booking_reassigned(
+                old_driver_id=driver_id_int,
+                booking_id=booking_id_int,
+                new_driver_id=None,
+                event_id=str(event.get("event_id") or "") or None,
+                correlation_id=event.get("correlation_id"),
+            )
+        except Exception:
+            logger.exception(
+                "[EventBus] Push DRIVER_UNASSIGNED échoué booking_id=%s driver_id=%s",
+                booking_id_int,
+                driver_id_int,
+            )
         logger.info(
             "✅ Assignment cancelled notification sent: assignment_id=%s, "
             "booking_id=%s, driver_id=%s",

@@ -39,6 +39,11 @@ import {
 import { canEnterFromLocalSession } from "./auth/canEnterFromLocalSession";
 import { flushPendingSessionConfirmation } from "./auth/pendingSessionConfirmation";
 import {
+  isP0ValidateEnabled,
+  probeCredentialStatuses,
+  probeEvent,
+} from "./auth/p0AuthStatusProbe";
+import {
   clearLocalAuthCredentialsLocked,
   getSessionGenerationId,
   isCurrentSessionGeneration,
@@ -307,8 +312,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
     void flushPendingSessionConfirmation().catch(() => undefined);
 
     // 2. Restore offline snapshot
+    if (isP0ValidateEnabled()) {
+      await probeCredentialStatuses("before_restore", { lifecycle: "cold_start" });
+    }
     const offline = await restoreOfflineSessionSnapshot();
     if (!isCurrentSessionGeneration(resumeGeneration)) return { localSessionReady: false };
+    if (isP0ValidateEnabled()) {
+      probeEvent("restore_result", { kind: offline.kind });
+      await probeCredentialStatuses("after_restore", { restore_kind: offline.kind });
+    }
 
     if (offline.kind === "storage_locked") {
       setMobileSessionStatus("storage_locked");
@@ -342,6 +354,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
       // Credential cryptographique absent / bundle incohérent : cleanup local sans
       // tombstone ni révocation serveur. Pas de attemptRestRecovery / session-resume repair.
       void appendSessionJournalEvent("session.resume.incoherent_local");
+      if (isP0ValidateEnabled()) {
+        probeEvent("incoherent_local_cleanup", {
+          session_resume_repair: "NO",
+          authenticated_offline: "NO",
+        });
+      }
       try {
         setAuthToken(null);
         await withCredentialStoreLock(async () => {
@@ -349,6 +367,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
         });
       } catch {
         /* best-effort */
+      }
+      if (isP0ValidateEnabled()) {
+        await probeCredentialStatuses("after_incoherent_cleanup");
       }
       setBootstrap(null);
       setActiveContext(null);
@@ -390,12 +411,28 @@ export function SessionProvider({ children }: PropsWithChildren) {
       return { localSessionReady };
     }
     // 3. Recovery REST (refresh puis session-resume) — capture génération, pas de bump
+    if (isP0ValidateEnabled()) {
+      probeEvent("rest_recovery_start", { reason: "cold_start" });
+    }
     const outcome = await attemptRestRecovery("cold_start");
     if (!isCurrentSessionGeneration(resumeGeneration)) return { localSessionReady: false };
+    if (isP0ValidateEnabled()) {
+      probeEvent("rest_recovery_outcome", {
+        outcome,
+        refresh_error_code: getLastRefreshErrorCode(),
+      });
+      await probeCredentialStatuses("after_rest_recovery", {
+        outcome,
+        mobile_session: "pending",
+      });
+    }
 
     if (outcome === "recovered") {
       setMobileSessionStatus("authenticated_online");
       void appendSessionJournalEvent("session.resume.success", { via: "coordinator" });
+      if (isP0ValidateEnabled()) {
+        probeEvent("mobile_session_state", { state: "authenticated_online" });
+      }
       void flushPendingSessionConfirmation().catch(() => undefined);
       try {
         const ctx = activeContextRef.current;
@@ -834,6 +871,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
     try {
       await login(email, password);
       await bootstrapSession({ trigger: "login_success" });
+      if (isP0ValidateEnabled()) {
+        await probeCredentialStatuses("after_login_success", {
+          mobile_session: "authenticated_online",
+        });
+        probeEvent("fresh_login_t0_complete");
+      }
     } catch (e) {
       const message = toUiErrorMessage(e, "Login failed");
       setError(message);

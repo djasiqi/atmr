@@ -147,3 +147,37 @@ class TestF10CsrfProductionNoFallback:
         ):
             secret = _get_csrf_secret()
             assert secret == "temporary-csrf-secret-change-in-production"
+
+
+class TestDevLocalhostAnyPortCors:
+    """Expo Web sur un port autre que 8081 doit passer le preflight (ERR_NETWORK)."""
+
+    def test_localhost_8082_echoes_custom_preflight_headers(self, client):
+        response = client.options(
+            "/api/v1/auth/bootstrap",
+            headers={
+                "Origin": "http://localhost:8082",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "x-trace-id,x-client-platform",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers.get("Access-Control-Allow-Origin") == (
+            "http://localhost:8082"
+        )
+        allow = (response.headers.get("Access-Control-Allow-Headers") or "").lower()
+        assert "x-trace-id" in allow
+        assert "x-client-platform" in allow
+        assert response.headers.get("Access-Control-Allow-Credentials") == "true"
+
+    def test_public_origin_does_not_echo_custom_headers(self, client):
+        response = client.options(
+            "/api/v1/auth/bootstrap",
+            headers={
+                "Origin": "https://evil.example",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "x-trace-id",
+            },
+        )
+        allow = (response.headers.get("Access-Control-Allow-Headers") or "").lower()
+        assert "x-trace-id" not in allow

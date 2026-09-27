@@ -1,5 +1,5 @@
 import { AppState, Platform } from "react-native";
-import * as Updates from "expo-updates";
+import { fetchOtaUpdate, getUpdateInfo } from "./expoUpdatesAccess";
 import type { PropsWithChildren } from "../reactCompat";
 import { useCallback, useEffect, useRef, useState } from "../reactCompat";
 import { emitDriverTelemetry } from "../observability/driverTelemetry";
@@ -15,7 +15,7 @@ import { useExpoUpdatesState } from "./useExpoUpdatesState";
 const SOURCE = "core.version.OtaAutoReloadProvider";
 
 function isOtaRuntimeSupported(): boolean {
-  return Platform.OS !== "web" && Updates.isEnabled && !__DEV__;
+  return Platform.OS !== "web" && getUpdateInfo().isEnabled && !__DEV__;
 }
 
 export function OtaAutoReloadProvider({ children }: PropsWithChildren) {
@@ -36,7 +36,7 @@ export function OtaAutoReloadProvider({ children }: PropsWithChildren) {
       }
 
       const evaluation = evaluateOtaAutoReload({
-        updatesEnabled: Updates.isEnabled,
+        updatesEnabled: getUpdateInfo().isEnabled,
         isDev: __DEV__,
         appState: AppState.currentState,
         missionBlocking: isOtaAutoReloadMissionBlocking(),
@@ -51,7 +51,7 @@ export function OtaAutoReloadProvider({ children }: PropsWithChildren) {
             source: SOURCE,
             reason: evaluation.deferReason,
             trigger,
-            update_id: Updates.updateId ?? null,
+            update_id: getUpdateInfo().updateId,
           });
         }
         return;
@@ -61,7 +61,7 @@ export function OtaAutoReloadProvider({ children }: PropsWithChildren) {
       emitDriverTelemetry("ota.auto_reload.start", {
         source: SOURCE,
         trigger,
-        update_id: Updates.updateId ?? null,
+        update_id: getUpdateInfo().updateId,
       });
 
       const result = await reloadPendingOtaUpdate();
@@ -71,7 +71,7 @@ export function OtaAutoReloadProvider({ children }: PropsWithChildren) {
           source: SOURCE,
           trigger,
           reason: "reload_async_failed",
-          update_id: Updates.updateId ?? null,
+          update_id: getUpdateInfo().updateId,
         });
       }
     },
@@ -82,7 +82,7 @@ export function OtaAutoReloadProvider({ children }: PropsWithChildren) {
     if (!isUpdatePending) return;
     emitDriverTelemetry("ota.auto_reload.pending_detected", {
       source: SOURCE,
-      update_id: Updates.updateId ?? null,
+      update_id: getUpdateInfo().updateId,
     });
     void tryAutoReload("isUpdatePending");
   }, [isUpdatePending, tryAutoReload]);
@@ -96,13 +96,13 @@ export function OtaAutoReloadProvider({ children }: PropsWithChildren) {
     fetchInFlightRef.current = true;
     void (async () => {
       try {
-        await Updates.fetchUpdateAsync();
+        await fetchOtaUpdate();
       } catch {
         emitDriverTelemetry("ota.auto_reload.failed", {
           source: SOURCE,
           trigger: "fetch_update",
           reason: "fetch_update_failed",
-          update_id: Updates.updateId ?? null,
+          update_id: getUpdateInfo().updateId,
         });
       } finally {
         fetchInFlightRef.current = false;

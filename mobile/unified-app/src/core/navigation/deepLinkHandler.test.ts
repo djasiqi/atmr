@@ -16,6 +16,13 @@ describe("resolveDriverDeepLink", () => {
     });
   });
 
+  it("resolves driver booking deep link", () => {
+    expect(resolveDriverDeepLink("lirie://driver/bookings/46778")).toEqual({
+      route: "/(app)/(driver)/missions/46778",
+      missionId: 46778,
+    });
+  });
+
   it("resolves lirie mission deep link", () => {
     expect(resolveDriverDeepLink("lirie://mission/321")).toEqual({
       route: "/(app)/(driver)/missions/321",

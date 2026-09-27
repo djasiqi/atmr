@@ -1,4 +1,6 @@
 import { Philosopher_700Bold } from "@expo-google-fonts/philosopher";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -19,6 +21,7 @@ import { NotificationsProvider } from "../src/core/providers/NotificationsProvid
 import { ExternalIntentProvider } from "../src/core/providers/ExternalIntentProvider";
 import { LayoutDebugOverlay } from "../src/design/responsive/LayoutDebugOverlay";
 import { ChatLayoutKpisProvider } from "../src/design/responsive/chatLayoutKpis";
+import { P0ValidateBootstrap } from "../src/core/auth/P0ValidateBootstrap";
 
 void SplashScreen.preventAutoHideAsync().catch(() => {
   // ignore if splash is already controlled elsewhere
@@ -36,6 +39,8 @@ if (Platform.OS !== "web") {
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Philosopher_700Bold,
+    ...Ionicons.font,
+    ...MaterialCommunityIcons.font,
   });
 
   useEffect(() => {
@@ -118,6 +123,7 @@ export default function RootLayout() {
         <MonitoringProvider>
           <NativeCapabilitiesProvider>
             <SessionProvider>
+              <P0ValidateBootstrap />
               <BootSplashGate>
                 <ExternalIntentProvider>
                   <NotificationsProvider>

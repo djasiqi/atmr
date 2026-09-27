@@ -1,5 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { AuthContext } from "../contracts/auth";
+import { isCompanySessionNetworkReady } from "../network/companySessionNetworkGate";
+import { isDriverSessionNetworkReady } from "../network/driverSessionNetworkGate";
 import { contextScopedKey } from "./contextCache";
 import { QUERY_STALE_TIME_MS } from "../queryStaleTimes";
 import { queryCacheOptions } from "../queryCachePolicy";
@@ -20,6 +22,7 @@ function todayIsoDate(): string {
 /** Prefetch minimal avant switchContext API (non bloquant). */
 export function prefetchContextTarget(queryClient: QueryClient, target: AuthContext): void {
   if (target.context_type === "driver" && target.context_id) {
+    if (!isDriverSessionNetworkReady()) return;
     const companyId = target.company_id;
     void queryClient.prefetchQuery({
       queryKey: driverQueryKeys.missions(target.context_id),
@@ -37,6 +40,7 @@ export function prefetchContextTarget(queryClient: QueryClient, target: AuthCont
   }
 
   if (target.context_type === "company" && target.context_id) {
+    if (!isCompanySessionNetworkReady()) return;
     const date = todayIsoDate();
     void queryClient.prefetchQuery({
       queryKey: contextScopedKey(target.context_id, [

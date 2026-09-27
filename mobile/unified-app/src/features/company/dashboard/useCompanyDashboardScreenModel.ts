@@ -111,6 +111,7 @@ export function useCompanyDashboardScreenModel() {
   const liveDriversRefetch = liveDrivers.refetch;
 
   const refreshStaleOnly = useCallback(async (options?: { includeMissions?: boolean }) => {
+    if (!isCompanySessionNetworkReady()) return;
     const now = Date.now();
     const tasks: Promise<unknown>[] = [];
     // OPT-04E : focus / AppState ne refetch pas les rides (J±1 + double GET).
@@ -142,6 +143,7 @@ export function useCompanyDashboardScreenModel() {
   ]);
 
   const refreshAll = useCallback(async () => {
+    if (!isCompanySessionNetworkReady()) return;
     setStickyRidesFetchReason("manual");
     const tasks: Promise<unknown>[] = [
       missionsRefetch(),

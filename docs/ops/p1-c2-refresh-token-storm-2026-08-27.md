@@ -2,6 +2,8 @@
 
 **Date :** 2026-08-27 · **Statut :** implémenté, revue appliquée (403 non terminal), tests PASS, **commité — non déployé, pas de push sans accord**.
 
+**P0 session 2026-09-23 : `RCA PENDING`.** P1-C2 n’est pas la cause démontrée des déconnexions chauffeur. Ne pas rouvrir la classification des 401, les TTL, ni cette porte tant que le triplet « app `session_revoked` / `refresh_replay_detected` + `mobile_device_session.status=active` + `revoked_reason` NULL » n’est pas observé. Fiche : [`p0-mobile-session-push-evidence.md`](p0-mobile-session-push-evidence.md).
+
 ## Symptôme (mesuré en C0/C1)
 
 - **71 requêtes `POST /auth/refresh-token` en 2 minutes** (fenêtre épisode C1),

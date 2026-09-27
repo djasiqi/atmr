@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import * as Updates from "expo-updates";
+import { checkForOtaUpdate } from "./expoUpdatesAccess";
 import Constants from "expo-constants";
 import {
   fetchAndReloadOtaUpdate,
@@ -73,7 +73,7 @@ export function useRuntimeUpdateGate() {
     let mounted = true;
     const check = async () => {
       try {
-        const result = await Updates.checkForUpdateAsync();
+        const result = await checkForOtaUpdate();
         if (!mounted) return;
         const requiresUpdate =
           !policy.killSwitch &&

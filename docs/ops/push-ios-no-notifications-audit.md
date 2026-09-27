@@ -1,5 +1,8 @@
 # Audit — iOS : aucune notification (Sujet 1)
 
+**Statut officiel (2026-09-23) : `P0 — DEVICE TEST REQUIRED`.**
+Aucun changement FCM / Expo / APNs avant les deux `test-push` sur un iPhone réel. Fiche à remplir : [`p0-mobile-session-push-evidence.md`](p0-mobile-session-push-evidence.md). `provider_accepted` n’est pas `mobile_received`.
+
 ## Symptôme
 
 Android reçoit correctement les notifications ; iOS n’en reçoit aucune.
@@ -122,6 +125,7 @@ Prometheus — labels autorisés uniquement : `platform`, `provider`, `delivery_
 ## Journal de preuve terrain
 
 _À remplir lors des tests appareil réel (dev + TestFlight/prod)._
+_Statut 2026-09-23 : journal toujours vide. Gate Phase A non close. Utiliser la fiche `=== INCIDENT PUSH IOS ===` de [`p0-mobile-session-push-evidence.md`](p0-mobile-session-push-evidence.md)._
 
 ### Build development
 
@@ -153,7 +157,7 @@ _À remplir lors des tests appareil réel (dev + TestFlight/prod)._
 
 ### Reste à faire (gate de sortie Phase A — ops / terrain)
 
-- Remplir le journal de preuve (builds dev + TestFlight/prod).
-- Vérifier manuellement la clé APNs Firebase, Bundle ID, `aps-environment`.
-- Exécuter test-push forcé FCM puis Expo et documenter cause racine.
-- Activer Phase B/C uniquement après preuve FCM positive.
+- ✅ **Statut tenu, pas de correctif** : `P0 — DEVICE TEST REQUIRED`. La fiche de collecte est dans [`p0-mobile-session-push-evidence.md`](p0-mobile-session-push-evidence.md).
+- Exécuter sur un iPhone réel `POST /api/v1/driver/me/test-push` avec `{"provider":"fcm"}` puis `{"provider":"expo"}`, et distinguer `provider_accepted` de `mobile_received`.
+- Vérifier manuellement la clé APNs Firebase, Bundle ID, `aps-environment` du binaire TestFlight.
+- Activer Phase B/C uniquement après preuve FCM positive sur l’appareil.

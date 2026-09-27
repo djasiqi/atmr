@@ -7,12 +7,8 @@ import {
 import { isCompanyBootWorkAllowedAtLane, resolveCompanyTabLazy } from "./companyColdStartGraph";
 
 describe("NAV-01 companyTabModulePreload", () => {
-  it("ne précharge que du CODE barre — aucun id GET", () => {
-    expect(COMPANY_TAB_CODE_PRELOAD_IDS).toEqual([
-      "chat.module",
-      "menu.module",
-    ]);
-    expect(COMPANY_TAB_CODE_PRELOAD_IDS.join(" ")).not.toMatch(/get|query|prefetch|invoice|client/i);
+  it("ne précharge aucun écran lourd au boot", () => {
+    expect(COMPANY_TAB_CODE_PRELOAD_IDS).toEqual([]);
   });
 
   it("conserve lazy au boot pour Chat / Menu ; Cockpit+Courses eager", () => {
@@ -24,20 +20,20 @@ describe("NAV-01 companyTabModulePreload", () => {
     expect(resolveCompanyTabLazy("clients-facturation")).toBe(true);
   });
 
-  it("le preload code n’est pas dans la lane critical", () => {
+  it("le preload code n’est ni critical ni background", () => {
     expect(isCompanyBootWorkAllowedAtLane("tabs.code.preload", "critical")).toBe(false);
-    expect(isCompanyBootWorkAllowedAtLane("tabs.code.preload", "background")).toBe(true);
+    expect(isCompanyBootWorkAllowedAtLane("tabs.code.preload", "background")).toBe(false);
   });
 
   it("enchaîne les loaders et n’appelle aucun prefetch GET", async () => {
     const loaded: string[] = [];
     const prefetchQuery = jest.fn();
     const loaders: CompanyTabCodePreload[] = [
-      { id: "chat.module", load: async () => { loaded.push("chat"); } },
-      { id: "menu.module", load: async () => { loaded.push("menu"); } },
+      { id: "menu.module", load: async () => { loaded.push("menu-a"); } },
+      { id: "menu.module", load: async () => { loaded.push("menu-b"); } },
     ];
     await preloadCompanyTabModules(loaders);
-    expect(loaded).toEqual(["chat", "menu"]);
+    expect(loaded).toEqual(["menu-a", "menu-b"]);
     expect(prefetchQuery).not.toHaveBeenCalled();
   });
 
@@ -46,15 +42,15 @@ describe("NAV-01 companyTabModulePreload", () => {
     let cancelled = false;
     const loaders: CompanyTabCodePreload[] = [
       {
-        id: "chat.module",
+        id: "menu.module",
         load: async () => {
-          loaded.push("chat");
+          loaded.push("menu-a");
           cancelled = true;
         },
       },
-      { id: "menu.module", load: async () => { loaded.push("menu"); } },
+      { id: "menu.module", load: async () => { loaded.push("menu-b"); } },
     ];
     await preloadCompanyTabModules(loaders, () => cancelled);
-    expect(loaded).toEqual(["chat"]);
+    expect(loaded).toEqual(["menu-a"]);
   });
 });

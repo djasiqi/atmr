@@ -11,6 +11,7 @@
  * Jamais Application.applicationName (nom de l'app « Lirie »).
  */
 import { Platform } from "react-native";
+import { getUpdateInfo } from "../version/expoUpdatesAccess";
 
 export type DeviceRuntimeMetadata = {
   platform: "ios" | "android" | "web" | string;
@@ -145,20 +146,12 @@ export function resolveDeviceRuntimeMetadata(): DeviceRuntimeMetadata {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Updates = require("expo-updates") as {
-      updateId?: string | null;
-      runtimeVersion?: string | null;
-      channel?: string | null;
-      isEmbeddedLaunch?: boolean;
-    };
-    otaUpdateId = Updates?.updateId ? String(Updates.updateId) : "embedded";
-    expoRuntimeVersion = Updates?.runtimeVersion
-      ? String(Updates.runtimeVersion)
-      : null;
-    if (Updates?.channel) {
-      releaseChannel = String(Updates.channel);
-    } else if (Updates?.isEmbeddedLaunch) {
+    const update = getUpdateInfo();
+    otaUpdateId = update.updateId ? String(update.updateId) : "embedded";
+    expoRuntimeVersion = update.runtimeVersion ? String(update.runtimeVersion) : null;
+    if (update.channel) {
+      releaseChannel = String(update.channel);
+    } else if (update.isEmbeddedLaunch) {
       releaseChannel = "embedded";
     }
   } catch {

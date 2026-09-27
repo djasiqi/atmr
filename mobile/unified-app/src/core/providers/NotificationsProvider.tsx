@@ -1,4 +1,4 @@
-import { AppState, Platform } from "react-native";
+import { Alert, AppState, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,6 +31,7 @@ import {
   initDriverFirebaseMessaging,
 } from "../../features/driver/firebaseMessaging";
 import { resolveDriverDeepLink } from "../navigation/deepLinkHandler";
+import { normalizeDriverEventType } from "../realtime/eventContracts";
 import { configureMissionBarIOS } from "../../features/driver/missionBarIOS";
 import { hideMissionBarAndroid } from "../../features/driver/missionBarAndroid";
 import { registerMissionBarBackgroundHandlers } from "../../features/driver/missionBarBackground";
@@ -230,11 +231,11 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
   );
 
   const normalizePushType = useCallback((raw: string): DriverPushPayload["type"] | null => {
-    if (raw === "mission_assigned" || raw === "booking_assigned" || raw === "booking")
-      return "mission_assigned";
-    if (raw === "mission_updated" || raw === "booking_updated") return "mission_updated";
-    if (raw === "mission_cancelled" || raw === "booking_cancelled") return "mission_cancelled";
-    if (raw === "mission_reassigned" || raw === "booking_reassigned") return "mission_reassigned";
+    const canonical = normalizeDriverEventType(raw);
+    if (canonical === "mission_assigned") return "mission_assigned";
+    if (canonical === "mission_updated") return "mission_updated";
+    if (canonical === "mission_cancelled") return "mission_cancelled";
+    if (canonical === "mission_reassigned") return "mission_reassigned";
     if (raw === "chat_message" || raw === "message" || raw === "team_chat_message") return "chat_message";
     if (raw === "reminder_action") return "reminder_action";
     if (raw === "informative") return "informative";
@@ -264,7 +265,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     (input: unknown, actionIdentifier?: string): DriverPushPayload | null => {
       if (!input || typeof input !== "object") return null;
       const value = input as Record<string, unknown>;
-      const rawType = String(value.type ?? "mission_updated");
+      const rawType = String(value.event_type ?? value.type ?? "mission_updated");
       const type = normalizePushType(rawType);
       if (!type) return null;
       const missionIdRaw =
@@ -287,10 +288,14 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
             ? "booking_v1"
             : "unknown";
       const threadId = extractThreadId(value);
+      const reasonRaw = typeof value.reason === "string" ? value.reason : undefined;
+      const unassignReason =
+        reasonRaw === "reassigned" || reasonRaw === "unassigned" ? reasonRaw : undefined;
       return {
         mission_id: Number.isFinite(resolvedMissionId) ? (resolvedMissionId as number) : null,
         type,
         event_id: typeof value.event_id === "string" ? value.event_id : undefined,
+        unassign_reason: unassignReason,
         action:
           normalizeQuickAction(value.action) ?? normalizeQuickAction(actionIdentifier),
         deep_link: deepLink,
@@ -353,7 +358,8 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
       }
       if (
         payload.mission_id != null &&
-        (payload.type === "mission_updated" ||
+        (payload.type === "mission_assigned" ||
+          payload.type === "mission_updated" ||
           payload.type === "mission_reassigned" ||
           payload.type === "mission_cancelled")
       ) {
@@ -390,7 +396,10 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
       }
 
       if (payload.type === "mission_assigned") {
-        const route = "/(app)/(driver)";
+        const route =
+          payload.mission_id != null
+            ? `/(app)/(driver)/missions/${payload.mission_id}`
+            : "/(app)/(driver)";
         recordNotificationNavigationTotal({ route });
         emitNotificationNavigation({ mission_id: payload.mission_id, route });
         router.push(route as any);
@@ -398,7 +407,14 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
       }
 
       if (payload.type === "mission_reassigned") {
-        const route = "/(app)/(driver)/trips";
+        const route = "/(app)/(driver)/missions";
+        const reassigned = payload.unassign_reason === "reassigned";
+        Alert.alert(
+          reassigned ? "Transport réattribué" : "Transport retiré",
+          reassigned
+            ? "Ce transport a été réattribué à un autre chauffeur."
+            : "Ce transport ne vous est plus assigné."
+        );
         recordNotificationNavigationTotal({ route });
         emitNotificationNavigation({ mission_id: payload.mission_id, route });
         router.push(route as any);

@@ -1,5 +1,9 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { QueryClient } from "@tanstack/react-query";
+import {
+  resetDriverSessionNetworkGateForTests,
+  setDriverSessionNetworkReady,
+} from "../../../core/network/driverSessionNetworkGate";
 
 jest.mock("../api/companyApi", () => ({
   getDispatchMissions: jest.fn(async () => ({ missions: [], context_id: "company:42", refreshed_at: "" })),
@@ -13,6 +17,15 @@ import {
 } from "./prefetchAdjacentDispatchMissions";
 
 describe("prefetchAdjacentDispatchMissions", () => {
+  beforeEach(() => {
+    resetDriverSessionNetworkGateForTests();
+    setDriverSessionNetworkReady(true);
+  });
+
+  afterEach(() => {
+    resetDriverSessionNetworkGateForTests();
+  });
+
   it("calcule J-1 et J+1 sans ambiguïté de fuseau", () => {
     expect(shiftIsoDate("2026-09-05", -1)).toBe("2026-09-04");
     expect(shiftIsoDate("2026-09-05", 1)).toBe("2026-09-06");
@@ -36,5 +49,13 @@ describe("prefetchAdjacentDispatchMissions", () => {
     expect(spy.mock.calls.every((call) => (call[0] as { refetchOnWindowFocus?: boolean }).refetchOnWindowFocus === false)).toBe(
       true
     );
+  });
+
+  it("ne précharge pas tant que SESSION_READY n’est pas ouvert", () => {
+    resetDriverSessionNetworkGateForTests();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = jest.spyOn(queryClient, "prefetchQuery").mockResolvedValue(undefined as never);
+    prefetchAdjacentDispatchMissions(queryClient, "company:42", "2026-09-05");
+    expect(spy).not.toHaveBeenCalled();
   });
 });

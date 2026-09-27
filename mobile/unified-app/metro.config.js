@@ -20,6 +20,8 @@ config.server = {
     return (req, res, next) => {
       res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
       res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+      // Sans cet en-tête, la police ionicons est bloquée et les icônes deviennent des carrés.
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       return base(req, res, next);
     };
   },

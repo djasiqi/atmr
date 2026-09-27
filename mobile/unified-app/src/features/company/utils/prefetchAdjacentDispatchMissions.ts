@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { isCompanySessionNetworkReady } from "../../../core/network/companySessionNetworkGate";
 import { contextScopedKey } from "../../../core/cache/contextCache";
 import { queryCacheOptions } from "../../../core/queryCachePolicy";
 import { getDispatchMissions } from "../api/companyApi";
@@ -35,6 +36,7 @@ export function prefetchAdjacentDispatchMissions(
   contextId: string,
   date: string
 ): void {
+  if (!isCompanySessionNetworkReady()) return;
   for (const neighbor of adjacentIsoDates(date)) {
     void queryClient.prefetchQuery({
       queryKey: dispatchMissionsQueryKey(contextId, neighbor),

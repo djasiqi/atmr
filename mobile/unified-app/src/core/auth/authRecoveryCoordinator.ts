@@ -22,6 +22,7 @@ import {
   type SessionEnvelope,
   type SessionGenerationId,
 } from "./authCredentialStore";
+import { readOfflineUiSnapshot } from "./offlineUiSnapshotStore";
 import {
   claimNextSessionGenerationIfCurrent,
   withCredentialStoreLock,
@@ -38,6 +39,7 @@ import {
 } from "../api/client";
 import { getNetworkSnapshot } from "../network/networkState";
 import { readPendingResumeOperation } from "./pendingResumeOperation";
+import { isP0ValidateEnabled, probeEvent } from "./p0AuthStatusProbe";
 
 const TERMINAL_ERROR_CODES = new Set([
   "session_revoked",
@@ -123,13 +125,26 @@ async function runRestRecovery(reason: string): Promise<RecoveryOutcome> {
   // Une reprise commencée doit être réconciliée avant tout refresh normal.
   const pendingResume = await readPendingResumeOperation();
   if (pendingResume) {
+    if (isP0ValidateEnabled()) {
+      probeEvent("session_resume_attempted", { reason, via: "pending_first" });
+    }
     const resumeFirst = await sessionResumeRequest();
     if (resumeFirst.ok) {
       void appendSessionJournalEvent("auth.recovery.success", {
         reason,
         via: "pending_session_resume",
       });
+      if (isP0ValidateEnabled()) {
+        probeEvent("session_resume_result", { ok: "YES", via: "pending_first" });
+      }
       return "recovered";
+    }
+    if (isP0ValidateEnabled()) {
+      probeEvent("session_resume_result", {
+        ok: "NO",
+        code: resumeFirst.code ?? "null",
+        via: "pending_first",
+      });
     }
     const resumeFirstClass = classifyAuthErrorCode(resumeFirst.code);
     if (resumeFirstClass === "terminal") {
@@ -156,13 +171,26 @@ async function runRestRecovery(reason: string): Promise<RecoveryOutcome> {
     return "no_action";
   }
 
+  if (isP0ValidateEnabled()) {
+    probeEvent("refresh_http_attempted", { reason });
+  }
   const refreshed = await refreshAuthTokenNow();
   if (refreshed) {
     void appendSessionJournalEvent("auth.recovery.success", { reason, via: "refresh" });
+    if (isP0ValidateEnabled()) {
+      probeEvent("refresh_http_result", { ok: "YES", status: "success" });
+    }
     return "recovered";
   }
 
   const refreshErrorClass = classifyAuthErrorCode(getLastRefreshErrorCode());
+  if (isP0ValidateEnabled()) {
+    probeEvent("refresh_http_result", {
+      ok: "NO",
+      error_code: getLastRefreshErrorCode(),
+      error_class: refreshErrorClass,
+    });
+  }
   if (refreshErrorClass === "terminal") {
     void appendSessionJournalEvent("auth.recovery.terminal", {
       reason,
@@ -178,10 +206,23 @@ async function runRestRecovery(reason: string): Promise<RecoveryOutcome> {
     return "keep_local";
   }
 
+  if (isP0ValidateEnabled()) {
+    probeEvent("session_resume_attempted", { reason, via: "after_refresh_fail" });
+  }
   const resumeOutcome = await sessionResumeRequest();
   if (resumeOutcome.ok) {
     void appendSessionJournalEvent("auth.recovery.success", { reason, via: "session_resume" });
+    if (isP0ValidateEnabled()) {
+      probeEvent("session_resume_result", { ok: "YES", via: "after_refresh_fail" });
+    }
     return "recovered";
+  }
+  if (isP0ValidateEnabled()) {
+    probeEvent("session_resume_result", {
+      ok: "NO",
+      code: resumeOutcome.code ?? "null",
+      via: "after_refresh_fail",
+    });
   }
   const resumeErrorClass = classifyAuthErrorCode(resumeOutcome.code);
   if (resumeErrorClass === "terminal") {
@@ -287,10 +328,16 @@ export async function restoreOfflineSessionSnapshot(): Promise<ColdStartRestoreR
     return { kind: "incoherent_local" };
   }
 
+  const offlineUi = await readOfflineUiSnapshot();
+  const offlineUiMatches = offlineUi != null && offlineUi.session_id === envelope.value.session_id;
   return {
     kind: "restored",
-    activeContext: envelope.value.cached_active_context ?? null,
-    bootstrap: envelope.value.cached_bootstrap ?? null,
+    activeContext: offlineUiMatches
+      ? offlineUi.active_context
+      : envelope.value.cached_active_context ?? null,
+    bootstrap: offlineUiMatches
+      ? offlineUi.bootstrap
+      : envelope.value.cached_bootstrap ?? null,
   };
 }
 

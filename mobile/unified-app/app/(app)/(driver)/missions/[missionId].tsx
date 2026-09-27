@@ -81,9 +81,12 @@ export default function DriverMissionDetailScreen() {
   const [confirmCompletionOpen, setConfirmCompletionOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const invalidMissionId = !Number.isFinite(missionIdNumber);
-  const missionError = missionQuery.error as { status?: number; message?: string } | undefined;
+  const missionError = missionQuery.error as { status?: number; code?: string; message?: string } | undefined;
+  const missionReassigned =
+    missionQuery.isError &&
+    (missionError?.status === 403 || missionError?.code === "BOOKING_ASSIGNED_TO_OTHER_DRIVER");
   const missionNotFound = missionQuery.isError && missionError?.status === 404;
-  const missionUnavailable = invalidMissionId || missionNotFound;
+  const missionUnavailable = invalidMissionId || missionNotFound || missionReassigned;
 
   return (
     <DriverContextGuard>
@@ -110,7 +113,9 @@ export default function DriverMissionDetailScreen() {
               <AppText variant="bodyMuted">
                 {invalidMissionId
                   ? "Identifiant mission invalide."
-                  : "Cette mission n'est plus accessible (annulee, terminee ou reattribuee)."}
+                  : missionReassigned
+                    ? "Ce transport ne vous est plus assigné."
+                    : "Cette mission n'est plus accessible (annulee, terminee ou reattribuee)."}
               </AppText>
               <Pressable
                 style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}

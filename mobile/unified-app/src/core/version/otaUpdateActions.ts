@@ -1,4 +1,4 @@
-import * as Updates from "expo-updates";
+import { fetchOtaUpdate, reloadOtaUpdate } from "./expoUpdatesAccess";
 
 export const OTA_ASSET_LOAD_ERROR =
   "Impossible de télécharger la mise à jour. Vérifiez votre connexion (Wi‑Fi de préférence) et réessayez.";
@@ -17,11 +17,11 @@ export function resolveOtaApplyErrorMessage(error: unknown): string {
 
 export async function fetchAndReloadOtaUpdate(): Promise<OtaApplyResult> {
   try {
-    const fetchResult = await Updates.fetchUpdateAsync();
+    const fetchResult = await fetchOtaUpdate();
     if (!fetchResult.isNew) {
       return "not_new";
     }
-    await Updates.reloadAsync();
+    await reloadOtaUpdate();
     return "reloaded";
   } catch {
     return "failed";
@@ -30,7 +30,7 @@ export async function fetchAndReloadOtaUpdate(): Promise<OtaApplyResult> {
 
 export async function reloadPendingOtaUpdate(): Promise<OtaApplyResult> {
   try {
-    await Updates.reloadAsync();
+    await reloadOtaUpdate();
     return "reloaded";
   } catch {
     return "failed";

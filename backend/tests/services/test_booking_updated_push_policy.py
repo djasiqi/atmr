@@ -73,3 +73,16 @@ def test_driver_push_false_when_notify_disabled() -> None:
 def test_driver_push_fields_contains_expected_keys() -> None:
     assert "scheduled_time" in DRIVER_PUSH_FIELDS
     assert "pickup_location" in DRIVER_PUSH_FIELDS
+    assert "notes_medical" not in DRIVER_PUSH_FIELDS
+    assert "doctor_name" not in DRIVER_PUSH_FIELDS
+
+
+def test_driver_push_false_on_medical_notes_only() -> None:
+    changes = {"notes_medical": "détail clinique", "doctor_name": "Dr X"}
+    assert (
+        should_send_driver_push_on_booking_updated(
+            notify_driver_push=True,
+            changes=changes,
+        )
+        is False
+    )

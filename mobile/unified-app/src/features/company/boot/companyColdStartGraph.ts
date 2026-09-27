@@ -87,8 +87,8 @@ export const COMPANY_BOOT_WORK: readonly CompanyBootWorkItem[] = [
   },
   {
     id: "tabs.code.preload",
-    lane: "background",
-    reason: "NAV-01 — JS Chat / Menu après premier écran, sans GET",
+    lane: "never",
+    reason: "settings et clients-facturation restent lazy jusqu’au tap (deux graphes ~1600 modules saturent Metro web).",
   },
   {
     id: "billing.invoices",

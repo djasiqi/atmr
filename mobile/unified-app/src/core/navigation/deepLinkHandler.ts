@@ -56,6 +56,20 @@ export function resolveDriverDeepLink(input: string | null | undefined): DriverD
       };
     }
   }
+  const driverBookingTail = removeAnySchemePrefix(
+    input,
+    SCHEMES.map((scheme) => `${scheme}driver/bookings/`)
+  );
+  if (driverBookingTail != null) {
+    const idRaw = driverBookingTail.split("?")[0];
+    const missionId = Number(idRaw);
+    if (Number.isFinite(missionId)) {
+      return {
+        route: `/(app)/(driver)/missions/${missionId}`,
+        missionId,
+      };
+    }
+  }
   const missionTail = removeAnySchemePrefix(input, SCHEMES.map((scheme) => `${scheme}mission/`));
   if (missionTail != null) {
     const idRaw = missionTail.split("?")[0];

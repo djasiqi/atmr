@@ -839,9 +839,9 @@ def create_app(config_name: str | None = None):
     # Définir cors_origins même si Socket.IO est désactivé
     # (nécessaire pour CORS plus bas)
     # ✅ Liste centralisée des origines CORS en développement (pas de "*" + headers custom).
-    # Dev local : 3000 = dashboard company, 8081 = app chauffeur web (Bearer only, withCredentials=false).
-    # Pour éviter ERR_NETWORK sur le driver web (8081), le backend doit tourner avec FLASK_CONFIG=development
-    # ou SOCKETIO_CORS_ORIGINS contenant http://localhost:8081 et http://127.0.0.1:8081.
+    # Dev local : 3000 = dashboard company, 8081 = app chauffeur web (port Metro habituel).
+    # Expo Web peut aussi lier 8082+ si 8081 est pris : en development/testing,
+    # _is_cors_origin_allowed accepte tout loopback/LAN, pas seulement ces ports.
     CORS_DEV_ORIGINS = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -915,6 +915,39 @@ def create_app(config_name: str | None = None):
     # En dev/test uniquement : autoriser tous les headers CORS pour débloquer vite en local.
     # En prod, on garde la liste explicite (sécurité).
     cors_allow_headers_wildcard = config_name in ("development", "testing")
+
+    # Expo Web prend le premier port libre (8081 occupé → 8082, etc.).
+    # En dev/test, tout loopback ou LAN privé est une origine locale, quel que soit le port.
+    _dev_local_origin_re = re.compile(
+        r"^https?://"
+        r"("
+        r"localhost"
+        r"|127\.0\.0\.1"
+        r"|\[::1\]"
+        r"|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+        r"|192\.168\.\d{1,3}\.\d{1,3}"
+        r"|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
+        r")"
+        r"(?::\d{1,5})?$",
+        re.IGNORECASE,
+    )
+
+    def _is_cors_origin_allowed(origin: str | None) -> bool:
+        """Origine acceptée pour CORS avec credentials.
+
+        La liste explicite reste la source en production. En development/testing,
+        un hôte loopback ou RFC1918 est accepté sur n'importe quel port : sinon
+        le preflight Expo Web (headers X-Trace-Id, X-Client-Platform, …) échoue
+        et Axios remonte ERR_NETWORK sur /auth/bootstrap.
+        """
+        if not origin:
+            return False
+        if isinstance(cors_origins, (list, tuple, set)) and origin in cors_origins:
+            return True
+        return bool(
+            config_name in ("development", "testing")
+            and _dev_local_origin_re.match(origin)
+        )
 
     if skip_socketio:
         app.logger.info("⏭️  Socket.IO désactivé (SKIP_SOCKETIO=1)")
@@ -1222,7 +1255,7 @@ def create_app(config_name: str | None = None):
             response = make_response("", 204)
             response.headers["X-Content-Type-Options"] = "nosniff"
             origin = request.headers.get("Origin")
-            if origin and origin in cors_origins:
+            if origin and _is_cors_origin_allowed(origin):
                 response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
             response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -1293,7 +1326,7 @@ def create_app(config_name: str | None = None):
             "Cache-Control": "public, max-age=3600",
         }
         origin = request.headers.get("Origin")
-        if origin and origin in cors_origins:
+        if origin and _is_cors_origin_allowed(origin):
             headers["Access-Control-Allow-Origin"] = origin
         return Response(data, mimetype=mimetype, headers=headers)
 
@@ -1604,7 +1637,7 @@ def create_app(config_name: str | None = None):
                 has_acao,
             )
         # Pour TOUTE requête avec Origin : forcer les en-têtes CORS (origine exacte, jamais * avec credentials).
-        if origin and origin in cors_origins:
+        if origin and _is_cors_origin_allowed(origin):
             resp.headers["Access-Control-Allow-Origin"] = origin
             resp.headers["Access-Control-Allow-Methods"] = (
                 "GET, POST, PUT, PATCH, DELETE, OPTIONS"
@@ -1663,9 +1696,9 @@ def create_app(config_name: str | None = None):
                 "[CORS-PREFLIGHT] Origin: %s, cors_origins: %s, in list: %s",
                 origin,
                 cors_origins,
-                origin in cors_origins if origin else False,
+                _is_cors_origin_allowed(origin),
             )
-            if origin and origin in cors_origins:
+            if origin and _is_cors_origin_allowed(origin):
                 # ✅ Chrome n'envoie pas la requête réelle (GET/POST) après 204 No Content au preflight OPTIONS.
                 # Retourner 200 OK au lieu de 204 pour que Chrome envoie bien le GET/POST qui suit.
                 response = make_response("", 200)
@@ -1789,7 +1822,7 @@ def create_app(config_name: str | None = None):
             return response
 
         allowed_origin: str | None = None
-        if cors_origins == "*" or origin in cast("list[str]", cors_origins):
+        if cors_origins == "*" or _is_cors_origin_allowed(origin):
             allowed_origin = origin
 
         if not allowed_origin:

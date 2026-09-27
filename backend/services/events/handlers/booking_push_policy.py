@@ -7,17 +7,21 @@ from typing import Any
 DRIVER_PUSH_FIELDS = frozenset(
     {
         "scheduled_time",
+        "pickup_time",
+        "appointment_time",
+        "arrival_time",
+        "return_time",
+        "mission_date",
+        "scheduled_date",
         "pickup_location",
         "dropoff_location",
-        "notes",
-        "notes_medical",
-        "medical_facility",
-        "hospital_service",
-        "doctor_name",
-        "pickup_access_notes",
-        "dropoff_access_notes",
-        "wheelchair_client_has",
-        "wheelchair_need",
+        "return_location",
+        "return_address",
+        "stops",
+        "waypoints",
+        "route_steps",
+        "intermediate_stops",
+        "legs",
     }
 )
 

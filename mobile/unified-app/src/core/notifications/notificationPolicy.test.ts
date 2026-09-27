@@ -11,12 +11,12 @@ describe("notificationPolicy", () => {
     clearActiveMissionScreen(-1);
   });
 
-  it("suppresses mission_updated on active mission screen", () => {
+  it("keeps a foreground banner when the mission screen is already open", () => {
     setActiveMissionScreen(42);
     const result = shouldSuppressForActiveScreen({
       payload: { type: "mission_updated", mission_id: 42 },
     });
-    expect(result.suppress).toBe(true);
+    expect(result.suppress).toBe(false);
   });
 
   it("hides silent mission_refresh in foreground", () => {

@@ -16,6 +16,8 @@ export type DriverPushType =
 
 export type DriverPushQuickAction = "accept" | "reject" | "start" | "complete";
 
+export type DriverUnassignReason = "reassigned" | "unassigned";
+
 export type DriverPushPayload = {
   type: DriverPushType;
   mission_id: number | null;
@@ -24,6 +26,7 @@ export type DriverPushPayload = {
   deep_link?: string;
   payload_schema?: "booking_v1" | "mission_v2" | "unknown";
   thread_id?: string;
+  unassign_reason?: DriverUnassignReason;
 };
 
 export const DRIVER_PUSH_PAYLOAD_MATRIX: Record<DriverPushType, string> = {

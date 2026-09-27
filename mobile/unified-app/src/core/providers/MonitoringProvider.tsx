@@ -1,20 +1,19 @@
 import { useEffect } from "../reactCompat";
 import type { PropsWithChildren } from "../reactCompat";
-import { emitDriverTelemetry, setDriverTelemetrySink } from "../observability/driverTelemetry";import { sendIngestEvent } from "../observability/ingestAdapter";
+import { emitDriverTelemetry, setDriverTelemetrySink } from "../observability/driverTelemetry";
+import { sendIngestEvent } from "../observability/ingestAdapter";
 import * as Sentry from "@sentry/react-native";
-import * as Updates from "expo-updates";
 import Constants from "expo-constants";
+import { getUpdateInfo } from "../version/expoUpdatesAccess";
 
 function applyFleetMapSentryContext(): void {
   try {
-    Sentry.setTag("expo_update_id", Updates.updateId ?? "embedded");
-    Sentry.setTag(
-      "is_embedded_launch",
-      String(Updates.isEmbeddedLaunch ?? true)
-    );
+    const update = getUpdateInfo();
+    Sentry.setTag("expo_update_id", update.updateId ?? "embedded");
+    Sentry.setTag("is_embedded_launch", String(update.isEmbeddedLaunch));
     Sentry.setTag(
       "runtime_version",
-      Updates.runtimeVersion ?? Constants.expoConfig?.runtimeVersion ?? "unknown"
+      update.runtimeVersion ?? Constants.expoConfig?.runtimeVersion ?? "unknown"
     );
   } catch {
     // Best effort — monitoring ne doit pas bloquer le démarrage
@@ -45,12 +44,13 @@ export function MonitoringProvider({ children }: PropsWithChildren) {
       applyFleetMapSentryContext();
     }
 
-    if (!__DEV__ && Updates.isEnabled && Updates.isEmbeddedLaunch === false) {
+    const update = getUpdateInfo();
+    if (!__DEV__ && update.isEnabled && update.isEmbeddedLaunch === false) {
       emitDriverTelemetry("ota.auto_reload.applied", {
         source: "MonitoringProvider",
-        update_id: Updates.updateId ?? "unknown",
+        update_id: update.updateId ?? "unknown",
         runtime_version:
-          Updates.runtimeVersion ?? Constants.expoConfig?.runtimeVersion ?? "unknown",
+          update.runtimeVersion ?? Constants.expoConfig?.runtimeVersion ?? "unknown",
       });
     }
 

@@ -31,6 +31,7 @@ Test : `authCredentialStore.keys.test.ts`.
 
 - Backend : 400 `device_identity_required` / 503 `mobile_session_contract_incomplete` + log `mobile_login_contract`.
 - Mobile : headers device stricts, `AuthContractError`, `toApiError` transport-only.
+- Navigateur (app unifiée, `X-Client-Platform: web`) : le contrat v1 + `X-Device-ID` crée la session durable et renvoie les jetons JSON, comme le natif. Le site société sans ce contrat reste en cookies uniquement.
 
 ## Tests
 

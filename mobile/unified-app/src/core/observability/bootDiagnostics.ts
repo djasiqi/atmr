@@ -2,7 +2,7 @@ import { AppState, PixelRatio, Platform } from "react-native";
 import * as Application from "expo-application";
 import * as Device from "expo-device";
 import * as Sentry from "@sentry/react-native";
-import * as Updates from "expo-updates";
+import { getUpdateInfo } from "../version/expoUpdatesAccess";
 import { appendSessionJournalEvent } from "./sessionJournal";
 
 export type BootFallbackName =
@@ -58,7 +58,7 @@ export function reportBootFallback(
       android_api_level: Platform.OS === "android" ? String(Platform.Version) : "n/a",
       os_version: Device.osVersion ?? "unknown",
       app_version: Application.nativeApplicationVersion ?? "unknown",
-      ota_update_id: Updates.updateId ?? "embedded",
+      ota_update_id: getUpdateInfo().updateId ?? "embedded",
       new_arch_enabled: String(detectNewArchEnabled()),
       font_scale: String(PixelRatio.getFontScale()),
       app_state: appState ?? "unknown",

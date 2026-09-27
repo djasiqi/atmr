@@ -21,16 +21,10 @@ from services.notifications.device_token_lifecycle import (
 )
 from services.notifications.push import send_push_message
 from services.notifications.push_message_builder import (
-    CHANGE_TYPE_ADDRESS_CHANGE,
-    CHANGE_TYPE_CANCEL,
-    CHANGE_TYPE_DETAILS_CHANGE,
-    CHANGE_TYPE_TIME_CHANGE,
     CHAT_TYPE_DIRECT,
     EVENT_ASSIGNED,
-    EVENT_REASSIGNED,
     _extract_time_hhmm,
     build_chat_push,
-    build_push_for_company_to_driver,
     build_push_for_driver_to_company,
     build_push_message,
 )
@@ -556,6 +550,72 @@ def _create_event_payload(data: Dict[str, Any], event_type: str) -> Dict[str, An
 # ==================== Fonctions de fan-out par événement métier ====================
 
 
+def _driver_operational_message(
+    *,
+    event_type: str,
+    driver_id: int,
+    booking_id: int,
+    booking_data: Dict[str, Any] | None,
+    mutation_id: str | None,
+    changes: Dict[str, Any] | None = None,
+    old_time_label: str | None = None,
+    new_time_label: str | None = None,
+    unassign_reason: str | None = None,
+) -> tuple[str, str, Dict[str, Any]]:
+    """Texte et payload opérationnels, sans donnée médicale."""
+    from services.notifications.driver_operational_events import (
+        build_operational_payload,
+        render_operational_copy,
+        stable_event_id,
+        time_label_from_context,
+    )
+
+    context = booking_data or {}
+    anchor_raw = context.get("parent_booking_id") or context.get(
+        "mission_anchor_booking_id"
+    )
+    try:
+        anchor = int(anchor_raw) if anchor_raw else booking_id
+    except (TypeError, ValueError):
+        anchor = booking_id
+    time_label = time_label_from_context(context) or new_time_label
+    stable_mutation = mutation_id or f"{event_type}:{booking_id}:{driver_id}"
+    event_id = stable_event_id(
+        mutation_id=stable_mutation,
+        event_type=event_type,
+        driver_id=driver_id,
+        booking_id=booking_id,
+    )
+    title, body = render_operational_copy(
+        event_type,
+        time_label=time_label,
+        old_time_label=old_time_label,
+        new_time_label=new_time_label or time_label,
+        unassign_reason=unassign_reason,
+    )
+    occurred_at = str(context.get("occurred_at") or "") or None
+    from datetime import UTC, datetime
+
+    payload = build_operational_payload(
+        event_id=event_id,
+        event_type=event_type,
+        booking_id=booking_id,
+        mission_anchor_booking_id=anchor,
+        occurred_at=occurred_at or datetime.now(UTC).isoformat(),
+        reason=unassign_reason if event_type == "DRIVER_UNASSIGNED" else None,
+    )
+    if changes:
+        payload["changes"] = sorted(classify_operational_change_names(changes))
+    payload["actor_role"] = "company"
+    return title, body, payload
+
+
+def classify_operational_change_names(changes: Dict[str, Any]) -> set[str]:
+    from services.notifications.driver_operational_events import classify_change_kinds
+
+    return classify_change_kinds(changes)
+
+
 def fanout_booking_assigned_to_driver(
     driver_id: int,
     booking_id: int,
@@ -618,33 +678,20 @@ def fanout_booking_assigned_to_driver(
 
     push_ctx: Dict[str, Any] = dict(booking_data or {})
     push_ctx.setdefault("id", booking_id)
-    discrete = _get_recipient_discreet_mode(driver_id=driver_id)
-    msg = build_push_message(
-        EVENT_ASSIGNED,
-        push_ctx,
-        "driver",
-        discrete_mode=discrete,
+    title, body, data = _driver_operational_message(
+        event_type="DRIVER_ASSIGNED",
+        driver_id=driver_id,
+        booking_id=booking_id,
+        booking_data=push_ctx,
+        mutation_id=event_id or correlation_id,
     )
-    app_logger.warning(
-        "[event_fanout] Sending push notification to driver %s for booking %s (pickup: %s)",
-        driver_id,
-        booking_id,
-        push_ctx.get("pickup_location") or push_ctx.get("pickup_address") or "-",
-    )
-
-    data = dict(msg["data"])
-    data["recipient_role"] = "driver"
-    data["actor_role"] = "company"
-    if event_id:
-        data["event_id"] = event_id
     if correlation_id:
         data["correlation_id"] = correlation_id
-    data.setdefault("booking_id", booking_id)
-    data["mission_id"] = booking_id
-    if event_id:
-        data["dedupe_key"] = f"event:{event_id}"
-    else:
-        data.setdefault("dedupe_key", f"booking:{booking_id}:event:assigned")
+    app_logger.warning(
+        "[event_fanout] Sending push notification to driver %s for booking %s",
+        driver_id,
+        booking_id,
+    )
 
     _log_push_fanout(
         event_type="booking_assigned",
@@ -655,8 +702,8 @@ def fanout_booking_assigned_to_driver(
     )
     result = _send_push_to_driver(
         driver_id=driver_id,
-        title=msg["title"],
-        body=msg["body"],
+        title=title,
+        body=body,
         data=data,
     )
 
@@ -773,81 +820,68 @@ def fanout_booking_updated(
             else None
         )
 
-        # Détecter change_type (priorité: Annulée > Horaire > Adresse > Statut)
-        # Cas "statut inchangé mais info modifiée": si EN_ROUTE + modif heure/adresse,
-        # on utilise time_change/address_change (pas status) → dedupe_key inclut event_type.
-        change_type = "status"
-        old_time: str | None = None
-        new_time: str | None = None
-        address_change_type: str | None = None
-        new_address_short: str | None = None
-        details_change_labels: list[str] | None = None
-
-        if status in {"canceled", "cancelled"}:
-            change_type = CHANGE_TYPE_CANCEL
-        elif isinstance(changes, dict):
-            if "scheduled_time" in changes:
-                ch = changes.get("scheduled_time")
-                if isinstance(ch, dict):
-                    old_time = _extract_time_hhmm(ch.get("from"))
-                    new_time = _extract_time_hhmm(ch.get("to"))
-                change_type = CHANGE_TYPE_TIME_CHANGE
-            elif "pickup_location" in changes or "dropoff_location" in changes:
-                ch_p = changes.get("pickup_location")
-                ch_d = changes.get("dropoff_location")
-                if isinstance(ch_p, dict) and ch_p.get("to"):
-                    address_change_type = "pickup"
-                    new_address_short = str(ch_p.get("to", ""))[:40]
-                elif isinstance(ch_d, dict) and ch_d.get("to"):
-                    address_change_type = "dropoff"
-                    new_address_short = str(ch_d.get("to", ""))[:40]
-                if not address_change_type and ch_p:
-                    address_change_type = "pickup"
-                elif not address_change_type and ch_d:
-                    address_change_type = "dropoff"
-                change_type = CHANGE_TYPE_ADDRESS_CHANGE
-            else:
-                details_fields_map = {
-                    "notes": "Notes",
-                    "notes_medical": "Notes médicales",
-                    "medical_facility": "Établissement",
-                    "hospital_service": "Service / bât.",
-                    "doctor_name": "Médecin",
-                    "pickup_access_notes": "Accès pickup",
-                    "dropoff_access_notes": "Accès destination",
-                    "wheelchair_client_has": "Chaise roulante",
-                    "wheelchair_need": "Chaise roulante",
-                }
-                labels = [
-                    label for key, label in details_fields_map.items() if key in changes
-                ]
-                if labels:
-                    # Dedup des labels en conservant l'ordre
-                    details_change_labels = list(dict.fromkeys(labels))
-                    change_type = CHANGE_TYPE_DETAILS_CHANGE
-
-        discrete = _get_recipient_discreet_mode(driver_id=driver_id)
-        msg = build_push_for_company_to_driver(
-            ctx,
-            change_type=change_type,
-            status=status,
-            old_time=old_time,
-            new_time=new_time,
-            address_change_type=address_change_type,
-            new_address_short=new_address_short,
-            details_change_labels=details_change_labels,
-            discrete_mode=discrete,
+        kinds = (
+            classify_operational_change_names(changes)
+            if isinstance(changes, dict)
+            else set()
         )
+        if status in {"canceled", "cancelled"}:
+            operational_type = "BOOKING_CANCELLED"
+        elif status == "assigned":
+            operational_type = "DRIVER_ASSIGNED"
+        elif kinds == {"route", "schedule"}:
+            operational_type = "BOOKING_CHANGED"
+        elif "schedule" in kinds:
+            operational_type = "SCHEDULE_CHANGED"
+        elif "route" in kinds:
+            operational_type = "ROUTE_CHANGED"
+        else:
+            from services.monitoring.prometheus import inc_driver_push_skipped
+            from services.notifications.push_pipeline_log import log_driver_push_skipped
 
-        # Anti-spam: dedup + throttle
+            log_driver_push_skipped(
+                reason="non_operational_change",
+                driver_id=driver_id,
+                booking_id=booking_id,
+                changes_keys=sorted(changes.keys()) if isinstance(changes, dict) else [],
+            )
+            inc_driver_push_skipped(reason="non_operational_change")
+            return
+
+        old_time = None
+        new_time = None
+        if isinstance(changes, dict):
+            scheduled = changes.get("scheduled_time")
+            if isinstance(scheduled, dict):
+                old_time = _extract_time_hhmm(scheduled.get("from"))
+                new_time = _extract_time_hhmm(scheduled.get("to"))
+
+        title, body, data = _driver_operational_message(
+            event_type=operational_type,
+            driver_id=driver_id,
+            booking_id=booking_id,
+            booking_data=ctx if isinstance(ctx, dict) else None,
+            mutation_id=str(ctx.get("trace_id") or "") or None,
+            changes=changes if isinstance(changes, dict) else None,
+            old_time_label=old_time,
+            new_time_label=new_time,
+        )
+        if operational_type == "DRIVER_ASSIGNED":
+            from services.notifications.push_driver_booking_dedup import (
+                claim_driver_booking_push,
+            )
+
+            if not claim_driver_booking_push(driver_id, booking_id):
+                return
+
         from services.notifications.dedup_throttle import check_dedup_and_throttle
 
         skip, reason = check_dedup_and_throttle(
             "driver",
             driver_id,
-            msg["dedupe_key"],
+            data["dedupe_key"],
             f"booking_{booking_id}",
-            msg.get("throttle_seconds", 8),
+            0,
             1,
         )
         if skip:
@@ -858,12 +892,8 @@ def fanout_booking_updated(
             )
             return
 
-        data = dict(msg["data"])
-        data["collapse_key"] = msg["collapse_key"]
-        data["dedupe_key"] = msg["dedupe_key"]
         data["routing_version"] = 2
         data["routing_decision"] = "driver_only"
-        data["recipient_role"] = "driver"
         if ctx.get("trace_id"):
             data["trace_id"] = ctx["trace_id"]
         if ctx.get("actor_role") is not None:
@@ -872,22 +902,16 @@ def fanout_booking_updated(
             data["actor_id"] = ctx["actor_id"]
 
         _log_push_fanout(
-            event_type="booking_updated",
+            event_type=operational_type,
             booking_id=booking_id,
             actor_role=ctx.get("actor_role"),
             driver_id_target=driver_id,
             company_id_target=0,
         )
-        if os.environ.get("DEBUG_NOTIF_ROUTING", "").lower() in ("1", "true", "yes"):
-            app_logger.info(
-                "[event_fanout] PUSH_DRIVER collapse_key=%s dedupe_key=%s routing_decision=driver_only",
-                msg["collapse_key"],
-                msg.get("dedupe_key"),
-            )
         _send_push_to_driver(
             driver_id=driver_id,
-            title=msg["title"],
-            body=msg["body"],
+            title=title,
+            body=body,
             data=data,
         )
     else:
@@ -1048,24 +1072,19 @@ def fanout_booking_cancelled(
             driver_id,
         )
 
-    # 2. Push notification (background) - template Company→Driver cancel
+    # 2. Un seul push d'annulation. Pas de DRIVER_UNASSIGNED en plus.
     ctx = booking_data or {"id": booking_id}
-    discrete = _get_recipient_discreet_mode(driver_id=driver_id)
-    msg = build_push_for_company_to_driver(
-        ctx,
-        change_type=CHANGE_TYPE_CANCEL,
-        status="cancelled",
-        discrete_mode=discrete,
+    title, body, data = _driver_operational_message(
+        event_type="BOOKING_CANCELLED",
+        driver_id=driver_id,
+        booking_id=booking_id,
+        booking_data=ctx,
+        mutation_id=str(ctx.get("trace_id") or ctx.get("event_id") or "") or None,
     )
-    data = dict(msg["data"])
-    data["collapse_key"] = msg["collapse_key"]
-    data["dedupe_key"] = msg["dedupe_key"]
-    data["recipient_role"] = "driver"
-    data["actor_role"] = "company"
     _send_push_to_driver(
         driver_id=driver_id,
-        title=msg["title"],
-        body=msg["body"],
+        title=title,
+        body=body,
         data=data,
     )
 
@@ -1174,31 +1193,19 @@ def fanout_driver_booking_reassigned(
             old_driver_id,
         )
 
-    # 2) Push notification (background) — message métier + dedupe_key stable
+    # 2) Push : l'ancien chauffeur doit comprendre que le transport lui est retiré.
     push_ctx: Dict[str, Any] = dict(booking_data or {})
     push_ctx.setdefault("id", booking_id)
-    discrete = _get_recipient_discreet_mode(driver_id=old_driver_id)
-    msg = build_push_message(
-        EVENT_REASSIGNED,
-        push_ctx,
-        "driver",
-        discrete_mode=discrete,
+    title, body, data = _driver_operational_message(
+        event_type="DRIVER_UNASSIGNED",
+        driver_id=old_driver_id,
+        booking_id=booking_id,
+        booking_data=push_ctx,
+        mutation_id=event_id or correlation_id,
+        unassign_reason="reassigned" if new_driver_id else "unassigned",
     )
-    data = dict(msg["data"])
-    data["type"] = "booking_reassigned"
-    data["booking_id"] = booking_id
-    data["mission_id"] = booking_id
-    data["new_driver_id"] = new_driver_id
-    data["recipient_role"] = "driver"
-    data["actor_role"] = "company"
-    if event_id:
-        data["event_id"] = event_id
     if correlation_id:
         data["correlation_id"] = correlation_id
-    if event_id:
-        data["dedupe_key"] = f"event:{event_id}"
-    else:
-        data.setdefault("dedupe_key", f"booking:{booking_id}:event:reassigned")
 
     _log_push_fanout(
         event_type="booking_reassigned",
@@ -1209,8 +1216,8 @@ def fanout_driver_booking_reassigned(
     )
     _send_push_to_driver(
         driver_id=old_driver_id,
-        title=msg["title"],
-        body=msg["body"],
+        title=title,
+        body=body,
         data=data,
     )
 

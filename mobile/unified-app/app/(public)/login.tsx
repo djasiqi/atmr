@@ -32,6 +32,7 @@ import {
   persistLoginRememberMe,
   readLoginPreferences,
 } from "../../src/core/auth/loginPreferences";
+import { isP0ValidateEnabled, probeEvent } from "../../src/core/auth/p0AuthStatusProbe";
 import {
   AppNotice,
   AppSwitch,
@@ -103,6 +104,12 @@ export default function LoginScreen() {
   const { topInset } = useAppViewport();
   /** Clavier dual : `useKeyboardHeight` remplace le doublon listeners + magic numbers (cf. plan Sprint 1). */
   const { keyboardVisible, scrollPaddingBottom: keyboardScrollPaddingBottom } = useKeyboardHeight();
+
+  ReactRuntime.useEffect(() => {
+    if (isP0ValidateEnabled()) {
+      probeEvent("login_screen_mounted", { mobile_session: mobileSessionStatus ?? "unknown" });
+    }
+  }, []);
 
   ReactRuntime.useEffect(() => {
     let cancelled = false;

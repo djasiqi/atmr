@@ -1,6 +1,10 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { QueryClient } from "@tanstack/react-query";
 import type { AuthContext } from "../contracts/auth";
+import {
+  resetDriverSessionNetworkGateForTests,
+  setDriverSessionNetworkReady,
+} from "../network/driverSessionNetworkGate";
 import { prefetchContextTarget } from "./prefetchContextTarget";
 
 jest.mock("../../features/company/api/companyApi", () => ({
@@ -20,6 +24,30 @@ jest.mock("../../features/driver/messages/api", () => ({
 }));
 
 describe("prefetchContextTarget", () => {
+  beforeEach(() => {
+    resetDriverSessionNetworkGateForTests();
+    setDriverSessionNetworkReady(true);
+  });
+
+  afterEach(() => {
+    resetDriverSessionNetworkGateForTests();
+  });
+
+  it("ne précharge pas le cockpit tant que SESSION_READY n’est pas ouvert", () => {
+    resetDriverSessionNetworkGateForTests();
+    const queryClient = new QueryClient();
+    const spy = jest.spyOn(queryClient, "prefetchQuery").mockResolvedValue(undefined as never);
+    prefetchContextTarget(queryClient, {
+      context_type: "company",
+      context_id: "company:42",
+      label: "Test",
+      permissions: [],
+      is_default: true,
+      company_id: 42,
+    } as AuthContext);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   it("ne précharge que dashboard / missions J / drivers live (OPT-07A)", () => {
     const queryClient = new QueryClient();
     const spy = jest

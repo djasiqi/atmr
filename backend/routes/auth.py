@@ -1397,6 +1397,8 @@ def _login_post_body():
     is_mobile_request = _is_mobile_request()
 
     contract = (request.headers.get("X-Auth-Contract-Version") or "").strip()
+    # L'app unifiée (y compris le navigateur) demande le même contrat que le natif.
+    wants_device_session = contract == "mobile-device-session-v1"
     device_installation_id = request.headers.get("X-Device-ID") or request.headers.get(
         "X-Installation-ID"
     )
@@ -1430,7 +1432,7 @@ def _login_post_body():
     mobile_recovery_credential = None
     mobile_revocation_secret = None
     mobile_reaped_session_ids: list = []
-    if is_mobile_request and device_installation_id:
+    if device_installation_id and (is_mobile_request or wants_device_session):
         driver_id_for_session = getattr(user, "driver_id", None)
         if driver_id_for_session is None:
             driver_obj = getattr(user, "driver", None)
@@ -1527,7 +1529,7 @@ def _login_post_body():
         }, 503
 
     refresh_expires_delta = _resolve_refresh_token_expires(
-        is_mobile_request=is_mobile_request,
+        is_mobile_request=is_mobile_request or wants_device_session,
         remember_me=remember_me,
     )
 
@@ -1747,8 +1749,8 @@ def _login_post_body():
     # Métadonnée scheduler (web + mobile) : pas de JWT dans le JSON web.
     response_data.update(_access_expiry_metadata(access_expires_delta))
 
-    # Lot 1-E : web = cookies only (pas de tokens JSON) ; mobile = Bearer/JSON
-    if is_mobile_request:
+    # Lot 1-E : web société = cookies only ; app (native ou navigateur sous contrat v1) = Bearer/JSON
+    if is_mobile_request or wants_device_session:
         response_data["token"] = access_token
         response_data["access_token"] = access_token
         response_data["refresh_token"] = refresh_token
@@ -1775,7 +1777,7 @@ def _login_post_body():
             "mobile_login_contract",
             extra={
                 "trace_id": trace_id,
-                "is_mobile": True,
+                "is_mobile": is_mobile_request,
                 "contract_version": contract,
                 "has_device_id": bool(device_installation_id),
                 "session_created": mobile_session is not None,

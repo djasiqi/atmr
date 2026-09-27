@@ -282,7 +282,7 @@ describe("NotificationsProvider", () => {
     expect(mockHandleDriverPushQuickAction).toHaveBeenCalledWith(
       expect.objectContaining({ mission_id: 321, type: "mission_assigned" })
     );
-    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)");
+    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)/missions/321");
 
     await act(async () => {
       renderer!.unmount();
@@ -670,7 +670,7 @@ describe("NotificationsProvider", () => {
       await Promise.resolve();
     });
 
-    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)");
+    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)/missions/602");
 
     await act(async () => {
       renderer!.unmount();
@@ -769,7 +769,7 @@ describe("NotificationsProvider", () => {
       await Promise.resolve();
     });
 
-    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)/trips");
+    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)/missions");
 
     await act(async () => {
       renderer!.unmount();

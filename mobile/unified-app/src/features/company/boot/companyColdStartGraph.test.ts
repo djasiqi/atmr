@@ -25,6 +25,7 @@ describe("companyColdStartGraph", () => {
         "companies.me",
         "dispatch.mode.get",
         "optimizer.status",
+        "tabs.code.preload",
       ])
     );
     expect(isCompanyBootWorkAllowedAtLane("optimizer.status", "critical")).toBe(false);
@@ -40,6 +41,6 @@ describe("companyColdStartGraph", () => {
     expect(isCompanyBootWorkAllowedAtLane("drivers.live", "critical")).toBe(true);
     expect(isCompanyBootWorkAllowedAtLane("inbox.notifications", "background")).toBe(true);
     expect(isCompanyBootWorkAllowedAtLane("tabs.code.preload", "critical")).toBe(false);
-    expect(isCompanyBootWorkAllowedAtLane("tabs.code.preload", "background")).toBe(true);
+    expect(isCompanyBootWorkAllowedAtLane("tabs.code.preload", "background")).toBe(false);
   });
 });

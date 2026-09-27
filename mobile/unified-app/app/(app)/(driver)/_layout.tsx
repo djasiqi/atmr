@@ -252,6 +252,9 @@ export default function DriverLayout() {
   useEffect(() => {
     void hydrateDriverMapViewport();
   }, []);
+  useEffect(() => {
+    void import("../../../tasks/locationTask").then((mod) => mod.registerDriverBackgroundTasks());
+  }, []);
   const { width } = useAppViewport();
   const reduceMotion = useReduceMotion();
   const tabScreenOptions = useMemo(

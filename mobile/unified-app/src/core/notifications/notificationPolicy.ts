@@ -37,18 +37,6 @@ export function shouldSuppressForActiveScreen(input: {
     }
   }
 
-  const missionId = input.payload?.mission_id;
-  if (missionId != null && screen.currentMissionId === missionId) {
-    if (
-      rawType === "mission_updated" ||
-      rawType === "mission_reassigned" ||
-      input.payload?.type === "mission_updated" ||
-      input.payload?.type === "mission_reassigned"
-    ) {
-      return { suppress: true, reason: "active_screen" };
-    }
-  }
-
   return { suppress: false };
 }
 

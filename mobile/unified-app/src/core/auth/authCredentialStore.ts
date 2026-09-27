@@ -96,8 +96,22 @@ async function nativeGet(key: string): Promise<SecureCredentialReadResult> {
   }
 }
 
+/** Marge sous la limite native Expo SecureStore (2048 octets). */
+export const SECURE_STORE_VALUE_BUDGET_BYTES = 1500;
+
+export function secureStoreUtf8ByteLength(value: string): number {
+  if (typeof TextEncoder !== "undefined") {
+    return new TextEncoder().encode(value).length;
+  }
+  return value.length;
+}
+
 async function nativeSet(key: string, value: string): Promise<SecureCredentialWriteResult> {
   assertSecureStoreKey(key);
+  const bytes = secureStoreUtf8ByteLength(value);
+  if (bytes > SECURE_STORE_VALUE_BUDGET_BYTES) {
+    return { status: "failed", cause: `secure_store_budget_exceeded:${bytes}` };
+  }
   if (!isNative()) {
     webMemory.set(key, value);
     return { status: "ok" };
@@ -452,8 +466,8 @@ export type SessionEnvelope = {
   /** Secret local (jamais transmis sauf via revoke-pending) pour la révocation hors-ligne. */
   revocation_secret?: string | null;
   /**
-   * Extension locale (non contractuelle côté backend) : permet de réhydrater
-   * immédiatement l'UI en mode authenticated_offline au cold start, avant tout appel réseau.
+   * Legacy lecture seule. À l'écriture, ces champs partent dans AsyncStorage
+   * (`offlineUiSnapshotStore`) pour rester sous le budget SecureStore.
    */
   cached_active_context?: AuthContext | null;
   cached_bootstrap?: BootstrapResponse | null;
@@ -469,10 +483,35 @@ export async function readSessionEnvelope(): Promise<TypedCredentialReadResult<S
   }
 }
 
+/**
+ * Le bootstrap et le contexte UI ne sont pas des secrets.
+ * Ils sortent de SecureStore (budget 1500 octets) vers AsyncStorage.
+ */
+async function persistSlimSessionEnvelope(envelope: SessionEnvelope): Promise<SessionEnvelope> {
+  if (envelope.cached_bootstrap != null || envelope.cached_active_context != null) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const snapshotStore = require("./offlineUiSnapshotStore") as typeof import("./offlineUiSnapshotStore");
+      await snapshotStore.writeOfflineUiSnapshot({
+        session_id: envelope.session_id,
+        active_context: envelope.cached_active_context ?? null,
+        bootstrap: envelope.cached_bootstrap ?? null,
+      });
+    } catch {
+      /* L'UI se reconstruira au bootstrap réseau. Le secret reste prioritaire. */
+    }
+  }
+  const slim: SessionEnvelope = { ...envelope };
+  delete slim.cached_bootstrap;
+  delete slim.cached_active_context;
+  return slim;
+}
+
 export async function writeSessionEnvelope(
   envelope: SessionEnvelope
 ): Promise<SecureCredentialWriteResult> {
-  return nativeSet(ENVELOPE_KEY, JSON.stringify(envelope));
+  const slim = await persistSlimSessionEnvelope(envelope);
+  return nativeSet(ENVELOPE_KEY, JSON.stringify(slim));
 }
 
 export async function deleteSessionEnvelope(): Promise<SecureCredentialWriteResult> {
@@ -511,6 +550,13 @@ async function clearPendingAuthOperationMarkers(): Promise<void> {
     await AsyncStorage.removeItem("@atmr/auth/pending_resume_operation");
   } catch {
     /* ignore */
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const snapshotStore = require("./offlineUiSnapshotStore") as typeof import("./offlineUiSnapshotStore");
+    await snapshotStore.deleteOfflineUiSnapshot();
+  } catch {
+    /* best-effort */
   }
 }
 

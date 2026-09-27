@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockSecureMemory = new Map<string, string>();
+const mockAsyncMemory = new Map<string, string>();
 
 jest.mock("expo-secure-store", () => ({
   AFTER_FIRST_UNLOCK: 0,
@@ -24,9 +25,13 @@ jest.mock("react-native", () => ({
 jest.mock("@react-native-async-storage/async-storage", () => ({
   __esModule: true,
   default: {
-    getItem: jest.fn(async () => null),
-    setItem: jest.fn(async () => undefined),
-    removeItem: jest.fn(async () => undefined),
+    getItem: jest.fn(async (key: string) => mockAsyncMemory.get(key) ?? null),
+    setItem: jest.fn(async (key: string, value: string) => {
+      mockAsyncMemory.set(key, value);
+    }),
+    removeItem: jest.fn(async (key: string) => {
+      mockAsyncMemory.delete(key);
+    }),
   },
 }));
 
@@ -97,6 +102,7 @@ async function seedRestorableBundle(opts?: { withRefresh?: boolean; withLegacy?:
 describe("P0 force-kill restoreOfflineSessionSnapshot", () => {
   beforeEach(() => {
     mockSecureMemory.clear();
+    mockAsyncMemory.clear();
     __resetSessionGenerationForTests();
     __resetCredentialStoreLockForTests();
   });

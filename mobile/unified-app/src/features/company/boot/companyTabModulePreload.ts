@@ -2,40 +2,21 @@ import { useEffect } from "react";
 import { InteractionManager } from "react-native";
 
 /**
- * NAV-01 — preload CODE des onglets barre (pas les écrans, pas leurs GET).
- * RideCreateModal n’est pas import() ici : un second chunk async fait crasher Metro
- * (`unknown module`) au Fast Refresh / idle require.
+ * NAV-01 — aucun preload CODE des onglets hors Cockpit / Courses.
+ * `settings` (~1600 modules) et `clients-facturation` (~1600 modules) partaient
+ * ensemble dès la lane background et saturaient le heap Metro web (~2 Go).
+ * Le chat reste lazy pour la même raison côté Android. Le premier tap charge la route.
  */
-export const COMPANY_TAB_CODE_PRELOAD_IDS = [
-  "chat.module",
-  "menu.module",
-] as const;
+export const COMPANY_TAB_CODE_PRELOAD_IDS = [] as const;
 
-export type CompanyTabCodePreloadId = (typeof COMPANY_TAB_CODE_PRELOAD_IDS)[number];
+export type CompanyTabCodePreloadId = string;
 
 export type CompanyTabCodePreload = {
   id: CompanyTabCodePreloadId;
   load: () => Promise<unknown>;
 };
 
-export const COMPANY_TAB_CODE_PRELOADS: readonly CompanyTabCodePreload[] = [
-  {
-    id: "chat.module",
-    load: () =>
-      Promise.all([
-        import("../../../../app/(app)/(company)/messages/_layout"),
-        import("../../../../app/(app)/(company)/messages/index"),
-      ]),
-  },
-  {
-    id: "menu.module",
-    load: () =>
-      Promise.all([
-        import("../../../../app/(app)/(company)/settings"),
-        import("../../../../app/(app)/(company)/clients-facturation"),
-      ]),
-  },
-];
+export const COMPANY_TAB_CODE_PRELOADS: readonly CompanyTabCodePreload[] = [];
 
 export async function preloadCompanyTabModules(
   loaders: readonly CompanyTabCodePreload[] = COMPANY_TAB_CODE_PRELOADS,
@@ -52,7 +33,8 @@ export async function preloadCompanyTabModules(
 }
 
 /**
- * Après le premier écran utile (lane background). N’exécute aucun prefetch React Query.
+ * File vide : aucun import() d’écran tant que l’utilisateur n’ouvre pas la route.
+ * N’exécute aucun prefetch React Query.
  */
 export function usePreloadCompanyTabModules(enabled: boolean): void {
   useEffect(() => {
