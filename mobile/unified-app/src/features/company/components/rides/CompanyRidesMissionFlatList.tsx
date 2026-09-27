@@ -13,7 +13,7 @@ import {
   isDispatchCompleted,
   isDispatchCancelled,
 } from "../../utils/companyDispatchStatus";
-import { canMarkRideUrgent } from "../../utils/pickupSentinel";
+import { canMarkRideUrgent, hasScheduledPickupTime } from "../../utils/pickupSentinel";
 import type { CompanyDispatchMission } from "../../api/contracts";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -91,6 +91,7 @@ const CompanyRidesMissionRow = memo(function CompanyRidesMissionRow({
   const cancelled = isDispatchCancelled(mission);
   const showActions = !completed && !cancelled;
   const showComplete = canManualCompleteRide(mission);
+  const showSchedule = !hasScheduledPickupTime(mission);
   const showUrgent = canMarkRideUrgent(mission);
   const unassigned = mission.driver_id == null;
 
@@ -180,7 +181,7 @@ const CompanyRidesMissionRow = memo(function CompanyRidesMissionRow({
                 disabled={!contextId || !canEditRide}
               />
             ) : null}
-            {showActions ? (
+            {showActions && showSchedule ? (
               <EnterpriseActionChip
                 icon="time-outline"
                 label={isActionPending ? "Planif…" : "Planifier"}
