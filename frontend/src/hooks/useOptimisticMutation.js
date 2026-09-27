@@ -2,6 +2,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { detectConflict, resolveConflict, createConflictMessage } from '../utils/conflictResolution';
+import { toSafeErrorText } from '../utils/apiErrorMessage';
 import { toast } from 'sonner';
 
 /**
@@ -213,8 +214,7 @@ export function useOptimisticMutation({
       }
       
       if (showToast && options.showErrorToast !== false) {
-        const errorMessage = err?.response?.data?.message || err?.message || 'Erreur lors de la mise à jour';
-        toast.error(errorMessage);
+        toast.error(toSafeErrorText(err, 'Erreur lors de la mise à jour'));
       }
 
       // Nettoyer les refs
