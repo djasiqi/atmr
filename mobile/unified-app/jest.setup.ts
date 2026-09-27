@@ -31,6 +31,22 @@ jest.mock("expo-constants", () => ({
   },
 }));
 
+// expo-updates charge ExpoUpdates natif dès l'import. Le module
+// expoUpdatesAccess.native.ts est résolu par Jest et casse les suites
+// qui importent deviceRuntimeMetadata sans mock local.
+jest.mock("expo-updates", () => ({
+  __esModule: true,
+  updateId: null,
+  channel: null,
+  runtimeVersion: null,
+  isEnabled: false,
+  isEmbeddedLaunch: true,
+  checkForUpdateAsync: jest.fn(async () => ({ isAvailable: false })),
+  fetchUpdateAsync: jest.fn(async () => ({ isNew: false })),
+  reloadAsync: jest.fn(async () => undefined),
+  useUpdates: () => ({ isUpdatePending: false, isUpdateAvailable: false }),
+}));
+
 jest.mock("expo-font", () => ({
   __esModule: true,
   loadAsync: () => Promise.resolve(),

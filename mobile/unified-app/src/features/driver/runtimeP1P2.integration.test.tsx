@@ -303,7 +303,7 @@ describe("P1->P2 lightweight integration", () => {
     expect(mockRegisterDriverPushToken).toHaveBeenCalledWith(
       expect.objectContaining({ token: "ExpoPushToken[integration]", driverId: 42 })
     );
-    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)");
+    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)/missions/501");
     expect(getDriverForegroundResumeListenerCountForTests()).toBeGreaterThan(0);
 
     let releaseReconcile: (() => void) | null = null;

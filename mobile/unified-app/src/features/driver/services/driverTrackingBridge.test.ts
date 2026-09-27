@@ -72,6 +72,11 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
   default: mockAsyncStorage,
 }));
 
+jest.mock("@sentry/react-native", () => ({
+  __esModule: true,
+  addBreadcrumb: jest.fn(),
+}));
+
 jest.mock("expo-battery", () => ({
   __esModule: true,
   getBatteryLevelAsync: jest.fn().mockResolvedValue(0.85),
