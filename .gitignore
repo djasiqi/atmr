@@ -346,3 +346,5 @@ docs/ops/**/operations-app-*.apk
 docs/ops/**/operations-app-*.aab
 docs/ops/**/operations-app-*.apks
 docs/ops/_p0e_build_136_diag/
+
+/frontend/test-results/.last-run.json
