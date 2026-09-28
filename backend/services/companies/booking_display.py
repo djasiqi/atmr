@@ -608,6 +608,7 @@ def build_booking_trip_flags(
         "round_trip": round_trip,
         "return_leg": is_return_leg,
         "multi_stop": multi_stop,
+        "route_group_id": route_group_id,
         "leg_number": int(leg_number) if leg_number is not None else None,
         "leg_count": leg_count if multi_stop else (1 if route_group_id else None),
         "transferred": transferred,

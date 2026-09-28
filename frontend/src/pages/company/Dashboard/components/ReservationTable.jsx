@@ -167,7 +167,7 @@ const getDelayRowClass = (delayMinutes) => {
  * façon contiguë et ordonnée par route_sequence_number, tout en conservant la
  * position globale des autres lignes (insertion à la 1re occurrence du groupe).
  */
-function clusterRouteGroups(list) {
+export function clusterRouteGroups(list) {
   if (!Array.isArray(list) || list.length === 0) return list;
   const byGroup = new Map();
   list.forEach((r) => {

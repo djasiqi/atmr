@@ -1,4 +1,4 @@
-import React, { memo, useCallback } from "react";
+import React, { memo, useCallback, useMemo } from "react";
 import { FlatList, View, type ListRenderItem, type RefreshControlProps } from "react-native";
 import { AppText } from "../../../../design/responsive";
 import { DispatchRideListCard } from "../DispatchRideListCard";
@@ -15,6 +15,7 @@ import {
 } from "../../utils/companyDispatchStatus";
 import { canMarkRideUrgent, hasScheduledPickupTime } from "../../utils/pickupSentinel";
 import type { CompanyDispatchMission } from "../../api/contracts";
+import { clusterCompanyRouteMissions } from "../../utils/clusterCompanyRouteMissions";
 import { Ionicons } from "@expo/vector-icons";
 import {
   COMPANY_RIDES_LIST_VIRTUALIZATION,
@@ -378,10 +379,12 @@ export function CompanyRidesMissionFlatList({
     </View>
   );
 
+  const orderedMissions = useMemo(() => clusterCompanyRouteMissions(missions), [missions]);
+
   return (
     <FlatList
       style={emptyStyles.list}
-      data={missions}
+      data={orderedMissions}
       keyExtractor={missionListKeyExtractor}
       renderItem={renderItem}
       ListHeaderComponent={listHeaderComponent}
