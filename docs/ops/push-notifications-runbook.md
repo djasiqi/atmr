@@ -1,7 +1,8 @@
 # Runbook — Couverture push chauffeur
 
-> **iOS — aucune notification** : `P0 — DEVICE TEST REQUIRED`. Diagnostic Phase A
-> [`push-ios-no-notifications-audit.md`](push-ios-no-notifications-audit.md).
+> **iOS — routage push** : `PASS PROD`. **Delivery** : `P0 FAIL / HOTFIX REQUIRED`.
+> Validation appareil en pause (2026-09-28, course 40500).
+> Diagnostic : [`push-ios-no-notifications-audit.md`](push-ios-no-notifications-audit.md).
 > Fiche iPhone (FCM puis Expo, `provider_accepted` ≠ `mobile_received`) :
 > [`p0-mobile-session-push-evidence.md`](p0-mobile-session-push-evidence.md).
 

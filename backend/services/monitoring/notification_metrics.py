@@ -34,10 +34,12 @@ def _histogram(
     return Histogram(name, documentation, labelnames, buckets=buckets)
 
 
-# ✅ Compteurs de notifications envoyées
-notifications_sent_total = _counter(
-    "notifications_sent_total",
-    "Nombre total de notifications envoyées",
+# Statut d'enqueue (queued / kafka / success / failed).
+# Ne pas réutiliser notifications_sent_total : son contrat canonique est
+# channel, notification_type, region (services.notifications.metrics).
+notification_enqueue_status_total = _counter(
+    "notification_enqueue_status_total",
+    "Issue de la mise en file ou de l'envoi push, sans effet sur le résultat métier",
     ("notification_type", "channel", "status"),
 )
 
@@ -108,16 +110,34 @@ silent_sync_duration_seconds = _histogram(
 def track_notification_sent(
     notification_type: str, channel: str, status: str = "success"
 ) -> None:
-    """Enregistre une notification envoyée.
+    """Enregistre une notification sans jamais faire échouer l'envoi métier.
 
-    Args:
-        notification_type: Type de notification (booking, message, etc.)
-        channel: Canal utilisé (missions, critical, etc.)
-        status: Statut (success, failed)
+    ``notifications_sent_total`` garde les labels canoniques
+    ``channel``, ``notification_type``, ``region``.
+    Le statut d'enqueue va dans ``notification_enqueue_status_total``.
     """
-    notifications_sent_total.labels(
-        notification_type=notification_type, channel=channel, status=status
-    ).inc()
+    try:
+        from services.notifications.metrics import record_notification_sent
+
+        record_notification_sent(
+            channel=channel,
+            notification_type=notification_type,
+            region="unknown",
+        )
+        notification_enqueue_status_total.labels(
+            notification_type=notification_type,
+            channel=channel,
+            status=status,
+        ).inc()
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "[telemetry_error] track_notification_sent type=%s channel=%s status=%s",
+            notification_type,
+            channel,
+            status,
+        )
 
 
 def track_notification_action(notification_type: str, action_type: str) -> None:
@@ -247,7 +267,7 @@ def get_notification_metrics_summary() -> dict[str, Any]:
             "silent_sync_duration_seconds",
         ],
         "example_queries": {
-            "open_rate": 'notifications_opened_total / notifications_sent_total{status="success"}',
+            "open_rate": "notifications_opened_total / notifications_sent_total",
             "action_rate": "notification_actions_total / notifications_opened_total",
             "night_skip_rate": "notifications_skipped_night_total / (notifications_sent_total + notifications_skipped_night_total)",
             "avg_delivery_time": "rate(notification_delivery_duration_seconds_sum[5m]) / rate(notification_delivery_duration_seconds_count[5m])",

@@ -1,14 +1,17 @@
 # P0 mobile — collecte de preuve (session chauffeur et push iOS)
 
 **Date :** 2026-09-23
-**Mise à jour :** 2026-09-25 — RCA **code** documentée dans [`mobile-session-disconnect-audit-2026-09-25.md`](./mobile-session-disconnect-audit-2026-09-25.md) (RC-1…RC-7). Correctifs P0-1/P0-3/P0-6 autorisés sans attendre le triplet ; P0-4/P0-5 (UI) et tout assouplissement de classification 401 restent **bloqués** tant que le triplet runtime n’est pas capturé.
+**Mise à jour :** 2026-09-28 — routage push iOS entreprise en production (`d6f05831` / `8419c3d2`), validation appareil encore ouverte. RCA session 2026-09-25 inchangée : [`mobile-session-disconnect-audit-2026-09-25.md`](./mobile-session-disconnect-audit-2026-09-25.md).
 
 **Statut officiel :**
 
 | Incident | Statut | Code |
 | --- | --- | --- |
 | Session chauffeur | `P0 — RCA CODE CONFIRMED` (preuve runtime triplet toujours requise) | Pas de patch « ignore 401 » / TTL / porte P1-C2. Voir audit 2026-09-25 pour P0-1…P0-6. |
-| Push iOS | `P0 — DEVICE TEST REQUIRED` | Aucun changement FCM / Expo / APNs avant les deux `test-push` sur un iPhone réel. |
+| Push iOS (routage FCM) | `PASS PROD` | `d6f05831` en production le 2026-09-28 21:33 (Genève). Course 40500 : FCM iOS accepté. |
+| Fiabilité delivery push | `P0 FAIL / HOTFIX REQUIRED` | 22:29–22:30 course 40500 : métriques fatales + claim Redis avant envoi. Validation appareil en pause. |
+| Dédup fournisseur par appareil | `FAIL` | Même `device_id` : Expo et FCM sélectionnés (double bandeau 22:20). |
+| Crash carte entreprise iOS | `CODE FIXED / NEW iOS BUILD + DEVICE VALIDATION PENDING` | `5f7a8d87`. Absent du binaire actuellement sur l’iPhone. Build iOS à distribuer, puis reproduction de l’usage carte de 14:38 et absence de nouvel événement `LIRIE-MOBILE-1K`. |
 
 Les deux incidents restent séparés. Une session tombée peut empêcher le renouvellement du token push. Elle n’explique pas à elle seule qu’Android reçoive les notifications et que les iPhone, collectivement, n’en reçoivent plus.
 

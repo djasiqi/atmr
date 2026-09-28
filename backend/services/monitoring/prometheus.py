@@ -47,20 +47,20 @@ def _get_or_create_metric(metric_class, name, *args, **kwargs):
     if not PROMETHEUS_AVAILABLE or REGISTRY is None:
         return None
 
-    # Essayer de créer la métrique directement
-    # Si elle existe déjà, Prometheus lèvera une ValueError
+    existing = getattr(REGISTRY, "_names_to_collectors", {}).get(name)
+    if existing is not None:
+        return existing
+
+    # Une seconde importation du module ne doit pas recréer le collector.
     try:
         return metric_class(name, *args, **kwargs)
-    except ValueError as e:
-        # Si la métrique existe déjà (duplication), logger et retourner None
-        # La métrique existante sera utilisée depuis le registre global
+    except Exception as e:
         if "Duplicated timeseries" in str(e) or "already registered" in str(e):
             logger.debug(
-                "[PrometheusMetrics] Métrique %s déjà enregistrée (ignorée, utilisation de l'existante)",
+                "[PrometheusMetrics] Métrique %s déjà enregistrée, collector existant réutilisé",
                 name,
             )
-            return None
-        # Autre erreur : la propager
+            return getattr(REGISTRY, "_names_to_collectors", {}).get(name)
         raise
 
 
@@ -70,30 +70,28 @@ def _get_or_create_metric(metric_class, name, *args, **kwargs):
 # ==================== ETA Metrics ====================
 
 if PROMETHEUS_AVAILABLE and Counter and Gauge and Histogram:
-    # Précision ETA
-    ETA_ACCURACY_RATE = Gauge(
+    # Une seule registration par processus : le helper réutilise le collector.
+    ETA_ACCURACY_RATE = _get_or_create_metric(
+        Gauge,
         "eta_accuracy_rate",
         "Taux de précision ETA (0-1)",
         ["zone"],  # zone: "city", "suburb", "highway"
     )
-
-    # Latence calcul ETA
-    ETA_CALCULATION_LATENCY_SECONDS = Histogram(
+    ETA_CALCULATION_LATENCY_SECONDS = _get_or_create_metric(
+        Histogram,
         "eta_calculation_latency_seconds",
         "Latence de calcul ETA (secondes)",
         ["source"],  # source: "osrm", "osrm_ml", "haversine"
         buckets=[0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0],
     )
-
-    # Compteurs ETA par source
-    ETA_CALCULATIONS_TOTAL = Counter(
+    ETA_CALCULATIONS_TOTAL = _get_or_create_metric(
+        Counter,
         "eta_calculations_total",
         "Total calculs ETA",
         ["source"],  # source: "osrm", "osrm_ml", "haversine", "haversine_adaptive"
     )
-
-    # Erreurs ETA
-    ETA_ERRORS_TOTAL = Counter(
+    ETA_ERRORS_TOTAL = _get_or_create_metric(
+        Counter,
         "eta_errors_total",
         "Total erreurs calcul ETA",
         ["error_type"],  # error_type: "osrm_timeout", "osrm_error", "invalid_coords"

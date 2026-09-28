@@ -1,7 +1,77 @@
 # Audit — iOS : aucune notification (Sujet 1)
 
-**Statut officiel (2026-09-23) : `P0 — DEVICE TEST REQUIRED`.**
-Aucun changement FCM / Expo / APNs avant les deux `test-push` sur un iPhone réel. Fiche à remplir : [`p0-mobile-session-push-evidence.md`](p0-mobile-session-push-evidence.md). `provider_accepted` n’est pas `mobile_received`.
+**Statut officiel (2026-09-28, 22:35 Genève) :**
+
+```text
+PUSH iOS ROUTING          = PASS PROD
+PUSH DELIVERY RELIABILITY = P0 FAIL / HOTFIX REQUIRED
+DEVICE PROVIDER DEDUP     = FAIL
+REAL-DEVICE VALIDATION    = PAUSED
+```
+
+Le routage FCM iOS (`d6f05831`) est en production depuis 21:33. La course 40500 à 22:20 a prouvé le routage (FCM iOS accepté) et le doublon Expo+FCM du même `device_id`. À 22:29–22:30, les notifications d'assignation et de réattribution ont été perdues : la tâche Celery meurt sur Prometheus (`eta_accuracy_rate`, `Incorrect label names`) après que le claim Redis est déjà consommé. Aucun token n'a été modifié. La validation appareil est en pause tant que ce hotfix n'est pas en production.
+
+Le crash carte `AIRGoogleMap` / `LIRIE-MOBILE-1K` est un sujet séparé : `MAP CRASH = CODE FIXED / NEW iOS BUILD + DEVICE VALIDATION PENDING` (`5f7a8d87`). Le déploiement backend ne le valide pas.
+
+Historique 2026-09-23 : `P0 — DEVICE TEST REQUIRED` (Phase A, pas de changement FCM/Expo/APNs avant `test-push`). Fiche : [`p0-mobile-session-push-evidence.md`](p0-mobile-session-push-evidence.md). `provider_accepted` n’est pas `mobile_received`.
+
+## Gate — PUSH iOS, validation production
+
+Aucune autre correction avant ce test. Ne pas modifier la ligne FCM à la main. Si le passage `android → ios` n’a pas lieu à l’étape 1, arrêter : le défaut est encore dans l’enregistrement du token, avant l’envoi.
+
+```text
+PUSH iOS — PRODUCTION VALIDATION GATE
+
+Précondition
+[PASS] backend déployé après 21:33 (Genève, 2026-09-28)
+[PASS] ligne FCM iPhone encore platform=android (id 774, last_seen 21:22, avant la fin du déploiement)
+[PASS] ligne non modifiée manuellement
+
+Étape 1 — Ré-enregistrement
+[ ] ouvrir Lirie sur l’iPhone après 21:33
+[ ] vérifier nouveau last_seen_at
+[ ] FCM : platform android → ios automatiquement
+[ ] fournisseur reste fcm
+[ ] token reste active
+
+Étape 2 — Assignation
+[ ] assigner une course à Emmenez Moi
+[ ] S23 reçoit
+[ ] iPhone reçoit
+
+Étape 3 — Modification / statut
+[ ] modifier la course ou son statut
+[ ] S23 reçoit
+[ ] iPhone reçoit
+
+Étape 4 — États iOS
+[ ] foreground
+[ ] background
+[ ] application fermée
+
+Étape 5 — Preuves serveur
+[ ] routage FCM = ios
+[ ] payload comporte une alerte APNs visible
+[ ] ticket Expo enregistré
+[ ] receipt Expo récupéré
+[ ] processed > 0
+[ ] aucune erreur DeviceNotRegistered sur le token actuel
+```
+
+## Gate — crash carte iOS (séparé)
+
+Le déploiement backend ne couvre pas ce sujet.
+
+```text
+MAP CRASH — IOS BUILD GATE
+
+[ ] nouvelle build contenant 5f7a8d87
+[ ] installée sur iPhone 16 Pro Max
+[ ] même parcours carte que lors du crash de 14:38
+[ ] répétition navigation / ouverture / fermeture carte
+[ ] aucun nouveau LIRIE-MOBILE-1K
+[ ] aucun NSInvalidArgumentException AIRGoogleMap
+```
 
 ## Symptôme
 
@@ -157,7 +227,7 @@ _Statut 2026-09-23 : journal toujours vide. Gate Phase A non close. Utiliser la 
 
 ### Reste à faire (gate de sortie Phase A — ops / terrain)
 
-- ✅ **Statut tenu, pas de correctif** : `P0 — DEVICE TEST REQUIRED`. La fiche de collecte est dans [`p0-mobile-session-push-evidence.md`](p0-mobile-session-push-evidence.md).
+- ✅ **Statut 2026-09-28** : routage push iOS `DEPLOYED / REAL-DEVICE VALIDATION PENDING`. La fiche de collecte reste [`p0-mobile-session-push-evidence.md`](p0-mobile-session-push-evidence.md). Le gate Phase A de 2026-09-23 (clé APNs, `test-push` forcé) n’est pas clos par ce déploiement.
 - Exécuter sur un iPhone réel `POST /api/v1/driver/me/test-push` avec `{"provider":"fcm"}` puis `{"provider":"expo"}`, et distinguer `provider_accepted` de `mobile_received`.
 - Vérifier manuellement la clé APNs Firebase, Bundle ID, `aps-environment` du binaire TestFlight.
 - Activer Phase B/C uniquement après preuve FCM positive sur l’appareil.
