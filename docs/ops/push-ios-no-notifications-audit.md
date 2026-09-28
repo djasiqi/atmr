@@ -11,6 +11,8 @@ REAL-DEVICE VALIDATION    = PAUSED
 
 Le routage FCM iOS (`d6f05831`) est en production depuis 21:33. La course 40500 à 22:20 a prouvé le routage (FCM iOS accepté) et le doublon Expo+FCM du même `device_id`. À 22:29–22:30, les notifications d'assignation et de réattribution ont été perdues : la tâche Celery meurt sur Prometheus (`eta_accuracy_rate`, `Incorrect label names`) après que le claim Redis est déjà consommé. Aucun token n'a été modifié. La validation appareil est en pause tant que ce hotfix n'est pas en production.
 
+DELIVERY-06, assumé `at-least-once` : si le provider accepte puis que le processus meurt avant l'écriture de `SENT`, le retry peut renvoyer. Le même `notification_id` trace les deux acceptations. Ce n'est pas une perte de notification.
+
 Le crash carte `AIRGoogleMap` / `LIRIE-MOBILE-1K` est un sujet séparé : `MAP CRASH = CODE FIXED / NEW iOS BUILD + DEVICE VALIDATION PENDING` (`5f7a8d87`). Le déploiement backend ne le valide pas.
 
 Historique 2026-09-23 : `P0 — DEVICE TEST REQUIRED` (Phase A, pas de changement FCM/Expo/APNs avant `test-push`). Fiche : [`p0-mobile-session-push-evidence.md`](p0-mobile-session-push-evidence.md). `provider_accepted` n’est pas `mobile_received`.

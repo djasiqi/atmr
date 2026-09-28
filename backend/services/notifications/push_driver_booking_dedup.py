@@ -3,6 +3,11 @@
 IN_FLIGHT est un bail court, pris par le worker juste avant l'appel fournisseur.
 SENT n'est posé qu'après une acceptation provider. Un crash avant l'envoi libère
 le bail (ou le laisse expirer) pour qu'un retry ou un nouvel événement puisse partir.
+
+Fenêtre DELIVERY-06 : le provider a accepté, puis le processus meurt avant
+l'écriture de SENT. Ce n'est pas exactement-une-fois. Le retry peut renvoyer.
+Sémantique assumée : at-least-once. Le même ``notification_id`` (``event_id``
+du payload, réutilisé par Celery) trace les deux acceptations.
 """
 
 from __future__ import annotations
