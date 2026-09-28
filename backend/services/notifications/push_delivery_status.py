@@ -89,6 +89,15 @@ def sanitize_provider_text(value: Any, *, max_len: int | None = None) -> str:
     return text
 
 
+def normalize_expo_push_tickets(data: Any) -> list[dict[str, Any]]:
+    """Normalise la réponse Expo Push : objet unique ou liste de tickets."""
+    if isinstance(data, dict):
+        return [data]
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    return []
+
+
 def classify_push_result(
     result: dict[str, Any] | None,
     *,
@@ -194,11 +203,21 @@ def classify_push_result(
     if result.get("ok"):
         message_id = result.get("message_id")
         ticket_id = result.get("provider_ticket_id") or result.get("expo_ticket_id")
-        if not ticket_id and isinstance(result.get("data"), list):
-            for ticket in result["data"]:
-                if isinstance(ticket, dict) and ticket.get("id"):
+        if not ticket_id:
+            for ticket in normalize_expo_push_tickets(result.get("data")):
+                if ticket.get("id"):
                     ticket_id = ticket.get("id")
                     break
+            wrapped = result.get("data")
+            if (
+                not ticket_id
+                and isinstance(wrapped, dict)
+                and "data" in wrapped
+            ):
+                for ticket in normalize_expo_push_tickets(wrapped.get("data")):
+                    if ticket.get("id"):
+                        ticket_id = ticket.get("id")
+                        break
 
         out["delivery_status"] = PROVIDER_ACCEPTED
         out["provider_message_id"] = str(message_id) if message_id else None

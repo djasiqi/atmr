@@ -64,6 +64,27 @@ def test_send_fcm_android_visible_when_title_present(_init, send_mock):
 
 @patch("services.notifications.firebase_push._send_with_retry")
 @patch("services.notifications.firebase_push._init_firebase", return_value=True)
+def test_send_fcm_ios_visible_apns_alert_when_title_present(_init, send_mock):
+    """IOS-FCM-02 : alerte APNs visible, les données métier restent dans data."""
+    send_mock.return_value = {"ok": True, "message_id": "mid"}
+    res = send_fcm_ios(
+        token="iphone:APA91bRegistration",
+        title="Course • En route",
+        body="HUG",
+        data={"booking_id": "40442"},
+    )
+    assert res["ok"] is True
+    msg = send_mock.call_args.args[0]
+    assert msg.notification.title == "Course • En route"
+    assert msg.notification.body == "HUG"
+    assert msg.data.get("booking_id") == "40442"
+    assert msg.apns.headers["apns-push-type"] == "alert"
+    assert msg.apns.headers["apns-priority"] == "10"
+    assert msg.apns.payload.aps.sound == "default"
+
+
+@patch("services.notifications.firebase_push._send_with_retry")
+@patch("services.notifications.firebase_push._init_firebase", return_value=True)
 def test_send_fcm_ios_data_only_when_title_and_body_empty(_init, send_mock):
     send_mock.return_value = {"ok": True}
     res = send_fcm_ios(token="tok", title="", body="", data={"type": "silent_update"})

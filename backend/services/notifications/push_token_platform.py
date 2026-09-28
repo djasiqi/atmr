@@ -22,19 +22,22 @@ def looks_like_fcm_token(token: str) -> bool:
 
 
 def is_android_fcm_registration_token(token: str) -> bool:
-    """Token FCM émis par Firebase Android SDK (pas un token APNs iOS)."""
-    if looks_like_expo_token(token):
-        return False
-    if token.startswith((FCM_TOKEN_PREFIX, "APA91b")):
-        return True
-    return ":APA91" in token
+    """Ne déduit plus Android depuis la forme du token.
+
+    ``:APA91`` est présent sur les tokens FCM iOS et Android. La plateforme
+    enregistrée par l'application est la seule source de vérité.
+    """
+    del token
+    return False
 
 
 def infer_fcm_platform(token: str, platform: str | None) -> str | None:
-    """Corrige platform=ios lorsqu'un token FCM Android est enregistré par erreur."""
-    normalized = (platform or "").strip().lower() or None
-    if normalized == "android":
-        return "android"
-    if normalized == "ios" and is_android_fcm_registration_token(token):
-        return "android"
-    return normalized
+    """Normalise la plateforme enregistrée, sans la réécrire depuis le token.
+
+    ``token`` est ignoré : un token FCM iOS qui contient ``:APA91`` reste iOS.
+    """
+    del token
+    normalized = (platform or "").strip().lower()
+    if normalized in ("ios", "android"):
+        return normalized
+    return None

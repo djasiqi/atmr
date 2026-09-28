@@ -544,19 +544,23 @@ def send_push_message(
         )
         resp.raise_for_status()
         response_data = cast(Dict[str, Any], resp.json())
-        # ✅ Normaliser la réponse Expo Push : vérifier si "data" contient des erreurs
-        # Expo Push retourne {"data": [{"status": "ok", ...}]} en cas de succès
-        if "data" in response_data and isinstance(response_data["data"], list):
-            # Vérifier si tous les tickets ont status "ok"
-            all_ok = all(
-                ticket.get("status") == "ok" for ticket in response_data["data"]
-            )
-            if all_ok:
-                result = {"ok": True, "data": response_data.get("data")}
-                _record_push_success()  # ✅ Enregistrer succès pour circuit breaker
+        from services.notifications.push_delivery_status import (
+            normalize_expo_push_tickets,
+        )
 
-                # ✅ P2: PUSH_PROOF ticket — pour diagnostic app killed (corrélation receipts)
-                for ticket in response_data["data"]:
+        # Expo renvoie soit {"data": {status, id}} soit {"data": [{status, id}, ...]}.
+        tickets = (
+            normalize_expo_push_tickets(response_data.get("data"))
+            if isinstance(response_data, dict) and "data" in response_data
+            else []
+        )
+        if tickets:
+            all_ok = all(ticket.get("status") == "ok" for ticket in tickets)
+            if all_ok:
+                result = {"ok": True, "data": tickets}
+                _record_push_success()
+
+                for ticket in tickets:
                     tid = ticket.get("id")
                     if tid:
                         result["provider_ticket_id"] = tid
@@ -588,16 +592,14 @@ def send_push_message(
                         extra={"correlation_id": correlation_id, "expo_ticket_id": tid},
                     )
             else:
-                # Au moins un ticket a échoué
                 errors = []
                 token_is_invalid = False
                 result_configuration_error = False
-                for ticket in response_data["data"]:
+                for ticket in tickets:
                     tid = ticket.get("id")
                     tstatus = ticket.get("status")
                     tmsg = ticket.get("message", "")
                     tdetails = ticket.get("details", {}) or {}
-                    # ✅ P2: PUSH_PROOF ticket — erreur immédiate (pas besoin receipt)
                     app_logger.warning(
                         "[push] PUSH_PROOF ticket status=error id=%s message=%s details=%s correlation_id=%s",
                         tid,
@@ -612,16 +614,12 @@ def send_push_message(
                         error_type = ticket.get("details", {}).get("error")
                         errors.append(error_msg)
 
-                        # ✅ AMÉLIORATION: Détecter les tokens invalides/expirés
-                        # Expo renvoie ces erreurs quand le token n'est plus valide
                         if error_type in [
                             "DeviceNotRegistered",
                             "InvalidCredentials",
                             "MessageTooBig",
                             "MessageRateExceeded",
                         ]:
-                            # DeviceNotRegistered seul → invalid_token / désactivation
-                            # InvalidCredentials → configuration_error (pas de désactivation)
                             if error_type == "DeviceNotRegistered":
                                 token_is_invalid = True
                             elif error_type == "InvalidCredentials":
@@ -634,7 +632,6 @@ def send_push_message(
                                 error_type,
                                 extra={"correlation_id": correlation_id},
                             )
-                            # ✅ INSTRUMENTATION: Métrique Prometheus pour token invalide
                             reason_map = {
                                 "DeviceNotRegistered": "device_not_registered",
                                 "InvalidCredentials": "invalid_credentials",
@@ -651,12 +648,12 @@ def send_push_message(
                     "error": "; ".join(errors) if errors else "expo_ticket_error",
                     "token_invalid": token_is_invalid,
                     "configuration_error": result_configuration_error,
+                    "data": tickets,
                 }
-                # ✅ CORRECTIF #5: Enregistrer séparément selon le type d'erreur
                 _record_push_failure(token_invalid=token_is_invalid)
         else:
-            # Format inattendu mais pas d'erreur HTTP
-            result = {"ok": True, "data": response_data}
+            result = {"ok": False, "error": "expo_response_without_ticket"}
+            _record_push_failure(token_invalid=False)
     except (RequestException, Timeout, RequestsConnectionError) as e:
         # Erreurs réseau attendues : connexion HTTP, timeout
         app_logger.warning(

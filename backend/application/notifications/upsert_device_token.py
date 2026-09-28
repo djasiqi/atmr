@@ -280,18 +280,7 @@ def upsert_device_token(
     inferred_platform = infer_fcm_platform(
         token, platform if isinstance(platform, str) else None
     )
-    if (
-        resolved_provider == "fcm"
-        and platform == "ios"
-        and inferred_platform == "android"
-    ):
-        app_logger.warning(
-            "[push-token] platform ios->android inferred for FCM Android token owner driver=%s company=%s",
-            driver_id,
-            company_id,
-        )
-        platform = "android"
-    elif inferred_platform:
+    if inferred_platform:
         platform = inferred_platform
 
     row: DeviceToken | None = None

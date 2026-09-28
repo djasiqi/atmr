@@ -25,10 +25,7 @@ from app import create_app
 from models import DeviceToken, Driver
 from scripts.audit_device_tokens import classify_token, serialize_token
 from services.notifications.push_device_selection import android_has_expo_only
-from services.notifications.push_token_platform import (
-    is_android_fcm_registration_token,
-    looks_like_fcm_token,
-)
+from services.notifications.push_token_platform import looks_like_fcm_token
 
 FCM_COVERAGE_FCM_NATIVE_OK = "fcm_native_ok"
 FCM_COVERAGE_ANDROID_EXPO_ONLY = "android_expo_only"
@@ -75,7 +72,10 @@ def _token_dict(token: DeviceToken) -> dict[str, Any]:
     return {
         **serialize_token(token, classification),
         "looks_like_fcm": looks_like_fcm_token(value),
-        "looks_like_android_fcm_registration": is_android_fcm_registration_token(value),
+        "looks_like_android_fcm_registration": (
+            (token.platform or "").strip().lower() == "android"
+            and looks_like_fcm_token(value)
+        ),
     }
 
 

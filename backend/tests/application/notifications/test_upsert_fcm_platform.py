@@ -9,7 +9,7 @@ from application.notifications.upsert_device_token import upsert_device_token
 
 @patch("application.notifications.upsert_device_token.DeviceToken")
 @patch("application.notifications.upsert_device_token.db")
-def test_upsert_fcm_modern_android_token_corrects_ios_platform(mock_db, mock_dt):
+def test_upsert_keeps_ios_when_fcm_token_contains_apa91(mock_db, mock_dt):
     q = MagicMock()
     q.first.return_value = None
     mock_dt.query.filter_by.return_value = q
@@ -24,4 +24,4 @@ def test_upsert_fcm_modern_android_token_corrects_ios_platform(mock_db, mock_dt)
         platform="ios",
         provider="fcm",
     )
-    assert result.platform == "android"
+    assert result.platform == "ios"

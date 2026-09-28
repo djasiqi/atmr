@@ -19,12 +19,14 @@ from services.notifications.push_token_platform import (
 def test_looks_like_fcm_token_modern_prefix_format() -> None:
     token = "FakeFcmInstanceId:APA91bTestRegistrationToken_9I-ZK9iUTWXRY"
     assert looks_like_fcm_token(token) is True
-    assert is_android_fcm_registration_token(token) is True
+    # :APA91 n'identifie pas Android : les tokens FCM iOS ont la même forme.
+    assert is_android_fcm_registration_token(token) is False
 
 
-def test_infer_fcm_platform_ios_to_android() -> None:
+def test_infer_fcm_platform_keeps_registered_ios() -> None:
     token = "prefix:APA91bFakeToken"
-    assert infer_fcm_platform(token, "ios") == "android"
+    assert infer_fcm_platform(token, "ios") == "ios"
+    assert infer_fcm_platform(token, "android") == "android"
 
 
 def test_prioritize_android_fcm_over_expo() -> None:

@@ -126,6 +126,7 @@ def apply_expo_receipts(
 
     updated = 0
     still_pending = 0
+    processed = 0
     for tid in ids:
         rec = receipts.get(tid)
         meta = load_expo_ticket(tid) or {"ticket_id": tid}
@@ -133,6 +134,7 @@ def apply_expo_receipts(
             still_pending += 1
             continue
 
+        processed += 1
         status = rec.get("status", "error")
         details = rec.get("details") or {}
         err = details.get("error") if isinstance(details, dict) else None
@@ -195,7 +197,7 @@ def apply_expo_receipts(
         updated += 1
 
     return {
-        "processed": len(ids),
+        "processed": processed,
         "updated": updated,
         "pending": still_pending,
     }
