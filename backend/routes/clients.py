@@ -409,7 +409,10 @@ class ManageClientProfile(Resource):
                 "habitual_wheelchair_need",
                 "habitual_needs_assistance",
             ):
-                if mobility_key in validated_data and validated_data[mobility_key] is not None:
+                if (
+                    mobility_key in validated_data
+                    and validated_data[mobility_key] is not None
+                ):
                     client_data[mobility_key] = bool(validated_data[mobility_key])
             if "invoice_delivery_method" in validated_data:
                 client_data["invoice_delivery_method"] = validated_data[
