@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from types import SimpleNamespace
 
+import pytest
+
 from application.bookings.round_trip_temporal import (
     RETURN_BEFORE_APPOINTMENT_MESSAGE,
     RETURN_BEFORE_OUTBOUND_MESSAGE,
@@ -131,6 +133,18 @@ class TestInvalidateDownstream:
 
 
 class TestUpdateReservationRules:
+    @pytest.fixture(autouse=True)
+    def _legacy_segment_not_canonical(self, monkeypatch):
+        """Ces fixtures sont des segments legacy, pas une mission canonique.
+
+        Le garde-fou contrat interroge la session SQL. Sans contexte Flask,
+        il doit rester hors chemin : l'invariant testé est la chronologie.
+        """
+        monkeypatch.setattr(
+            "application.companies.reservations.company_mission.resolve_company_mission_anchor",
+            lambda _booking: None,
+        )
+
     def test_reject_confirming_return_before_outbound(self):
         outbound = _booking(id=10, scheduled_time=datetime(2026, 9, 12, 14, 15))
         ret = _booking(
@@ -240,6 +254,13 @@ class TestScheduleReservationRules:
 
 
 class TestRouteGroupTopology:
+    @pytest.fixture(autouse=True)
+    def _legacy_segment_not_canonical(self, monkeypatch):
+        monkeypatch.setattr(
+            "application.companies.reservations.company_mission.resolve_company_mission_anchor",
+            lambda _booking: None,
+        )
+
     def test_reject_leg2_before_leg1(self):
         outbound = _booking(
             id=45726,
