@@ -36,6 +36,9 @@ class _ClientLike(Protocol):
     door_code: Any
     floor: Any
     access_notes: Any
+    habitual_wheelchair_client_has: Any
+    habitual_wheelchair_need: Any
+    habitual_needs_assistance: Any
     gp_name: Any
     gp_phone: Any
     default_billed_to_type: Any
@@ -187,6 +190,33 @@ class UpdateCompanyClientUseCase:
             client.floor = data["floor"] or None
         if "access_notes" in data:
             client.access_notes = data["access_notes"] or None
+        next_own = (
+            bool(data["habitual_wheelchair_client_has"])
+            if "habitual_wheelchair_client_has" in data
+            else bool(client.habitual_wheelchair_client_has)
+        )
+        next_need = (
+            bool(data["habitual_wheelchair_need"])
+            if "habitual_wheelchair_need" in data
+            else bool(client.habitual_wheelchair_need)
+        )
+        if next_own and next_need:
+            return UpdateCompanyClientResult(
+                ok=False,
+                error={
+                    "error": (
+                        "Le fauteuil personnel et le fauteuil à fournir "
+                        "ne peuvent pas être habituels en même temps."
+                    )
+                },
+                status_code=400,
+            )
+        if "habitual_wheelchair_client_has" in data:
+            client.habitual_wheelchair_client_has = next_own
+        if "habitual_wheelchair_need" in data:
+            client.habitual_wheelchair_need = next_need
+        if "habitual_needs_assistance" in data:
+            client.habitual_needs_assistance = bool(data["habitual_needs_assistance"])
 
         # Médecin traitant
         if "gp_name" in data:

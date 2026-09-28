@@ -206,7 +206,6 @@ _POSTGIS_EXTENSION_TABLES = frozenset(
 def include_object(obj, name, type_, reflected, compare_to):
     """Filtre autogenerate : PostGIS, partitions GPS, dérive index/contraintes."""
     del compare_to
-    del obj
     if type_ == "table" and name in _POSTGIS_EXTENSION_TABLES:
         return False
     # Partitions créées en SQL / Celery — absentes du metadata SQLAlchemy
@@ -214,6 +213,15 @@ def include_object(obj, name, type_, reflected, compare_to):
         return False
     if type_ == "column" and name == "geom":
         return False
+    only_tables = os.getenv("AUTOGENERATE_ONLY_TABLES", "")
+    if only_tables:
+        allowed = {item.strip() for item in only_tables.split(",") if item.strip()}
+        if type_ == "table" and name not in allowed:
+            return False
+        table = getattr(obj, "table", None)
+        table_name = getattr(table, "name", None) if table is not None else None
+        if table_name and table_name not in allowed:
+            return False
     return not (
         os.getenv("AUTOGENERATE_SKIP_INDEXES") == "1"
         and type_ in {"index", "unique_constraint"}

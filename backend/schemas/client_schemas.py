@@ -34,6 +34,8 @@ class ClientUpdateSchema(Schema):
         )
     )
     address = fields.Str(validate=validate.Length(min=1, max=500))
+    domicile_lat = fields.Float(allow_none=True)
+    domicile_lon = fields.Float(allow_none=True)
     birth_date = fields.Str(
         validate=validate.Regexp(
             ISO8601_DATE_REGEX, error="birth_date doit être au format YYYY-MM-DD"
@@ -51,6 +53,9 @@ class ClientUpdateSchema(Schema):
     floor = fields.Str(validate=validate.Length(max=20), allow_none=True)
     door_code = fields.Str(validate=validate.Length(max=50), allow_none=True)
     access_notes = fields.Str(validate=validate.Length(max=4000), allow_none=True)
+    habitual_wheelchair_client_has = fields.Bool(allow_none=True)
+    habitual_wheelchair_need = fields.Bool(allow_none=True)
+    habitual_needs_assistance = fields.Bool(allow_none=True)
     # Mode d'envoi facture : email (défaut) ou papier (+ CHF 3 à la création)
     invoice_delivery_method = fields.Str(
         allow_none=True,

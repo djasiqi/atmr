@@ -96,6 +96,16 @@ class Client(db.Model):
     door_code: Mapped[str] = mapped_column(String(50), nullable=True)
     floor: Mapped[str] = mapped_column(String(20), nullable=True)
     access_notes: Mapped[str] = mapped_column(Text, nullable=True)
+    # Préférences de profil. Une course en garde une copie, jamais l'inverse.
+    habitual_wheelchair_client_has: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    habitual_wheelchair_need: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    habitual_needs_assistance: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     # Médecin traitant
     gp_name: Mapped[str] = mapped_column(String(120), nullable=True)
@@ -452,6 +462,11 @@ class Client(db.Model):
                 "door_code": self.door_code,
                 "floor": self.floor,
                 "notes": self.access_notes,
+            },
+            "mobility": {
+                "wheelchair_client_has": bool(self.habitual_wheelchair_client_has),
+                "wheelchair_need": bool(self.habitual_wheelchair_need),
+                "needs_assistance": bool(self.habitual_needs_assistance),
             },
             "gp": {
                 "name": self.gp_name,

@@ -390,6 +390,10 @@ class ManageClientProfile(Resource):
                 client_data["contact_phone"] = validated_data["phone"]
             if "address" in validated_data:
                 client_data["domicile_address"] = validated_data["address"]
+            if "domicile_lat" in validated_data:
+                client_data["domicile_lat"] = validated_data["domicile_lat"]
+            if "domicile_lon" in validated_data:
+                client_data["domicile_lon"] = validated_data["domicile_lon"]
             if validated_data.get("birth_date"):
                 client_data["birth_date"] = validated_data["birth_date"]
             if "avs_number" in validated_data:
@@ -400,6 +404,13 @@ class ManageClientProfile(Resource):
                 client_data["door_code"] = validated_data["door_code"]
             if "access_notes" in validated_data:
                 client_data["access_notes"] = validated_data["access_notes"]
+            for mobility_key in (
+                "habitual_wheelchair_client_has",
+                "habitual_wheelchair_need",
+                "habitual_needs_assistance",
+            ):
+                if mobility_key in validated_data and validated_data[mobility_key] is not None:
+                    client_data[mobility_key] = bool(validated_data[mobility_key])
             if "invoice_delivery_method" in validated_data:
                 client_data["invoice_delivery_method"] = validated_data[
                     "invoice_delivery_method"
