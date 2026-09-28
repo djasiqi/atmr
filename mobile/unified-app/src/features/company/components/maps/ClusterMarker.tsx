@@ -43,18 +43,29 @@ export function ClusterMarker({
     [count, drivers]
   );
 
-  if (!iconSource.uri?.trim()) {
-    return null;
-  }
+  const coordinate = isValidMapCoord(displayCoordinate.latitude, displayCoordinate.longitude)
+    ? displayCoordinate
+    : isValidMapCoord(latitude, longitude)
+      ? targetCoordinate
+      : null;
 
-  if (!isValidMapCoord(displayCoordinate.latitude, displayCoordinate.longitude)) {
-    return null;
+  if (!iconSource.uri?.trim() || coordinate == null) {
+    return (
+      <FleetMapRasterMarker
+        ref={primaryMarkerRef}
+        coordinate={targetCoordinate}
+        imageSource={iconSource}
+        anchor={{ x: 0.5, y: 0.5 }}
+        zIndex={500}
+        opacity={0}
+      />
+    );
   }
 
   return (
     <FleetMapRasterMarker
       ref={primaryMarkerRef}
-      coordinate={displayCoordinate}
+      coordinate={coordinate}
       imageSource={iconSource}
       anchor={{ x: 0.5, y: 0.5 }}
       onPress={onPress}

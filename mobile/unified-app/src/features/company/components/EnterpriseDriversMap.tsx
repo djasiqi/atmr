@@ -20,7 +20,7 @@ import {
 } from "./maps/fleetMapDirections";
 import { FleetMapEtaBadgeMarker } from "./maps/FleetMapEtaBadgeMarker";
 import { FleetMapLiriePointMarker } from "./maps/FleetMapLiriePointMarker";
-import { MissionRoutePolylines } from "./maps/MissionRoutePolyline";
+import { buildMissionRoutePolylineElements } from "./maps/MissionRoutePolyline";
 import { useFleetMissionRoutedPaths } from "./maps/useFleetMissionRoutedPaths";
 import { FLEET_MISSION_MAP_POLICY } from "./maps/fleetMapMissionPolicies";
 import type { FleetMissionOverlay } from "./maps/fleetMapMissionVisual";
@@ -39,7 +39,7 @@ import {
 } from "./maps/fleetMapWebCamera";
 import { DEFAULT_FLEET_MAP_LAYERS } from "./maps/fleetMapTypes";
 import type { ImminentDeparture } from "../dashboard/cockpit/imminentDepartures";
-import { ImminentDepartureMarkers } from "./maps/ImminentDepartureMarkers";
+import { buildImminentDepartureCircleElements } from "./maps/ImminentDepartureMarkers";
 import {
   applyFleetFitVerticalBias,
   computeFleetMapFitEdgePadding,
@@ -621,45 +621,54 @@ export function EnterpriseDriversMap({
       <FleetMapEtaBadgeMarker coordinate={etaMid} label={etaLabel} zIndex={200} />
     ) : null;
 
+  const nativeMapChildren = (() => {
+    const children: ReactElement[] = [];
+    if (mountDynamicOverlays) {
+      children.push(...heatmapNodes);
+      children.push(...buildImminentDepartureCircleElements(imminentDepartures));
+      if (hasMissionRoutes) {
+        children.push(
+          ...buildMissionRoutePolylineElements(
+            missionOverlays,
+            routedPathsByMissionId,
+            routedStateByMissionId
+          )
+        );
+      } else if (routeCoords.length >= 2) {
+        children.push(
+          <Polyline
+            key="standalone-route-glow"
+            coordinates={routeCoords}
+            strokeColor="rgba(239, 68, 68, 0.10)"
+            strokeWidth={STANDALONE_ROUTE_STROKES.glow}
+            lineCap="round"
+            lineJoin="round"
+          />
+        );
+        children.push(
+          <Polyline
+            key="standalone-route-main"
+            coordinates={routeCoords}
+            strokeColor={activeRoute?.color ?? "#EF4444"}
+            strokeWidth={STANDALONE_ROUTE_STROKES.main}
+            lineCap="round"
+            lineJoin="round"
+          />
+        );
+      }
+      children.push(...missionAnchorNodes);
+      if (missionEtaBubble) children.push(missionEtaBubble);
+      if (etaBubble) children.push(etaBubble);
+    }
+    if (mountDriverMarkers) {
+      children.push(...markerNodes);
+    }
+    return children;
+  })();
+
   const mapNode = (
     <MapView {...mapProps}>
-      {mountDynamicOverlays ? (
-        <>
-          {heatmapNodes}
-          {imminentDepartures.length > 0 ? (
-            <ImminentDepartureMarkers departures={imminentDepartures} />
-          ) : null}
-          {hasMissionRoutes ? (
-            <MissionRoutePolylines
-              overlays={missionOverlays}
-              routedPathsByMissionId={routedPathsByMissionId}
-              routedStateByMissionId={routedStateByMissionId}
-            />
-          ) : null}
-          {!hasMissionRoutes && routeCoords.length >= 2 ? (
-            <Polyline
-              coordinates={routeCoords}
-              strokeColor="rgba(239, 68, 68, 0.10)"
-              strokeWidth={STANDALONE_ROUTE_STROKES.glow}
-              lineCap="round"
-              lineJoin="round"
-            />
-          ) : null}
-          {!hasMissionRoutes && routeCoords.length >= 2 ? (
-            <Polyline
-              coordinates={routeCoords}
-              strokeColor={activeRoute?.color ?? "#EF4444"}
-              strokeWidth={STANDALONE_ROUTE_STROKES.main}
-              lineCap="round"
-              lineJoin="round"
-            />
-          ) : null}
-          {missionAnchorNodes}
-          {missionEtaBubble}
-          {etaBubble}
-        </>
-      ) : null}
-      {mountDriverMarkers ? markerNodes : null}
+      {nativeMapChildren}
     </MapView>
   );
 

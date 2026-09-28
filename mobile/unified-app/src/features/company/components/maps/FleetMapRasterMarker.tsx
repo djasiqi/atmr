@@ -38,12 +38,20 @@ const FleetMapRasterMarkerComponent = forwardRef<Marker, Props>(function FleetMa
     [imageSource]
   );
 
-  if (!markerProps) {
-    return null;
-  }
-
-  if (!isValidMapCoord(coordinate.latitude, coordinate.longitude)) {
-    return null;
+  const coordinateIsValid = isValidMapCoord(coordinate.latitude, coordinate.longitude);
+  // Jamais `null` : AIRGoogleMap.insertReactSubview plante si la sous-vue native est nil.
+  if (!markerProps || !coordinateIsValid) {
+    return (
+      <Marker
+        ref={ref}
+        coordinate={
+          coordinateIsValid ? coordinate : { latitude: 46.2044, longitude: 6.1432 }
+        }
+        opacity={0}
+        tracksViewChanges={false}
+        zIndex={zIndex}
+      />
+    );
   }
 
   return (

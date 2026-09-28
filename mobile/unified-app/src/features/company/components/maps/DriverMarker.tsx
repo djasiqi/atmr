@@ -86,15 +86,27 @@ function DriverMarkerComponent({
 
   void vectorMode;
 
-  if (!isValidMapCoord(displayCoordinate.latitude, displayCoordinate.longitude)) {
-    return null;
+  const coordinate = isValidMapCoord(displayCoordinate.latitude, displayCoordinate.longitude)
+    ? displayCoordinate
+    : isValidMapCoord(item.latitude, item.longitude)
+      ? targetCoordinate
+      : null;
+
+  if (coordinate == null) {
+    return (
+      <Marker
+        coordinate={{ latitude: 46.2044, longitude: 6.1432 }}
+        opacity={0}
+        tracksViewChanges={false}
+      />
+    );
   }
 
   if (Platform.OS === "android") {
     return (
       <Marker
         ref={primaryMarkerRef}
-        coordinate={displayCoordinate}
+        coordinate={coordinate}
         anchor={{ x: 0.5, y: 0.5 }}
         tracksViewChanges={androidTracksViewChanges}
         zIndex={theme.priority}
@@ -113,14 +125,10 @@ function DriverMarkerComponent({
     );
   }
 
-  if (!imageSource.uri?.trim()) {
-    return null;
-  }
-
   return (
     <FleetMapRasterMarker
       ref={primaryMarkerRef}
-      coordinate={displayCoordinate}
+      coordinate={coordinate}
       imageSource={imageSource}
       anchor={markerAnchor}
       title={driverFleetMarkerTitle(item)}

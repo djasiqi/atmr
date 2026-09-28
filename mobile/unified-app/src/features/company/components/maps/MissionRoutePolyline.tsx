@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 
 import { Animated, Platform } from "react-native";
 
@@ -345,5 +345,88 @@ export function MissionRoutePolylines({
 
   );
 
+}
+
+/**
+ * Polylines hôtes, sans fragment ni `null`, pour les poser directement dans MapView.
+ * iOS New Arch : un fragment ou une vue vide sous AIRGoogleMap insère `nil`
+ * (`insertReactSubview`) et fait crasher l'app.
+ */
+export function buildMissionRoutePolylineElements(
+  overlays: FleetMissionOverlay[],
+  routedPathsByMissionId: ReadonlyMap<string, FleetMapLatLng[]>,
+  routedStateByMissionId: ReadonlyMap<string, FleetRoutedPathState>
+): ReactElement[] {
+  const elements: ReactElement[] = [];
+
+  for (const overlay of overlays) {
+    const legRenders = resolveFleetMissionRouteLegRenders(
+      overlay,
+      routedPathsByMissionId,
+      routedStateByMissionId
+    );
+
+    for (const legRender of legRenders) {
+      const renderCoords = prepareFleetRouteCoordsForNativeRender(
+        legRender.coordinates.map((point) => ({
+          latitude: point.latitude,
+          longitude: point.longitude,
+        }))
+      );
+      if (renderCoords.length < 2) continue;
+
+      const routeStyle = legRender.style;
+      if (!routeStyle) continue;
+
+      const opacity = overlay.displayOpacity * legRender.style.opacity;
+      const nativeStrokes = isNativeFleetMapPlatform()
+        ? resolveNativeMissionRouteStrokes(routeStyle)
+        : { mainStroke: routeStyle.strokeWidth, glowStroke: routeStyle.glowWidth };
+      const isAndroidNative = isAndroidFleetMapPlatform();
+      const glowOpacity =
+        opacity *
+        (isNativeFleetMapPlatform()
+          ? isAndroidNative
+            ? 0.22
+            : FLEET_NATIVE_ROUTE_RENDER.glowOpacityScale
+          : 0.85);
+      const lineOpacity = Math.min(
+        isAndroidNative ? 0.78 : FLEET_NATIVE_ROUTE_RENDER.maxMainLineOpacity,
+        opacity
+      );
+      const showGlowPolyline = !isAndroidNative || overlay.isSelected;
+      const keyBase = `${overlay.missionId}-${legRender.leg}`;
+
+      if (showGlowPolyline) {
+        elements.push(
+          <Polyline
+            key={`glow-${keyBase}`}
+            coordinates={renderCoords}
+            strokeColor={withAlpha(routeStyle.glowColor, glowOpacity)}
+            strokeWidth={nativeStrokes.glowStroke}
+            lineCap="round"
+            lineJoin="round"
+            lineDashPattern={routeStyle.lineDashPattern ?? undefined}
+            zIndex={legRender.zIndex}
+          />
+        );
+      }
+
+      elements.push(
+        <Polyline
+          key={`line-${keyBase}`}
+          coordinates={renderCoords}
+          strokeColor={applyStrokeOpacity(routeStyle.color, lineOpacity)}
+          strokeWidth={nativeStrokes.mainStroke}
+          lineCap="round"
+          lineJoin="round"
+          lineDashPattern={routeStyle.lineDashPattern ?? undefined}
+          zIndex={legRender.zIndex + 1}
+        />
+      );
+    }
+  }
+
+  return elements;
 }
 
