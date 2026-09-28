@@ -209,11 +209,7 @@ def classify_push_result(
                     ticket_id = ticket.get("id")
                     break
             wrapped = result.get("data")
-            if (
-                not ticket_id
-                and isinstance(wrapped, dict)
-                and "data" in wrapped
-            ):
+            if not ticket_id and isinstance(wrapped, dict) and "data" in wrapped:
                 for ticket in normalize_expo_push_tickets(wrapped.get("data")):
                     if ticket.get("id"):
                         ticket_id = ticket.get("id")

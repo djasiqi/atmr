@@ -73,7 +73,10 @@ def test_expo_01_single_object_extracts_ticket_id() -> None:
     response.raise_for_status.return_value = None
     with (
         patch("services.notifications.push.requests.post", return_value=response),
-        patch("services.notifications.push._check_circuit_breaker", return_value=(False, None)),
+        patch(
+            "services.notifications.push._check_circuit_breaker",
+            return_value=(False, None),
+        ),
         patch("services.notifications.push._record_push_success"),
         patch("services.notifications.expo_receipts.store_expo_ticket") as store,
     ):
@@ -110,7 +113,10 @@ def test_expo_02_ticket_list_extracts_ticket_id() -> None:
     response.raise_for_status.return_value = None
     with (
         patch("services.notifications.push.requests.post", return_value=response),
-        patch("services.notifications.push._check_circuit_breaker", return_value=(False, None)),
+        patch(
+            "services.notifications.push._check_circuit_breaker",
+            return_value=(False, None),
+        ),
         patch("services.notifications.push._record_push_success"),
         patch("services.notifications.expo_receipts.store_expo_ticket") as store,
     ):
@@ -178,7 +184,11 @@ def test_expo_04_device_not_registered_deactivates_token() -> None:
         ),
         patch(
             "services.notifications.expo_receipts.load_expo_ticket",
-            return_value={"ticket_id": "ticket-dead", "device_token_id": 773, "platform": "ios"},
+            return_value={
+                "ticket_id": "ticket-dead",
+                "device_token_id": 773,
+                "platform": "ios",
+            },
         ),
         patch("services.notifications.expo_receipts.redis_client"),
         patch("ext.db"),
