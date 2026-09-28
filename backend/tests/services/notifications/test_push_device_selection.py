@@ -142,6 +142,51 @@ def test_prepare_driver_push_targets_single_latest_android_fcm() -> None:
     assert targets[0]["id"] == 57
 
 
+def _ios_row(row_id: int, device_id: str, provider: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=row_id,
+        token=f"token-{row_id}",
+        device_id=device_id,
+        platform="ios",
+        provider=provider,
+        updated_at=None,
+    )
+
+
+def test_device_provider_01_ios_fcm_preferred_over_expo() -> None:
+    """DEVICE-PROVIDER-01 : même appareil, Expo + FCM iOS => un seul FCM."""
+    rows = [
+        _ios_row(824, "atmr-1787520916767-a4kexsnra", "expo"),
+        _ios_row(825, "atmr-1787520916767-a4kexsnra", "fcm"),
+    ]
+    targets = prepare_driver_push_targets(rows, driver_id=20135)
+    assert len(targets) == 1
+    assert targets[0]["id"] == 825
+    assert targets[0]["provider"] == "fcm"
+
+
+def test_device_provider_02_expo_fallback_when_fcm_absent() -> None:
+    """DEVICE-PROVIDER-02 : FCM absent de la sélection => Expo."""
+    rows = [_ios_row(824, "atmr-1787520916767-a4kexsnra", "expo")]
+    targets = prepare_driver_push_targets(rows, driver_id=20135)
+    assert len(targets) == 1
+    assert targets[0]["provider"] == "expo"
+
+
+def test_device_provider_03_two_physical_devices() -> None:
+    """DEVICE-PROVIDER-03 : deux device_id => une alerte chacun."""
+    rows = [
+        _ios_row(824, "phone-a", "expo"),
+        _ios_row(825, "phone-a", "fcm"),
+        _ios_row(900, "phone-b", "expo"),
+        _ios_row(901, "phone-b", "fcm"),
+    ]
+    targets = prepare_driver_push_targets(rows, driver_id=20135)
+    assert len(targets) == 2
+    by_device = {row["device_id"]: row["provider"] for row in targets}
+    assert by_device == {"phone-a": "fcm", "phone-b": "fcm"}
+
+
 def test_android_has_expo_only() -> None:
     tokens = [
         SimpleNamespace(platform="android", provider="expo"),

@@ -155,7 +155,12 @@ def prepare_driver_push_targets(
     *,
     driver_id: int | None = None,
 ) -> list[PushDeviceDict]:
-    """Extrait, déduplique par token, priorise FCM sur Android (et iOS si flag Phase B)."""
+    """Extrait, déduplique par token, un fournisseur par appareil.
+
+    Android : FCM canonique (comportement existant).
+    iOS : FCM si une ligne active existe pour ce ``device_id``, sinon Expo.
+    La ligne Expo n'est pas désactivée en base.
+    """
     extracted = [
         device_token_row_to_push_dict(row)
         for row in device_tokens_raw
@@ -171,16 +176,24 @@ def prepare_driver_push_targets(
         )
     prioritized = prioritize_android_fcm_devices(deduped, driver_id=driver_id)
     result = _keep_latest_android_fcm_only(prioritized)
+    # Un appareil iOS = une alerte. FCM prioritaire, Expo seulement s'il n'y a pas de FCM.
+    return _prefer_ios_fcm_when_available(result, driver_id=driver_id)
 
-    # Phase B (off par défaut) : préférer FCM iOS, garder Expo en fallback sélection
-    try:
-        from services.notifications.ios_push_flags import ios_native_fcm_preferred
 
-        if ios_native_fcm_preferred():
-            result = _prefer_ios_fcm_when_available(result, driver_id=driver_id)
-    except Exception:
-        pass
-    return result
+def _latest_push_row(rows: list[PushDeviceDict]) -> PushDeviceDict:
+    """Garde la ligne la plus récente d'un même appareil."""
+
+    def sort_key(row: PushDeviceDict) -> tuple[int, int]:
+        updated = row.get("updated_at")
+        ts = (
+            updated.timestamp()
+            if updated is not None and hasattr(updated, "timestamp")
+            else 0
+        )
+        row_id = row.get("id")
+        return (ts, int(row_id) if isinstance(row_id, int) else 0)
+
+    return max(rows, key=sort_key)
 
 
 def _prefer_ios_fcm_when_available(
@@ -188,9 +201,10 @@ def _prefer_ios_fcm_when_available(
     *,
     driver_id: int | None = None,
 ) -> list[PushDeviceDict]:
-    """Si un FCM iOS existe pour une installation, ne pas aussi pousser Expo iOS.
+    """Un ``device_id`` iOS ne produit qu'une cible.
 
-    Ne désactive pas les tokens en base — sélection uniquement (Phase B).
+    FCM actif : Expo du même appareil est ignoré, sans être désactivé en base.
+    Pas de FCM : Expo est le secours. Les deux ne partent jamais dans le même envoi.
     """
     by_device: dict[str, list[PushDeviceDict]] = defaultdict(list)
     without: list[PushDeviceDict] = []
@@ -208,13 +222,18 @@ def _prefer_ios_fcm_when_available(
         ios_fcm = [d for d in ios if (d.get("provider") or "expo") == "fcm"]
         ios_expo = [d for d in ios if (d.get("provider") or "expo") == "expo"]
         if ios_fcm:
-            selected.extend(ios_fcm)
-            if ios_expo:
+            selected.append(_latest_push_row(ios_fcm))
+            if ios_expo or len(ios_fcm) > 1:
                 app_logger.info(
-                    "[push] ios_expo_skipped_prefer_fcm driver=%s device_id=%s",
+                    "[push] ios_expo_skipped_prefer_fcm driver=%s device_id=%s "
+                    "kept_fcm=%s skipped_expo=%s",
                     driver_id,
                     device_id,
+                    selected[-1].get("id"),
+                    len(ios_expo),
                 )
+        elif ios_expo:
+            selected.append(_latest_push_row(ios_expo))
         else:
             selected.extend(ios)
         selected.extend(other)
