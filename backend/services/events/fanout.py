@@ -49,6 +49,20 @@ except ImportError:
         pass
 
 
+def _track_notification_sent_safe(
+    notification_type: str, channel: str, status: str
+) -> None:
+    """La télémétrie ne change jamais le résultat métier de l'enqueue."""
+    try:
+        track_notification_sent(notification_type, channel, status)
+    except Exception:
+        app_logger.exception(
+            "[event_fanout] telemetry_error track_notification_sent type=%s status=%s",
+            notification_type,
+            status,
+        )
+
+
 def _get_notification_channel(notification_type: str) -> str:
     """Détermine le canal Android approprié selon le type.
 
@@ -368,7 +382,9 @@ def _send_push_to_driver(
                             driver_id,
                         )
                         channel = data.get("channelId", "unknown")
-                        track_notification_sent(notification_type, channel, "kafka")
+                        _track_notification_sent_safe(
+                            notification_type, channel, "kafka"
+                        )
                         return True
                 except Exception:
                     app_logger.exception(
@@ -400,11 +416,9 @@ def _send_push_to_driver(
                 data.get("trace_id"),
             )
 
-            # ✅ Phase 2 - Analytics: Tracker notification envoyée
+            # La mise en file a réussi. Une erreur Prometheus ne la défait pas.
             channel = data.get("channelId", "unknown")
-            track_notification_sent(notification_type, channel, "queued")
-
-            # Considéré comme succès car la notification est en queue
+            _track_notification_sent_safe(notification_type, channel, "queued")
             return True
 
         # Mode legacy: envoi direct (sans fallback ni queue persistante)
@@ -656,11 +670,12 @@ def fanout_booking_assigned_to_driver(
 
     # 2. Push notification (background) — message métier (nom client + contexte), jamais ID-only
     from services.notifications.push_driver_booking_dedup import (
-        claim_driver_booking_push,
+        driver_booking_push_already_sent,
     )
     from services.notifications.push_pipeline_log import log_driver_push_stage
 
-    if not claim_driver_booking_push(driver_id, booking_id):
+    # SENT seulement : un claim avant la file a déjà perdu l'envoi de 22:29.
+    if driver_booking_push_already_sent(driver_id, booking_id):
         log_driver_push_stage(
             "driver_push.dedup_skipped",
             event_id=event_id,
@@ -870,10 +885,10 @@ def fanout_booking_updated(
         )
         if operational_type == "DRIVER_ASSIGNED":
             from services.notifications.push_driver_booking_dedup import (
-                claim_driver_booking_push,
+                driver_booking_push_already_sent,
             )
 
-            if not claim_driver_booking_push(driver_id, booking_id):
+            if driver_booking_push_already_sent(driver_id, booking_id):
                 return
 
         from services.notifications.dedup_throttle import check_dedup_and_throttle
@@ -1941,12 +1956,12 @@ def send_critical_alert_ios(
                 f"[critical_alert] Critical alert envoyée à driver {driver_id}: {alert_type} ({success_count}/{len(device_tokens)} devices)"
             )
             # Tracker métrique
-            track_notification_sent("critical_alert", "critical", "success")
+            _track_notification_sent_safe("critical_alert", "critical", "success")
         else:
             app_logger.error(
                 f"[critical_alert] Échec envoi à driver {driver_id}: {alert_type}"
             )
-            track_notification_sent("critical_alert", "critical", "failed")
+            _track_notification_sent_safe("critical_alert", "critical", "failed")
 
         return success
 
@@ -1954,7 +1969,7 @@ def send_critical_alert_ios(
         app_logger.error(
             f"[critical_alert] Exception driver {driver_id}: {e}", exc_info=True
         )
-        track_notification_sent("critical_alert", "critical", "failed")
+        _track_notification_sent_safe("critical_alert", "critical", "failed")
         return False
 
 

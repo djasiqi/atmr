@@ -19,6 +19,7 @@ from contextlib import suppress
 from typing import Any, ClassVar, Dict
 
 from celery import Task
+from celery.exceptions import Retry
 from typing_extensions import override
 
 from celery_app import celery
@@ -112,6 +113,8 @@ def send_push_notification_task(
 
     # ✅ CRITIQUE: Créer un contexte d'application Flask pour utiliser SQLAlchemy
     app = get_flask_app()
+    lease_state = "skipped"
+    _booking_id: Any = None
     with app.app_context():
         try:
             from services.notifications.push_pipeline_log import log_driver_push_stage
@@ -296,6 +299,33 @@ def send_push_notification_task(
                 token_invalid_count = 0
                 invalid_token_ids_flag_off: list[int] = []
                 last_result: Dict[str, Any] | None = None
+                if notification_type == "booking_assigned" and _booking_id:
+                    from services.notifications.push_driver_booking_dedup import (
+                        begin_driver_booking_push,
+                    )
+
+                    lease_state = begin_driver_booking_push(
+                        int(driver_id), int(_booking_id)
+                    )
+                    if lease_state == "sent":
+                        log_driver_push_stage(
+                            "driver_push.dedup_skipped",
+                            event_id=(data or {}).get("event_id"),
+                            correlation_id=(data or {}).get("correlation_id"),
+                            booking_id=_booking_id,
+                            driver_id=driver_id,
+                            notification_type=notification_type,
+                        )
+                        return {
+                            "ok": True,
+                            "deduped": True,
+                            "channel": "push",
+                        }
+                    if lease_state == "busy":
+                        raise self.retry(
+                            countdown=5,
+                            exc=ConnectionError("driver_push_inflight"),
+                        )
                 for device_token in device_tokens_data:
                     result = send_push_message(
                         token=device_token["token"],
@@ -368,6 +398,13 @@ def send_push_notification_task(
 
                 # Si au moins un envoi a réussi, considérer comme succès
                 if success_count > 0:
+                    if lease_state == "claimed" and _booking_id:
+                        from services.notifications.push_driver_booking_dedup import (
+                            mark_driver_booking_push_sent,
+                        )
+
+                        mark_driver_booking_push_sent(int(driver_id), int(_booking_id))
+                        lease_state = "sent"
                     logger.warning(
                         "[notification_task] Push sent successfully to driver %s (%d/%d devices)",
                         driver_id,
@@ -459,7 +496,11 @@ def send_push_notification_task(
                 "channel": "none",
             }
 
+        except Retry:
+            _release_booking_assigned_lease(lease_state, driver_id, _booking_id)
+            raise
         except self.MaxRetriesExceededError:
+            _release_booking_assigned_lease(lease_state, driver_id, _booking_id)
             # Tous les retries push épuisés → Fallback SMS/Email
             logger.warning(
                 "[notification_task] Max push retries exceeded for driver %s, using fallback",
@@ -494,7 +535,8 @@ def send_push_notification_task(
                 "attempts": self.request.retries + 1,
             }
         except Exception as e:
-            # Erreur inattendue
+            # Erreur inattendue. Le bail ne doit pas rester SENT : l'envoi n'a pas abouti.
+            _release_booking_assigned_lease(lease_state, driver_id, _booking_id)
             logger.exception(
                 "[notification_task] Unexpected error in send_push_notification_task: %s",
                 e,
@@ -504,6 +546,19 @@ def send_push_notification_task(
                 "error": str(e),
                 "channel": "none",
             }
+
+
+def _release_booking_assigned_lease(
+    lease_state: str, driver_id: int, booking_id: Any
+) -> None:
+    """Libère IN_FLIGHT si le provider n'a pas accepté. N'écrit pas SENT."""
+    if lease_state != "claimed" or not booking_id:
+        return
+    from services.notifications.push_driver_booking_dedup import (
+        release_driver_booking_push,
+    )
+
+    release_driver_booking_push(int(driver_id), int(booking_id))
 
 
 @celery.task(

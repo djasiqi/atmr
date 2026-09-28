@@ -45,6 +45,7 @@ def test_claim_driver_booking_push_dedup_second_call():
     )
 
     mock_redis = MagicMock()
+    mock_redis.get.return_value = None
     mock_redis.set.side_effect = [True, None]
 
     with patch(
