@@ -45,6 +45,7 @@ class ScheduleCompanyReservationUseCase:
         scheduled_time_iso: str,
         is_outbound_completed: bool = True,
         time_confirmed: bool | None = None,
+        confirm_pickup: bool = False,
     ) -> ScheduleCompanyReservationResult:
         st = status_value(getattr(booking, "status", None)).lower()
         if st not in self._ALLOWED:
@@ -91,7 +92,29 @@ class ScheduleCompanyReservationUseCase:
                 status_code=400,
             )
 
-        if time_confirmed is not None:
+        previous_appointment = None
+        if confirm_pickup and not bool(getattr(booking, "time_confirmed", True)):
+            previous_appointment = getattr(booking, "scheduled_time", None)
+            if (
+                previous_appointment is not None
+                and sched_local > previous_appointment
+            ):
+                return ScheduleCompanyReservationResult(
+                    ok=False,
+                    error={
+                        "error": "pickup_after_appointment",
+                        "message": (
+                            "L'heure de prise en charge doit être "
+                            "au plus tard à l'heure du rendez-vous."
+                        ),
+                    },
+                    status_code=422,
+                )
+
+        if confirm_pickup:
+            intended_confirmed = True
+            _remember_unconfirmed_appointment(booking, previous_appointment)
+        elif time_confirmed is not None:
             intended_confirmed = bool(time_confirmed)
         else:
             # Compat legacy : sentinelle 00:00 = heure à confirmer
@@ -137,3 +160,19 @@ class ScheduleCompanyReservationUseCase:
             should_trigger_dispatch=True,
             trigger_reason="update",
         )
+
+
+def _remember_unconfirmed_appointment(booking: Any, previous: Any) -> None:
+    """Garde le rendez-vous déjà saisi quand l'entreprise confirme la prise en charge."""
+    if previous is None:
+        return
+    raw = getattr(previous, "isoformat", None)
+    stamp = raw() if callable(raw) else str(previous)
+    if not stamp:
+        return
+    breakdown = getattr(booking, "price_breakdown_json", None)
+    payload = dict(breakdown) if isinstance(breakdown, dict) else {}
+    if payload.get("portal_appointment_time"):
+        return
+    payload["portal_appointment_time"] = stamp
+    booking.price_breakdown_json = payload

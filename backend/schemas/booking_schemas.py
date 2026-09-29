@@ -1,6 +1,6 @@
 """✅ Schemas Marshmallow pour validation des endpoints de réservations."""
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime
 
 from marshmallow import (
     Schema,
@@ -30,10 +30,13 @@ class BookingCreateSchema(Schema):
     dropoff_location = fields.Str(
         required=True, validate=validate.Length(min=1, max=500)
     )
-    # Portail client : « Dès que possible » → asap=true et scheduled_time absent / null
+    # Portail client : « Dès que possible » → asap=true et scheduled_time null.
+    # Aucune heure de repli n'est fabriquée.
     asap = fields.Bool(load_default=False)
     scheduled_time = fields.Str(
-        required=True,
+        required=False,
+        allow_none=True,
+        load_default=None,
         validate=validate.Regexp(
             ISO8601_DATETIME_REGEX, error="scheduled_time doit être au format ISO 8601"
         ),
@@ -52,6 +55,22 @@ class BookingCreateSchema(Schema):
     medical_facility = fields.Str(load_default="", validate=validate.Length(max=200))
     doctor_name = fields.Str(load_default="", validate=validate.Length(max=200))
     hospital_service = fields.Str(load_default="", validate=validate.Length(max=255))
+    # departure = heure de prise en charge ; arrival = rendez-vous à destination.
+    scheduled_time_type = fields.Str(
+        load_default="departure",
+        validate=validate.OneOf(["departure", "arrival"]),
+    )
+    is_urgent = fields.Bool(load_default=False)
+    wheelchair_client_has = fields.Bool(load_default=False)
+    wheelchair_need = fields.Bool(load_default=False)
+    needs_assistance = fields.Bool(load_default=False)
+    assistance_detail = fields.Str(load_default="", validate=validate.Length(max=200))
+    pickup_access_notes = fields.Str(load_default="", validate=validate.Length(max=500))
+    dropoff_access_notes = fields.Str(
+        load_default="", validate=validate.Length(max=500)
+    )
+    requester_name = fields.Str(load_default="", validate=validate.Length(max=200))
+    requester_phone = fields.Str(load_default="", validate=validate.Length(max=30))
     is_round_trip = fields.Bool(load_default=False)
     return_time = fields.Str(
         load_default=None,
@@ -78,6 +97,12 @@ class BookingCreateSchema(Schema):
         load_default="",
         validate=validate.Length(max=CLIENT_PORTAL_FREE_NOTE_MAX_LENGTH),
     )
+    medical_destination = fields.Bool(load_default=False)
+    medical_destination_detail = fields.Str(
+        load_default="",
+        validate=validate.Length(max=255),
+    )
+    route_steps = fields.List(fields.Dict(), load_default=None, allow_none=True)
     is_recurring = fields.Bool(load_default=False)
     recurrence_type = fields.Str(
         load_default=None,
@@ -114,10 +139,16 @@ class BookingCreateSchema(Schema):
             and asap_val.strip().lower() in ("true", "1", "yes")
         )
         st = raw.get("scheduled_time")
-        if asap and (st is None or (isinstance(st, str) and not st.strip())):
-            # Marge pour éviter « dans le passé » (latence réseau / parsing fuseau)
-            soon = (datetime.now(UTC) + timedelta(minutes=5)).replace(microsecond=0)
-            raw["scheduled_time"] = soon.isoformat().replace("+00:00", "Z")
+        if isinstance(st, str) and not st.strip():
+            raw["scheduled_time"] = None
+        rt = raw.get("return_time")
+        if isinstance(rt, str) and not rt.strip():
+            raw["return_time"] = None
+        if asap:
+            # Ne jamais substituer « maintenant + 5 min » : ce n'est pas une prise en charge.
+            raw["scheduled_time"] = None
+            raw["scheduled_time_type"] = "departure"
+            raw["is_urgent"] = True
         red = raw.get("recurrence_end_date")
         if isinstance(red, str) and not red.strip():
             raw["recurrence_end_date"] = None
@@ -125,6 +156,49 @@ class BookingCreateSchema(Schema):
         if isinstance(rd, str) and not rd.strip():
             raw["return_date"] = None
         return raw
+
+    @validates_schema
+    def validate_scheduled_time_required_unless_asap(self, data, **kwargs):  # noqa: ARG002
+        """Hors « dès que possible », la date/heure saisie est obligatoire. Jamais inventée."""
+        if data.get("asap") or data.get("is_urgent"):
+            return
+        scheduled = data.get("scheduled_time")
+        if scheduled is None or (isinstance(scheduled, str) and not scheduled.strip()):
+            raise ValidationError(
+                {
+                    "scheduled_time": [
+                        "scheduled_time est requis hors mode dès que possible."
+                    ]
+                }
+            )
+
+    @validates_schema
+    def validate_mobility_flags(self, data, **kwargs):  # noqa: ARG002
+        """Fauteuil personnel et fauteuil à fournir s'excluent, comme côté entreprise."""
+        if data.get("wheelchair_client_has") and data.get("wheelchair_need"):
+            raise ValidationError(
+                "wheelchair_client_has et wheelchair_need ne peuvent pas être vrais ensemble."
+            )
+        if data.get("needs_assistance") and not str(data.get("assistance_detail") or "").strip():
+            raise ValidationError(
+                {"assistance_detail": ["Indiquez le type d’assistance."]}
+            )
+
+    @validates_schema
+    def validate_portal_medical_and_steps(self, data, **kwargs):  # noqa: ARG002
+        """Destination médicale et étapes : même contrat, sans heure inventée."""
+        from shared.portal_client_booking_contract import (
+            prepare_portal_extra_stop,
+            validate_medical_destination,
+        )
+
+        try:
+            validate_medical_destination(data)
+            for step in data.get("route_steps") or []:
+                if isinstance(step, dict):
+                    prepare_portal_extra_stop(step)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
 
     @validates_schema
     def validate_return_time_after_scheduled_time(self, data, **kwargs):  # noqa: ARG002

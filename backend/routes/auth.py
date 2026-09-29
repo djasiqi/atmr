@@ -1736,6 +1736,8 @@ def _login_post_body():
             "public_id": user.public_id,
             "username": user.username,
             "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
             "role": user.role.value,
             "force_password_change": user.force_password_change,
             "must_complete_onboarding": _must_complete_onboarding(user),
@@ -5168,13 +5170,15 @@ class Register(Resource):
                         400,
                     )
 
+            from shared.user_display import family_name_upper
+
             uc = RegisterUserUseCase()
             input_data = RegisterUserInput(
                 username=username,
                 email=email,
                 password=password,
                 first_name=validated_data.get("first_name"),
-                last_name=validated_data.get("last_name"),
+                last_name=family_name_upper(validated_data.get("last_name")),
                 phone=phone,
                 address=validated_data.get("address"),
                 birth_date=validated_data.get("birth_date"),
@@ -7396,6 +7400,8 @@ class TOTPChallenge(Resource):
                         "public_id": user.public_id,
                         "username": user.username,
                         "email": user.email,
+                        "first_name": user.first_name,
+                        "last_name": user.last_name,
                         "role": user.role.value if user.role else None,
                     },
                     "token": access_token,

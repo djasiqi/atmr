@@ -112,4 +112,32 @@ describe('invoiceLinesPreviewUi', () => {
       returnBookingId: 45703,
     });
   });
+
+  it('ne marque pas une étape isolée comme aller-retour', () => {
+    const chain = presentInvoiceLinesPreview([
+      {
+        booking_id: 46798,
+        booking_ids: [46798],
+        unit_type: 'round_trip',
+        segments_count: 1,
+        is_round_trip_leg: true,
+        scheduled_at: '2026-09-29T23:45:00',
+        description: 'Trajet HUG → Joli-Mont',
+        amount_ht: 40,
+        leg_label: 'Étape 2',
+      },
+      {
+        booking_id: 46799,
+        booking_ids: [46799],
+        unit_type: 'single',
+        segments_count: 1,
+        scheduled_at: '2026-09-30T00:00:00',
+        description: 'Trajet Joli-Mont → Pictet',
+        amount_ht: 40,
+        leg_label: 'Retour',
+      },
+    ]);
+    expect(chain.rows.map((row) => row.isRoundTrip)).toEqual([false, false]);
+    expect(chain.rows.map((row) => row.legLabel)).toEqual(['Étape 2', 'Retour']);
+  });
 });

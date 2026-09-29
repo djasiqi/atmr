@@ -45,11 +45,23 @@ def test_habitual_mobility_persists_without_rewriting_bookings(db) -> None:
     assert rejected.ok is False
     assert client.habitual_wheelchair_client_has is False
 
+    missing_detail = UpdateCompanyClientUseCase().execute(
+        client=client,
+        data={
+            "habitual_wheelchair_client_has": True,
+            "habitual_needs_assistance": True,
+            "habitual_assistance_detail": "   ",
+        },
+    )
+    assert missing_detail.ok is False
+    assert client.habitual_needs_assistance is False
+
     saved = UpdateCompanyClientUseCase().execute(
         client=client,
         data={
             "habitual_wheelchair_client_has": True,
             "habitual_needs_assistance": True,
+            "habitual_assistance_detail": "Aide à la marche",
             "floor": "9e",
             "door_code": "Autre",
         },
@@ -64,6 +76,7 @@ def test_habitual_mobility_persists_without_rewriting_bookings(db) -> None:
     assert mobility["wheelchair_client_has"] is True
     assert mobility["wheelchair_need"] is False
     assert mobility["needs_assistance"] is True
+    assert mobility["assistance_detail"] == "Aide à la marche"
     assert reloaded_client.floor == "9e"
 
     reloaded_booking = db.session.get(Booking, booking.id)

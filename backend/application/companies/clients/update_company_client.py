@@ -39,6 +39,7 @@ class _ClientLike(Protocol):
     habitual_wheelchair_client_has: Any
     habitual_wheelchair_need: Any
     habitual_needs_assistance: Any
+    habitual_assistance_detail: Any
     gp_name: Any
     gp_phone: Any
     default_billed_to_type: Any
@@ -215,8 +216,31 @@ class UpdateCompanyClientUseCase:
             client.habitual_wheelchair_client_has = next_own
         if "habitual_wheelchair_need" in data:
             client.habitual_wheelchair_need = next_need
+        next_assistance = (
+            bool(data["habitual_needs_assistance"])
+            if "habitual_needs_assistance" in data
+            else bool(client.habitual_needs_assistance)
+        )
+        if "habitual_assistance_detail" in data:
+            next_assistance_detail = str(
+                data.get("habitual_assistance_detail") or ""
+            ).strip()[:200]
+        else:
+            next_assistance_detail = str(
+                getattr(client, "habitual_assistance_detail", None) or ""
+            ).strip()
+        if next_assistance and not next_assistance_detail:
+            return UpdateCompanyClientResult(
+                ok=False,
+                error={"error": "Indiquez le type d’assistance."},
+                status_code=400,
+            )
         if "habitual_needs_assistance" in data:
-            client.habitual_needs_assistance = bool(data["habitual_needs_assistance"])
+            client.habitual_needs_assistance = next_assistance
+        if not next_assistance:
+            client.habitual_assistance_detail = None
+        elif "habitual_assistance_detail" in data:
+            client.habitual_assistance_detail = next_assistance_detail or None
 
         # Médecin traitant
         if "gp_name" in data:

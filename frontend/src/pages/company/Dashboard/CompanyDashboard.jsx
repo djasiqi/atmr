@@ -35,6 +35,7 @@ import {
   deleteReservation,
   dispatchNowForReservation,
   triggerReturnBooking,
+  acceptAndConfirmPickup,
   fetchDispatchDelays,
   fetchRequestOffers,
   fetchCompanyReservationsPaginated,
@@ -71,6 +72,7 @@ import { CompanyDashboardFreshnessBadge } from './components/CompanyDashboardFre
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { toast } from 'sonner';
 import { resolveTriggerReturnBookingId } from '../../../utils/bookingScheduling';
+import { pickupNeedsCompanyConfirmation } from '../../../utils/routeGroupItinerary';
 import { logoutUser } from '../../../utils/apiClient';
 import { lirieKeys, LIRIE_QK_PREFIX, lirieInvalidateCompanyReservationLists, listScopeHash } from '../../../queryKeys/lirie';
 import {
@@ -1025,6 +1027,22 @@ const CompanyDashboard = () => {
   };
 
   const handleConfirmReturnTime = async (data) => {
+    if (
+      scheduleModalReservation
+      && typeof data === 'string'
+      && pickupNeedsCompanyConfirmation(scheduleModalReservation)
+    ) {
+      await acceptAndConfirmPickup(scheduleModalReservation, data);
+      setScheduleModalOpen(false);
+      setScheduleModalReservation(null);
+      toast.success('Demande acceptée, heure de prise en charge confirmée');
+      startTransition(() => {
+        reloadReservations();
+        void lirieInvalidateCompanyReservationLists(queryClient);
+      });
+      return;
+    }
+
     setScheduleModalOpen(false);
     if (!scheduleModalReservation) return;
 
@@ -1712,6 +1730,11 @@ const CompanyDashboard = () => {
               <ReservationTable
                 reservations={displayUrgent}
                 loading={loadingReservations}
+                onRowClick={(row) => {
+                  if (!row?.id) return;
+                  const base = location.pathname.replace(/\/$/, '');
+                  navigate(`${base}/reservations?booking=${row.id}`);
+                }}
                 delays={delaysByBooking}
                 onAccept={handleAccept}
                 onReject={handleReject}
@@ -1729,6 +1752,11 @@ const CompanyDashboard = () => {
                   <ReservationTable
                     reservations={displayPending}
                     loading={loadingReservations}
+                    onRowClick={(row) => {
+                      if (!row?.id || row.__institutionOffer) return;
+                      const base = location.pathname.replace(/\/$/, '');
+                      navigate(`${base}/reservations?booking=${row.id}`);
+                    }}
                     delays={delaysByBooking}
                     onAccept={handleAccept}
                     onReject={handleReject}
@@ -1756,6 +1784,11 @@ const CompanyDashboard = () => {
                   <ReservationTable
                     reservations={displayAssigned}
                     loading={loadingReservations}
+                    onRowClick={(row) => {
+                      if (!row?.id) return;
+                      const base = location.pathname.replace(/\/$/, '');
+                      navigate(`${base}/reservations?booking=${row.id}`);
+                    }}
                     delays={delaysByBooking}
                     onAssign={openAssignModal}
                     onTransfer={handleOpenTransferModal}

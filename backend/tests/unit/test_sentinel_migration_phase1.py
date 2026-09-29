@@ -179,3 +179,55 @@ class TestScheduleReservationExplicitTimeConfirmed:
         )
         assert result.ok is True
         assert synced == [35204]
+
+    def test_confirm_pickup_keeps_the_appointment(self):
+        from application.companies.reservations.schedule_reservation import (
+            ScheduleCompanyReservationUseCase,
+        )
+
+        booking = Booking(
+            customer_name="Test",
+            pickup_location="A",
+            dropoff_location="B",
+            scheduled_time=datetime(2026, 9, 29, 23, 0),
+            time_confirmed=False,
+            status=BookingStatus.ACCEPTED.value,
+            amount=25.0,
+            is_return=False,
+        )
+        result = ScheduleCompanyReservationUseCase().execute(
+            booking,
+            scheduled_time_iso="2026-09-29T22:56:00",
+            confirm_pickup=True,
+        )
+        assert result.ok is True
+        assert booking.time_confirmed is True
+        assert booking.scheduled_time is not None
+        assert booking.scheduled_time.hour == 22
+        assert booking.scheduled_time.minute == 56
+        assert "23:00" in str(booking.price_breakdown_json["portal_appointment_time"])
+
+    def test_confirm_pickup_rejects_a_time_after_the_appointment(self):
+        from application.companies.reservations.schedule_reservation import (
+            ScheduleCompanyReservationUseCase,
+        )
+
+        booking = Booking(
+            customer_name="Test",
+            pickup_location="A",
+            dropoff_location="B",
+            scheduled_time=datetime(2026, 9, 29, 23, 0),
+            time_confirmed=False,
+            status=BookingStatus.ACCEPTED.value,
+            amount=25.0,
+            is_return=False,
+        )
+        result = ScheduleCompanyReservationUseCase().execute(
+            booking,
+            scheduled_time_iso="2026-09-29T23:30:00",
+            confirm_pickup=True,
+        )
+        assert result.ok is False
+        assert result.status_code == 422
+        assert booking.time_confirmed is False
+        assert booking.scheduled_time.hour == 23

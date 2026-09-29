@@ -106,6 +106,7 @@ class Client(db.Model):
     habitual_needs_assistance: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    habitual_assistance_detail: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Médecin traitant
     gp_name: Mapped[str] = mapped_column(String(120), nullable=True)
@@ -467,6 +468,11 @@ class Client(db.Model):
                 "wheelchair_client_has": bool(self.habitual_wheelchair_client_has),
                 "wheelchair_need": bool(self.habitual_wheelchair_need),
                 "needs_assistance": bool(self.habitual_needs_assistance),
+                "assistance_detail": (
+                    (self.habitual_assistance_detail or "").strip() or None
+                    if self.habitual_needs_assistance
+                    else None
+                ),
             },
             "gp": {
                 "name": self.gp_name,

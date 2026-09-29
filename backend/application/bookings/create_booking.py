@@ -28,6 +28,10 @@ from services.geo.geo_resolver import (
     geo_unit_id_from_pickup_admin_token,
     resolve_pickup_admin,
 )
+from services.geolocation.google_geocoding_gate import (
+    GeocodingBudgetExceeded,
+    GeocodingRateLimited,
+)
 from services.pricing.pricing_engine import compute_price
 from shared.booking_company_resolution import (
     resolve_booking_owner_company_id_for_create,
@@ -38,6 +42,35 @@ from shared.time_utils import api_scheduled_iso_to_naive_geneva
 
 logger = logging.getLogger(__name__)
 WEEKEND_START_INDEX = 5
+
+
+def _stored_coordinates(
+    validated_data: dict[str, Any],
+    lat_key: str,
+    lon_keys: tuple[str, ...],
+) -> tuple[float, float] | None:
+    """Coordonnées déjà connues : aucun appel Geocoding n'est nécessaire."""
+    lat_raw = validated_data.get(lat_key)
+    lon_raw = next(
+        (
+            validated_data.get(key)
+            for key in lon_keys
+            if validated_data.get(key) is not None
+        ),
+        None,
+    )
+    if lat_raw is None or lon_raw is None:
+        return None
+    try:
+        lat = float(lat_raw)
+        lon = float(lon_raw)
+    except (TypeError, ValueError):
+        return None
+    if not GeoValidator.is_valid(lat, lon):
+        return None
+    return lat, lon
+
+
 BOOKING_FREEZE_FLAG = "FF_BOOKING_PRICE_FREEZE_ON_CREATE"
 
 # Champs réservés aux flux internes / dispatcher — jamais acceptés sur le UC client.
@@ -249,33 +282,90 @@ class CreateBookingUseCase:
         # Validation des données (défense en profondeur)
         validated_data = cast(dict[str, Any], BookingCreateSchema().load(cmd.data))
 
-        # Parser la date
-        try:
-            scheduled_time = api_scheduled_iso_to_naive_geneva(
-                validated_data["scheduled_time"]
-            )
-        except Exception as date_error:
-            logger.error("Erreur de conversion scheduled_time: %s", date_error)
-            raise ValueError("Invalid scheduled_time format") from date_error
-        if scheduled_time is None:
-            raise ValueError("Invalid scheduled_time format")
+        # Parser la date. « Dès que possible » : aucune heure fabriquée.
+        from shared.portal_client_booking_contract import (
+            classify_destination_contact,
+            decide_portal_schedule,
+            decide_return_schedule,
+            prepare_portal_extra_stop,
+            scrub_access_from_free_note,
+        )
 
+        schedule = decide_portal_schedule(validated_data)
+        validated_data["client_note"] = scrub_access_from_free_note(validated_data)
+        explicit_service = str(validated_data.get("hospital_service") or "").strip()
+        explicit_doctor = str(validated_data.get("doctor_name") or "").strip()
+        detail = str(validated_data.get("medical_destination_detail") or "").strip()
+        if explicit_service or explicit_doctor:
+            validated_data["hospital_service"] = explicit_service[:255]
+            validated_data["doctor_name"] = explicit_doctor[:200]
+        elif detail:
+            classified = classify_destination_contact(detail)
+            validated_data["hospital_service"] = classified["hospital_service"]
+            validated_data["doctor_name"] = classified["doctor_name"]
+        scheduled_time = None
+        if schedule["scheduled_time_raw"]:
+            try:
+                scheduled_time = api_scheduled_iso_to_naive_geneva(
+                    schedule["scheduled_time_raw"]
+                )
+            except Exception as date_error:
+                logger.error("Erreur de conversion scheduled_time: %s", date_error)
+                raise ValueError("Invalid scheduled_time format") from date_error
+            if scheduled_time is None:
+                raise ValueError("Invalid scheduled_time format")
+        elif schedule["kind"] != "asap":
+            raise ValueError("Invalid scheduled_time format")
+        time_confirmed = bool(schedule["time_confirmed"])
+        validated_data["is_urgent"] = bool(schedule["is_urgent"])
+
+        return_plan = decide_return_schedule(validated_data)
         return_scheduled_time = None
         return_time_exact = False
-        rt_raw = validated_data.get("return_time")
-        rd_raw = validated_data.get("return_date")
+        rt_raw = return_plan["return_time_raw"]
+        rd_raw = return_plan["return_date"]
         if rt_raw:
             try:
                 return_scheduled_time = api_scheduled_iso_to_naive_geneva(rt_raw)
             except Exception as date_error:
                 logger.error("Erreur de conversion return_time: %s", date_error)
                 raise ValueError("Invalid return_time format") from date_error
+            if return_scheduled_time is None:
+                raise ValueError("Invalid return_time format")
             return_time_exact = True
         elif bool(validated_data.get("is_round_trip")) and rd_raw:
-            rd_str = str(rd_raw).strip() if isinstance(rd_raw, str) else ""
-            if rd_str:
-                return_scheduled_time = None
-                return_time_exact = False
+            return_scheduled_time = None
+            return_time_exact = False
+
+        extra_route_stops: list[dict[str, Any]] = []
+        for step in validated_data.get("route_steps") or []:
+            if not isinstance(step, dict):
+                continue
+            prepared = prepare_portal_extra_stop(step)
+            step_schedule = prepared["schedule"]
+            step_time = None
+            if step_schedule["scheduled_time_raw"]:
+                try:
+                    step_time = api_scheduled_iso_to_naive_geneva(
+                        step_schedule["scheduled_time_raw"]
+                    )
+                except Exception as date_error:
+                    logger.error("Erreur de conversion étape: %s", date_error)
+                    raise ValueError("Invalid scheduled_time format") from date_error
+                if step_time is None:
+                    raise ValueError("Invalid scheduled_time format")
+            extra_route_stops.append(
+                {
+                    "dropoff_location": prepared["dropoff_location"],
+                    "scheduled_time": step_time,
+                    "time_confirmed": bool(step_schedule["time_confirmed"]),
+                    "is_urgent": bool(step_schedule["is_urgent"]),
+                    "medical_facility": prepared["medical_facility"],
+                    "hospital_service": prepared["hospital_service"],
+                    "doctor_name": prepared["doctor_name"],
+                    "dropoff_access_notes": prepared["dropoff_access_notes"],
+                }
+            )
 
         notes_medical = compose_client_portal_notes_medical(validated_data)
 
@@ -370,7 +460,8 @@ class CreateBookingUseCase:
         )
 
         active_stay = find_active_stay_for_client(
-            client_id=cmd.client_id, reference_date=scheduled_time
+            client_id=cmd.client_id,
+            reference_date=scheduled_time or datetime.now(),
         )
         manual_amount = validated_data.get("amount")
         prefer_clinic = None
@@ -407,6 +498,12 @@ class CreateBookingUseCase:
                 validated_data["pickup_location"],
                 validated_data["dropoff_location"],
             )
+        except (GeocodingBudgetExceeded, GeocodingRateLimited) as e:
+            logger.warning(
+                "Quota Geocoding atteint, réservation poursuivie sans distance Google: %s",
+                e,
+            )
+            duration_seconds, distance_meters = 0, 0
         except OSError as e:
             msg = (
                 "❌ Erreur configuration géocodage pour booking (pickup=%s, "
@@ -586,6 +683,26 @@ class CreateBookingUseCase:
                 notes_medical=notes_medical,
                 return_scheduled_time=return_scheduled_time,
                 return_time_exact=return_time_exact,
+                wheelchair_client_has=bool(
+                    validated_data.get("wheelchair_client_has", False)
+                ),
+                wheelchair_need=bool(validated_data.get("wheelchair_need", False)),
+                needs_assistance=bool(validated_data.get("needs_assistance", False)),
+                assistance_detail=(
+                    (
+                        str(validated_data.get("assistance_detail") or "").strip()[:200]
+                        or None
+                    )
+                    if validated_data.get("needs_assistance")
+                    else None
+                ),
+                is_urgent=bool(validated_data.get("is_urgent", False)),
+                time_confirmed=time_confirmed,
+                pickup_access_notes=validated_data.get("pickup_access_notes") or None,
+                dropoff_access_notes=validated_data.get("dropoff_access_notes") or None,
+                requester_name=validated_data.get("requester_name") or None,
+                requester_phone=validated_data.get("requester_phone") or None,
+                extra_route_stops=extra_route_stops or None,
             )
 
             from services.auth.portal_phone_verification import is_portal_client
@@ -700,13 +817,15 @@ class CreateBookingUseCase:
         pickup_geo_unit_id: int | None,
         dropoff_geo_unit_id: int | None,
         distance_meters: int,
-        scheduled_time: datetime,
+        scheduled_time: datetime | None,
         is_round_trip: bool,
         pickup_lat: float | None,
         pickup_lon: float | None,
         dropoff_lat: float | None,
         dropoff_lon: float | None,
     ) -> tuple[int | None, int | None, float | None, dict[str, Any] | None]:
+        if scheduled_time is None:
+            return None, None, None, None
         if os.getenv(BOOKING_FREEZE_FLAG, "true").lower() not in {
             "1",
             "true",
@@ -768,30 +887,51 @@ class CreateBookingUseCase:
     def _geocode_booking_addresses(
         self, validated_data: dict[str, Any], company_id: int | None
     ) -> tuple[float, float, float, float, bool]:
+        from services.geolocation.google_geocoding_gate import geocoding_source
+
         try:
             company_ctx = None
             if company_id and self.company_lookup is not None:
                 company_ctx = self.company_lookup.find_model_by_id(int(company_id))
 
-            pickup_coords = self.geocoding_service.geocode_address(
-                validated_data["pickup_location"], country="CH"
-            )
-            pickup_lat, pickup_lon, pickup_geocoded = self._process_geocoding_result(
-                pickup_coords,
-                validated_data["pickup_location"],
-                company_ctx,
-                "pickup",
-            )
+            with geocoding_source("booking_creation"):
+                known_pickup = _stored_coordinates(
+                    validated_data, "pickup_lat", ("pickup_lon", "pickup_lng")
+                )
+                if known_pickup is not None:
+                    pickup_lat, pickup_lon = known_pickup
+                    pickup_geocoded = True
+                else:
+                    pickup_coords = self.geocoding_service.geocode_address(
+                        validated_data["pickup_location"], country="CH"
+                    )
+                    pickup_lat, pickup_lon, pickup_geocoded = (
+                        self._process_geocoding_result(
+                            pickup_coords,
+                            validated_data["pickup_location"],
+                            company_ctx,
+                            "pickup",
+                        )
+                    )
 
-            dropoff_coords = self.geocoding_service.geocode_address(
-                validated_data["dropoff_location"], country="CH"
-            )
-            dropoff_lat, dropoff_lon, dropoff_geocoded = self._process_geocoding_result(
-                dropoff_coords,
-                validated_data["dropoff_location"],
-                company_ctx,
-                "dropoff",
-            )
+                known_dropoff = _stored_coordinates(
+                    validated_data, "dropoff_lat", ("dropoff_lon", "dropoff_lng")
+                )
+                if known_dropoff is not None:
+                    dropoff_lat, dropoff_lon = known_dropoff
+                    dropoff_geocoded = True
+                else:
+                    dropoff_coords = self.geocoding_service.geocode_address(
+                        validated_data["dropoff_location"], country="CH"
+                    )
+                    dropoff_lat, dropoff_lon, dropoff_geocoded = (
+                        self._process_geocoding_result(
+                            dropoff_coords,
+                            validated_data["dropoff_location"],
+                            company_ctx,
+                            "dropoff",
+                        )
+                    )
             geocode_miss = (not pickup_geocoded) or (not dropoff_geocoded)
             return pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, geocode_miss
         except ValueError as e:

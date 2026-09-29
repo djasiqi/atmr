@@ -362,6 +362,7 @@ class Booking(db.Model):
     passenger_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     external_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
     needs_assistance = Column(Boolean, nullable=False, server_default=text("false"))
+    assistance_detail: Mapped[str | None] = mapped_column(String(200), nullable=True)
     requester_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     requester_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     requester_service: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -733,6 +734,11 @@ class Booking(db.Model):
                 "dropoff_door_code": getattr(self, "dropoff_door_code", None) or None,
                 "wheelchair_client_has": _as_bool(self.wheelchair_client_has),
                 "wheelchair_need": _as_bool(self.wheelchair_need),
+                "needs_assistance": _as_bool(getattr(self, "needs_assistance", False)),
+                "assistance_detail": getattr(self, "assistance_detail", None) or None,
+                "is_urgent": _as_bool(getattr(self, "is_urgent", False)),
+                "requester_name": getattr(self, "requester_name", None) or None,
+                "requester_phone": getattr(self, "requester_phone", None) or None,
                 # ✅ P1-4 Phase 1.4: Standardiser timestamps en ISO 8601
                 "created_at": (
                     iso_utc_z(to_utc_from_db(created_dt))
@@ -826,6 +832,7 @@ class Booking(db.Model):
                 ),
                 "route_group_id": getattr(self, "route_group_id", None),
                 "route_sequence_number": getattr(self, "route_sequence_number", None),
+                "route_group_legs": getattr(self, "_route_group_legs", None) or None,
                 "passenger": self._get_institution_passenger_brief(),
                 "institution_leg": self._get_institution_leg_clinical_brief(),
                 **self._canonical_display_payload(),
@@ -929,7 +936,14 @@ class Booking(db.Model):
                 or "patient_transport",
                 "delivery_description": getattr(self, "delivery_description", None)
                 or None,
+                "wheelchair_client_has": _as_bool(
+                    getattr(self, "wheelchair_client_has", False)
+                ),
                 "wheelchair_need": _as_bool(self.wheelchair_need),
+                "needs_assistance": _as_bool(getattr(self, "needs_assistance", False)),
+                "assistance_detail": getattr(self, "assistance_detail", None) or None,
+                "is_urgent": _as_bool(getattr(self, "is_urgent", False)),
+                "requester_phone": getattr(self, "requester_phone", None) or None,
                 "amount": round(_as_float(self.amount), 2),
                 "portal_contract_flow": _as_str(
                     getattr(self, "portal_contract_flow", None)
@@ -952,6 +966,7 @@ class Booking(db.Model):
                 "billed_to_company_id": self.billed_to_company_id,
                 "route_group_id": getattr(self, "route_group_id", None),
                 "route_sequence_number": getattr(self, "route_sequence_number", None),
+                "route_group_legs": getattr(self, "_route_group_legs", None) or None,
                 "institution_timeline": (
                     None
                     if getattr(self, "_list_projection", False)

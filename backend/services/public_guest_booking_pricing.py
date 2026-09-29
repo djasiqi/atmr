@@ -90,9 +90,12 @@ def compute_public_guest_booking_price(
             "error_message": "Date ou heure de prise en charge invalides.",
         }
 
+    from services.geolocation.google_geocoding_gate import geocoding_source
+
     geocoding = get_geocoding_service()
-    pickup = geocoding.geocode_address(departure, country="CH")
-    dropoff = geocoding.geocode_address(destination, country="CH")
+    with geocoding_source("pricing"):
+        pickup = geocoding.geocode_address(departure, country="CH")
+        dropoff = geocoding.geocode_address(destination, country="CH")
     if not pickup or pickup.get("lat") is None or pickup.get("lon") is None:
         return {
             "ok": False,

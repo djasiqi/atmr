@@ -11,6 +11,7 @@ import {
   acceptReservation,
   rejectReservation,
   scheduleReservation,
+  acceptAndConfirmPickup,
   dispatchNowForReservation,
   updateReservation,
   fetchRequestOffers,
@@ -23,6 +24,7 @@ import { useInstitutionOfferMutations } from '../../../hooks/useInstitutionOffer
 import { computeAcceptNowPickupIso } from '../../../utils/institutionOfferActions';
 import { resolveReturnPickupConflict } from '../../../utils/roundTripTemporal';
 import { portalCarrierAcceptOfferedAmount } from '../../../utils/portalDoubleValidationUi';
+import { pickupNeedsCompanyConfirmation } from '../../../utils/routeGroupItinerary';
 import ReservationTable from '../Dashboard/components/ReservationTable';import ReservationTableSkeleton from '../Dashboard/components/ReservationTableSkeleton';
 import ProposeOfferTimeModal from '../Dashboard/components/ProposeOfferTimeModal';
 import ReservationStats from './components/ReservationStats';
@@ -915,6 +917,31 @@ const CompanyReservations = () => {
   };
 
   const handleConfirmSchedule = async (data) => {
+    if (
+      scheduleModalReservation
+      && typeof data === 'string'
+      && pickupNeedsCompanyConfirmation(scheduleModalReservation)
+    ) {
+      const updated = await acceptAndConfirmPickup(scheduleModalReservation, data);
+      const next = updated?.reservation;
+      if (next?.id) {
+        setSelectedReservation((prev) => (
+          prev && Number(prev.id) === Number(next.id)
+            ? {
+              ...prev,
+              ...next,
+              route_group_legs: next.route_group_legs || prev.route_group_legs,
+            }
+            : prev
+        ));
+      }
+      setScheduleModalOpen(false);
+      setScheduleModalReservation(null);
+      afterListMutation();
+      toast.success('Demande acceptée, heure de prise en charge confirmée');
+      return;
+    }
+
     setScheduleModalOpen(false);
     if (!scheduleModalReservation) return;
 
@@ -1321,6 +1348,13 @@ const CompanyReservations = () => {
                   return result?.reservation || result;
                 }}
                 onDelete={handleDeleteRequest}
+                onAccept={handleAccept}
+                onReject={async (reservationId) => {
+                  await handleReject(reservationId);
+                  setSelectedReservation(null);
+                }}
+                onConfirmPickup={handleSchedule}
+                onTransfer={handleOpenTransferModal}
                 onReservationUpdated={(updated) => {
                   if (updated?.id) setSelectedReservation(updated);
                   afterListMutation();

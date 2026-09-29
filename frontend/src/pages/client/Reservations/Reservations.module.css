@@ -623,6 +623,36 @@
   border-color: #e2e8f0;
 }
 
+.routeSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 232px;
+  gap: 16px;
+  align-items: start;
+}
+
+.routeMapCard {
+  width: 232px;
+  height: 232px;
+  justify-self: end;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #f4f6f5;
+}
+
+.routeMapFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
 .routeBlock {
   display: flex;
   flex-direction: column;
@@ -684,13 +714,28 @@
   padding-bottom: 0;
 }
 
+.routeHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .routeLabel {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--brand-neutral-gray-cyan, #91a3a0);
-  margin-bottom: 4px;
+}
+
+.glanceDate {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #14352c;
+  line-height: 1.3;
 }
 
 .metaDtIcon {
@@ -703,11 +748,26 @@
 }
 
 .routePlace {
+  margin-top: 2px;
   font-size: 14px;
-  line-height: 1.5;
-  font-weight: 400;
+  line-height: 1.45;
+  font-weight: 500;
   color: #0f172a;
   word-break: break-word;
+}
+
+.routeDetail {
+  font-weight: 500;
+  color: #64748b;
+}
+
+.routeWhen {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
 }
 
 .timelineSection {
@@ -1141,27 +1201,36 @@
 
 .bookingActions {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid #eef2f6;
 }
 
 .primaryActionSlot {
-  width: 100%;
+  width: auto;
 }
 
-.primaryActionSlot .primaryButton {
-  width: 100%;
+.bookingActions .primaryActionSlot .primaryButton {
+  width: auto;
+  min-height: 40px;
+  padding: 8px 16px;
   justify-content: center;
 }
 
 .secondaryActionsRow {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.bookingActions .cancelLinkBtn {
+  margin-left: auto;
 }
 
 .cancelBtn {
@@ -1465,6 +1534,9 @@
 }
 
 .pastGhostLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
   margin: 0;
   padding: 4px 0;
   border: none;
@@ -1475,6 +1547,17 @@
   color: #64748b;
   cursor: pointer;
   text-align: right;
+}
+
+.contactNewDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #b91c1c;
+  flex-shrink: 0;
+  vertical-align: middle;
 }
 
 .pastGhostLink:hover {
@@ -1504,7 +1587,11 @@
 }
 
 .pastRowPanelTimelineSection {
-  margin: 0;
+  margin: 0 0 18px;
+}
+
+.pastRowPanelTimelineSection:last-of-type {
+  margin-bottom: 0;
 }
 
 .pastRowPanelSubheading {
@@ -1589,6 +1676,41 @@
   gap: 12px;
 }
 
+.pastHistoryActions {
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid #eef2f6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 20px;
+}
+
+.pastHistoryPrimary,
+.pastHistorySecondary {
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.pastHistoryPrimary {
+  color: #334155;
+}
+
+.pastHistorySecondary {
+  color: #64748b;
+}
+
+.pastHistoryPrimary:hover,
+.pastHistorySecondary:hover {
+  color: #00796b;
+}
+
 .pastRowPanel .primaryActionSlot .primaryButton {
   min-height: 46px;
   border-radius: 10px;
@@ -1621,6 +1743,15 @@
 }
 
 @media (max-width: 768px) {
+  .routeSplit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .routeMapCard {
+    width: min(100%, 232px);
+    margin-left: auto;
+  }
+
   .listControlsInner {
     flex-direction: column;
     align-items: stretch;
@@ -1801,4 +1932,91 @@
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid #eef2f6;
+}
+
+.eventReportDossier {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.eventReportLabel {
+  display: block;
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.eventReportField {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.eventReportField:focus {
+  outline: 2px solid #00796b;
+  outline-offset: 1px;
+  border-color: #00796b;
+}
+
+.eventReportConsent {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #334155;
+}
+
+.eventReportConsent input {
+  margin-top: 2px;
+}
+
+.eventReportError {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #9a3412;
+}
+
+.eventReportActions {
+  margin-top: 16px;
+}
+
+.eventReportSubmit {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #00796b;
+  cursor: pointer;
+}
+
+.eventReportSubmit:hover {
+  text-decoration: underline;
+}
+
+.eventReportSubmit:disabled {
+  color: #94a3b8;
+  cursor: default;
+  text-decoration: none;
 }

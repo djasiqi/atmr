@@ -214,6 +214,83 @@ def test_create_booking_use_case_blocks_unverified_portal_phone(
     assert writer.calls == 0
 
 
+def test_portal_parity_reaches_writer_without_invented_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PORTAL → writer : ASAP nul, rendez-vous non confirmé, retour sans heure."""
+    import application.bookings.create_booking as mod
+
+    _patch_common(monkeypatch, mod)
+    monkeypatch.setattr(mod, "publish_event", lambda _evt: None)
+    monkeypatch.setattr(
+        "services.legal.portal_terms_status.assert_portal_terms_current",
+        lambda **_k: None,
+    )
+    monkeypatch.setattr(
+        "services.auth.portal_phone_verification.assert_portal_phone_verified",
+        lambda **_k: None,
+    )
+    writer = _FakeBookingWriter()
+    uc = _build_uc(writer=writer, client_repo=_FakeClientRepo(company_id=None))
+
+    uc.execute(
+        _base_cmd(
+            asap=True,
+            is_urgent=True,
+            scheduled_time="2026-09-30T09:00:00+02:00",
+        )
+    )
+    assert writer.last_kwargs["scheduled_time"] is None
+    assert writer.last_kwargs["time_confirmed"] is False
+    assert writer.last_kwargs["is_urgent"] is True
+
+    uc.execute(
+        _base_cmd(
+            scheduled_time="2026-09-30T09:00:00+02:00",
+            scheduled_time_type="arrival",
+            wheelchair_client_has=True,
+            needs_assistance=True,
+            pickup_access_notes="Code 1234",
+            dropoff_access_notes="Accueil",
+            client_note="Prise en charge : Code 1234\nDestination : Accueil",
+            hospital_service="Radiologie",
+            doctor_name="Dr Martin",
+        )
+    )
+    assert writer.last_kwargs["scheduled_time"] is not None
+    assert writer.last_kwargs["time_confirmed"] is False
+    assert writer.last_kwargs["is_urgent"] is False
+    assert writer.last_kwargs["wheelchair_client_has"] is True
+    assert writer.last_kwargs["wheelchair_need"] is False
+    assert writer.last_kwargs["needs_assistance"] is True
+    notes = writer.last_kwargs["notes_medical"] or ""
+    assert "Code 1234" not in notes
+    assert "Accueil" not in notes
+
+    uc.execute(
+        _base_cmd(
+            scheduled_time="2026-09-30T08:15:00+02:00",
+            scheduled_time_type="departure",
+            is_round_trip=True,
+            return_date="2026-09-30",
+            return_time="   ",
+        )
+    )
+    assert writer.last_kwargs["time_confirmed"] is True
+    assert writer.last_kwargs["return_time_exact"] is False
+    assert writer.last_kwargs["return_scheduled_time"] is None
+    assert writer.last_kwargs["is_round_trip"] is True
+
+    with pytest.raises(ValidationError):
+        uc.execute(
+            _base_cmd(
+                wheelchair_client_has=True,
+                wheelchair_need=True,
+            )
+        )
+    assert writer.calls == 3
+
+
 def test_create_booking_use_case_invalid_scheduled_time_raises_value_error() -> None:
     uc = _build_uc()
     with pytest.raises(ValidationError, match="scheduled_time"):
@@ -706,3 +783,50 @@ def test_known_client_post_routes_delegate_to_shared_helper() -> None:
                     )
                     found = True
         assert found, f"Handler manquant: {rel} {class_name}.{method_name}"
+
+
+def test_stored_coordinates_skip_google_geocoding() -> None:
+    geocoding = _FakeGeocoding()
+    uc = _build_uc(geocoding=geocoding)
+    pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, geocode_miss = (
+        uc._geocode_booking_addresses(
+            {
+                "pickup_location": "Rue Pickup 1, Geneve",
+                "dropoff_location": "Rue Dropoff 2, Geneve",
+                "pickup_lat": 46.2,
+                "pickup_lon": 6.14,
+                "dropoff_lat": 46.21,
+                "dropoff_lng": 6.15,
+            },
+            None,
+        )
+    )
+    assert geocoding.calls == []
+    assert geocode_miss is False
+    assert (pickup_lat, pickup_lon) == (46.2, 6.14)
+    assert (dropoff_lat, dropoff_lon) == (46.21, 6.15)
+
+
+def test_booking_survives_geocoding_quota_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import application.bookings.create_booking as mod
+    from services.geolocation.google_geocoding_gate import GeocodingBudgetExceeded
+
+    monkeypatch.setattr(mod, "publish_event", lambda _evt: None)
+    _patch_common(monkeypatch, mod)
+    writer = _FakeBookingWriter()
+
+    def _blocked(_pickup: str, _dropoff: str) -> tuple[int, int]:
+        raise GeocodingBudgetExceeded("plafond")
+
+    uc = _build_uc(
+        writer=writer,
+        geocoding=_FakeGeocoding(succeed=False),
+        distance_fn=_blocked,
+        trigger_async=lambda *_a: None,
+    )
+    booking = uc.execute(_base_cmd())
+    assert getattr(booking, "id", None) == 123
+    assert writer.calls == 1
+    assert writer.last_kwargs.get("distance_meters") == 0

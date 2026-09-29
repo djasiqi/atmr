@@ -95,11 +95,54 @@ def _scheduled_iso(booking: Any) -> str | None:
     return str(st)
 
 
+def _route_groups_longer_than_round_trip(bookings: list[Any]) -> set[str]:
+    """Groupes d'itinéraire à plus de 2 courses (étape 1, étape 2, retour…)."""
+    counts: dict[str, int] = {}
+    for b in bookings:
+        rg = getattr(b, "route_group_id", None)
+        if rg is None:
+            continue
+        key = str(rg)
+        counts[key] = counts.get(key, 0) + 1
+    return {key for key, n in counts.items() if n > 2}
+
+
+def _chain_leg_labels(bookings: list[Any]) -> dict[int, str]:
+    """Étiquette d'affichage : « Étape N » ou « Retour » pour une chaîne de plus de 2 courses."""
+    by_group: dict[str, list[Any]] = {}
+    for b in bookings:
+        rg = getattr(b, "route_group_id", None)
+        if rg is None:
+            continue
+        by_group.setdefault(str(rg), []).append(b)
+    labels: dict[int, str] = {}
+    for segs in by_group.values():
+        if len(segs) <= 2:
+            continue
+        ordered = sorted(
+            segs,
+            key=lambda item: (
+                getattr(item, "route_sequence_number", None) is None,
+                getattr(item, "route_sequence_number", None) or 0,
+                int(item.id),
+            ),
+        )
+        step = 0
+        for item in ordered:
+            if bool(getattr(item, "is_return", False)):
+                labels[int(item.id)] = "Retour"
+                continue
+            step += 1
+            labels[int(item.id)] = f"Étape {step}"
+    return labels
+
+
 def _round_trip_leg_by_booking_id(bookings: list[Any]) -> dict[int, bool]:
     """True si le booking est l'aller ou le retour d'un A/R avec l'autre segment dans la même liste."""
     if not bookings:
         return {}
     ids = {int(b.id) for b in bookings}
+    chain_groups = _route_groups_longer_than_round_trip(bookings)
     parents_with_return_in_list: set[int] = set()
     for b in bookings:
         pid = getattr(b, "parent_booking_id", None)
@@ -108,6 +151,10 @@ def _round_trip_leg_by_booking_id(bookings: list[Any]) -> dict[int, bool]:
     out: dict[int, bool] = {}
     for b in bookings:
         bid = int(b.id)
+        rg = getattr(b, "route_group_id", None)
+        if rg is not None and str(rg) in chain_groups:
+            out[bid] = False
+            continue
         is_ret = bool(getattr(b, "is_return", False))
         pid = getattr(b, "parent_booking_id", None)
         linked_to_parent = pid is not None and int(pid) in ids
@@ -236,6 +283,7 @@ class PeriodPreviewLine:
     round_trip_partner_description: str | None = None
     round_trip_partner_scheduled_at: str | None = None
     round_trip_primary_scheduled_at: str | None = None
+    leg_label: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -407,6 +455,7 @@ def build_period_invoice_preview(
             else None
         )
         rt_map = _round_trip_leg_by_booking_id(bookings)
+        leg_labels = _chain_leg_labels(bookings)
         # Une seule requête pour tous les clients des lignes (évite N+1).
         clients_by_id: dict[int, Any] = {}
         if include_line_details:
@@ -464,6 +513,7 @@ def build_period_invoice_preview(
                     already_invoiced=bool(getattr(b, "invoice_line_id", None)),
                     is_round_trip_leg=bool(rt_map.get(int(b.id), False)),
                     patient_name=row_patient,
+                    leg_label=leg_labels.get(int(b.id)),
                 )
             )
 
@@ -559,6 +609,7 @@ def build_period_invoice_preview(
         warnings=warnings,
     )
     rt_map_s2 = _round_trip_leg_by_booking_id(eligible_bookings)
+    leg_labels_s2 = _chain_leg_labels(eligible_bookings)
     crepo = ClientRepository()
     # Batch : une requête client (+ user) pour toute la période clinique (Sentry N+1).
     clients_by_id_s2: dict[int, Any] = {}
@@ -614,6 +665,7 @@ def build_period_invoice_preview(
                 already_invoiced=bool(getattr(b, "invoice_line_id", None)),
                 is_round_trip_leg=bool(rt_map_s2.get(int(b.id), False)),
                 patient_name=row_patient,
+                leg_label=leg_labels_s2.get(int(b.id)),
             )
         )
 
@@ -655,7 +707,10 @@ def preview_line_to_dict(pl: PeriodPreviewLine) -> dict[str, Any]:
         partner = int(pl.round_trip_partner_booking_id)
         if partner not in booking_ids:
             booking_ids.append(partner)
-    unit_type = "round_trip" if pl.is_round_trip_leg else "single"
+    merged_round_trip = (
+        pl.is_round_trip_leg and pl.round_trip_partner_booking_id is not None
+    )
+    unit_type = "round_trip" if merged_round_trip else "single"
     d: dict[str, Any] = {
         "booking_id": pl.booking_id,
         "primary_booking_id": pl.booking_id,
@@ -674,8 +729,10 @@ def preview_line_to_dict(pl: PeriodPreviewLine) -> dict[str, Any]:
         "source_type": pl.source_type,
         "is_locked": pl.is_locked,
         "already_invoiced": pl.already_invoiced,
-        "is_round_trip_leg": pl.is_round_trip_leg,
+        "is_round_trip_leg": merged_round_trip,
     }
+    if pl.leg_label and not merged_round_trip:
+        d["leg_label"] = pl.leg_label
     if pl.patient_name:
         d["patient_name"] = pl.patient_name
     if pl.round_trip_partner_booking_id is not None:

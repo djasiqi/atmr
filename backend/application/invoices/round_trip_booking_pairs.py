@@ -46,6 +46,29 @@ def _is_booking_cancelled(booking: Any) -> bool:
     return status_str.upper().strip() in {"CANCELED", "CANCELLED"}
 
 
+def booking_ids_in_longer_route_group(bookings: list[Any]) -> set[int]:
+    """Courses d'un ``route_group_id`` de plus de 2 étapes : jamais un A/R fusionné.
+
+    Un aller-retour commercial reste un groupe de 2 segments. Étape 1, étape 2
+    et retour restent trois lignes, y compris si le retour a un ``parent_booking_id``.
+    """
+    members: dict[str, list[int]] = defaultdict(list)
+    for booking in bookings:
+        rg = getattr(booking, "route_group_id", None)
+        if rg is None:
+            continue
+        try:
+            bid = int(booking.id)
+        except (TypeError, ValueError):
+            continue
+        members[str(rg)].append(bid)
+    frozen: set[int] = set()
+    for ids in members.values():
+        if len(ids) > 2:
+            frozen.update(ids)
+    return frozen
+
+
 def find_round_trip_merge_booking_pairs(
     bookings: list[Any],
     *,
@@ -73,6 +96,7 @@ def find_round_trip_merge_booking_pairs(
             continue
     used_ids: set[int] = set()
     pairs_out: list[tuple[int, int]] = []
+    frozen_chain_ids = booking_ids_in_longer_route_group(list(by_id.values()))
 
     # --- 1) Liens explicites parent / retour ---
     explicit_children: dict[int, list[int]] = defaultdict(list)
@@ -85,6 +109,8 @@ def find_round_trip_merge_booking_pairs(
         if len(children) != 1:
             continue
         rid = children[0]
+        if parent_id in frozen_chain_ids or rid in frozen_chain_ids:
+            continue
         if parent_id in used_ids or rid in used_ids:
             continue
         pb, rb = by_id.get(parent_id), by_id.get(rid)
@@ -100,7 +126,7 @@ def find_round_trip_merge_booking_pairs(
     groups: dict[tuple[Any, ...], list[Any]] = defaultdict(list)
     for b in bookings:
         bid = int(b.id)
-        if bid in used_ids:
+        if bid in used_ids or bid in frozen_chain_ids:
             continue
         if _is_booking_cancelled(b):
             continue

@@ -5,6 +5,11 @@ import styles from './ReservationTable.module.css';
 import { formatDelay } from '../../../../utils/formatDelay';
 import { pickupArrivalHint } from '../../../../utils/formatPickupEta';
 import BookingScheduleCell from '../../../../components/booking/BookingScheduleCell';
+import {
+  journeyPlaces,
+  otherJourneyScheduleLines,
+  pickupNeedsCompanyConfirmation,
+} from '../../../../utils/routeGroupItinerary';
 import ReservationActions from '../../../../components/reservations/ReservationActions';
 import BookingIdentityCell from '../../../../components/booking/BookingIdentityCell';
 import BookingTripBadges from '../../../../components/booking/BookingTripBadges';
@@ -19,7 +24,7 @@ import {
   resolveRespondTargetBooking,
 } from '../../../../utils/transportActionPending';
 import { useSearchParams } from 'react-router-dom';
-import { portalCarrierFacingAmountDisplay, portalCarrierAcceptButtonLabel } from '../../../../utils/portalDoubleValidationUi';
+import { portalCarrierFacingAmountDisplay, portalCarrierAcceptButtonLabel, portalCarrierRouteGroupAmount } from '../../../../utils/portalDoubleValidationUi';
 
 /** Boutons Valider/Départ immédiat/Planifier/Refuser pour une offre institution (branche `__institutionOffer`). */
 const renderInstitutionOfferActionButtons = (r, handlers) => (
@@ -54,8 +59,66 @@ function findReturnBookingForOutbound(allReservations, outboundId) {
   );
 }
 
+function renderOtherSchedules(booking, allReservations) {
+  return otherJourneyScheduleLines(booking, allReservations).map((line) => (
+    <span key={line.key} className={styles.scheduleExtra}>
+      {line.text}
+    </span>
+  ));
+}
+
+function renderJourney(booking, allReservations, textClassName) {
+  const places = journeyPlaces(booking, allReservations);
+  return places.map((place, index) => {
+    const isFirst = index === 0;
+    const isLast = index === places.length - 1;
+    const dotClass = isFirst
+      ? styles.locationDotPickup
+      : isLast
+        ? styles.locationDotDropoff
+        : styles.locationDotStop;
+    return (
+      <div className={styles.locationRow} key={`${index}-${place}`}>
+        <span className={`${styles.locationDot} ${dotClass}`} aria-hidden />
+        <span className={textClassName} title={place}>{place}</span>
+      </div>
+    );
+  });
+}
+
 /** Montants aller-retour : total sur l’aller, libellé explicite sur le retour si montant 0. */
+const PICKUP_CONFIRM_LABEL = "Accepter et confirmer l'heure de prise en charge";
+
+function acceptActionLabel(r, allReservations) {
+  const groupAmt = portalCarrierRouteGroupAmount(r, allReservations);
+  if (groupAmt?.isAnchor && groupAmt.total > 0) {
+    return `Accepter cette demande à CHF ${groupAmt.total.toFixed(2)}`;
+  }
+  return portalCarrierAcceptButtonLabel(r);
+}
+
 function renderAmountCell(r, allReservations) {
+  const groupAmt = portalCarrierRouteGroupAmount(r, allReservations);
+  if (groupAmt) {
+    if (!groupAmt.isAnchor) {
+      return (
+        <div className={styles.amountCellStack}>
+          <span className={styles.amountLegLabel}>Inclus dans la demande</span>
+          <span className={styles.amountSub}>{groupAmt.label}</span>
+        </div>
+      );
+    }
+    return (
+      <div className={styles.amountCellStack}>
+        <span>
+          <span className={styles.amountValue}>{groupAmt.total.toFixed(2)}</span>
+          <span className={styles.amountCurrency}> CHF</span>
+        </span>
+        <span className={styles.amountSub}>{groupAmt.label}</span>
+      </div>
+    );
+  }
+
   const carrierAmt = portalCarrierFacingAmountDisplay(r);
   if (carrierAmt.mode === 'company_quote' || carrierAmt.mode === 'awaiting_quote') {
     return (
@@ -364,6 +427,7 @@ const ReservationTable = ({
                   <td className={styles.dateCell}>
                     <div className={styles.timeCellStack}>
                       <BookingScheduleCell booking={r} undefinedClassName={styles.pickupEtaHint} />
+                      {renderOtherSchedules(r, reservations)}
                       {pickupArrivalLabel && (
                         <span className={styles.pickupEtaHint} title={pickupArrivalLabel.title}>
                           {pickupArrivalLabel.text}
@@ -371,15 +435,8 @@ const ReservationTable = ({
                       )}
                     </div>
                   </td>
-                  <td className={styles.locationCell}>
-                    <div className={styles.locationRow}>
-                      <span className={`${styles.locationDot} ${styles.locationDotPickup}`} />
-                      <span className={styles.locationText} title={r.pickup_location}>{r.pickup_location}</span>
-                    </div>
-                    <div className={styles.locationRow}>
-                      <span className={`${styles.locationDot} ${styles.locationDotDropoff}`} />
-                      <span className={styles.locationText} title={r.dropoff_location}>{r.dropoff_location}</span>
-                    </div>
+                  <td className={styles.locationCell} aria-label="Itinéraire">
+                    {renderJourney(r, reservations, styles.locationText)}
                   </td>
                   <td>
                     {r.__institutionOffer ? (
@@ -482,14 +539,22 @@ const ReservationTable = ({
                             <button
                               type="button"
                               data-tour-id="pending-accept-action"
-                              onClick={() => onAccept?.(r)}
+                              onClick={() => (
+                                pickupNeedsCompanyConfirmation(r)
+                                  ? onSchedule?.(r)
+                                  : onAccept?.(r)
+                              )}
                               title={
-                                portalCarrierAcceptButtonLabel(r) ||
-                                (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
+                                pickupNeedsCompanyConfirmation(r)
+                                  ? PICKUP_CONFIRM_LABEL
+                                  : acceptActionLabel(r, reservations) ||
+                                    (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
                               }
                               aria-label={
-                                portalCarrierAcceptButtonLabel(r) ||
-                                (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
+                                pickupNeedsCompanyConfirmation(r)
+                                  ? PICKUP_CONFIRM_LABEL
+                                  : acceptActionLabel(r, reservations) ||
+                                    (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
                               }
                               className={`${styles.actionButton} ${styles.acceptButton} ${styles.touchTarget}`}
                             >
@@ -590,6 +655,7 @@ const ReservationTable = ({
                   <span className={styles.mobileCardValue}>
                     <div className={styles.timeCellStack}>
                       <BookingScheduleCell booking={r} undefinedClassName={styles.pickupEtaHint} />
+                      {renderOtherSchedules(r, reservations)}
                       {pickupArrivalLabel && (
                         <span className={styles.pickupEtaHint} title={pickupArrivalLabel.title}>
                           {pickupArrivalLabel.text}
@@ -598,15 +664,8 @@ const ReservationTable = ({
                     </div>
                   </span>
                 </div>
-                <div className={styles.mobileCardRoute}>
-                  <div className={styles.locationRow}>
-                    <span className={`${styles.locationDot} ${styles.locationDotPickup}`} />
-                    <span className={styles.mobileCardRouteText}>{r.pickup_location || '-'}</span>
-                  </div>
-                  <div className={styles.locationRow}>
-                    <span className={`${styles.locationDot} ${styles.locationDotDropoff}`} />
-                    <span className={styles.mobileCardRouteText}>{r.dropoff_location || '-'}</span>
-                  </div>
+                <div className={styles.mobileCardRoute} aria-label="Itinéraire">
+                  {renderJourney(r, reservations, styles.mobileCardRouteText)}
                 </div>
                 <div className={styles.mobileCardRow}>
                   <span className={styles.mobileCardLabel}>Montant</span>
@@ -662,14 +721,22 @@ const ReservationTable = ({
                       <button
                         type="button"
                         data-tour-id="pending-accept-action-mobile"
-                        onClick={() => onAccept?.(r)}
+                        onClick={() => (
+                          pickupNeedsCompanyConfirmation(r)
+                            ? onSchedule?.(r)
+                            : onAccept?.(r)
+                        )}
                         title={
-                          portalCarrierAcceptButtonLabel(r) ||
-                          (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
+                          pickupNeedsCompanyConfirmation(r)
+                            ? PICKUP_CONFIRM_LABEL
+                            : acceptActionLabel(r, reservations) ||
+                              (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
                         }
                         aria-label={
-                          portalCarrierAcceptButtonLabel(r) ||
-                          (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
+                          pickupNeedsCompanyConfirmation(r)
+                            ? PICKUP_CONFIRM_LABEL
+                            : acceptActionLabel(r, reservations) ||
+                              (r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter')
                         }
                         className={`${styles.actionButton} ${styles.acceptButton} ${styles.touchTarget}`}
                       >
@@ -728,4 +795,5 @@ const ReservationTable = ({
   );
 };
 
+export { journeyPlaces, otherJourneyScheduleLines };
 export default React.memo(ReservationTable);

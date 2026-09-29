@@ -1,7 +1,7 @@
 // src/pages/client/Account/AccountUser.jsx
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import apiClient, { logoutUser } from '../../../utils/apiClient';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
 import Footer from '../../../components/layout/Footer/Footer';
 import ConfirmationModal from '../../../components/common/ConfirmationModal';
@@ -9,6 +9,7 @@ import AddressAutocomplete from '../../../components/common/AddressAutocomplete'
 import { getApiErrorMessage } from '../../../utils/apiErrorMessage';
 import { getActiveUser, hasActiveSession, setEnvUser } from '../../../utils/webAuthSession';
 import { changeClientPassword } from '../../../services/clientService';
+import { computeProfileCompletionPercent } from './profileCompletion';
 import './AccountUser.css';
 
 import avatarMale from '../../../assets/images/avatar-male.png';
@@ -22,6 +23,11 @@ function cleanDisplay(value) {
   return s;
 }
 
+function familyNameUpper(value) {
+  const text = cleanDisplay(value);
+  return text ? text.toLocaleUpperCase('fr-CH') : '';
+}
+
 /** Mappe la réponse GET /clients/:public_id vers l’état formulaire (aligné domicile + user). */
 function mapClientResponseToForm(data) {
   if (!data) return {};
@@ -29,7 +35,7 @@ function mapClientResponseToForm(data) {
   const domicileAddr = cleanDisplay(data.domicile?.address);
   const userAddr = cleanDisplay(u.address);
   const firstName = cleanDisplay(data.first_name || u.first_name);
-  const lastName = cleanDisplay(data.last_name || u.last_name);
+  const lastName = familyNameUpper(data.last_name || u.last_name);
   const birthDate = cleanDisplay(u.birth_date || data.birth_date);
   const genderRawValue = u.gender || data.gender;
   const genderRaw = genderRawValue != null ? String(genderRawValue) : '';
@@ -49,11 +55,16 @@ function mapClientResponseToForm(data) {
     floor: cleanDisplay(access.floor),
     door_code: cleanDisplay(access.door_code),
     access_notes: cleanDisplay(access.notes),
+    wheelchair_client_has: Boolean(data.mobility?.wheelchair_client_has),
+    wheelchair_need: Boolean(data.mobility?.wheelchair_need),
+    needs_assistance: Boolean(data.mobility?.needs_assistance),
+    assistance_detail: cleanDisplay(data.mobility?.assistance_detail),
     birth_date: birthDate,
     gender: ['HOMME', 'FEMME', 'AUTRE'].includes(genderNorm) ? genderNorm : '',
     profile_image: u.profile_image || null,
     force_password_change: Boolean(u.force_password_change),
     phone_verified: Boolean(data.phone_verified || u.phone_verified),
+    client_type: String(data.client_type || 'PORTAL').toUpperCase(),
     invoice_delivery_method:
       data.invoice_delivery_method === 'paper' ||
       data.default_billing?.invoice_delivery_method === 'paper'
@@ -75,26 +86,6 @@ function accountInitials(firstName, lastName) {
   return pair || '?';
 }
 
-/** Score 0–100 selon les champs utiles aux réservations (heuristique côté client). */
-function computeProfileCompletionPercent(profile) {
-  if (!profile || typeof profile !== 'object') return 0;
-  const t = (v) => String(v ?? '').trim().length > 0;
-  let points = 0;
-  let max = 0;
-  const add = (filled, weight) => {
-    max += weight;
-    if (filled) points += weight;
-  };
-  add(t(profile.first_name) && t(profile.last_name), 15);
-  add(t(profile.email), 10);
-  add(t(profile.phone), 15);
-  add(t(profile.birth_date), 10);
-  add(t(profile.gender), 10);
-  add(t(profile.address), 25);
-  add(t(profile.floor) || t(profile.door_code) || t(profile.access_notes), 15);
-  if (max === 0) return 0;
-  return Math.min(100, Math.round((points / max) * 100));
-}
 
 const ACCOUNT_SECTION_META = {
   profile: {
@@ -135,7 +126,7 @@ function buildClientUpdatePayload(form) {
   const fn = (form.first_name || '').trim();
   const ln = (form.last_name || '').trim();
   if (fn) p.first_name = fn;
-  if (ln) p.last_name = ln;
+  if (ln) p.last_name = familyNameUpper(ln);
   const phoneRaw = (form.phone || '').replace(/\s/g, '').trim();
   if (phoneRaw) p.phone = phoneRaw;
   const addr = (form.address || '').trim();
@@ -147,6 +138,12 @@ function buildClientUpdatePayload(form) {
   p.floor = (form.floor ?? '').trim();
   p.door_code = (form.door_code ?? '').trim();
   p.access_notes = (form.access_notes ?? '').trim();
+  p.habitual_wheelchair_client_has = Boolean(form.wheelchair_client_has);
+  p.habitual_wheelchair_need = Boolean(form.wheelchair_need);
+  p.habitual_needs_assistance = Boolean(form.needs_assistance);
+  p.habitual_assistance_detail = form.needs_assistance
+    ? String(form.assistance_detail || '').trim().slice(0, 200)
+    : '';
   if (form.invoice_delivery_method === 'paper' || form.invoice_delivery_method === 'email') {
     p.invoice_delivery_method = form.invoice_delivery_method;
   }
@@ -157,6 +154,7 @@ const AccountUser = () => {
   const { public_id } = useParams();
   const navigate = useNavigate();
   const [updatedProfile, setUpdatedProfile] = useState({});
+  const profileRef = React.useRef({});
   const [loadError, setLoadError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -202,12 +200,41 @@ const AccountUser = () => {
     }
   }, []);
 
+  const applyProfile = useCallback((mapped) => {
+    const next = mapped && typeof mapped === 'object' ? mapped : {};
+    profileRef.current = next;
+    setUpdatedProfile(next);
+    return next;
+  }, []);
+
+  const patchProfile = useCallback((partial) => {
+    setUpdatedProfile((prev) => {
+      const patch = typeof partial === 'function' ? partial(prev) : partial;
+      const next = { ...(prev || {}), ...(patch || {}) };
+      profileRef.current = next;
+      return next;
+    });
+  }, []);
+
   const reloadProfile = useCallback(async () => {
     const { data } = await apiClient.get(`/clients/${public_id}`);
-    const mapped = mapClientResponseToForm(data);
-    setUpdatedProfile(mapped);
-    return mapped;
-  }, [public_id]);
+    const rawLast = cleanDisplay(data?.last_name || data?.user?.last_name);
+    const upperLast = familyNameUpper(rawLast);
+    const form = applyProfile(mapClientResponseToForm(data));
+    if (rawLast && upperLast && rawLast !== upperLast) {
+      try {
+        await apiClient.put(`/clients/${public_id}`, { last_name: upperLast });
+        const sessionUser = getActiveUser();
+        if (sessionUser) {
+          sessionUser.last_name = upperLast;
+          setEnvUser(sessionUser);
+        }
+      } catch (err) {
+        console.error('Normalisation du nom de famille :', err);
+      }
+    }
+    return form;
+  }, [applyProfile, public_id]);
 
   useEffect(() => {
     if (!hasActiveSession()) {
@@ -220,8 +247,7 @@ const AccountUser = () => {
     apiClient
       .get(`/clients/${public_id}`)
       .then((response) => {
-        const mapped = mapClientResponseToForm(response.data);
-        setUpdatedProfile(mapped);
+        applyProfile(mapClientResponseToForm(response.data));
       })
       .catch(() => {
         setLoadError('Impossible de charger le compte utilisateur.');
@@ -229,7 +255,11 @@ const AccountUser = () => {
       .finally(() => {
         setLoading(false);
       });
-  }, [public_id, navigate]);
+  }, [applyProfile, public_id, navigate]);
+
+  useEffect(() => {
+    profileRef.current = updatedProfile;
+  }, [updatedProfile]);
 
   useEffect(() => {
     refreshProfilePic(
@@ -319,7 +349,8 @@ const AccountUser = () => {
   const handleUpdateProfile = () => {
     setSaveError(null);
     setSaveSuccess(false);
-    const payload = buildClientUpdatePayload(updatedProfile);
+    const form = profileRef.current || {};
+    const payload = buildClientUpdatePayload(form);
     if (Object.keys(payload).length === 0) {
       setSaveError('Aucune modification à enregistrer.');
       return;
@@ -345,10 +376,19 @@ const AccountUser = () => {
           /* ignore */
         }
       })
-      .catch((err) => {
-        setSaveError(
-          getApiErrorMessage(err, 'Impossible de mettre à jour le compte.')
+      .catch(async (err) => {
+        const message = getApiErrorMessage(
+          err,
+          'Impossible de mettre à jour le compte.'
         );
+        if (/type d[’']assistance/i.test(message)) {
+          try {
+            await reloadProfile();
+          } catch {
+            /* le formulaire garde la saisie locale */
+          }
+        }
+        setSaveError(message);
       })
       .finally(() => {
         setSaving(false);
@@ -550,16 +590,23 @@ const AccountUser = () => {
                     </button>
                   </div>
                 </div>
-                <section className="home-suggestion-card">
-                  <h3>Terminer votre profil</h3>
-                  <p>
-                    Complétez vos informations personnelles et de sécurité pour accélérer vos
-                    réservations et protéger votre compte.
-                  </p>
-                  <button type="button" onClick={() => setActiveSection('personal')}>
-                    Continuer
-                  </button>
-                </section>
+                {profileCompletionPct < 100 ? (
+                  <section className="home-suggestion-card">
+                    <h3>
+                      {updatedProfile.phone_verified
+                        ? 'Terminer votre profil'
+                        : 'Vérifier votre téléphone'}
+                    </h3>
+                    <p>
+                      {updatedProfile.phone_verified
+                        ? 'Complétez vos informations personnelles pour accélérer vos réservations.'
+                        : 'Confirmez votre numéro par SMS. Sans cette vérification, le profil reste incomplet et la prochaine réservation sera bloquée.'}
+                    </p>
+                    <button type="button" onClick={() => setActiveSection('personal')}>
+                      Continuer
+                    </button>
+                  </section>
+                ) : null}
               </div>
             ) : null}
 
@@ -585,12 +632,7 @@ const AccountUser = () => {
                                 type="text"
                                 autoComplete="given-name"
                                 value={updatedProfile.first_name || ''}
-                                onChange={(e) =>
-                                  setUpdatedProfile({
-                                    ...updatedProfile,
-                                    first_name: e.target.value,
-                                  })
-                                }
+                                onChange={(e) => patchProfile({ first_name: e.target.value })}
                               />
                             </div>
                             <div className="profile-field">
@@ -600,12 +642,7 @@ const AccountUser = () => {
                                 type="text"
                                 autoComplete="family-name"
                                 value={updatedProfile.last_name || ''}
-                                onChange={(e) =>
-                                  setUpdatedProfile({
-                                    ...updatedProfile,
-                                    last_name: e.target.value,
-                                  })
-                                }
+                                onChange={(e) => patchProfile({ last_name: familyNameUpper(e.target.value) })}
                               />
                             </div>
                           </div>
@@ -617,12 +654,7 @@ const AccountUser = () => {
                                 type="date"
                                 autoComplete="bday"
                                 value={updatedProfile.birth_date || ''}
-                                onChange={(e) =>
-                                  setUpdatedProfile({
-                                    ...updatedProfile,
-                                    birth_date: e.target.value,
-                                  })
-                                }
+                                onChange={(e) => patchProfile({ birth_date: e.target.value })}
                               />
                             </div>
                             <div className="profile-field">
@@ -630,9 +662,7 @@ const AccountUser = () => {
                               <select
                                 id="account-gender"
                                 value={updatedProfile.gender || ''}
-                                onChange={(e) =>
-                                  setUpdatedProfile({ ...updatedProfile, gender: e.target.value })
-                                }
+                                onChange={(e) => patchProfile({ gender: e.target.value })}
                               >
                                 <option value="">Sélectionner…</option>
                                 <option value="HOMME">Homme</option>
@@ -670,9 +700,7 @@ const AccountUser = () => {
                             inputMode="tel"
                             placeholder="ex. +41791234567 ou 0791234567"
                             value={updatedProfile.phone || ''}
-                            onChange={(e) =>
-                              setUpdatedProfile({ ...updatedProfile, phone: e.target.value })
-                            }
+                            onChange={(e) => patchProfile({ phone: e.target.value })}
                           />
                           <p className="field-hint profile-fieldNote">
                             {updatedProfile.phone_verified
@@ -737,17 +765,9 @@ const AccountUser = () => {
                           inputId="account-address"
                           name="address"
                           value={updatedProfile.address || ''}
-                          onChange={(e) =>
-                            setUpdatedProfile({
-                              ...updatedProfile,
-                              address: e.target.value,
-                            })
-                          }
+                          onChange={(e) => patchProfile({ address: e.target.value })}
                           onSelect={(item) =>
-                            setUpdatedProfile({
-                              ...updatedProfile,
-                              address: item.label || '',
-                            })
+                            patchProfile({ address: item.label || '' })
                           }
                           placeholder="Rechercher votre adresse (Suisse)…"
                           inputClassName="account-ac-input"
@@ -763,9 +783,7 @@ const AccountUser = () => {
                             maxLength={20}
                             placeholder="ex. 3e, Rez"
                             value={updatedProfile.floor || ''}
-                            onChange={(e) =>
-                              setUpdatedProfile({ ...updatedProfile, floor: e.target.value })
-                            }
+                            onChange={(e) => patchProfile({ floor: e.target.value })}
                           />
                         </div>
                         <div className="profile-field">
@@ -777,9 +795,7 @@ const AccountUser = () => {
                             maxLength={50}
                             placeholder="Digicode, nom affiché…"
                             value={updatedProfile.door_code || ''}
-                            onChange={(e) =>
-                              setUpdatedProfile({ ...updatedProfile, door_code: e.target.value })
-                            }
+                            onChange={(e) => patchProfile({ door_code: e.target.value })}
                           />
                         </div>
                       </div>
@@ -792,13 +808,102 @@ const AccountUser = () => {
                           maxLength={4000}
                           placeholder="Entrée, parking, accès PMR, consignes…"
                           value={updatedProfile.access_notes || ''}
-                          onChange={(e) =>
-                            setUpdatedProfile({
-                              ...updatedProfile,
-                              access_notes: e.target.value,
-                            })
-                          }
+                          onChange={(e) => patchProfile({ access_notes: e.target.value })}
                         />
+                      </div>
+                      <div className="profile-field account-mobility">
+                        <span id="account-mobility-label" className="account-mobilityHeading">
+                          Besoins habituels
+                        </span>
+                        <div className="account-mobilityGrid">
+                          <div
+                            id="account-mobility-wheelchair"
+                            className="account-mobilityChips"
+                            role="group"
+                            aria-label="Fauteuil"
+                          >
+                            <button
+                              type="button"
+                              className="account-mobilityChip"
+                              aria-pressed={
+                                !updatedProfile.wheelchair_client_has && !updatedProfile.wheelchair_need
+                              }
+                              onClick={() =>
+                                patchProfile({
+                                  wheelchair_client_has: false,
+                                  wheelchair_need: false,
+                                })
+                              }
+                            >
+                              Aucun
+                            </button>
+                            <button
+                              type="button"
+                              className="account-mobilityChip"
+                              aria-pressed={Boolean(updatedProfile.wheelchair_client_has)}
+                              onClick={() =>
+                                patchProfile({
+                                  wheelchair_client_has: true,
+                                  wheelchair_need: false,
+                                })
+                              }
+                            >
+                              En fauteuil
+                            </button>
+                            <button
+                              type="button"
+                              className="account-mobilityChip"
+                              aria-pressed={Boolean(updatedProfile.wheelchair_need)}
+                              onClick={() =>
+                                patchProfile({
+                                  wheelchair_client_has: false,
+                                  wheelchair_need: true,
+                                })
+                              }
+                            >
+                              Fournir fauteuil
+                            </button>
+                          </div>
+                          <div className="account-mobilitySwitch">
+                            <button
+                              type="button"
+                              role="switch"
+                              id="account-mobility-assistance"
+                              className={`account-mobilityToggle${
+                                updatedProfile.needs_assistance ? ' is-on' : ''
+                              }`}
+                              aria-checked={Boolean(updatedProfile.needs_assistance)}
+                              aria-label="Assistance"
+                              onClick={() =>
+                                patchProfile((prev) => ({
+                                  needs_assistance: !prev.needs_assistance,
+                                  assistance_detail: prev.needs_assistance
+                                    ? ''
+                                    : prev.assistance_detail,
+                                }))
+                              }
+                            />
+                            <span>Assistance</span>
+                          </div>
+                          {updatedProfile.needs_assistance ? (
+                            <input
+                              id="account-mobility-assistance-detail"
+                              className="account-mobilityAssist"
+                              type="text"
+                              maxLength={200}
+                              required
+                              aria-required="true"
+                              value={updatedProfile.assistance_detail || ''}
+                              placeholder="Type d'assistance *"
+                              aria-label="Type d'assistance"
+                              onChange={(e) =>
+                                patchProfile({
+                                  assistance_detail: e.target.value.slice(0, 200),
+                                })
+                              }
+                            />
+                          ) : null}
+                        </div>
                       </div>
                     </fieldset>
                   </div>
@@ -824,28 +929,6 @@ const AccountUser = () => {
                       {saving ? 'Enregistrement…' : 'Sauvegarder'}
                     </button>
                   </footer>
-                </section>
-
-                <section className="payment-info-section" aria-labelledby="payment-info-heading">
-                  <h2 id="payment-info-heading">Paiement des courses</h2>
-                  <p className="payment-info-text">
-                    Aucune carte bancaire ni TWINT n’est stocké sur ce compte. Pour une course à votre charge, le
-                    règlement se fait par un paiement sécurisé <strong>Saferpay</strong> immédiatement après la
-                    réservation (redirection automatique depuis votre tableau de bord). Si l’ouverture du paiement
-                    échoue, vous pouvez réessayer depuis le tableau de bord ou depuis{' '}
-                    <Link to={`/reservations/${public_id}`} className="payment-link">
-                      Mes courses
-                    </Link>
-                    .
-                  </p>
-                  <p className="payment-info-text">
-                    Les courses prises en charge par une assurance ou une institution ne passent pas par ce
-                    paiement en ligne.
-                  </p>
-                  <p className="payment-info-text">
-                    Tant que le paiement n’est pas validé, la demande n’est pas transmise aux entreprises de
-                    transport comme réservation à traiter.
-                  </p>
                 </section>
               </>
             ) : null}
@@ -1097,8 +1180,9 @@ const AccountUser = () => {
                           try {
                             await apiClient.put(
                               `/clients/${public_id}`,
-                              buildClientUpdatePayload(updatedProfile)
+                              buildClientUpdatePayload(profileRef.current || {})
                             );
+                            await reloadProfile();
                             setPrivacyHint('Préférence d’envoi de facture enregistrée.');
                           } catch (err) {
                             setPrivacyHint(

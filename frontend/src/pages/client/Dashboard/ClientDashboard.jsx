@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import apiClient from '../../../utils/apiClient';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import homeFieldStyles from '../../Home/Home.module.css';
-import institutionStyles from '../../institution/Requests/InstitutionRequestForm.module.css';
 import './ClientDashboard.css';
 import { useMutation } from '@tanstack/react-query';
 import { useHybridDataSync } from '../../../hooks/useHybridDataSync';
@@ -25,6 +25,13 @@ import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
 import Footer from '../../../components/layout/Footer/Footer';
 import Modal from '../../../components/common/Modal';
 import AddressAutocomplete from '../../../components/common/AddressAutocomplete';
+import InlineTimePicker from '../../../components/ui/InlineTimePicker';
+import InlineDatePicker from '../../../components/ui/InlineDatePicker';
+import {
+  composeProfilePickupAccess,
+  classifyPortalMedicalPlace,
+  destinationLooksMedical,
+} from './portalTransportProfile';
 import { getApiErrorMessage } from '../../../utils/apiErrorMessage';
 import { toast } from 'sonner';
 import { toastSaferpayCheckoutError } from '../../../utils/saferpayPaymentUi';
@@ -34,6 +41,7 @@ import {
   getClientBookingToneClass,
   getClientBookingUx,
   getEffectiveClientBookingActions,
+  normalizeClientBookingStatus,
   resolveClientBookingDisplayStatus,
 } from '../../../utils/clientBookingUx';
 import { trackClientKpiEvent } from '../../../utils/clientKpi';
@@ -58,22 +66,158 @@ import {
   CLIENT_SURFACE_CONTRACTS,
   reportContractMismatch,
 } from '../../../utils/clientSurfaceContracts';
+import { foldClientRouteRequests } from '../../../utils/clientRouteRequest';
 
 const CONTAINER_STYLE = { width: '100%', height: '100%' };
 
 const MISSING_ADDRESSES_MSG = 'Veuillez saisir le lieu de départ et la destination.';
-const MAX_CLIENT_NOTE_LEN = 500;
-/** Longueur max par ligne (départ / arrivée) pour rester sous la limite API une fois les libellés ajoutés. */
-const MAX_CLIENT_NOTE_LEG = 230;
+/** Longueur max par ligne (départ / arrivée), affichée comme sur le formulaire. */
+const MAX_CLIENT_NOTE_LEG = 250;
 
-function buildClientNoteFromLegs(departureHint, arrivalHint) {
-  const d = String(departureHint || '').trim();
-  const a = String(arrivalHint || '').trim();
-  if (!d && !a) return '';
-  const parts = [];
-  if (d) parts.push(`Prise en charge : ${d}`);
-  if (a) parts.push(`Destination : ${a}`);
-  return parts.join('\n').slice(0, MAX_CLIENT_NOTE_LEN);
+const PORTAL_ROUTE_TIPS = [
+  'Ajoutez vos destinations dans l’ordre de votre trajet.',
+  'Indiquez l’heure de prise en charge ou celle du rendez-vous.',
+  'Si les deux heures sont remplies, la prise en charge fait foi.',
+  'Le rendez-vous doit être après l’heure de prise en charge.',
+  'La date du transport se choisit une seule fois, en haut de la demande.',
+  'Le départ du retour peut rester sans heure.',
+  'L’adresse de retour reprend le point de départ.',
+  'Pour une étape un autre jour, utilisez « Autre jour » à côté de l’heure.',
+  'Activez « Destination médicale » pour l’établissement, le service ou le médecin.',
+  'Un nom de médecin remplit le champ Médecin, l’établissement devient « Cabinet médical ».',
+  'Précisez l’accès seulement s’il y a une entrée, un code ou un étage particulier.',
+  'Un fauteuil personnel et un fauteuil à fournir ne se combinent pas.',
+  'L’assistance peut s’ajouter au fauteuil : indiquez alors le type d’aide.',
+  'La récurrence décrit la série. Le transporteur confirme chaque passage.',
+];
+
+const PORTAL_ROUTE_TIP_STORAGE_KEY = 'portal-route-tip-index';
+
+function readStoredRouteTipIndex() {
+  try {
+    const index = Number(sessionStorage.getItem(PORTAL_ROUTE_TIP_STORAGE_KEY));
+    if (Number.isInteger(index) && index >= 0 && index < PORTAL_ROUTE_TIPS.length) {
+      return index;
+    }
+  } catch {
+    /* sessionStorage indisponible */
+  }
+  return null;
+}
+
+/** À chaque chargement, le conseil suivant. Le premier affichage est tiré au sort. */
+function initialRouteTipIndex() {
+  const previous = readStoredRouteTipIndex();
+  const count = PORTAL_ROUTE_TIPS.length;
+  const next = previous == null ? Math.floor(Math.random() * count) : (previous + 1) % count;
+  try {
+    sessionStorage.setItem(PORTAL_ROUTE_TIP_STORAGE_KEY, String(next));
+  } catch {
+    /* sessionStorage indisponible */
+  }
+  return next;
+}
+
+function extraStopIsMedical(stop) {
+  if (stop?.medicalOptOut) return false;
+  return (
+    Boolean(stop?.detailsOpen) ||
+    destinationLooksMedical(stop?.address) ||
+    Boolean(String(stop?.facility || '').trim()) ||
+    Boolean(String(stop?.service || '').trim()) ||
+    Boolean(String(stop?.doctor || '').trim())
+  );
+}
+
+/** Recopie le nom du lieu (ex. Clinique de Joli-Mont) dans Établissement, tant que le client n’a pas modifié le champ. */
+function applyExtraStopPlace(stop, address) {
+  const text = String(address || '');
+  const next = { ...stop, address: text };
+  if (stop?.medicalOptOut) return next;
+  if (!text.trim() || !destinationLooksMedical(text)) {
+    if (!stop?.facilityTouched) next.facility = '';
+    if (!stop?.doctorTouched) next.doctor = '';
+    return next;
+  }
+  const place = classifyPortalMedicalPlace(text);
+  if (!stop?.facilityTouched) next.facility = place.facility.slice(0, 200);
+  if (!stop?.doctorTouched) next.doctor = place.doctor.slice(0, 200);
+  return next;
+}
+
+function PortalMark({ name }) {
+  const props = {
+    width: 16,
+    height: 16,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+  };
+  if (name === 'calendar') {
+    return (
+      <svg {...props}>
+        <rect x="3" y="5" width="18" height="16" rx="2" />
+        <path d="M3 10h18M8 3v4M16 3v4" />
+      </svg>
+    );
+  }
+  if (name === 'pin') {
+    return (
+      <svg {...props}>
+        <path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z" />
+        <circle cx="12" cy="10" r="2.2" />
+      </svg>
+    );
+  }
+  if (name === 'info') {
+    return (
+      <svg {...props} width="14" height="14">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 11v5M12 8h.01" />
+      </svg>
+    );
+  }
+  if (name === 'crosshair') {
+    return (
+      <svg {...props} width="16" height="16">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+      </svg>
+    );
+  }
+  if (name === 'plus') {
+    return (
+      <svg {...props} width="16" height="16">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    );
+  }
+  if (name === 'person') {
+    return (
+      <svg {...props}>
+        <circle cx="12" cy="8" r="3" />
+        <path d="M6 19c1.2-3 3.2-4.5 6-4.5S16.8 16 18 19" />
+      </svg>
+    );
+  }
+  if (name === 'wheelchair') {
+    return (
+      <svg {...props}>
+        <circle cx="16" cy="6" r="1.6" />
+        <path d="M8 19a5 5 0 1 0 4.2-7.4L11 9h6M11 12h4" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...props}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4.2l2.4 1.5" />
+    </svg>
+  );
 }
 
 /** Jours 0 = lundi … 6 = dimanche (aligné backend `recurrence_days`). */
@@ -144,10 +288,10 @@ function computeIndicativeFareChf(distanceM, durationS) {
 
 function buildCustomerName(p) {
   if (!p) return 'Client';
-  const fn = p.first_name || p.user?.first_name || '';
-  const ln = p.last_name || p.user?.last_name || '';
-  const n = `${fn} ${ln}`.trim();
-  return n || p.user?.username || p.username || 'Client';
+  const fn = String(p.first_name || p.user?.first_name || '').trim();
+  const rawLast = String(p.last_name || p.user?.last_name || '').trim();
+  const ln = rawLast && rawLast !== 'Non spécifié' ? rawLast.toLocaleUpperCase('fr-CH') : '';
+  return `${fn} ${ln}`.trim() || 'Client';
 }
 
 function homeAddressFromProfile(p) {
@@ -155,6 +299,15 @@ function homeAddressFromProfile(p) {
   const dom = p.domicile?.address ? String(p.domicile.address).trim() : '';
   const userAddress = p.user?.address ? String(p.user.address).trim() : '';
   return (dom || userAddress || p.address || p.domicile_address || p.billing_address || '').trim();
+}
+
+function habitualMobilityFromProfile(p) {
+  const mobility = p?.mobility || {};
+  const own = Boolean(mobility.wheelchair_client_has);
+  const need = Boolean(mobility.wheelchair_need) && !own;
+  const assistance = Boolean(mobility.needs_assistance);
+  const detail = assistance ? String(mobility.assistance_detail || '').trim().slice(0, 200) : '';
+  return { own, need, assistance, detail };
 }
 
 function formatBookingDate(value) {
@@ -185,11 +338,31 @@ function formatTripResumeWhen(value) {
   return `${datePart} à ${timePart}`;
 }
 
-function formatScheduledSummaryLabel(dateStr, timeStr, asap) {
+function formatPortalLegWhen(prefix, dateStr, timeStr) {
+  const date = String(dateStr || '').trim();
+  const time = String(timeStr || '').trim();
+  if (!date && !time) return prefix;
+  const parsed = new Date(time ? `${date}T${time}:00` : `${date}T12:00:00`);
+  if (!Number.isFinite(parsed.getTime())) {
+    return [prefix, date, time].filter(Boolean).join(' · ');
+  }
+  const datePart = parsed.toLocaleDateString('fr-CH', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  if (!time) return `${prefix} · ${datePart}`;
+  const timePart = parsed.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' });
+  return `${prefix} · ${datePart} · ${timePart}`;
+}
+
+function formatScheduledSummaryLabel(dateStr, timeStr, asap, scheduleAnchor = 'arrival') {
   if (asap) return 'Dès que possible (selon disponibilité des véhicules)';
   if (!dateStr || !timeStr) return '—';
   const d = new Date(`${dateStr}T${timeStr}:00`);
-  if (!Number.isFinite(d.getTime())) return `${dateStr} à ${timeStr}`;
+  const prefix = scheduleAnchor === 'departure' ? 'Départ souhaité' : 'Rendez-vous';
+  if (!Number.isFinite(d.getTime())) return `${prefix} · ${dateStr} à ${timeStr}`;
   const datePart = d.toLocaleDateString('fr-CH', {
     weekday: 'short',
     day: '2-digit',
@@ -197,7 +370,229 @@ function formatScheduledSummaryLabel(dateStr, timeStr, asap) {
     year: 'numeric',
   });
   const timePart = d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' });
-  return `${datePart} · ${timePart}`;
+  return `${prefix} · ${datePart} · ${timePart}`;
+}
+
+function verifiedProfilePhone(profile) {
+  if (!profile || profile.phone_verified === false) return '';
+  return String(
+    profile.phone || profile.user?.phone || profile.mobile_phone || profile.mobile || ''
+  ).trim();
+}
+
+function composeMedicalContact(service, doctor) {
+  return [String(service || '').trim(), String(doctor || '').trim()].filter(Boolean).join(' – ');
+}
+
+function mobilityNeedsLabel({
+  wheelchairOwn,
+  wheelchairRequired,
+  assistanceRequired,
+  assistanceDetail,
+}) {
+  const parts = [];
+  if (wheelchairOwn) parts.push('Fauteuil personnel');
+  if (wheelchairRequired) parts.push('Fauteuil à fournir');
+  if (assistanceRequired) {
+    const detail = String(assistanceDetail || '').trim();
+    parts.push(detail ? `Assistance · ${detail}` : 'Assistance');
+  }
+  return parts.join(' · ');
+}
+
+function portalSubmitWaitCopy(index, transportCount) {
+  const count = Math.max(1, Number(transportCount) || 1);
+  const record =
+    count > 1 ? `Enregistrement des ${count} transports` : 'Enregistrement du transport';
+  const steps = ['Vérification des adresses', record, 'Transmission de la demande'];
+  const settled = index >= steps.length;
+  const active = Math.min(index, steps.length - 1);
+  return {
+    title: settled ? 'Traitement toujours en cours' : steps[active],
+    steps,
+    active,
+    settled,
+    hint: settled
+      ? 'Le traitement continue. Restez sur cette page : la confirmation arrive dès que la demande est enregistrée.'
+      : 'Restez sur cette page. La confirmation s’affiche dès que la demande est enregistrée.',
+  };
+}
+
+/** Jour calendaire local (YYYY-MM-DD), sans le décalage UTC de toISOString. */
+function localCalendarYmd(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatPortalDayLabel(dateStr) {
+  const d = new Date(`${dateStr}T12:00:00`);
+  if (!Number.isFinite(d.getTime())) return dateStr;
+  const label = d.toLocaleDateString('fr-CH', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function formatPortalClock(timeStr) {
+  const match = String(timeStr || '').match(/^(\d{2}):(\d{2})/);
+  return match ? `${match[1]}:${match[2]}` : String(timeStr || '').trim();
+}
+
+/** Récapitulatif en langage humain, avant la confirmation. */
+function buildPortalReviewNarrative({
+  asap,
+  scheduleAnchor,
+  selectedDate,
+  selectedTime,
+  departureTime = '',
+  appointmentTime = '',
+  pickup,
+  destination,
+  roundTrip,
+  returnTime,
+  needsLabel,
+  contactDetail,
+  contactName,
+  contactPhone,
+  recurrenceLabel,
+  extraStopLabels = [],
+  establishmentLabel = '',
+}) {
+  const lines = [];
+  if (!asap && selectedDate) {
+    lines.push({ kind: 'date', strong: true, text: formatPortalDayLabel(selectedDate) });
+  }
+  lines.push({ kind: 'route', text: `${pickup} → ${destination}` });
+  if (asap) {
+    lines.push({ kind: 'schedule', strong: true, text: 'Dès que possible' });
+  } else if (scheduleAnchor === 'departure') {
+    lines.push({
+      kind: 'schedule',
+      strong: true,
+      text: `Prise en charge à ${formatPortalClock(selectedTime)}`,
+    });
+    if (appointmentTime) {
+      lines.push({ kind: 'schedule', text: `Rendez-vous à ${formatPortalClock(appointmentTime)}` });
+    }
+  } else {
+    lines.push({
+      kind: 'schedule',
+      strong: true,
+      text: `Rendez-vous à ${formatPortalClock(selectedTime)}`,
+    });
+    if (departureTime) {
+      lines.push({ kind: 'schedule', text: `Départ souhaité à ${formatPortalClock(departureTime)}` });
+    } else {
+      lines.push({ kind: 'schedule', text: 'Prise en charge : à déterminer par le transporteur' });
+    }
+  }
+  if (roundTrip) {
+    lines.push({
+      kind: 'trip',
+      text: returnTime
+        ? `Aller-retour · départ à ${formatPortalClock(returnTime)}`
+        : 'Aller-retour · départ non précisé',
+    });
+  } else {
+    lines.push({ kind: 'trip', text: 'Aller simple' });
+  }
+  extraStopLabels.forEach((label) => lines.push({ kind: 'stop', text: label }));
+  if (needsLabel) lines.push({ kind: 'needs', text: needsLabel });
+  if (establishmentLabel) {
+    lines.push({ kind: 'place', text: `Établissement : ${establishmentLabel}` });
+  }
+  if (contactDetail) lines.push({ kind: 'place', text: contactDetail });
+  if (recurrenceLabel) lines.push({ kind: 'meta', text: recurrenceLabel });
+  if (contactName) {
+    lines.push({
+      kind: 'meta',
+      text: contactPhone ? `Contact : ${contactName} • ${contactPhone}` : `Contact : ${contactName}`,
+    });
+  }
+  return lines;
+}
+
+function buildPortalOrderSteps({
+  pickup,
+  destination,
+  extraStops = [],
+  roundTrip,
+  asap,
+  hasDepartureTime,
+  hasAppointmentTime,
+  departureTime,
+  appointmentTime,
+  returnTime,
+  pickupAccess,
+  dropoffAccess,
+  facilityText,
+  serviceText,
+  doctorText,
+  medicalDestinationActive,
+}) {
+  const steps = [];
+  const departLines = [];
+  if (asap) departLines.push('Dès que possible');
+  else if (hasDepartureTime) departLines.push(`Prise en charge à ${formatPortalClock(departureTime)}`);
+  else departLines.push('Prise en charge : à déterminer par le transporteur');
+  if (pickupAccess) departLines.push(`Accès départ : ${pickupAccess}`);
+  steps.push({ key: 'depart', label: 'Départ', address: pickup, lines: departLines });
+
+  const arrivalLines = [];
+  if (!asap && hasAppointmentTime) {
+    arrivalLines.push(`Rendez-vous à ${formatPortalClock(appointmentTime)}`);
+  }
+  if (medicalDestinationActive && facilityText) arrivalLines.push(`Établissement : ${facilityText}`);
+  if (medicalDestinationActive && serviceText) arrivalLines.push(serviceText);
+  if (medicalDestinationActive && doctorText) arrivalLines.push(doctorText);
+  if (dropoffAccess) arrivalLines.push(`Accès destination : ${dropoffAccess}`);
+  const hasExtra = extraStops.some((stop) => String(stop.address || '').trim());
+  steps.push({
+    key: 'arrival',
+    label: hasExtra ? 'Étape 1' : 'Arrivée',
+    address: destination,
+    lines: arrivalLines,
+  });
+
+  extraStops.forEach((stop, index) => {
+    const address = String(stop.address || '').trim();
+    if (!address) return;
+    const lines = [];
+    const time = String(stop.time || '').trim();
+    if (time) lines.push(`Heure de départ à ${formatPortalClock(time)}`);
+    if (extraStopIsMedical(stop)) {
+      const facility = String(stop.facility || '').trim();
+      const service = String(stop.service || '').trim();
+      const doctor = String(stop.doctor || '').trim();
+      if (facility) lines.push(`Établissement : ${facility}`);
+      if (service) lines.push(service);
+      if (doctor) lines.push(doctor);
+    }
+    const access = String(stop.access || '').trim();
+    if (access) lines.push(`Accès : ${access}`);
+    steps.push({
+      key: stop.key || `stop-${index}`,
+      label: `Étape ${index + 2}`,
+      address,
+      lines,
+    });
+  });
+
+  if (roundTrip) {
+    const lines = [
+      returnTime
+        ? `Aller-retour · départ à ${formatPortalClock(returnTime)}`
+        : 'Aller-retour · départ non précisé',
+    ];
+    if (pickupAccess) lines.push(`Accès retour : ${pickupAccess}`);
+    steps.push({ key: 'return', label: 'Retour', address: pickup, lines });
+  }
+  return steps;
 }
 
 /** `Date` → id jour backend `recurrence_days` (0 = lundi … 6 = dimanche). */
@@ -266,6 +661,10 @@ function asBookingBool(value) {
 /** Pastille A/R ou retour (champs API `booking.serialize`). */
 function getBookingTripKindMeta(booking) {
   if (!booking) return null;
+  const legs = Number(booking.route_request_transport_count) || 0;
+  if (legs > 2) {
+    return { variant: 'roundTrip', label: `${legs} trajets` };
+  }
   if (asBookingBool(booking.is_return)) {
     return { variant: 'return', label: 'Retour' };
   }
@@ -273,6 +672,55 @@ function getBookingTripKindMeta(booking) {
     return { variant: 'roundTrip', label: 'Aller-retour' };
   }
   return null;
+}
+
+function recentTripStops(trip) {
+  const folded = Array.isArray(trip?.route_request_stops) ? trip.route_request_stops : [];
+  const places = folded.filter((stop) => String(stop?.place || '').trim());
+  if (places.length > 1) return places;
+  return [
+    { key: 'pickup', place: trip?.pickup_location },
+    { key: 'dropoff', place: trip?.dropoff_location },
+  ].filter((stop) => String(stop.place || '').trim());
+}
+
+function splitReuseDetail(detail) {
+  const parts = String(detail || '')
+    .split('·')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  let service = '';
+  let doctor = '';
+  parts.forEach((part) => {
+    if (/^(dr\.?|docteur|prof\.?)\b/i.test(part)) doctor = doctor || part;
+    else if (!service) service = part;
+    else if (!doctor) doctor = part;
+  });
+  return { service, doctor };
+}
+
+function blankExtraStop(address, index, detail = '') {
+  const medical = splitReuseDetail(detail);
+  return applyExtraStopPlace(
+    {
+      key: `reuse-${Date.now()}-${index}`,
+      address: '',
+      asap: true,
+      scheduleOpen: false,
+      anchor: 'departure',
+      date: '',
+      time: '',
+      facility: '',
+      service: medical.service,
+      doctor: medical.doctor,
+      doctorTouched: Boolean(medical.doctor),
+      access: '',
+      otherDay: false,
+      detailsOpen: false,
+      medicalOptOut: false,
+    },
+    address
+  );
 }
 
 function deriveAddressErrorMessage(error) {
@@ -296,27 +744,6 @@ function deriveAddressErrorMessage(error) {
     return 'Trop de demandes d’itinéraire. Patientez quelques instants ou ajustez les adresses.';
   }
   return 'Impossible d’estimer ce trajet pour le moment. Vous pouvez tout de même envoyer votre demande.';
-}
-
-function extractPrimaryPlaceLabel(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  const firstSegment = raw
-    .split(',')
-    .map((part) => part.trim())
-    .find(Boolean);
-  return firstSegment || raw;
-}
-
-/** Destination clairement hôpital / clinique : l’établissement peut être déduit sans champ dupliqué. */
-function isHospitalLikeDestination(value) {
-  const lower = String(value || '').toLowerCase();
-  return ['hôpital', 'hopital', 'hug', 'clinique', 'hospital', 'chuv'].some((k) => lower.includes(k));
-}
-
-function destinationHasDoctorHint(value) {
-  const lower = String(value || '').toLowerCase();
-  return ['docteur', 'dr', 'dr.', 'dr med', 'dr méd', 'médecin'].some((k) => lower.includes(k));
 }
 
 /** Normalise la destination pour repérer la plus utilisée dans l’historique. */
@@ -346,9 +773,30 @@ const ClientDashboard = () => {
   const [pastBookings, setPastBookings] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [formError, setFormError] = useState(null);
+  const [routeTipIndex, setRouteTipIndex] = useState(initialRouteTipIndex);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(PORTAL_ROUTE_TIP_STORAGE_KEY, String(routeTipIndex));
+    } catch {
+      /* sessionStorage indisponible */
+    }
+  }, [routeTipIndex]);
   const [payOfferBookingId, setPayOfferBookingId] = useState(null);
   const [payingSaferpay, setPayingSaferpay] = useState(false);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [submitWaitIndex, setSubmitWaitIndex] = useState(0);
+  useEffect(() => {
+    if (!bookingSubmitting) {
+      setSubmitWaitIndex(0);
+      return undefined;
+    }
+    const timers = [1400, 3200, 7000].map((delay, index) =>
+      window.setTimeout(() => setSubmitWaitIndex(index + 1), delay)
+    );
+    return () => {
+      timers.forEach((id) => window.clearTimeout(id));
+    };
+  }, [bookingSubmitting]);
   const [phoneGate, setPhoneGate] = useState({
     open: false,
     code: '',
@@ -359,19 +807,54 @@ const ClientDashboard = () => {
     maskedPhone: '',
   });
   const [loadingBookings, setLoadingBookings] = useState(false);
-  const [asapMode, setAsapMode] = useState(false);
-  const [roundTripEnabled, setRoundTripEnabled] = useState(false);
+  const [departureTime, setDepartureTime] = useState('');
+  const [appointmentTime, setAppointmentTime] = useState('');
+  const [wheelchairOwn, setWheelchairOwn] = useState(false);
+  const [wheelchairRequired, setWheelchairRequired] = useState(false);
+  const [assistanceRequired, setAssistanceRequired] = useState(false);
+  const [assistanceDetail, setAssistanceDetail] = useState('');
+  const [hospitalService, setHospitalService] = useState('');
+  const [doctorName, setDoctorName] = useState('');
+  const [extraStops, setExtraStops] = useState([]);
+  const facilityTouchedRef = useRef(false);
+  const doctorTouchedRef = useRef(false);
+  const medicalAutoOpenedRef = useRef(false);
+  const locatingPickupRef = useRef(false);
+  const medicalOptOutRef = useRef(false);
+  const medicalDestinationKeyRef = useRef('');
+  const profileSnapshotApplied = useRef(false);
+  const [roundTripEnabled, setRoundTripEnabled] = useState(true);
+  const [returnOtherDay, setReturnOtherDay] = useState(false);
   const [returnDate, setReturnDate] = useState('');
   const [returnTime, setReturnTime] = useState('');
+  const [medicalEditorOpen, setMedicalEditorOpen] = useState(false);
+  const [medicalOptOut, setMedicalOptOut] = useState(false);
   const [recurrenceEnabled, setRecurrenceEnabled] = useState(false);
+  const [recurrenceEndMode, setRecurrenceEndMode] = useState('count');
   const [recurrenceType, setRecurrenceType] = useState('weekly');
   const [recurrenceSeriesLength, setRecurrenceSeriesLength] = useState(4);
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   const [recurrenceDays, setRecurrenceDays] = useState([]);
-  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [estimateNotice, setEstimateNotice] = useState('');
   const [reservationFeedback, setReservationFeedback] = useState(null);
   const [portalReview, setPortalReview] = useState(null);
+
+  const presentPortalCard = useCallback((apply) => {
+    const reduceMotion =
+      window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+    const card = document.querySelector('.bookingFormCard');
+    if (reduceMotion || typeof document.startViewTransition !== 'function' || !card) {
+      apply();
+      return;
+    }
+    card.style.setProperty('view-transition-name', 'booking-form-card');
+    const transition = document.startViewTransition(() => {
+      flushSync(apply);
+    });
+    transition.finished.finally(() => {
+      card.style.removeProperty('view-transition-name');
+    });
+  }, []);
   const [termsCatalog, setTermsCatalog] = useState([]);
   const [termsAcceptances, setTermsAcceptances] = useState([]);
   const [termsStatus, setTermsStatus] = useState(null);
@@ -407,12 +890,22 @@ const ClientDashboard = () => {
   const [indicativeUnavailability, setIndicativeUnavailability] = useState('');
 
   const [medicalFacility, setMedicalFacility] = useState('');
-  const [doctorName, setDoctorName] = useState('');
   const [clientNoteDeparture, setClientNoteDeparture] = useState('');
   const [clientNoteArrival, setClientNoteArrival] = useState('');
   const [showMedicalFields, setShowMedicalFields] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
-  const [selectedTime, setSelectedTime] = useState('');
+  const [todayDateMin, setTodayDateMin] = useState(() => localCalendarYmd());
+  const departureClock = String(departureTime || '').trim();
+  const appointmentClock = String(appointmentTime || '').trim();
+  const hasDepartureTime = Boolean(departureClock);
+  const hasAppointmentTime = Boolean(appointmentClock);
+  const asapMode = !hasDepartureTime && !hasAppointmentTime;
+  const scheduleAnchor = hasDepartureTime
+    ? 'departure'
+    : hasAppointmentTime
+      ? 'arrival'
+      : 'departure';
+  const selectedTime = scheduleAnchor === 'arrival' ? appointmentClock : departureClock;
 
   const center = useMemo(() => ({ lat: 46.2044, lng: 6.1432 }), []);
 
@@ -577,38 +1070,36 @@ const ClientDashboard = () => {
     if (!pu && !dd) return;
     if (pu) setPickup(pu);
     if (dd) setDestination(dd);
+    const extras = Array.isArray(pb.extra_stops) ? pb.extra_stops : [];
+    setExtraStops(
+      extras.map((stop, index) => blankExtraStop(stop?.place || '', index, stop?.detail || ''))
+    );
+    if (typeof pb.round_trip === 'boolean') setRoundTripEnabled(pb.round_trip);
+    const detail = splitReuseDetail(pb.dropoff_detail);
+    if (detail.service) setHospitalService(detail.service);
+    if (detail.doctor) {
+      doctorTouchedRef.current = true;
+      setDoctorName(detail.doctor);
+    }
     setFormError(null);
     navigate(location.pathname, { replace: true, state: null });
   }, [location.pathname, location.state, navigate]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (typeof window.matchMedia !== 'function') return;
-    const media = window.matchMedia('(max-width: 768px)');
-    if (!media || typeof media.matches !== 'boolean') return;
-    const handleMedia = (event) => setIsMobileViewport(event.matches);
-    setIsMobileViewport(media.matches);
-    if (typeof media.addEventListener === 'function') {
-      media.addEventListener('change', handleMedia);
-      return () => media.removeEventListener('change', handleMedia);
-    }
-    if (typeof media.addListener === 'function') {
-      media.addListener(handleMedia);
-      return () => media.removeListener(handleMedia);
-    }
-    return undefined;
-  }, []);
-
-  useEffect(() => {
-    const now = new Date();
-    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
-    oneHourLater.setMinutes(Math.ceil(oneHourLater.getMinutes() / 5) * 5, 0, 0);
-    const defaultDate = oneHourLater.toISOString().split('T')[0];
-    const defaultHours = String(oneHourLater.getHours()).padStart(2, '0');
-    const defaultMinutes = String(oneHourLater.getMinutes()).padStart(2, '0');
-    const defaultTime = `${defaultHours}:${defaultMinutes}`;
-    setSelectedDate((prev) => prev || defaultDate);
-    setSelectedTime((prev) => prev || defaultTime);
+    const syncTransportDate = () => {
+      const now = new Date();
+      const today = localCalendarYmd(now);
+      const oneHourLater = localCalendarYmd(new Date(now.getTime() + 60 * 60 * 1000));
+      const fallback = oneHourLater < today ? today : oneHourLater;
+      setTodayDateMin(today);
+      setSelectedDate((prev) => {
+        if (!prev || prev < today) return fallback;
+        return prev;
+      });
+    };
+    syncTransportDate();
+    const id = window.setInterval(syncTransportDate, 30 * 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   const onMapLoad = useCallback((map) => {
@@ -772,14 +1263,6 @@ const ClientDashboard = () => {
     );
   }, []);
 
-  const handleSwapAddresses = useCallback(() => {
-    setPickup(destination);
-    setDestination(pickup);
-    setPickupSelection(destinationSelection);
-    setDestinationSelection(pickupSelection);
-    setFormError(null);
-  }, [pickup, destination, pickupSelection, destinationSelection]);
-
   const loadBookings = useCallback(
     async (quiet = false) => {
       if (!effectiveClientId) return null;
@@ -788,14 +1271,37 @@ const ClientDashboard = () => {
         const response = await apiClient.get(`/clients/${effectiveClientId}/bookings`, authHeaders);
         const bookingsArray = response.data;
         const now = Date.now();
+        const isFinishedBooking = (booking) => {
+          const norm = normalizeClientBookingStatus(booking?.status);
+          return norm === 'completed' || norm === 'cancelled';
+        };
         const ongoing = bookingsArray.filter((b) => {
+          if (isFinishedBooking(b)) return false;
           const status = String(b.status || '').toLowerCase();
           if (status === 'in_progress' || status === 'assigned') return true;
           const scheduledTime = Date.parse(b.scheduled_time);
           return Number.isFinite(scheduledTime) && Math.abs(scheduledTime - now) <= 90 * 60 * 1000;
         });
-        const upcoming = bookingsArray.filter((b) => Date.parse(b.scheduled_time) > now);
-        const past = bookingsArray.filter((b) => Date.parse(b.scheduled_time) <= now);
+        const upcoming = bookingsArray.filter(
+          (b) => !isFinishedBooking(b) && Date.parse(b.scheduled_time) > now
+        );
+        const pastGroups = new Set();
+        bookingsArray.forEach((b) => {
+          const scheduledTime = Date.parse(b.scheduled_time);
+          const status = String(b.status || '').toLowerCase();
+          const isPast =
+            isFinishedBooking(b) ||
+            (Number.isFinite(scheduledTime) && scheduledTime <= now) ||
+            (!Number.isFinite(scheduledTime) &&
+              (status === 'completed' || status === 'cancelled' || status === 'canceled'));
+          if (isPast && b.route_group_id) pastGroups.add(String(b.route_group_id));
+        });
+        const past = bookingsArray.filter((b) => {
+          if (isFinishedBooking(b)) return true;
+          const scheduledTime = Date.parse(b.scheduled_time);
+          if (Number.isFinite(scheduledTime)) return scheduledTime <= now;
+          return Boolean(b.route_group_id) && pastGroups.has(String(b.route_group_id));
+        });
         setUpcomingBookings(upcoming);
         setPastBookings(past);
         setOngoingBookings(ongoing);
@@ -853,139 +1359,145 @@ const ClientDashboard = () => {
 
   const nextBooking = nearestOngoingBooking || nearestUpcomingBooking || null;
   const hasActiveOrFutureBooking = Boolean(nextBooking);
-  /** Dernier trajet passé + trajet le plus récent vers la destination la plus fréquente (max 2, sans doublon). */
+  /** Dernier trajet, puis l’itinéraire distinct le plus répété. */
   const recentTrips = useMemo(() => {
-    const list = pastBookings.filter(
+    const list = foldClientRouteRequests(pastBookings).filter(
       (b) => b && !isBookingCanceledForRecent(b) && String(b.dropoff_location || '').trim()
     );
     if (list.length === 0) return [];
 
-    const sortedByTime = [...list].sort(
-      (a, b) => Date.parse(b.scheduled_time) - Date.parse(a.scheduled_time)
-    );
-    const lastTrip = sortedByTime[0];
+    const instantOf = (trip) => {
+      const latest = Date.parse(trip?.route_request_latest_time || trip?.scheduled_time);
+      return Number.isFinite(latest) ? latest : 0;
+    };
+    const signatureOf = (trip) =>
+      recentTripStops(trip)
+        .map((stop) => normalizeRecentTripDestination(stop.place))
+        .filter(Boolean)
+        .join('>');
 
-    /** @type {Map<string, { count: number, best: (typeof list)[0] }>} */
-    const byDest = new Map();
-    for (const b of list) {
-      const key = normalizeRecentTripDestination(b.dropoff_location);
+    /** @type {Map<string, { count: number, best: (typeof list)[0], latest: number }>} */
+    const byRoute = new Map();
+    for (const trip of list) {
+      const key = signatureOf(trip);
       if (!key) continue;
-      const ts = Date.parse(b.scheduled_time);
-      const cur = byDest.get(key);
-      if (!cur) {
-        byDest.set(key, { count: 1, best: b });
+      const latest = instantOf(trip);
+      const current = byRoute.get(key);
+      if (!current) {
+        byRoute.set(key, { count: 1, best: trip, latest });
       } else {
-        cur.count += 1;
-        if (Number.isFinite(ts) && ts > Date.parse(cur.best.scheduled_time)) {
-          cur.best = b;
+        current.count += 1;
+        if (latest >= current.latest) {
+          current.best = trip;
+          current.latest = latest;
         }
       }
     }
 
-    let favoriteTrip = null;
-    let bestCount = -1;
-    let bestLatestTs = -Infinity;
-    for (const { count, best } of byDest.values()) {
-      const ts = Date.parse(best.scheduled_time);
-      if (
-        count > bestCount ||
-        (count === bestCount && Number.isFinite(ts) && ts > bestLatestTs)
-      ) {
-        bestCount = count;
-        favoriteTrip = best;
-        bestLatestTs = Number.isFinite(ts) ? ts : bestLatestTs;
-      }
-    }
+    const routes = [...byRoute.values()];
+    if (routes.length === 0) return [];
+    routes.sort((left, right) => right.latest - left.latest);
+    const last = routes[0];
+    const other = routes
+      .filter((route) => route !== last)
+      .sort((left, right) => right.count - left.count || right.latest - left.latest)[0];
 
-    const out = [];
-    if (lastTrip) out.push(lastTrip);
-    if (favoriteTrip && favoriteTrip.id !== lastTrip?.id) out.push(favoriteTrip);
+    const out = [{ ...last.best, recentTripRole: 'Dernier' }];
+    if (other && other.best.id !== last.best.id) {
+      out.push({
+        ...other.best,
+        recentTripRole: other.count > last.count ? 'Le plus utilisé' : 'Précédent',
+      });
+    }
     return out;
   }, [pastBookings]);
   const hasRecentTrips = recentTrips.length > 0;
 
-  const todayDateMin = useMemo(() => new Date().toISOString().split('T')[0], []);
-
   /** Date du 1er départ (récurrent) : jour du trajet planifié, ou aujourd’hui si « dès que possible ». */
   const recurrenceStartYmd = useMemo(() => {
-    if (!asapMode && selectedDate && String(selectedDate).trim()) {
+    if (selectedDate && String(selectedDate).trim()) {
       return String(selectedDate).trim();
     }
     return todayDateMin;
-  }, [asapMode, selectedDate, todayDateMin]);
-
-  const timeMinForSelectedDate = useMemo(() => {
-    if (!selectedDate || selectedDate !== todayDateMin) return undefined;
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
   }, [selectedDate, todayDateMin]);
-
-  const timeMinForReturn = useMemo(() => {
-    if (!returnDate) return undefined;
-    let minMinutes = null;
-    if (returnDate === todayDateMin) {
-      const now = new Date();
-      minMinutes = now.getHours() * 60 + now.getMinutes();
-    }
-    if (!asapMode && selectedDate && selectedTime && returnDate === selectedDate) {
-      const outbound = new Date(`${selectedDate}T${selectedTime}:00`);
-      if (Number.isFinite(outbound.getTime())) {
-        const afterOutbound = outbound.getHours() * 60 + outbound.getMinutes() + 1;
-        minMinutes = minMinutes == null ? afterOutbound : Math.max(minMinutes, afterOutbound);
-      }
-    }
-    if (minMinutes == null) return undefined;
-    const hh = Math.floor(minMinutes / 60);
-    const mm = minMinutes % 60;
-    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-  }, [returnDate, todayDateMin, asapMode, selectedDate, selectedTime]);
 
   useEffect(() => {
     if (!roundTripEnabled) {
       setReturnDate('');
       setReturnTime('');
+      setReturnOtherDay(false);
       return;
     }
-    setReturnDate((prev) => {
-      if (prev && String(prev).trim()) return prev;
-      if (selectedDate && String(selectedDate).trim()) return selectedDate;
-      return todayDateMin;
-    });
-  }, [roundTripEnabled, selectedDate, todayDateMin]);
+    if (returnOtherDay) return;
+    const outbound =
+      selectedDate && String(selectedDate).trim() ? String(selectedDate).trim() : todayDateMin;
+    setReturnDate(outbound);
+  }, [roundTripEnabled, returnOtherDay, selectedDate, todayDateMin]);
 
   useEffect(() => {
-    if (!destination) {
+    const text = String(destination || '').trim();
+    if (medicalDestinationKeyRef.current !== text) {
+      medicalDestinationKeyRef.current = text;
+      if (medicalOptOutRef.current) {
+        medicalOptOutRef.current = false;
+        setMedicalOptOut(false);
+      }
+    }
+    if (!text) {
       setShowMedicalFields(false);
-      setMedicalFacility('');
-      setDoctorName('');
+      if (!facilityTouchedRef.current) setMedicalFacility('');
+      if (!doctorTouchedRef.current) setDoctorName('');
+      if (medicalAutoOpenedRef.current) {
+        medicalAutoOpenedRef.current = false;
+        setMedicalEditorOpen(false);
+      }
       return;
     }
-    const lower = destination.toLowerCase();
-    const medicalKeywords = ['hôpital', 'hopital', 'hug', 'ems', 'cabinet', 'clinique', 'médecin', 'docteur'];
-    const doctorKeywords = ['docteur', 'dr', 'dr.', 'dr med', 'dr méd', 'médecin'];
-
-    const isMedicalFacility = medicalKeywords.some((k) => lower.includes(k));
-    const isDoctor = doctorKeywords.some((k) => lower.includes(k));
-
-    const primaryPlaceLabel = extractPrimaryPlaceLabel(destination);
-
-    let showMedical = false;
-    if (isDoctor) {
-      setDoctorName(primaryPlaceLabel);
-      showMedical = true;
-    } else {
-      setDoctorName('');
+    if (destinationLooksMedical(text)) {
+      if (medicalOptOutRef.current) return;
+      medicalAutoOpenedRef.current = true;
+      setShowMedicalFields(true);
+      const place = classifyPortalMedicalPlace(text);
+      if (!facilityTouchedRef.current) setMedicalFacility(place.facility.slice(0, 200));
+      if (!doctorTouchedRef.current) setDoctorName(place.doctor.slice(0, 200));
+      if (!hospitalService.trim() && !place.doctor) setMedicalEditorOpen(true);
+      return;
     }
-    if (isMedicalFacility) {
-      setMedicalFacility(primaryPlaceLabel);
-      showMedical = true;
-    } else {
-      setMedicalFacility('');
-    }
-    setShowMedicalFields(showMedical);
-  }, [destination]);
+    setShowMedicalFields(false);
+    if (!facilityTouchedRef.current) setMedicalFacility('');
+    if (!doctorTouchedRef.current) setDoctorName('');
+  }, [destination, hospitalService, doctorName]);
+
+  useEffect(() => {
+    setExtraStops((prev) => {
+      let changed = false;
+      const next = prev.map((stop) => {
+        const updated = applyExtraStopPlace(stop, stop.address);
+        if (updated.facility !== stop.facility || updated.doctor !== stop.doctor) {
+          changed = true;
+          return updated;
+        }
+        return stop;
+      });
+      return changed ? next : prev;
+    });
+  }, [extraStops]);
+
+  const medicalTextFilled = Boolean(
+    String(medicalFacility || '').trim() ||
+      String(hospitalService || '').trim() ||
+      String(doctorName || '').trim()
+  );
+  const medicalCardOn =
+    !medicalOptOut && (showMedicalFields || medicalEditorOpen || medicalTextFilled);
+
+  const setMedicalDestinationOn = (next) => {
+    medicalAutoOpenedRef.current = false;
+    medicalOptOutRef.current = !next;
+    setMedicalOptOut(!next);
+    setShowMedicalFields(next);
+    setMedicalEditorOpen(next);
+  };
 
   const indicativeAmount = useMemo(() => {
     if (indicativeServer && typeof indicativeServer.indicative_amount_chf === 'number') {
@@ -1398,24 +1910,45 @@ const ClientDashboard = () => {
       asapMode,
       roundTrip: roundTripEnabled,
     });
-    if (!asapMode && (!selectedDate || !selectedTime)) {
-      setFormError('Veuillez sélectionner une date et une heure.');
+    if (!selectedDate || !String(selectedDate).trim()) {
+      setFormError('Indiquez la date du transport.');
       return;
     }
-
+    if (!hasDepartureTime && !hasAppointmentTime) {
+      setFormError('Indiquez l’heure de prise en charge ou l’heure du rendez-vous.');
+      return;
+    }
     /** ISO UTC pour l’API (évite le double décalage getTimezoneOffset). */
     let scheduledTimeIso = null;
     let outboundMs = Date.now();
     if (!asapMode) {
-      const scheduledDateTime = new Date(`${selectedDate}T${selectedTime}:00`);
-      if (!Number.isFinite(scheduledDateTime.getTime())) {
+      const departureDateTime = hasDepartureTime
+        ? new Date(`${selectedDate}T${departureTime}:00`)
+        : null;
+      const appointmentDateTime = hasAppointmentTime
+        ? new Date(`${selectedDate}T${appointmentTime}:00`)
+        : null;
+      if (
+        (departureDateTime && !Number.isFinite(departureDateTime.getTime())) ||
+        (appointmentDateTime && !Number.isFinite(appointmentDateTime.getTime()))
+      ) {
         setFormError('Date/heure invalide.');
         return;
       }
-      if (scheduledDateTime.getTime() < Date.now() - 60 * 1000) {
+      const clocks = [departureDateTime, appointmentDateTime].filter(Boolean);
+      if (clocks.some((when) => when.getTime() < Date.now() - 60 * 1000)) {
         setFormError('Veuillez choisir une date et une heure futures.');
         return;
       }
+      if (
+        departureDateTime &&
+        appointmentDateTime &&
+        appointmentDateTime.getTime() <= departureDateTime.getTime()
+      ) {
+        setFormError('Le rendez-vous doit être après l’heure de départ.');
+        return;
+      }
+      const scheduledDateTime = appointmentDateTime || departureDateTime;
       scheduledTimeIso = scheduledDateTime.toISOString();
       outboundMs = scheduledDateTime.getTime();
     }
@@ -1428,7 +1961,7 @@ const ClientDashboard = () => {
         );
         return;
       }
-      const outboundDateStr = !asapMode && selectedDate ? selectedDate : todayDateMin;
+      const outboundDateStr = selectedDate && String(selectedDate).trim() ? selectedDate : todayDateMin;
       if (String(returnDate).trim() < String(outboundDateStr).trim()) {
         setFormError('La date de retour ne peut pas être antérieure au départ prévu.');
         return;
@@ -1451,23 +1984,27 @@ const ClientDashboard = () => {
       }
     }
 
-    const recurrenceEndTrim = recurrenceEndDate.trim();
-    const recurrenceStartForSeries = !asapMode && selectedDate ? selectedDate : todayDateMin;
+    const recurrenceEndTrim = recurrenceEndMode === 'date' ? recurrenceEndDate.trim() : '';
+    const recurrenceStartForSeries = selectedDate && String(selectedDate).trim() ? selectedDate : todayDateMin;
 
     if (recurrenceEnabled) {
       if (recurrenceType === 'custom' && recurrenceDays.length === 0) {
         setFormError('Pour des jours personnalisés, sélectionnez au moins un jour de la semaine.');
         return;
       }
-      if (recurrenceEndTrim) {
+      if (recurrenceEndMode === 'date') {
+        if (!recurrenceEndTrim) {
+          setFormError('Indiquez la date de fin de la série.');
+          return;
+        }
         if (recurrenceEndTrim < recurrenceStartForSeries) {
           setFormError('La date de fin de série ne peut pas précéder la date du premier départ.');
           return;
         }
-      } else {
+      } else if (recurrenceEndMode === 'count') {
         const rep = Math.min(52, Math.max(1, Math.floor(Number(recurrenceSeriesLength)) || 0));
         if (!rep) {
-          setFormError('Indiquez le nombre de répétitions (1 à 52), ou choisissez une date de fin de série.');
+          setFormError('Indiquez le nombre de transports (1 à 52).');
           return;
         }
       }
@@ -1480,27 +2017,94 @@ const ClientDashboard = () => {
       amountCalc *= recurrenceSeriesMultiplier;
     }
     const amountForApi = roundChfToFiveRappen(amountCalc);
-    const seriesLen = recurrenceEndTrim
-      ? estimatedOccurrencesForRecurrence({
-          startYmd: recurrenceStartForSeries,
-          endYmd: recurrenceEndTrim,
-          recurrenceType,
-          recurrenceDays,
-        })
-      : Math.min(52, Math.max(1, Math.floor(Number(recurrenceSeriesLength)) || 1));
+    const seriesLen =
+      recurrenceEndMode === 'date' && recurrenceEndTrim
+        ? estimatedOccurrencesForRecurrence({
+            startYmd: recurrenceStartForSeries,
+            endYmd: recurrenceEndTrim,
+            recurrenceType,
+            recurrenceDays,
+          })
+        : recurrenceEndMode === 'open'
+          ? 52
+          : Math.min(52, Math.max(1, Math.floor(Number(recurrenceSeriesLength)) || 1));
 
-    const clientNotePayload = buildClientNoteFromLegs(clientNoteDeparture, clientNoteArrival);
+    const pickupAccess = String(clientNoteDeparture || '').trim();
+    const dropoffAccess = String(clientNoteArrival || '').trim();
+    const facilityText = String(medicalFacility || '').trim();
+    const serviceText = String(hospitalService || '').trim();
+    const doctorText = String(doctorName || '').trim();
+    const contactDetail = composeMedicalContact(serviceText, doctorText);
+    const medicalDestinationActive =
+      !medicalOptOut &&
+      (showMedicalFields || medicalEditorOpen || Boolean(facilityText || serviceText || doctorText));
+    if (medicalDestinationActive && (!facilityText || !contactDetail)) {
+      setFormError('Indiquez l’établissement et le service ou le médecin.');
+      return;
+    }
+    if (assistanceRequired && !String(assistanceDetail || '').trim()) {
+      setFormError('Indiquez le type d’assistance.');
+      return;
+    }
+    for (const stop of extraStops) {
+      if (!String(stop.address || '').trim()) {
+        setFormError('Chaque étape doit avoir une adresse.');
+        return;
+      }
+      if (String(stop.time || '').trim() && stop.otherDay && !String(stop.date || '').trim()) {
+        setFormError('Indiquez le jour de l’étape dont l’heure est précisée.');
+        return;
+      }
+      if (
+        extraStopIsMedical(stop) &&
+        (!String(stop.facility || '').trim() ||
+          !composeMedicalContact(stop.service, stop.doctor))
+      ) {
+        setFormError('Chaque destination médicale doit indiquer l’établissement et le service ou le médecin.');
+        return;
+      }
+    }
+    const serviceOrDoctor = contactDetail;
+    const needsLabel = mobilityNeedsLabel({
+      wheelchairOwn,
+      wheelchairRequired,
+      assistanceRequired,
+      assistanceDetail,
+    });
+    const contactPhone = verifiedProfilePhone(profile).slice(0, 30);
+    const effectiveScheduleAnchor = asapMode ? 'departure' : scheduleAnchor;
+    let recurrenceLabel = '';
+    if (recurrenceEnabled) {
+      const typeLabel =
+        recurrenceType === 'daily'
+          ? 'tous les jours'
+          : recurrenceType === 'weekly'
+            ? 'toutes les semaines'
+            : 'jours personnalisés';
+      const endTrim = String(recurrenceEndDate || '').trim();
+      recurrenceLabel = endTrim
+        ? `Récurrence : ${typeLabel} jusqu’au ${formatRecurrenceYmdShort(endTrim)}`
+        : `Récurrence : ${typeLabel}, ${Math.min(52, Math.max(1, Math.floor(Number(recurrenceSeriesLength)) || 1))} répétition(s)`;
+    }
 
     if (isPortalPrivateClient && !confirm) {
       const fingerprint = JSON.stringify({
         pickup,
         destination,
         scheduledTimeIso,
+        scheduleAnchor: effectiveScheduleAnchor,
         amount: amountForApi,
         maximum: portalCeilingFlowEnabled ? maximumAcceptedAmount : '',
         roundTripEnabled,
         returnDate: returnDate || '',
         returnTimeIso,
+        wheelchairOwn,
+        wheelchairRequired,
+        assistanceRequired,
+        assistanceDetail: assistanceRequired ? assistanceDetail.trim() : '',
+        pickupAccess,
+        dropoffAccess,
+        serviceOrDoctor: medicalDestinationActive ? serviceOrDoctor : '',
       });
       const storageKey = `portal-order-idempotency:${fingerprint}`;
       let key = null;
@@ -1530,21 +2134,68 @@ const ClientDashboard = () => {
           return;
         }
       }
-      setPortalReview({
+      presentPortalCard(() => setPortalReview({
         amountLabel: Number(amountForApi).toFixed(2),
         maximumLabel: portalCeilingFlowEnabled
           ? Number(String(maximumAcceptedAmount).replace(',', '.')).toFixed(2)
           : null,
         eligibleCarriers: conditionalOrderEnabled ? eligibleCarriers : [],
-        debtorName: buildCustomerName(profile),
-        billingAddress: String(profile?.billing_address || '').trim(),
-        scheduledLabel: asapMode ? 'Dès que possible' : `${selectedDate} ${selectedTime}`,
-        pickup,
-        destination,
-        roundTrip: roundTripEnabled,
-        returnLabel: roundTripEnabled ? [returnDate, returnTime].filter(Boolean).join(' ') : '',
+        narrative: buildPortalReviewNarrative({
+          asap: asapMode,
+          scheduleAnchor: effectiveScheduleAnchor,
+          selectedDate,
+          selectedTime,
+          departureTime: hasDepartureTime && hasAppointmentTime ? departureTime : '',
+          appointmentTime: scheduleAnchor === 'departure' && hasAppointmentTime ? appointmentTime : '',
+          pickup,
+          destination,
+          roundTrip: roundTripEnabled,
+          returnTime: returnTime || '',
+          needsLabel,
+          contactDetail: medicalDestinationActive ? contactDetail : '',
+          contactName: buildCustomerName(profile),
+          contactPhone,
+          recurrenceLabel,
+          extraStopLabels: extraStops.map(
+            (stop, index) => `Étape ${index + 2} : ${String(stop.address || '').trim()}`
+          ),
+          establishmentLabel: medicalDestinationActive ? facilityText : '',
+        }),
+        accessLines: [
+          pickupAccess && `Accès départ : ${pickupAccess}`,
+          dropoffAccess && `Accès destination : ${dropoffAccess}`,
+        ].filter(Boolean),
         storageKey,
-      });
+        steps: buildPortalOrderSteps({
+          pickup,
+          destination,
+          extraStops,
+          roundTrip: roundTripEnabled,
+          asap: asapMode,
+          hasDepartureTime,
+          hasAppointmentTime,
+          departureTime,
+          appointmentTime,
+          returnTime: returnTime || '',
+          pickupAccess,
+          dropoffAccess,
+          facilityText,
+          serviceText,
+          doctorText,
+          medicalDestinationActive,
+        }),
+        transportCount:
+          1 +
+          extraStops.filter((stop) => String(stop.address || '').trim()).length +
+          (roundTripEnabled ? 1 : 0),
+        maximumAuthorizedLabel: roundChfToFiveRappen(
+          (indicativeAmount != null ? indicativeAmount : MIN_CLIENT_INDICATIVE_FARE_CHF) *
+            (1 +
+              extraStops.filter((stop) => String(stop.address || '').trim()).length +
+              (roundTripEnabled ? 1 : 0)) *
+            (recurrenceEnabled && recurrenceSeriesMultiplier > 1 ? recurrenceSeriesMultiplier : 1)
+        ).toFixed(2),
+      }));
       setOpenTermsDoc(null);
       void loadPortalTerms();
       return;
@@ -1574,9 +2225,61 @@ const ClientDashboard = () => {
             accept_pricing_ceiling: true,
           }
         : {}),
-      medical_facility: medicalFacility,
-      doctor_name: doctorName,
-      ...(clientNotePayload ? { client_note: clientNotePayload } : {}),
+      medical_facility: medicalDestinationActive ? medicalFacility : '',
+      doctor_name: medicalDestinationActive ? doctorText.slice(0, 200) : '',
+      hospital_service: medicalDestinationActive ? serviceText.slice(0, 255) : '',
+      ...(medicalDestinationActive
+        ? {
+            medical_destination: true,
+            medical_destination_detail: contactDetail.slice(0, 255),
+          }
+        : {}),
+      ...(extraStops.length
+        ? {
+            route_steps: extraStops.map((stop) => {
+              const facility = String(stop.facility || '').trim();
+              const service = String(stop.service || '').trim();
+              const doctor = String(stop.doctor || '').trim();
+              const detail = composeMedicalContact(service, doctor);
+              const medical = extraStopIsMedical(stop);
+              const stopTime = String(stop.time || '').trim();
+              const planned = Boolean(stopTime);
+              const stopDate =
+                stop.otherDay && String(stop.date || '').trim()
+                  ? String(stop.date).trim()
+                  : String(selectedDate || '').trim();
+              let scheduled = null;
+              if (planned && stopDate && stopTime) {
+                const when = new Date(`${stopDate}T${stopTime}:00`);
+                if (Number.isFinite(when.getTime())) scheduled = when.toISOString();
+              }
+              return {
+                address: String(stop.address || '').trim(),
+                asap: !planned,
+                scheduled_time_type: 'departure',
+                scheduled_time: scheduled,
+                medical_destination: medical,
+                medical_facility: medical ? facility : '',
+                hospital_service: medical ? service.slice(0, 255) : '',
+                doctor_name: medical ? doctor.slice(0, 200) : '',
+                medical_destination_detail: medical ? detail.slice(0, 255) : '',
+                access_notes: String(stop.access || '').trim(),
+              };
+            }),
+          }
+        : {}),
+      scheduled_time_type: effectiveScheduleAnchor,
+      is_urgent: asapMode,
+      wheelchair_client_has: wheelchairOwn,
+      wheelchair_need: wheelchairRequired,
+      needs_assistance: assistanceRequired,
+      ...(assistanceRequired && assistanceDetail.trim()
+        ? { assistance_detail: assistanceDetail.trim().slice(0, 200) }
+        : {}),
+      ...(pickupAccess ? { pickup_access_notes: pickupAccess } : {}),
+      ...(dropoffAccess ? { dropoff_access_notes: dropoffAccess } : {}),
+      requester_name: buildCustomerName(profile),
+      ...(contactPhone ? { requester_phone: contactPhone } : {}),
       is_round_trip: roundTripEnabled,
       ...(roundTripEnabled && returnDate && String(returnDate).trim()
         ? { return_date: String(returnDate).trim() }
@@ -1739,7 +2442,7 @@ const ClientDashboard = () => {
         }
       }
       portalIdempotencyKeyRef.current = null;
-      setPortalReview(null);
+      presentPortalCard(() => setPortalReview(null));
       setUpcomingBookings((prev) => {
         const incomingBooking = payload.booking || root.booking;
         if (incomingBooking?.pickup_location) {
@@ -1753,18 +2456,32 @@ const ClientDashboard = () => {
       setDestinationSelection(null);
       if (!asapMode) {
         setSelectedDate('');
-        setSelectedTime('');
       }
-      setRoundTripEnabled(false);
+      setDepartureTime('');
+      setAppointmentTime('');
+      setRoundTripEnabled(true);
       setReturnDate('');
       setReturnTime('');
+      setReturnOtherDay(false);
       setRecurrenceEnabled(false);
       setRecurrenceType('weekly');
       setRecurrenceSeriesLength(4);
       setRecurrenceEndDate('');
       setRecurrenceDays([]);
       setMedicalFacility('');
+      setHospitalService('');
       setDoctorName('');
+      facilityTouchedRef.current = false;
+      doctorTouchedRef.current = false;
+      medicalAutoOpenedRef.current = false;
+      setMedicalEditorOpen(false);
+      medicalOptOutRef.current = false;
+      setMedicalOptOut(false);
+      const habitual = habitualMobilityFromProfile(profile);
+      setWheelchairOwn(habitual.own);
+      setWheelchairRequired(habitual.need);
+      setAssistanceRequired(habitual.assistance);
+      setAssistanceDetail(habitual.detail);
       setClientNoteDeparture('');
       setClientNoteArrival('');
       setRouteLatLngs([]);
@@ -1934,18 +2651,17 @@ const ClientDashboard = () => {
     [bookingUx.label]
   );
 
-  const dashboardDateParts = useMemo(() => {
-    const d = new Date();
-    return {
-      display: d.toLocaleDateString('fr-CH', {
-        weekday: 'long',
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-      }),
-      iso: d.toISOString(),
-    };
-  }, []);
+  const missionDayLabel = useMemo(() => {
+    const ymd = selectedDate && String(selectedDate).trim() ? String(selectedDate).trim() : todayDateMin;
+    const parsed = new Date(`${ymd}T12:00:00`);
+    if (!Number.isFinite(parsed.getTime())) return ymd;
+    return parsed.toLocaleDateString('fr-CH', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+  }, [selectedDate, todayDateMin]);
   const [estimateAmountPulse, setEstimateAmountPulse] = useState(false);
   const prevIndicativeAmountRef = useRef(null);
 
@@ -1968,16 +2684,76 @@ const ClientDashboard = () => {
     const d = destination.trim();
     if (!p || !d) return null;
     if (!asapMode && (!selectedDate || !selectedTime)) return null;
-    const extras = [];
+    const hasStops = extraStops.some((stop) => String(stop.address || '').trim());
+    const detailedPath = hasStops || roundTripEnabled;
+    const legs = [
+      {
+        key: 'pickup',
+        label: 'Prise en charge',
+        text: p,
+        when: detailedPath
+          ? asapMode
+            ? 'Dès que possible'
+            : hasDepartureTime
+              ? formatPortalLegWhen('Prise en charge', selectedDate, departureClock)
+              : 'Prise en charge à déterminer'
+          : '',
+      },
+      {
+        key: 'destination',
+        label: hasStops ? 'Étape 1' : 'Destination',
+        text: d,
+        detail: medicalCardOn
+          ? [String(hospitalService || '').trim(), String(doctorName || '').trim()]
+              .filter(Boolean)
+              .join(' · ')
+          : '',
+        when:
+          detailedPath && hasAppointmentTime
+            ? formatPortalLegWhen('Rendez-vous', selectedDate, appointmentClock)
+            : '',
+      },
+    ];
+    extraStops.forEach((stop, index) => {
+      const address = String(stop.address || '').trim();
+      if (!address) return;
+      const stopTime = String(stop.time || '').trim();
+      const stopDate =
+        stop.otherDay && String(stop.date || '').trim()
+          ? String(stop.date).trim()
+          : String(selectedDate || '').trim();
+      legs.push({
+        key: stop.key || `stop-${index}`,
+        label: `Étape ${index + 2}`,
+        text: address,
+        detail: extraStopIsMedical(stop)
+          ? [String(stop.service || '').trim(), String(stop.doctor || '').trim()]
+              .filter(Boolean)
+              .join(' · ')
+          : '',
+        when: stopTime ? formatPortalLegWhen('Heure de départ', stopDate, stopTime) : '',
+      });
+    });
     if (roundTripEnabled) {
-      if (returnDate && returnTime) {
-        extras.push(`Retour prévu : ${returnDate} à ${returnTime}`);
-      } else if (returnDate) {
-        extras.push(`Retour prévu le ${returnDate} (heure à définir)`);
-      } else {
-        extras.push('Aller-retour');
-      }
+      const backDate = String(returnDate || selectedDate || '').trim();
+      const backTime = String(returnTime || '').trim();
+      legs.push({
+        key: 'return',
+        label: 'Retour',
+        text: p,
+        when: backTime
+          ? formatPortalLegWhen('Heure de départ', backDate, backTime)
+          : formatPortalLegWhen('Heure à définir', backDate, ''),
+      });
     }
+    const extras = [];
+    const needs = mobilityNeedsLabel({
+      wheelchairOwn,
+      wheelchairRequired,
+      assistanceRequired,
+      assistanceDetail,
+    });
+    if (needs) extras.push(needs);
     if (recurrenceEnabled) {
       const typeLabel =
         recurrenceType === 'daily'
@@ -1999,7 +2775,14 @@ const ClientDashboard = () => {
     return {
       pickup: p,
       destination: d,
-      whenLabel: formatScheduledSummaryLabel(selectedDate, selectedTime, asapMode),
+      legs,
+      showScheduleFooter: !detailedPath,
+      whenLabel: formatScheduledSummaryLabel(
+        selectedDate,
+        selectedTime,
+        asapMode,
+        asapMode ? 'departure' : scheduleAnchor
+      ),
       extras,
     };
   }, [
@@ -2008,6 +2791,19 @@ const ClientDashboard = () => {
     selectedDate,
     selectedTime,
     asapMode,
+    scheduleAnchor,
+    departureClock,
+    appointmentClock,
+    hasDepartureTime,
+    hasAppointmentTime,
+    extraStops,
+    medicalCardOn,
+    hospitalService,
+    doctorName,
+    wheelchairOwn,
+    wheelchairRequired,
+    assistanceRequired,
+    assistanceDetail,
     roundTripEnabled,
     returnDate,
     returnTime,
@@ -2019,7 +2815,10 @@ const ClientDashboard = () => {
 
   const recurrenceHintText = useMemo(() => {
     if (!recurrenceEnabled) return null;
-    const endTrim = String(recurrenceEndDate || '').trim();
+    if (recurrenceEndMode === 'open') {
+      return 'Une réservation est créée par cette demande. La série n’a pas de date de fin : elle est décrite jusqu’à 52 transports, et le transporteur confirmera les passages.';
+    }
+    const endTrim = recurrenceEndMode === 'date' ? String(recurrenceEndDate || '').trim() : '';
     if (endTrim) {
       const endLabel = formatRecurrenceYmdShort(endTrim);
       if (recurrenceType === 'custom' && recurrenceDays.length > 0) {
@@ -2037,6 +2836,7 @@ const ClientDashboard = () => {
     return `Une réservation est créée par cette demande. Vous indiquez ${n} répétition${n > 1 ? 's' : ''} (${recurrenceType === 'daily' ? 'quotidien' : 'hebdomadaire'}) : le transporteur confirmera la série.`;
   }, [
     recurrenceEnabled,
+    recurrenceEndMode,
     recurrenceEndDate,
     recurrenceType,
     recurrenceSeriesLength,
@@ -2060,12 +2860,6 @@ const ClientDashboard = () => {
     return estimateInlineParts.join(' • ');
   }, [estimateInlineParts]);
 
-  const clientNotePreview = useMemo(
-    () => buildClientNoteFromLegs(clientNoteDeparture, clientNoteArrival),
-    [clientNoteDeparture, clientNoteArrival]
-  );
-  const clientNotePreviewLen = clientNotePreview.length;
-
   useEffect(() => {
     const home = homeAddressFromProfile(profile);
     if (!home) return;
@@ -2075,12 +2869,44 @@ const ClientDashboard = () => {
     });
   }, [profile]);
 
+  useEffect(() => {
+    if (!profile || profileSnapshotApplied.current) return;
+    profileSnapshotApplied.current = true;
+    const access = composeProfilePickupAccess(profile);
+    if (access) {
+      setClientNoteDeparture((prev) => (String(prev || '').trim() ? prev : access));
+    }
+    const habitual = habitualMobilityFromProfile(profile);
+    setWheelchairOwn(habitual.own);
+    setWheelchairRequired(habitual.need);
+    setAssistanceRequired(habitual.assistance);
+    setAssistanceDetail(habitual.detail);
+  }, [profile]);
+
   const handleBookingAction = useCallback(
     (action, booking) => {
       if (!booking?.id) return;
       if (action === 'Recommander') {
-        setPickup(String(booking.pickup_location || ''));
-        setDestination(String(booking.dropoff_location || ''));
+        const stops = recentTripStops(booking);
+        const hasReturn = stops.some((stop) => stop.label === 'Retour');
+        const routeStops = (hasReturn ? stops.slice(0, -1) : stops).filter((stop) =>
+          String(stop?.place || '').trim()
+        );
+        const dropoffs = routeStops.slice(1);
+        const firstDetail = splitReuseDetail(dropoffs[0]?.detail);
+        setPickup(String(routeStops[0]?.place || booking.pickup_location || ''));
+        setDestination(String(dropoffs[0]?.place || booking.dropoff_location || ''));
+        if (firstDetail.service) setHospitalService(firstDetail.service);
+        if (firstDetail.doctor) {
+          doctorTouchedRef.current = true;
+          setDoctorName(firstDetail.doctor);
+        }
+        setExtraStops(
+          dropoffs.slice(1).map((stop, index) => blankExtraStop(stop.place, index, stop.detail))
+        );
+        setRoundTripEnabled(
+          hasReturn || asBookingBool(booking.is_round_trip) || asBookingBool(booking.has_return)
+        );
         setFormError(null);
         return;
       }
@@ -2097,9 +2923,10 @@ const ClientDashboard = () => {
   return (
     <div className="container">
       {(() => {
-        const p = profile || {};
-        const userName = p.first_name ?? p.firstName ?? p.username ?? p.user?.first_name ?? p.user?.username ?? 'Utilisateur';
-        return <HeaderDashboard userName={userName} />;
+        const p = profile || null;
+        const named = p ? buildCustomerName(p) : '';
+        const headerName = named && named !== 'Client' ? named : undefined;
+        return <HeaderDashboard userName={headerName} />;
       })()}
 
       <div className="clientDashboardContentStack">
@@ -2149,20 +2976,54 @@ const ClientDashboard = () => {
           </div>
         ) : null}
         <div className="mainRow clientDashboardMainRow">
-            <section className="leftSection card bookingFormCard">
+            <section
+              className={`leftSection card bookingFormCard${
+                portalReview ? ' bookingFormCard--review' : ''
+              }`}
+            >
               <div className="dashboardHeader bookingHeaderPro">
                 <div className="headerLeft">
                   <div className="bookingHeaderLead">
                     <div className="bookingHeaderTitles">
-                      <h1 className="title bookingHeaderTitle">Demande de transport médical</h1>
+                      <h1 className="title bookingHeaderTitle">Demande de transport</h1>
+                      <p className="bookingHeaderSubtitle">
+                        {portalReview
+                          ? 'Vérifiez le récapitulatif, puis confirmez ou modifiez la demande.'
+                          : 'Indiquez les lieux de votre transport et les horaires associés.'}
+                      </p>
                     </div>
-                    <time
-                      className="headerMeta headerMetaPill"
-                      dateTime={dashboardDateParts.iso}
-                      aria-label="Journée affichée (référence)"
+                    <div
+                      className="headerMeta headerMetaPill portalHeaderDate"
+                      onClick={(event) => {
+                        const target = event.target;
+                        if (target instanceof Element && target.closest('[role="dialog"]')) return;
+                        const toggle = event.currentTarget.querySelector(
+                          'button[aria-haspopup="dialog"]'
+                        );
+                        if (!(toggle instanceof HTMLButtonElement)) return;
+                        if (event.target === toggle || toggle.contains(event.target)) return;
+                        toggle.click();
+                      }}
                     >
-                      {dashboardDateParts.display}
-                    </time>
+                      <span className="portalDateIcon" aria-hidden="true">
+                        <PortalMark name="calendar" />
+                      </span>
+                      <span className="portalDateText">
+                        <span className="portalDateKicker">
+                          Date du transport <span className="portalDateReq">*</span>
+                        </span>
+                        <span className="portalDateValue" aria-hidden="true">{missionDayLabel}</span>
+                      </span>
+                      <span className="portalDateChevron" aria-hidden="true">▾</span>
+                      <InlineDatePicker
+                        className="portalHeaderDatePicker"
+                        inputId="client-booking-date"
+                        value={selectedDate}
+                        onChange={setSelectedDate}
+                        minDate={todayDateMin}
+                        ariaLabel="Date du transport"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2203,19 +3064,89 @@ const ClientDashboard = () => {
                     </div>
                   ) : null}
 
-                  <div className="addressFieldsBlock addressFieldsBlockPrimary">
-                    <div className="bookingAddressSwapRow">
-                      <div className="bookingAddressSwapFields">
-                        <div className={`${homeFieldStyles.fieldBlock} bookingFormAddressFieldBlock`}>
-                          <label htmlFor="client-dashboard-pickup" className={homeFieldStyles.fieldLabel}>
-                            Lieu de prise en charge
+                  <div className="bookingFormRoute">
+                  <div className="portalRouteHead">
+                  <h2 className="portalRouteHeading">Parcours</h2>
+                  <p className="portalRouteTip">
+                    <span className="portalRouteTipMark" aria-hidden="true">
+                      <PortalMark name="pin" />
+                    </span>
+                    <span className="portalRouteTipLabel">Conseil</span>
+                    <span className="portalRouteTipItem" aria-live="polite">
+                      {PORTAL_ROUTE_TIPS[routeTipIndex]}
+                    </span>
+                    <span className="portalRouteTipNav">
+                      <button
+                        type="button"
+                        className="portalRouteTipNavBtn"
+                        aria-label="Conseil précédent"
+                        onClick={() =>
+                          setRouteTipIndex(
+                            (current) =>
+                              (current + PORTAL_ROUTE_TIPS.length - 1) % PORTAL_ROUTE_TIPS.length
+                          )
+                        }
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="m15 18-6-6 6-6" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="portalRouteTipNavBtn"
+                        aria-label="Conseil suivant"
+                        onClick={() =>
+                          setRouteTipIndex((current) => (current + 1) % PORTAL_ROUTE_TIPS.length)
+                        }
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
+                      </button>
+                    </span>
+                  </p>
+                  </div>
+                  <div className="portalRouteList">
+                    <article className="portalRouteStep">
+                      <div className="portalRouteRail" aria-hidden="true">
+                        <span className="portalRouteDot">1</span>
+                        <span className="portalRouteConnector" />
+                      </div>
+                      <div className="portalRouteStepBody">
+                        <div className="portalStepSplit">
+                        <div className="portalStepPlace">
+                        <div className="portalStepHeading">
+                          <label htmlFor="client-dashboard-pickup" className="portalRouteStepTitle">
+                            Départ
                           </label>
+                        </div>
                           <div
                             className={`${homeFieldStyles.fieldGroup} bookingFormAddressFieldGroup${
                               showPickupFieldInvalid ? ` ${homeFieldStyles.fieldGroupInvalid}` : ''
                             }`}
                           >
-                            <div className={homeFieldStyles.fieldIcon} aria-hidden>
+                            <button
+                              type="button"
+                              className={`${homeFieldStyles.fieldIcon} portalHomeAddressBtn`}
+                              aria-label="Utiliser mon adresse de domicile"
+                              title="Adresse de domicile"
+                              onClick={() => {
+                                const home = homeAddressFromProfile(profile);
+                                if (!home) {
+                                  setFormError('Aucune adresse de domicile n’est enregistrée.');
+                                  return;
+                                }
+                                const lat = profile?.domicile?.lat ?? profile?.domicile_lat;
+                                const lon = profile?.domicile?.lon ?? profile?.domicile_lon;
+                                setPickup(home);
+                                setPickupSelection(
+                                  lat != null && lat !== '' && lon != null && lon !== ''
+                                    ? { validated: true, lat, lon }
+                                    : null
+                                );
+                                setFormError(null);
+                              }}
+                            >
                               <svg
                                 width="18"
                                 height="18"
@@ -2224,11 +3155,11 @@ const ClientDashboard = () => {
                                 stroke="currentColor"
                                 strokeWidth="2.5"
                                 strokeLinecap="round"
+                                strokeLinejoin="round"
                               >
-                                <circle cx="12" cy="12" r="3" />
-                                <circle cx="12" cy="12" r="9" strokeDasharray="4 3" />
+                                <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z" />
                               </svg>
-                            </div>
+                            </button>
                             <AddressAutocomplete
                               flushInput
                               inputId="client-dashboard-pickup"
@@ -2251,38 +3182,131 @@ const ClientDashboard = () => {
                               }}
                               placeholder="Ex: HUG, Rue Gabrielle-Perret-Gentil"
                             />
+                            {pickup ? (
+                              <button
+                                type="button"
+                                className="portalFieldAction"
+                                aria-label="Effacer le lieu de prise en charge"
+                                onClick={() => {
+                                  setPickup('');
+                                  setPickupSelection(null);
+                                }}
+                              >
+                                ×
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="portalFieldAction"
+                              aria-label="Utiliser ma position actuelle"
+                              title="Ma position"
+                              onClick={() => {
+                                if (locatingPickupRef.current) return;
+                                if (!navigator.geolocation) {
+                                  setFormError('La géolocalisation n’est pas disponible sur cet appareil.');
+                                  return;
+                                }
+                                locatingPickupRef.current = true;
+                                setFormError(null);
+                                navigator.geolocation.getCurrentPosition(
+                                  (position) => {
+                                    const lat = position.coords.latitude;
+                                    const lon = position.coords.longitude;
+                                    apiClient
+                                      .get('/geocode/reverse', { params: { lat, lon } })
+                                      .then((response) => {
+                                        const item = response?.data || {};
+                                        const label = String(item.label || item.address || '').trim();
+                                        if (!label) {
+                                          setFormError('Aucune adresse trouvée pour cette position.');
+                                          return;
+                                        }
+                                        setPickup(label);
+                                        setPickupSelection({
+                                          validated: true,
+                                          lat: item.lat ?? lat,
+                                          lon: item.lon ?? lon,
+                                        });
+                                        setFormError(null);
+                                      })
+                                      .catch(() => {
+                                        setFormError(
+                                          'Impossible de déterminer l’adresse à partir de votre position.'
+                                        );
+                                      })
+                                      .finally(() => {
+                                        locatingPickupRef.current = false;
+                                      });
+                                  },
+                                  (err) => {
+                                    locatingPickupRef.current = false;
+                                    setFormError(
+                                      err?.code === 1
+                                        ? 'Autorisez la localisation pour remplir le lieu de prise en charge.'
+                                        : 'Impossible d’obtenir votre position.'
+                                    );
+                                  },
+                                  { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+                                );
+                              }}
+                            >
+                              <PortalMark name="crosshair" />
+                            </button>
                           </div>
+                        <details className="portalAccessFold">
+                          <summary>Préciser l’accès (optionnel)</summary>
+                          <input
+                            type="text"
+                            className="input bookingClientNoteLineInput"
+                            value={clientNoteDeparture}
+                            onChange={(e) =>
+                              setClientNoteDeparture(e.target.value.slice(0, MAX_CLIENT_NOTE_LEG))
+                            }
+                            maxLength={MAX_CLIENT_NOTE_LEG}
+                            placeholder="Entrée, code, étage, instructions…"
+                            autoComplete="off"
+                            aria-label="Accès au départ"
+                          />
+                        </details>
                         </div>
-                        <div
-                          className={`${homeFieldStyles.fieldBlock} bookingFormAddressFieldBlock`}
-                          title={
-                            isHospitalLikeDestination(destination)
-                              ? 'L’établissement médical est déduit de l’adresse de destination.'
-                              : undefined
-                          }
-                        >
-                          <label htmlFor="client-dashboard-dropoff" className={homeFieldStyles.fieldLabel}>
-                            Destination
+                        <aside className="portalTimeCard">
+                          <p className="portalTimeCardTitle">
+                            Heure de prise en charge
+                            {!hasDepartureTime && !hasAppointmentTime ? (
+                              <span className="portalDateReq">*</span>
+                            ) : null}
+                          </p>
+                          <InlineTimePicker
+                            inputId="client-booking-departure-time"
+                            value={departureTime}
+                            onChange={setDepartureTime}
+                            ariaLabel="Heure de départ"
+                          />
+                        </aside>
+                        </div>
+                      </div>
+                    </article>
+                    <article className="portalRouteStep">
+                      <div className="portalRouteRail" aria-hidden="true">
+                        <span className="portalRouteDot">2</span>
+                        {extraStops.length > 0 || roundTripEnabled ? (
+                          <span className="portalRouteConnector" />
+                        ) : null}
+                      </div>
+                      <div className="portalRouteStepBody">
+                        <div className="portalStepSplit">
+                        <div className="portalStepPlace">
+                        <div className="portalStepHeading">
+                          <label htmlFor="client-dashboard-dropoff" className="portalRouteStepTitle">
+                            {extraStops.length > 0 ? 'Étape 1' : 'Destination'}
                           </label>
+                        </div>
+                        <div className={`${homeFieldStyles.fieldBlock} bookingFormAddressFieldBlock`}>
                           <div
                             className={`${homeFieldStyles.fieldGroup} bookingFormAddressFieldGroup${
                               showDropoffFieldInvalid ? ` ${homeFieldStyles.fieldGroupInvalid}` : ''
-                            }`}
+                            }`                            }
                           >
-                            <div className={homeFieldStyles.fieldIcon} aria-hidden>
-                              <svg
-                                width="18"
-                                height="18"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                                strokeLinecap="round"
-                              >
-                                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
-                                <circle cx="12" cy="9" r="2.5" />
-                              </svg>
-                            </div>
                             <AddressAutocomplete
                               flushInput
                               inputId="client-dashboard-dropoff"
@@ -2305,73 +3329,105 @@ const ClientDashboard = () => {
                               }}
                               placeholder="Ex: Clinique de Carouge"
                             />
+                            {destination ? (
+                              <button
+                                type="button"
+                                className="portalFieldAction"
+                                aria-label="Effacer la destination"
+                                onClick={() => {
+                                  setDestination('');
+                                  setDestinationSelection(null);
+                                }}
+                              >
+                                ×
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="portalFieldAction"
+                              aria-label="Rechercher la destination"
+                              onClick={() => document.getElementById('client-dashboard-dropoff')?.focus()}
+                            >
+                              <PortalMark name="crosshair" />
+                            </button>
                           </div>
                         </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="bookingAddressSwapButton"
-                        onClick={handleSwapAddresses}
-                        title="Inverser prise en charge et destination"
-                        aria-label="Inverser le lieu de prise en charge et la destination"
-                      >
-                        ↕
-                      </button>
-                    </div>
-                  </div>
-
-                  <details className="bookingClientNoteFold bookingClientNoteFold--afterAddresses">
-                    <summary className="bookingClientNoteSummary">
-                      <span className="bookingClientNoteSummaryChevron" aria-hidden="true">
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.25"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
+                        <div
+                          className={`portalMedicalCard${medicalCardOn ? '' : ' portalMedicalCard--closed'}`}
                         >
-                          <path d="m6 9 6 6 6-6" />
-                        </svg>
-                      </span>
-                      <span className="bookingClientNoteSummaryLabel">
-                        Précisions pour le transporteur{' '}
-                        <span className="bookingClientNoteSummaryOptional">(optionnel)</span>
-                      </span>
-                    </summary>
-                    <div className="bookingClientNoteBody">
-                      <div className="bookingClientNoteRows">
-                        <div className="bookingClientNoteRow">
-                          <label
-                            className="bookingClientNoteRowLabel"
-                            htmlFor="client-booking-note-departure"
-                          >
-                            Au départ
-                          </label>
-                          <input
-                            id="client-booking-note-departure"
-                            type="text"
-                            className="input bookingClientNoteLineInput"
-                            value={clientNoteDeparture}
-                            onChange={(e) =>
-                              setClientNoteDeparture(
-                                e.target.value.slice(0, MAX_CLIENT_NOTE_LEG)
-                              )
-                            }
-                            maxLength={MAX_CLIENT_NOTE_LEG}
-                            spellCheck="true"
-                            autoComplete="off"
-                            placeholder="Ex. RDV 9h, parking visiteurs"
-                          />
+                          <div className="portalMedicalCardHead">
+                            <button
+                              type="button"
+                              role="switch"
+                              className={`portalMedicalSwitch${medicalCardOn ? ' is-on' : ''}`}
+                              aria-checked={medicalCardOn}
+                              aria-label="Destination médicale"
+                              onClick={() => setMedicalDestinationOn(!medicalCardOn)}
+                            />
+                            <span>Destination médicale</span>
+                          </div>
+                          {medicalCardOn ? (
+                            <div className="portalMedicalFields">
+                              <label htmlFor="client-booking-establishment">
+                                <span className="portalMedicalFieldLabel">
+                                  Établissement <span className="portalMedicalReq">*</span>
+                                </span>
+                                <input
+                                  id="client-booking-establishment"
+                                  className="portalMedicalInput"
+                                  value={medicalFacility}
+                                  onChange={(e) => {
+                                    facilityTouchedRef.current = true;
+                                    setMedicalFacility(e.target.value.slice(0, 200));
+                                  }}
+                                  maxLength={200}
+                                  placeholder="Clinique de Carouge"
+                                  autoComplete="organization"
+                                />
+                              </label>
+                              <label htmlFor="client-booking-service">
+                                <span className="portalMedicalFieldLabel">
+                                  Service
+                                  {!hospitalService.trim() && !doctorName.trim() ? (
+                                    <span className="portalMedicalReq">*</span>
+                                  ) : null}
+                                </span>
+                                <input
+                                  id="client-booking-service"
+                                  className="portalMedicalInput"
+                                  value={hospitalService}
+                                  onChange={(e) => setHospitalService(e.target.value.slice(0, 255))}
+                                  maxLength={255}
+                                  placeholder="Cardiologie"
+                                  autoComplete="off"
+                                />
+                              </label>
+                              <label htmlFor="client-booking-doctor">
+                                <span className="portalMedicalFieldLabel">
+                                  Médecin
+                                  {!hospitalService.trim() && !doctorName.trim() ? (
+                                    <span className="portalMedicalReq">*</span>
+                                  ) : null}
+                                </span>
+                                <input
+                                  id="client-booking-doctor"
+                                  className="portalMedicalInput"
+                                  value={doctorName}
+                                  onChange={(e) => {
+                                    doctorTouchedRef.current = true;
+                                    setDoctorName(e.target.value.slice(0, 200));
+                                  }}
+                                  maxLength={200}
+                                  placeholder="Dr Martin"
+                                  autoComplete="off"
+                                />
+                              </label>
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="bookingClientNoteRow">
-                          <label className="bookingClientNoteRowLabel" htmlFor="client-booking-note-arrival">
-                            À l’arrivée
-                          </label>
+                        <details className="portalAccessFold">
+                          <summary>Préciser l’accès (optionnel)</summary>
                           <input
-                            id="client-booking-note-arrival"
                             type="text"
                             className="input bookingClientNoteLineInput"
                             value={clientNoteArrival}
@@ -2379,208 +3435,487 @@ const ClientDashboard = () => {
                               setClientNoteArrival(e.target.value.slice(0, MAX_CLIENT_NOTE_LEG))
                             }
                             maxLength={MAX_CLIENT_NOTE_LEG}
-                            spellCheck="true"
+                            placeholder="Service, étage, accueil, instructions…"
                             autoComplete="off"
-                            placeholder="Ex. Bât. B, 3e étage, accueil radiologie"
+                            aria-label="Accès à destination"
                           />
+                        </details>
+                        </div>
+                        <aside className="portalTimeCard">
+                          <p className="portalTimeCardTitle">
+                            Rendez-vous
+                            {!hasDepartureTime && !hasAppointmentTime ? (
+                              <span className="portalDateReq">*</span>
+                            ) : null}
+                          </p>
+                          <InlineTimePicker
+                            inputId="client-booking-time"
+                            value={appointmentTime}
+                            onChange={setAppointmentTime}
+                            ariaLabel="Heure du rendez-vous"
+                          />
+                        </aside>
                         </div>
                       </div>
-                      <div className="bookingClientNoteFooter">
-                        <span
-                          className={`bookingClientNoteCounter${
-                            clientNotePreviewLen >= 450 ? ' bookingClientNoteCounter--near' : ''
-                          }`}
-                          aria-live="polite"
-                        >
-                          {clientNotePreviewLen} / {MAX_CLIENT_NOTE_LEN}
-                        </span>
-                      </div>
-                    </div>
-                  </details>
+                    </article>
 
-                  <div
-                    className={`${homeFieldStyles.fieldBlock} ${homeFieldStyles.tripKindFieldScope} bookingScheduleModeField`}
-                  >
-                    <span id="client-dashboard-schedule-mode-label" className={homeFieldStyles.fieldLabelCompact}>
-                      Horaire du transport
-                    </span>
-                    <div
-                      className={`${institutionStyles.missionSegment} ${homeFieldStyles.tripKindSegment}`}
-                      role="radiogroup"
-                      aria-labelledby="client-dashboard-schedule-mode-label"
-                    >
-                      <button
-                        type="button"
-                        className={`${institutionStyles.missionBtn} ${homeFieldStyles.tripKindBtn} ${
-                          asapMode ? institutionStyles.missionBtnActive : ''
-                        }`}
-                        role="radio"
-                        aria-checked={asapMode}
-                        onClick={() => setAsapMode(true)}
-                      >
-                        Dès que possible
-                      </button>
-                      <button
-                        type="button"
-                        className={`${institutionStyles.missionBtn} ${homeFieldStyles.tripKindBtn} ${
-                          !asapMode ? institutionStyles.missionBtnActive : ''
-                        }`}
-                        role="radio"
-                        aria-checked={!asapMode}
-                        onClick={() => setAsapMode(false)}
-                      >
-                        Planifier un horaire
-                      </button>
-                    </div>
+                  {extraStops.map((stop, index) => {
+                    const stopMedicalOn = extraStopIsMedical(stop);
+                    const stopLabel = `Étape ${index + 2}`;
+                    return (
+                    <article className="portalRouteStep" key={stop.key}>
+                      <div className="portalRouteRail" aria-hidden="true">
+                        <span className="portalRouteDot">{index + 3}</span>
+                        {index < extraStops.length - 1 || roundTripEnabled ? (
+                          <span className="portalRouteConnector" />
+                        ) : null}
+                      </div>
+                      <div className="portalRouteStepBody">
+                        <div className="portalStepSplit">
+                          <div className="portalStepPlace">
+                            <div className="portalStepHeading">
+                              <label
+                                htmlFor={`client-booking-stop-${stop.key}`}
+                                className="portalRouteStepTitle"
+                              >
+                                {stopLabel}
+                              </label>
+                              <button
+                                type="button"
+                                className="portalExtraStopRemove"
+                                onClick={() =>
+                                  setExtraStops((prev) => prev.filter((item) => item.key !== stop.key))
+                                }
+                              >
+                                Retirer
+                              </button>
+                            </div>
+                            <div className={`${homeFieldStyles.fieldBlock} bookingFormAddressFieldBlock`}>
+                              <div className={`${homeFieldStyles.fieldGroup} bookingFormAddressFieldGroup`}>
+                                <AddressAutocomplete
+                                  flushInput
+                                  inputId={`client-booking-stop-${stop.key}`}
+                                  name={`stop-${stop.key}`}
+                                  value={stop.address}
+                                  onChange={(e) =>
+                                    setExtraStops((prev) =>
+                                      prev.map((item) =>
+                                        item.key === stop.key
+                                          ? applyExtraStopPlace(item, e.target.value)
+                                          : item
+                                      )
+                                    )
+                                  }
+                                  onSelect={(item) =>
+                                    setExtraStops((prev) =>
+                                      prev.map((entry) =>
+                                        entry.key === stop.key
+                                          ? applyExtraStopPlace(entry, item.label || '')
+                                          : entry
+                                      )
+                                    )
+                                  }
+                                  placeholder="Ex: Clinique de Carouge"
+                                />
+                                {stop.address ? (
+                                  <button
+                                    type="button"
+                                    className="portalFieldAction"
+                                    aria-label={`Effacer l’adresse de l’étape ${index + 2}`}
+                                    onClick={() =>
+                                      setExtraStops((prev) =>
+                                        prev.map((item) =>
+                                          item.key === stop.key ? applyExtraStopPlace(item, '') : item
+                                        )
+                                      )
+                                    }
+                                  >
+                                    ×
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className="portalFieldAction"
+                                  aria-label={`Rechercher l’adresse de l’étape ${index + 2}`}
+                                  onClick={() =>
+                                    document.getElementById(`client-booking-stop-${stop.key}`)?.focus()
+                                  }
+                                >
+                                  <PortalMark name="crosshair" />
+                                </button>
+                              </div>
+                            </div>
+                            <div
+                              className={`portalMedicalCard${stopMedicalOn ? '' : ' portalMedicalCard--closed'}`}
+                            >
+                              <div className="portalMedicalCardHead">
+                                <button
+                                  type="button"
+                                  role="switch"
+                                  className={`portalMedicalSwitch${stopMedicalOn ? ' is-on' : ''}`}
+                                  aria-checked={stopMedicalOn}
+                                  aria-label="Destination médicale"
+                                  onClick={() =>
+                                    setExtraStops((prev) =>
+                                      prev.map((item) =>
+                                        item.key === stop.key
+                                          ? {
+                                              ...item,
+                                              medicalOptOut: stopMedicalOn,
+                                              detailsOpen: !stopMedicalOn,
+                                            }
+                                          : item
+                                      )
+                                    )
+                                  }
+                                />
+                                <span>Destination médicale</span>
+                              </div>
+                              {stopMedicalOn ? (
+                                <div className="portalMedicalFields">
+                                  <label htmlFor={`client-booking-stop-facility-${stop.key}`}>
+                                    <span className="portalMedicalFieldLabel">
+                                      Établissement <span className="portalMedicalReq">*</span>
+                                    </span>
+                                    <input
+                                      id={`client-booking-stop-facility-${stop.key}`}
+                                      className="portalMedicalInput"
+                                      value={stop.facility}
+                                      onChange={(e) =>
+                                        setExtraStops((prev) =>
+                                          prev.map((item) =>
+                                            item.key === stop.key
+                                              ? {
+                                                  ...item,
+                                                  facilityTouched: true,
+                                                  facility: e.target.value.slice(0, 200),
+                                                }
+                                              : item
+                                          )
+                                        )
+                                      }
+                                      maxLength={200}
+                                      placeholder="Clinique de Carouge"
+                                      autoComplete="organization"
+                                    />
+                                  </label>
+                                  <label htmlFor={`client-booking-stop-service-${stop.key}`}>
+                                    <span className="portalMedicalFieldLabel">
+                                      Service
+                                      {!String(stop.service || '').trim() && !String(stop.doctor || '').trim() ? (
+                                        <span className="portalMedicalReq">*</span>
+                                      ) : null}
+                                    </span>
+                                    <input
+                                      id={`client-booking-stop-service-${stop.key}`}
+                                      className="portalMedicalInput"
+                                      value={stop.service}
+                                      onChange={(e) =>
+                                        setExtraStops((prev) =>
+                                          prev.map((item) =>
+                                            item.key === stop.key
+                                              ? { ...item, service: e.target.value.slice(0, 255) }
+                                              : item
+                                          )
+                                        )
+                                      }
+                                      maxLength={255}
+                                      placeholder="Cardiologie"
+                                      autoComplete="off"
+                                    />
+                                  </label>
+                                  <label htmlFor={`client-booking-stop-doctor-${stop.key}`}>
+                                    <span className="portalMedicalFieldLabel">
+                                      Médecin
+                                      {!String(stop.service || '').trim() && !String(stop.doctor || '').trim() ? (
+                                        <span className="portalMedicalReq">*</span>
+                                      ) : null}
+                                    </span>
+                                    <input
+                                      id={`client-booking-stop-doctor-${stop.key}`}
+                                      className="portalMedicalInput"
+                                      value={stop.doctor}
+                                      onChange={(e) =>
+                                        setExtraStops((prev) =>
+                                          prev.map((item) =>
+                                            item.key === stop.key
+                                              ? {
+                                                  ...item,
+                                                  doctorTouched: true,
+                                                  doctor: e.target.value.slice(0, 200),
+                                                }
+                                              : item
+                                          )
+                                        )
+                                      }
+                                      maxLength={200}
+                                      placeholder="Dr Martin"
+                                      autoComplete="off"
+                                    />
+                                  </label>
+                                </div>
+                              ) : null}
+                            </div>
+                            <details className="portalAccessFold">
+                              <summary>Préciser l’accès (optionnel)</summary>
+                              <input
+                                type="text"
+                                className="input bookingClientNoteLineInput"
+                                value={stop.access}
+                                onChange={(e) =>
+                                  setExtraStops((prev) =>
+                                    prev.map((item) =>
+                                      item.key === stop.key
+                                        ? { ...item, access: e.target.value.slice(0, MAX_CLIENT_NOTE_LEG) }
+                                        : item
+                                    )
+                                  )
+                                }
+                                maxLength={MAX_CLIENT_NOTE_LEG}
+                                placeholder="Entrée, étage, accueil…"
+                                autoComplete="off"
+                                aria-label={`Accès à l’étape ${index + 2}`}
+                              />
+                            </details>
+                          </div>
+                          <aside className="portalTimeCard">
+                            <div className="portalTimeCardHead">
+                              <p className="portalTimeCardTitle">Heure de départ</p>
+                              {!stop.otherDay ? (
+                                <button
+                                  type="button"
+                                  className="portalOtherDay"
+                                  onClick={() =>
+                                    setExtraStops((prev) =>
+                                      prev.map((item) =>
+                                        item.key === stop.key ? { ...item, otherDay: true } : item
+                                      )
+                                    )
+                                  }
+                                >
+                                  Autre jour
+                                </button>
+                              ) : null}
+                            </div>
+                            <InlineTimePicker
+                              value={stop.time}
+                              onChange={(hhmm) =>
+                                setExtraStops((prev) =>
+                                  prev.map((item) =>
+                                    item.key === stop.key ? { ...item, time: hhmm } : item
+                                  )
+                                )
+                              }
+                              ariaLabel={`Heure de départ de l’étape ${index + 2}`}
+                            />
+                            {stop.otherDay ? (
+                              <input
+                                type="date"
+                                className="input"
+                                aria-label={`Jour de l’étape ${index + 2}`}
+                                value={stop.date}
+                                min={selectedDate || todayDateMin}
+                                onChange={(e) =>
+                                  setExtraStops((prev) =>
+                                    prev.map((item) =>
+                                      item.key === stop.key ? { ...item, date: e.target.value } : item
+                                    )
+                                  )
+                                }
+                              />
+                            ) : null}
+                          </aside>
+                        </div>
+                      </div>
+                    </article>
+                    );
+                  })}
+
                   </div>
-
-                  {(!asapMode || !isMobileViewport) && (
-                    <div className={`dateTime dateTimeFade ${asapMode ? 'dateTimeDimmed' : ''}`}>
-                      <div className="inputWrapper dateField">
-                        <label className="inputLabel" htmlFor="client-booking-date">
-                          Date
-                        </label>
-                        <input
-                          id="client-booking-date"
-                          type="date"
-                          value={selectedDate}
-                          onChange={(e) => setSelectedDate(e.target.value)}
-                          className="input"
-                          min={todayDateMin}
-                          disabled={asapMode}
-                        />
-                      </div>
-                      <div className="inputWrapper dateField dateFieldNarrow">
-                        <label className="inputLabel" htmlFor="client-booking-time">
-                          Heure
-                        </label>
-                        <input
-                          id="client-booking-time"
-                          type="time"
-                          value={selectedTime}
-                          onChange={(e) => setSelectedTime(e.target.value)}
-                          className="input"
-                          min={timeMinForSelectedDate}
-                          disabled={asapMode}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div
-                    className={`${homeFieldStyles.fieldBlock} ${homeFieldStyles.tripKindFieldScope} bookingTripTypeField`}
-                  >
-                    <span id="client-dashboard-trip-type-label" className={homeFieldStyles.fieldLabelCompact}>
-                      Aller / retour
-                    </span>
-                    <div
-                      className={`${institutionStyles.missionSegment} ${homeFieldStyles.tripKindSegment}`}
-                      role="radiogroup"
-                      aria-labelledby="client-dashboard-trip-type-label"
-                    >
-                      <button
-                        type="button"
-                        className={`${institutionStyles.missionBtn} ${homeFieldStyles.tripKindBtn} ${
-                          !roundTripEnabled ? institutionStyles.missionBtnActive : ''
-                        }`}
-                        role="radio"
-                        aria-checked={!roundTripEnabled}
-                        onClick={() => setRoundTripEnabled(false)}
-                      >
-                        Aller simple
-                      </button>
-                      <button
-                        type="button"
-                        className={`${institutionStyles.missionBtn} ${homeFieldStyles.tripKindBtn} ${
-                          roundTripEnabled ? institutionStyles.missionBtnActive : ''
-                        }`}
-                        role="radio"
-                        aria-checked={roundTripEnabled}
-                        onClick={() => setRoundTripEnabled(true)}
-                      >
-                        Avec retour planifié
-                      </button>
-                    </div>
-                  </div>
-
+                  <div className={`portalRouteActions${roundTripEnabled ? ' portalRouteActions--linked' : ''}`}>
                   {roundTripEnabled ? (
-                    <div className="dateTime bookingReturnDateTime">
-                      <div className="inputWrapper dateField">
-                        <label className="inputLabel" htmlFor="client-booking-return-date">
-                          Date du retour
-                        </label>
-                        <input
-                          id="client-booking-return-date"
-                          type="date"
-                          value={returnDate}
-                          onChange={(e) => setReturnDate(e.target.value)}
-                          className="input"
-                          min={todayDateMin}
-                        />
-                      </div>
-                      <div className="inputWrapper dateField dateFieldNarrow">
-                        <label className="inputLabel" htmlFor="client-booking-return-time">
-                          Heure du retour (optionnel)
-                        </label>
-                        <input
-                          id="client-booking-return-time"
-                          type="time"
-                          value={returnTime}
-                          onChange={(e) => setReturnTime(e.target.value)}
-                          className="input"
-                          min={timeMinForReturn}
-                        />
-                      </div>
+                    <div className="portalRouteRail" aria-hidden="true">
+                      <span className="portalRouteConnector" />
                     </div>
                   ) : null}
-
-                  <div className="bookingRecurrenceBlock">
-                    <div
-                      className="bookingRecurrenceToolbar"
-                      role="group"
-                      aria-labelledby="client-booking-recurrence-legend"
-                    >
-                      <span
-                        id="client-booking-recurrence-legend"
-                        className="bookingRecurrenceToolbarLabel"
-                      >
-                        Récurrence
-                      </span>
-                      <button
-                        type="button"
-                        className={`bookingRecurrenceChip${
-                          recurrenceEnabled ? ' bookingRecurrenceChip--active' : ''
-                        }`}
-                        aria-pressed={recurrenceEnabled}
-                        onClick={() => setRecurrenceEnabled((v) => !v)}
-                      >
-                        Récurrente
-                      </button>
-                    </div>
-
-                    {recurrenceEnabled ? (
-                      <div className="bookingRecurrenceConfig">
-                        <div className="inputWrapper bookingRecurrenceGroup">
-                          <label className="inputLabel" htmlFor="client-booking-recurrence-type">
-                            Type de récurrence
-                          </label>
-                          <select
-                            id="client-booking-recurrence-type"
-                            className="input bookingRecurrenceSelect"
-                            value={recurrenceType}
-                            onChange={(e) => setRecurrenceType(e.target.value)}
-                          >
-                            <option value="daily">Tous les jours</option>
-                            <option value="weekly">Toutes les semaines</option>
-                            <option value="custom">Jours personnalisés</option>
-                          </select>
+                  <div className="portalAddStopWrap">
+                  <button
+                    type="button"
+                    className="portalAddStop"
+                    onClick={() =>
+                      setExtraStops((prev) => [
+                        ...prev,
+                        {
+                          key: `${Date.now()}-${prev.length}`,
+                          address: '',
+                          asap: true,
+                          scheduleOpen: false,
+                          anchor: 'departure',
+                          date: '',
+                          time: '',
+                          facility: '',
+                          service: '',
+                          doctor: '',
+                          access: '',
+                          otherDay: false,
+                          detailsOpen: false,
+                          medicalOptOut: false,
+                        },
+                      ])
+                    }
+                  >
+                    <PortalMark name="plus" />
+                    Ajouter une destination
+                  </button>
+                  </div>
+                  <div className="portalRoundTripToggle">
+                    <button
+                      type="button"
+                      role="switch"
+                      className={`portalMedicalSwitch${roundTripEnabled ? ' is-on' : ''}`}
+                      aria-checked={roundTripEnabled}
+                      aria-label="Aller-retour"
+                      onClick={() => setRoundTripEnabled((current) => !current)}
+                    />
+                    <span>Aller-retour</span>
+                  </div>
+                  </div>
+                  {roundTripEnabled ? (
+                    <article className="portalRouteStep portalRouteReturnStep">
+                      <div className="portalRouteRail" aria-hidden="true">
+                        <span className="portalRouteDot portalRouteDotReturn">
+                          {extraStops.length + 3}
+                        </span>
+                      </div>
+                      <div className="portalRouteStepBody">
+                        <div className="portalStepSplit">
+                        <div className="portalStepPlace">
+                        <div className="portalStepHeading">
+                          <p className="portalRouteStepTitle" id="client-booking-return-label">
+                            Retour
+                          </p>
+                          <span className="portalStepKicker">Identique au point de départ</span>
                         </div>
+                        <div className={`${homeFieldStyles.fieldBlock} bookingFormAddressFieldBlock`}>
+                        <div
+                          className={`${homeFieldStyles.fieldGroup} bookingFormAddressFieldGroup portalRouteReadonlyGroup`}
+                        >
+                          <input
+                            type="text"
+                            className="portalRouteReadonly"
+                            readOnly
+                            tabIndex={-1}
+                            aria-label="Adresse de retour, identique au départ"
+                            value={pickup}
+                          />
+                        </div>
+                        </div>
+                        <details className="portalAccessFold">
+                          <summary>Préciser l’accès (optionnel)</summary>
+                          <input
+                            type="text"
+                            className="input bookingClientNoteLineInput"
+                            value={clientNoteDeparture}
+                            onChange={(e) =>
+                              setClientNoteDeparture(e.target.value.slice(0, MAX_CLIENT_NOTE_LEG))
+                            }
+                            maxLength={MAX_CLIENT_NOTE_LEG}
+                            placeholder="Entrée, code, étage, instructions…"
+                            autoComplete="off"
+                            aria-label="Accès au retour"
+                          />
+                        </details>
+                        </div>
+                        <aside className="portalTimeCard">
+                          <div className="portalTimeCardHead">
+                            <p className="portalTimeCardTitle">Heure de départ (optionnel)</p>
+                            {!returnOtherDay ? (
+                              <button
+                                type="button"
+                                className="portalOtherDay"
+                                onClick={() => setReturnOtherDay(true)}
+                              >
+                                Autre jour
+                              </button>
+                            ) : null}
+                          </div>
+                          <InlineTimePicker
+                            inputId="client-booking-return-time"
+                            value={returnTime}
+                            onChange={setReturnTime}
+                            ariaLabel="Heure de départ du retour, facultatif"
+                          />
+                          <input
+                            id="client-booking-return-date"
+                            type={returnOtherDay ? 'date' : 'hidden'}
+                            className={returnOtherDay ? 'input' : undefined}
+                            aria-label={returnOtherDay ? 'Jour du retour' : undefined}
+                            value={returnDate}
+                            min={returnOtherDay ? selectedDate || todayDateMin : undefined}
+                            onChange={(e) => setReturnDate(e.target.value)}
+                          />
+                        </aside>
+                        </div>
+                      </div>
+                    </article>
+                  ) : null}
+                  </div>
 
+                  <div className="bookingFormWhen">
+                  <h2 className="portalRouteHeading">Options trajet</h2>
+                  <div className="portalRecurrenceRow">
+                    <div className="portalRecurrenceCopy">
+                      <p className="portalRecurrenceTitle">
+                        Récurrence <span>(optionnel)</span>
+                      </p>
+                      <p className="portalRecurrenceLead">
+                        Plusieurs transports sur le même trajet.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      className={`portalMedicalSwitch${recurrenceEnabled ? ' is-on' : ''}`}
+                      aria-checked={recurrenceEnabled}
+                      aria-label="Récurrence"
+                      onClick={() => setRecurrenceEnabled((current) => !current)}
+                    />
+                  </div>
+                  {recurrenceEnabled ? (
+                      <div className="bookingRecurrenceConfig">
+                        <div className="portalRecurBlock">
+                          <p className="portalRecurLabel" id="client-booking-recurrence-type-label">
+                            Répéter
+                          </p>
+                          <div
+                            id="client-booking-recurrence-type"
+                            className="portalRecurSegments"
+                            role="radiogroup"
+                            aria-labelledby="client-booking-recurrence-type-label"
+                          >
+                            {[
+                              ['daily', 'Tous les jours'],
+                              ['weekly', 'Chaque semaine'],
+                              ['custom', 'Jours choisis'],
+                            ].map(([value, label]) => (
+                              <button
+                                key={value}
+                                type="button"
+                                role="radio"
+                                aria-checked={recurrenceType === value}
+                                className={recurrenceType === value ? 'is-on' : undefined}
+                                onClick={() => setRecurrenceType(value)}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         {recurrenceType === 'custom' ? (
-                          <div className="bookingRecurrenceGroup">
-                            <span className="inputLabel" id="client-booking-recurrence-days-label">
+                          <div className="portalRecurBlock">
+                            <p className="portalRecurLabel" id="client-booking-recurrence-days-label">
                               Jours concernés
-                            </span>
+                            </p>
                             <div
                               className="bookingRecurrenceDayStrip"
                               role="group"
@@ -2601,61 +3936,92 @@ const ClientDashboard = () => {
                                 </button>
                               ))}
                             </div>
-                            {recurrenceDays.length === 0 ? (
-                              <p className="bookingRecurrenceWarning" role="status">
-                                Sélectionnez au moins un jour.
-                              </p>
-                            ) : null}
                           </div>
                         ) : null}
-
-                        <div className="inputWrapper bookingRecurrenceGroup">
-                          <label className="inputLabel" htmlFor="client-booking-recurrence-end">
-                            Jusqu’au
-                            <span className="bookingRecurrenceLabelOptional"> (optionnel)</span>
-                          </label>
-                          <input
-                            id="client-booking-recurrence-end"
-                            type="date"
-                            className="input"
-                            value={recurrenceEndDate}
-                            min={recurrenceStartYmd}
-                            onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                            aria-describedby={
-                              recurrenceHintText ? 'client-booking-recurrence-hint' : undefined
-                            }
-                          />
+                        <div className="portalRecurBlock">
+                          <p className="portalRecurLabel" id="portal-repeat-end-label">
+                            La série se termine
+                          </p>
+                          <div
+                            className="portalRecurSegments"
+                            role="radiogroup"
+                            aria-labelledby="portal-repeat-end-label"
+                          >
+                            {[
+                              ['count', 'Après'],
+                              ['date', 'À une date'],
+                              ['open', 'Sans fin'],
+                            ].map(([value, label]) => (
+                              <button
+                                key={value}
+                                type="button"
+                                role="radio"
+                                name="portal-repeat-end"
+                                aria-checked={recurrenceEndMode === value}
+                                className={recurrenceEndMode === value ? 'is-on' : undefined}
+                                onClick={() => setRecurrenceEndMode(value)}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          {recurrenceEndMode === 'count' ? (
+                            <div className="portalRecurValue">
+                              <span>Nombre de transports</span>
+                              <div className="portalRecurStepper">
+                                <button
+                                  type="button"
+                                  aria-label="Diminuer le nombre de transports"
+                                  onClick={() =>
+                                    setRecurrenceSeriesLength((current) => Math.max(1, current - 1))
+                                  }
+                                >
+                                  −
+                                </button>
+                                <input
+                                  id="client-booking-recurrence-count"
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={1}
+                                  max={52}
+                                  step={1}
+                                  value={recurrenceSeriesLength}
+                                  onChange={(e) => {
+                                    const n = Number(e.target.value);
+                                    if (Number.isNaN(n)) {
+                                      setRecurrenceSeriesLength(1);
+                                      return;
+                                    }
+                                    setRecurrenceSeriesLength(Math.min(52, Math.max(1, Math.floor(n))));
+                                  }}
+                                  className="bookingRecurrenceCountInput"
+                                  aria-label="Nombre de transports"
+                                />
+                                <button
+                                  type="button"
+                                  aria-label="Augmenter le nombre de transports"
+                                  onClick={() =>
+                                    setRecurrenceSeriesLength((current) => Math.min(52, current + 1))
+                                  }
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                          {recurrenceEndMode === 'date' ? (
+                            <div className="portalRecurValue portalRecurValue--date">
+                              <InlineDatePicker
+                                inputId="client-booking-recurrence-end"
+                                className="portalRecurDate"
+                                value={recurrenceEndDate}
+                                minDate={recurrenceStartYmd}
+                                onChange={setRecurrenceEndDate}
+                                ariaLabel="Date de fin de la série"
+                              />
+                            </div>
+                          ) : null}
                         </div>
-
-                        {!String(recurrenceEndDate || '').trim() ? (
-                          <div className="inputWrapper bookingRecurrenceGroup">
-                            <label className="inputLabel" htmlFor="client-booking-recurrence-count">
-                              Nombre de répétitions
-                            </label>
-                            <input
-                              id="client-booking-recurrence-count"
-                              type="number"
-                              inputMode="numeric"
-                              min={1}
-                              max={52}
-                              step={1}
-                              value={recurrenceSeriesLength}
-                              onChange={(e) => {
-                                const n = Number(e.target.value);
-                                if (Number.isNaN(n)) {
-                                  setRecurrenceSeriesLength(1);
-                                  return;
-                                }
-                                setRecurrenceSeriesLength(Math.min(52, Math.max(1, Math.floor(n))));
-                              }}
-                              className="input bookingRecurrenceCountInput"
-                              placeholder="Ex. 4"
-                              aria-describedby={
-                                recurrenceHintText ? 'client-booking-recurrence-hint' : undefined
-                              }
-                            />
-                          </div>
-                        ) : null}
                         {recurrenceHintText ? (
                           <p id="client-booking-recurrence-hint" className="bookingRecurrenceHint">
                             {recurrenceHintText}
@@ -2665,40 +4031,8 @@ const ClientDashboard = () => {
                     ) : null}
                   </div>
 
-                  {showMedicalFields ? (
-                    <>
-                      {!isHospitalLikeDestination(destination) ? (
-                        <div className="inputWrapper">
-                          <label className="inputLabel" htmlFor="client-medical-facility">
-                            Établissement (optionnel)
-                          </label>
-                          <input
-                            id="client-medical-facility"
-                            type="text"
-                            value={medicalFacility}
-                            onChange={(e) => setMedicalFacility(e.target.value)}
-                            className="input"
-                            placeholder="Nom de l’établissement"
-                          />
-                        </div>
-                      ) : null}
-                      {destinationHasDoctorHint(destination) ? (
-                        <div className="inputWrapper">
-                          <label className="inputLabel" htmlFor="client-doctor">
-                            Nom du médecin (optionnel)
-                          </label>
-                          <input
-                            id="client-doctor"
-                            type="text"
-                            value={doctorName}
-                            onChange={(e) => setDoctorName(e.target.value)}
-                            className="input"
-                            placeholder="Nom du médecin"
-                          />
-                        </div>
-                      ) : null}
-                    </>
-                  ) : null}
+
+
 
                   {!isPortalPrivateClient && payOfferBookingId != null && payOffer ? (
                     <div
@@ -2852,47 +4186,72 @@ const ClientDashboard = () => {
                       <h2 id="portal-order-review-title" className="portalOrderReviewTitle">
                         Récapitulatif de la demande
                       </h2>
-                      <dl className="portalOrderReviewGrid">
-                        <div>
-                          <dt>Demandeur</dt>
-                          <dd>{portalReview.debtorName}</dd>
-                        </div>
-                        <div>
-                          <dt>Facturé à</dt>
-                          <dd>
-                            {portalReview.debtorName}
-                            {portalReview.billingAddress ? (
-                              <span className="portalOrderReviewMuted">
-                                {portalReview.billingAddress}
-                              </span>
+                      {(() => {
+                        const narrative = portalReview.narrative || [];
+                        const dateLine = narrative.find((line) => line.kind === 'date');
+                        const legs = tripDraftSummary?.legs?.length
+                          ? tripDraftSummary.legs
+                          : (portalReview.steps || []).map((step) => ({
+                              key: step.key,
+                              label: step.label,
+                              text: step.address,
+                              detail: '',
+                              when: (step.lines || []).join(' · '),
+                            }));
+                        const extras = [
+                          ...(tripDraftSummary?.extras || []),
+                          ...narrative
+                            .filter(
+                              (line) =>
+                                line.kind === 'meta' &&
+                                String(line.text || '').startsWith('Contact')
+                            )
+                            .map((line) => line.text),
+                          ...(portalReview.accessLines || []),
+                        ].filter(Boolean);
+                        return (
+                          <>
+                            {dateLine ? (
+                              <p className="portalOrderReviewDate">{dateLine.text}</p>
                             ) : null}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>Date et heure</dt>
-                          <dd>{portalReview.scheduledLabel}</dd>
-                        </div>
-                        <div>
-                          <dt>Prise en charge</dt>
-                          <dd>{portalReview.pickup}</dd>
-                        </div>
-                        <div>
-                          <dt>Destination</dt>
-                          <dd>{portalReview.destination}</dd>
-                        </div>
-                        <div>
-                          <dt>Trajet</dt>
-                          <dd>
-                            {portalReview.roundTrip ? 'Aller-retour' : 'Aller simple'}
-                            {portalReview.returnLabel ? ` — retour ${portalReview.returnLabel}` : ''}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>Transporteur</dt>
-                          <dd>Attribué après confirmation</dd>
-                        </div>
-                      </dl>
-                      {portalCeilingFlowEnabled && portalReview.maximumLabel ? (
+                            {legs.length ? (
+                              <ol className="portalOrderRoute">
+                                {legs.map((leg) => (
+                                  <li key={leg.key}>
+                                    <span>{leg.label}</span>
+                                    <strong>{leg.text}</strong>
+                                    {leg.detail ? (
+                                      <p className="portalOrderRouteNote">{leg.detail}</p>
+                                    ) : null}
+                                    {leg.when ? (
+                                      <p className="portalOrderRouteNote portalOrderRouteNote--when">
+                                        {leg.when}
+                                      </p>
+                                    ) : null}
+                                  </li>
+                                ))}
+                              </ol>
+                            ) : null}
+                            {tripDraftSummary?.showScheduleFooter && tripDraftSummary.whenLabel ? (
+                              <p className="portalOrderReviewSchedule">{tripDraftSummary.whenLabel}</p>
+                            ) : null}
+                            {extras.length ? (
+                              <div className="portalOrderFacts">
+                                {extras.map((line) => (
+                                  <p key={line} className="portalOrderFact">
+                                    {line}
+                                  </p>
+                                ))}
+                              </div>
+                            ) : null}
+                          </>
+                        );
+                      })()}
+                      {portalReview.transportCount > 2 && portalReview.maximumAuthorizedLabel ? (
+                        <p className="portalOrderEstimate">
+                          Prix maximum autorisé : CHF {portalReview.maximumAuthorizedLabel}
+                        </p>
+                      ) : portalCeilingFlowEnabled && portalReview.maximumLabel ? (
                         <p className="portalOrderEstimate">
                           Prix maximum accepté (pas le prix final) : CHF{' '}
                           {portalReview.maximumLabel}
@@ -2922,7 +4281,12 @@ const ClientDashboard = () => {
                           </p>
                         </details>
                       ) : null}
-                      {conditionalOrderEnabled && portalReview.maximumLabel ? (
+                      {portalReview.transportCount > 2 ? (
+                        <p className="portalOrderEstimateNote">
+                          {portalReview.transportCount} transports. En confirmant, vous
+                          acceptez de payer jusqu’à ce montant.
+                        </p>
+                      ) : conditionalOrderEnabled && portalReview.maximumLabel ? (
                         <p className="portalOrderEstimateNote">
                           Cette commande vous engage si une entreprise de transport
                           l’accepte. Le contrat sera alors automatiquement conclu avec
@@ -2971,16 +4335,56 @@ const ClientDashboard = () => {
                             variant: 'order',
                           })
                         : null}
+                      {bookingSubmitting ? (
+                        (() => {
+                          const wait = portalSubmitWaitCopy(
+                            submitWaitIndex,
+                            portalReview.transportCount
+                          );
+                          return (
+                            <div
+                              className="portalOrderWait"
+                              role="status"
+                              aria-live="polite"
+                              aria-busy="true"
+                            >
+                              <div className="portalOrderWaitTrack" aria-hidden="true">
+                                <span className="portalOrderWaitBar" />
+                              </div>
+                              <p className="portalOrderWaitTitle">{wait.title}</p>
+                              <ol className="portalOrderWaitSteps">
+                                {wait.steps.map((label, stepIndex) => {
+                                  const state =
+                                    wait.settled || stepIndex < wait.active
+                                      ? 'done'
+                                      : stepIndex === wait.active
+                                        ? 'current'
+                                        : 'pending';
+                                  return (
+                                    <li
+                                      key={label}
+                                      className={`portalOrderWaitStep portalOrderWaitStep--${state}`}
+                                    >
+                                      <span className="portalOrderWaitMark" aria-hidden="true" />
+                                      {label}
+                                    </li>
+                                  );
+                                })}
+                              </ol>
+                              <p className="portalOrderWaitHint">{wait.hint}</p>
+                            </div>
+                          );
+                        })()
+                      ) : (
                       <div className="formActions formActionsPrimary">
                         <button
                           type="button"
                           className={`${homeFieldStyles.ctaButton} bookingDashboardCta`}
                           onClick={() => handleBooking({ confirm: true })}
-                          disabled={bookingSubmitting}
-                          aria-busy={bookingSubmitting}
                         >
-                          {bookingSubmitting
-                            ? 'Envoi en cours…'
+                          {portalReview?.transportCount > 2 &&
+                          portalReview?.maximumAuthorizedLabel
+                            ? `Confirmer et accepter CHF ${portalReview.maximumAuthorizedLabel}`
                             : conditionalOrderEnabled && portalReview?.maximumLabel
                               ? `Commander jusqu’à CHF ${portalReview.maximumLabel}.–`
                               : 'Confirmer la demande de transport'}
@@ -2988,15 +4392,89 @@ const ClientDashboard = () => {
                         <button
                           type="button"
                           className="ghostButton"
-                          onClick={() => setPortalReview(null)}
-                          disabled={bookingSubmitting}
+                          onClick={() => presentPortalCard(() => setPortalReview(null))}
                         >
                           Modifier la demande
                         </button>
                       </div>
+                      )}
                     </section>
                   ) : null}
 
+
+                  <div className="bookingFormMore">
+                  <div
+                    className={`${homeFieldStyles.fieldBlock} ${homeFieldStyles.tripKindFieldScope} bookingNeedsBlock`}
+                  >
+                    <span id="client-dashboard-needs-label" className="portalSectionHeading">
+                      Besoins pour le transport
+                    </span>
+                    {profile?.mobility &&
+                    (profile.mobility.wheelchair_client_has ||
+                      profile.mobility.wheelchair_need ||
+                      profile.mobility.needs_assistance) ? (
+                      <p className="portalNeedsHint">Selon vos informations habituelles</p>
+                    ) : null}
+                    <div className="bookingNeedsGrid">
+                      <div
+                        id="client-booking-wheelchair"
+                        className="bookingWheelchairChips"
+                        role="group"
+                        aria-label="Fauteuil"
+                      >
+                          {[
+                            ['none', 'Aucun', !wheelchairOwn && !wheelchairRequired],
+                            ['own', 'En fauteuil', wheelchairOwn],
+                            ['provide', 'Fournir fauteuil', wheelchairRequired],
+                          ].map(([value, label, pressed]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              className="bookingWheelchairChip"
+                              aria-pressed={pressed}
+                              onClick={() => {
+                                setWheelchairOwn(value === 'own');
+                                setWheelchairRequired(value === 'provide');
+                              }}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      <div className="portalRoundTripToggle bookingNeedsSwitch">
+                        <button
+                          type="button"
+                          role="switch"
+                          id="client-booking-assistance"
+                          className={`portalMedicalSwitch${assistanceRequired ? ' is-on' : ''}`}
+                          aria-checked={assistanceRequired}
+                          aria-label="Assistance"
+                          onClick={() => {
+                            setAssistanceRequired((current) => {
+                              if (current) setAssistanceDetail('');
+                              return !current;
+                            });
+                          }}
+                        />
+                        <span>Assistance</span>
+                      </div>
+                      {assistanceRequired ? (
+                        <input
+                          id="client-booking-assistance-detail"
+                          className="bookingNeedsAssistInput"
+                          type="text"
+                          maxLength={200}
+                          required
+                          aria-required="true"
+                          value={assistanceDetail}
+                          placeholder="Type d'assistance *"
+                          aria-label="Type d'assistance"
+                          onChange={(e) => setAssistanceDetail(e.target.value)}
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                  </div>
                   <div className="formActions formActionsPrimary">
                     <button
                       type="button"
@@ -3049,85 +4527,31 @@ const ClientDashboard = () => {
               </div>
             </section>
             <aside className="bookingSidebar" aria-label="Contexte trajet et reprise">
-              {indicativeAmount != null || tripDraftSummary ? (
+              {indicativeAmount != null ? (
                 <div
                   className="sidebarJourneyCard"
                   role="region"
-                  aria-label={
-                    indicativeAmount != null && tripDraftSummary
-                      ? 'Estimation et récapitulatif du trajet'
-                      : indicativeAmount != null
-                        ? 'Estimation du transport'
-                        : 'Récapitulatif du trajet'
-                  }
+                  aria-label="Estimation du transport"
                 >
-                  {indicativeAmount != null ? (
-                    <section
-                      className="sidebarJourneyCardEstimate"
-                      aria-labelledby="sidebar-journey-estimate-title"
-                      role="status"
-                      aria-live="polite"
+                  <section
+                    className="sidebarJourneyCardEstimate"
+                    aria-labelledby="sidebar-journey-estimate-title"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <h3 id="sidebar-journey-estimate-title" className="sidebarEstimateTitle">
+                      Estimation transport
+                    </h3>
+                    <div
+                      className={`sidebarEstimateAmount${estimateAmountPulse ? ' sidebarEstimateAmount--pulse' : ''}`}
                     >
-                      <h3 id="sidebar-journey-estimate-title" className="sidebarEstimateTitle">
-                        Estimation transport
-                      </h3>
-                      <div
-                        className={`sidebarEstimateAmount${estimateAmountPulse ? ' sidebarEstimateAmount--pulse' : ''}`}
-                      >
-                        {indicativeAmountForDisplay.toFixed(2)} CHF
-                      </div>
-                      {estimateMetaJoined ? (
-                        <p className="sidebarEstimateMetaLine">{estimateMetaJoined}</p>
-                      ) : null}
-                      <p className="sidebarEstimateLegal">{sidebarEstimateLegal}</p>
-                    </section>
-                  ) : null}
-
-                  {tripDraftSummary ? (
-                    <section
-                      className={`sidebarJourneyCardRecap${indicativeAmount != null ? ' sidebarJourneyCardRecap--afterEstimate' : ''}`}
-                      aria-labelledby="sidebar-journey-recap-kicker"
-                    >
-                      <header className="tripSummaryProHeader">
-                        <span id="sidebar-journey-recap-kicker" className="tripSummaryProKicker">
-                          Récapitulatif
-                        </span>
-                        <span className="tripSummaryProHeaderTitle">Trajet sélectionné</span>
-                      </header>
-                      <ul className="tripSummaryProPath">
-                        <li className="tripSummaryProLeg">
-                          <span className="tripSummaryProLegMark" aria-hidden="true" />
-                          <div className="tripSummaryProLegBody">
-                            <span className="tripSummaryProLegLabel">Prise en charge</span>
-                            <span className="tripSummaryProLegText">{tripDraftSummary.pickup}</span>
-                          </div>
-                        </li>
-                        <li className="tripSummaryProLeg">
-                          <span
-                            className="tripSummaryProLegMark tripSummaryProLegMark--arrival"
-                            aria-hidden="true"
-                          />
-                          <div className="tripSummaryProLegBody">
-                            <span className="tripSummaryProLegLabel">Destination</span>
-                            <span className="tripSummaryProLegText">{tripDraftSummary.destination}</span>
-                          </div>
-                        </li>
-                      </ul>
-                      <footer className="tripSummaryProSchedule">
-                        <span className="tripSummaryProScheduleLabel">Horaire affiché</span>
-                        <p className="tripSummaryProWhen">{tripDraftSummary.whenLabel}</p>
-                      </footer>
-                      {tripDraftSummary.extras?.length ? (
-                        <div className="tripSummaryProExtras">
-                          {tripDraftSummary.extras.map((line) => (
-                            <p key={line} className="tripSummaryProExtraLine">
-                              {line}
-                            </p>
-                          ))}
-                        </div>
-                      ) : null}
-                    </section>
-                  ) : null}
+                      {indicativeAmountForDisplay.toFixed(2)} CHF
+                    </div>
+                    {estimateMetaJoined ? (
+                      <p className="sidebarEstimateMetaLine">{estimateMetaJoined}</p>
+                    ) : null}
+                    <p className="sidebarEstimateLegal">{sidebarEstimateLegal}</p>
+                  </section>
                 </div>
               ) : null}
 
@@ -3147,6 +4571,9 @@ const ClientDashboard = () => {
                           >
                             <div className="recentTripCardInner">
                               <div className="recentTripInfo">
+                                {trip.recentTripRole ? (
+                                  <p className="recentTripRole">{trip.recentTripRole}</p>
+                                ) : null}
                                 <div className="recentTripCardTop">
                                   {tripKindMeta ? (
                                     <span
@@ -3167,19 +4594,38 @@ const ClientDashboard = () => {
                                   </time>
                                 </div>
                                 <div className="recentTripRouteStack" aria-label="Trajet enregistré">
-                                  <div className="recentTripLeg">
-                                    <span className="recentTripLegDot" aria-hidden />
-                                    <span className="recentTripLegText">{trip.pickup_location}</span>
-                                  </div>
-                                  <div className="recentTripLeg recentTripLeg--arrival">
-                                    <span className="recentTripLegDot" aria-hidden />
-                                    <span className="recentTripLegText">{trip.dropoff_location}</span>
-                                  </div>
+                                  {recentTripStops(trip).map((stop, index, all) => {
+                                    const label =
+                                      stop.label || (index === 0 ? 'Départ' : 'Arrivée');
+                                    const dotKind =
+                                      index === 0
+                                        ? ' recentTripLegDot--origin'
+                                        : index === all.length - 1
+                                          ? ' recentTripLegDot--end'
+                                          : '';
+                                    return (
+                                      <div
+                                        key={stop.key || `${trip.id}-${index}`}
+                                        className="recentTripLeg"
+                                      >
+                                        <span className="recentTripLegRail" aria-hidden="true">
+                                          <span className={`recentTripLegDot${dotKind}`} />
+                                          {index < all.length - 1 ? (
+                                            <span className="recentTripLegLine" />
+                                          ) : null}
+                                        </span>
+                                        <span className="recentTripLegCopy">
+                                          <span className="recentTripLegLabel">{label}</span>
+                                          <span className="recentTripLegText">{stop.place}</span>
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                               <button
                                 type="button"
-                                className="secondaryButton recentTripReuseBtnSober"
+                                className="recentTripReuseBtnSober"
                                 onClick={() => handleBookingAction('Recommander', trip)}
                               >
                                 Réutiliser ce trajet

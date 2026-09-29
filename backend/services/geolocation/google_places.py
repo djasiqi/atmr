@@ -11,6 +11,12 @@ from typing import Any, Dict, List
 import requests
 from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
 
+from services.geolocation.google_geocoding_gate import (
+    GeocodingBudgetExceeded,
+    GeocodingRateLimited,
+    perform_google_geocode_http,
+)
+
 app_logger = logging.getLogger("app")
 
 # Clé API Google (Geocoding + Places)
@@ -266,8 +272,6 @@ def geocode_address_google(
         msg = "Adresse vide ou invalide"
         raise ValueError(msg)
 
-    url = "https://maps.googleapis.com/maps/api/geocode/json"
-
     params: Dict[str, Any] = {
         "address": address,
         "key": GOOGLE_API_KEY,
@@ -278,40 +282,42 @@ def geocode_address_google(
         params["components"] = f"country:{country}"
 
     try:
-        response = requests.get(url, params=params, timeout=API_TIMEOUT)
-        response.raise_for_status()
-        data = response.json()
-
-        if data.get("status") == "ZERO_RESULTS":
-            app_logger.warning("⚠️ Aucun résultat de géocodage pour: %s", address)
-            return None
-
-        if data.get("status") != "OK":
-            error_msg = data.get("error_message", data.get("status"))
-            app_logger.warning("⚠️ Google Geocoding: %s", error_msg)
-            return None
-
-        results = data.get("results", [])
-        if not results:
-            return None
-
-        # Prendre le premier résultat (le plus pertinent)
-        result = results[0]
-        location = result.get("geometry", {}).get("location", {})
-
-        return {
-            "address": result.get("formatted_address", ""),
-            "lat": location.get("lat"),
-            "lon": location.get("lng"),
-            "place_id": result.get("place_id"),
-            "location_type": result.get("geometry", {}).get("location_type"),
-            "address_components": result.get("address_components", []),
-        }
-
+        data = perform_google_geocode_http(params)
+    except (GeocodingBudgetExceeded, GeocodingRateLimited):
+        app_logger.warning(
+            "Géocodage Google refusé par le budget applicatif pour: %s", address
+        )
+        return None
     except requests.RequestException as e:
         app_logger.error("❌ Erreur Google Geocoding API: %s", e)
         msg = f"Erreur lors du géocodage: {e}"
         raise GooglePlacesError(msg) from e
+
+    if data.get("status") == "ZERO_RESULTS":
+        app_logger.warning("⚠️ Aucun résultat de géocodage pour: %s", address)
+        return None
+
+    if data.get("status") != "OK":
+        error_msg = data.get("error_message", data.get("status"))
+        app_logger.warning("⚠️ Google Geocoding: %s", error_msg)
+        return None
+
+    results = data.get("results", [])
+    if not results:
+        return None
+
+    # Prendre le premier résultat (le plus pertinent)
+    result = results[0]
+    location = result.get("geometry", {}).get("location", {})
+
+    return {
+        "address": result.get("formatted_address", ""),
+        "lat": location.get("lat"),
+        "lon": location.get("lng"),
+        "place_id": result.get("place_id"),
+        "location_type": result.get("geometry", {}).get("location_type"),
+        "address_components": result.get("address_components", []),
+    }
 
 
 def reverse_geocode_latlng_google(
@@ -325,7 +331,6 @@ def reverse_geocode_latlng_google(
         msg = "Clé API Google Maps non configurée"
         raise GooglePlacesError(msg)
 
-    url = "https://maps.googleapis.com/maps/api/geocode/json"
     params: Dict[str, Any] = {
         "latlng": f"{lat},{lon}",
         "key": GOOGLE_API_KEY,
@@ -333,41 +338,45 @@ def reverse_geocode_latlng_google(
     }
 
     try:
-        response = requests.get(url, params=params, timeout=API_TIMEOUT)
-        response.raise_for_status()
-        data = response.json()
-
-        if data.get("status") == "ZERO_RESULTS":
-            app_logger.warning(
-                "⚠️ Reverse geocode: aucun résultat pour latlng=%s,%s", lat, lon
-            )
-            return None
-
-        if data.get("status") != "OK":
-            error_msg = data.get("error_message", data.get("status"))
-            app_logger.warning("⚠️ Google reverse geocode: %s", error_msg)
-            return None
-
-        results = data.get("results", [])
-        if not results:
-            return None
-
-        result = results[0]
-        location = result.get("geometry", {}).get("location", {})
-
-        return {
-            "address": result.get("formatted_address", ""),
-            "lat": location.get("lat"),
-            "lon": location.get("lng"),
-            "place_id": result.get("place_id"),
-            "location_type": result.get("geometry", {}).get("location_type"),
-            "address_components": result.get("address_components", []),
-        }
-
+        data = perform_google_geocode_http(params)
+    except (GeocodingBudgetExceeded, GeocodingRateLimited):
+        app_logger.warning(
+            "Géocodage inverse Google refusé par le budget applicatif (%s,%s)",
+            lat,
+            lon,
+        )
+        return None
     except requests.RequestException as e:
         app_logger.error("❌ Google reverse geocode API: %s", e)
         msg = f"Erreur lors du géocodage inverse: {e}"
         raise GooglePlacesError(msg) from e
+
+    if data.get("status") == "ZERO_RESULTS":
+        app_logger.warning(
+            "⚠️ Reverse geocode: aucun résultat pour latlng=%s,%s", lat, lon
+        )
+        return None
+
+    if data.get("status") != "OK":
+        error_msg = data.get("error_message", data.get("status"))
+        app_logger.warning("⚠️ Google reverse geocode: %s", error_msg)
+        return None
+
+    results = data.get("results", [])
+    if not results:
+        return None
+
+    result = results[0]
+    location = result.get("geometry", {}).get("location", {})
+
+    return {
+        "address": result.get("formatted_address", ""),
+        "lat": location.get("lat"),
+        "lon": location.get("lng"),
+        "place_id": result.get("place_id"),
+        "location_type": result.get("geometry", {}).get("location_type"),
+        "address_components": result.get("address_components", []),
+    }
 
 
 def extract_address_components(

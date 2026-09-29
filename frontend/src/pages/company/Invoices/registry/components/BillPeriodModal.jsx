@@ -2416,6 +2416,8 @@ const BillPeriodModal = ({
                                   A/R · {row.segmentsCount} course
                                   {row.segmentsCount !== 1 ? 's' : ''}
                                 </span>
+                              ) : row.legLabel ? (
+                                <span className={styles.invoiceLineAr}>{row.legLabel}</span>
                               ) : null}
                             </div>
                             {row.isRoundTrip ? (

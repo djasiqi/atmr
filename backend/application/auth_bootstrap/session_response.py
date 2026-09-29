@@ -60,6 +60,8 @@ def build_auth_me_payload(
         "public_id": snapshot.public_id,
         "username": snapshot.username,
         "email": snapshot.email,
+        "first_name": snapshot.first_name,
+        "last_name": snapshot.last_name,
         "role": snapshot.role.value,
         "bootstrap_version": BOOTSTRAP_RESPONSE_VERSION,
         "account_active": denial is None,

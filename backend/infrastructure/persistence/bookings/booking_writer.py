@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any, Protocol, cast
 
 from ext import db
 from models.booking import Booking
 from models.enums import BookingCreatedVia, BookingStatus
+
+
+def _blank_to_none(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _split_round_trip_total_amount(total: float) -> tuple[float, float]:
@@ -72,6 +80,17 @@ class BookingWriterPort(Protocol):
         notes_medical: str | None = None,
         return_scheduled_time: Any | None = None,
         return_time_exact: bool = False,
+        wheelchair_client_has: bool = False,
+        wheelchair_need: bool = False,
+        needs_assistance: bool = False,
+        assistance_detail: str | None = None,
+        is_urgent: bool = False,
+        time_confirmed: bool = True,
+        pickup_access_notes: str | None = None,
+        dropoff_access_notes: str | None = None,
+        requester_name: str | None = None,
+        requester_phone: str | None = None,
+        extra_route_stops: list[dict[str, Any]] | None = None,
     ) -> Booking:
         """Crée et commit le booking (et son retour si round-trip)."""
         ...
@@ -122,7 +141,22 @@ class SqlAlchemyBookingWriter:
         notes_medical: str | None = None,
         return_scheduled_time: Any | None = None,
         return_time_exact: bool = False,
+        wheelchair_client_has: bool = False,
+        wheelchair_need: bool = False,
+        needs_assistance: bool = False,
+        assistance_detail: str | None = None,
+        is_urgent: bool = False,
+        time_confirmed: bool = True,
+        pickup_access_notes: str | None = None,
+        dropoff_access_notes: str | None = None,
+        requester_name: str | None = None,
+        requester_phone: str | None = None,
+        extra_route_stops: list[dict[str, Any]] | None = None,
     ) -> Booking:
+        if bool(wheelchair_client_has) and bool(wheelchair_need):
+            raise ValueError(
+                "wheelchair_client_has et wheelchair_need ne peuvent pas être vrais ensemble."
+            )
         outbound_amount = float(amount)
         return_amount = 0.0
         outbound_price_amount = price_amount
@@ -140,6 +174,8 @@ class SqlAlchemyBookingWriter:
             customer_name=customer_name,
             pickup_location=pickup_location,
             dropoff_location=dropoff_location,
+            is_return=False,
+            time_confirmed=bool(time_confirmed),
             scheduled_time=scheduled_time,
             amount=outbound_amount,
             status=BookingStatus.PENDING,
@@ -150,9 +186,17 @@ class SqlAlchemyBookingWriter:
             doctor_name=doctor_name,
             hospital_service=hospital_service or None,
             notes_medical=notes_medical,
+            pickup_access_notes=_blank_to_none(pickup_access_notes),
+            dropoff_access_notes=_blank_to_none(dropoff_access_notes),
+            wheelchair_client_has=bool(wheelchair_client_has),
+            wheelchair_need=bool(wheelchair_need),
+            needs_assistance=bool(needs_assistance),
+            assistance_detail=_blank_to_none(assistance_detail) if needs_assistance else None,
+            is_urgent=bool(is_urgent),
+            requester_name=_blank_to_none(requester_name),
+            requester_phone=_blank_to_none(requester_phone),
             duration_seconds=duration_seconds,
             distance_meters=distance_meters,
-            is_return=False,
             is_round_trip=bool(is_round_trip),
             pickup_lat=pickup_lat,
             pickup_lon=pickup_lon,
@@ -178,6 +222,11 @@ class SqlAlchemyBookingWriter:
             price_breakdown_json=price_breakdown_json,
             created_via=BookingCreatedVia.CLIENT_APP,
         )
+        stops = [stop for stop in (extra_route_stops or []) if isinstance(stop, dict)]
+        route_group_id = str(uuid.uuid4()) if stops else None
+        if route_group_id:
+            new_booking.route_group_id = route_group_id
+            new_booking.route_sequence_number = 1
         from services.platform_billing.billing_origin import apply_origin_on_booking
 
         apply_origin_on_booking(new_booking, created_via=BookingCreatedVia.CLIENT_APP)
@@ -186,9 +235,23 @@ class SqlAlchemyBookingWriter:
             db.session.add(new_booking)
             db.session.flush()  # attribue new_booking.id
 
+            last_leg = new_booking
+            for index, stop in enumerate(stops, start=2):
+                last_leg = self._create_route_leg(
+                    previous=last_leg,
+                    stop=stop,
+                    sequence=index,
+                    route_group_id=route_group_id or "",
+                    user_id=user_id,
+                    client_id=client_id,
+                )
+                db.session.add(last_leg)
+                db.session.flush()
+
             if is_round_trip:
                 return_booking = self._create_return_booking(
-                    outbound_booking=new_booking,
+                    outbound_booking=last_leg,
+                    home_booking=new_booking if stops else None,
                     user_id=user_id,
                     client_id=client_id,
                     duration_seconds=duration_seconds,
@@ -197,6 +260,8 @@ class SqlAlchemyBookingWriter:
                     return_time_exact=return_time_exact,
                     return_leg_amount=return_amount,
                     return_price_amount=return_price_amount,
+                    route_group_id=route_group_id,
+                    route_sequence_number=(len(stops) + 2) if stops else None,
                 )
                 db.session.add(return_booking)
 
@@ -226,13 +291,26 @@ class SqlAlchemyBookingWriter:
         return_time_exact: bool = False,
         return_leg_amount: float = 0.0,
         return_price_amount: float | None = None,
+        home_booking: Booking | None = None,
+        route_group_id: str | None = None,
+        route_sequence_number: int | None = None,
     ) -> Booking:
+        # Heure absente : rester à None. Ne jamais substituer 00:00.
+        if not return_time_exact:
+            return_scheduled_time = None
         # Ordre des kwargs : is_return / parent_booking_id / time_confirmed AVANT scheduled_time,
         # sinon @validates("scheduled_time") s'exécute avec is_return encore à False → ValueError.
+        home = home_booking or outbound_booking
+        pickup_location = outbound_booking.dropoff_location
+        dropoff_location = home.pickup_location
+        pickup_access = outbound_booking.dropoff_access_notes
+        dropoff_access = home.pickup_access_notes
+        # Retour vers le domicile : la destination n'est plus l'établissement de la dernière étape.
+        clear_medical = home_booking is not None and home_booking is not outbound_booking
         return_booking = cast("Any", Booking)(
             customer_name=outbound_booking.customer_name,
-            pickup_location=outbound_booking.dropoff_location,
-            dropoff_location=outbound_booking.pickup_location,
+            pickup_location=pickup_location,
+            dropoff_location=dropoff_location,
             is_return=True,
             parent_booking_id=outbound_booking.id,
             time_confirmed=bool(return_time_exact),
@@ -242,9 +320,23 @@ class SqlAlchemyBookingWriter:
             user_id=user_id,
             client_id=client_id,
             company_id=outbound_booking.company_id,
+            medical_facility="" if clear_medical else outbound_booking.medical_facility,
+            doctor_name="" if clear_medical else outbound_booking.doctor_name,
+            hospital_service=None if clear_medical else outbound_booking.hospital_service,
+            notes_medical=outbound_booking.notes_medical,
+            pickup_access_notes=pickup_access,
+            dropoff_access_notes=dropoff_access,
+            wheelchair_client_has=bool(outbound_booking.wheelchair_client_has),
+            wheelchair_need=bool(outbound_booking.wheelchair_need),
+            needs_assistance=bool(outbound_booking.needs_assistance),
+            assistance_detail=outbound_booking.assistance_detail,
+            requester_name=outbound_booking.requester_name,
+            requester_phone=outbound_booking.requester_phone,
             duration_seconds=duration_seconds,
             distance_meters=distance_meters,
             price_amount=return_price_amount,
+            route_group_id=route_group_id,
+            route_sequence_number=route_sequence_number,
             created_via=BookingCreatedVia.CLIENT_APP,
         )
         from services.platform_billing.billing_origin import apply_origin_on_booking
@@ -264,9 +356,59 @@ class SqlAlchemyBookingWriter:
         try:
             return_booking.pickup_lat = outbound_booking.dropoff_lat
             return_booking.pickup_lon = outbound_booking.dropoff_lon
-            return_booking.dropoff_lat = outbound_booking.pickup_lat
-            return_booking.dropoff_lon = outbound_booking.pickup_lon
+            return_booking.dropoff_lat = home.pickup_lat
+            return_booking.dropoff_lon = home.pickup_lon
         except Exception:
             pass
 
         return return_booking
+
+    def _create_route_leg(
+        self,
+        *,
+        previous: Booking,
+        stop: dict[str, Any],
+        sequence: int,
+        route_group_id: str,
+        user_id: int,
+        client_id: int,
+    ) -> Booking:
+        """Étape suivante du même parcours. L'heure absente reste None."""
+        leg = cast("Any", Booking)(
+            customer_name=previous.customer_name,
+            pickup_location=previous.dropoff_location,
+            dropoff_location=str(stop.get("dropoff_location") or ""),
+            is_return=False,
+            time_confirmed=bool(stop.get("time_confirmed")),
+            scheduled_time=stop.get("scheduled_time"),
+            # 0 est refusé par le modèle. L'estimation client reste sur la première course.
+            amount=0.5,
+            status=BookingStatus.PENDING,
+            user_id=user_id,
+            client_id=client_id,
+            company_id=previous.company_id,
+            medical_facility=str(stop.get("medical_facility") or ""),
+            doctor_name=str(stop.get("doctor_name") or ""),
+            hospital_service=stop.get("hospital_service") or None,
+            pickup_access_notes=previous.dropoff_access_notes,
+            dropoff_access_notes=_blank_to_none(stop.get("dropoff_access_notes")),
+            wheelchair_client_has=bool(previous.wheelchair_client_has),
+            wheelchair_need=bool(previous.wheelchair_need),
+            needs_assistance=bool(previous.needs_assistance),
+            assistance_detail=previous.assistance_detail,
+            is_urgent=bool(stop.get("is_urgent")),
+            requester_name=previous.requester_name,
+            requester_phone=previous.requester_phone,
+            is_round_trip=False,
+            route_group_id=route_group_id,
+            route_sequence_number=sequence,
+            created_via=BookingCreatedVia.CLIENT_APP,
+        )
+        from services.platform_billing.billing_origin import apply_origin_on_booking
+
+        apply_origin_on_booking(leg, created_via=BookingCreatedVia.CLIENT_APP)
+        if getattr(previous, "billing_origin", None):
+            leg.billing_origin = previous.billing_origin
+            leg.billing_origin_source = previous.billing_origin_source
+            leg.billing_origin_reason = "ROUTE_LEG_SAME_ORIGIN"
+        return leg

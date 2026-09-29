@@ -9,6 +9,7 @@ import {
   firstClickToastMessage,
   portalReservationAmountDisplay,
   portalCarrierFacingAmountDisplay,
+  portalCarrierRouteGroupAmount,
   portalCarrierAcceptOfferedAmount,
   portalCarrierAcceptButtonLabel,
   formatPortalCancellationPolicyForDisplay,
@@ -171,6 +172,60 @@ describe('portalDoubleValidationUi', () => {
         amount: 50,
       })
     ).toBe('Accepter cette course à CHF 40.00');
+  });
+
+  it('demande ouverte à 3 trajets : 40 CHF × 3, pas le montant stocké', () => {
+    const legs = [
+      {
+        id: 1,
+        route_group_id: 'g',
+        route_sequence_number: 1,
+        company_id: null,
+        amount: 25,
+        company_suggested_amount: 40,
+      },
+      {
+        id: 2,
+        route_group_id: 'g',
+        route_sequence_number: 2,
+        company_id: null,
+        amount: 0.5,
+        company_suggested_amount: 40,
+      },
+      {
+        id: 3,
+        route_group_id: 'g',
+        route_sequence_number: 3,
+        company_id: null,
+        amount: 25,
+        is_return: true,
+        company_suggested_amount: 40,
+      },
+    ];
+    const anchor = portalCarrierRouteGroupAmount(legs[0], legs);
+    expect(anchor.isAnchor).toBe(true);
+    expect(anchor.total).toBe(120);
+    expect(anchor.label).toBe('40.00 CHF × 3 trajets');
+    expect(portalCarrierRouteGroupAmount(legs[1], legs).isAnchor).toBe(false);
+    expect(portalCarrierFacingAmountDisplay(legs[0]).amount).toBe(40);
+    expect(portalCarrierFacingAmountDisplay(legs[0]).amount).not.toBe(25);
+  });
+
+  it('une seule ligne visible d’un parcours à 3 trajets : 40 CHF × 3', () => {
+    const row = {
+      id: 46797,
+      route_group_id: 'g',
+      route_sequence_number: 1,
+      company_id: null,
+      amount: 25,
+      is_round_trip: true,
+      company_suggested_amount: 40,
+      trip_flags: { leg_number: 1, leg_count: 3, multi_stop: true, round_trip: true },
+    };
+    const group = portalCarrierRouteGroupAmount(row, [row]);
+    expect(group.total).toBe(120);
+    expect(group.label).toBe('40.00 CHF × 3 trajets');
+    expect(group.isAnchor).toBe(true);
   });
 
   it('formate le prix CHF et retire la réf. technique des conditions', () => {

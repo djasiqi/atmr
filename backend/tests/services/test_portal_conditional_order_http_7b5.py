@@ -12,6 +12,7 @@ from application.companies.accept_reservation import AcceptReservationUseCase
 from services.companies.booking_transfer_cache import (
     attach_serialize_context_to_bookings,
 )
+from services.pricing.portal_carrier_ceiling import carrier_leg_priced_as_round_trip
 from services.legal.portal_double_validation import (
     ERROR_TRANSPORT_ALREADY_ASSIGNED,
     FLOW_CONDITIONAL_ORDER_V1,
@@ -144,3 +145,34 @@ def test_attach_skips_legacy_booking_amount_path(app):
     with app.app_context():
         attach_serialize_context_to_bookings([booking], viewer_company_id=1)
     assert getattr(booking, "_company_suggested_amount", None) is None
+
+
+def test_multi_stop_leg_is_not_priced_as_round_trip():
+    grouped = SimpleNamespace(
+        is_round_trip=True,
+        route_group_id="18b0975a-221b-455c-a526-f5574b4122fc",
+        _route_group_leg_count=3,
+    )
+    classic = SimpleNamespace(is_round_trip=True, route_group_id=None)
+    assert carrier_leg_priced_as_round_trip(grouped) is False
+    assert carrier_leg_priced_as_round_trip(classic) is True
+
+
+def test_attach_carrier_quote_for_open_portal_client(app):
+    booking = SimpleNamespace(
+        id=202,
+        company_id=None,
+        portal_contract_flow="legacy",
+        amount=25.0,
+        client=SimpleNamespace(client_type="PORTAL"),
+    )
+    with (
+        app.app_context(),
+        patch(
+            "services.pricing.portal_carrier_ceiling.estimate_portal_carrier_offer_amount",
+            return_value=40.0,
+        ),
+    ):
+        attach_serialize_context_to_bookings([booking], viewer_company_id=1)
+    assert booking._company_suggested_amount == 40.0
+    assert float(booking._company_suggested_amount) != float(booking.amount)

@@ -81,12 +81,13 @@
 .selectRow {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
 }
 
 .select {
-  width: 56px;
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
   height: 30px;
   border: 1px solid var(--border-primary, #e5e7eb);
   border-radius: 6px;
@@ -122,8 +123,8 @@
 
 /* ── Quick presets ── */
 .presets {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   margin-top: 8px;
   padding-top: 8px;
@@ -131,8 +132,8 @@
 }
 
 .preset {
-  flex: 1 1 auto;
-  min-width: 46px;
+  width: 100%;
+  min-width: 0;
   height: 24px;
   border: 1px solid var(--border-primary, #e5e7eb);
   border-radius: 5px;

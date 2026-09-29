@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom';
 import {
   FiX, FiTruck, FiMapPin, FiInfo, FiClock, FiFileText, FiUser, FiPhone,
-  FiAlertCircle, FiEdit2, FiPackage, FiHome, FiTrash2,
+  FiAlertCircle, FiEdit2, FiPackage, FiHome, FiTrash2, FiCheckCircle, FiXCircle, FiShare2,
 } from 'react-icons/fi';
 import { buildScheduleDisplay, renderBookingDateTime } from '../../../../utils/formatDate';
 import {
@@ -20,6 +20,7 @@ import { buildIdentityFromApi, isInstitutionCompanyBooking } from '../../../../u
 import {
   isPortalDoubleValidationFlow,
   portalCarrierFacingAmountDisplay,
+  portalCarrierRouteGroupAmount,
 } from '../../../../utils/portalDoubleValidationUi';
 import { extractWallClockDate, extractWallClockTime } from '../../../../utils/missionTimeDisplay';import {
   formatAppointmentShiftLead,
@@ -28,6 +29,7 @@ import { extractWallClockDate, extractWallClockTime } from '../../../../utils/mi
 } from '../../../../utils/institutionAppointmentShift';
 import { resolveReturnPickupConflict } from '../../../../utils/roundTripTemporal';
 import { resolveBookingDriverName } from '../../../../utils/bookingDriver';
+import { pickupNeedsCompanyConfirmation, routeTimelinePoints } from '../../../../utils/routeGroupItinerary';
 import { getBookingSourceMeta } from '../../../../constants/bookingSourceLabels';
 import {
   completeReservation,
@@ -365,6 +367,10 @@ const ReservationDetailPanel = ({
   onSave,
   onDelete,
   onReservationUpdated,
+  onAccept,
+  onReject,
+  onConfirmPickup,
+  onTransfer,
 }) => {
   const [vouchers, setVouchers] = useState([]);
   const [loadingVouchers, setLoadingVouchers] = useState(false);
@@ -872,8 +878,9 @@ const ReservationDetailPanel = ({
   const isFailed = billingStatusVal && billingStatusVal.startsWith('failed');
   const isInstitutionBooking = isInstitutionCompanyBooking(reservation);
   const isTransferredBooking = !!reservation.is_transferred || !!reservation.active_transfer;
+  const portalClientId = reservation.client_id ?? reservation.client?.id;
   const isDirectPortalClientBooking =
-    !!reservation.client_id && !isInstitutionBooking && !isTransferredBooking;
+    portalClientId != null && !isInstitutionBooking && !isTransferredBooking;
   const chatBookingId = reservation.is_return && reservation.parent_booking_id
     ? reservation.parent_booking_id
     : reservation.id;
@@ -1163,6 +1170,57 @@ const ReservationDetailPanel = ({
 
       {/* Scrollable body */}
       <div className={s.panelBody}>
+        {!editing && String(status).toLowerCase() === 'pending' && !isTransferredBooking && (onConfirmPickup || onAccept || onReject || onTransfer) && (
+          <div className={s.pendingActions}>
+            <p className={s.offerActionHint}>
+              {pickupNeedsCompanyConfirmation(reservation)
+                ? "Confirmez l'heure de prise en charge pour accepter cette demande."
+                : 'Cette demande est en attente de votre réponse.'}
+            </p>
+            <div className={s.pendingActionsRow}>
+              {pickupNeedsCompanyConfirmation(reservation) && onConfirmPickup ? (
+                <button
+                  type="button"
+                  className={`${s.actionBtn} ${s.pendingPrimaryBtn} ${s.btnPrimary}`}
+                  onClick={() => onConfirmPickup(reservation)}
+                >
+                  <FiCheckCircle size={14} aria-hidden />
+                  Accepter et confirmer l'heure de prise en charge
+                </button>
+              ) : null}
+              {!pickupNeedsCompanyConfirmation(reservation) && onAccept ? (
+                <button
+                  type="button"
+                  className={`${s.actionBtn} ${s.pendingPrimaryBtn} ${s.btnPrimary}`}
+                  onClick={() => onAccept(reservation)}
+                >
+                  <FiCheckCircle size={14} aria-hidden />
+                  Accepter
+                </button>
+              ) : null}
+              {onReject ? (
+                <button
+                  type="button"
+                  className={`${s.actionBtn} ${s.pendingSecondaryBtn} ${s.actionBtnReject}`}
+                  onClick={() => onReject(reservation.id)}
+                >
+                  <FiXCircle size={14} aria-hidden />
+                  Refuser
+                </button>
+              ) : null}
+              {onTransfer ? (
+                <button
+                  type="button"
+                  className={`${s.actionBtn} ${s.pendingSecondaryBtn} ${s.btnSecondary}`}
+                  onClick={() => onTransfer(reservation)}
+                >
+                  <FiShare2 size={14} aria-hidden />
+                  Transférer
+                </button>
+              ) : null}
+            </div>
+          </div>
+        )}
 
         {isMaterialDelivery && (
           <div className={s.deliveryLead} data-testid="company-delivery-lead">
@@ -1728,23 +1786,38 @@ const ReservationDetailPanel = ({
                   </div>
                 )}
                 <div className={s.summaryItem}>
-                  <span className={s.summaryLabel}>Horaire</span>
+                  <span className={s.summaryLabel}>
+                    {reservation.is_urgent
+                      ? 'Dès que possible'
+                      : !reservation.is_return &&
+                          reservation.time_confirmed === false &&
+                          reservation.scheduled_time
+                        ? 'Rendez-vous — prise en charge à proposer'
+                        : 'Horaire'}
+                  </span>
                   <span className={s.summaryValue}>
-                    {renderBookingDateTime(reservation)}
+                    {reservation.is_urgent
+                      ? 'Dès que possible'
+                      : renderBookingDateTime(reservation)}
                   </span>
                 </div>
                 {(() => {
+                  const groupAmt = portalCarrierRouteGroupAmount(reservation, linkedBookings);
                   const amtDisp = portalCarrierFacingAmountDisplay(reservation);
+                  const label = groupAmt?.isAnchor ? 'Votre tarif' : amtDisp.label;
+                  const value = groupAmt?.isAnchor
+                    ? `${formatCurrency(groupAmt.total)} · ${groupAmt.label}`
+                    : groupAmt
+                      ? groupAmt.label
+                      : amtDisp.amount != null
+                        ? formatCurrency(amtDisp.amount)
+                        : amtDisp.mode === 'awaiting_quote'
+                          ? 'Selon votre grille tarifaire'
+                          : '—';
                   return (
                     <div className={s.summaryItem}>
-                      <span className={s.summaryLabel}>{amtDisp.label}</span>
-                      <span className={s.summaryValue}>
-                        {amtDisp.amount != null
-                          ? formatCurrency(amtDisp.amount)
-                          : amtDisp.mode === 'awaiting_quote'
-                            ? 'Selon votre grille tarifaire'
-                            : '—'}
-                      </span>
+                      <span className={s.summaryLabel}>{label}</span>
+                      <span className={s.summaryValue}>{value}</span>
                     </div>
                   );
                 })()}
@@ -1795,46 +1868,86 @@ const ReservationDetailPanel = ({
                 <div className={`${s.sectionIcon} ${s.sectionIconBrand}`}><FiMapPin size={13} /></div>
                 <h3 className={s.sectionTitle}>Trajet</h3>
               </div>
-              <div className={s.route}>
-                <div className={s.routeTrack}>
-                  <div className={`${s.routeDot} ${s.routeDotStart}`} />
-                  <div className={s.routeLine} />
-                  <div className={`${s.routeDot} ${s.routeDotEnd}`} />
-                </div>
-                <div className={s.routeStops}>
-                  <div className={s.routeStop}>
-                    <div className={s.routeStopLabel}>Départ</div>
-                    <div className={s.routeStopAddress}>{reservation.pickup_location || '-'}</div>
-                    {isReturnTrip && arrivalClinicalLine && (
-                      <div className={s.routeStopDetails}>{arrivalClinicalLine}</div>
-                    )}
-                    {isReturnTrip && hospitalAccessNotes && (
-                      <div className={s.routeStopMeta}>
-                        <span>{hospitalAccessNotes}</span>
+              {(() => {
+                const points = routeTimelinePoints(reservation, linkedBookings);
+                if (!points) {
+                  return (
+                    <div className={s.route}>
+                      <div className={s.routeTrack}>
+                        <div className={`${s.routeDot} ${s.routeDotStart}`} />
+                        <div className={s.routeLine} />
+                        <div className={`${s.routeDot} ${s.routeDotEnd}`} />
                       </div>
-                    )}
-                    {!isReturnTrip && renderStopAccess(reservation.pickup_location, homeTripNotes)}
-                  </div>
-                  <div className={s.routeStop}>
-                    <div className={s.routeStopLabel}>
-                      Arrivée
-                      {arrivalAppointmentLabel && (
-                        <span className={s.routeStopTime}> · {arrivalAppointmentLabel}</span>
-                      )}
+                      <div className={s.routeStops}>
+                        <div className={s.routeStop}>
+                          <div className={s.routeStopLabel}>Départ</div>
+                          <div className={s.routeStopAddress}>{reservation.pickup_location || '-'}</div>
+                          {isReturnTrip && arrivalClinicalLine && (
+                            <div className={s.routeStopDetails}>{arrivalClinicalLine}</div>
+                          )}
+                          {isReturnTrip && hospitalAccessNotes && (
+                            <div className={s.routeStopMeta}>
+                              <span>{hospitalAccessNotes}</span>
+                            </div>
+                          )}
+                          {!isReturnTrip && renderStopAccess(reservation.pickup_location, homeTripNotes)}
+                        </div>
+                        <div className={s.routeStop}>
+                          <div className={s.routeStopLabel}>
+                            Arrivée
+                            {arrivalAppointmentLabel && (
+                              <span className={s.routeStopTime}> · {arrivalAppointmentLabel}</span>
+                            )}
+                          </div>
+                          <div className={s.routeStopAddress}>{reservation.dropoff_location || '-'}</div>
+                          {!isReturnTrip && arrivalClinicalLine && (
+                            <div className={s.routeStopDetails}>{arrivalClinicalLine}</div>
+                          )}
+                          {!isReturnTrip && hospitalAccessNotes && (
+                            <div className={s.routeStopMeta}>
+                              <span>{hospitalAccessNotes}</span>
+                            </div>
+                          )}
+                          {isReturnTrip && renderStopAccess(reservation.dropoff_location, homeTripNotes)}
+                        </div>
+                      </div>
                     </div>
-                    <div className={s.routeStopAddress}>{reservation.dropoff_location || '-'}</div>
-                    {!isReturnTrip && arrivalClinicalLine && (
-                      <div className={s.routeStopDetails}>{arrivalClinicalLine}</div>
-                    )}
-                    {!isReturnTrip && hospitalAccessNotes && (
-                      <div className={s.routeStopMeta}>
-                        <span>{hospitalAccessNotes}</span>
-                      </div>
-                    )}
-                    {isReturnTrip && renderStopAccess(reservation.dropoff_location, homeTripNotes)}
+                  );
+                }
+                return (
+                  <div className={s.routeTimeline}>
+                    {points.map((point, index) => {
+                      const isFirst = index === 0;
+                      const isLast = index === points.length - 1;
+                      const dotClass = isFirst
+                        ? s.routeDotStart
+                        : isLast
+                          ? s.routeDotEnd
+                          : s.routeDotMid;
+                      return (
+                        <div className={s.routeTimelineStop} key={point.key}>
+                          <div className={s.routeMarker}>
+                            <span className={`${s.routeDot} ${dotClass}`} />
+                            {!isLast && <span className={s.routeConnector} />}
+                          </div>
+                          <div className={s.routeStopBody}>
+                            <div className={s.routeStopLabel}>
+                              {point.label}
+                              {point.timeLabel ? (
+                                <span className={s.routeStopTime}> · {point.timeLabel}</span>
+                              ) : null}
+                            </div>
+                            <div className={s.routeStopAddress}>{point.address || '—'}</div>
+                            {point.details ? (
+                              <div className={s.routeStopDetails}>{point.details}</div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-              </div>
+                );
+              })()}
               {reservation.is_return && (
                 <div className={s.roundTripBadge}>Aller-retour</div>
               )}
@@ -1880,10 +1993,21 @@ const ReservationDetailPanel = ({
             {(() => {
               const notesMed = reservation.notes_medical && reservation.notes_medical !== 'Aucune note' ? reservation.notes_medical : null;
               const instructions = reservation.instructions || null;
-              const phone = reservation.phone || null;
               const extRef = (meta.external_reference || reservation.external_reference) || null;
-              const wheelchair = reservation.wheelchair_need || reservation.wheelchair_client_has;
-              if (!notesMed && !instructions && !phone && !extRef && !wheelchair) return null;
+              const wheelchairOwn = Boolean(reservation.wheelchair_client_has);
+              const wheelchairRequired = Boolean(reservation.wheelchair_need);
+              const assistance = Boolean(reservation.needs_assistance);
+              const assistanceDetail = String(reservation.assistance_detail || '').trim();
+              const mobilityParts = [];
+              if (wheelchairOwn) mobilityParts.push('Fauteuil personnel');
+              if (wheelchairRequired) mobilityParts.push('Fauteuil à fournir');
+              if (assistance) {
+                mobilityParts.push(
+                  assistanceDetail ? `Assistance · ${assistanceDetail}` : 'Assistance'
+                );
+              }
+              const phone = reservation.phone || reservation.requester_phone || null;
+              if (!notesMed && !instructions && !phone && !extRef && mobilityParts.length === 0) return null;
               return (
                 <div className={s.section}>
                   <div className={s.sectionHeader}>
@@ -1902,11 +2026,11 @@ const ReservationDetailPanel = ({
                       <span className={s.infoValue}>{extRef}</span>
                     </div>
                   )}
-                  {wheelchair && (
+                  {mobilityParts.length > 0 && (
                     <div className={s.infoRow}>
                       <span className={s.infoLabel}><FiTruck size={11} /> Mobilité</span>
                       <span className={s.infoValue}>
-                        {reservation.wheelchair_need ? 'Fauteuil requis' : 'Fauteuil client'}
+                        {mobilityParts.join(' • ')}
                       </span>
                     </div>
                   )}
@@ -2270,6 +2394,7 @@ const ReservationDetailPanel = ({
                 bookingId={chatBookingId}
                 socket={companySocket}
                 closed={isBookingChatClosed(reservation)}
+                showUnavailableHint
               />
             )}
 

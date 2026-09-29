@@ -14,8 +14,11 @@ import {
 } from 'react-icons/fi';
 import { toast } from 'sonner';
 import styles from './HeaderDashboard.module.css';
+import ClientNotificationBell from './ClientNotificationBell';
 import { logoutUser } from '../../../utils/apiClient';
 import { getEnvUser } from '../../../utils/webAuthSession';
+import { useSessionBootstrap } from '../../../contexts/SessionBootstrapContext';
+import { fullNameFromUser, pickAccountDisplayName } from './accountDisplayName';
 
 function formatToday() {
   return new Date().toLocaleDateString('fr-CH', {
@@ -42,6 +45,7 @@ function initialsFromName(name) {
 const HeaderDashboard = ({ variant = 'default', userName: userNameProp }) => {
   const isAdmin = variant === 'admin';
   const { public_id } = useParams();
+  const { user: sessionUser } = useSessionBootstrap();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [userName, setUserName] = useState(userNameProp || 'Utilisateur');
@@ -53,23 +57,24 @@ const HeaderDashboard = ({ variant = 'default', userName: userNameProp }) => {
   const closeMenu = useCallback(() => setIsMenuOpen(false), []);
 
   useEffect(() => {
-    const user = getEnvUser();
-    if (user) {
-      try {
-        if (user?.username) setUserName(user.username);
-        if (user?.public_id) setPublicId(user.public_id);
-        if (user?.role) setUserRole(user.role);
-      } catch (error) {
-        console.error("Erreur lors de la récupération de l'utilisateur :", error);
-      }
+    const user = sessionUser || getEnvUser();
+    if (!user) return;
+    try {
+      const name = fullNameFromUser(user);
+      if (name) setUserName(name);
+      if (user?.public_id) setPublicId(user.public_id);
+      if (user?.role) setUserRole(user.role);
+    } catch (error) {
+      console.error("Erreur lors de la récupération de l'utilisateur :", error);
     }
-  }, []);
+  }, [sessionUser]);
 
   useEffect(() => {
-    if (userNameProp) setUserName(userNameProp);
+    const picked = pickAccountDisplayName(userNameProp, '');
+    if (picked) setUserName(picked);
   }, [userNameProp]);
 
-  const displayName = userNameProp || userName;
+  const displayName = pickAccountDisplayName(userNameProp, userName) || 'Compte';
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -296,14 +301,18 @@ const HeaderDashboard = ({ variant = 'default', userName: userNameProp }) => {
         </ul>
       </nav>
       <div className={styles.headerActions}>
-        <button
-          type="button"
-          className={styles.bellButton}
-          onClick={handleNotificationsClick}
-          aria-label="Notifications"
-        >
-          <FiBell className={styles.bellIcon} aria-hidden />
-        </button>
+        {roleLower === 'client' ? (
+          <ClientNotificationBell publicId={publicId} />
+        ) : (
+          <button
+            type="button"
+            className={styles.bellButton}
+            onClick={handleNotificationsClick}
+            aria-label="Notifications"
+          >
+            <FiBell className={styles.bellIcon} aria-hidden />
+          </button>
+        )}
         {userDropdown}
       </div>
     </header>

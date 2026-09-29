@@ -11,6 +11,10 @@ from models.enums import UserRole
 from models.portal_receivable import PortalReceivable
 from models.user import User
 from routes.api_error_utils import auth_error
+from services.billing.client_carrier_invoices import (
+    company_invoice_visible_to_client,
+    list_company_invoices_for_client_user,
+)
 from services.billing.portal_receivable import (
     PortalReceivableError,
     dispute_portal_receivable,
@@ -43,9 +47,49 @@ class ClientPortalReceivableCollection(Resource):
             .order_by(PortalReceivable.due_date.desc(), PortalReceivable.id.desc())
             .all()
         )
-        return {
-            "data": [serialize_portal_receivable_for_client(row) for row in rows]
-        }, 200
+        receivables = [serialize_portal_receivable_for_client(row) for row in rows]
+        known_numbers = {
+            str(item.get("external_invoice_number") or "").strip()
+            for item in receivables
+        }
+        invoices = [
+            item
+            for item in list_company_invoices_for_client_user(int(user.id))
+            if str(item.get("external_invoice_number") or "").strip() not in known_numbers
+        ]
+        return {"data": [*receivables, *invoices]}, 200
+
+
+@client_portal_receivables_ns.route("/invoices/<int:invoice_id>/pdf")
+class ClientCarrierInvoicePdf(Resource):
+    @jwt_required()
+    @role_required(UserRole.client)
+    def get(self, invoice_id: int):
+        from werkzeug.exceptions import NotFound as WzNotFound
+
+        from shared.invoice_pdf_filename import build_invoice_pdf_download_filename
+        from shared.upload_path_resolver import serve_stored_upload
+
+        user = _current_user()
+        if user is None:
+            return auth_error("unauthorized", "Utilisateur introuvable.", 401)
+        invoice = company_invoice_visible_to_client(int(user.id), int(invoice_id))
+        if invoice is None or not str(invoice.pdf_url or "").strip():
+            return {
+                "error": "invoice_pdf_not_found",
+                "message": "Le PDF de cette facture n’est pas disponible.",
+            }, 404
+        try:
+            return serve_stored_upload(
+                invoice.pdf_url,
+                as_attachment=True,
+                download_filename=build_invoice_pdf_download_filename(invoice),
+            )
+        except WzNotFound:
+            return {
+                "error": "invoice_pdf_not_found",
+                "message": "Le PDF de cette facture n’est pas disponible.",
+            }, 404
 
 
 @client_portal_receivables_ns.route("/<int:receivable_id>/dispute")

@@ -8,6 +8,16 @@ from typing import Any
 _PLACEHOLDER_USER_RE = re.compile(r"^User #\d+$", re.IGNORECASE)
 
 
+def family_name_upper(value: str | None) -> str | None:
+    """Nom de famille canonique : majuscules, tel qu’enregistré en base."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text == "Non spécifié":
+        return text
+    return text.upper()
+
+
 def is_placeholder_actor_display_name(name: str | None) -> bool:
     """True si le libellé est vide ou du type « User #91597 »."""
     if name is None:

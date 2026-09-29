@@ -23,6 +23,9 @@ from infrastructure.invoices.invoice_calculator import (
     round_to_5_cents,
 )
 from application.invoices.booking_schedule import booking_schedule_sort_key
+from application.invoices.invoice_booking_units import (
+    segments_belong_to_longer_route_group,
+)
 from application.invoices.invoice_line_description import (
     build_merged_round_trip_invoice_line_description_from_segments,
 )
@@ -1167,6 +1170,8 @@ class GenerateInvoiceUseCase:
             round_trip_group_sets = []
             for _s in round_trip_group_sets_raw:
                 _segs = [bookings_by_id[i] for i in _s if i in bookings_by_id]
+                if segments_belong_to_longer_route_group(_segs, bookings_by_id):
+                    continue
                 if _is_strict_reverse_round_trip(_segs):
                     round_trip_group_sets.append(_s)
             in_round_trip_merge: set[int] = set()

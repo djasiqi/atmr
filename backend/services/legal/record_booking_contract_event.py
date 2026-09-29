@@ -132,10 +132,25 @@ CLIENT_ORDER_FIELDS = (
     "notes_medical",
 )
 
+# Champs PORTAL structurés. Comparés seulement s'ils sont dans l'état « avant »,
+# pour ne pas faire varier les mutations historiques qui ne les capturaient pas.
+PORTAL_PARITY_FIELDS = (
+    "time_confirmed",
+    "is_urgent",
+    "wheelchair_client_has",
+    "needs_assistance",
+    "assistance_detail",
+    "pickup_access_notes",
+    "dropoff_access_notes",
+    "hospital_service",
+)
+
 
 def client_visible_booking_state(booking: Any) -> dict[str, Any]:
     """État client comparable, capturé avant une mutation."""
     state = {field: getattr(booking, field, None) for field in CLIENT_ORDER_FIELDS}
+    for field in PORTAL_PARITY_FIELDS:
+        state[field] = getattr(booking, field, None)
     state["_status"] = _status_text(getattr(booking, "status", None))
     return state
 
@@ -146,11 +161,26 @@ def _same_order_value(field: str, before: Any, after: Any) -> bool:
             return abs(float(before or 0) - float(after or 0)) < 0.001
         except (TypeError, ValueError):
             return before == after
-    if field in {"medical_facility", "doctor_name", "notes_medical"}:
+    if field in {
+        "medical_facility",
+        "doctor_name",
+        "notes_medical",
+        "pickup_access_notes",
+        "dropoff_access_notes",
+        "hospital_service",
+        "assistance_detail",
+    }:
         return str(before or "").strip() == str(after or "").strip()
     if field in {"pickup_location", "dropoff_location"}:
         return str(before or "").strip() == str(after or "").strip()
-    if field in {"is_round_trip", "wheelchair_need"}:
+    if field in {
+        "is_round_trip",
+        "wheelchair_need",
+        "time_confirmed",
+        "is_urgent",
+        "wheelchair_client_has",
+        "needs_assistance",
+    }:
         return bool(before) == bool(after)
     return before == after
 
@@ -158,7 +188,11 @@ def _same_order_value(field: str, before: Any, after: Any) -> bool:
 def changed_client_order_fields(before: dict[str, Any], booking: Any) -> list[str]:
     """Champs de commande réellement différents après la mutation."""
     changed: list[str] = []
-    for field in CLIENT_ORDER_FIELDS:
+    fields = list(CLIENT_ORDER_FIELDS)
+    for field in PORTAL_PARITY_FIELDS:
+        if field in before:
+            fields.append(field)
+    for field in fields:
         if not _same_order_value(
             field, before.get(field), getattr(booking, field, None)
         ):

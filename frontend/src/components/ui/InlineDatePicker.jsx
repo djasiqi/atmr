@@ -198,6 +198,7 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
   const wrapperRef = useRef(null);
   const popoverRef = useRef(null);
   const inputRef = useRef(null);
+  const iconBtnRef = useRef(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [masked, setMasked] = useState(() => isoToDisplay(value));
   const [inputError, setInputError] = useState(false);
@@ -353,26 +354,32 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
   };
 
   const updatePosition = useCallback(() => {
-    if (!wrapperRef.current) return;
-    const rect = wrapperRef.current.getBoundingClientRect();
-    const popW = 222;
+    const field = wrapperRef.current;
+    if (!field) return;
+    const button = iconBtnRef.current;
+    const fieldRect = field.getBoundingClientRect();
+    const buttonRect = button?.getBoundingClientRect();
+    const wideTrigger = Boolean(buttonRect && buttonRect.width >= 160);
+    const anchor = wideTrigger ? buttonRect : fieldRect;
+    const popW = wideTrigger ? Math.round(anchor.width) : 222;
     const margin = 8;
     const gap = 6;
     const el = popoverRef.current;
     const measured = el?.offsetHeight;
     const popH = measured && measured > 48 ? measured : 252;
-    const spaceBelow = window.innerHeight - rect.bottom - margin;
-    const spaceAbove = rect.top - margin;
+    const spaceBelow = window.innerHeight - anchor.bottom - margin;
+    const spaceAbove = anchor.top - margin;
     let top;
     if (spaceBelow >= popH + gap || spaceBelow >= spaceAbove) {
-      top = rect.bottom + gap;
+      top = anchor.bottom + gap;
     } else {
-      top = rect.top - popH - gap;
+      top = anchor.top - popH - gap;
     }
-    let left = Math.min(rect.left, window.innerWidth - popW - margin);
+    const alignRight = wideTrigger ? anchor.right : (buttonRect?.right ?? fieldRect.right);
+    let left = alignRight - popW;
     left = Math.max(margin, Math.min(left, window.innerWidth - popW - margin));
     top = Math.max(margin, Math.min(top, window.innerHeight - popH - margin));
-    setPos({ top, left });
+    setPos({ top, left, width: popW });
   }, []);
 
   useLayoutEffect(() => {
@@ -464,6 +471,7 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
           title={title}
         />
         <button
+          ref={iconBtnRef}
           type="button"
           className={dp.iconBtn}
           onClick={() => setOpen(!open)}
@@ -483,7 +491,9 @@ const InlineDatePicker = forwardRef(function InlineDatePicker({
           role="dialog"
           aria-modal="true"
           aria-label="Choisir une date"
-          style={{ top: pos.top, left: pos.left }}
+          style={{ top: pos.top, left: pos.left, width: pos.width }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
           <div className={dp.header}>
             <button type="button" className={dp.navBtn} onClick={prevMonth} disabled={!canGoPrev()} aria-label="Mois précédent">

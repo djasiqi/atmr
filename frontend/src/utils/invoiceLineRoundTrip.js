@@ -158,6 +158,37 @@ export function lineEditorContextSubline(line) {
   return parts.length ? parts.join(' · ') : null;
 }
 
+function normalizeRouteEndpoint(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function splitTransportEndpoints(description) {
+  const raw = String(description || '')
+    .trim()
+    .replace(/^trajet\s*:\s*/i, '')
+    .replace(/^trajet\s+/i, '');
+  const parts = raw.split(/\s*(?:→|↔|<->)\s*/);
+  if (parts.length < 2) return null;
+  const start = normalizeRouteEndpoint(parts[0]);
+  const end = normalizeRouteEndpoint(parts[parts.length - 1]);
+  if (!start || !end) return null;
+  return [start, end];
+}
+
+/** Vrai seulement pour A→B et B→A. Une chaîne A→B, B→C, C→A n'est pas un aller-retour. */
+export function transportDescriptionsAreStrictReverse(left, right) {
+  const a = splitTransportEndpoints(left);
+  const b = splitTransportEndpoints(right);
+  if (!a || !b) return false;
+  return a[0] === b[1] && a[1] === b[0];
+}
+
 /** Inverse « Trajet A → B » en « Trajet B → A » (jambe retour si description partenaire absente). */
 export function invertTrajetLineDescription(description) {
   if (description == null) return description ?? '';

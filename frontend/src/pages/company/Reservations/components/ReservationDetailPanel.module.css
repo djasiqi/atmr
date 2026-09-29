@@ -499,6 +499,35 @@
   color: var(--text-secondary);
 }
 
+.pendingActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.pendingActionsRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pendingPrimaryBtn {
+  grid-column: 1 / -1;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.pendingSecondaryBtn {
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
 /* Actions bar (offres institution) */
 .offerActionsBlock {
   display: flex;

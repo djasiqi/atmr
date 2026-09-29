@@ -1114,6 +1114,18 @@ def _detect_and_group_round_trips(
     """
     from datetime import datetime
 
+    from application.invoices.round_trip_booking_pairs import (
+        booking_ids_in_longer_route_group,
+    )
+
+    frozen_chain_ids = booking_ids_in_longer_route_group(
+        [
+            item.get("booking")
+            for item in invoice_lines_with_bookings
+            if item.get("booking") is not None
+        ]
+    )
+
     # ✅ ÉTAPE 1: Détection par champs explicites (parent_booking_id, is_return)
     explicit_pairs: dict[int, list[dict[str, Any]]] = {}  # parent_id -> [items]
     items_by_booking_id: dict[int, dict[str, Any]] = {}  # booking.id -> item
@@ -1188,6 +1200,21 @@ def _detect_and_group_round_trips(
         if not parent_booking or not return_booking:
             continue
 
+        parent_bid = getattr(parent_booking, "id", None)
+        return_bid = getattr(return_booking, "id", None)
+        if (
+            parent_bid is not None
+            and return_bid is not None
+            and (
+                int(parent_bid) in frozen_chain_ids
+                or int(return_bid) in frozen_chain_ids
+            )
+        ):
+            used_by_explicit.discard(return_idx)
+            if parent_idx is not None:
+                used_by_explicit.discard(parent_idx)
+            continue
+
         # ✅ Annulés : ne pas regrouper (chaque ligne reste standalone avec son libellé)
         if _is_booking_cancelled(parent_booking) or _is_booking_cancelled(
             return_booking
@@ -1250,6 +1277,25 @@ def _detect_and_group_round_trips(
     for idx, item in enumerate(invoice_lines_with_bookings):
         if idx in used_by_explicit:
             # Déjà traité par détection explicite, ignorer
+            continue
+        booking_for_chain = item.get("booking")
+        chain_bid = getattr(booking_for_chain, "id", None)
+        if chain_bid is not None and int(chain_bid) in frozen_chain_ids:
+            item["is_round_trip"] = False
+            item["transport_type"] = "Aller"
+            pickup = item.get("pickup", "")
+            dropoff = item.get("dropoff", "")
+            if pickup and dropoff:
+                item["transport_display"] = (
+                    f"{_short_label_for_transport(pickup)} → "
+                    f"{_short_label_for_transport(dropoff)}"
+                )
+            else:
+                item["transport_display"] = (
+                    f"{pickup} → {dropoff}" if pickup or dropoff else ""
+                )
+            item["earliest_scheduled"] = item.get("date")
+            standalone_items.append(item)
             continue
         patient_id = item.get("patient_id")
         date = item.get("date")

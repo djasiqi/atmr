@@ -136,8 +136,11 @@ def _geocode_address(address: str) -> tuple[float, float] | None:
     if alias and alias.get("lat") is not None and alias.get("lon") is not None:
         return float(alias["lat"]), float(alias["lon"])
 
+    from services.geolocation.google_geocoding_gate import geocoding_source
+
     try:
-        result = geocode_address_google(query, country="CH")
+        with geocoding_source("institution_route"):
+            result = geocode_address_google(query, country="CH")
     except Exception:
         result = None
     if not result:

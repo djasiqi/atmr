@@ -56,6 +56,9 @@ class ClientUpdateSchema(Schema):
     habitual_wheelchair_client_has = fields.Bool(allow_none=True)
     habitual_wheelchair_need = fields.Bool(allow_none=True)
     habitual_needs_assistance = fields.Bool(allow_none=True)
+    habitual_assistance_detail = fields.Str(
+        validate=validate.Length(max=200), allow_none=True
+    )
     # Mode d'envoi facture : email (défaut) ou papier (+ CHF 3 à la création)
     invoice_delivery_method = fields.Str(
         allow_none=True,

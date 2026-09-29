@@ -811,9 +811,13 @@ class CompanyMe(Resource):
                 )
 
                 def _geocode_fn(address: str):
+                    from services.geolocation.google_geocoding_gate import (
+                        geocoding_source,
+                    )
                     from services.geolocation.maps import geocode_address
 
-                    return geocode_address(address, country="CH")
+                    with geocoding_source("company_address"):
+                        return geocode_address(address, country="CH")
 
                 uc = UpdateCompanyProfileUseCase(geocode_fn=_geocode_fn)
                 uc_result = uc.execute(company, validated_data=validated_data)
@@ -1941,12 +1945,14 @@ class CompanyDashboardBootstrap(Resource):
         try:
             from services.companies.booking_transfer_cache import (
                 attach_route_group_leg_counts_to_bookings,
+                attach_route_group_legs_to_bookings,
                 attach_serialize_context_to_bookings,
                 attach_transfer_cache_to_bookings,
             )
 
             attach_transfer_cache_to_bookings(bookings)
             attach_route_group_leg_counts_to_bookings(bookings)
+            attach_route_group_legs_to_bookings(bookings)
             attach_serialize_context_to_bookings(bookings, company_id)
             bookings_payload = [b.serialize_dashboard for b in bookings]
         except Exception:
@@ -2604,12 +2610,14 @@ class CompanyReservations(Resource):
 
         from services.companies.booking_transfer_cache import (
             attach_route_group_leg_counts_to_bookings,
+            attach_route_group_legs_to_bookings,
             attach_serialize_context_to_bookings,
             attach_transfer_cache_to_bookings,
         )
 
         attach_transfer_cache_to_bookings(reservations)
         attach_route_group_leg_counts_to_bookings(reservations)
+        attach_route_group_legs_to_bookings(reservations)
         attach_serialize_context_to_bookings(reservations, company_id)
 
         # Retourner les données dans le format attendu par le frontend
@@ -7288,6 +7296,7 @@ class ScheduleReservation(Resource):
             scheduled_time_iso=str(iso),
             is_outbound_completed=True,
             time_confirmed=data.get("time_confirmed"),
+            confirm_pickup=bool(data.get("confirm_pickup")),
         )
         if not uc_result.ok:
             if uc_result.status_code == 422:

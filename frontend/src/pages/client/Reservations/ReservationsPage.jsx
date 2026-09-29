@@ -29,6 +29,17 @@ import {
 import { useClientBookingSocketRefresh } from '../../../hooks/useClientBookingSocketRefresh';
 import ClientBookingLiveTrackModal from '../../../components/client/ClientBookingLiveTrackModal';
 import ClientTransportContactModal from '../../../components/client/ClientTransportContactModal';
+import ClientTripEventReportModal from './ClientTripEventReportModal';
+import ReservationRouteMap from './ReservationRouteMap';
+import { foldClientRouteRequests } from '../../../utils/clientRouteRequest';
+import { fetchClientMessageNotifications } from '../../../services/clientService';
+import { ensureClientPortalSocket } from '../../../services/clientPortalSocket';
+import {
+  CLIENT_MESSAGE_READ_EVENT,
+  bookingHasUnreadCarrierMessage,
+  readClientMessageIds,
+  rememberClientMessageRead,
+} from '../../../utils/clientMessageNotifRead';
 
 /** Libellé facturation / couverture (sans répéter le montant affiché à côté). */
 function getBillingCoverageLabel(booking) {
@@ -96,6 +107,9 @@ function isClientRoundTripOutbound(booking) {
 
 /** Total facturé du dossier (aller + segment retour lié), pour tri / PDF / past. */
 function clientRoundTripTotalChf(booking) {
+  if (Number.isFinite(Number(booking?.route_request_amount))) {
+    return Number(booking.route_request_amount);
+  }
   if (!booking || booking.is_return) return Number(booking?.amount || 0);
   const base = Number(booking.amount || 0);
   const rb = booking.return_booking;
@@ -114,6 +128,8 @@ function clientRoundTripAwaitingReturnCompletion(booking) {
 
 function clientTripListSection(booking, nowTs) {
   if (clientRoundTripAwaitingReturnCompletion(booking)) return 'upcoming';
+  const shown = normalizeClientBookingStatus(resolveClientBookingDisplayStatus(booking));
+  if (shown === 'completed' || shown === 'cancelled') return 'past';
   const t = Date.parse(booking.scheduled_time);
   if (!Number.isFinite(t)) return 'past';
   return t > nowTs ? 'upcoming' : 'past';
@@ -203,6 +219,18 @@ const TIMELINE_PAYMENT_FIRST = [
 ];
 
 /**
+ * Compte PORTAL : l’entreprise facture après la course. Aucun encaissement
+ * n’a lieu à la commande, donc l’étape paiement n’est pas affichée.
+ */
+const TIMELINE_CARRIER_INVOICE = [
+  { id: 'broadcast', label: 'Demande transmise aux entreprises' },
+  { id: 'company', label: 'Entreprise retenue' },
+  { id: 'driver', label: 'Chauffeur désigné par l’entreprise' },
+  { id: 'moving', label: 'En route' },
+  { id: 'done', label: 'Terminée' },
+];
+
+/**
  * Flux PORTAL double_validation_v2 — aucun paiement LIRIE.
  * 1. Demande enregistrée ;
  * 2. Transmission aux entreprises ;
@@ -225,7 +253,12 @@ function getTimelineSteps(booking) {
     resolveClientBookingDisplayStatus(booking)
   );
   const isPortalDv = isPortalContractFlow(booking);
-  const base = isPortalDv ? TIMELINE_PORTAL_DV : TIMELINE_PAYMENT_FIRST;
+  const skipsOnlinePayment = !requiresPrivateOnlinePaymentAtBooking(booking);
+  const base = isPortalDv
+    ? TIMELINE_PORTAL_DV
+    : skipsOnlinePayment
+      ? TIMELINE_CARRIER_INVOICE
+      : TIMELINE_PAYMENT_FIRST;
 
   if (displayNorm === 'cancelled') {
     return [{ id: 'cancelled', label: 'Course annulée', state: 'cancelled' }];
@@ -262,6 +295,19 @@ function getTimelineSteps(booking) {
         break;
       default:
         currentIndex = booking?.company_id ? 3 : 1;
+        break;
+    }
+  } else if (skipsOnlinePayment) {
+    switch (displayNorm) {
+      case 'confirmed':
+        currentIndex = hasDriverAssigned(booking) ? 2 : 1;
+        break;
+      case 'driver_on_the_way':
+      case 'in_progress':
+        currentIndex = 3;
+        break;
+      default:
+        currentIndex = 0;
         break;
     }
   } else {
@@ -379,6 +425,114 @@ function formatLongWeekdayDateFr(iso) {
   });
   if (!raw) return '';
   return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function ClientRouteStops({ stops, label = 'Trajet' }) {
+  if (!Array.isArray(stops) || stops.length === 0) return null;
+  return (
+    <div className={styles.routeBlock} aria-label={label}>
+      {stops.map((stop, index, all) => {
+        const isLast = index === all.length - 1;
+        return (
+          <div className={styles.routeLeg} key={stop.key}>
+            <div className={styles.routeIconCol} aria-hidden>
+              <div
+                className={`${styles.routeDot} ${
+                  index === 0 ? styles.routeDotOrigin : styles.routeDotDestination
+                }`}
+              />
+              {isLast ? null : <div className={styles.routeLine} />}
+            </div>
+            <div className={`${styles.routeContent} ${isLast ? styles.routeContentLast : ''}`}>
+              <div className={styles.routeHead}>
+                <div className={styles.routeLabel}>{stop.label}</div>
+                {stop.when ? <div className={styles.routeWhen}>{glanceStopWhen(stop.when)}</div> : null}
+              </div>
+              <div className={styles.routePlace}>
+                {stop.place}
+                {stop.detail ? <span className={styles.routeDetail}> · {stop.detail}</span> : null}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function historyMapPoint(lat, lon) {
+  const latitude = Number(lat);
+  const longitude = Number(lon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+  if (latitude === 0 && longitude === 0) return null;
+  return { lat: latitude, lng: longitude };
+}
+
+function historyMedicalDetail(booking) {
+  return [booking?.hospital_service, booking?.doctor_name]
+    .map((value) => String(value || '').trim())
+    .filter((value) => value && value !== 'Non spécifié' && value !== 'Aucune note')
+    .join(' · ');
+}
+
+/** Heure réelle : prise en charge chauffeur, ou dépôt confirmé (chauffeur ou entreprise). */
+function operationalStopWhen(prefix, iso) {
+  const clock = formatSpotlightTime(iso);
+  return clock ? `${prefix} ${clock}` : '';
+}
+
+function historyOperationalWhen(stop) {
+  if (stop?.label === 'Prise en charge') {
+    return operationalStopWhen('Prise en charge', stop.boarded_at);
+  }
+  return operationalStopWhen('Dépôt', stop.completed_at);
+}
+
+/** Étapes repliées d’un groupe, ou départ → arrivée d’une course simple. */
+function historyRouteStops(booking) {
+  const folded = Array.isArray(booking?.route_request_stops) ? booking.route_request_stops : [];
+  if (folded.length > 1) {
+    return folded.map((stop) => ({ ...stop, when: historyOperationalWhen(stop) }));
+  }
+  const pickup = String(booking?.pickup_location || '').trim();
+  const dropoff = String(booking?.dropoff_location || '').trim();
+  if (!pickup && !dropoff) return [];
+  return [
+    {
+      key: `pickup-${booking?.id || 'trip'}`,
+      label: 'Prise en charge',
+      place: pickup || 'Départ non renseigné',
+      detail: '',
+      point: historyMapPoint(booking?.pickup_lat, booking?.pickup_lon),
+      boarded_at: booking?.boarded_at || null,
+      completed_at: null,
+      when: operationalStopWhen('Prise en charge', booking?.boarded_at),
+    },
+    {
+      key: `dropoff-${booking?.id || 'trip'}`,
+      label: 'Destination',
+      place: dropoff || 'Destination non renseignée',
+      detail: historyMedicalDetail(booking),
+      point: historyMapPoint(booking?.dropoff_lat, booking?.dropoff_lon),
+      boarded_at: null,
+      completed_at: booking?.completed_at || null,
+      when: operationalStopWhen('Dépôt', booking?.completed_at),
+    },
+  ];
+}
+
+function glanceStopWhen(when) {
+  const text = String(when || '').trim();
+  if (!text) return '';
+  if (text === 'Prise en charge à déterminer') return 'À déterminer';
+  if (text.startsWith('Heure à définir')) return 'Heure à définir';
+  const clock = text.match(/(\d{2}:\d{2})\s*$/);
+  if (text.startsWith('Rendez-vous') && clock) return `Rendez-vous ${clock[1]}`;
+  if (text.startsWith('Heure de départ') && clock) return `Départ ${clock[1]}`;
+  if (text.startsWith('Prise en charge') && clock) return `Prise en charge ${clock[1]}`;
+  if (text.startsWith('Dépôt') && clock) return `Dépôt ${clock[1]}`;
+  return text;
 }
 
 function formatSpotlightTime(iso) {
@@ -586,6 +740,7 @@ function PastBookingRow({
   isExpanded,
   onToggleDetails,
   onContact,
+  hasNewMessage = false,
   title,
   relativeDayLabel,
   timeLabel,
@@ -643,6 +798,9 @@ function PastBookingRow({
               }}
             >
               Contacter
+              {hasNewMessage ? (
+                <span className={styles.contactNewDot} aria-label="Nouveau message" />
+              ) : null}
             </button>
             <button
               type="button"
@@ -962,7 +1120,9 @@ function ReservationCard({
       ? new Date(scheduled).toISOString()
       : undefined;
   const rb = booking.return_booking;
-  const isRoundTripCard = isClientRoundTripOutbound(booking);
+  const requestStops = Array.isArray(booking.route_request_stops) ? booking.route_request_stops : [];
+  const isGroupedRequest = requestStops.length > 1;
+  const isRoundTripCard = !isGroupedRequest && isClientRoundTripOutbound(booking);
   const rbAmount = rb != null ? Number(rb.amount || 0) : 0;
   const splitRoundTripAmounts =
     isRoundTripCard && Number.isFinite(rbAmount) && rbAmount > 0;
@@ -982,6 +1142,13 @@ function ReservationCard({
     .join(' ');
 
   const displayNorm = normalizeClientBookingStatus(displayStatus);
+  const companyName = String(booking?.company_name || '').trim().toLowerCase();
+  const carrierConfirmed =
+    Boolean(booking?.company_id) ||
+    (companyName.length > 0 &&
+      companyName !== 'non assignée' &&
+      companyName !== 'non assigné');
+  const awaitingCarrierConfirmation = isGroupedRequest && !carrierConfirmed;
   const showPendingBroadcastHint =
     displayNorm === 'pending' && !bookingNeedsClientOnlinePayment(booking);
 
@@ -995,7 +1162,7 @@ function ReservationCard({
     <article id={`booking-${booking.id}`} className={cardClass}>
       <header className={variant === 'spotlight' ? styles.cardTopSpotlight : styles.cardTop}>
         <div className={styles.cardTopMain}>
-          {variant === 'spotlight' && !isRoundTripCard ? (
+          {variant === 'spotlight' && !isRoundTripCard && !isGroupedRequest ? (
             <>
               <div className={styles.spotlightEyebrow}>Prochaine course</div>
               <div className={styles.spotlightWhenRow}>
@@ -1009,11 +1176,18 @@ function ReservationCard({
             </>
           ) : (
             <div className={styles.cardWhenStack}>
-              {variant === 'spotlight' && isRoundTripCard ? (
+              {variant === 'spotlight' && (isRoundTripCard || isGroupedRequest) ? (
                 <div className={styles.spotlightEyebrow}>Prochaine course</div>
               ) : null}
-              <time className={styles.cardWhen} dateTime={dateTimeAttr}>
-                {isRoundTripCard ? `Aller · ${formatDateTime(scheduled)}` : formatDateTime(scheduled)}
+              <time
+                className={isGroupedRequest ? styles.glanceDate : styles.cardWhen}
+                dateTime={dateTimeAttr}
+              >
+                {isGroupedRequest
+                  ? [relDay, longDay].filter(Boolean).join(' · ') || formatDateTime(scheduled)
+                  : isRoundTripCard
+                    ? `Aller · ${formatDateTime(scheduled)}`
+                    : formatDateTime(scheduled)}
               </time>
               {isRoundTripCard && returnScheduled ? (
                 <time className={styles.cardWhenSecondary} dateTime={returnDateTimeAttr}>
@@ -1024,7 +1198,7 @@ function ReservationCard({
           )}
         </div>
         <div className={styles.cardTopRight}>
-          {isRoundTripCard ? (
+          {!isGroupedRequest && isRoundTripCard ? (
             <span className={styles.tripKindBadge} title="Demande aller et retour liées.">
               Aller-retour
             </span>
@@ -1038,7 +1212,7 @@ function ReservationCard({
         </div>
       </header>
 
-      {showPendingBroadcastHint ? (
+      {showPendingBroadcastHint && !isGroupedRequest ? (
         <div className={styles.pendingHint} role="status">
           <span className={styles.pendingHintIcon} aria-hidden>
             <SvgIconInfo size={14} />
@@ -1050,37 +1224,37 @@ function ReservationCard({
         </div>
       ) : null}
 
-      <div className={styles.routeBlock} aria-label="Trajet">
-        <div className={styles.routeLeg}>
-          <div className={styles.routeIconCol} aria-hidden>
-            <div className={`${styles.routeDot} ${styles.routeDotOrigin}`} />
-            <div className={styles.routeLine} />
-          </div>
-          <div className={styles.routeContent}>
-            <div className={styles.routeLabel}>Départ</div>
-            <div className={styles.routePlace}>{booking.pickup_location || 'Départ non renseigné'}</div>
-          </div>
-        </div>
-        <div className={styles.routeLeg}>
-          <div className={styles.routeIconCol} aria-hidden>
-            <div className={`${styles.routeDot} ${styles.routeDotDestination}`} />
-          </div>
-          <div className={`${styles.routeContent} ${styles.routeContentLast}`}>
-            <div className={styles.routeLabel}>Destination</div>
-            <div className={styles.routePlace}>
-              {booking.dropoff_location || 'Destination non renseignée'}
-            </div>
-          </div>
-        </div>
+      <div className={isGroupedRequest ? styles.routeSplit : undefined}>
+        <ClientRouteStops
+          stops={
+            isGroupedRequest
+              ? requestStops
+              : [
+                  {
+                    key: 'pickup',
+                    label: 'Départ',
+                    place: booking.pickup_location || 'Départ non renseigné',
+                  },
+                  {
+                    key: 'dropoff',
+                    label: 'Destination',
+                    place: booking.dropoff_location || 'Destination non renseignée',
+                  },
+                ]
+          }
+        />
+        {isGroupedRequest ? <ReservationRouteMap stops={requestStops} /> : null}
       </div>
 
-      {showTimeline ? (
+      {showTimeline && !isGroupedRequest ? (
         <div className={styles.timelineSection}>
           <div className={styles.timelineSectionTitle}>Avancement de la prise en charge</div>
           <BookingStatusTimeline booking={booking} layout="horizontal" />
         </div>
       ) : null}
-      {showDriverBlock ? <DriverMiniCard booking={booking} emphasized={variant === 'spotlight'} /> : null}
+      {showDriverBlock && hasDriverAssigned(booking) ? (
+        <DriverMiniCard booking={booking} emphasized={variant === 'spotlight'} />
+      ) : null}
 
       <dl className={styles.metaGrid}>
         <div className={styles.metaItem}>
@@ -1088,10 +1262,20 @@ function ReservationCard({
             <span className={styles.metaDtIcon} aria-hidden>
               <SvgIconCreditCard size={11} />
             </span>
-            {amountDisplay.label}
+            {awaitingCarrierConfirmation ? 'Prix maximum autorisé' : amountDisplay.label}
           </dt>
           <dd>
-            {splitRoundTripAmounts ? (
+            {awaitingCarrierConfirmation ? (
+              <>
+                {formatAmount(booking.route_request_amount)}
+                <span className={styles.metaAmountHint}>
+                  {' '}
+                  En attente de confirmation de l’entreprise de transport
+                </span>
+              </>
+            ) : isGroupedRequest ? (
+              formatAmount(booking.route_request_amount)
+            ) : splitRoundTripAmounts ? (
               <>
                 <div>
                   {formatAmount(booking.amount)}{' '}
@@ -1133,7 +1317,7 @@ function ReservationCard({
             )}
           </dd>
         </div>
-        {showCarrier ? (
+        {showCarrier && !awaitingCarrierConfirmation ? (
           <div className={styles.metaItem}>
             <dt>
               <span className={styles.metaDtIcon} aria-hidden>
@@ -1144,6 +1328,7 @@ function ReservationCard({
             <dd>{booking.company_name || 'Non assigné'}</dd>
           </div>
         ) : null}
+        {isGroupedRequest ? null : (
         <div className={styles.metaItem}>
           <dt>
             <span className={styles.metaDtIcon} aria-hidden>
@@ -1153,6 +1338,7 @@ function ReservationCard({
           </dt>
           <dd>{getBillingCoverageLabel(booking)}</dd>
         </div>
+        )}
       </dl>
 
       {showClientBookingPolicy ? (
@@ -1176,7 +1362,7 @@ function ReservationCard({
 const ReservationsPage = () => {
   const { public_id: publicIdFromRoute } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const selectedBookingId = Number.parseInt(
     searchParams.get('bookingId') || searchParams.get('booking') || '',
     10
@@ -1197,6 +1383,10 @@ const ReservationsPage = () => {
   const [liveTrackBookingId, setLiveTrackBookingId] = useState(null);
   const [inlineEditBookingId, setInlineEditBookingId] = useState(null);
   const [contactModalBooking, setContactModalBooking] = useState(null);
+  const [eventReportBooking, setEventReportBooking] = useState(null);
+  const [carrierMessages, setCarrierMessages] = useState([]);
+  const [readCarrierMessages, setReadCarrierMessages] = useState(() => readClientMessageIds());
+  const [balanceDueChf, setBalanceDueChf] = useState(null);
 
   const reloadBookings = useCallback(async (quiet = false) => {
     if (!effectivePublicId) {
@@ -1250,6 +1440,22 @@ const ReservationsPage = () => {
       reloadBookings(false);
     }
   }, [effectivePublicId, reloadBookings]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve(apiClient.get('/clients/me/portal-receivables'))
+      .then((res) => {
+        const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+        const sum = rows.reduce((acc, row) => acc + Number(row.balance_due || 0), 0);
+        if (!cancelled) setBalanceDueChf(Number.isFinite(sum) ? sum : 0);
+      })
+      .catch(() => {
+        if (!cancelled) setBalanceDueChf(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [effectivePublicId]);
 
   // 🎯 Annuler une réservation
   const onlinePaymentCompleted = (booking) => {
@@ -1307,11 +1513,33 @@ const ReservationsPage = () => {
   const goDashboardPrefill = useCallback(
     (booking) => {
       if (!effectivePublicId || !booking) return;
+      const stops = historyRouteStops(booking);
+      const hasReturn = stops.some((stop) => stop.label === 'Retour');
+      const routeStops = (hasReturn ? stops.slice(0, -1) : stops).filter((stop) =>
+        String(stop?.place || '').trim()
+      );
+      const dropoffs = routeStops.slice(1);
+      const roundTrip =
+        hasReturn ||
+        booking.is_round_trip === true ||
+        booking.is_round_trip === 1 ||
+        booking.is_round_trip === '1' ||
+        booking.is_round_trip === 'true' ||
+        booking.has_return === true ||
+        booking.has_return === 1 ||
+        booking.has_return === '1' ||
+        booking.has_return === 'true';
       navigate(`/dashboard/client/${encodeURIComponent(effectivePublicId)}`, {
         state: {
           prefillFromBooking: {
-            pickup_location: booking.pickup_location,
-            dropoff_location: booking.dropoff_location,
+            pickup_location: routeStops[0]?.place || booking.pickup_location || '',
+            dropoff_location: dropoffs[0]?.place || booking.dropoff_location || '',
+            dropoff_detail: dropoffs[0]?.detail || '',
+            extra_stops: dropoffs.slice(1).map((stop) => ({
+              place: stop.place,
+              detail: stop.detail || '',
+            })),
+            round_trip: roundTrip,
           },
         },
       });
@@ -1451,53 +1679,112 @@ const ReservationsPage = () => {
     }
   }, [bookings, liveTrackBookingId]);
 
-  const handleInvoiceComingSoon = useCallback(() => {
-    toast.info(
-      'Les factures par course seront téléchargeables ici très prochainement. D’ici là, vous pouvez exporter l’historique en PDF ci-dessous.',
-      { duration: 7000 }
-    );
-  }, []);
-
-  const handleCancelBooking = async (bookingId) => {
-    if (
-      !window.confirm(
-        'Confirmer l’annulation de cette réservation ? Les conditions de remboursement (délais 24 h / 4 h, aller-retour) sont rappelées dans la section « Modification et annulation » au-dessus des boutons.'
-      )
-    ) {
+  const handleCancelBooking = async (booking) => {
+    const ids = (
+      Array.isArray(booking?.route_request_ids) && booking.route_request_ids.length
+        ? booking.route_request_ids
+        : [booking?.id]
+    ).filter((id) => Number(id) > 0);
+    const confirmMessage =
+      ids.length > 1
+        ? `Confirmer l’annulation de cette demande ? Les ${ids.length} transports seront annulés ensemble.`
+        : 'Confirmer l’annulation de cette réservation ? Les conditions de remboursement (délais 24 h / 4 h, aller-retour) sont rappelées dans la section « Modification et annulation » au-dessus des boutons.';
+    if (!window.confirm(confirmMessage)) {
       return;
     }
 
     setBookings((prevBookings) =>
-      prevBookings.map((b) => (b.id === bookingId ? { ...b, isCancelling: true } : b))
+      prevBookings.map((b) => (ids.includes(b.id) ? { ...b, isCancelling: true } : b))
     );
 
     try {
-      const response = await apiClient.delete(`/bookings/${bookingId}`);
-
-      if (response.status === 200) {
-        setInlineEditBookingId((cur) => (cur === bookingId ? null : cur));
-        await reloadBookings(true);
-        toast.success('Réservation annulée.');
-      } else {
-        throw new Error("L'annulation a échoué.");
+      for (const id of ids) {
+        const response = await apiClient.delete(`/bookings/${id}`);
+        if (response.status !== 200) {
+          throw new Error("L'annulation a échoué.");
+        }
       }
+      setInlineEditBookingId((cur) => (ids.includes(cur) ? null : cur));
+      await reloadBookings(true);
+      toast.success(ids.length > 1 ? 'Demande annulée.' : 'Réservation annulée.');
     } catch (error) {
       console.error("Erreur lors de l'annulation :", error);
       setBookings((prev) =>
-        prev.map((b) => (b.id === bookingId ? { ...b, isCancelling: false } : b))
+        prev.map((b) => (ids.includes(b.id) ? { ...b, isCancelling: false } : b))
       );
       toast.error("Une erreur s'est produite lors de l'annulation.", { duration: 6000 });
     }
   };
 
-  const clientBookingsForDisplay = useMemo(() => {
-    const hideReturnIds = new Set();
-    for (const b of bookings) {
-      const rid = Number(b?.return_booking?.id);
-      if (Number.isFinite(rid) && rid > 0) hideReturnIds.add(rid);
+  const clientBookingsForDisplay = useMemo(
+    () => foldClientRouteRequests(bookings),
+    [bookings]
+  );
+
+  const loadCarrierMessages = useCallback(async () => {
+    try {
+      const data = await fetchClientMessageNotifications();
+      setCarrierMessages(Array.isArray(data?.notifications) ? data.notifications : []);
+    } catch (loadError) {
+      console.error('[ReservationsPage] messages transporteur', loadError);
     }
-    return bookings.filter((b) => !hideReturnIds.has(Number(b.id)));
-  }, [bookings]);
+  }, []);
+
+  useEffect(() => {
+    void loadCarrierMessages();
+  }, [loadCarrierMessages]);
+
+  useEffect(() => {
+    const syncRead = () => setReadCarrierMessages(readClientMessageIds());
+    window.addEventListener(CLIENT_MESSAGE_READ_EVENT, syncRead);
+    return () => window.removeEventListener(CLIENT_MESSAGE_READ_EVENT, syncRead);
+  }, []);
+
+  useEffect(() => {
+    let socket;
+    let cancelled = false;
+    const onMessage = (payload) => {
+      const sender = String(payload?.message?.sender_type || '').toUpperCase();
+      if (sender && sender !== 'COMPANY') return;
+      void loadCarrierMessages();
+    };
+    ensureClientPortalSocket().then((connected) => {
+      if (cancelled || !connected) return;
+      socket = connected;
+      socket.on('booking_message', onMessage);
+    });
+    return () => {
+      cancelled = true;
+      socket?.off('booking_message', onMessage);
+    };
+  }, [loadCarrierMessages]);
+
+  const openContact = useCallback((booking) => {
+    setContactModalBooking(booking);
+    const ids = new Set(
+      [booking?.id, ...(booking?.route_request_ids || [])].map(Number)
+    );
+    const unreadIds = carrierMessages
+      .filter((item) => ids.has(Number(item?.booking_id)) && !readCarrierMessages.has(Number(item?.id)))
+      .map((item) => item.id);
+    if (unreadIds.length) {
+      setReadCarrierMessages(rememberClientMessageRead(unreadIds));
+    }
+  }, [carrierMessages, readCarrierMessages]);
+
+  const contactBookingId = Number.parseInt(searchParams.get('contact') || '', 10);
+  useEffect(() => {
+    if (!Number.isFinite(contactBookingId) || contactBookingId <= 0) return;
+    const match = clientBookingsForDisplay.find((booking) => (
+      Number(booking?.id) === contactBookingId
+      || (booking?.route_request_ids || []).some((id) => Number(id) === contactBookingId)
+    ));
+    if (!match) return;
+    openContact(match);
+    const next = new URLSearchParams(searchParams);
+    next.delete('contact');
+    setSearchParams(next, { replace: true });
+  }, [contactBookingId, clientBookingsForDisplay, searchParams, setSearchParams, openContact]);
 
   // 📌 Tri et filtrage des réservations
   const sortedBookings = [...clientBookingsForDisplay].sort((a, b) => {
@@ -1551,14 +1838,10 @@ const ReservationsPage = () => {
       const n = normalizeClientBookingStatus(resolveClientBookingDisplayStatus(b));
       return n === 'cancelled' || n === 'canceled';
     }).length;
-    const totalPaidChf = pastOnly
-      .filter((b) => normalizeClientBookingStatus(resolveClientBookingDisplayStatus(b)) === 'completed')
-      .reduce((sum, b) => sum + clientRoundTripTotalChf(b), 0);
     return {
       upcomingN,
       completedN,
       canceledN,
-      totalPaidChf,
     };
   }, [clientBookingsForDisplay]);
 
@@ -1623,8 +1906,8 @@ const ReservationsPage = () => {
     }
     if (norm === 'completed') {
       return (
-        <button type="button" className="primaryButton" onClick={handleInvoiceComingSoon}>
-          Télécharger la facture
+        <button type="button" className="primaryButton" onClick={() => setEventReportBooking(booking)}>
+          Signaler un événement
         </button>
       );
     }
@@ -1667,17 +1950,8 @@ const ReservationsPage = () => {
     const acts = bookingActions(booking);
     const norm = normalizeClientBookingStatus(resolveClientBookingDisplayStatus(booking));
     const primaryIsTrack = norm === 'driver_on_the_way' || norm === 'in_progress';
-    const canPay = canPayOnline(booking);
-    /** Après « Payer maintenant » (CTA principal), proposer tout de suite « Voir détail » si pertinent. */
-    const showVoirDetail =
-      acts.includes('Voir') || (canPay && norm === 'awaiting_payment');
     return (
       <>
-        {showVoirDetail ? (
-          <button type="button" className="secondaryButton" onClick={() => scrollToBooking(booking.id)}>
-            Voir détail
-          </button>
-        ) : null}
         {norm === 'round_trip_return_pending' ? (
           <button
             type="button"
@@ -1713,14 +1987,17 @@ const ReservationsPage = () => {
             Suivre
           </button>
         ) : null}
-        <button type="button" className="secondaryButton" onClick={() => setContactModalBooking(booking)}>
+        <button type="button" className="secondaryButton" onClick={() => openContact(booking)}>
           Contacter
+          {bookingHasUnreadCarrierMessage(booking, carrierMessages, readCarrierMessages) ? (
+            <span className={styles.contactNewDot} aria-label="Nouveau message" />
+          ) : null}
         </button>
         {acts.includes('Annuler') ? (
           <button
             type="button"
             className={styles.cancelLinkBtn}
-            onClick={() => handleCancelBooking(booking.id)}
+            onClick={() => handleCancelBooking(booking)}
             disabled={booking.isCancelling}
           >
             {booking.isCancelling ? 'Annulation…' : 'Annuler'}
@@ -1858,11 +2135,11 @@ const ReservationsPage = () => {
                       <div className={styles.heroStatDivider} aria-hidden />
                       <div className={styles.heroStat}>
                         <span className={styles.heroStatValue}>
-                          {bookingStats.totalPaidChf > 0
-                            ? `${bookingStats.totalPaidChf.toFixed(2)} CHF`
-                            : '—'}
+                          {balanceDueChf == null
+                            ? '—'
+                            : `${balanceDueChf.toFixed(2)} CHF`}
                         </span>
-                        <span className={styles.heroStatLabel}>Total payé</span>
+                        <span className={styles.heroStatLabel}>Reste à payer</span>
                       </div>
                       <div className={styles.heroStatDivider} aria-hidden />
                       <div className={styles.heroStat}>
@@ -1977,7 +2254,9 @@ const ReservationsPage = () => {
                       inlineEditPanel={renderInlineEditForBooking(booking)}
                     />
                   ))}
-                  {nextBooking && otherUpcoming.length === 0 ? (
+                  {nextBooking &&
+                  otherUpcoming.length === 0 &&
+                  !nextBooking.route_request_stops?.length ? (
                     <p className={styles.upcomingOnlyNextHint}>Aucune autre course programmée.</p>
                   ) : null}
                 </div>
@@ -2019,10 +2298,16 @@ const ReservationsPage = () => {
                     const displayPast = resolveClientBookingDisplayStatus(booking);
                     const statusUx = getClientBookingUx(displayPast);
                     const normPast = normalizeClientBookingStatus(displayPast);
-                    const title =
+                    const tripCount = Number(booking.route_request_transport_count) || 0;
+                    const destination =
                       String(booking.dropoff_location || '').trim() ||
                       String(booking.pickup_location || '').trim() ||
                       'Course';
+                    const title =
+                      tripCount > 1 ? `${tripCount} trajets · ${destination}` : destination;
+                    const historyStops = historyRouteStops(booking);
+                    const historyHeading =
+                      historyStops.length > 2 ? 'Étapes du trajet' : 'Trajet';
                     const totalChf = clientRoundTripTotalChf(booking);
                     const parsed = Date.parse(booking.scheduled_time);
                     const timeLabel = Number.isFinite(parsed)
@@ -2058,25 +2343,54 @@ const ReservationsPage = () => {
                         onToggleDetails={() =>
                           setPastExpandedId((prev) => (prev === booking.id ? null : booking.id))
                         }
-                        onContact={() => setContactModalBooking(booking)}
+                        onContact={() => openContact(booking)}
+                        hasNewMessage={bookingHasUnreadCarrierMessage(
+                          booking,
+                          carrierMessages,
+                          readCarrierMessages
+                        )}
                         title={title}
                         relativeDayLabel={relativeDayLabel}
                         timeLabel={timeLabel}
                         statusPill={statusPill}
                         amountContent={amountContent}
                       >
-                        <div className={styles.pastRowPanelTimelineSection}>
-                          <h4 className={styles.pastRowPanelSubheading}>Progression du trajet</h4>
-                          <BookingStatusTimeline booking={booking} />
-                        </div>
-                        <div className={styles.pastRowPanelActions}>
-                          <div className={styles.primaryActionSlot}>
-                            {renderPrimaryAction(booking)}
+                        {historyStops.length > 0 ? (
+                          <div className={styles.pastRowPanelTimelineSection}>
+                            <h4 className={styles.pastRowPanelSubheading}>{historyHeading}</h4>
+                            <div className={styles.routeSplit}>
+                              <ClientRouteStops stops={historyStops} label={historyHeading} />
+                              <ReservationRouteMap stops={historyStops} />
+                            </div>
                           </div>
-                          {historySecondary ? (
-                            <div className={styles.secondaryActionsRow}>{historySecondary}</div>
-                          ) : null}
-                        </div>
+                        ) : null}
+                        {normPast === 'completed' ? (
+                          <div className={styles.pastHistoryActions}>
+                            <button
+                              type="button"
+                              className={styles.pastHistoryPrimary}
+                              onClick={() => setEventReportBooking(booking)}
+                            >
+                              Signaler un événement
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.pastHistorySecondary}
+                              onClick={() => goDashboardPrefill(booking)}
+                            >
+                              Recommander
+                            </button>
+                          </div>
+                        ) : (
+                          <div className={styles.pastRowPanelActions}>
+                            <div className={styles.primaryActionSlot}>
+                              {renderPrimaryAction(booking)}
+                            </div>
+                            {historySecondary ? (
+                              <div className={styles.secondaryActionsRow}>{historySecondary}</div>
+                            ) : null}
+                          </div>
+                        )}
                       </PastBookingRow>
                     );
                   })}
@@ -2104,6 +2418,13 @@ const ReservationsPage = () => {
         open={Boolean(contactModalBooking)}
         onClose={() => setContactModalBooking(null)}
         onOpenSupport={handleOpenSupportFromContactModal}
+      />
+
+      <ClientTripEventReportModal
+        booking={eventReportBooking}
+        client={_clientData}
+        open={Boolean(eventReportBooking)}
+        onClose={() => setEventReportBooking(null)}
       />
 
       <Footer />

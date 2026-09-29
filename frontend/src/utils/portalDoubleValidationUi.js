@@ -165,8 +165,81 @@ export function firstClickToastMessage({ doubleValidationEnabled } = {}) {
  * @param {Record<string, unknown> | null | undefined} reservation
  * @returns {{ mode: 'company_quote' | 'awaiting_quote' | 'standard', label: string, amount: number | null }}
  */
+function positiveChf(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+/**
+ * Total grille d'une demande multi-trajets encore ouverte.
+ * Chaque trajet est coté par l'entreprise ; le total est la somme.
+ *
+ * @param {Record<string, unknown> | null | undefined} reservation
+ * @param {Array<Record<string, unknown>> | null | undefined} allReservations
+ * @returns {{ isAnchor: boolean, total: number, count: number, unit: number | null, label: string } | null}
+ */
+export function portalCarrierRouteGroupAmount(reservation, allReservations) {
+  const groupId = reservation?.route_group_id;
+  if (!groupId) return null;
+  const members = Array.isArray(allReservations)
+    ? allReservations.filter((row) => row?.route_group_id === groupId)
+    : [];
+  const flaggedCount = Number(reservation?.trip_flags?.leg_count);
+  const count = Math.max(
+    Number.isFinite(flaggedCount) ? flaggedCount : 0,
+    members.length
+  );
+  if (count < 2) return null;
+  const rows = members.length > 0 ? members : [reservation];
+  const stillOpen = rows.every(
+    (row) => row?.company_id == null || Number(row.company_id) <= 0
+  );
+  if (!stillOpen) return null;
+  const quotes = rows
+    .map((row) => positiveChf(row?.company_suggested_amount ?? row?.carrier_quote))
+    .filter((amount) => amount != null);
+  const unit = positiveChf(
+    reservation?.company_suggested_amount ?? reservation?.carrier_quote
+  );
+  if (unit == null || quotes.length === 0) return null;
+  const uniform = quotes.every((amount) => Math.abs(amount - unit) < 0.001);
+  const total = uniform
+    ? Math.round(unit * count * 100) / 100
+    : Math.round(quotes.reduce((sum, amount) => sum + amount, 0) * 100) / 100;
+  const sequence = Number(
+    reservation?.route_sequence_number ?? reservation?.trip_flags?.leg_number
+  ) || 1;
+  const anchorSequence = Math.min(
+    ...rows.map(
+      (row) =>
+        Number(row?.route_sequence_number ?? row?.trip_flags?.leg_number) || 1
+    )
+  );
+  return {
+    isAnchor: sequence === anchorSequence,
+    total,
+    count,
+    unit: uniform ? unit : null,
+    label: uniform
+      ? `${unit.toFixed(2)} CHF × ${count} trajets`
+      : `Votre tarif · ${count} trajets`,
+  };
+}
+
 export function portalCarrierFacingAmountDisplay(reservation) {
+  const suggested = positiveChf(
+    reservation?.carrier_quote ?? reservation?.company_suggested_amount
+  );
+  const assigned =
+    reservation?.company_id != null && Number(reservation.company_id) > 0;
   if (!isPortalContractFlow(reservation)) {
+    if (!assigned && suggested != null) {
+      return {
+        mode: 'company_quote',
+        label: 'Votre tarif (grille)',
+        amount: suggested,
+      };
+    }
     const amt = Number(reservation?.amount);
     return {
       mode: 'standard',
@@ -174,8 +247,6 @@ export function portalCarrierFacingAmountDisplay(reservation) {
       amount: Number.isFinite(amt) ? amt : null,
     };
   }
-  const assigned =
-    reservation?.company_id != null && Number(reservation.company_id) > 0;
   if (assigned) {
     const contractual = Number(
       reservation?.contractual_amount ?? reservation?.amount
@@ -186,10 +257,7 @@ export function portalCarrierFacingAmountDisplay(reservation) {
       amount: Number.isFinite(contractual) ? contractual : null,
     };
   }
-  const suggested = Number(
-    reservation?.carrier_quote ?? reservation?.company_suggested_amount
-  );
-  if (Number.isFinite(suggested) && suggested > 0) {
+  if (suggested != null) {
     return {
       mode: 'company_quote',
       label: 'Votre tarif (grille)',

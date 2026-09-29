@@ -123,6 +123,7 @@ const COMPANY_MAP_ROUTE_PATTERNS = [
 
 const MAP_ROUTE_PATTERNS = [
   /^\/dashboard\/client\/.+/,
+  /^\/reservations\/.+/,
   /^\/driver\/map(?:\/|$)/,
   ...COMPANY_MAP_ROUTE_PATTERNS,
 ];

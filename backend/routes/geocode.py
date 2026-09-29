@@ -860,7 +860,10 @@ def resolve_reverse_geocode_for_client(lat: float, lon: float) -> Dict[str, Any]
     """Résout lat/lon en adresse lisible (Google si actif, sinon Photon)."""
     if USE_GOOGLE_PLACES:
         try:
-            r = reverse_geocode_latlng_google(lat, lon)
+            from services.geolocation.google_geocoding_gate import geocoding_source
+
+            with geocoding_source("reverse_geocode"):
+                r = reverse_geocode_latlng_google(lat, lon)
             if r:
                 addr = (r.get("address") or "").strip()
                 lat_r = r.get("lat")
@@ -1265,13 +1268,17 @@ def normalize_photon(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
                 try:
                     # Appeler Google Geocoding pour enrichir
+                    from services.geolocation.google_geocoding_gate import (
+                        geocoding_source,
+                    )
                     from services.geolocation.google_places import (
                         geocode_address_google,
                     )
 
-                    google_result = geocode_address_google(
-                        search_address, country=country or "CH"
-                    )
+                    with geocoding_source("autocomplete_enrichment"):
+                        google_result = geocode_address_google(
+                            search_address, country=country or "CH"
+                        )
                     if google_result:
                         address_components = google_result.get("address_components", [])
                         # Extraire le code postal si manquant
@@ -2028,22 +2035,25 @@ class GeocodeAddress(Resource):
                     "name": serialized.get("name"),
                 }, 200
 
-            if USE_GOOGLE_PLACES:
-                result = geocode_address_google(address, country=country)
-            else:
-                # Fallback vers le service existant
-                from services.geolocation.maps import geocode_address
+            from services.geolocation.google_geocoding_gate import geocoding_source
 
-                coords = geocode_address(address, country=country)
-                result = (
-                    {
-                        "address": address,
-                        "lat": coords.get("lat"),
-                        "lon": coords.get("lon"),
-                    }
-                    if coords
-                    else None
-                )
+            with geocoding_source("api_geocode"):
+                if USE_GOOGLE_PLACES:
+                    result = geocode_address_google(address, country=country)
+                else:
+                    # Fallback vers le service existant
+                    from services.geolocation.maps import geocode_address
+
+                    coords = geocode_address(address, country=country)
+                    result = (
+                        {
+                            "address": address,
+                            "lat": coords.get("lat"),
+                            "lon": coords.get("lon"),
+                        }
+                        if coords
+                        else None
+                    )
 
             if not result:
                 return APIErrorHandler.handle_not_found(

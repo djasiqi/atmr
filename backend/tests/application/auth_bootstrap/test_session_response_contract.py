@@ -34,6 +34,8 @@ def _base_snap() -> SessionBootstrapSnapshot:
         public_id="p-1",
         username="john",
         email="j@example.com",
+        first_name="Mirjete",
+        last_name="Osmani",
         role=UserRole.DRIVER,
         account_status=None,
         driver_id=7,
@@ -50,6 +52,8 @@ def test_success_payload_has_all_keys():
     assert p["access_denied_code"] is None
     assert p["message"] is None
     assert p["account_active"] is True
+    assert p["first_name"] == "Mirjete"
+    assert p["last_name"] == "Osmani"
     assert "error" not in p
 
 

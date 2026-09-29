@@ -4,6 +4,43 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 
+def _apply_portal_carrier_tariff(booking: Any, company_id: int) -> None:
+    """Écrit le tarif de l'entreprise sur la course acceptée, et sur chaque trajet du groupe."""
+    from decimal import Decimal
+
+    from services.pricing.portal_carrier_ceiling import (
+        estimate_portal_carrier_offer_amount,
+    )
+
+    def _write(target: Any) -> None:
+        quoted = estimate_portal_carrier_offer_amount(target, int(company_id))
+        if quoted is None:
+            return
+        target.amount = float(quoted)
+        target.price_amount = Decimal(str(quoted))
+
+    _write(booking)
+    group_id = getattr(booking, "route_group_id", None)
+    booking_id = getattr(booking, "id", None)
+    if not group_id or booking_id is None:
+        return
+
+    from models.booking import Booking
+
+    siblings = Booking.query.filter(
+        Booking.route_group_id == group_id,
+        Booking.id != int(booking_id),
+    ).all()
+    for sibling in siblings:
+        owner = getattr(sibling, "company_id", None)
+        if owner not in (None, company_id):
+            continue
+        sibling.company_id = company_id
+        if _status_value(getattr(sibling, "status", None)).upper() == "PENDING":
+            _set_status(sibling, "accepted")
+        _write(sibling)
+
+
 def _status_value(status: Any) -> str:
     if status is None:
         return ""
@@ -201,4 +238,6 @@ class AcceptReservationUseCase:
 
         booking.company_id = company_id
         _set_status(booking, "accepted")
+        if client is not None and is_portal_client(client):
+            _apply_portal_carrier_tariff(booking, int(company_id))
         return AcceptReservationResult(ok=True, should_trigger_dispatch=True)

@@ -1,7 +1,10 @@
 import React, { useMemo } from 'react';
 import { formatCurrencyCHF } from '../../../../../services/invoiceService';
 import { formatPatientDisplayNameNomPrenom } from '../../../../../utils/patientDisplayName';
-import { getRoundTripAuditLegs } from '../../../../../utils/invoiceLineRoundTrip';
+import {
+  getRoundTripAuditLegs,
+  transportDescriptionsAreStrictReverse,
+} from '../../../../../utils/invoiceLineRoundTrip';
 import styles from './InvoiceLivePreview.module.css';
 
 const MONTHS_FR = [
@@ -249,29 +252,28 @@ function payerHint(inv) {
   return null;
 }
 
-/** Ligne RIDE fusionnée avec une autre pour l’aperçu : masquer la ligne « retour » dupliquée. */
-function linePreviewHiddenMergedRoundTrip(line) {
-  const m = line?.line_meta;
-  if (!m || typeof m !== 'object') return false;
-  return m.preview_hide_merged_round_trip === true;
+/** Masque le retour seulement si c'est le miroir exact de l'aller (A→B et B→A). */
+function linePreviewHiddenMergedRoundTrip(line, allLines) {
+  const m = parseMeta(line?.line_meta);
+  if (m?.preview_hide_merged_round_trip !== true) return false;
+  const primaryId = Number(m.round_trip_merge_primary_reservation_id);
+  const primary = (Array.isArray(allLines) ? allLines : []).find(
+    (ln) => Number(ln?.reservation_id) === primaryId
+  );
+  if (!primary) return false;
+  return transportDescriptionsAreStrictReverse(primary.description, line.description);
 }
 
-/**
- * [A/R] uniquement si deux segments sont fusionnés (payeur / ligne masquée),
- * ou si l’aperçu période a fusionné un vrai A/R (jambe + borne fin → deux créneaux).
- * Ne pas se fier à `is_round_trip_leg` seul (faux positifs aller simple).
- */
-/** [A/R] uniquement si fusion métier explicite (partenaire réservation ou ligne masquée). */
-function lineIsRoundTrip(line) {
-  const m = line?.line_meta;
-  if (!m || typeof m !== 'object') return false;
-  if (m.period_preview_single_leg) return false;
-  if (m.round_trip_merge_partner_reservation_id != null) return true;
-  if (m.preview_hide_merged_round_trip === true) return true;
-  if (m.billing_unit === 'round_trip') return true;
-  const sec = m.round_trip_secondary_reservation_ids;
-  if (Array.isArray(sec) && sec.length > 0) return true;
-  return m.round_trip_secondary_reservation_id != null;
+/** Partenaire affiché en A/R : présent et trajet strictement inverse. */
+function commercialRoundTripPartner(line, byReservationId) {
+  const m = parseMeta(line?.line_meta);
+  if (m?.period_preview_single_leg) return null;
+  const rid = m?.round_trip_merge_partner_reservation_id;
+  if (rid == null || !byReservationId) return null;
+  const partner = byReservationId.get(Number(rid));
+  if (!partner) return null;
+  if (!transportDescriptionsAreStrictReverse(line?.description, partner.description)) return null;
+  return partner;
 }
 
 /** Montants HT / TVA / TTC pour une ligne principale A/R (somme des deux segments facturés). */
@@ -420,12 +422,14 @@ export default function InvoiceLivePreview({
         return a.idx - b.idx;
       })
       .map(({ ln }) => ln)
-      .filter((ln) => !linePreviewHiddenMergedRoundTrip(ln));
+      .filter((ln) => !linePreviewHiddenMergedRoundTrip(ln, raw));
   }, [invoice?.lines]);
   const showTransportDateColumn = lines.some(
     (ln) => lineDetailDateLabel(ln, invoice) != null
   );
-  const showRoundTripLegend = lines.some((ln) => lineIsRoundTrip(ln));
+  const showRoundTripLegend = lines.some(
+    (ln) => commercialRoundTripPartner(ln, rideLinesByReservationId) != null
+  );
   const payer = payerHint(invoice);
 
   const gdBreakdown = useMemo(() => {
@@ -499,11 +503,11 @@ export default function InvoiceLivePreview({
                 const sub = customPrestationSubline(line);
                 const transportDate = lineDetailDateLabel(line, invoice);
                 const patientSub = rideLinePatientSubline(line, invoice);
-                const lineMeta = parseMeta(line?.line_meta);
-                const partnerRid = lineMeta?.round_trip_merge_partner_reservation_id;
-                const mergePartner =
-                  partnerRid != null ? rideLinesByReservationId.get(Number(partnerRid)) : null;
-                const isAr = lineIsRoundTrip(line);
+                const mergePartner = commercialRoundTripPartner(
+                  line,
+                  rideLinesByReservationId
+                );
+                const isAr = mergePartner != null;
                 const partnerKind = mergePartner
                   ? String(mergePartner.type ?? mergePartner.line_type ?? '')
                       .trim()

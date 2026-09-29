@@ -764,8 +764,11 @@ def _geocode_safe_cached(address: str) -> tuple[float, float] | None:
         return None
     try:
         # ✅ REFACTORING: Utilisation de l'interface pour découpler du service de géocodage
+        from services.geolocation.google_geocoding_gate import geocoding_source
+
         geocoding_service = get_geocoding_service()
-        res = geocoding_service.geocode_address(address)
+        with geocoding_source("dispatch"):
+            res = geocoding_service.geocode_address(address)
         # attendu: dict {"lat": ..., "lon": ...} OU (lat, lon)
         if isinstance(res, dict) and "lat" in res and "lon" in res:
             res_d = cast("Dict[str, Any]", res)

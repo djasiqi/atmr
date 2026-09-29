@@ -1,5 +1,5 @@
 import React, {
-  useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle,
+  useState, useRef, useEffect, useLayoutEffect, useCallback, forwardRef, useImperativeHandle,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { FiClock } from 'react-icons/fi';
@@ -23,7 +23,7 @@ const InlineTimePicker = forwardRef(function InlineTimePicker({
   const wrapperRef = useRef(null);
   const popoverRef = useRef(null);
   const inputRef = useRef(null);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const [masked, setMasked] = useState('');
   const [showUndefinedLabel, setShowUndefinedLabel] = useState(false);
 
@@ -133,7 +133,7 @@ const InlineTimePicker = forwardRef(function InlineTimePicker({
     const rect = wrapperRef.current.getBoundingClientRect();
     const margin = 8;
     const gap = 4;
-    const popW = 180;
+    const popW = Math.round(rect.width) || 180;
     const measured = popoverRef.current?.offsetHeight;
     const popH = measured && measured > 48 ? measured : 220;
     const spaceBelow = window.innerHeight - rect.bottom - margin;
@@ -144,18 +144,23 @@ const InlineTimePicker = forwardRef(function InlineTimePicker({
     } else {
       top = rect.top - popH - gap;
     }
-    let left = Math.min(rect.left, window.innerWidth - popW - margin);
+    let left = rect.left;
     left = Math.max(margin, Math.min(left, window.innerWidth - popW - margin));
     top = Math.max(margin, Math.min(top, window.innerHeight - popH - margin));
-    setPos({ top, left });
+    setPos({ top, left, width: popW });
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     updatePosition();
+    const id = window.requestAnimationFrame(() => updatePosition());
     window.addEventListener('scroll', updatePosition, true);
     window.addEventListener('resize', updatePosition);
-    return () => { window.removeEventListener('scroll', updatePosition, true); window.removeEventListener('resize', updatePosition); };
+    return () => {
+      window.cancelAnimationFrame(id);
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
   }, [open, updatePosition]);
 
   useEffect(() => {
@@ -205,7 +210,13 @@ const InlineTimePicker = forwardRef(function InlineTimePicker({
       </div>
 
       {open && createPortal(
-        <div ref={popoverRef} className={tp.popover} style={{ top: pos.top, left: pos.left }}>
+        <div
+          ref={popoverRef}
+          className={tp.popover}
+          style={{ top: pos.top, left: pos.left, width: pos.width || undefined }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
           <div className={tp.popoverTitle}>
             <FiClock size={11} className={tp.popoverTitleIcon} />
             Heure

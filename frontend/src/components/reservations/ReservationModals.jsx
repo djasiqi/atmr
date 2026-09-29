@@ -8,6 +8,7 @@ import EditReservationModal from './EditReservationModal';
 import InlineDatePicker from '../ui/InlineDatePicker';
 import InlineTimePicker from '../ui/InlineTimePicker';
 import { hasScheduledPickupTime, isReturnLeg } from '../../utils/bookingScheduling';
+import { pickupNeedsCompanyConfirmation } from '../../utils/routeGroupItinerary';
 import styles from './ReservationModals.module.css';
 
 const DEMO_FIRST_NAMES = [
@@ -61,6 +62,7 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const parseValidDate = (value) => {
     if (!value) return null;
@@ -69,36 +71,64 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
     return date;
   };
 
+  const formatDateInput = (dateObj) => {
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatTimeInput = (dateObj) => {
+    const hours = String(dateObj.getHours()).padStart(2, '0');
+    const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
   useEffect(() => {
     if (isOpen) {
-      // Priorité: date retour existante > date aller (original_booking) > now+1h.
-      const dateObj =
-        parseValidDate(reservation?.scheduled_time)
+      setError('');
+      const confirmingPickup = pickupNeedsCompanyConfirmation(reservation);
+      const appointment = confirmingPickup
+        ? parseValidDate(reservation?.scheduled_time)
+        : null;
+      const dateObj = appointment
+        || parseValidDate(reservation?.scheduled_time)
         || parseValidDate(reservation?.original_booking?.scheduled_time)
         || parseValidDate(reservation?.pickup_time)
         || new Date(Date.now() + 60 * 60 * 1000);
 
-      const year = dateObj.getFullYear();
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      setSelectedDate(`${year}-${month}-${day}`);
+      if (appointment) {
+        const travelSec = Number(reservation?.duration_seconds);
+        const leadMs = Number.isFinite(travelSec) && travelSec >= 60
+          ? travelSec * 1000
+          : 30 * 60 * 1000;
+        const suggested = new Date(appointment.getTime() - leadMs);
+        setSelectedDate(formatDateInput(suggested));
+        setSelectedTime(formatTimeInput(suggested));
+        return;
+      }
+
+      setSelectedDate(formatDateInput(dateObj));
 
       if (!hasScheduledPickupTime(reservation)) {
         setSelectedTime('');
       } else {
-        const hours = dateObj.getHours();
-        const minutes = dateObj.getMinutes();
-        setSelectedTime(`${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
+        setSelectedTime(formatTimeInput(dateObj));
       }
     }
   }, [isOpen, reservation]);
 
   const isReturn = isReturnLeg(reservation);
+  const confirmingPickup = pickupNeedsCompanyConfirmation(reservation);
+  const appointmentLabel = String(reservation?.scheduling?.display_time || '')
+    .replace(/\s*\(non confirmé\)\s*$/i, '')
+    .trim();
 
   const handleConfirm = async () => {
     if (!selectedDate || !selectedTime) return;
 
     setLoading(true);
+    setError('');
     try {
       if (typeof onConfirm === 'function') {
         // Envoyer la date/heure locale telle quelle, sans conversion UTC via Date.
@@ -111,8 +141,12 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
         }
       }
       onClose();
-    } catch (error) {
-      console.error('Erreur lors de la planification:', error);
+    } catch (confirmError) {
+      const message = confirmError?.response?.data?.message
+        || confirmError?.response?.data?.error
+        || confirmError?.message
+        || "Impossible de confirmer l'heure de prise en charge.";
+      setError(String(message));
     } finally {
       setLoading(false);
     }
@@ -147,7 +181,13 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
         {/* Header */}
         <div className={styles.schedHeader}>
           <div className={styles.schedHeaderIcon}><FiClock size={14} /></div>
-          <h3 className={styles.schedTitle}>{isReturn ? 'Planifier le retour' : "Planifier l'heure"}</h3>
+          <h3 className={styles.schedTitle}>
+            {isReturn
+              ? 'Planifier le retour'
+              : confirmingPickup
+                ? "Confirmer l'heure de prise en charge"
+                : "Planifier l'heure"}
+          </h3>
         </div>
 
         {/* Info card */}
@@ -157,6 +197,12 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
               <div className={styles.schedInfoRow}>
                 <span className={styles.schedInfoLabel}>Client</span>
                 <span className={styles.schedInfoValue}>{clientName}</span>
+              </div>
+            )}
+            {confirmingPickup && appointmentLabel && appointmentLabel !== 'À définir' && (
+              <div className={styles.schedInfoRow}>
+                <span className={styles.schedInfoLabel}>Rendez-vous</span>
+                <span className={styles.schedInfoValue}>{appointmentLabel}</span>
               </div>
             )}
             {isReturn && allerTime && (
@@ -186,10 +232,13 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
               <InlineDatePicker value={selectedDate} onChange={(iso) => setSelectedDate(iso)} />
             </div>
             <div className={styles.schedField}>
-              <label className={styles.schedLabel}>Heure <span>*</span></label>
+              <label className={styles.schedLabel}>
+                {confirmingPickup ? 'Heure de prise en charge' : 'Heure'} <span>*</span>
+              </label>
               <InlineTimePicker value={selectedTime} onChange={(hhmm) => setSelectedTime(hhmm)} />
             </div>
           </div>
+          {error && <p className={styles.schedError}>{error}</p>}
         </div>
 
         {/* Actions */}
@@ -208,7 +257,9 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
             onClick={handleConfirm}
             disabled={!selectedDate || !selectedTime || loading}
           >
-            {loading ? 'Planification...' : 'Planifier'}
+            {loading
+              ? (confirmingPickup ? 'Confirmation...' : 'Planification...')
+              : (confirmingPickup ? 'Accepter et confirmer' : 'Planifier')}
           </button>
         </div>
       </div>

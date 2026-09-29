@@ -9,6 +9,24 @@ import { startSaferpayHostedCheckout } from 'services/clientSaferpayPaymentServi
 
 const mockNavigate = jest.fn();
 
+function isoToPickerDisplay(iso) {
+  const [year, month, day] = String(iso).split('-');
+  return `${day}.${month}.${year}`;
+}
+
+function setTransportDate(iso) {
+  fireEvent.change(screen.getByLabelText('Date du transport'), {
+    target: { value: isoToPickerDisplay(iso) },
+  });
+}
+
+function readTransportDateIso() {
+  const raw = document.getElementById('client-booking-date')?.value || '';
+  const dotted = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (dotted) return `${dotted[3]}-${dotted[2]}-${dotted[1]}`;
+  return raw;
+}
+
 jest.mock('react-router-dom', () => {
   const actual = jest.requireActual('react-router-dom');
   return {
@@ -155,7 +173,32 @@ describe('ClientDashboard', () => {
 
   const mockBookings = [];
 
+  const dismissEmptyMedicalDestination = () => {
+    const medicalSwitch = screen.queryByRole('switch', { name: 'Destination médicale' });
+    if (!medicalSwitch || medicalSwitch.getAttribute('aria-checked') !== 'true') return;
+    const facility = screen.queryByLabelText(/Établissement/i);
+    const service = screen.queryByLabelText(/^Service/i);
+    const doctor = screen.queryByLabelText(/^Médecin/i);
+    if (facility?.value || service?.value || doctor?.value) return;
+    fireEvent.click(medicalSwitch);
+  };
+
   const openPortalReview = async () => {
+    const returnDay = document.getElementById('client-booking-return-date');
+    if (returnDay) {
+      const outboundValue = readTransportDateIso();
+      if (!returnDay.value || (outboundValue && returnDay.value < outboundValue)) {
+        const base = outboundValue
+          ? new Date(`${outboundValue}T12:00:00`)
+          : new Date(Date.now() + 24 * 60 * 60 * 1000);
+        base.setDate(base.getDate() + 1);
+        const y = base.getFullYear();
+        const m = String(base.getMonth() + 1).padStart(2, '0');
+        const d = String(base.getDate()).padStart(2, '0');
+        fireEvent.change(returnDay, { target: { value: `${y}-${m}-${d}` } });
+      }
+    }
+    dismissEmptyMedicalDestination();
     const verify = await screen.findByRole('button', { name: /Vérifier la demande/i });
     await waitFor(() => expect(verify).toBeEnabled());
     fireEvent.click(verify);
@@ -245,6 +288,52 @@ describe('ClientDashboard', () => {
       expect(pickupInput).toHaveValue('Rue de Lausanne 1, 1201 Genève');
       expect(dropoffInput).toHaveValue('');
     });
+    const medicalSwitch = screen.getByRole('switch', { name: 'Destination médicale' });
+    expect(medicalSwitch).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByLabelText(/Établissement/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Service$/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Médecin$/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Préciser l’établissement/i })).not.toBeInTheDocument();
+    fireEvent.click(medicalSwitch);
+    expect(medicalSwitch).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText(/Établissement/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Service/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Médecin/i)).toBeInTheDocument();
+  });
+
+  it('active la destination médicale quand le lieu est un cabinet ou un dentiste', async () => {
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+    const dropoffInput = await screen.findByTestId('client-dashboard-dropoff');
+    fireEvent.change(dropoffInput, { target: { value: 'Gare de Lausanne' } });
+    const medicalSwitch = screen.getByRole('switch', { name: 'Destination médicale' });
+    expect(medicalSwitch).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.change(dropoffInput, { target: { value: 'Dentiste des Eaux-Vives' } });
+    expect(medicalSwitch).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText(/Établissement/i)).toHaveValue('Dentiste des Eaux-Vives');
+    expect(screen.getByLabelText(/^Service/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Médecin/i)).toBeInTheDocument();
+  });
+
+  it('range un docteur dans Médecin et propose Cabinet médical', async () => {
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+    fireEvent.change(await screen.findByTestId('client-dashboard-dropoff'), {
+      target: { value: 'Dr méd. Bigler Jean-Michel' },
+    });
+    expect(screen.getByLabelText(/Établissement/i)).toHaveValue('Cabinet médical');
+    expect(screen.getByLabelText(/^Médecin/i)).toHaveValue('Dr méd. Bigler Jean-Michel');
+  });
+
+  it('éteint la destination médicale automatique quand la destination est vidée', async () => {
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+    const dropoffInput = await screen.findByTestId('client-dashboard-dropoff');
+    fireEvent.change(dropoffInput, { target: { value: 'Clinique de Carouge' } });
+    const medicalSwitch = screen.getByRole('switch', { name: 'Destination médicale' });
+    expect(medicalSwitch).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.change(dropoffInput, { target: { value: '' } });
+    expect(medicalSwitch).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByLabelText(/Établissement/i)).not.toBeInTheDocument();
   });
 
   it('émet les événements KPI clés de réservation', async () => {
@@ -314,7 +403,7 @@ describe('ClientDashboard', () => {
     expect(screen.getByRole('button', { name: /Voir/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Modifier/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Annuler/i })).toBeInTheDocument();
-    expect(screen.getByText('Aller-retour')).toBeInTheDocument();
+    expect(screen.getByText('Aller-retour', { selector: '.bookingTripKindChip' })).toBeInTheDocument();
   });
 
   it('affiche la pastille Retour pour une course retour (is_return)', async () => {
@@ -344,8 +433,40 @@ describe('ClientDashboard', () => {
     render(<ClientDashboard />, { wrapper: createWrapper() });
 
     expect(await screen.findByText(/Prochaine course/i)).toBeInTheDocument();
-    expect(screen.getByText('Retour')).toBeInTheDocument();
-    expect(screen.queryByText('Aller-retour')).not.toBeInTheDocument();
+    expect(screen.getByText('Retour', { selector: '.bookingTripKindChip' })).toBeInTheDocument();
+    expect(
+      screen.queryByText('Aller-retour', { selector: '.bookingTripKindChip' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('ne place pas un retour déjà terminé dans Prochaine course', async () => {
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/clients/client-123') {
+        return Promise.resolve({ data: mockProfile });
+      }
+      if (url.includes('/bookings')) {
+        return Promise.resolve({
+          data: [
+            {
+              id: 46799,
+              pickup_location: 'Clinique de Joli-Mont, Avenue Trembley 45, 1209, Genève',
+              dropoff_location: 'Avenue Ernest-Pictet 9, 1203, Genève',
+              scheduled_time: toIso(20 * 60 * 60 * 1000),
+              status: 'return_completed',
+              amount: 40,
+              is_return: true,
+            },
+          ],
+        });
+      }
+      return Promise.reject(new Error('Not found'));
+    });
+
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+
+    expect(await screen.findByText(/Reprendre un trajet récent/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Prochaine course/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Terminée')).not.toBeInTheDocument();
   });
 
   it('affiche les courses recentes quand il n y a pas de course active/future', async () => {
@@ -375,24 +496,200 @@ describe('ClientDashboard', () => {
 
     expect(await screen.findByText(/Reprendre un trajet récent/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Réutiliser ce trajet/i })).toBeInTheDocument();
-    expect(screen.getByText('Aller-retour')).toBeInTheDocument();
+    expect(screen.getByText('Aller-retour', { selector: '.bookingTripKindChip' })).toBeInTheDocument();
   });
 
-  it('désactive date et heure quand dès que possible est activé', async () => {
+  it('regroupe un transport à plusieurs étapes en un seul trajet récent', async () => {
+    const groupId = '18b0975a-221b-455c-a526-f5574b4122fc';
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/clients/client-123') {
+        return Promise.resolve({ data: mockProfile });
+      }
+      if (url.includes('/bookings')) {
+        return Promise.resolve({
+          data: [
+            {
+              id: 46797,
+              route_group_id: groupId,
+              route_sequence_number: 1,
+              pickup_location: 'Avenue Ernest-Pictet 9, 1203, Genève',
+              dropoff_location: 'Hôpitaux Universitaires de Genève (HUG)',
+              hospital_service: 'Radiologie',
+              scheduled_time: toIso(-3 * 60 * 60 * 1000),
+              status: 'COMPLETED',
+              amount: 40,
+              is_round_trip: true,
+              is_return: false,
+              company_id: 1,
+            },
+            {
+              id: 46798,
+              route_group_id: groupId,
+              route_sequence_number: 2,
+              pickup_location: 'Hôpitaux Universitaires de Genève (HUG)',
+              dropoff_location: 'Clinique de Joli-Mont',
+              doctor_name: 'Docteur Rashiti',
+              scheduled_time: toIso(-2 * 60 * 60 * 1000),
+              status: 'COMPLETED',
+              amount: 40,
+              is_round_trip: false,
+              is_return: false,
+              company_id: 1,
+            },
+            {
+              id: 46799,
+              route_group_id: groupId,
+              route_sequence_number: 3,
+              parent_booking_id: 46798,
+              pickup_location: 'Clinique de Joli-Mont',
+              dropoff_location: 'Avenue Ernest-Pictet 9, 1203, Genève',
+              scheduled_time: null,
+              status: 'ACCEPTED',
+              amount: 40,
+              is_round_trip: false,
+              is_return: true,
+              company_id: 1,
+            },
+          ],
+        });
+      }
+      return Promise.reject(new Error('Not found'));
+    });
+
     render(<ClientDashboard />, { wrapper: createWrapper() });
 
-    const dateInput = await screen.findByLabelText(/Date/i);
-    const timeInput = screen.getByLabelText(/Heure/i);
-    const asapRadio = screen.getByRole('radio', { name: /Dès que possible/i });
+    expect(await screen.findByText(/Reprendre un trajet récent/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Réutiliser ce trajet/i })).toHaveLength(1);
+    expect(screen.getByText('3 trajets', { selector: '.bookingTripKindChip' })).toBeInTheDocument();
+    expect(screen.queryByText('Aller-retour', { selector: '.bookingTripKindChip' })).not.toBeInTheDocument();
+    expect(screen.getByText('Étape 1')).toBeInTheDocument();
+    expect(screen.getByText(/Hôpitaux Universitaires de Genève/)).toBeInTheDocument();
+    expect(screen.getByText('Étape 2')).toBeInTheDocument();
+    expect(screen.getByText('Clinique de Joli-Mont')).toBeInTheDocument();
+    expect(screen.getByText('Retour', { selector: '.recentTripLegLabel' })).toBeInTheDocument();
 
-    expect(dateInput).not.toBeDisabled();
-    expect(timeInput).not.toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /Réutiliser ce trajet/i }));
 
-    fireEvent.click(asapRadio);
+    expect(screen.getByTestId('client-dashboard-pickup')).toHaveValue(
+      'Avenue Ernest-Pictet 9, 1203, Genève'
+    );
+    expect(screen.getByTestId('client-dashboard-dropoff')).toHaveValue(
+      'Hôpitaux Universitaires de Genève (HUG)'
+    );
+    expect(screen.getByLabelText('Étape 2')).toHaveValue('Clinique de Joli-Mont');
+  });
 
-    expect(dateInput).toBeDisabled();
-    expect(timeInput).toBeDisabled();
-    expect(asapRadio).toBeChecked();
+  it('propose le dernier trajet et le trajet le plus utilisé', async () => {
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/clients/client-123') {
+        return Promise.resolve({ data: mockProfile });
+      }
+      if (url.includes('/bookings')) {
+        return Promise.resolve({
+          data: [
+            {
+              id: 10,
+              pickup_location: 'Avenue Ernest-Pictet 9',
+              dropoff_location: 'HUG',
+              scheduled_time: toIso(-20 * 24 * 60 * 60 * 1000),
+              status: 'COMPLETED',
+              amount: 40,
+            },
+            {
+              id: 11,
+              pickup_location: 'Avenue Ernest-Pictet 9',
+              dropoff_location: 'HUG',
+              scheduled_time: toIso(-10 * 24 * 60 * 60 * 1000),
+              status: 'COMPLETED',
+              amount: 40,
+            },
+            {
+              id: 12,
+              pickup_location: 'Genève',
+              dropoff_location: 'Lausanne',
+              scheduled_time: toIso(-2 * 60 * 60 * 1000),
+              status: 'COMPLETED',
+              amount: 50,
+            },
+          ],
+        });
+      }
+      return Promise.reject(new Error('Not found'));
+    });
+
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+
+    expect(await screen.findByText('Dernier')).toBeInTheDocument();
+    expect(screen.getByText('Le plus utilisé')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Réutiliser ce trajet/i })).toHaveLength(2);
+    expect(screen.getByText('Lausanne')).toBeInTheDocument();
+    expect(screen.getByText('HUG')).toBeInTheDocument();
+  });
+
+  it('reprend un aller simple sans remettre le retour', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/dashboard/client/client-123',
+            state: {
+              prefillFromBooking: {
+                pickup_location: 'Avenue Ernest-Pictet 9, 1203, Genève',
+                dropoff_location:
+                  'Hôpitaux Universitaires de Genève (HUG), Rue Gabrielle-Perret-Gentil 4, 1205 Genève',
+                dropoff_detail: 'Radiologie',
+                extra_stops: [],
+                round_trip: false,
+              },
+            },
+          },
+        ]}
+      >
+        <QueryClientProvider client={queryClient}>
+          <Routes>
+            <Route path="/dashboard/client/:id" element={<ClientDashboard />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByLabelText('Aller-retour')).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByText('Identique au point de départ')).not.toBeInTheDocument();
+    expect(screen.getByTestId('client-dashboard-pickup')).toHaveValue(
+      'Avenue Ernest-Pictet 9, 1203, Genève'
+    );
+    await waitFor(() => {
+      expect(document.getElementById('client-booking-service')).toHaveValue('Radiologie');
+    });
+  });
+
+  it('affiche les horaires du trajet et la date', async () => {
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+
+    expect(await screen.findByLabelText('Heure de départ')).toBeEnabled();
+    expect(screen.getByLabelText('Heure du rendez-vous')).toBeEnabled();
+    expect(screen.getByLabelText(/Date du transport/i)).toBeEnabled();
+  });
+
+  it('ouvre le calendrier au clic sur la date de l’en-tête', async () => {
+    render(<ClientDashboard />, { wrapper: createWrapper() });
+
+    const dateField = await screen.findByLabelText(/Date du transport/i);
+
+    fireEvent.click(dateField.closest('.portalHeaderDate'));
+
+    expect(await screen.findByRole('dialog', { name: 'Choisir une date' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mois précédent' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mois suivant' }));
+    expect(screen.getByRole('dialog', { name: 'Choisir une date' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mois précédent' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mois précédent' }));
+    expect(screen.getByRole('button', { name: 'Mois précédent' })).toBeDisabled();
   });
 
   it('la réservation reste possible si estimation itinéraire échoue', async () => {
@@ -429,7 +726,12 @@ describe('ClientDashboard', () => {
       await screen.findByText(/Impossible d’estimer ce trajet pour le moment/i, {}, { timeout: 4000 })
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Dès que possible' }));
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    setTransportDate(
+      `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`
+    );
+    fireEvent.change(screen.getByLabelText('Heure de départ'), { target: { value: '10:30' } });
+
     await confirmPortalOrder();
 
     await waitFor(() => {
@@ -459,10 +761,8 @@ describe('ClientDashboard', () => {
     const y = tomorrow.getFullYear();
     const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
     const d = String(tomorrow.getDate()).padStart(2, '0');
-    fireEvent.change(screen.getByLabelText(/Date/i), {
-      target: { value: `${y}-${m}-${d}` },
-    });
-    fireEvent.change(screen.getByLabelText(/Heure/i), {
+    setTransportDate(`${y}-${m}-${d}`);
+    fireEvent.change(screen.getByLabelText('Heure du rendez-vous'), {
       target: { value: '10:30' },
     });
     await confirmPortalOrder();
@@ -494,7 +794,7 @@ describe('ClientDashboard', () => {
 
     render(<ClientDashboard />, { wrapper: createWrapper() });
 
-    await screen.findByDisplayValue('Rue de Lausanne 1, 1201 Genève');
+    await screen.findByTestId('client-dashboard-pickup');
 
     fireEvent.change(await screen.findByTestId('client-dashboard-pickup'), {
       target: { value: 'Genève Gare' },
@@ -507,12 +807,17 @@ describe('ClientDashboard', () => {
     const y = tomorrow.getFullYear();
     const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
     const d = String(tomorrow.getDate()).padStart(2, '0');
-    fireEvent.change(screen.getByLabelText(/Date/i), {
-      target: { value: `${y}-${m}-${d}` },
-    });
-    fireEvent.change(screen.getByLabelText(/Heure/i), {
+    setTransportDate(`${y}-${m}-${d}`);
+    fireEvent.change(screen.getByLabelText('Heure du rendez-vous'), {
       target: { value: '10:30' },
     });
+    const returnLater = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+    fireEvent.change(document.getElementById('client-booking-return-date'), {
+      target: {
+        value: `${returnLater.getFullYear()}-${String(returnLater.getMonth() + 1).padStart(2, '0')}-${String(returnLater.getDate()).padStart(2, '0')}`,
+      },
+    });
+    dismissEmptyMedicalDestination();
     const submitTransport = await screen.findByRole('button', {
       name: /Valider la demande de transport/i,
     });
@@ -553,10 +858,8 @@ describe('ClientDashboard', () => {
     const y = tomorrow.getFullYear();
     const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
     const d = String(tomorrow.getDate()).padStart(2, '0');
-    fireEvent.change(screen.getByLabelText(/Date/i), {
-      target: { value: `${y}-${m}-${d}` },
-    });
-    fireEvent.change(screen.getByLabelText(/Heure/i), {
+    setTransportDate(`${y}-${m}-${d}`);
+    fireEvent.change(screen.getByLabelText('Heure du rendez-vous'), {
       target: { value: '10:30' },
     });
     await confirmPortalOrder();
@@ -583,9 +886,7 @@ describe('ClientDashboard', () => {
     const y = tomorrow.getFullYear();
     const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
     const d = String(tomorrow.getDate()).padStart(2, '0');
-    fireEvent.change(document.getElementById('client-booking-date'), {
-      target: { value: `${y}-${m}-${d}` },
-    });
+    setTransportDate(`${y}-${m}-${d}`);
     fireEvent.change(document.getElementById('client-booking-time'), {
       target: { value: '10:30' },
     });
@@ -596,7 +897,7 @@ describe('ClientDashboard', () => {
     await fillOutbound();
     await openPortalReview();
 
-    expect(screen.getAllByText('Jean Dupont').length).toBeGreaterThan(1);
+    expect(screen.getByText(/Contact : Jean Dupont/)).toBeInTheDocument();
     // Hors DV : estimation indicative. Avec DV : uniquement le plafond (pas les deux).
     const hasEstimate = screen.queryByText(/Estimation indicative : CHF/i);
     const hasCeiling = screen.queryByText(/Prix maximum accepté \(pas le prix final\)/i);
@@ -609,7 +910,6 @@ describe('ClientDashboard', () => {
     } else {
       expect(screen.getByText(/Indicative — le montant final/i)).toBeInTheDocument();
     }
-    expect(screen.getByText(/Attribué après confirmation/i)).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Confirmer la demande de transport' })
     ).toBeInTheDocument();

@@ -414,25 +414,42 @@ class ManageClientProfile(Resource):
                     and validated_data[mobility_key] is not None
                 ):
                     client_data[mobility_key] = bool(validated_data[mobility_key])
+            if "habitual_assistance_detail" in validated_data:
+                client_data["habitual_assistance_detail"] = validated_data[
+                    "habitual_assistance_detail"
+                ]
             if "invoice_delivery_method" in validated_data:
                 client_data["invoice_delivery_method"] = validated_data[
                     "invoice_delivery_method"
                 ]
 
             # Utiliser le use case pour les champs Client
+            assistance_error = None
             if client_data:
                 uc = UpdateCompanyClientUseCase()
                 result = uc.execute(client=cast(Any, client), data=client_data)
                 if not result.ok:
-                    return result.error or {
-                        "error": "Failed to update client"
-                    }, result.status_code or 400
+                    message = ""
+                    if isinstance(result.error, dict):
+                        message = str(result.error.get("error") or "")
+                    # L'étage, le code, le complément et le fauteuil sont déjà
+                    # posés : on les enregistre, puis on demande le type.
+                    if "type d" in message and "assistance" in message:
+                        assistance_error = result.error or {
+                            "error": "Indiquez le type d’assistance."
+                        }
+                    else:
+                        return result.error or {
+                            "error": "Failed to update client"
+                        }, result.status_code or 400
 
             # Mise à jour des champs User (non gérés par le use case actuel)
             if validated_data.get("first_name"):
                 client.user.first_name = validated_data["first_name"]
             if validated_data.get("last_name"):
-                client.user.last_name = validated_data["last_name"]
+                from shared.user_display import family_name_upper
+
+                client.user.last_name = family_name_upper(validated_data["last_name"])
             if "gender" in validated_data:
                 client.user.gender = GenderEnum(validated_data["gender"])
             if "phone" in validated_data and client.user is not None:
@@ -455,6 +472,8 @@ class ManageClientProfile(Resource):
                     client.user.phone = validated_data.get("phone")
 
             db.session.commit()
+            if assistance_error:
+                return assistance_error, 400
             return {"message": "Profile updated successfully"}, 200
 
         except Exception as e:
@@ -645,15 +664,18 @@ class ClientMyBookingPreview(Resource):
             except ValidationError as e:
                 return handle_validation_error(e)
 
+            from services.geolocation.google_geocoding_gate import geocoding_source
+
             geocoding = get_geocoding_service()
-            pickup = geocoding.geocode_address(
-                validated["pickup_location"],
-                country="CH",
-            )
-            dropoff = geocoding.geocode_address(
-                validated["dropoff_location"],
-                country="CH",
-            )
+            with geocoding_source("pricing"):
+                pickup = geocoding.geocode_address(
+                    validated["pickup_location"],
+                    country="CH",
+                )
+                dropoff = geocoding.geocode_address(
+                    validated["dropoff_location"],
+                    country="CH",
+                )
             if not pickup or pickup.get("lat") is None or pickup.get("lon") is None:
                 return APIErrorHandler.handle_validation_error(
                     "Adresse de départ non géocodable.",
@@ -2292,6 +2314,88 @@ class GenerateQRBill(Resource):
 # -------------------------------------------------------------------
 
 
+@clients_ns.route("/me/message-notifications")
+class ClientMessageNotifications(Resource):
+    @jwt_required()
+    @role_required(UserRole.client)
+    def get(self):
+        """Réponses écrites du transporteur pour la cloche du portail client."""
+        try:
+            current_user = get_current_user_via_use_case()
+            if not current_user:
+                return APIErrorHandler.handle_permission_error(
+                    "User not found or invalid token",
+                    logger_instance=logger,
+                )
+            client = client_repo.find_by_user_id_with_user(current_user.id)
+            if not client or not getattr(client, "is_active", True):
+                return APIErrorHandler.handle_permission_error(
+                    "Client profile not found",
+                    logger_instance=logger,
+                )
+
+            from models.booking import Booking
+            from models.booking_message import BookingMessage, BookingMessageSender
+            from services.notifications.client_message_bell import (
+                serialize_client_invoice_notification,
+                serialize_client_message_notification,
+            )
+
+            rows = (
+                db.session.query(BookingMessage, Booking)
+                .join(Booking, Booking.id == BookingMessage.booking_id)
+                .filter(
+                    Booking.client_id == client.id,
+                    BookingMessage.sender_type == BookingMessageSender.COMPANY,
+                )
+                .order_by(BookingMessage.created_at.desc(), BookingMessage.id.desc())
+                .limit(20)
+                .all()
+            )
+            notifications = [
+                serialize_client_message_notification(message, booking)
+                for message, booking in rows
+            ]
+            from models.enums import InvoiceStatus
+            from models.invoice import Invoice
+            from sqlalchemy import or_
+            from sqlalchemy.orm import joinedload
+
+            invoices = (
+                db.session.query(Invoice)
+                .options(joinedload(Invoice.company))
+                .filter(
+                    or_(
+                        Invoice.client_id == client.id,
+                        Invoice.bill_to_client_id == client.id,
+                    ),
+                    Invoice.status.in_(
+                        (
+                            InvoiceStatus.SENT,
+                            InvoiceStatus.PARTIALLY_PAID,
+                            InvoiceStatus.OVERDUE,
+                        )
+                    ),
+                )
+                .order_by(
+                    Invoice.sent_at.desc().nulls_last(),
+                    Invoice.issued_at.desc(),
+                    Invoice.id.desc(),
+                )
+                .limit(10)
+                .all()
+            )
+            notifications.extend(
+                serialize_client_invoice_notification(invoice) for invoice in invoices
+            )
+            notifications.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+            notifications = notifications[:20]
+            return {"notifications": notifications, "total": len(notifications)}, 200
+        except Exception as e:
+            logger.error("message-notifications client: %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
 @clients_ns.route("/me")
 class DeleteAccount(Resource):
     @jwt_required()
@@ -3125,9 +3229,12 @@ class ClientsList(Resource):
             # Créer l'utilisateur (création directe temporaire, à migrer vers use case)
             from models import Client, User
 
+            from shared.user_display import family_name_upper
+
+            stored_last_name = family_name_upper(data["last_name"]) or data["last_name"]
             new_user = cast("Any", User)(
                 first_name=data["first_name"],
-                last_name=data["last_name"],
+                last_name=stored_last_name,
                 email=data["email"],
                 role=UserRole.client,
             )
@@ -3162,9 +3269,13 @@ class ClientsList(Resource):
             # Géocodage de l'adresse de domicile
             if main_address:
                 try:
+                    from services.geolocation.google_geocoding_gate import (
+                        geocoding_source,
+                    )
                     from services.geolocation.maps import geocode_address
 
-                    coords = geocode_address(main_address.strip(), country="CH")
+                    with geocoding_source("client_address"):
+                        coords = geocode_address(main_address.strip(), country="CH")
                     if coords:
                         new_client.domicile_address = main_address
                         new_client.domicile_lat = coords.get("lat")
@@ -3198,9 +3309,13 @@ class ClientsList(Resource):
             billing_address = data.get("billing_address")
             if billing_address and billing_address.strip():
                 try:
+                    from services.geolocation.google_geocoding_gate import (
+                        geocoding_source,
+                    )
                     from services.geolocation.maps import geocode_address
 
-                    coords = geocode_address(billing_address.strip(), country="CH")
+                    with geocoding_source("client_address"):
+                        coords = geocode_address(billing_address.strip(), country="CH")
                     if coords:
                         new_client.billing_address = billing_address
                         new_client.billing_lat = coords.get("lat")

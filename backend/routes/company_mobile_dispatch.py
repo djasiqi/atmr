@@ -318,9 +318,11 @@ def _resolve_booking_map_coordinates(
         return None, None
 
     try:
+        from services.geolocation.google_geocoding_gate import geocoding_source
         from services.geolocation.maps import geocode_address
 
-        coords = geocode_address(addr, country="CH")
+        with geocoding_source("driver_map"):
+            coords = geocode_address(addr, country="CH")
         if coords and "lat" in coords and "lon" in coords:
             return float(coords["lat"]), float(coords["lon"])
     except Exception as exc:

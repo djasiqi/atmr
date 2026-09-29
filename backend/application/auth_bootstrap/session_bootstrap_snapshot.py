@@ -22,3 +22,5 @@ class SessionBootstrapSnapshot:
     driver_is_active: bool | None
     company_relation_id: int | None
     client_active_flags: tuple[bool, ...]
+    first_name: str | None = None
+    last_name: str | None = None

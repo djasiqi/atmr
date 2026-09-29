@@ -725,6 +725,57 @@
   margin: 0;
 }
 
+.outageNotice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 14px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid #f3d19c;
+  background: #fffaf3;
+}
+
+.outageTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #9a3412;
+}
+
+.outageText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #7c2d12;
+}
+
+.outageContacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.outageContact {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #f3d19c;
+  background: #fff;
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.outageContact:hover {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
 /* ── Submit button ── */
 
 .submitButton {

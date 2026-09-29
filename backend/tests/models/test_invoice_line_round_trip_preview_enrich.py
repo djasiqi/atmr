@@ -150,3 +150,41 @@ def test_enrich_for_api_skips_single_when_pair_merge_applies():
         assert d1["line_meta"]["round_trip_merge_partner_reservation_id"] == 102
         assert d2["line_meta"]["preview_hide_merged_round_trip"] is True
         assert d1["line_meta"].get("billing_unit") != "round_trip"
+
+
+def test_three_leg_route_stays_three_invoice_lines():
+    """Étape 1, étape 2 et retour : pas de méta A/R qui masquerait une course au PDF."""
+    with patch("models.booking.Booking") as mock_booking_cls:
+        group = "18b0975a-221b-455c-a526-f5574b4122fc"
+        day = datetime(2026, 9, 29, 22, 50, 0)
+        later = datetime(2026, 9, 29, 23, 45, 0)
+        pictet = "Avenue Ernest-Pictet 9, Genève"
+        hug = "HUG, Genève"
+        joli = "Clinique de Joli-Mont, Genève"
+        ab = _booking(46797, 42, day, pictet, hug, Decimal("40.00"))
+        bc = _booking(46798, 42, later, hug, joli, Decimal("40.00"))
+        ca = _booking(46799, 42, later, joli, pictet, Decimal("40.00"))
+        ca.parent_booking_id = 46798
+        ca.is_return = True
+        ab.is_round_trip = True
+        for booking in (ab, bc, ca):
+            booking.route_group_id = group
+        mock_booking_cls.query.filter.return_value.all.return_value = [ab, bc, ca]
+        lines = [
+            SimpleNamespace(type=InvoiceLineType.RIDE, reservation_id=bid)
+            for bid in (46797, 46798, 46799)
+        ]
+        payloads = [
+            {"reservation_id": bid, "line_total": 40.0, "line_meta": {}}
+            for bid in (46797, 46798, 46799)
+        ]
+        enrich_invoice_line_payloads_for_api(
+            lines,
+            payloads,
+            bookings_by_id={46797: ab, 46798: bc, 46799: ca},
+        )
+        for payload in payloads:
+            meta = payload["line_meta"]
+            assert meta.get("billing_unit") != "round_trip"
+            assert "round_trip_merge_partner_reservation_id" not in meta
+            assert meta.get("preview_hide_merged_round_trip") is not True

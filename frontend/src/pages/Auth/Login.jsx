@@ -27,6 +27,47 @@ import AddressAutocomplete from '../../components/common/AddressAutocomplete';
 import styles from './Login.module.css';
 import institutionStyles from '../institution/Requests/InstitutionRequestForm.module.css';
 import { getApiErrorMessage } from '../../utils/apiErrorMessage';
+import {
+  getServiceUnavailableMessage,
+  LIRIE_SUPPORT_EMAIL,
+  LIRIE_SUPPORT_PHONE,
+} from '../../constants/platformSupport';
+
+function supportPhoneHref(phone) {
+  const compact = String(phone || '').replace(/[^\d+]/g, '');
+  if (!compact) return '';
+  if (compact.startsWith('+')) return `tel:${compact}`;
+  if (compact.startsWith('00')) return `tel:+${compact.slice(2)}`;
+  if (compact.startsWith('0')) return `tel:+41${compact.slice(1)}`;
+  return `tel:+${compact}`;
+}
+
+function ServiceOutageNotice() {
+  const phoneHref = supportPhoneHref(LIRIE_SUPPORT_PHONE);
+
+  return (
+    <div className={styles.outageNotice} role="alert">
+      <p className={styles.outageTitle}>Service momentanément indisponible</p>
+      <p className={styles.outageText}>
+        Une maintenance ou un incident empêche la connexion. Vous pouvez joindre le support.
+      </p>
+      {LIRIE_SUPPORT_PHONE || LIRIE_SUPPORT_EMAIL ? (
+        <div className={styles.outageContacts}>
+          {LIRIE_SUPPORT_PHONE ? (
+            <a className={styles.outageContact} href={phoneHref}>
+              {LIRIE_SUPPORT_PHONE}
+            </a>
+          ) : null}
+          {LIRIE_SUPPORT_EMAIL ? (
+            <a className={styles.outageContact} href={`mailto:${LIRIE_SUPPORT_EMAIL}`}>
+              {LIRIE_SUPPORT_EMAIL}
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 const REMEMBER_KEY = 'lirie_remember_me';
 const SIGNUP_DISABLED =
@@ -715,11 +756,13 @@ const Login = () => {
             </p>
           )}
 
-          {errorMessage && (
+          {errorMessage === getServiceUnavailableMessage() ? (
+            <ServiceOutageNotice />
+          ) : errorMessage ? (
             <p className={styles.errorMessage} role="alert">
               {errorMessage}
             </p>
-          )}
+          ) : null}
 
           {isSignupMode && SIGNUP_DISABLED ? (
             <p className={styles.resumeHint} role="note">

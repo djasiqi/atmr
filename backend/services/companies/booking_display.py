@@ -488,6 +488,20 @@ def booking_has_confirmed_pickup_time(booking: Any) -> bool:
     return booking_has_scheduled_pickup_time(booking)
 
 
+def _portal_appointment_clock(booking: Any) -> str | None:
+    """Heure de rendez-vous conservée après confirmation de la prise en charge."""
+    breakdown = getattr(booking, "price_breakdown_json", None)
+    if not isinstance(breakdown, dict):
+        return None
+    raw = str(breakdown.get("portal_appointment_time") or "").strip()
+    if not raw:
+        return None
+    match = re.search(r"(\d{2}):(\d{2})", raw)
+    if match is None:
+        return None
+    return f"{match.group(1)}:{match.group(2)}"
+
+
 def build_booking_scheduling(booking: Any) -> dict[str, Any]:
     scheduled_dt = getattr(booking, "scheduled_time", None)
     raw_time_confirmed = getattr(booking, "time_confirmed", None)
@@ -538,6 +552,7 @@ def build_booking_scheduling(booking: Any) -> dict[str, Any]:
         "time_defined": time_defined,
         "display_time": display_time,
         "display_datetime": display_datetime,
+        "appointment_time": _portal_appointment_clock(booking),
     }
 
 

@@ -818,6 +818,11 @@ def _enrich_invoice_line_payloads_single_round_trip(
         bookings_by_id = {int(b.id): b for b in bookings}
 
     invoice_rid_set = set(rids)
+    from application.invoices.round_trip_booking_pairs import (
+        booking_ids_in_longer_route_group,
+    )
+
+    frozen_chain_ids = booking_ids_in_longer_route_group(list(bookings_by_id.values()))
 
     for ln, d in zip(invoice_lines, line_dicts, strict=True):
         if ln.type != InvoiceLineType.RIDE or not ln.reservation_id:
@@ -835,6 +840,8 @@ def _enrich_invoice_line_payloads_single_round_trip(
 
         b = bookings_by_id.get(int(ln.reservation_id))
         if not b:
+            continue
+        if int(b.id) in frozen_chain_ids:
             continue
         if getattr(b, "is_return", False):
             continue

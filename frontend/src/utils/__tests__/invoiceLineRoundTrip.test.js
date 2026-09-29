@@ -1,4 +1,7 @@
-import { getRoundTripAuditLegs } from '../invoiceLineRoundTrip';
+import {
+  getRoundTripAuditLegs,
+  transportDescriptionsAreStrictReverse,
+} from '../invoiceLineRoundTrip';
 
 describe('getRoundTripAuditLegs', () => {
   it('expose les deux booking_id d’un A/R regroupé', () => {
@@ -19,6 +22,21 @@ describe('getRoundTripAuditLegs', () => {
     expect(legs.inbound.bookingId).toBe(202);
     expect(legs.outbound.amountHt).toBe(40);
     expect(legs.inbound.amountHt).toBe(40);
+  });
+
+  it('reconnaît un aller-retour miroir et refuse une chaîne', () => {
+    expect(
+      transportDescriptionsAreStrictReverse(
+        'Trajet Domicile → Hôpital',
+        'Trajet Hôpital → Domicile'
+      )
+    ).toBe(true);
+    expect(
+      transportDescriptionsAreStrictReverse(
+        'Trajet Hôpitaux Universitaires de Genève (HUG) → Clinique de Joli-Mont',
+        'Trajet Clinique de Joli-Mont → Avenue Ernest-Pictet 9'
+      )
+    ).toBe(false);
   });
 
   it('ne fusionne pas une ligne simple', () => {

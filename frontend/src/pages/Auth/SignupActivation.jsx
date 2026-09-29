@@ -491,7 +491,7 @@ const SignupActivation = () => {
         <div className={styles.card}>
           <h1 className={styles.title}>Activation terminee</h1>
           <p className={styles.subtitle}>
-            Votre compte est actif. Connectez-vous pour continuer.
+            Votre compte est actif. Connectez-vous, puis confirmez votre adresse et vos besoins habituels avant la première réservation.
           </p>
           <p className={`${styles.statusBox} ${styles.statusSuccess}`}>
             Compte active avec succes.

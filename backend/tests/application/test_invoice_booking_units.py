@@ -128,6 +128,78 @@ def test_two_patients_same_carrier_never_merged():
     assert segments == 4
 
 
+def test_three_leg_route_keeps_parent_return_as_separate_lines():
+    """A→B, B→C, C→A : le retour lié au parent ne forme pas un A/R des deux dernières courses."""
+    group = "18b0975a-221b-455c-a526-f5574b4122fc"
+    ab = _bk(
+        46797,
+        pickup="Avenue Ernest-Pictet 9, Genève",
+        dropoff="HUG, Genève",
+        amount="40.00",
+        route_group_id=group,
+        scheduled=datetime(2026, 9, 29, 22, 50, 0),
+    )
+    bc = _bk(
+        46798,
+        pickup="HUG, Genève",
+        dropoff="Clinique de Joli-Mont, Genève",
+        amount="40.00",
+        route_group_id=group,
+        scheduled=datetime(2026, 9, 29, 23, 45, 0),
+    )
+    ca = _bk(
+        46799,
+        pickup="Clinique de Joli-Mont, Genève",
+        dropoff="Avenue Ernest-Pictet 9, Genève",
+        amount="40.00",
+        route_group_id=group,
+        parent_booking_id=46798,
+        is_return=True,
+        scheduled=None,
+    )
+    ca.scheduled_time = None
+    units = resolve_invoice_booking_units(
+        selected_ids=None,
+        scope_bookings=[ab, bc, ca],
+        subject_key_fn=lambda b: resolve_subject_identity(b).key,
+        amount_ht_fn=lambda b: Decimal(str(b.amount)),
+    )
+    assert len(units) == 3
+    assert all(u.kind == "single" for u in units)
+    assert {i for u in units for i in u.booking_ids} == {46797, 46798, 46799}
+
+
+def test_two_leg_route_group_still_forms_round_trip():
+    """Un vrai A/R (2 segments, même groupe) reste une seule ligne."""
+    group = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    aller = _bk(
+        10,
+        pickup="Domicile",
+        dropoff="Hôpital",
+        amount="40.00",
+        route_group_id=group,
+    )
+    retour = _bk(
+        11,
+        pickup="Hôpital",
+        dropoff="Domicile",
+        amount="40.00",
+        route_group_id=group,
+        parent_booking_id=10,
+        is_return=True,
+        scheduled=datetime(2026, 9, 29, 18, 0, 0),
+    )
+    units = resolve_invoice_booking_units(
+        selected_ids=None,
+        scope_bookings=[aller, retour],
+        subject_key_fn=lambda b: resolve_subject_identity(b).key,
+        amount_ht_fn=lambda b: Decimal(str(b.amount)),
+    )
+    assert len(units) == 1
+    assert units[0].kind == "round_trip"
+    assert set(units[0].booking_ids) == {10, 11}
+
+
 def test_chain_abc_not_merged_as_single_round_trip():
     """A→B→C : pas une unité A/R unique (max 2 segments)."""
     a = _bk(

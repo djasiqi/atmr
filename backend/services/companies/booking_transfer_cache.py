@@ -97,6 +97,59 @@ def attach_transfer_cache_to_bookings(bookings: list[Booking]) -> None:
         )
 
 
+def _blank_medical(value: object) -> str:
+    text = str(value or "").strip()
+    if text.lower() in {"", "non spécifié", "non specifie", "none", "null"}:
+        return ""
+    return text
+
+
+def _route_leg_summary(booking: Booking) -> dict[str, Any]:
+    from services.companies.booking_display import build_booking_scheduling
+
+    scheduling = build_booking_scheduling(booking)
+    return {
+        "id": getattr(booking, "id", None),
+        "sequence": getattr(booking, "route_sequence_number", None),
+        "is_return": bool(getattr(booking, "is_return", False)),
+        "pickup_location": getattr(booking, "pickup_location", None),
+        "dropoff_location": getattr(booking, "dropoff_location", None),
+        "time_confirmed": scheduling.get("time_confirmed"),
+        "time_scheduled": scheduling.get("time_scheduled"),
+        "display_time": scheduling.get("display_time"),
+        "appointment_time": scheduling.get("appointment_time"),
+        "hospital_service": _blank_medical(getattr(booking, "hospital_service", None))
+        or None,
+        "doctor_name": _blank_medical(getattr(booking, "doctor_name", None)) or None,
+    }
+
+
+def attach_route_group_legs_to_bookings(bookings: list[Booking]) -> None:
+    """Résumé de chaque étape du parcours, même si la liste n'en montre qu'une."""
+    if not bookings:
+        return
+    group_ids = {
+        str(booking.route_group_id)
+        for booking in bookings
+        if getattr(booking, "route_group_id", None)
+    }
+    if not group_ids:
+        return
+    rows = (
+        Booking.query.filter(Booking.route_group_id.in_(list(group_ids)))
+        .order_by(Booking.route_sequence_number.asc(), Booking.id.asc())
+        .all()
+    )
+    by_group: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        gid = str(row.route_group_id)
+        by_group.setdefault(gid, []).append(_route_leg_summary(row))
+    for booking in bookings:
+        gid = getattr(booking, "route_group_id", None)
+        if gid:
+            booking._route_group_legs = by_group.get(str(gid), [])
+
+
 def attach_route_group_leg_counts_to_bookings(bookings: list[Booking]) -> None:
     """Précharge le nombre de legs par route_group_id (badges multi-étapes)."""
     if not bookings:
@@ -156,6 +209,16 @@ def attach_return_leg_topology_to_bookings(bookings: list[Booking]) -> None:
             booking._is_return_leg_from_topology = topology_by_booking[int(bid)]
 
 
+def _is_open_portal_client_booking(booking: Any) -> bool:
+    """Demande d'un client portail, pas encore prise par une entreprise."""
+    client = getattr(booking, "client", None)
+    if client is None:
+        return False
+    client_type = getattr(client, "client_type", None)
+    value = getattr(client_type, "value", client_type)
+    return str(value or "").strip().upper() == "PORTAL"
+
+
 def attach_serialize_context_to_bookings(
     bookings: list[Booking],
     viewer_company_id: int | None,
@@ -175,11 +238,15 @@ def attach_serialize_context_to_bookings(
     )
 
     for booking in bookings:
-        # DV v2 + conditional_order_v1 : tarif grille du viewer authentifié.
-        # Jamais booking.amount (estimation) ni plafond client.
-        if not booking_uses_portal_contract_flow(booking):
-            continue
+        # Marché ouvert : tarif de la grille du viewer, jamais booking.amount
+        # (estimation client) ni le plafond. Vaut pour le flux contractuel et
+        # pour une demande PORTAL encore non assignée.
         if getattr(booking, "company_id", None) is not None:
+            continue
+        if not (
+            booking_uses_portal_contract_flow(booking)
+            or _is_open_portal_client_booking(booking)
+        ):
             continue
         try:
             suggested = estimate_portal_carrier_offer_amount(

@@ -416,6 +416,26 @@ def compute_portal_carrier_ceiling(
     )
 
 
+def carrier_leg_priced_as_round_trip(booking: Any) -> bool:
+    """Double le forfait seulement si l'aller-retour tient sur une seule ligne.
+
+    Un parcours à plusieurs étapes a déjà un booking par trajet, retour compris.
+    Le prix cantonal s'applique alors une fois par trajet, sans second ×2.
+    """
+    if not bool(getattr(booking, "is_round_trip", False)):
+        return False
+    if not getattr(booking, "route_group_id", None):
+        return True
+    cached = getattr(booking, "_route_group_leg_count", None)
+    try:
+        legs = int(cached) if cached is not None else None
+    except (TypeError, ValueError):
+        legs = None
+    if legs is not None:
+        return legs <= 1
+    return False
+
+
 def estimate_portal_carrier_offer_amount(
     booking: Any,
     company_id: int,
@@ -439,7 +459,7 @@ def estimate_portal_carrier_offer_amount(
     dropoff_lat = getattr(booking, "dropoff_lat", None)
     dropoff_lon = getattr(booking, "dropoff_lon", None)
     scheduled_time = getattr(booking, "scheduled_time", None)
-    is_round_trip = bool(getattr(booking, "is_round_trip", False))
+    is_round_trip = carrier_leg_priced_as_round_trip(booking)
 
     distance_m = _distance_meters(
         pickup_lat=float(pickup_lat) if pickup_lat is not None else None,

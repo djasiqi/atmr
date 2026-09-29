@@ -69,3 +69,60 @@ def test_portal_accept_falls_back_to_company_quote_not_booking_amount():
     kwargs = create_offer.call_args.kwargs
     assert float(kwargs["offered_amount"]) == 40.0
     assert float(kwargs["offered_amount"]) != float(booking.amount)
+
+
+def test_legacy_portal_accept_writes_company_tariff():
+    booking = SimpleNamespace(
+        id=46797,
+        status="pending",
+        company_id=None,
+        client_id=10,
+        amount=25.0,
+        price_amount=None,
+        portal_contract_flow=None,
+        route_group_id=None,
+        pickup_location="GE",
+        dropoff_location="HUG",
+        is_round_trip=True,
+    )
+    company = SimpleNamespace(id=1, is_approved=True, name="Emmenez")
+    client = SimpleNamespace(id=10)
+    company_query = MagicMock()
+    company_query.get.return_value = company
+    client_query = MagicMock()
+    client_query.get.return_value = client
+
+    with (
+        patch("models.Company") as CompanyModel,
+        patch("models.client.Client") as ClientModel,
+        patch(
+            "services.auth.portal_phone_verification.is_portal_client",
+            return_value=True,
+        ),
+        patch(
+            "services.legal.portal_double_validation.booking_uses_conditional_order",
+            return_value=False,
+        ),
+        patch(
+            "services.legal.portal_double_validation.booking_uses_double_validation",
+            return_value=False,
+        ),
+        patch(
+            "services.billing.portal_booking_debtor.resolve_portal_booking_debtor_user_id",
+            return_value=None,
+        ),
+        patch(
+            "services.pricing.portal_carrier_ceiling.estimate_portal_carrier_offer_amount",
+            return_value=40.0,
+        ),
+    ):
+        CompanyModel.query = company_query
+        ClientModel.query = client_query
+        result = AcceptReservationUseCase().execute(
+            booking, company_id=1, offered_amount=None
+        )
+
+    assert result.ok is True
+    assert booking.company_id == 1
+    assert float(booking.amount) == 40.0
+    assert float(booking.price_amount) == 40.0

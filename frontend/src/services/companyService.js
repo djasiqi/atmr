@@ -338,11 +338,44 @@ export const deleteReservation = async (reservationId, reasonCode = null, reason
 /**
  * Planifie une réservation à une date/heure précise (ISO local sans Z).
  */
-export const scheduleReservation = async (reservationId, isoDatetime) => {
-  const { data } = await apiClient.put(`/companies/me/reservations/${reservationId}/schedule`, {
-    scheduled_time: isoDatetime,
-  });
+export const scheduleReservation = async (reservationId, isoDatetime, options = null) => {
+  const body = { scheduled_time: isoDatetime };
+  if (options?.confirmPickup) {
+    body.confirm_pickup = true;
+  }
+  if (options?.timeConfirmed != null) {
+    body.time_confirmed = Boolean(options.timeConfirmed);
+  }
+  const { data } = await apiClient.put(
+    `/companies/me/reservations/${reservationId}/schedule`,
+    body,
+  );
   return data;
+};
+
+/**
+ * Accepte toute la demande, puis enregistre l'heure de prise en charge confirmée.
+ * Le rendez-vous déjà indiqué est conservé.
+ */
+export const acceptAndConfirmPickup = async (reservation, isoDatetime) => {
+  const ids = [];
+  const push = (id) => {
+    const numeric = Number(id);
+    if (Number.isFinite(numeric) && numeric > 0 && !ids.includes(numeric)) {
+      ids.push(numeric);
+    }
+  };
+  push(reservation?.id);
+  (reservation?.route_group_legs || []).forEach((leg) => push(leg?.id));
+  const anchorId = Number(reservation?.id);
+  for (const id of ids) {
+    try {
+      await acceptReservation(id);
+    } catch (error) {
+      if (id === anchorId) throw error;
+    }
+  }
+  return scheduleReservation(anchorId, isoDatetime, { confirmPickup: true });
 };
 
 /**

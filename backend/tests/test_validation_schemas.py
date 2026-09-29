@@ -1,7 +1,5 @@
 """Tests pour les schemas de validation Marshmallow."""
 
-import re
-
 import pytest
 from marshmallow import ValidationError
 
@@ -202,20 +200,52 @@ class TestBookingCreateSchema:
         assert "errors" in exc_info.value.messages
         assert "amount" in exc_info.value.messages["errors"]
 
-    def test_asap_true_fills_scheduled_time_when_missing(self):
-        """Portail client : mode « dès que possible » sans scheduled_time."""
+    def test_asap_true_keeps_scheduled_time_empty(self):
+        """« Dès que possible » ne fabrique aucune heure de prise en charge."""
         data = {
             "customer_name": "Jane Doe",
             "pickup_location": "Rue du Rhône 1, Genève",
             "dropoff_location": "CHUV, Lausanne",
             "asap": True,
+            "scheduled_time": "2025-12-25T10:00:00Z",
             "amount": 50.0,
         }
         result = validate_request(BookingCreateSchema(), data)
         assert result["asap"] is True
-        st = result["scheduled_time"]
-        assert isinstance(st, str)
-        assert re.match(ISO8601_DATETIME_REGEX, st)
+        assert result["scheduled_time"] is None
+        assert result["scheduled_time_type"] == "departure"
+        assert result["is_urgent"] is True
+
+    def test_arrival_schedule_and_exclusive_wheelchair(self):
+        data = {
+            "customer_name": "Jane Doe",
+            "pickup_location": "Rue du Rhône 1, Genève",
+            "dropoff_location": "HUG, Genève",
+            "scheduled_time": "2025-12-25T10:00:00Z",
+            "amount": 50.0,
+            "scheduled_time_type": "arrival",
+            "wheelchair_client_has": True,
+            "needs_assistance": True,
+            "assistance_detail": "Aide à la marche",
+            "pickup_access_notes": "Code 1234",
+        }
+        result = validate_request(BookingCreateSchema(), data)
+        assert result["scheduled_time_type"] == "arrival"
+        assert result["wheelchair_client_has"] is True
+        assert result["wheelchair_need"] is False
+        assert result["needs_assistance"] is True
+        assert result["assistance_detail"] == "Aide à la marche"
+        assert result["pickup_access_notes"] == "Code 1234"
+
+        with pytest.raises(ValidationError):
+            validate_request(
+                BookingCreateSchema(),
+                {**data, "assistance_detail": "  "},
+            )
+
+        conflict = {**data, "wheelchair_need": True}
+        with pytest.raises(ValidationError):
+            validate_request(BookingCreateSchema(), conflict)
 
     def test_recurring_weekly_requires_series_length(self):
         data = {

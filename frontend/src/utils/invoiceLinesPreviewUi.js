@@ -32,11 +32,12 @@ export const presentInvoiceLinesPreview = (previewLines = [], options = {}) => {
     const bookingIds = Array.isArray(line.booking_ids)
       ? line.booking_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id))
       : [Number(line.booking_id)].filter((id) => Number.isFinite(id));
+    const partnerId = toFiniteNumber(line.round_trip_partner_booking_id);
+    const segmentsCount = Number(line.segments_count) || bookingIds.length || 1;
     const isRoundTrip =
-      line.unit_type === 'round_trip' ||
-      Boolean(line.is_round_trip_leg && line.round_trip_partner_booking_id != null);
-    const segmentsCount =
-      Number(line.segments_count) || bookingIds.length || (isRoundTrip ? 2 : 1);
+      segmentsCount >= 2 &&
+      (line.unit_type === 'round_trip' ||
+        Boolean(line.is_round_trip_leg && partnerId != null));
     return {
       key: line.preview_row_id || `booking:${line.booking_id}`,
       dateLabel: formatPreviewDayMonth(line.scheduled_at),
@@ -52,6 +53,7 @@ export const presentInvoiceLinesPreview = (previewLines = [], options = {}) => {
       returnAmountHt: toFiniteNumber(line.round_trip_partner_amount_ht),
       outboundDescription: compactInvoiceRoute(line.description),
       returnDescription: compactInvoiceRoute(line.round_trip_partner_description),
+      legLabel: isRoundTrip ? '' : String(line.leg_label || '').trim(),
     };
   });
   const visualLineCount = rows.length;

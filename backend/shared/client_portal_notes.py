@@ -7,8 +7,8 @@ Récapitulatif des champs côté modèle ``Booking`` (pour éviter les confusion
   métier (occurrences, récurrence).
 - ``medical_facility`` / ``doctor_name`` : colonnes dédiées (200 car. chacune) ;
   ne sont **pas** recopiées dans ``notes_medical`` par ce module.
-- ``pickup_access_notes`` / ``dropoff_access_notes`` : réservés aux flux société /
-  institution (saisie manuelle, offres) ; **absents** du schéma portail client.
+- ``pickup_access_notes`` / ``dropoff_access_notes`` : précisions d'accès du portail
+  client, persistées dans les colonnes dédiées (pas recopiées ici).
 - Profil client : ``access_notes`` (domicile) est distinct et n'est pas envoyé ici.
 
 Voir :meth:`compose_client_portal_notes_medical` pour l'assemblage persisté.
@@ -46,6 +46,13 @@ def compose_client_portal_notes_medical(validated_data: dict[str, Any]) -> str |
     si le total dépasse :attr:`NOTES_MEDICAL_ASSEMBLED_PORTAL_MAX_LENGTH`.
     """
     meta_lines: list[str] = []
+    if validated_data.get("asap") or validated_data.get("is_urgent"):
+        meta_lines.append("Horaire souhaité : dès que possible.")
+    elif (validated_data.get("scheduled_time_type") or "").strip() == "arrival":
+        meta_lines.append(
+            "Horaire souhaité : rendez-vous à destination. "
+            "La prise en charge est à proposer par le transporteur."
+        )
     try:
         occ = int(validated_data.get("occurrences") or 1)
     except (TypeError, ValueError):

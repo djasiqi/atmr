@@ -225,6 +225,112 @@
   font-size: 20px;
 }
 
+.bellWrap {
+  position: relative;
+}
+
+.bellBadge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #b91c1c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.bellMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(340px, 80vw);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+  z-index: 40;
+}
+
+.bellMenuHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.bellMenuMark {
+  border: 0;
+  background: transparent;
+  color: var(--brand-primary, #00796b);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bellMenuEmpty {
+  margin: 0;
+  padding: 18px 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.bellMenuList {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.bellMenuItem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.bellMenuItem:hover,
+.bellMenuItemUnread {
+  background: rgba(0, 121, 107, 0.06);
+}
+
+.bellMenuTitle {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.bellMenuText {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.bellMenuTime {
+  font-size: 11px;
+  color: var(--text-tertiary, #64748b);
+}
+
 .nav {
   display: flex;
   align-items: center;

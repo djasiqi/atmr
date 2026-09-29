@@ -7,6 +7,11 @@ import { getActivePublicId } from '../utils/webAuthSession';
  * Récupère les informations du profil client pour le user connecté.
  * Résout le public_id via la session web active (env + fallback legacy).
  */
+export const fetchClientMessageNotifications = async () => {
+  const { data } = await apiClient.get('/clients/me/message-notifications');
+  return data;
+};
+
 export const fetchClient = async (publicIdOverride = null) => {
   const publicId = publicIdOverride || getActivePublicId();
   if (!publicId) {

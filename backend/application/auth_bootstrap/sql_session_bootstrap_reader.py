@@ -59,5 +59,7 @@ class SqlSessionBootstrapReader:
             driver_is_active=driver_is_active,
             company_relation_id=company_relation_id,
             client_active_flags=client_active_flags,
+            first_name=cast(str | None, user.first_name),
+            last_name=cast(str | None, user.last_name),
         )
         return snap, user

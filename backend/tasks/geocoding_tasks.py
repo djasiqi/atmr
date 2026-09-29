@@ -74,10 +74,13 @@ def geocode_booking_addresses_task(
             pickup_coords = None
             dropoff_coords = None
 
+            from services.geolocation.google_geocoding_gate import geocoding_source
+
             # ✅ P1: Géocoder l'adresse de départ
             if pickup_address and pickup_address.strip():
                 try:
-                    pickup_coords = geocode_address(pickup_address, country=country)
+                    with geocoding_source("booking_async"):
+                        pickup_coords = geocode_address(pickup_address, country=country)
                     if (
                         pickup_coords
                         and "lat" in pickup_coords
@@ -107,7 +110,10 @@ def geocode_booking_addresses_task(
             # ✅ P1: Géocoder l'adresse d'arrivée
             if dropoff_address and dropoff_address.strip():
                 try:
-                    dropoff_coords = geocode_address(dropoff_address, country=country)
+                    with geocoding_source("booking_async"):
+                        dropoff_coords = geocode_address(
+                            dropoff_address, country=country
+                        )
                     if (
                         dropoff_coords
                         and "lat" in dropoff_coords

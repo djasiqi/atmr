@@ -135,12 +135,26 @@
   /* Rétablit les gouttières du .container annulées par .clientDashboardContentStack (carte bord à bord). */
   padding-inline: var(--dash-inline-bleed, var(--footer-bleed-inline, 20px));
   box-sizing: border-box;
+  font-family: var(--font-family-base);
+}
+
+.clientDashboardMainRow button,
+.clientDashboardMainRow input,
+.clientDashboardMainRow select,
+.clientDashboardMainRow textarea,
+.clientDashboardBelowRow button,
+.clientDashboardBelowRow input,
+.clientDashboardBelowRow select,
+.clientDashboardBelowRow textarea {
+  font-family: inherit;
 }
 
 /* Formulaire semi-vitré quand la carte est active : la carte transparaît à gauche aussi */
 .clientDashboardPage--mapBackdrop .bookingFormCard.card {
-  background: rgba(255, 255, 255, 0.82);
-  border-color: rgba(15, 23, 42, 0.1);
+  background: #fff;
+  border-color: rgba(15, 23, 42, 0.08);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   box-shadow:
     0 18px 38px -18px rgba(15, 23, 42, 0.18),
     0 4px 10px rgba(15, 23, 42, 0.06);
@@ -148,27 +162,37 @@
 
 @supports (backdrop-filter: blur(10px)) {
   .clientDashboardPage--mapBackdrop .bookingFormCard.card {
-    background: rgba(255, 255, 255, 0.72);
-    backdrop-filter: blur(14px) saturate(1.12);
-    -webkit-backdrop-filter: blur(14px) saturate(1.12);
+    background: #fff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }
 
 .clientDashboardPage--mapBackdrop .bookingFormCard > .dashboardHeader.bookingHeaderPro {
-  background: linear-gradient(180deg, rgba(236, 253, 245, 0.82) 0%, rgba(248, 250, 252, 0.78) 50%, rgba(255, 255, 255, 0.65) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(236, 248, 243, 0.72) 0%,
+    rgba(244, 251, 248, 0.32) 48%,
+    rgba(244, 251, 248, 0) 100%
+  );
 }
 
 /* En-tête mission fusionné dans la carte formulaire (un seul conteneur visuel) */
 .bookingFormCard > .dashboardHeader.bookingHeaderPro {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: flex-start;
-  padding: 20px 24px 14px;
+  padding: 18px 24px 20px;
   margin: 0;
-  border-radius: 0;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 17px 17px 0 0;
+  border-bottom: 0;
   box-shadow: none;
-  background: linear-gradient(180deg, #ecfdf8 0%, #f8fafc 55%, #ffffff 100%);
+  background: linear-gradient(
+    180deg,
+    #f4fbf8 0%,
+    rgba(244, 251, 248, 0.42) 48%,
+    rgba(244, 251, 248, 0) 100%
+  );
 }
 
 .bookingFormCard > .dashboardHeader.bookingHeaderPro .headerLeft {
@@ -181,9 +205,10 @@
 
 .bookingHeaderLead {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px 16px;
+  width: 100%;
 }
 
 .bookingHeaderTitles {
@@ -191,22 +216,127 @@
   min-width: 0;
 }
 
+.bookingHeaderSubtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #64748b;
+}
+
 .bookingFormCard > .dashboardHeader.bookingHeaderPro .headerMeta.headerMetaPill {
   flex-shrink: 0;
-  margin: 2px 0 0;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 12px;
+  column-gap: 8px;
+  align-items: center;
+  margin: 0;
   padding: 8px 12px;
-  border-radius: 999px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.25;
+  color: #0f172a;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: none;
+  max-width: 18rem;
+  white-space: normal;
+}
+
+.portalDateIcon,
+.portalDateChevron {
+  display: flex;
+  color: #64748b;
+}
+
+.portalDateText {
+  min-width: 0;
+}
+
+.portalDateReq {
+  color: #dc2626;
+}
+
+.portalHeaderDate {
+  position: relative;
+  cursor: pointer;
+}
+
+.portalHeaderDatePicker,
+.portalHeaderDate [class*='InlineDatePicker_field__'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.portalHeaderDate [class*='InlineDatePicker_input__'] {
+  position: absolute;
+  width: 1px !important;
+  min-width: 0 !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  margin: -1px;
+  padding: 0 !important;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.portalHeaderDate [class*='InlineDatePicker_input__']:focus,
+.portalHeaderDate [class*='InlineDatePicker_field__']:focus-within {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.portalHeaderDate [class*='InlineDatePicker_iconBtn__'] {
+  position: absolute !important;
+  inset: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0;
+  padding: 0;
+  transform: none !important;
+  opacity: 0;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.portalDateKicker {
+  display: block;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.25;
-  color: #475569;
-  text-align: center;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(148, 163, 184, 0.45);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-  max-width: min(12.5rem, 46vw);
-  white-space: normal;
+  color: #64748b;
+}
+
+.portalDateValue {
+  display: block;
+  margin-top: 2px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #0f172a;
+}
+
+.portalHeaderDate:hover {
+  border-color: rgba(15, 118, 110, 0.45);
+  color: #0f766e;
+}
+
+.portalHeaderDate:focus-within {
+  outline: none;
 }
 
 .bookingHeaderTitle {
@@ -244,9 +374,10 @@
 }
 
 .title.bookingHeaderTitle {
-  font-size: clamp(1.2rem, 2.4vw, 1.55rem);
+  font-family: inherit;
+  font-size: 28px;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   line-height: 1.2;
   color: #0f172a;
 }
@@ -289,7 +420,7 @@
 
 .mainRow {
   display: grid;
-  grid-template-columns: minmax(0, min(560px, 1fr)) 1fr;
+  grid-template-columns: minmax(0, min(720px, 1fr)) 1fr;
   gap: 28px;
   align-items: start;
   justify-items: stretch;
@@ -297,14 +428,14 @@
 
 @media (min-width: 1152px) {
   .mainRow {
-    grid-template-columns: minmax(400px, 560px) 1fr;
+    grid-template-columns: minmax(0, 720px) 1fr;
     column-gap: 36px;
     row-gap: 32px;
   }
 
   .mainRow .leftSection {
     padding-right: 4px;
-    max-width: 560px;
+    max-width: 720px;
     width: 100%;
   }
 
@@ -359,34 +490,6 @@
   margin: 0 0 4px;
 }
 
-.sidebarJourneyCardRecap {
-  background: linear-gradient(165deg, #fafbfc 0%, #ffffff 42%, #f8fafc 100%);
-}
-
-.sidebarJourneyCardRecap--afterEstimate {
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
-}
-
-.sidebarJourneyCardRecap .tripSummaryProHeader {
-  padding: 14px 16px 12px;
-}
-
-.sidebarJourneyCardRecap .tripSummaryProPath {
-  padding-top: 2px;
-}
-
-.sidebarJourneyCardRecap .tripSummaryProLeg {
-  padding: 10px 16px;
-}
-
-.sidebarJourneyCardRecap .tripSummaryProLeg:not(:last-child)::after {
-  left: calc(16px + 11px - 1px);
-}
-
-.sidebarJourneyCardRecap .tripSummaryProSchedule {
-  padding: 12px 16px 14px;
-}
-
 .card {
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
@@ -407,13 +510,15 @@
 .bookingFormCard.card {
   border-radius: 18px;
   border: 1px solid rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  padding: 0;
   box-shadow:
     0 18px 38px -18px rgba(15, 23, 42, 0.24),
     0 4px 10px rgba(15, 23, 42, 0.04);
 }
 
 .bookingFormCard .cardBody {
-  padding: 20px 24px 22px;
+  padding: 0 24px 22px;
   /* Gouttière strictement symétrique (priorité sur toute surcharge) */
   padding-left: 24px !important;
   padding-right: 24px !important;
@@ -457,6 +562,47 @@
 
 .bookingReturnDateTime {
   margin-top: 2px;
+}
+
+.bookingReturnLead,
+.bookingReturnHint {
+  flex: 1 0 100%;
+  margin: 0;
+}
+
+.bookingReturnLead {
+  font-size: 12px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+}
+
+.bookingReturnHint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.bookingScheduleAnchor {
+  padding-top: 0;
+}
+
+.bookingNeedsBlock {
+  padding: 8px 0 2px;
+}
+
+.bookingNeedsChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.bookingExtraOptionsFold {
+  margin-top: 8px;
+}
+
+.bookingExtraOptionsFold .bookingRecurrenceBlock {
+  padding: 2px 0 8px;
 }
 
 .bookingRecurrenceBlock {
@@ -567,37 +713,33 @@
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 0;
   width: 100%;
 }
 
 .bookingRecurrenceDayBtn {
   width: 100%;
   min-width: 0;
-  height: 34px;
+  height: 35px;
   padding: 0 4px;
-  border-radius: 8px;
-  border: 1px solid var(--border-primary);
-  background: var(--bg-primary);
-  font-size: 11px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: #64748b;
   cursor: pointer;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
 }
 
 .bookingRecurrenceDayBtn:hover {
-  border-color: rgba(0, 121, 107, 0.35);
-  color: var(--text-primary);
+  border-color: #cbd5e1;
+  color: #334155;
 }
 
 .bookingRecurrenceDayBtn--on {
-  border-color: rgba(0, 121, 107, 0.5);
-  background: rgba(0, 121, 107, 0.12);
-  color: var(--brand-primary, #00796b);
+  border-color: #0f766e;
+  background: #fff;
+  color: #0f766e;
 }
 
 .bookingFormCard :global([class*='Home_fieldLabel']) {
@@ -607,7 +749,7 @@
 
 /*
  * Champs adresse : même base que Home (Home.module.css : fieldBlock, fieldGroup, fieldIcon).
- * Modificateur pour hauteur / typo adaptées au formulaire client (Home utilise 30px).
+ * Modificateur pour hauteur / typo adaptées au formulaire client (35px).
  */
 .bookingFormCard .bookingFormAddressFieldBlock :global([class*='Home_fieldIcon']) {
   position: relative;
@@ -619,9 +761,53 @@
   height: 18px;
 }
 
+.bookingFormCard .bookingFormAddressFieldGroup :global([class*='Home_fieldIcon']) {
+  order: 0;
+  color: #64748b;
+}
+
+.portalFieldAction {
+  order: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.portalFieldAction:hover {
+  color: #0f766e;
+  background: #f3faf7;
+}
+
+.bookingFormCard .portalHomeAddressBtn {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.bookingFormCard .portalHomeAddressBtn:hover {
+  color: #0f766e;
+}
+
 .bookingFormCard .bookingFormAddressFieldGroup {
-  min-height: 46px;
-  height: 48px;
+  min-height: 35px;
+  height: 35px;
   /* Home.module .fieldGroup : padding 0 8px — forcer symétrie explicite */
   padding-block: 0;
   padding-inline: 6px !important;
@@ -629,8 +815,8 @@
 }
 
 .bookingFormCard .bookingFormAddressFieldGroup :global([class*='AddressAutocomplete_wrapper__']) {
-  min-height: 46px;
-  height: 48px;
+  min-height: 35px;
+  height: 35px;
   box-sizing: border-box;
   margin-inline: 0;
   padding-inline: 0 !important;
@@ -640,9 +826,9 @@
 .bookingFormCard .bookingFormAddressFieldGroup :global([class*='AddressAutocomplete_inputFlush__']),
 .bookingFormCard .bookingFormAddressFieldGroup :global([class*='AddressAutocomplete_input__']),
 .bookingFormCard .bookingFormAddressFieldGroup input[type='text'] {
-  min-height: 46px !important;
-  height: 48px !important;
-  line-height: 48px !important;
+  min-height: 35px !important;
+  height: 35px !important;
+  line-height: 35px !important;
   font-size: 14px;
   padding: 0 2px !important;
   /* Un seul anneau de focus : le champ module garde border/box-shadow par défaut → à retirer ici */
@@ -704,7 +890,1544 @@
 }
 
 .formDense {
+  gap: 0;
+}
+
+.bookingFormRoute,
+.bookingFormWhen,
+.bookingFormMore {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.bookingFormRoute {
+  gap: 0;
+}
+
+.bookingFormWhen {
+  gap: 10px;
+}
+
+.portalRouteHead {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 6px;
+  margin-bottom: 26px;
+}
+
+.portalRouteHeading,
+.portalSectionHeading {
+  margin: 0;
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+  color: #0f172a;
+}
+
+.portalRouteTip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.portalRouteTipLabel {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.portalRouteTipMark {
+  display: flex;
+  flex: 0 0 auto;
+  color: #94a3b8;
+}
+
+.portalRouteTipItem {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 400;
+  color: #475569;
+}
+
+.portalRouteTipNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.portalRouteTipNavBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.portalRouteTipNavBtn:hover {
+  color: #0f766e;
+  background: #f4fbf8;
+}
+
+.portalStepSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 196px;
+  gap: 10px;
+  align-items: start;
+}
+
+.portalStepPlace {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.portalStepHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.portalStepHeading .portalRouteStepTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.portalStepKicker {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.portalStepHeading,
+.portalTimeCardTitle {
+  box-sizing: border-box;
+  min-height: 24px;
+  align-items: center;
+}
+
+.portalTimeCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.portalTimeCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.portalTimeCardHead .portalTimeCardTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+}
+
+.portalTimeCardHead .portalOtherDay {
+  align-self: center;
+  flex: 0 0 auto;
+  margin-top: 0;
+  height: auto;
+  min-height: 0;
+}
+
+.portalTimeCardTitle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.portalTimeCardTitle svg {
+  flex-shrink: 0;
+  color: #0f766e;
+}
+
+.portalClockModes {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.portalClockModes button {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.portalClockModes button.is-on {
+  background: #0f766e;
+  color: #fff;
+}
+
+.bookingFormCard .portalTimeCard [class*='InlineTimePicker_input__'] {
+  height: 35px !important;
+  min-height: 35px !important;
+}
+
+.portalTimeCard input[type='date'] {
+  width: 100%;
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
+  padding-block: 0;
+  padding-inline: 10px;
+  box-sizing: border-box;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background-color: #fff;
+  background-image: none;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.portalTimeCard input[type='date']:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+  outline: none;
+}
+
+.portalReturnTimeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.portalReturnTimeRow .portalOtherDay {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: 35px;
+  padding: 0 6px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #0f172a;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.portalAccessFold {
+  border: 0;
+}
+
+.portalAccessFold summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f766e;
+  list-style: none;
+}
+
+.portalAccessFold summary::-webkit-details-marker {
+  display: none;
+}
+
+.portalAccessFold summary::before {
+  content: '▾ ';
+}
+
+.portalAccessFold .input {
+  margin-top: 8px;
+  height: 35px;
+  min-height: 35px;
+}
+
+.portalMedicalCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 12px;
+  border: 1px solid #d7efe6;
+  border-radius: 10px;
+  background: #f4fbf8;
+  box-sizing: border-box;
+}
+
+.portalMedicalCard--closed {
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
+  justify-content: center;
+}
+
+.portalMedicalCard:not(.portalMedicalCard--closed) {
+  height: auto;
+  max-height: none;
+  padding-bottom: 12px;
+  border-radius: 14px;
+}
+
+.portalMedicalCardHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  flex: 0 0 33px;
+  height: 33px;
+  min-height: 33px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.portalMedicalSwitch {
+  position: relative;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 36px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f1f5f9;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.portalMedicalSwitch::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+  transition: transform 0.15s ease;
+}
+
+.portalMedicalSwitch:hover {
+  border-color: #94a3b8;
+}
+
+.portalMedicalSwitch.is-on {
+  background: #0f766e;
+  border-color: #0f766e;
+}
+
+.portalMedicalSwitch.is-on:hover {
+  background: #0d6b64;
+  border-color: #0d6b64;
+}
+
+.portalMedicalSwitch.is-on::after {
+  transform: translateX(16px);
+}
+
+.portalMedicalSwitch:focus-visible {
+  outline: 2px solid rgba(15, 118, 110, 0.35);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portalMedicalSwitch,
+  .portalMedicalSwitch::after {
+    transition: none;
+  }
+}
+
+.portalMedicalFields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin-top: 4px;
+}
+
+.portalMedicalFields > label:first-child {
+  grid-column: 1 / -1;
+}
+
+.portalMedicalFields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.portalMedicalFieldLabel {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2em;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.portalMedicalReq {
+  color: #dc2626;
+}
+
+.portalMedicalFields .portalMedicalInput {
+  height: 35px;
+  min-height: 35px;
+  padding: 0 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.portalMedicalEditor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid #d7efe6;
+  border-radius: 14px;
+  background: #f3faf7;
+}
+
+.portalMedicalEditorTitle,
+.portalMedicalEditor label {
+  grid-column: 1 / -1;
+}
+
+.portalMedicalEditor label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.portalMedicalEditor label + .portalMedicalInput,
+.portalMedicalEditor .portalMedicalInput {
+  grid-column: auto;
+}
+
+.portalMedicalValidate {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 800px) {
+  .portalStepSplit {
+    grid-template-columns: 1fr;
+  }
+
+  .portalRouteHead {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .portalMedicalFields,
+  .bookingClientNoteRows {
+    grid-template-columns: 1fr;
+  }
+
+  .portalRouteActions {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .portalRoundTripToggle {
+    justify-content: center;
+  }
+}
+
+.portalRouteList {
+  display: flex;
+  flex-direction: column;
+}
+
+.portalRouteStep {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: 10px;
+}
+
+.portalRouteRail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: stretch;
+  min-height: 100%;
+}
+
+.portalRouteDot {
+  position: relative;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: #0f766e;
+  box-shadow: none;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.portalRouteDotReturn {
+  background: #0f766e;
+  box-shadow: none;
+}
+
+.portalRouteConnector {
+  position: relative;
+  z-index: 0;
+  flex: 1 0 auto;
+  align-self: center;
+  width: 2px;
+  min-height: 8px;
+  margin: 0 0 -2px;
+  border-radius: 1px;
+  background: #8fd0c4;
+}
+
+.portalRouteStepBody {
+  min-width: 0;
+  padding-bottom: 12px;
+}
+
+.portalRouteStepTitle {
+  display: block;
+  margin: 0 0 6px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #0f172a;
+}
+
+.portalRouteReadonly {
+  box-sizing: border-box;
+  width: 100%;
+  height: 35px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.portalRouteActions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 196px;
+  gap: 10px;
+  align-items: start;
+  margin: 18px 0 14px 32px;
+}
+
+.portalRouteActions--linked {
+  grid-template-columns: 22px minmax(0, 1fr) 196px;
+  column-gap: 10px;
+  align-items: stretch;
+  margin: 0;
+}
+
+.portalRouteActions--linked .portalRouteRail {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.portalRouteActions--linked .portalAddStopWrap,
+.portalRouteActions--linked .portalRoundTripToggle {
+  align-self: start;
+  margin-top: 18px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 800px) {
+  .portalRouteActions {
+    grid-template-columns: 1fr;
+  }
+
+  .portalRouteActions--linked {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+
+  .portalRouteActions--linked .portalRouteRail {
+    grid-row: 1 / -1;
+  }
+
+  .portalRouteActions--linked .portalAddStopWrap,
+  .portalRouteActions--linked .portalRoundTripToggle {
+    grid-column: 2;
+  }
+}
+
+.portalRoundTripToggle {
+  justify-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 35px;
+  min-height: 35px;
+  padding: 0 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.portalAddStopWrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.portalAddressMomentRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 6px;
+  align-items: center;
+}
+
+.portalAddressMomentRow > .bookingFormAddressFieldBlock,
+.portalAddressMomentRow > div.portalStepMoment {
+  display: contents;
+}
+
+.portalAddressMomentRow .portalRouteStepTitle {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+}
+
+.portalAddressMomentRow .bookingFormAddressFieldGroup {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+}
+
+.portalAddressMomentRow .portalStepMomentLabel,
+.portalAddressMomentRow > p.portalStepMoment {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.portalAddressMomentRow .portalStepMoment input {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.portalAddressMomentRow > .portalRouteReadonly {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  min-width: 0;
+}
+
+.portalAddressMomentRow .portalStepMomentControls {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.portalAddressMomentRow > .bookingReturnHint {
+  grid-column: 2;
+  grid-row: 3;
+  flex: none;
+  margin: 0;
+  max-width: 11rem;
+  justify-self: end;
+  text-align: right;
+}
+
+.portalStepMoment {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.portalStepMomentLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.bookingFormCard .portalStepMoment .input,
+.bookingFormCard .portalStepMoment input[type='time'],
+.bookingFormCard .portalStepMoment input[type='date'] {
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
+  width: 128px;
+  padding-block: 0;
+  box-sizing: border-box;
+}
+
+.portalStepAccess {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.portalFirstSchedule {
+  margin: 0 0 0 auto;
+  width: min(100%, 380px);
+}
+
+.portalRouteHead .portalWhenModes {
+  width: 100%;
+}
+
+.portalRouteHead .portalWhenQuestion {
+  margin: 0 0 4px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.portalRouteHead .portalWhenHint {
+  margin: 4px 0 0;
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .portalRouteHead {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .portalFirstSchedule {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .portalRouteHead .portalWhenQuestion,
+  .portalRouteHead .portalWhenHint {
+    text-align: left;
+  }
+}
+
+.portalMedicalEditor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid #d7efe6;
+  border-radius: 14px;
+  background: #f3faf7;
+}
+
+.portalMedicalEditor .portalMedicalEditorTitle {
+  grid-column: 1 / -1;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.portalMedicalEditor label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.portalMedicalEditor label:nth-of-type(1),
+.portalMedicalEditor input:nth-of-type(1) {
+  grid-column: 1;
+}
+
+.portalMedicalEditor label:nth-of-type(2),
+.portalMedicalEditor input:nth-of-type(2) {
+  grid-column: 2;
+}
+
+.portalMedicalEditor .portalMedicalValidate {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.portalMedicalEditorTitle,
+.portalMedicalKicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.portalMedicalSummary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  align-items: start;
+  margin-top: 8px;
+}
+
+.portalMedicalSummary .portalMedicalKicker {
+  grid-column: 1 / -1;
+}
+
+.portalMedicalSummary p {
+  margin: 0;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.portalMedicalSummary button,
+.portalMedicalValidate,
+.portalOtherDay {
+  border: none;
+  background: transparent;
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.portalMedicalValidate {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.portalRecurrenceRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 10px;
+  padding: 12px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.portalRecurrenceCopy {
+  min-width: 0;
+}
+
+.portalRecurrenceTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.portalRecurrenceTitle span {
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.portalRecurrenceLead {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.portalSectionHeading {
+  display: block;
+  margin: 0 0 10px;
+}
+
+.bookingFormCard .portalRouteReadonlyGroup {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.bookingFormCard .portalRouteReadonlyGroup :global([class*='Home_fieldIcon']) {
+  color: #94a3b8;
+}
+
+.bookingFormCard .portalRouteReadonlyGroup .portalRouteReadonly {
+  flex: 1 1 auto;
+  order: 1;
+  min-width: 0;
+  width: auto;
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
+  margin: 0;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 35px;
+  cursor: default;
+}
+
+.portalRouteOptions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.portalRouteOptionsLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.portalRouteOptions .portalRepeat {
+  display: contents;
+}
+
+.portalRouteOptions .bookingRecurrenceConfig {
+  flex: 1 1 100%;
+  width: 100%;
+}
+
+.portalRouteChoice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.portalRouteChoice button {
+  height: 35px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.portalRouteChoiceActive {
+  background: #f0fdfa;
+  color: #0f766e;
+  border-color: #0f766e;
+}
+
+.portalRouteReturnStep .dateTime .input,
+.portalRouteReturnStep .portalRouteReadonly {
+  min-height: 35px;
+  height: 35px;
+}
+
+.portalWhenQuestion {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.portalWhenHint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.bookingFormWhen .portalWhenModes {
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
+}
+
+.bookingFormWhen .portalWhenModes :global([class*='Home_tripKindBtn']) {
+  white-space: nowrap;
+  height: 35px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+@media (max-width: 520px) {
+  .bookingFormWhen .portalWhenModes {
+    height: auto;
+    max-height: none;
+    flex-wrap: wrap;
+  }
+
+  .bookingFormWhen .portalWhenModes :global([class*='Home_tripKindBtn']):first-child {
+    flex: 1 1 100%;
+  }
+}
+
+.portalRepeat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.portalAddSchedule {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+}
+
+.portalRepeatEnd {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.portalRepeatEnd legend {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.portalRepeatEnd label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.portalRepeatEnd .input {
+  height: 35px;
+  min-height: 35px;
+  width: auto;
+}
+
+.bookingFormWhen .portalRecurrenceRow:has(+ .bookingRecurrenceConfig) {
+  border-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-bottom: 10px;
+}
+
+.bookingFormCard .bookingRecurrenceConfig {
+  margin: 0;
+  padding: 2px 16px 14px;
+  border: 1px solid #e2e8f0;
+  border-top: 1px solid #f1f5f9;
+  border-radius: 0 0 14px 14px;
+  background: #fff;
+  gap: 0;
+}
+
+.portalRecurBlock {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 16px;
+  padding: 12px 0;
+}
+
+.portalRecurBlock + .portalRecurBlock {
+  border-top: 1px solid #f1f5f9;
+}
+
+.portalRecurLabel {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #0f172a;
+}
+
+.portalRecurSegments {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  height: 35px;
+  padding: 3px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: #f1f5f9;
+}
+
+.portalRecurSegments button {
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.portalRecurSegments button:hover {
+  color: #334155;
+}
+
+.portalRecurSegments button.is-on {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.portalRecurSegments button:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 1px;
+}
+
+.bookingFormCard .bookingRecurrenceDayStrip {
+  height: 35px;
+  padding: 3px;
+  gap: 2px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: #f1f5f9;
+}
+
+.bookingFormCard .bookingRecurrenceDayBtn {
+  height: auto;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.bookingFormCard .bookingRecurrenceDayBtn--on {
+  border: 0;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 640px) {
+  .portalRecurBlock {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .portalRecurValue {
+    grid-column: 1;
+  }
+}
+
+.portalRecurValue {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 35px;
+}
+
+.portalRecurValue > span {
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.portalRecurStepper {
+  display: inline-flex;
+  align-items: center;
+  height: 35px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.portalRecurStepper button {
+  width: 35px;
+  height: 35px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.portalRecurStepper button:hover {
+  background: #f1f5f9;
+  color: #0f766e;
+}
+
+.bookingFormCard .portalRecurStepper .bookingRecurrenceCountInput {
+  width: 44px;
+  max-width: 44px;
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  appearance: textfield;
+}
+
+.bookingFormCard .portalRecurStepper .bookingRecurrenceCountInput::-webkit-outer-spin-button,
+.bookingFormCard .portalRecurStepper .bookingRecurrenceCountInput::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.portalRecurValue--date {
+  display: block;
+}
+
+.bookingFormCard .portalRecurDate [class*='InlineDatePicker_input__'] {
+  height: 35px !important;
+  min-height: 35px !important;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 14px !important;
+}
+
+.bookingFormCard .portalRecurDate [class*='InlineDatePicker_input__']:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+  outline: none;
+}
+
+.bookingFormCard .bookingRecurrenceHint {
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid #f1f5f9;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.portalNeedsHint {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.bookingFormMore {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0;
+}
+
+.bookingFormCard .bookingFormWhen .bookingScheduleModeField,
+.bookingFormCard .bookingFormWhen .bookingTripTypeField,
+.bookingFormCard .bookingFormWhen .bookingScheduleAnchor,
+.bookingFormCard .bookingFormMore .bookingNeedsBlock {
+  padding: 0;
+}
+
+.bookingFormCard .bookingFormWhen :global([class*='Home_fieldLabelCompact']),
+.bookingFormCard .bookingFormMore :global([class*='Home_fieldLabelCompact']),
+.bookingFormCard .bookingFormWhen .inputLabel,
+.bookingFormCard .bookingFormWhen .bookingReturnLead {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.bookingFormCard .bookingFormWhen :global([class*='Home_tripKindSegment']) {
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
+  border-radius: 12px;
+}
+
+.bookingFormCard .bookingFormWhen .dateTime {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(120px, 0.75fr);
+  gap: 12px;
+  width: 100%;
+}
+
+.bookingFormCard .bookingFormWhen .dateTime .input {
+  min-height: 35px;
+  height: 35px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.portalWhenBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.portalWhenBlockTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bookingFormWhen .bookingReturnHint {
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.bookingFormRoute .portalExtraStop {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.bookingFormRoute .portalAddStop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: transparent;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bookingFormRoute .portalAddStop svg {
+  color: #94a3b8;
+}
+
+.bookingFormRoute .portalAddStop:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.bookingFormRoute .portalAddStop:hover svg {
+  color: #64748b;
+}
+
+.bookingNeedsGrid {
+  display: grid;
+  grid-template-columns: 432px 196px;
+  column-gap: 10px;
+  row-gap: 8px;
+  align-items: center;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  margin-top: 10px;
+  margin-left: 32px;
+}
+
+.bookingWheelchairChips {
+  box-sizing: border-box;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: 432px;
+  max-width: 100%;
+  margin-left: 0;
+  padding: 3px;
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.bookingWheelchairChip {
+  flex: 1 1 0;
+  height: 30px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.bookingWheelchairChip:hover {
+  color: #0f766e;
+}
+
+.bookingWheelchairChip[aria-pressed='true'] {
+  background: #fff;
+  color: #0f766e;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.bookingWheelchairChip:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 1px;
+}
+
+.bookingNeedsGrid .bookingNeedsSwitch {
+  width: 196px;
+  max-width: 100%;
+}
+
+.bookingFormCard .bookingNeedsAssistInput {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.bookingFormCard .bookingNeedsAssistInput::placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.bookingFormCard .bookingNeedsAssistInput:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+  outline: none;
+}
+
+@media (max-width: 800px) {
+  .bookingNeedsGrid {
+    grid-template-columns: minmax(0, 1fr);
+    width: calc(100% - 32px);
+  }
+
+  .bookingWheelchairChips,
+  .bookingNeedsGrid .bookingNeedsSwitch,
+  .bookingFormCard .bookingNeedsAssistInput {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .bookingFormCard .bookingNeedsAssistInput {
+    grid-column: 1;
+  }
+}
+
+.bookingFormMore .bookingClientNoteSummary {
+  min-height: 44px;
 }
 
 .cardHeader {
@@ -766,9 +2489,12 @@
   background: transparent;
 }
 
-.bookingClientNoteFold--afterAddresses {
-  margin-top: 8px;
-  margin-bottom: 0;
+.bookingFormMore .bookingClientNoteFold {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
 }
 
 .bookingClientNoteFold[open] {
@@ -865,9 +2591,9 @@
 }
 
 .bookingClientNoteRows {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
   margin: 0;
   padding: 0;
 }
@@ -892,10 +2618,12 @@
 .bookingClientNoteLineInput {
   box-sizing: border-box;
   width: 100%;
-  min-height: 40px;
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
   font-size: 13px;
   line-height: 1.35;
-  padding: 8px 11px;
+  padding: 0 11px;
   border-color: rgba(15, 23, 42, 0.1);
 }
 
@@ -910,6 +2638,7 @@
 }
 
 .bookingClientNoteCounter {
+  align-self: flex-end;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
@@ -1104,6 +2833,24 @@
   font-size: 14px;
 }
 
+.bookingFormCard .portalTimeCard .input,
+.bookingFormCard .portalTimeCard input[type='time'],
+.bookingFormCard .portalTimeCard input[type='date'] {
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
+  padding-block: 0;
+  box-sizing: border-box;
+}
+
+.bookingFormCard .portalAccessFold .bookingClientNoteLineInput {
+  height: 35px;
+  min-height: 35px;
+  max-height: 35px;
+  padding-block: 0;
+  box-sizing: border-box;
+}
+
 .input:focus {
   border-color: var(--brand-primary);
   box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
@@ -1143,145 +2890,14 @@
   }
 }
 
-.tripSummaryProHeader {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 14px 18px 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.07);
-  background: rgba(255, 255, 255, 0.65);
-}
-
-.tripSummaryProKicker {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
-.tripSummaryProHeaderTitle {
-  font-size: 13px;
+.bookingSidebar .cardTitle {
+  font-family: inherit;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  color: #0f172a;
-}
-
-.tripSummaryProPath {
-  list-style: none;
-  margin: 0;
-  padding: 4px 0 0;
-}
-
-.tripSummaryProLeg {
-  position: relative;
-  display: grid;
-  grid-template-columns: 22px 1fr;
-  column-gap: 12px;
-  padding: 10px 18px;
-}
-
-/* Ligne entre départ et arrivée (sous la 1re pastille jusqu’au niveau de la 2e) */
-.tripSummaryProLeg:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  left: calc(18px + 11px - 1px);
-  top: calc(10px + 5px + 10px);
-  width: 2px;
-  height: calc(100% - 10px);
-  border-radius: 1px;
-  background: linear-gradient(180deg, rgba(0, 121, 107, 0.38) 0%, rgba(148, 163, 184, 0.28) 100%);
-}
-
-.tripSummaryProLegMark {
-  width: 10px;
-  height: 10px;
-  margin-top: 5px;
-  margin-left: 5px;
-  border-radius: 50%;
-  background: var(--brand-primary, #00796b);
-  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.2);
-  flex-shrink: 0;
-}
-
-.tripSummaryProLegMark--arrival {
-  background: #1e293b;
-  box-shadow: 0 0 0 3px rgba(30, 41, 59, 0.12);
-}
-
-.tripSummaryProLegBody {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.tripSummaryProLegLabel {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #94a3b8;
-}
-
-.tripSummaryProLegText {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.45;
-  color: #0f172a;
-  word-break: break-word;
-}
-
-.tripSummaryProSchedule {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 12px 18px 14px;
-  border-top: 1px solid rgba(15, 23, 42, 0.06);
-  background: rgba(248, 250, 252, 0.85);
-}
-
-.tripSummaryProScheduleLabel {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #94a3b8;
-}
-
-.tripSummaryProWhen {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: #0f172a;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
-
-.tripSummaryProExtras {
-  padding: 0 18px 12px;
-  border-top: 1px solid rgba(15, 23, 42, 0.04);
-  background: rgba(248, 250, 252, 0.85);
-}
-
-.tripSummaryProExtraLine {
-  margin: 6px 0 0;
-  font-size: 12px;
-  font-weight: 500;
-  color: #475569;
-  line-height: 1.4;
-}
-
-.tripSummaryProExtraLine:first-child {
-  margin-top: 8px;
-}
-
-.recentResumeCard .cardTitle {
-  font-size: var(--font-size-sm);
+  letter-spacing: 0;
+  line-height: 1.35;
   text-transform: none;
-  letter-spacing: 0.01em;
+  color: #0f172a;
 }
 
 .sidebarRecentCard .cardBody {
@@ -1336,6 +2952,17 @@
 /* CTA réservation : styles = Home.module.css .ctaButton ; correctifs contexte formulaire */
 .bookingFormCard .formActionsPrimary .bookingDashboardCta {
   margin-top: 0;
+  min-height: 48px;
+  border-radius: 12px;
+  background: #0f766e;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.bookingFormCard .formActionsPrimary .bookingDashboardCta:hover:not(:disabled) {
+  background: #0d655e;
+  transform: none;
+  box-shadow: none;
 }
 
 .bookingFormCard .formActionsPrimary .bookingDashboardCta .btnInlineSpinner {
@@ -1513,9 +3140,9 @@
 }
 
 .bookingFormCard .formActions.formActionsPrimary {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-primary);
+  margin-top: 16px;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .formActions .primaryButton,
@@ -1632,25 +3259,51 @@
 }
 
 .recentTripsListCompact {
-  gap: 10px;
+  gap: 0;
+}
+
+.recentTripCardCompact + .recentTripCardCompact {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #eef2f6;
 }
 
 .recentTripCardCompact {
   padding: 0;
   flex-direction: column;
   align-items: stretch;
-  border: 1px solid var(--border-primary);
-  background: var(--bg-primary);
-  border-radius: var(--radius-md);
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+.recentTripCardCompact .bookingTripKindChip {
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #00796b;
 }
 
 .recentTripCardInner {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
   flex: 1;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 2px 0 0;
+}
+
+.recentTripRole {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
 }
 
 .recentTripCardTop {
@@ -1673,38 +3326,95 @@
 .recentTripRouteStack {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 0;
+  margin-top: 4px;
 }
 
 .recentTripLeg {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: stretch;
+  gap: 10px;
   min-width: 0;
+}
+
+.recentTripLegRail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 10px;
+  flex-shrink: 0;
+  padding-top: 3px;
 }
 
 .recentTripLegDot {
   flex-shrink: 0;
-  width: 5px;
-  height: 5px;
-  margin-top: 6px;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
   border-radius: 50%;
-  background: var(--text-tertiary, #94a3b8);
+  border: 2px solid #00796b;
+  background: #fff;
+}
+
+.recentTripLegDot--origin,
+.recentTripLegDot--end {
+  background: #00796b;
+}
+
+.recentTripLegLine {
+  flex: 1 1 auto;
+  width: 1px;
+  min-height: 12px;
+  margin-top: 3px;
+  background: #cfe3df;
+}
+
+.recentTripLegCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-bottom: 12px;
+}
+
+.recentTripLeg:last-child .recentTripLegCopy {
+  padding-bottom: 0;
+}
+
+.recentTripLegLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #00796b;
 }
 
 .recentTripLegText {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-regular, 400);
-  color: var(--text-primary);
-  line-height: 1.45;
+  font-size: 13px;
+  font-weight: 400;
+  color: #1e293b;
+  line-height: 1.4;
   word-break: break-word;
 }
 
 .recentTripReuseBtnSober {
-  width: 100%;
-  margin-top: 2px;
-  font-weight: var(--font-weight-medium);
+  align-self: flex-start;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #00796b;
+  cursor: pointer;
+}
+
+.recentTripReuseBtnSober:hover {
+  color: #00695c;
+  text-decoration: underline;
 }
 
 .mapStack {
@@ -2121,7 +3831,12 @@
   }
 
   .bookingFormCard > .dashboardHeader.bookingHeaderPro {
-    padding: 14px 16px 12px;
+    padding: 16px 16px 20px;
+    border-radius: 17px 17px 0 0;
+  }
+
+  .title.bookingHeaderTitle {
+    font-size: 22px;
   }
 
   .bookingHeaderLead {
@@ -2136,7 +3851,7 @@
   }
 
   .bookingFormCard .cardBody {
-    padding: 16px;
+    padding: 0 16px 16px;
     padding-left: 16px !important;
     padding-right: 16px !important;
   }
@@ -2191,6 +3906,16 @@
   .bookingAddressSwapButton {
     justify-self: center;
   }
+
+  .portalRouteStepBody .portalMedicalBlock,
+  .addressFieldsBlockPrimary .portalMedicalBlock {
+    grid-template-columns: 1fr;
+    margin-right: 0;
+  }
+
+  .portalRouteActions {
+    flex-wrap: wrap;
+  }
 }
 
 /* Annule globals.css :where(input):focus-visible — focus anneau porté par .fieldGroup (Home.module.css) */
@@ -2207,17 +3932,188 @@ section.leftSection.card.bookingFormCard
   box-shadow: none !important;
 }
 
+.bookingFormCard--review .bookingFormRoute,
+.bookingFormCard--review .bookingFormWhen,
+.bookingFormCard--review .bookingFormMore,
+.bookingFormCard--review .cardBody > .form > .formActions {
+  display: none;
+}
+
+.bookingFormCard--review .portalHeaderDate {
+  pointer-events: none;
+}
+
 .portalOrderReview {
-  margin-top: 1rem;
-  padding: 1rem 1.1rem;
-  border: 1px solid #d7dde6;
-  border-radius: 12px;
-  background: #f7f9fb;
+  margin-top: 0;
+  padding: 22px 22px 18px;
+  border: 1px solid #e4ebe8;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(20, 53, 44, 0.04);
+}
+
+::view-transition-old(booking-form-card),
+::view-transition-new(booking-form-card) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-old(booking-form-card) {
+  animation-name: portalCardFadeOut;
+}
+
+::view-transition-new(booking-form-card) {
+  animation-name: portalCardFadeIn;
+}
+
+@keyframes portalCardFadeOut {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes portalCardFadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(booking-form-card),
+  ::view-transition-new(booking-form-card) {
+    animation: none;
+  }
 }
 
 .portalOrderReviewTitle {
-  margin: 0 0 0.75rem;
-  font-size: 1.05rem;
+  margin: 0;
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.25;
+  color: #0f172a;
+}
+
+.portalOrderReviewDate {
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.portalOrderRoute {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 14px 14px 4px;
+  border-radius: 12px;
+  background: #f6f7f8;
+}
+
+.portalOrderRoute li {
+  position: relative;
+  margin: 0;
+  padding: 0 0 12px 16px;
+}
+
+.portalOrderRoute li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #14352c;
+}
+
+.portalOrderRoute li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 16px;
+  bottom: 2px;
+  width: 1px;
+  background: #d5ddd9;
+}
+
+.portalOrderRoute span {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.portalOrderRoute strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #0f172a;
+}
+
+.portalOrderRouteNote {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #64748b;
+  white-space: pre-line;
+}
+
+.portalOrderRouteNote--when {
+  font-weight: 600;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+.portalOrderReviewSchedule {
+  margin: 12px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+.portalOrderFacts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e8eeeb;
+}
+
+.portalOrderFact {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #334155;
+  white-space: pre-line;
+}
+
+.portalOrderFact--lead {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.portalOrderNarrative {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+}
+
+.portalOrderNarrativeLine {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.portalOrderNarrativeLine--strong {
+  font-weight: 700;
 }
 
 .portalOrderReviewGrid {
@@ -2241,8 +4137,13 @@ section.leftSection.card.bookingFormCard
 }
 
 .portalOrderEstimate {
-  margin: 0.9rem 0 0.2rem;
-  font-weight: 650;
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f6f7f8;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
 }
 
 .portalMaximumField {
@@ -2297,23 +4198,151 @@ section.leftSection.card.bookingFormCard
 
 .portalOrderEstimateNote,
 .portalOrderLegal {
-  margin: 0.25rem 0;
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #64748b;
 }
 
 .portalOrderLegalLinks {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 8px 16px;
+  margin: 10px 0 0;
 }
 
 .portalOrderTermsLink {
   background: none;
   border: 0;
   padding: 0;
-  color: #0b5cab;
+  color: #00796b;
   text-decoration: underline;
+  text-underline-offset: 2px;
   cursor: pointer;
   font: inherit;
+  font-size: 13px;
+}
+
+.portalOrderWait {
+  margin-top: 18px;
+  padding: 16px 16px 14px;
+  border-radius: 12px;
+  background: #f6f7f8;
+}
+
+.portalOrderWaitTrack {
+  height: 3px;
+  border-radius: 99px;
+  background: #e2e8e6;
+  overflow: hidden;
+}
+
+.portalOrderWaitBar {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: inherit;
+  background: #00796b;
+  animation: portalOrderWaitSlide 1.6s ease-in-out infinite;
+}
+
+.portalOrderWaitTitle {
+  margin: 12px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #14352c;
+}
+
+.portalOrderWaitSteps {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.portalOrderWaitStep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.portalOrderWaitStep--done {
+  color: #334155;
+}
+
+.portalOrderWaitStep--current {
+  font-weight: 600;
+  color: #14352c;
+}
+
+.portalOrderWaitMark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d5ddd9;
+  flex-shrink: 0;
+}
+
+.portalOrderWaitStep--done .portalOrderWaitMark,
+.portalOrderWaitStep--current .portalOrderWaitMark {
+  background: #00796b;
+}
+
+.portalOrderWaitStep--current .portalOrderWaitMark {
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.16);
+}
+
+.portalOrderWaitHint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+@keyframes portalOrderWaitSlide {
+  0% {
+    transform: translateX(-130%);
+  }
+  100% {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portalOrderWaitBar {
+    width: 100%;
+    animation: none;
+    opacity: 0.85;
+  }
+}
+
+.portalOrderReview .formActionsPrimary {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.portalOrderReview .ghostButton {
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: #334155;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.portalOrderReview .ghostButton:hover:not(:disabled) {
+  color: #0f172a;
 }
 
 .portalTermsUpdateModal {
@@ -2790,3 +4819,120 @@ section.leftSection.card.bookingFormCard
     max-height: min(32vh, 12rem);
   }
 }
+
+.portalTransportPrep {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.portalTransportPrepTitle {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.portalTransportPrepLead,
+.portalMedicalBlockTitle {
+  margin: 0 0 0.35rem;
+}
+
+.portalPrepChips,
+.portalExtraStopSchedule,
+.portalExtraStopWhen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.portalMedicalBlock,
+.portalExtraStop {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.75rem 0;
+}
+
+.addressFieldsBlockPrimary .portalMedicalBlock,
+.portalRouteStepBody .portalMedicalBlock {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 12px;
+  align-items: end;
+  margin: 10px 0 0;
+}
+
+.portalMedicalInput {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 35px;
+  height: 35px;
+  padding: 0 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.portalMedicalInput:focus {
+  outline: none;
+  border-color: var(--brand-primary, #00796b);
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
+}
+
+.portalMedicalInput::placeholder {
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.portalStepHeading .portalExtraStopRemove {
+  margin-left: auto;
+  min-height: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.portalStepHeading .portalExtraStopRemove:hover {
+  color: #b91c1c;
+  background: transparent;
+}
+
+.portalTimeCard .portalOtherDay {
+  align-self: flex-start;
+  min-height: 0;
+  height: auto;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.portalExtraStopSchedule button,
+.portalExtraStopWhen input {
+  height: 35px;
+  min-height: 35px;
+  box-sizing: border-box;
+}
+
+.portalAddStop,
+.portalExtraStopRemove,
+.portalPrepChip {
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+}
+
+.portalPrepChip[aria-pressed='true'],
+.portalExtraStopSchedule button[aria-pressed='true'] {
+  background: #0f172a;
+  color: #fff;
+}
+

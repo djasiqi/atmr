@@ -1,7 +1,8 @@
 """Résolveur d'unités de facturation (simple / A/R strict).
 
 Politique facturation (pas l'heuristique hub/chaîne d'affichage) :
-1. parent_booking_id explicite, même subject_key, même payeur ;
+1. parent_booking_id explicite, même subject_key, même payeur,
+   sauf chaîne ``route_group_id`` de plus de 2 étapes ;
 2. même demande institution (request_id), 2 segments, même sujet, même payeur ;
 3. route_group_id avec exactement 2 segments aller+retour, même sujet, même payeur ;
 4. jamais « même patient + même date » sans relation métier ;
@@ -82,6 +83,47 @@ def _amount(b: Any, amount_ht_fn: Callable[[Any], Decimal] | None) -> Decimal:
 def _sched(b: Any) -> datetime | None:
     st = getattr(b, "scheduled_time", None)
     return st if isinstance(st, datetime) else None
+
+
+def _route_group_member_count(booking: Any, by_id: dict[int, Any]) -> int:
+    """Nombre de segments du même ``route_group_id`` présents dans le scope."""
+    rg = getattr(booking, "route_group_id", None)
+    if rg is None:
+        return 0
+    key = str(rg)
+    return sum(
+        1
+        for item in by_id.values()
+        if str(getattr(item, "route_group_id", "") or "") == key
+    )
+
+
+def segments_belong_to_longer_route_group(
+    segments: list[Any], scope_by_id: dict[int, Any]
+) -> bool:
+    """Vrai si ces segments partagent un ``route_group_id`` de plus de 2 courses."""
+    if not segments:
+        return False
+    rg = getattr(segments[0], "route_group_id", None)
+    if rg is None:
+        return False
+    key = str(rg)
+    if any(str(getattr(s, "route_group_id", "") or "") != key for s in segments):
+        return False
+    return _route_group_member_count(segments[0], scope_by_id) > 2
+
+
+def _parent_pair_is_chain_leg(child: Any, parent: Any, by_id: dict[int, Any]) -> bool:
+    """Vrai si le lien parent appartient à un trajet à plus de 2 étapes (A→B, B→C, C→A).
+
+    Un A/R commercial reste un groupe de exactement 2 segments. Le retour d'une
+    chaîne plus longue ne doit pas fusionner les deux dernières courses.
+    """
+    rg_child = getattr(child, "route_group_id", None)
+    rg_parent = getattr(parent, "route_group_id", None)
+    if rg_child is None or rg_parent is None or str(rg_child) != str(rg_parent):
+        return False
+    return _route_group_member_count(child, by_id) > 2
 
 
 def _is_strict_reverse(a: Any, b: Any) -> bool:
@@ -236,6 +278,8 @@ def resolve_invoice_booking_units(
         sk_a = _subject_key(b, subject_key_fn)
         sk_p = _subject_key(parent, subject_key_fn)
         if sk_a != sk_p or not _same_billing_destination(b, parent):
+            continue
+        if _parent_pair_is_chain_leg(b, parent, by_id):
             continue
         primary, secondary = _order_pair(parent, b)
         ids = (_bid(primary), _bid(secondary))

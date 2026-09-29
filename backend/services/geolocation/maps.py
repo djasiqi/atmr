@@ -12,6 +12,13 @@ import requests
 from cachetools import LRUCache
 
 from ext import app_logger
+from services.geolocation.google_geocoding_gate import (
+    GEOCODING_CACHE_TTL_SECONDS,
+    GeocodingBudgetExceeded,
+    GeocodingRateLimited,
+    geocoding_source,
+    perform_google_geocode_http,
+)
 from shared.geo_utils import haversine_tuple as _haversine_km
 from shared.retry import retry_http_request  # ✅ 2.3: Retry uniformisé
 
@@ -196,6 +203,8 @@ def get_distance_duration(
                 return _distance_duration_from_geocoded_strings(
                     pickup_address, dropoff_address, region=region
                 )
+            except (GeocodingBudgetExceeded, GeocodingRateLimited):
+                raise
             except Exception as e2:
                 app_logger.warning(
                     "⚠️ Fallback géocode+Haversine après échec Distance Matrix: %s", e2
@@ -292,8 +301,7 @@ def geocode_address(
         except Exception as e:
             app_logger.debug("[Google Maps] Redis cache check failed: %s", e)
 
-    # ✅ P1: Géocoder avec retry et backoff
-    url = "https://maps.googleapis.com/maps/api/geocode/json"
+    # ✅ P1: Géocoder avec retry et backoff (HTTP unique via la barrière Geocoding)
     params: Dict[str, str] = {
         "address": address,
         "key": str(GOOGLE_MAPS_API_KEY),
@@ -303,6 +311,7 @@ def geocode_address(
         params["components"] = f"country:{country}"
 
     result: Dict[str, float] | None = None
+    budget_blocked = False
 
     # ✅ P1: Utiliser retry avec backoff pour améliorer résilience
     def _geocode_request() -> Dict[str, float] | None:
@@ -310,9 +319,7 @@ def geocode_address(
         try:
             if not _google_maps_circuit_breaker.allow_request():
                 raise RuntimeError("google_maps_circuit_open")
-            resp = requests.get(url, params=params, timeout=_GOOGLE_TIMEOUT)
-            resp.raise_for_status()
-            data = resp.json()
+            data = perform_google_geocode_http(params)
 
             if data.get("status") != "OK" or not data.get("results"):
                 app_logger.warning(
@@ -367,6 +374,13 @@ def geocode_address(
             max_retries=2,
             base_delay_ms=250,
         )
+    except (GeocodingBudgetExceeded, GeocodingRateLimited):
+        app_logger.warning(
+            "[Google Maps] Géocodage annulé (budget ou débit applicatif, country=%s)",
+            country,
+        )
+        budget_blocked = True
+        result = None
     except Exception as e:
         if str(e) != "google_maps_circuit_open":
             _google_maps_circuit_breaker.record_failure()
@@ -376,6 +390,10 @@ def geocode_address(
             type(e).__name__,
         )
         result = None
+
+    # Un refus de budget ne doit pas être mis en cache : le quota se réinitialise.
+    if budget_blocked:
+        return None
 
     # ✅ P1: Mettre en cache le résultat (même si None pour éviter requêtes répétées)
     if redis_client:
@@ -413,9 +431,17 @@ def _distance_duration_from_geocoded_strings(
     drop = (dropoff or "").strip()
     if not pick or not drop:
         raise ValueError("Adresse de départ ou d'arrivée vide")
-    a = geocode_address(pick, country=region)
-    b = geocode_address(drop, country=region)
+    with geocoding_source("distance_fallback"):
+        a = geocode_address(pick, country=region)
+        b = geocode_address(drop, country=region)
     if not a or not b:
+        from services.geolocation.google_geocoding_gate import (
+            geocoding_quota_block_error,
+        )
+
+        blocked = geocoding_quota_block_error()
+        if blocked is not None:
+            raise blocked
         raise RuntimeError("ZERO_RESULTS")
     coord_a = (float(a["lat"]), float(a["lon"]))
     coord_b = (float(b["lat"]), float(b["lon"]))
@@ -429,10 +455,10 @@ _NOMINATIM_CACHE_TTL = int(os.getenv("NOMINATIM_CACHE_TTL", "86400"))  # 24h par
 _NOMINATIM_LOCAL_CACHE: LRUCache[str, Dict[str, float] | None] = LRUCache(maxsize=500)
 _NOMINATIM_LOCAL_CACHE_LOCK = threading.Lock()
 
-# ✅ P1: Cache pour géocodage Google Maps (TTL 7j)
+# Cache Google Geocoding : 29 jours (plafond contractuel 30 jours).
 _GOOGLE_MAPS_CACHE_TTL = int(
-    os.getenv("GOOGLE_MAPS_CACHE_TTL", "604800")
-)  # 7 jours par défaut
+    os.getenv("GOOGLE_MAPS_CACHE_TTL", str(GEOCODING_CACHE_TTL_SECONDS))
+)
 _GOOGLE_MAPS_LOCAL_CACHE: LRUCache[str, Dict[str, float] | None] = LRUCache(maxsize=500)
 _GOOGLE_MAPS_LOCAL_CACHE_LOCK = threading.Lock()
 

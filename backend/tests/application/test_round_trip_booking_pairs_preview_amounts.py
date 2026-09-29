@@ -55,6 +55,38 @@ def test_hub_pair_skipped_when_raw_amounts_differ_but_preview_amounts_match():
     assert pairs == [(1, 2)]
 
 
+def test_three_leg_route_group_is_not_merged_as_round_trip():
+    """A→B, B→C, C→A : ni le parent du retour, ni la chaîne du même jour."""
+    group = "18b0975a-221b-455c-a526-f5574b4122fc"
+    day = datetime(2026, 9, 29, 22, 50, 0)
+    later = datetime(2026, 9, 29, 23, 45, 0)
+    pictet = "Avenue Ernest-Pictet 9, 1203, Genève"
+    hug = "Hôpitaux Universitaires de Genève (HUG), Rue Gabrielle-Perret-Gentil 4, 1205 Genève"
+    joli = "Clinique de Joli-Mont, Avenue Trembley 45, 1209, Genève"
+    ab = _booking(46797, 42, day, pictet, hug, Decimal("40.00"))
+    bc = _booking(46798, 42, later, hug, joli, Decimal("40.00"))
+    ca = _booking(46799, 42, later, joli, pictet, Decimal("40.00"))
+    ca.scheduled_time = None
+    ca.parent_booking_id = 46798
+    ca.is_return = True
+    for booking in (ab, bc, ca):
+        booking.route_group_id = group
+    ab.is_round_trip = True
+    assert find_round_trip_merge_booking_pairs([ab, bc, ca]) == []
+
+
+def test_two_leg_parent_round_trip_still_merges():
+    day = datetime(2026, 9, 29, 10, 0, 0)
+    back = datetime(2026, 9, 29, 16, 0, 0)
+    aller = _booking(10, 42, day, "Domicile", "Hôpital", Decimal("40.00"))
+    retour = _booking(11, 42, back, "Hôpital", "Domicile", Decimal("40.00"))
+    retour.parent_booking_id = 10
+    retour.is_return = True
+    aller.route_group_id = "pair-only"
+    retour.route_group_id = "pair-only"
+    assert find_round_trip_merge_booking_pairs([aller, retour]) == [(10, 11)]
+
+
 def test_chain_segment_pair_dropoff_first_equals_pickup_second():
     """Clinique→foyer puis foyer→domicile : chaîne (pas inverse ni hub classique)."""
     day1 = datetime(2026, 3, 15, 11, 0, 0)
