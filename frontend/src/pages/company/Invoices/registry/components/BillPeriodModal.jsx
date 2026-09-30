@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   FiX,
   FiEye,
@@ -25,7 +26,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
 } from 'react-icons/fi';
-import { invoiceService, formatCurrencyCHF, generateInvoice } from '../../../../../services/invoiceService';
+import { invoiceService, formatCurrencyCHF, generateInvoice, invoiceCandidatesQueryOptions, patientCandidatesForPeriod } from '../../../../../services/invoiceService';
 import { getApiErrorMessage } from '../../../../../utils/apiErrorMessage';
 import { INVOICE_CATALOG, resolveInvoiceResource } from '../../../../../utils/invoiceCatalog';
 import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
@@ -538,7 +539,7 @@ function buildSyntheticInvoiceForPeriodAssembly({
 
   let client = { first_name: '', last_name: '—' };
   if (payerType === 'patient' && clientId) {
-    const c = clients.find((x) => String(x.id) === String(clientId));
+    const c = (clients || []).find((x) => String(x.id) === String(clientId));
     if (c) {
       client = {
         first_name: c.first_name || '',
@@ -630,12 +631,13 @@ const BillPeriodModal = ({
   const [payerType, setPayerType] = useState('patient');
   const [periodYear, setPeriodYear] = useState(defaultYear);
   const [periodMonth, setPeriodMonth] = useState(defaultMonth);
-  const [clients, setClients] = useState([]);
   const [institutions, setInstitutions] = useState([]);
   const [clientId, setClientId] = useState('');
   const [clinicKey, setClinicKey] = useState(''); // institution id as string
   const companySocket = useCompanySocket();
   const institutionPlanRequestId = useRef(0);
+  const listRequestRef = useRef(0);
+  const institutionsCacheRef = useRef(null);
   const institutionPlanAbortRef = useRef(null);
   const fetchInstitutionPlanRef = useRef(null);
   const [partnershipId, setPartnershipId] = useState('');
@@ -715,59 +717,79 @@ const BillPeriodModal = ({
   }, [addLineMode, addLineUnitPrice, addLineQty, addLineTaux, addLineTimeValue]);
 
   const loadLists = useCallback(async () => {
-    if (!companyId || !open) return;
+    if (!companyId || !open || payerType === 'patient') return;
+    const requestId = listRequestRef.current + 1;
+    listRequestRef.current = requestId;
     setLoadingLists(true);
     setError('');
+    const stillCurrent = () => requestId === listRequestRef.current;
     try {
-      /** Opportunités patient (sujet + payeur) — remplace le regroupement par client_id seul. */
-      const oppPromise =
-        payerType === 'patient'
-          ? invoiceService.fetchBillingOpportunities(companyId, periodYear, periodMonth)
-          : Promise.resolve(null);
-
-      const [oppRaw, inst, bpRaw] = await Promise.all([
-        oppPromise,
-        invoiceService.fetchInstitutions(companyId),
-        invoiceService.fetchBillablePartners(companyId, {
+      if (payerType === 'clinic') {
+        if (!institutionsCacheRef.current) {
+          const inst = await invoiceService.fetchInstitutions(companyId);
+          if (!stillCurrent()) return;
+          institutionsCacheRef.current =
+            inst?.institutions || inst?.data?.institutions || [];
+        }
+        setInstitutions(institutionsCacheRef.current);
+      } else {
+        const bpRaw = await invoiceService.fetchBillablePartners(companyId, {
           year: periodYear,
           month: periodMonth,
-        }),
-      ]);
-      const oppData = oppRaw?.data ?? oppRaw;
-      const payers = Array.isArray(oppData?.patient_payers) ? oppData.patient_payers : [];
-      const ec =
-        payerType === 'patient'
-          ? payers.map((p) => ({
-              id: p.opportunity_key || `client:${p.client_id}`,
-              opportunity_key: p.opportunity_key,
-              client_id: p.carrier_client_id ?? p.client_id,
-              carrier_client_id: p.carrier_client_id ?? p.client_id,
-              institution_patient_id:
-                p.subject_type === 'institution_patient' ? p.subject_id : null,
-              billing_party_id: p.billing_party_id,
-              first_name: '',
-              last_name: p.display_name || '',
-              display_name: p.display_name,
-              payer_display_name: p.payer_display_name,
-              unbilled_total_amount: p.unbilled_total_amount ?? p.estimated_total,
-              can_generate: p.can_generate !== false,
-              identity_status: p.identity_status,
-              recipient_status: p.recipient_status,
-              segments_count: p.segments_count,
-              units_count: p.units_count,
-              transports_count: p.transports_count ?? p.segments_count,
-            }))
-          : [];
-      setClients(Array.isArray(ec) ? ec : []);
-      setInstitutions(inst?.institutions || inst?.data?.institutions || []);
-      const bpList = bpRaw?.data ?? bpRaw;
-      setBillablePartners(Array.isArray(bpList) ? bpList : []);
+        });
+        if (!stillCurrent()) return;
+        const bpList = bpRaw?.data ?? bpRaw;
+        setBillablePartners(Array.isArray(bpList) ? bpList : []);
+      }
     } catch (e) {
+      if (!stillCurrent()) return;
       setError("Impossible de charger les listes. Réessayez.");
     } finally {
-      setLoadingLists(false);
+      if (stillCurrent()) setLoadingLists(false);
     }
   }, [companyId, open, periodYear, periodMonth, payerType]);
+
+  const patientCandidatesQuery = useQuery({
+    ...invoiceCandidatesQueryOptions(companyId, periodYear, periodMonth),
+    enabled: Boolean(open && companyId && payerType === 'patient'),
+  });
+
+  const listedClients = useMemo(() => {
+    if (payerType !== 'patient') return [];
+    return patientCandidatesForPeriod(
+      patientCandidatesQuery.data,
+      periodYear,
+      periodMonth,
+    ).map((row) => ({
+      id: row.id,
+      opportunity_key: row.id,
+      client_id: row.client_id,
+      carrier_client_id: row.client_id,
+      institution_patient_id: row.institution_patient_id,
+      billing_party_id: row.billing_party_id,
+      first_name: '',
+      last_name: row.name || '',
+      display_name: row.name,
+      unbilled_total_amount: row.amount,
+      amount_is_estimate: true,
+      can_generate: true,
+      segments_count: row.billable_count,
+      transports_count: row.billable_count,
+    }));
+  }, [payerType, patientCandidatesQuery.data, periodYear, periodMonth]);
+
+  useEffect(() => {
+    if (payerType === 'patient' && patientCandidatesQuery.isError) {
+      setError('Impossible de charger les patients à facturer. Réessayez.');
+    }
+  }, [payerType, patientCandidatesQuery.isError]);
+
+  const selectorBusy =
+    payerType === 'patient' ? patientCandidatesQuery.isLoading : loadingLists;
+
+  useEffect(() => {
+    institutionsCacheRef.current = null;
+  }, [companyId]);
 
   useEffect(() => {
     if (open) {
@@ -922,7 +944,7 @@ const BillPeriodModal = ({
     const mLabel = MONTHS_FR[mi] || '';
     const periodPart = `${mLabel.charAt(0).toUpperCase()}${mLabel.slice(1)} ${periodYear}`;
     if (payerType === 'patient' && clientId) {
-      const c = clients.find((x) => String(x.id) === String(clientId));
+      const c = listedClients.find((x) => String(x.id) === String(clientId));
       if (c) {
         const n = (c.display_name || `${c.first_name || ''} ${c.last_name || ''}`).trim();
         if (n) return `${periodPart} · ${n}`;
@@ -944,7 +966,7 @@ const BillPeriodModal = ({
     clientId,
     clinicKey,
     partnershipId,
-    clients,
+    listedClients,
     institutions,
     billablePartners,
   ]);
@@ -960,7 +982,7 @@ const BillPeriodModal = ({
       clientId,
       clinicKey,
       partnershipId,
-      clients,
+      clients: listedClients,
       institutions,
       billablePartners,
     });
@@ -974,7 +996,7 @@ const BillPeriodModal = ({
     clientId,
     clinicKey,
     partnershipId,
-    clients,
+    listedClients,
     institutions,
     billablePartners,
   ]);
@@ -1001,24 +1023,38 @@ const BillPeriodModal = ({
   );
 
   const billPatientChipOptions = useMemo(() => {
-    const rows = clients.map((c) => {
+    const rows = listedClients.map((c) => {
       const name = c.display_name || `${c.first_name || ''} ${c.last_name || ''}`.trim();
       const amt = c.unbilled_total_amount;
       const payer =
         c.payer_display_name && c.payer_display_name !== name
           ? ` — facturé à ${c.payer_display_name}`
           : '';
-      const blocked = c.can_generate === false ? ' [à compléter]' : '';
+      const summary = presentPatientInvoiceSummary(c);
       const segments = Number(c.segments_count) || 0;
       const trips = segments > 0 ? ` — ${segments} transport${segments > 1 ? 's' : ''}` : '';
+      const amount =
+        amt != null && (segments > 0 || Number(amt) > 0 || !summary.gateHeld)
+          ? ` · montant estimé ${formatCurrencyCHF(amt)}`
+          : '';
+      const pending = summary.pendingValidation.count;
+      const pendingTxt =
+        pending > 0
+          ? ` — ${pending} en attente de validation institution`
+          : summary.disputed.count > 0
+            ? ` — ${summary.disputed.count} contestée${summary.disputed.count > 1 ? 's' : ''}`
+            : '';
+      const blocked = summary.blocked ? ' [à compléter]' : '';
       return {
         value: String(c.id),
-        label: `${name}${payer}${trips}${amt != null ? ` — ${amt} CHF` : ''}${blocked}`,
-        disabled: c.can_generate === false,
+        label: `${name}${payer}${trips}${amount}${pendingTxt}${blocked}`,
+        // Une retenue institution reste sélectionnable : le résumé explique
+        // pourquoi la facture n'est pas encore possible.
+        disabled: summary.blocked,
       };
     });
     return rows;
-  }, [clients]);
+  }, [listedClients]);
 
   const billClinicChipOptions = useMemo(
     () =>
@@ -1551,13 +1587,18 @@ const BillPeriodModal = ({
   };
 
   const preparePatientFromOpportunity = async () => {
-    const opp = clients.find((c) => String(c.id) === String(clientId));
+    const opp = listedClients.find((c) => String(c.id) === String(clientId));
     if (!opp) {
       setError('Sélectionnez un patient pour préparer la facture.');
       return;
     }
     if (opp.can_generate === false) {
-      setError('Ce patient n’est pas encore facturable — identité ou destinataire à compléter.');
+      const oppSummary = presentPatientInvoiceSummary(opp);
+      setError(
+        oppSummary.gateHeld && oppSummary.emptyNote
+          ? `Ce patient n’est pas encore facturable — ${oppSummary.emptyNote}`
+          : 'Ce patient n’est pas encore facturable — identité ou destinataire à compléter.'
+      );
       return;
     }
     const carrierId = Number(opp.carrier_client_id ?? opp.client_id);
@@ -1622,8 +1663,8 @@ const BillPeriodModal = ({
   };
 
   const selectedPatient = useMemo(
-    () => clients.find((c) => String(c.id) === String(clientId)) || null,
-    [clients, clientId]
+    () => listedClients.find((c) => String(c.id) === String(clientId)) || null,
+    [listedClients, clientId]
   );
 
   const selectedPartner = useMemo(
@@ -1708,6 +1749,11 @@ const BillPeriodModal = ({
       return 'Sélectionnez un patient pour préparer la facture.';
     }
     if (payerType === 'patient' && clientId && !patientSummary.hasBillable) {
+      if (patientSummary.gateHeld) {
+        return patientSummary.blockedReason === 'disputed'
+          ? 'Prestations contestées par l’institution — à traiter avant facturation.'
+          : 'Prestations en attente de validation par l’institution — pas encore facturables.';
+      }
       return patientSummary.blocked
         ? 'Ce patient n’est pas encore facturable — identité ou destinataire à compléter.'
         : 'Aucune prestation à charge de ce patient pour cette période.';
@@ -1745,6 +1791,8 @@ const BillPeriodModal = ({
     institutionSummary.hasBillable,
     patientSummary.hasBillable,
     patientSummary.blocked,
+    patientSummary.gateHeld,
+    patientSummary.blockedReason,
     partnerSummary.hasBillable,
   ]);
 
@@ -1796,7 +1844,7 @@ const BillPeriodModal = ({
       let parsedClientId;
       let selectedOpp = null;
       if (payerType === 'patient') {
-        selectedOpp = clients.find((c) => String(c.id) === String(clientId));
+        selectedOpp = listedClients.find((c) => String(c.id) === String(clientId));
         if (!selectedOpp) {
           setError(
             'Ce patient ne correspond pas à la liste chargée pour cette période. Attendez la fin du chargement ou sélectionnez à nouveau un patient.'
@@ -2016,7 +2064,6 @@ const BillPeriodModal = ({
                     className={`${styles.billMonthPickerWrap} ${styles.billMonthPickerUnified}`}
                     value={`${String(periodYear).padStart(4, '0')}-${String(periodMonth).padStart(2, '0')}`}
                     onChange={handlePeriodYmPickerChange}
-                    disabled={loadingLists}
                   />
                   <label
                     id="bill-patient-inline-label"
@@ -2038,7 +2085,7 @@ const BillPeriodModal = ({
                       setPreview(null);
                       setShowLinesPreview(false);
                     }}
-                    disabled={loadingLists}
+                    disabled={selectorBusy}
                     menuMinWidth={280}
                     filterable
                   />
@@ -2053,7 +2100,6 @@ const BillPeriodModal = ({
                     className={`${styles.billMonthPickerWrap} ${styles.billMonthPickerUnified}`}
                     value={`${String(periodYear).padStart(4, '0')}-${String(periodMonth).padStart(2, '0')}`}
                     onChange={handlePeriodYmPickerChange}
-                    disabled={loadingLists}
                   />
                   <label
                     id="bill-clinic-inline-label"
@@ -2075,7 +2121,7 @@ const BillPeriodModal = ({
                       setPreview(null);
                       setShowLinesPreview(false);
                     }}
-                    disabled={loadingLists}
+                    disabled={selectorBusy}
                     menuMinWidth={300}
                     filterable
                   />
@@ -2090,7 +2136,6 @@ const BillPeriodModal = ({
                     className={`${styles.billMonthPickerWrap} ${styles.billMonthPickerUnified}`}
                     value={`${String(periodYear).padStart(4, '0')}-${String(periodMonth).padStart(2, '0')}`}
                     onChange={handlePeriodYmPickerChange}
-                    disabled={loadingLists}
                   />
                   <label
                     id="bill-partner-inline-label"
@@ -2112,7 +2157,7 @@ const BillPeriodModal = ({
                       setPreview(null);
                       setShowLinesPreview(false);
                     }}
-                    disabled={loadingLists}
+                    disabled={selectorBusy}
                     menuMinWidth={300}
                     filterable
                   />
@@ -2134,27 +2179,38 @@ const BillPeriodModal = ({
                     {periodLabelFr(periodYear, periodMonth)}
                   </div>
                   {patientSummary.hasBillable ? (
-                    <div className={styles.institutionSummaryTotals}>
-                      <span data-testid="patient-summary-count">
-                        {patientSummary.transportsCount} prestation
-                        {patientSummary.transportsCount !== 1 ? 's' : ''}
-                        {patientSummary.invoiceDeliveryMethod === 'paper'
-                          ? ' · papier'
-                          : ''}
-                      </span>
-                      <strong data-testid="patient-summary-amount">
-                        {formatCurrencyCHF(
-                          patientSummary.invoiceDeliveryMethod === 'paper'
-                            ? Number(patientSummary.totalHt) + 3
-                            : patientSummary.totalHt
-                        )}
-                      </strong>
-                    </div>
+                    <>
+                      <div className={styles.institutionSummaryTotals}>
+                        <span data-testid="patient-summary-count">
+                          {patientSummary.transportsCount} prestation
+                          {patientSummary.transportsCount !== 1 ? 's' : ''}
+                          {patientSummary.invoiceDeliveryMethod === 'paper'
+                            ? ' · papier'
+                            : ''}
+                        </span>
+                        <strong data-testid="patient-summary-amount">
+                          {formatCurrencyCHF(
+                            patientSummary.invoiceDeliveryMethod === 'paper'
+                              ? Number(patientSummary.totalHt) + 3
+                              : patientSummary.totalHt
+                          )}
+                        </strong>
+                      </div>
+                      {patientSummary.pendingNote ? (
+                        <div
+                          className={styles.institutionExcluded}
+                          data-testid="patient-pending-validation-warning"
+                        >
+                          <span>{patientSummary.pendingNote}</span>
+                        </div>
+                      ) : null}
+                    </>
                   ) : (
-                    <p className={styles.institutionSummaryNote}>
-                      {patientSummary.blocked
-                        ? 'Identité ou destinataire à compléter avant facturation.'
-                        : 'Aucune prestation à facturer à ce patient pour cette période.'}
+                    <p
+                      className={styles.institutionSummaryNote}
+                      data-testid="patient-summary-empty-note"
+                    >
+                      {patientSummary.emptyNote}
                     </p>
                   )}
                 </div>
@@ -2400,7 +2456,11 @@ const BillPeriodModal = ({
                     Chargement des lignes…
                   </p>
                 ) : linesPreview.rows.length === 0 ? (
-                  <p className={styles.formHint}>Aucune ligne à afficher pour cette sélection.</p>
+                  <p className={styles.formHint} data-testid="invoice-lines-preview-empty">
+                    {payerType === 'patient' && patientSummary.gateHeld && patientSummary.emptyNote
+                      ? `Aucune ligne facturable pour l'instant — ${patientSummary.emptyNote}`
+                      : 'Aucune ligne à afficher pour cette sélection.'}
+                  </p>
                 ) : (
                   <>
                     <ul className={styles.invoiceLinesList}>
@@ -2459,9 +2519,13 @@ const BillPeriodModal = ({
               </section>
             ) : null}
 
-            {loadingLists && (
+            {selectorBusy && (
               <p className={styles.formHint} role="status">
-                Chargement des listes (patients, institutions, partenaires)…
+                {payerType === 'clinic'
+                  ? 'Chargement des institutions…'
+                  : payerType === 'partner'
+                    ? 'Chargement des partenaires…'
+                    : 'Chargement des patients à facturer…'}
               </p>
             )}
           </div>

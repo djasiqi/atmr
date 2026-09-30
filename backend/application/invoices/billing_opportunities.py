@@ -16,6 +16,11 @@ from sqlalchemy.orm import joinedload
 
 from application.invoices.billable_amount import calculate_billable_booking_amount
 from application.invoices.booking_schedule import booking_schedule_sort_key
+from application.invoices.institution_invoice_eligibility import (
+    attach_invoice_request_ids,
+    filter_institution_invoice_eligible,
+    summarize_institution_gate_hold,
+)
 from application.invoices.institution_patient_resolution import (
     resolve_missing_institution_patient_ids,
 )
@@ -39,11 +44,24 @@ CALENDAR_MONTHS = 12
 
 RecipientStatus = Literal["ready", "missing_billing_address", "incomplete"]
 IdentityStatus = Literal["resolved", "needs_review"]
+BlockedReason = Literal[
+    "identity",
+    "recipient",
+    "pending_institution_validation",
+    "disputed",
+]
 
 
 @dataclass(frozen=True, slots=True)
 class PatientOpportunity:
-    """Opportunité patient (client classique ou InstitutionPatient)."""
+    """Opportunité patient (client classique ou InstitutionPatient).
+
+    ``segments_count`` / ``unbilled_total_amount`` ne comptent que les prestations
+    réellement facturables *maintenant* (même gate Market LIRIE que la
+    prévisualisation et la génération). Les prestations retenues par le gate sont
+    exposées à part (``pending_validation_*``, ``disputed_count``) pour que l'UI
+    explique la situation au lieu d'annoncer un montant impossible à facturer.
+    """
 
     opportunity_key: str
     subject_key: str
@@ -65,6 +83,12 @@ class PatientOpportunity:
     transports_count: int
     estimated_total: float
     invoice_delivery_method: str = "email"
+    # Retenue gate Market LIRIE (institution) — informatif, hors total
+    pending_validation_count: int = 0
+    pending_validation_amount: float = 0.0
+    pending_validation_release_at: str | None = None
+    disputed_count: int = 0
+    blocked_reason: BlockedReason | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -470,7 +494,42 @@ def load_eligible_bookings_for_opportunity(
     )
 
     out = filter_bookings_without_active_invoice_claim(out)
-    return sorted(out, key=booking_schedule_sort_key)
+    return sorted(_lock_still_uninvoiced(out), key=booking_schedule_sort_key)
+
+
+def bookings_still_uninvoiced(
+    original: list[Booking], locked_rows: list[Booking]
+) -> list[Booking]:
+    """Garde les courses encore sans ligne de facture après verrouillage."""
+    still_open = {
+        int(row.id)
+        for row in locked_rows
+        if getattr(row, "invoice_line_id", None) is None
+    }
+    return [booking for booking in original if int(booking.id) in still_open]
+
+
+def _lock_still_uninvoiced(bookings: list[Booking]) -> list[Booking]:
+    """Verrouille les courses puis retire celles déjà liées à une facture.
+
+    Deux préparations simultanées s'attendent. La seconde relit ``invoice_line_id``
+    après le commit de la première et ne facture pas deux fois la même course.
+    """
+    ids = []
+    for booking in bookings:
+        try:
+            ids.append(int(booking.id))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return []
+    locked = (
+        Booking.query.filter(Booking.id.in_(ids))
+        .order_by(Booking.id.asc())
+        .with_for_update()
+        .all()
+    )
+    return bookings_still_uninvoiced(bookings, locked)
 
 
 def _client_billable_under_company(client: Client | None, company_id: int) -> bool:
@@ -494,8 +553,13 @@ def list_billing_opportunities(
     company_id: int,
     period_year: int,
     period_month: int,
+    now: datetime | None = None,
 ) -> BillingOpportunitiesResult:
-    """Liste les opportunités patient (sujet+payeur) et cliniques S2."""
+    """Liste les opportunités patient (sujet+payeur) et cliniques S2.
+
+    ``now`` : horloge injectable (gate Market LIRIE, Europe/Zurich) — même
+    référence que ``build_period_invoice_preview`` / ``GenerateInvoiceUseCase``.
+    """
     if not 1 <= period_month <= CALENDAR_MONTHS:
         raise ValueError("period_month invalide (1-12)")
 
@@ -530,6 +594,10 @@ def list_billing_opportunities(
 
     # BUG B : exclure les bookings revendiqués par une InvoiceLine active.
     patient_bookings = filter_bookings_without_active_invoice_claim(patient_bookings)
+
+    # Gate Market LIRIE : résoudre les demandes institution en un seul lot
+    # (le filtre par sujet plus bas ne refait alors aucune requête).
+    attach_invoice_request_ids(patient_bookings)
 
     # Grouper par sujet facturable : un patient = une facture pour la période.
     groups: dict[str, list[Booking]] = defaultdict(list)
@@ -652,16 +720,27 @@ def list_billing_opportunities(
             list(scope_by_id.values())
         )
 
+        # Même gate Market LIRIE que period-preview / generate_invoice : une
+        # course institution en attente de validation (ou contestée) ne doit
+        # pas être annoncée comme facturable dans la liste « Direct patient ».
+        attach_invoice_request_ids(scope_bookings)
+        eligible_scope = filter_institution_invoice_eligible(scope_bookings, now=now)
+        eligible_ids = {int(b.id) for b in eligible_scope}
+        held_in_period = [b for b in bookings if int(b.id) not in eligible_ids]
+        gate_hold = summarize_institution_gate_hold(
+            held_in_period, now=now, amount_ht_fn=_amt
+        )
+
         units = resolve_invoice_booking_units(
-            selected_ids={int(b.id) for b in bookings},
-            scope_bookings=scope_bookings,
+            selected_ids={int(b.id) for b in bookings if int(b.id) in eligible_ids},
+            scope_bookings=eligible_scope,
             subject_key_fn=lambda bk: resolve_subject_identity(bk).key,
             amount_ht_fn=_amt,
             expand_explicit_peers=True,
         )
         # Ne garder que les unités du sujet (filet)
         units = [u for u in units if u.subject_key == subject_key]
-        if not units:
+        if not units and gate_hold.total_count == 0:
             continue
         total = float(sum((u.amount_ht for u in units), Decimal("0")))
         segments = sum(len(u.booking_ids) for u in units)
@@ -678,6 +757,15 @@ def list_billing_opportunities(
             and recipient_status == "ready"
             and segments > 0
         )
+        blocked_reason: BlockedReason | None = None
+        if segments == 0 and gate_hold.pending_count > 0:
+            blocked_reason = "pending_institution_validation"
+        elif segments == 0 and gate_hold.disputed_count > 0:
+            blocked_reason = "disputed"
+        elif identity_status != "resolved":
+            blocked_reason = "identity"
+        elif recipient_status != "ready":
+            blocked_reason = "recipient"
 
         delivery_pref = "email"
         carrier_client = db.session.get(Client, int(carrier)) if carrier else None
@@ -712,6 +800,13 @@ def list_billing_opportunities(
                 transports_count=segments,
                 estimated_total=total,
                 invoice_delivery_method=delivery_pref,
+                pending_validation_count=gate_hold.pending_count,
+                pending_validation_amount=gate_hold.pending_amount_ht,
+                pending_validation_release_at=(
+                    gate_hold.release_at.isoformat() if gate_hold.release_at else None
+                ),
+                disputed_count=gate_hold.disputed_count,
+                blocked_reason=blocked_reason,
             )
         )
 
@@ -826,6 +921,11 @@ def opportunities_to_dict(res: BillingOpportunitiesResult) -> dict[str, Any]:
                 "estimated_total": p.estimated_total,
                 "currency": p.currency,
                 "invoice_delivery_method": p.invoice_delivery_method or "email",
+                "pending_validation_count": p.pending_validation_count,
+                "pending_validation_amount": p.pending_validation_amount,
+                "pending_validation_release_at": p.pending_validation_release_at,
+                "disputed_count": p.disputed_count,
+                "blocked_reason": p.blocked_reason,
             }
             for p in res.patient_items
         ],

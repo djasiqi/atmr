@@ -612,6 +612,19 @@ export const invoiceService = {
     return response.data;
   },
 
+  /** Menu « Nouvelle facture » : patients du mois, sans lignes ni brouillon. */
+  async fetchInvoiceCandidates(companyId, year, month, { signal } = {}) {
+    const period = `${year}-${String(month).padStart(2, '0')}`;
+    const response = await apiClient.get(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/invoice-candidates`,
+      {
+        signal,
+        params: { payer_type: 'patient', period },
+      },
+    );
+    return response.data;
+  },
+
   async removeDraftInvoiceLine(companyId, invoiceId, lineId, options = {}) {
     const url = `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/lines/${lineId}`;
     const data = {};
@@ -960,3 +973,24 @@ export const {
   removeDraftGlobalDiscount,
   addDraftCustomLine,
 } = invoiceService;
+
+/** Patients du mois demandé uniquement. Une réponse tardive d'un autre mois est ignorée. */
+export function patientCandidatesForPeriod(payload, year, month) {
+  const body =
+    payload?.data && !Array.isArray(payload.data) && payload.patients == null
+      ? payload.data
+      : payload;
+  const expected = `${year}-${String(month).padStart(2, '0')}`;
+  if (!body || body.period !== expected || !Array.isArray(body.patients)) return [];
+  return body.patients;
+}
+
+/** Clé partagée registre + modal : le prefetch et l'ouverture lisent le même cache. */
+export function invoiceCandidatesQueryOptions(companyId, year, month) {
+  return {
+    queryKey: ['invoiceCandidates', companyId, Number(year), Number(month)],
+    queryFn: ({ signal }) =>
+      invoiceService.fetchInvoiceCandidates(companyId, year, month, { signal }),
+    staleTime: 60_000,
+  };
+}

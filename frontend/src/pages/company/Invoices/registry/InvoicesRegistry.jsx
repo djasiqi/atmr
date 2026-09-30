@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   FiFileText,
@@ -24,6 +24,7 @@ import {
   postReminder,
   duplicateInvoice,
   fetchBillingOpportunities,
+  invoiceCandidatesQueryOptions,
   getEffectiveDueDate,
   getDaysOverdue,
   bulkMarkAsSent,
@@ -134,6 +135,17 @@ const InvoicesRegistry = () => {
     enabled: Boolean(company?.id),
     staleTime: 60_000,
   });
+
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!company?.id) return undefined;
+    const handle = window.setTimeout(() => {
+      void queryClient.prefetchQuery(
+        invoiceCandidatesQueryOptions(company.id, opportunityYear, opportunityMonth),
+      );
+    }, 400);
+    return () => window.clearTimeout(handle);
+  }, [company?.id, opportunityMonth, opportunityYear, queryClient]);
 
   const {
     data: listData,

@@ -706,10 +706,23 @@ class GenerateInvoiceUseCase:
             from application.invoices.institution_invoice_eligibility import (
                 attach_invoice_request_ids,
                 filter_institution_invoice_eligible,
+                institution_gate_hold_message,
+                summarize_institution_gate_hold,
             )
 
             attach_invoice_request_ids(reservations)
+            gate_considered = list(reservations)
             reservations = filter_institution_invoice_eligible(reservations, now=now)
+            if not reservations and gate_considered:
+                # Tout est retenu par le gate Market LIRIE : expliquer pourquoi
+                # plutôt que « Aucune réservation trouvée pour cette période ».
+                hold_msg = institution_gate_hold_message(
+                    summarize_institution_gate_hold(gate_considered, now=now)
+                )
+                if hold_msg:
+                    raise ValueError(
+                        f"Aucune prestation facturable pour l'instant : {hold_msg}"
+                    )
             from application.invoices.billable_amount import (
                 partition_invoiceable_bookings,
             )

@@ -1901,6 +1901,69 @@ class BillingOpportunities(Resource):
             )
 
 
+@invoices_ns.route("/companies/<int:company_id>/invoices/invoice-candidates")
+class InvoiceCandidates(Resource):
+    """Menu « Nouvelle facture » : patients facturables du mois, lecture seule."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id: int):
+        from application.invoices.invoice_candidates import (
+            list_patient_invoice_candidates,
+        )
+        from routes.companies import _get_current_company_via_use_case
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response or not company:
+            return error_response, status_code
+        cid = int(getattr(company, "id", 0) or 0)
+        if cid != company_id:
+            return APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
+
+        payer_type = (request.args.get("payer_type") or "patient").strip().lower()
+        if payer_type != "patient":
+            return APIErrorHandler.handle_validation_error(
+                "Seul payer_type=patient est servi par ce sélecteur.",
+                logger_instance=logger,
+            )
+        period = (request.args.get("period") or "").strip()
+        year = request.args.get("year", type=int)
+        month = request.args.get("month", type=int)
+        if period:
+            parts = period.split("-")
+            if len(parts) != 2:
+                return APIErrorHandler.handle_validation_error(
+                    "period doit être AAAA-MM",
+                    logger_instance=logger,
+                )
+            try:
+                year = int(parts[0])
+                month = int(parts[1])
+            except ValueError:
+                return APIErrorHandler.handle_validation_error(
+                    "period doit être AAAA-MM",
+                    logger_instance=logger,
+                )
+        if not year or not month or not (1 <= month <= PERIOD_MONTH_MAX):
+            return APIErrorHandler.handle_validation_error(
+                "Paramètres period=AAAA-MM ou year et month (1-12) requis",
+                logger_instance=logger,
+            )
+        try:
+            payload = list_patient_invoice_candidates(
+                company_id=company_id,
+                period_year=year,
+                period_month=month,
+            )
+            return success_response(data=payload)
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+
+
 @invoices_ns.route("/companies/<int:company_id>/invoices/celery-tasks/<string:task_id>")
 class InvoiceCeleryTaskStatus(Resource):
     """Statut tâche Celery (ex. PDF async) — résultat via backend Redis."""
@@ -2424,6 +2487,13 @@ class GenerateInvoice(Resource):
                         invoice_result.error,
                         invoice_result.status_code or 400,
                     )
+                from application.invoices.invoice_candidates import (
+                    invalidate_patient_invoice_candidates,
+                )
+
+                invalidate_patient_invoice_candidates(
+                    company_id, period_year, period_month
+                )
                 if invoice_result.invoice:
                     return invoice_result.invoice.to_dict(), 201
                 if invoice_result.invoice_id:

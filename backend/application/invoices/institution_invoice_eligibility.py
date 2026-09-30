@@ -16,6 +16,7 @@ from __future__ import annotations
 from calendar import monthrange
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -205,6 +206,125 @@ def filter_institution_invoice_eligible(
     bookings: list[Any], *, now: datetime | None = None
 ) -> list[Any]:
     return [b for b in bookings if is_institution_invoice_eligible(b, now=now)]
+
+
+@dataclass(frozen=True, slots=True)
+class InstitutionGateHold:
+    """Prestations retenues par le gate Market LIRIE (lecture seule, sans write).
+
+    Sert à expliquer *pourquoi* une course terminée et non facturée n'apparaît
+    pas encore sur une facture : en attente de validation institution, contestée,
+    ou déclarée non facturable après contestation.
+    """
+
+    pending_count: int = 0
+    pending_amount_ht: float = 0.0
+    disputed_count: int = 0
+    disputed_amount_ht: float = 0.0
+    not_billable_count: int = 0
+    release_at: datetime | None = None
+
+    @property
+    def total_count(self) -> int:
+        return self.pending_count + self.disputed_count + self.not_billable_count
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "pending_count": self.pending_count,
+            "pending_amount_ht": self.pending_amount_ht,
+            "disputed_count": self.disputed_count,
+            "disputed_amount_ht": self.disputed_amount_ht,
+            "not_billable_count": self.not_billable_count,
+            "release_at": self.release_at.isoformat() if self.release_at else None,
+        }
+
+
+def summarize_institution_gate_hold(
+    bookings: list[Any],
+    *,
+    now: datetime | None = None,
+    amount_ht_fn: Any | None = None,
+) -> InstitutionGateHold:
+    """Résume les courses bloquées par le gate (pending / disputed / not_billable).
+
+    ``release_at`` = instant de libération automatique le plus tardif parmi les
+    courses ``pending`` (Europe/Zurich) — à partir de là, tout est facturable.
+    """
+    pending = disputed = not_billable = 0
+    pending_amt = Decimal("0")
+    disputed_amt = Decimal("0")
+    release_at: datetime | None = None
+
+    def _amt(b: Any) -> Decimal:
+        if amount_ht_fn is None:
+            return Decimal("0")
+        try:
+            return Decimal(str(amount_ht_fn(b)))
+        except (TypeError, ValueError, ArithmeticError):
+            return Decimal("0")
+
+    for b in bookings:
+        gate = invoice_gate_status(b, now=now)
+        if gate == "pending":
+            pending += 1
+            pending_amt += _amt(b)
+            service_dt = service_datetime(b)
+            if service_dt is not None:
+                candidate = market_lirie_release_instant(service_dt)
+                if release_at is None or candidate > release_at:
+                    release_at = candidate
+        elif gate == "disputed":
+            disputed += 1
+            disputed_amt += _amt(b)
+        elif gate == "not_billable":
+            not_billable += 1
+
+    return InstitutionGateHold(
+        pending_count=pending,
+        pending_amount_ht=float(round(pending_amt, 2)),
+        disputed_count=disputed,
+        disputed_amount_ht=float(round(disputed_amt, 2)),
+        not_billable_count=not_billable,
+        release_at=release_at,
+    )
+
+
+def _plural(count: int, singular: str, plural: str) -> str:
+    return singular if count == 1 else plural
+
+
+def institution_gate_hold_message(hold: InstitutionGateHold) -> str | None:
+    """Phrase utilisateur (FR) expliquant la retenue. ``None`` si rien n'est retenu."""
+    parts: list[str] = []
+    if hold.pending_count:
+        release = ""
+        if hold.release_at is not None:
+            release = (
+                " ou automatiquement dès le "
+                f"{_as_zurich(hold.release_at).strftime('%d.%m.%Y')}"
+            )
+        parts.append(
+            f"{hold.pending_count} "
+            f"{_plural(hold.pending_count, 'prestation', 'prestations')} "
+            "en attente de validation par l'institution (Market LIRIE) — "
+            f"{_plural(hold.pending_count, 'facturable', 'facturables')} "
+            f"après validation{release}."
+        )
+    if hold.disputed_count:
+        parts.append(
+            f"{hold.disputed_count} "
+            f"{_plural(hold.disputed_count, 'prestation contestée', 'prestations contestées')} "
+            "par l'institution — à traiter avant facturation."
+        )
+    if hold.not_billable_count:
+        parts.append(
+            f"{hold.not_billable_count} "
+            f"{_plural(hold.not_billable_count, 'prestation déclarée non facturable', 'prestations déclarées non facturables')} "
+            "après contestation."
+        )
+    if not parts:
+        return None
+    return " ".join(parts)
 
 
 def attach_invoice_request_ids(bookings: list[Any]) -> None:

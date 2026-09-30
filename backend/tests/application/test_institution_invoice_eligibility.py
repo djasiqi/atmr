@@ -10,6 +10,7 @@ from application.invoices.institution_invoice_eligibility import (
     ORIGIN_MARKET_LIRIE,
     ORIGIN_OWN_PORTFOLIO,
     filter_institution_invoice_eligible,
+    institution_gate_hold_message,
     invoice_gate_status,
     is_institution_invoice_eligible,
     is_market_lirie_deadline_passed,
@@ -17,6 +18,7 @@ from application.invoices.institution_invoice_eligibility import (
     reopen_market_lirie_validation_after_financial_change,
     resolve_commercial_origin,
     resolve_invoice_payer_type,
+    summarize_institution_gate_hold,
 )
 from application.invoices.invoice_booking_units import resolve_invoice_booking_units
 from models.enums import InstitutionBillingControlStatus
@@ -319,3 +321,104 @@ def test_validated_after_dispute_is_eligible():
     )
     assert invoice_gate_status(b) == "validated_after_dispute"
     assert is_institution_invoice_eligible(b)
+
+
+def test_gate_hold_summary_pending_patient_leg_end_of_month():
+    """Cas réel #40543 : course patient CLHDA du 30.09, contrôle NULL, `now` = 30.09 10:37.
+
+    Le gate retient la course jusqu'au 01.10 00:00 (Europe/Zurich) ; le résumé
+    doit l'expliquer (compte, montant, date de libération) plutôt que de la
+    faire disparaître silencieusement.
+    """
+    pending = _bk(
+        id=40543,
+        billing_origin="LIRIE_MARKETPLACE",
+        created_via="institution_portal",
+        institution_control_status=None,
+        billed_to_type="patient",
+        scheduled_time=datetime(2026, 9, 30, 9, 30, tzinfo=ZURICH),
+        amount=45,
+    )
+    now = datetime(2026, 9, 30, 10, 37, tzinfo=ZURICH)
+    assert invoice_gate_status(pending, now=now) == "pending"
+
+    hold = summarize_institution_gate_hold(
+        [pending], now=now, amount_ht_fn=lambda b: b.amount
+    )
+    assert hold.pending_count == 1
+    assert hold.pending_amount_ht == 45.0
+    assert hold.disputed_count == 0
+    assert hold.not_billable_count == 0
+    assert hold.total_count == 1
+    assert hold.release_at == datetime(2026, 10, 1, 0, 0, tzinfo=ZURICH)
+
+    msg = institution_gate_hold_message(hold)
+    assert msg == (
+        "1 prestation en attente de validation par l'institution (Market LIRIE) — "
+        "facturable après validation ou automatiquement dès le 01.10.2026."
+    )
+
+    # Le 01.10 à 00:00, plus rien n'est retenu.
+    released = summarize_institution_gate_hold(
+        [pending], now=datetime(2026, 10, 1, 0, 0, tzinfo=ZURICH)
+    )
+    assert released.total_count == 0
+    assert institution_gate_hold_message(released) is None
+
+
+def test_gate_hold_summary_mixed_pending_disputed_not_billable():
+    now = datetime(2026, 8, 20, 12, 0, tzinfo=ZURICH)
+    pending_a = _bk(
+        id=1,
+        billing_origin="LIRIE_MARKETPLACE",
+        created_via="institution_portal",
+        institution_control_status=InstitutionBillingControlStatus.PENDING_REVIEW,
+        scheduled_time=datetime(2026, 8, 5, 10, 0, tzinfo=ZURICH),
+        amount=40,
+    )
+    pending_b = _bk(
+        id=2,
+        billing_origin="LIRIE_MARKETPLACE",
+        created_via="institution_portal",
+        institution_control_status=InstitutionBillingControlStatus.PENDING_REVIEW,
+        scheduled_time=datetime(2026, 8, 18, 10, 0, tzinfo=ZURICH),
+        amount=60,
+    )
+    disputed = _bk(
+        id=3,
+        billing_origin="LIRIE_MARKETPLACE",
+        created_via="institution_portal",
+        institution_control_status=InstitutionBillingControlStatus.ANOMALY,
+        amount=25,
+    )
+    not_billable = _bk(
+        id=4,
+        billing_origin="LIRIE_MARKETPLACE",
+        created_via="institution_portal",
+        institution_control_status=InstitutionBillingControlStatus.ANOMALY,
+        invoice_billing_status="not_billable",
+        amount=99,
+    )
+    portfolio = _bk(id=5, billing_origin="OWN_PORTFOLIO", amount=10)
+
+    hold = summarize_institution_gate_hold(
+        [pending_a, pending_b, disputed, not_billable, portfolio],
+        now=now,
+        amount_ht_fn=lambda b: b.amount,
+    )
+    # Le portefeuille propre n'est jamais retenu.
+    assert hold.pending_count == 2
+    assert hold.pending_amount_ht == 100.0
+    assert hold.disputed_count == 1
+    assert hold.disputed_amount_ht == 25.0
+    assert hold.not_billable_count == 1
+    assert hold.release_at == datetime(2026, 9, 1, 0, 0, tzinfo=ZURICH)
+
+    msg = institution_gate_hold_message(hold)
+    assert msg == (
+        "2 prestations en attente de validation par l'institution (Market LIRIE) — "
+        "facturables après validation ou automatiquement dès le 01.09.2026. "
+        "1 prestation contestée par l'institution — à traiter avant facturation. "
+        "1 prestation déclarée non facturable après contestation."
+    )
+    assert hold.to_dict()["release_at"] == "2026-09-01T00:00:00+02:00"
