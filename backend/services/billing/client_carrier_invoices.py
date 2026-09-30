@@ -72,10 +72,7 @@ def serialize_company_invoice_for_client(invoice: Invoice) -> dict[str, Any]:
 
 
 def client_ids_for_user(user_id: int) -> list[int]:
-    return [
-        int(row.id)
-        for row in Client.query.filter_by(user_id=int(user_id)).all()
-    ]
+    return [int(row.id) for row in Client.query.filter_by(user_id=int(user_id)).all()]
 
 
 def company_invoice_visible_to_client(user_id: int, invoice_id: int) -> Invoice | None:

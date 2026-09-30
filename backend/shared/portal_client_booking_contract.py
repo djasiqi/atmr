@@ -125,7 +125,9 @@ def validate_medical_destination(data: dict[str, Any]) -> None:
     service = _blank(data.get("hospital_service"))
     doctor = _blank(data.get("doctor_name"))
     if not facility:
-        raise ValueError("L'établissement est obligatoire pour une destination médicale.")
+        raise ValueError(
+            "L'établissement est obligatoire pour une destination médicale."
+        )
     if not (detail or service or doctor):
         raise ValueError(
             "Indiquez le service ou le médecin pour une destination médicale."

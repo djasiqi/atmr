@@ -95,10 +95,7 @@ class ScheduleCompanyReservationUseCase:
         previous_appointment = None
         if confirm_pickup and not bool(getattr(booking, "time_confirmed", True)):
             previous_appointment = getattr(booking, "scheduled_time", None)
-            if (
-                previous_appointment is not None
-                and sched_local > previous_appointment
-            ):
+            if previous_appointment is not None and sched_local > previous_appointment:
                 return ScheduleCompanyReservationResult(
                     ok=False,
                     error={

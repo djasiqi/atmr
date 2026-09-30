@@ -13,7 +13,9 @@ def serialize_client_message_notification(message: Any, booking: Any) -> dict[st
     sender = str(getattr(message, "sender_label", "") or "").strip() or "Transporteur"
     created = getattr(message, "created_at", None)
     created_iso = (
-        created.isoformat() if created is not None and hasattr(created, "isoformat") else None
+        created.isoformat()
+        if created is not None and hasattr(created, "isoformat")
+        else None
     )
     return {
         "id": getattr(message, "id", None),
@@ -41,7 +43,9 @@ def serialize_client_invoice_notification(invoice: Any) -> dict[str, Any]:
     company = getattr(invoice, "company", None)
     company_name = str(getattr(company, "name", "") or "").strip()
     when = getattr(invoice, "sent_at", None) or getattr(invoice, "issued_at", None)
-    created_iso = when.isoformat() if when is not None and hasattr(when, "isoformat") else None
+    created_iso = (
+        when.isoformat() if when is not None and hasattr(when, "isoformat") else None
+    )
     detail = " · ".join(part for part in (number, amount, company_name) if part)
     return {
         "id": f"invoice-{int(invoice.id)}",

@@ -106,7 +106,9 @@ class Client(db.Model):
     habitual_needs_assistance: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
-    habitual_assistance_detail: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    habitual_assistance_detail: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
 
     # Médecin traitant
     gp_name: Mapped[str] = mapped_column(String(120), nullable=True)

@@ -179,7 +179,10 @@ class BookingCreateSchema(Schema):
             raise ValidationError(
                 "wheelchair_client_has et wheelchair_need ne peuvent pas être vrais ensemble."
             )
-        if data.get("needs_assistance") and not str(data.get("assistance_detail") or "").strip():
+        if (
+            data.get("needs_assistance")
+            and not str(data.get("assistance_detail") or "").strip()
+        ):
             raise ValidationError(
                 {"assistance_detail": ["Indiquez le type d’assistance."]}
             )

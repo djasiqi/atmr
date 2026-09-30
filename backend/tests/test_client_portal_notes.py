@@ -13,10 +13,15 @@ def test_compose_arrival_and_asap_lines() -> None:
     assert arrival is not None
     assert arrival.startswith("Horaire souhaité : rendez-vous à destination.")
 
-    asap = compose_client_portal_notes_medical({"asap": True, "scheduled_time_type": "arrival"})
+    asap = compose_client_portal_notes_medical(
+        {"asap": True, "scheduled_time_type": "arrival"}
+    )
     assert asap == "Horaire souhaité : dès que possible."
 
-    assert compose_client_portal_notes_medical({"scheduled_time_type": "departure"}) is None
+    assert (
+        compose_client_portal_notes_medical({"scheduled_time_type": "departure"})
+        is None
+    )
     assert compose_client_portal_notes_medical({}) is None
     assert compose_client_portal_notes_medical({"client_note": "  "}) is None
 

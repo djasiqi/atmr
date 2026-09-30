@@ -55,7 +55,8 @@ class ClientPortalReceivableCollection(Resource):
         invoices = [
             item
             for item in list_company_invoices_for_client_user(int(user.id))
-            if str(item.get("external_invoice_number") or "").strip() not in known_numbers
+            if str(item.get("external_invoice_number") or "").strip()
+            not in known_numbers
         ]
         return {"data": [*receivables, *invoices]}, 200
 

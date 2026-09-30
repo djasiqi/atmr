@@ -191,7 +191,9 @@ class SqlAlchemyBookingWriter:
             wheelchair_client_has=bool(wheelchair_client_has),
             wheelchair_need=bool(wheelchair_need),
             needs_assistance=bool(needs_assistance),
-            assistance_detail=_blank_to_none(assistance_detail) if needs_assistance else None,
+            assistance_detail=_blank_to_none(assistance_detail)
+            if needs_assistance
+            else None,
             is_urgent=bool(is_urgent),
             requester_name=_blank_to_none(requester_name),
             requester_phone=_blank_to_none(requester_phone),
@@ -306,7 +308,9 @@ class SqlAlchemyBookingWriter:
         pickup_access = outbound_booking.dropoff_access_notes
         dropoff_access = home.pickup_access_notes
         # Retour vers le domicile : la destination n'est plus l'établissement de la dernière étape.
-        clear_medical = home_booking is not None and home_booking is not outbound_booking
+        clear_medical = (
+            home_booking is not None and home_booking is not outbound_booking
+        )
         return_booking = cast("Any", Booking)(
             customer_name=outbound_booking.customer_name,
             pickup_location=pickup_location,
@@ -322,7 +326,9 @@ class SqlAlchemyBookingWriter:
             company_id=outbound_booking.company_id,
             medical_facility="" if clear_medical else outbound_booking.medical_facility,
             doctor_name="" if clear_medical else outbound_booking.doctor_name,
-            hospital_service=None if clear_medical else outbound_booking.hospital_service,
+            hospital_service=None
+            if clear_medical
+            else outbound_booking.hospital_service,
             notes_medical=outbound_booking.notes_medical,
             pickup_access_notes=pickup_access,
             dropoff_access_notes=dropoff_access,
