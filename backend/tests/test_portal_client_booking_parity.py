@@ -102,11 +102,19 @@ def test_personal_and_provided_wheelchair_are_exclusive():
 
 
 def test_assistance_alone_and_with_wheelchair():
+    with pytest.raises(ValidationError):
+        _load(
+            scheduled_time="2026-09-30T08:15:00",
+            needs_assistance=True,
+        )
+
     alone = _load(
         scheduled_time="2026-09-30T08:15:00",
         needs_assistance=True,
+        assistance_detail="Accompagnement",
     )
     assert alone["needs_assistance"] is True
+    assert alone["assistance_detail"] == "Accompagnement"
     assert alone["wheelchair_client_has"] is False
     assert alone["wheelchair_need"] is False
 
@@ -114,9 +122,11 @@ def test_assistance_alone_and_with_wheelchair():
         scheduled_time="2026-09-30T08:15:00",
         wheelchair_need=True,
         needs_assistance=True,
+        assistance_detail="Aide au transfert",
     )
     assert with_chair["wheelchair_need"] is True
     assert with_chair["needs_assistance"] is True
+    assert with_chair["assistance_detail"] == "Aide au transfert"
 
 
 def test_medical_destination_contact_is_structured():

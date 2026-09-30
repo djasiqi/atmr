@@ -86,6 +86,9 @@ def _activation_user(**overrides):
         "institution_id": None,
         "institution_role": None,
         "token_version": 1,
+        "first_name": "Jean",
+        "last_name": "TEST",
+        "force_password_change": False,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
