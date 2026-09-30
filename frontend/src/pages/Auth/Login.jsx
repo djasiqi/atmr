@@ -291,12 +291,22 @@ const Login = () => {
     const { name, value } = e.target;
     const nextValue = name === 'lastName' ? value.toLocaleUpperCase('fr-CH') : value;
     setSignupFormData((prev) => {
-      const next = { ...prev, [name]: nextValue };
-      // Mot de passe uniquement avec email : on efface si l'email est vidé
-      if (name === 'email' && !String(nextValue || '').trim()) {
-        next.password = '';
-        next.confirmPassword = '';
-      }
+      // Champs explicites : un [name] dynamique recopierait l'adresse
+      // (code postal, lieu médical) dans le profil mobilité ensuite stocké.
+      const next = { ...prev };
+      if (name === 'firstName') next.firstName = nextValue;
+      else if (name === 'lastName') next.lastName = nextValue;
+      else if (name === 'email') {
+        next.email = nextValue;
+        if (!String(nextValue || '').trim()) {
+          next.password = '';
+          next.confirmPassword = '';
+        }
+      } else if (name === 'password') next.password = nextValue;
+      else if (name === 'confirmPassword') next.confirmPassword = nextValue;
+      else if (name === 'phone') next.phone = nextValue;
+      else if (name === 'address') next.address = nextValue;
+      else if (name === 'mobilityNotes') next.mobilityNotes = nextValue;
       return next;
     });
     setErrorMessage('');
@@ -620,7 +630,6 @@ const Login = () => {
           needsElectricWheelchair: signupFormData.needsElectricWheelchair,
           needsWalkingAid: signupFormData.needsWalkingAid,
           needsDoorToDoorAssistance: signupFormData.needsDoorToDoorAssistance,
-          assistanceLevel: signupFormData.assistanceLevel,
         });
       }
       const params = new URLSearchParams();
