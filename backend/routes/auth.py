@@ -865,16 +865,17 @@ def _enforce_resend_policy(
     *, last_sent_at: datetime | None, resend_count: int
 ) -> tuple[bool, str | None, int]:
     now = datetime.now(UTC)
+    daily_count = resend_count
+    if last_sent_at and not _is_same_utc_day(last_sent_at, now):
+        daily_count = 0
+    # Le plafond du jour prime sur le délai court, y compris juste après minuit UTC.
+    if daily_count >= ACTIVATION_RESEND_DAILY_LIMIT:
+        return False, "daily_limit", 0
+
     if last_sent_at:
         elapsed = int((now - last_sent_at).total_seconds())
         if elapsed < ACTIVATION_RESEND_COOLDOWN_SECONDS:
             return False, "cooldown", ACTIVATION_RESEND_COOLDOWN_SECONDS - elapsed
-
-    daily_count = resend_count
-    if last_sent_at and not _is_same_utc_day(last_sent_at, now):
-        daily_count = 0
-    if daily_count >= ACTIVATION_RESEND_DAILY_LIMIT:
-        return False, "daily_limit", 0
 
     return True, None, 0
 

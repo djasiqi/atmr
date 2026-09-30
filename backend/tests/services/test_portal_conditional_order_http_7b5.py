@@ -12,11 +12,11 @@ from application.companies.accept_reservation import AcceptReservationUseCase
 from services.companies.booking_transfer_cache import (
     attach_serialize_context_to_bookings,
 )
-from services.pricing.portal_carrier_ceiling import carrier_leg_priced_as_round_trip
 from services.legal.portal_double_validation import (
     ERROR_TRANSPORT_ALREADY_ASSIGNED,
     FLOW_CONDITIONAL_ORDER_V1,
 )
+from services.pricing.portal_carrier_ceiling import carrier_leg_priced_as_round_trip
 
 
 def test_conditional_accept_idempotent_same_company_via_usecase():

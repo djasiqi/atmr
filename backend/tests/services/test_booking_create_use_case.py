@@ -250,6 +250,7 @@ def test_portal_parity_reaches_writer_without_invented_clock(
             scheduled_time_type="arrival",
             wheelchair_client_has=True,
             needs_assistance=True,
+            assistance_detail="Accompagnement",
             pickup_access_notes="Code 1234",
             dropoff_access_notes="Accueil",
             client_note="Prise en charge : Code 1234\nDestination : Accueil",

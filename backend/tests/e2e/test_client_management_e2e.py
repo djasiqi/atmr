@@ -240,10 +240,10 @@ class TestClientProfileUpdateFlow:
         if "user" in updated_profile:
             user_data = updated_profile["user"]
             assert user_data.get("first_name") == update_data["first_name"]
-            assert user_data.get("last_name") == update_data["last_name"]
+            assert user_data.get("last_name") == update_data["last_name"].upper()
         elif "first_name" in updated_profile:
             assert updated_profile.get("first_name") == update_data["first_name"]
-            assert updated_profile.get("last_name") == update_data["last_name"]
+            assert updated_profile.get("last_name") == update_data["last_name"].upper()
 
         # Note: phone et address peuvent être dans différents endroits selon la structure de réponse
         # On vérifie au moins que la mise à jour a été acceptée (status 200)

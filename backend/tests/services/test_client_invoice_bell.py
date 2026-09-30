@@ -6,7 +6,9 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from services.notifications.client_message_bell import serialize_client_invoice_notification
+from services.notifications.client_message_bell import (
+    serialize_client_invoice_notification,
+)
 
 
 def test_invoice_notification_names_the_received_bill():

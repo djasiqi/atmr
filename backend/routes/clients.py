@@ -2356,10 +2356,11 @@ class ClientMessageNotifications(Resource):
                 serialize_client_message_notification(message, booking)
                 for message, booking in rows
             ]
-            from models.enums import InvoiceStatus
-            from models.invoice import Invoice
             from sqlalchemy import or_
             from sqlalchemy.orm import joinedload
+
+            from models.enums import InvoiceStatus
+            from models.invoice import Invoice
 
             invoices = (
                 db.session.query(Invoice)
@@ -2388,7 +2389,9 @@ class ClientMessageNotifications(Resource):
             notifications.extend(
                 serialize_client_invoice_notification(invoice) for invoice in invoices
             )
-            notifications.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+            notifications.sort(
+                key=lambda item: item.get("created_at") or "", reverse=True
+            )
             notifications = notifications[:20]
             return {"notifications": notifications, "total": len(notifications)}, 200
         except Exception as e:
@@ -3228,7 +3231,6 @@ class ClientsList(Resource):
 
             # Créer l'utilisateur (création directe temporaire, à migrer vers use case)
             from models import Client, User
-
             from shared.user_display import family_name_upper
 
             stored_last_name = family_name_upper(data["last_name"]) or data["last_name"]
