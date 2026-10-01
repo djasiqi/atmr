@@ -3456,6 +3456,9 @@ def _build_s2_table(
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import cm
     from reportlab.platypus import Paragraph, Table, TableStyle
+    from application.invoices.invoice_line_customer_note import (
+        collect_customer_visible_notes,
+    )
     from application.invoices.invoice_line_description import (
         format_patient_display_name_nom_prenom,
         resolve_s2_clinic_line_patient_name,
@@ -3869,10 +3872,6 @@ def _build_s2_table(
                     desc_html = f'{esc_d}<br/><font size="{FONT_SECONDARY}" color="#64748b">{esc_s}</font>'
                 else:
                     desc_html = esc_d
-                from application.invoices.invoice_line_customer_note import (
-                    collect_customer_visible_notes,
-                )
-
                 desc_html = _pdf_limit_html_br_lines(
                     f"{desc_html}{disc_o}", max_simple_description_lines
                 )
@@ -3907,10 +3906,6 @@ def _build_s2_table(
             if line.line_total is None:
                 continue
             amt = line.line_total
-            from application.invoices.invoice_line_customer_note import (
-                collect_customer_visible_notes,
-            )
-
             orphan_notes = collect_customer_visible_notes([line])
             if amt == 0 and not orphan_notes:
                 continue

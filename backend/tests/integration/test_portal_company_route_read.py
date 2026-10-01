@@ -11,7 +11,7 @@ from models.enums import BookingStatus
 from services.companies.booking_display import build_booking_trip_flags
 from tests.services.test_client_booking_contract_event import _portal_user
 
-APPOINTMENT = datetime(2026, 9, 30, 9, 0, 0)
+APPOINTMENT = datetime(2026, 12, 15, 9, 0, 0)
 
 
 def _leg(user, client, **overrides) -> Booking:
@@ -87,7 +87,7 @@ def test_company_reads_one_mission_in_segment_order(db) -> None:
         pickup_location="Rue du Test 1",
         dropoff_location="Pharmacie",
         time_confirmed=True,
-        scheduled_time=datetime(2026, 9, 30, 14, 0, 0),
+        scheduled_time=datetime(2026, 12, 15, 14, 0, 0),
     )
     db.session.add_all([first, second, return_leg, simple])
     db.session.flush()

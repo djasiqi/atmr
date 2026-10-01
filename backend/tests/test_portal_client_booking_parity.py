@@ -225,11 +225,11 @@ def test_manual_and_institution_clocks_are_not_rewritten():
             "client_id": 123,
             "pickup_location": "Rue du Test 1",
             "dropoff_location": "HUG",
-            "scheduled_time": "2026-09-30T08:15:00Z",
+            "scheduled_time": "2026-12-15T08:15:00Z",
             "is_urgent": True,
         },
     )
-    assert manual["scheduled_time"] == "2026-09-30T08:15:00Z"
+    assert manual["scheduled_time"] == "2026-12-15T08:15:00Z"
 
     with pytest.raises(ValidationError) as exc:
         validate_request(
@@ -245,17 +245,17 @@ def test_manual_and_institution_clocks_are_not_rewritten():
     institution = TransportRequestCreateSchema().load(
         normalize_transport_request_schedule_payload(
             {
-                "mission_date": "2026-09-30",
+                "mission_date": "2026-12-15",
                 "pickup_location": "Clinique",
                 "dropoff_location": "HUG",
-                "scheduled_time": "2026-09-30T08:15:00+02:00",
+                "scheduled_time": "2026-12-15T08:15:00+01:00",
                 "scheduled_time_type": "departure",
                 "pickup_time_confirmed": True,
                 "asap": True,
             }
         )
     )
-    assert institution["scheduled_time"] == "2026-09-30T08:15:00+02:00"
+    assert institution["scheduled_time"] == "2026-12-15T08:15:00+01:00"
     assert institution["scheduled_time_type"] == "departure"
     assert "asap" not in institution
 

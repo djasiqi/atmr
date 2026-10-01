@@ -202,7 +202,7 @@ def test_partial_then_full_payment(db) -> None:
         recorded_by_user_id=owner.id,
         external_invoice_number="FAC-PAY",
         issued_at=datetime(2026, 9, 1, tzinfo=UTC),
-        due_date=datetime(2026, 10, 1, tzinfo=UTC),
+        due_date=datetime(2026, 12, 31, tzinfo=UTC),
         lines=[
             ReceivableLineInput(
                 booking_id=booking.id, invoiced_amount=Decimal("500.00")

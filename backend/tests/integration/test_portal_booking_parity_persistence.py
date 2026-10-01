@@ -31,8 +31,8 @@ from services.legal.record_booking_contract_event import (
 from shared.portal_client_booking_contract import read_company_portal_schedule
 from tests.services.test_client_booking_contract_event import _portal_user
 
-APPOINTMENT = datetime(2026, 9, 30, 9, 0, 0)
-DEPARTURE = datetime(2026, 9, 30, 8, 15, 0)
+APPOINTMENT = datetime(2026, 12, 15, 9, 0, 0)
+DEPARTURE = datetime(2026, 12, 15, 8, 15, 0)
 
 
 def _persist(db, user, client, **overrides) -> Booking:
@@ -242,7 +242,7 @@ def test_round_trip_without_time_creates_null_return(db) -> None:
 @pytest.mark.integration
 def test_round_trip_with_time_persists_return_clock(db) -> None:
     user, client = _portal_user(db)
-    return_at = datetime(2026, 9, 30, 16, 30, 0)
+    return_at = datetime(2026, 12, 15, 16, 30, 0)
     created = _persist(
         db,
         user,
