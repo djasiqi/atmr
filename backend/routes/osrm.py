@@ -14,13 +14,12 @@ from config import Config
 from ext import redis_client
 from schemas.osrm_schemas import OSRMRouteQuerySchema
 from schemas.validation_utils import validate_request
-from services.geolocation.historical_eta import get_improved_duration_estimate
+from services.geolocation.historical_eta import (
+    URBAN_TRAFFIC_FACTOR,
+    get_improved_duration_estimate,
+)
 from services.geolocation.osrm import route_info
 from shared.error_handlers import APIErrorHandler
-
-# OSRM donne le temps à vide. Sans historique de courses, ce facteur rapproche
-# l'estimation d'un trajet urbain réel (feux, circulation), sans service externe.
-_URBAN_TRAFFIC_FACTOR = 1.55
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +114,7 @@ class OSRMRoute(Resource):
                     (pickup_lat, pickup_lon),
                     (dropoff_lat, dropoff_lon),
                     road_duration,
-                    traffic_factor=_URBAN_TRAFFIC_FACTOR,
+                    traffic_factor=URBAN_TRAFFIC_FACTOR,
                     use_weather=False,
                 )
 

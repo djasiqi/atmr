@@ -3713,12 +3713,10 @@ class CompleteReservation(Resource):
             )
 
         booking_repo = BookingRepository()
-        booking_dto = booking_repo.find_by_id(reservation_id)
-        if not booking_dto or booking_dto.company_id != company_id:
-            booking = None
-        else:
-            # Utiliser le repository pour récupérer le modèle SQLAlchemy
-            booking = booking_repo.find_model_by_id(booking_dto.id)
+        # Owner + exécutant partenaire : company_id reste le propriétaire après transfert.
+        booking = booking_repo.find_model_by_id_with_visibility_for_update(
+            reservation_id, company_id
+        )
         from application.companies.reservations.complete_reservation import (
             CompleteCompanyReservationUseCase,
         )
@@ -6284,6 +6282,72 @@ class CreateDriver(Resource):
 class SingleReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    @limiter.limit("300 per hour")
+    def get(self, reservation_id):
+        """Charge une réservation visible par l'entreprise (détail panneau)."""
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response:
+            return error_response, status_code
+
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+
+        from models.client import Client
+        from models.driver import Driver
+        from repositories.booking_repository import BookingRepository
+        from services.companies.booking_transfer_cache import (
+            attach_route_group_leg_counts_to_bookings,
+            attach_route_group_legs_to_bookings,
+            attach_serialize_context_to_bookings,
+            attach_transfer_cache_to_bookings,
+        )
+        from sqlalchemy.orm import joinedload
+
+        booking_repo = BookingRepository()
+        visible = booking_repo.find_model_by_id_with_visibility(reservation_id, cid)
+        if not visible:
+            return APIErrorHandler.handle_not_found(
+                "Réservation",
+                reservation_id,
+                logger,
+            )
+
+        booking = (
+            Booking.query.filter(Booking.id == int(visible.id))
+            .options(
+                joinedload(Booking.client).joinedload(Client.user),
+                joinedload(Booking.driver).joinedload(Driver.user),
+                joinedload(Booking.company),
+                joinedload(Booking.executing_company),
+                joinedload(Booking.billed_to_company),
+            )
+            .first()
+        )
+        if booking is None:
+            return APIErrorHandler.handle_not_found(
+                "Réservation",
+                reservation_id,
+                logger,
+            )
+
+        loaded = [booking]
+        attach_transfer_cache_to_bookings(loaded)
+        attach_route_group_leg_counts_to_bookings(loaded)
+        attach_route_group_legs_to_bookings(loaded)
+        attach_serialize_context_to_bookings(loaded, cid)
+        return {"reservation": booking.serialize}, 200
+
+    @jwt_required()
+    @role_required(UserRole.company)
     @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting modification réservation
     def put(self, reservation_id):
         """Met à jour une réservation
@@ -8124,3 +8188,7 @@ class CompanyBookingChangeAck(Resource):
             company_id=cid,
         )
         return body, status
+
+
+# Enregistre les routes du temps de travail sur ce namespace.
+import routes.company_work_time as _company_work_time  # noqa: E402, F401

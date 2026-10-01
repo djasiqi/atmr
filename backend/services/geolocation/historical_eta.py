@@ -15,6 +15,10 @@ from ext import db
 
 logger = logging.getLogger(__name__)
 
+# Même facteur que « Durée estimée » sur le formulaire de réservation.
+# Il rapproche l'itinéraire OSRM à vide d'un trajet urbain, sans service externe.
+URBAN_TRAFFIC_FACTOR = 1.55
+
 # Constantes pour l'apprentissage historique
 MIN_HISTORICAL_TRIPS = 5  # Minimum de trajets pour utiliser l'historique
 COORD_PRECISION = 3  # Précision des coordonnées (3 décimales ≈ 111m)

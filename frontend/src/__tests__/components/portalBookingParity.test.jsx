@@ -203,15 +203,16 @@ describe('Parité formulaire PORTAL', () => {
     renderDashboard();
     await fillAddresses();
     plan();
+    fireEvent.click(screen.getByRole('button', { name: 'Autre jour' }));
     fireEvent.change(document.getElementById('client-booking-return-date'), {
-      target: { value: '2026-09-30' },
+      target: { value: '2026-10-15' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Vérifier la demande/i }));
     expect((await screen.findAllByText(/Heure à définir/)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer la demande de transport' }));
     await waitFor(() => expect(previewPayload().is_round_trip).toBe(true));
     const body = previewPayload();
-    expect(body.return_date).toBe('2026-09-30');
+    expect(body.return_date).toBe('2026-10-15');
     expect(body.return_time).toBeUndefined();
   });
 

@@ -45,7 +45,7 @@
 .popover {
   position: fixed;
   z-index: var(--z-modal-popover);
-  width: 180px;
+  width: 190px;
   box-sizing: border-box;
   background: var(--bg-primary, #fff);
   border: 1px solid var(--border-primary, #e5e7eb);
@@ -134,17 +134,17 @@
 .preset {
   width: 100%;
   min-width: 0;
-  height: 24px;
+  height: 26px;
   border: 1px solid var(--border-primary, #e5e7eb);
-  border-radius: 5px;
+  border-radius: 6px;
   background: var(--bg-secondary, #f9fafb);
   color: var(--text-secondary, #374151);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.12s;
-  padding: 0 4px;
+  padding: 0 6px;
 }
 
 .preset:hover {
@@ -164,6 +164,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 4px;
   margin-top: 8px;
   padding-top: 6px;
   border-top: 1px solid var(--border-primary, #e5e7eb);
@@ -176,7 +177,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 3px 6px;
+  padding: 2px 2px;
   border-radius: 4px;
   transition: background 0.12s;
   font-family: inherit;
@@ -193,7 +194,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 3px 6px;
+  padding: 2px 2px;
   border-radius: 4px;
   transition: background 0.12s, color 0.12s;
   font-family: inherit;

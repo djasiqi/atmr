@@ -209,10 +209,39 @@ def _bump_revision(assignment: Any) -> None:
         assignment.revision = 1
 
 
+def _booking_for_arrival(assignment: Any) -> Any | None:
+    """Résout le booking lié sans écrire arrived_at ailleurs."""
+    booking = getattr(assignment, "booking", None)
+    if booking is not None:
+        return booking
+    booking_id = getattr(assignment, "booking_id", None)
+    if booking_id is None:
+        return None
+    try:
+        from ext import db
+        from models.booking import Booking
+
+        return db.session.get(Booking, int(booking_id))
+    except Exception:
+        logger.exception(
+            "[assignment_transition] booking introuvable pour arrived_at assignment_id=%s",
+            getattr(assignment, "id", None),
+        )
+        return None
+
+
 def _touch_actual_timestamps(
     assignment: Any, target: AssignmentStatus, ts: datetime
 ) -> None:
     """Trace les jalons réels (preuve de progression, jamais écrasés)."""
+    if target == AssignmentStatus.ARRIVED_PICKUP:
+        booking = _booking_for_arrival(assignment)
+        if booking is not None:
+            from application.bookings.record_booking_arrival import (
+                record_booking_arrival,
+            )
+
+            record_booking_arrival(booking, now=ts)
     if (
         target == AssignmentStatus.ONBOARD
         and hasattr(assignment, "actual_pickup_at")

@@ -134,6 +134,84 @@ class TestCompaniesCriticalCoverage:
         assert booking is not None
         assert booking.status == BookingStatus.COMPLETED
 
+    def test_complete_transferred_reservation_by_executor(
+        self, client, app, companies_world, db
+    ):
+        """L'entreprise exécutante peut clôturer une course transférée assignée."""
+        from models.booking_transfer import BookingTransfer
+        from models.enums import PartnershipStatus, TransferModel, TransferStatus
+        from tests.routes.test_companies_partnerships_coverage import (
+            _partnership,
+            _second_company,
+        )
+
+        world = companies_world
+        owner = world["company"]
+        booking = world["booking"]
+        executor = _second_company(db)
+        stranger = _second_company(db)
+        partnership = _partnership(
+            db,
+            owner.id,
+            executor.id,
+            status=PartnershipStatus.ACCEPTED,
+        )
+        db.session.flush()
+
+        transfer = BookingTransfer()
+        transfer.booking_id = booking.id
+        transfer.partnership_id = partnership.id
+        transfer.transfer_model = TransferModel.SUBCONTRACT
+        transfer.owner_company_id = owner.id
+        transfer.executing_company_id = executor.id
+        transfer.client_price = Decimal("50.00")
+        transfer.partner_cost = Decimal("40.00")
+        transfer.platform_fee = Decimal("0.00")
+        transfer.currency = "CHF"
+        transfer.vat_rate = Decimal("0.00")
+        transfer.vat_included = True
+        transfer.status = TransferStatus.ACCEPTED
+        db.session.add(transfer)
+        booking.driver_id = world["driver"].id
+        db.session.flush()
+        booking.status = BookingStatus.ASSIGNED
+        booking.executing_company_id = executor.id
+        booking.billed_to_type = "patient"
+        db.session.commit()
+
+        executor_headers = _auth_headers(
+            app,
+            executor.user,
+            role="company",
+            company_id=executor.id,
+        )
+        stranger_headers = _auth_headers(
+            app,
+            stranger.user,
+            role="company",
+            company_id=stranger.id,
+        )
+
+        denied = client.post(
+            f"/api/v1/companies/me/reservations/{booking.id}/complete",
+            headers=stranger_headers,
+        )
+        assert denied.status_code == 400, denied.get_json()
+        assert (
+            denied.get_json().get("error") == "Réservation introuvable ou pas en cours"
+        )
+
+        complete = client.post(
+            f"/api/v1/companies/me/reservations/{booking.id}/complete",
+            headers=executor_headers,
+        )
+        assert complete.status_code == 200, complete.get_json()
+        db.session.refresh(booking)
+        db.session.refresh(transfer)
+        assert booking.status == BookingStatus.COMPLETED
+        assert transfer.status == TransferStatus.COMPLETED
+        assert transfer.is_validated is True
+
     def test_assign_rejects_incomplete_clinic_billing_no_auto_repair(
         self, client, companies_world, company_headers, db
     ):
@@ -1211,6 +1289,11 @@ class TestCompaniesCriticalCoverage:
                 "patch",
                 f"/api/v1/companies/me/reservations/{booking_id}/billing-adjustment",
                 {"amount": 10, "override_reason": "identifiant invalide"},
+            ),
+            (
+                "get",
+                f"/api/v1/companies/me/reservations/{booking_id}",
+                None,
             ),
             (
                 "put",

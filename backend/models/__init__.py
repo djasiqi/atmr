@@ -77,6 +77,15 @@ from .dispatch import (
     DriverStatus,
     RealtimeEvent,
 )
+from .driver_work_time import (
+    DriverCompensationLedger,
+    DriverCompensationPolicy,
+    DriverManualWorkEntry,
+    DriverWorkTimeAdjustment,
+    DriverWorkTimeDurationDecision,
+    DriverWorkTimePeriodClosure,
+    DriverWorkTimeSettings,
+)
 from .driver import (
     CompanyPlanningSettings,
     Driver,
@@ -393,6 +402,13 @@ __all__ = [
     "DispatchRun",
     "DispatchStatus",
     "Driver",
+    "DriverCompensationLedger",
+    "DriverCompensationPolicy",
+    "DriverManualWorkEntry",
+    "DriverWorkTimeAdjustment",
+    "DriverWorkTimeDurationDecision",
+    "DriverWorkTimePeriodClosure",
+    "DriverWorkTimeSettings",
     "DriverBreak",
     "DriverPreference",
     "DriverShift",

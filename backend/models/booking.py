@@ -132,6 +132,15 @@ class Booking(db.Model):
         Index("ix_booking_client_time", "client_id", "scheduled_time"),
         # Agrégations / filtres admin (tendances par mois sur created_at)
         Index("ix_booking_created_at", "created_at"),
+        # Temps de travail : agrégats bornés par chauffeur et heure de fin.
+        Index("ix_booking_driver_completed_at", "driver_id", "completed_at"),
+        # Courses terminées sans heure de fin : classement sur l'heure prévue locale.
+        Index(
+            "ix_booking_driver_scheduled_missing_completed",
+            "driver_id",
+            "scheduled_time",
+            postgresql_where=text("completed_at IS NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -196,6 +205,10 @@ class Booking(db.Model):
         DateTime(timezone=True), nullable=True
     )
     completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Jalon « Arrivé » (chauffeur sur place). Posé une seule fois, jamais écrasé.
+    arrived_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -548,6 +561,7 @@ class Booking(db.Model):
         updated_dt = _as_dt(self.updated_at)
         boarded_dt = _as_dt(self.boarded_at)
         completed_dt = _as_dt(self.completed_at)
+        arrived_dt = _as_dt(getattr(self, "arrived_at", None))
         billing_locked_at_dt = _as_dt(getattr(self, "billing_locked_at", None))
         cancelled_dt = cast("datetime | None", _as_dt(self.cancelled_at))
         pickup_admin_resolved_dt = cast(
@@ -764,6 +778,9 @@ class Booking(db.Model):
                 "parent_booking_id": self.parent_booking_id,
                 "time_confirmed": _as_bool(self.time_confirmed),
                 "has_return": self.return_trip is not None,
+                "arrived_at": iso_utc_z(to_utc_from_db(arrived_dt))
+                if arrived_dt
+                else None,
                 "boarded_at": iso_utc_z(to_utc_from_db(boarded_dt))
                 if boarded_dt
                 else None,

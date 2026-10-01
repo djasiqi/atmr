@@ -1,5 +1,6 @@
 // frontend/tests/services/companyService.test.js
 import {
+  fetchCompanyReservationById,
   fetchCompanyReservations,
   acceptReservation,
   rejectReservation,
@@ -39,7 +40,7 @@ describe('companyService', () => {
       const result = await fetchCompanyReservations('2025-10-16');
 
       expect(apiClient.get).toHaveBeenCalledWith('/companies/me/reservations', {
-        params: { flat: true, date: '2025-10-16' },
+        params: { flat: true, include_stats: false, date: '2025-10-16' },
         headers: {
           'Cache-Control': 'no-cache',
           Pragma: 'no-cache',
@@ -74,6 +75,46 @@ describe('companyService', () => {
       const result = await fetchCompanyReservations();
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('fetchCompanyReservationById', () => {
+    it('charge la réservation via GET direct', async () => {
+      apiClient.get.mockResolvedValue({
+        data: { reservation: { id: 45711, status: 'COMPLETED' } },
+      });
+
+      const result = await fetchCompanyReservationById(45711);
+
+      expect(apiClient.get).toHaveBeenCalledWith('/companies/me/reservations/45711');
+      expect(result).toEqual({ id: 45711, status: 'COMPLETED' });
+    });
+
+    it('retourne null si la course est introuvable', async () => {
+      apiClient.get.mockRejectedValue({ response: { status: 404 } });
+
+      const result = await fetchCompanyReservationById(45711);
+
+      expect(result).toBeNull();
+      expect(apiClient.get).toHaveBeenCalledTimes(1);
+    });
+
+    it("replie sur la liste si l'endpoint GET n'existe pas", async () => {
+      apiClient.get
+        .mockRejectedValueOnce({ response: { status: 405 } })
+        .mockResolvedValueOnce({
+          data: {
+            reservations: [
+              { id: 45711, status: 'COMPLETED' },
+              { id: 12, status: 'PENDING' },
+            ],
+          },
+        });
+
+      const result = await fetchCompanyReservationById(45711);
+
+      expect(result).toEqual({ id: 45711, status: 'COMPLETED' });
+      expect(apiClient.get).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -130,7 +171,7 @@ describe('companyService', () => {
 
       const result = await deleteReservation(123);
 
-      expect(apiClient.delete).toHaveBeenCalledWith('/companies/me/reservations/123');
+      expect(apiClient.delete).toHaveBeenCalledWith('/companies/me/reservations/123', {});
       expect(result).toEqual(mockResponse);
     });
   });
@@ -305,17 +346,23 @@ describe('companyService', () => {
 
       const result = await searchClients('Jean');
 
-      expect(apiClient.get).toHaveBeenCalledWith('/companies/me/clients?search=Jean');
+      expect(apiClient.get).toHaveBeenCalledWith('/companies/me/clients', {
+        params: { search: 'Jean', page: 1, per_page: 20 },
+        signal: undefined,
+      });
       expect(result).toEqual(mockClients);
     });
 
     it('devrait gérer recherche vide', async () => {
       const mockClients = [{ id: 1 }];
-      apiClient.get.mockResolvedValue({ data: mockClients });
+      apiClient.get.mockResolvedValue({ data: { clients: mockClients } });
 
       const result = await searchClients('');
 
-      expect(apiClient.get).toHaveBeenCalledWith('/companies/me/clients?search=');
+      expect(apiClient.get).toHaveBeenCalledWith('/companies/me/clients', {
+        params: { page: 1, per_page: 20 },
+        signal: undefined,
+      });
       expect(result).toEqual(mockClients);
     });
 

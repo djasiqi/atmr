@@ -217,6 +217,15 @@ class Config:
     """
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Bascule du temps de travail chauffeur : instant UTC absolu.
+    # Le défaut est le 01.10.2026 00:00 Europe/Zurich (CEST, UTC+2),
+    # soit 2026-09-30T22:00:00Z. Un naïf est lu comme UTC.
+    # Avant : durée estimée prise en charge → terminé si arrived_at manque.
+    # Après : anomalie, aucune durée inventée.
+    WORK_TIME_ARRIVED_AT_CUTOVER_AT = os.getenv(
+        "WORK_TIME_ARRIVED_AT_CUTOVER_AT",
+        "2026-09-30T22:00:00+00:00",
+    )
     # ✅ Phase 1 N+1: Configuration profilage SQLAlchemy
     # Activer SQLALCHEMY_ECHO pour logger toutes les requêtes SQL
     # (développement uniquement)

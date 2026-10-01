@@ -154,10 +154,19 @@ export const fetchCompanyReservationsPaginated = async ({
   }
 };
 
-/** Charge une réservation par ID (recherche paginée côté API). */
+/** Charge une réservation par ID (GET direct, repli liste si l’endpoint manque). */
 export const fetchCompanyReservationById = async (bookingId) => {
   const id = Number(bookingId);
   if (!id) return null;
+  try {
+    const { data } = await apiClient.get(`/companies/me/reservations/${id}`);
+    const reservation = data?.reservation ?? data;
+    if (reservation?.id === id) return reservation;
+  } catch (error) {
+    const status = error?.response?.status;
+    if (status === 404) return null;
+    if (status && status !== 405) throw error;
+  }
   const data = await fetchCompanyReservationsPaginated({
     search: String(id),
     page: 1,
@@ -581,6 +590,73 @@ export const updateDriverDetails = async (driverId, driverData) => {
 
 export const deleteDriver = async (driverId) => {
   const { data } = await apiClient.delete(`/companies/me/drivers/${driverId}`);
+  return data;
+};
+
+export const fetchWorkTimeSummary = async ({ from, to }) => {
+  const { data } = await apiClient.get('/companies/me/work-time/summary', { params: { from, to } });
+  return data;
+};
+
+export const fetchDriverWorkTime = async (driverId, { from, to, filter = 'all', page = 1, perPage = 31 } = {}) => {
+  const { data } = await apiClient.get(`/companies/me/work-time/drivers/${driverId}`, {
+    params: { from, to, filter, page, per_page: perPage },
+  });
+  return data;
+};
+
+export const fetchBookingWorkTimeExplain = async (bookingId) => {
+  const { data } = await apiClient.get(`/companies/me/work-time/bookings/${bookingId}/explain`);
+  return data;
+};
+
+export const createWorkTimeAdjustment = async (payload) => {
+  const { data } = await apiClient.post('/companies/me/work-time/adjustments', payload);
+  return data;
+};
+
+export const createWorkTimeDurationDecision = async (payload) => {
+  const { data } = await apiClient.post('/companies/me/work-time/duration-decisions', payload);
+  return data;
+};
+
+export const fetchWorkTimeSettings = async () => {
+  const { data } = await apiClient.get('/companies/me/work-time/settings');
+  return data;
+};
+
+export const saveWorkTimeSettings = async (payload) => {
+  const { data } = await apiClient.put('/companies/me/work-time/settings', payload);
+  return data;
+};
+
+export const createManualWorkEntry = async (payload) => {
+  const { data } = await apiClient.post('/companies/me/work-time/manual-entries', payload);
+  return data;
+};
+
+export const cancelManualWorkEntry = async (entryId, reason) => {
+  const { data } = await apiClient.post(`/companies/me/work-time/manual-entries/${entryId}/cancel`, { reason });
+  return data;
+};
+
+export const fetchCompensationPolicies = async () => {
+  const { data } = await apiClient.get('/companies/me/work-time/compensation-policies');
+  return data;
+};
+
+export const createCompensationPolicy = async (payload) => {
+  const { data } = await apiClient.post('/companies/me/work-time/compensation-policies', payload);
+  return data;
+};
+
+export const finalizeWorkTimePeriod = async ({ from, to }) => {
+  const { data } = await apiClient.post('/companies/me/work-time/periods/finalize', { from, to });
+  return data;
+};
+
+export const reopenWorkTimePeriod = async ({ from, to, reason }) => {
+  const { data } = await apiClient.post('/companies/me/work-time/periods/reopen', { from, to, reason });
   return data;
 };
 

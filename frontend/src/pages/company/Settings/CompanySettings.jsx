@@ -12,6 +12,7 @@ import {
   FiFileText,
   FiBell,
   FiShield,
+  FiClock,
 } from 'react-icons/fi';
 import styles from './CompanySettings.module.css';
 import { useLirieCompany } from '../../../hooks/useLirieCompany';
@@ -27,6 +28,7 @@ const PartnershipsTab = lazy(() => import('./tabs/PartnershipsTab'));
 const BillingTab = lazy(() => import('./tabs/BillingTab'));
 const NotificationsTab = lazy(() => import('./tabs/NotificationsTab'));
 const SecurityTab = lazy(() => import('./tabs/SecurityTab'));
+const CompensationTab = lazy(() => import('./tabs/CompensationTab'));
 const VehiclesTab = lazy(() => import('./tabs/VehiclesTab'));
 
 // Validations locales
@@ -41,7 +43,7 @@ export default function CompanySettings() {
   // Onglet actif (détecte le hash dans l'URL)
   const [activeTab, setActiveTab] = useState(() => {
     const hash = location.hash.replace('#', '');
-    const validTabs = ['general', 'operations', 'partnerships', 'billing', 'notifications', 'security', 'vehicles'];
+    const validTabs = ['general', 'operations', 'partnerships', 'billing', 'notifications', 'security', 'vehicles', 'compensation'];
     return validTabs.includes(hash) ? hash : 'general';
   });
 
@@ -57,7 +59,7 @@ export default function CompanySettings() {
   // Écouter les changements de hash (via React Router location)
   useEffect(() => {
     const hash = location.hash.replace('#', '');
-    const validTabs = ['general', 'operations', 'partnerships', 'billing', 'notifications', 'security', 'vehicles'];
+    const validTabs = ['general', 'operations', 'partnerships', 'billing', 'notifications', 'security', 'vehicles', 'compensation'];
     if (validTabs.includes(hash)) {
       setActiveTab(hash);
     }
@@ -68,7 +70,7 @@ export default function CompanySettings() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
-      const validTabs = ['general', 'operations', 'partnerships', 'billing', 'notifications', 'security', 'vehicles'];
+      const validTabs = ['general', 'operations', 'partnerships', 'billing', 'notifications', 'security', 'vehicles', 'compensation'];
       if (validTabs.includes(hash)) {
         setActiveTab(hash);
       }
@@ -475,6 +477,7 @@ export default function CompanySettings() {
     { id: 'billing', label: 'Facturation', Icon: FiFileText },
     { id: 'notifications', label: 'Notifications', Icon: FiBell },
     { id: 'security', label: 'Securite', Icon: FiShield },
+    { id: 'compensation', label: 'Remuneration chauffeurs', Icon: FiClock },
   ];
 
   const handleTabClick = (tabId) => {
@@ -608,6 +611,11 @@ export default function CompanySettings() {
                 {visitedTabs.has('security') && (
                   <div hidden={activeTab !== 'security'}>
                     <SecurityTab isEditing={isEditing} />
+                  </div>
+                )}
+                {visitedTabs.has('compensation') && (
+                  <div hidden={activeTab !== 'compensation'}>
+                    <CompensationTab />
                   </div>
                 )}
               </Suspense>

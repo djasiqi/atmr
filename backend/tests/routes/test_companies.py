@@ -358,6 +358,31 @@ class TestCompaniesRoutes:
         )
         assert resp.status_code == 200
 
+    def test_get_reservation_ok(self, client, app, companies_world):
+        world = companies_world
+        headers = _auth_headers(
+            app, world["company_user"], role="company", company_id=world["company"].id
+        )
+        resp = client.get(
+            f"/api/v1/companies/me/reservations/{world['booking'].id}",
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.get_json()
+        payload = resp.get_json()
+        reservation = payload.get("reservation") or payload
+        assert reservation["id"] == world["booking"].id
+
+    def test_get_reservation_404(self, client, app, companies_world):
+        world = companies_world
+        headers = _auth_headers(
+            app, world["company_user"], role="company", company_id=world["company"].id
+        )
+        resp = client.get(
+            "/api/v1/companies/me/reservations/999999",
+            headers=headers,
+        )
+        assert resp.status_code == 404
+
     def test_put_reservation_ok(self, client, app, companies_world):
         world = companies_world
         headers = _auth_headers(

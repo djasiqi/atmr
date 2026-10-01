@@ -318,6 +318,13 @@ class UpdateDriverBookingStatusUseCase:
             )
 
         if outcome in ("applied", "unchanged"):
+            if outcome == "applied":
+                from application.bookings.record_booking_arrival import (
+                    record_booking_arrival,
+                )
+
+                # Même helper que le PATCH dispatcher (idempotent si déjà posé).
+                record_booking_arrival(booking, now=now)
             try:
                 self._db.commit()
             except Exception:
