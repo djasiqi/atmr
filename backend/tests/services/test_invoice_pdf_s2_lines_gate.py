@@ -18,11 +18,16 @@ from tests.services.test_invoice_pdf_s2_gates_helpers import count_html_br_lines
 
 
 def test_consolidated_item_is_ride_transport_preconsolidated_mono_line():
-    """Items A/R mono-ligne (billing_unit=round_trip, clé ``line`` seule) = trajet."""
+    """Items A/R fusionnés (deux réservations, clé ``line`` seule) = trajet + [A/R]."""
     line = SimpleNamespace(
         id=3622,
         type=InvoiceLineType.RIDE,
-        line_meta={"billing_unit": "round_trip"},
+        reservation_id=10,
+        line_meta={
+            "billing_unit": "round_trip",
+            "booking_ids": [10, 11],
+            "round_trip_secondary_reservation_ids": [11],
+        },
     )
     item = {
         "is_round_trip": True,
@@ -31,8 +36,27 @@ def test_consolidated_item_is_ride_transport_preconsolidated_mono_line():
         "dropoff": "Centre d'Imagerie Rive Gauche, Route de Thonon 61, 1222 Vésenaz",
     }
     assert _consolidated_item_is_ride_transport(item) is True
-    enriched = {3622: {"billing_unit": "round_trip"}}
+    enriched = {
+        3622: {
+            "billing_unit": "round_trip",
+            "booking_ids": [10, 11],
+            "round_trip_secondary_reservation_ids": [11],
+        }
+    }
     assert _consolidated_item_shows_ar_tag_pdf(item, enriched) is True
+
+
+def test_billing_unit_alone_does_not_show_ar_tag():
+    """Flag historique ``billing_unit=round_trip`` sans 2e jambe : pas de [A/R] client."""
+    line = SimpleNamespace(
+        id=3622,
+        type=InvoiceLineType.RIDE,
+        reservation_id=10,
+        line_meta={"billing_unit": "round_trip", "booking_ids": [10]},
+    )
+    item = {"is_round_trip": True, "line": line}
+    enriched = {3622: {"billing_unit": "round_trip", "booking_ids": [10]}}
+    assert _consolidated_item_shows_ar_tag_pdf(item, enriched) is False
 
 
 def test_s2_full_address_transport_text_max_two_lines():
@@ -114,7 +138,12 @@ def test_s2_preconsolidated_mono_line_ar_uses_full_address_helper():
     line = SimpleNamespace(
         id=3622,
         type=InvoiceLineType.RIDE,
-        line_meta={"billing_unit": "round_trip"},
+        reservation_id=10,
+        line_meta={
+            "billing_unit": "round_trip",
+            "booking_ids": [10, 11],
+            "round_trip_secondary_reservation_ids": [11],
+        },
     )
     item = {
         "is_round_trip": True,
@@ -124,7 +153,13 @@ def test_s2_preconsolidated_mono_line_ar_uses_full_address_helper():
             "Centre d'Imagerie Rive Gauche - Vésenaz, Route de Thonon 61, 1222, Vésenaz"
         ),
     }
-    enriched = {3622: {"billing_unit": "round_trip"}}
+    enriched = {
+        3622: {
+            "billing_unit": "round_trip",
+            "booking_ids": [10, 11],
+            "round_trip_secondary_reservation_ids": [11],
+        }
+    }
     assert _consolidated_item_is_ride_transport(item) is True
     assert _consolidated_item_shows_ar_tag_pdf(item, enriched) is True
 
@@ -226,6 +261,19 @@ def _create_s2_round_trip_mono_line_invoice(db, *, num_lines: int = 3):
         db.session.flush()
         amt = Decimal("80.00")
         total += amt
+        return_booking = Booking(
+            company=company,
+            client=client,
+            user_id=owner.id,
+            customer_name="BADONNEL Marie-Claude",
+            pickup_location=dest,
+            dropoff_location=hub,
+            scheduled_time=datetime(2026, 5, 4 + i, 15, 0, 0, tzinfo=UTC),
+            amount=Decimal("80.00"),
+            status=BookingStatus.COMPLETED,
+        )
+        db.session.add(return_booking)
+        db.session.flush()
         lines.append(
             InvoiceLine(
                 invoice=invoice,
@@ -241,6 +289,9 @@ def _create_s2_round_trip_mono_line_invoice(db, *, num_lines: int = 3):
                 line_meta={
                     "patient_name": "BADONNEL Marie-Claude",
                     "billing_unit": "round_trip",
+                    "booking_ids": [booking.id, return_booking.id],
+                    "round_trip_secondary_reservation_ids": [return_booking.id],
+                    "round_trip_secondary_reservation_id": return_booking.id,
                 },
             )
         )
@@ -254,7 +305,7 @@ def _create_s2_round_trip_mono_line_invoice(db, *, num_lines: int = 3):
 
 @pytest.mark.integration
 def test_s2_pdf_mono_line_round_trip_contains_inline_ar(db):
-    """PDF-S2-LINES-01 : billing_unit=round_trip mono-ligne → [A/R] inline (pas seulement légende)."""
+    """PDF-S2-LINES-01 : ligne fusionnée aller+retour → [A/R] inline (pas seulement légende)."""
     from tests.services.test_invoice_pdf_s2_gates_helpers import extract_text_per_page
 
     invoice, pdf_service = _create_s2_round_trip_mono_line_invoice(db, num_lines=3)

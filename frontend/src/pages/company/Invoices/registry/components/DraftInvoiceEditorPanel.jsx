@@ -50,9 +50,10 @@ import { getApiErrorMessage } from '../../../../../utils/apiErrorMessage';
 import { normalizeServiceDateToIsoForApi } from '../../../../../utils/invoiceServiceDate';
 import { filterInvoiceLines } from '../../../../../utils/invoiceLineFilter';
 import {
-  isAnyRoundTripLine,
+  ROUND_TRIP_LINE_STRUCTURE,
   isRoundTripPreviewHiddenLine,
   canShowRoundTripLegExcludeActions,
+  roundTripLineStructure,
   sortInvoiceLinesForEditor,
 } from '../../../../../utils/invoiceLineRoundTrip';
 import '../../../../../styles/acrobatPdfEmbedHide.css';
@@ -89,6 +90,37 @@ const TIME_UNITS = [
 /** Au-delà, pagination + filtre (factures avec de nombreux transports). */
 const LINE_PAGE_SIZE = 25;
 const HEAVY_LINES_THRESHOLD = 12;
+
+/**
+ * Libellé de la corbeille selon la STRUCTURE A/R réelle de la ligne (réservations rattachées),
+ * jamais selon le badge « A/R » seul : une ligne mono-réservation reste « ce transport ».
+ */
+function removeLineButtonTitle(structure, noun) {
+  switch (structure) {
+    case ROUND_TRIP_LINE_STRUCTURE.MERGED_BOTH_LEGS:
+      return 'Retirer l’aller-retour complet (aller + retour) de la facture';
+    case ROUND_TRIP_LINE_STRUCTURE.PAIR_PRIMARY:
+      return 'Exclure l’aller de la facture (le retour reste facturé sur sa ligne)';
+    case ROUND_TRIP_LINE_STRUCTURE.PAIR_RETURN:
+      return 'Exclure le retour de la facture (l’aller reste facturé sur sa ligne)';
+    default:
+      return `Exclure ce ${noun} de la facture`;
+  }
+}
+
+/** Confirmation avant retrait d’une ligne transport, alignée sur ce que fait réellement le backend. */
+function removeLineConfirmMessage(structure, noun) {
+  switch (structure) {
+    case ROUND_TRIP_LINE_STRUCTURE.MERGED_BOTH_LEGS:
+      return 'Retirer l’aller-retour complet (aller + retour) de la facture ? Les deux transports redeviendront facturables.';
+    case ROUND_TRIP_LINE_STRUCTURE.PAIR_PRIMARY:
+      return `Exclure l’aller de la facture ? Le retour reste facturé sur sa propre ligne et ce ${noun} redeviendra facturable.`;
+    case ROUND_TRIP_LINE_STRUCTURE.PAIR_RETURN:
+      return `Exclure le retour de la facture ? L’aller reste facturé sur sa propre ligne et ce ${noun} redeviendra facturable.`;
+    default:
+      return `Exclure ce ${noun} de la facture ? Le montant sera retiré du brouillon et le ${noun} redeviendra facturable.`;
+  }
+}
 
 /** Méta facture : parfois objet, parfois chaîne JSON selon la couche API / cache. */
 function parseInvoiceMeta(raw) {
@@ -1357,15 +1389,8 @@ const DraftInvoiceEditorPanel = ({
 
   const handleRemoveLine = async (line) => {
     if (!allowsLineEditing) return;
-    const ar = isAnyRoundTripLine(line);
     const noun = rideLikeNoun(line);
-    if (
-      !window.confirm(
-        ar
-          ? `Exclure ce ${noun} de la facture ? L’autre jambe aller-retour restera facturée séparément si elle existe.`
-          : `Exclure ce ${noun} de la facture ? Le montant sera retiré du brouillon et le ${noun} redeviendra facturable.`
-      )
-    ) {
+    if (!window.confirm(removeLineConfirmMessage(roundTripLineStructure(line, lines), noun))) {
       return;
     }
     setSaving(true);
@@ -2130,7 +2155,9 @@ const DraftInvoiceEditorPanel = ({
                 const rowNeedsApply = descEditable || amountEditable || noteEditable;
                 const rowAmountNegative =
                   line.line_total != null && Number(line.line_total) < 0;
-                const showArLegExclude = canShowRoundTripLegExcludeActions(line);
+                // Structure réelle (réservations rattachées), jamais le badge A/R ni le prix.
+                const arStructure = roundTripLineStructure(line, lines);
+                const showArLegExclude = canShowRoundTripLegExcludeActions(line, lines);
                 const rowClassNames = [
                   rowAmountNegative ? styles.rowAmountNegative : '',
                   isRoundTripPreviewHiddenLine(line) ? styles.rowRoundTripReturn : '',
@@ -2257,11 +2284,7 @@ const DraftInvoiceEditorPanel = ({
                             type="button"
                             className={`${styles.btnTrashXs} ${styles.danger}`}
                             disabled={saving}
-                            title={
-                              showArLegExclude
-                                ? 'Retirer l’aller-retour complet de la facture'
-                                : `Exclure ce ${rideLikeNoun(line)} de la facture`
-                            }
+                            title={removeLineButtonTitle(arStructure, rideLikeNoun(line))}
                             aria-label={`Exclure ligne ${line.id}`}
                             onClick={() => handleRemoveLine(line)}
                           >

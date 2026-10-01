@@ -3,6 +3,11 @@ import { formatCurrencyCHF } from '../../../../../services/invoiceService';
 import { formatPatientDisplayNameNomPrenom } from '../../../../../utils/patientDisplayName';
 import {
   getRoundTripAuditLegs,
+  getRoundTripPartnerLine,
+  invoiceLineClientArTag,
+  invoiceLineRepresentsFullRoundTrip,
+  ROUND_TRIP_LINE_STRUCTURE,
+  roundTripLineStructure,
   transportDescriptionsAreStrictReverse,
 } from '../../../../../utils/invoiceLineRoundTrip';
 import styles from './InvoiceLivePreview.module.css';
@@ -252,16 +257,9 @@ function payerHint(inv) {
   return null;
 }
 
-/** Masque le retour seulement si c'est le miroir exact de l'aller (A→B et B→A). */
+/** Jambe retour d'une paire deux lignes : masquée (le tag [A/R] est sur la primaire). */
 function linePreviewHiddenMergedRoundTrip(line, allLines) {
-  const m = parseMeta(line?.line_meta);
-  if (m?.preview_hide_merged_round_trip !== true) return false;
-  const primaryId = Number(m.round_trip_merge_primary_reservation_id);
-  const primary = (Array.isArray(allLines) ? allLines : []).find(
-    (ln) => Number(ln?.reservation_id) === primaryId
-  );
-  if (!primary) return false;
-  return transportDescriptionsAreStrictReverse(primary.description, line.description);
+  return roundTripLineStructure(line, allLines) === ROUND_TRIP_LINE_STRUCTURE.PAIR_RETURN;
 }
 
 /** Partenaire affiché en A/R : présent et trajet strictement inverse. */
@@ -427,8 +425,8 @@ export default function InvoiceLivePreview({
   const showTransportDateColumn = lines.some(
     (ln) => lineDetailDateLabel(ln, invoice) != null
   );
-  const showRoundTripLegend = lines.some(
-    (ln) => commercialRoundTripPartner(ln, rideLinesByReservationId) != null
+  const showRoundTripLegend = lines.some((ln) =>
+    invoiceLineRepresentsFullRoundTrip(ln, invoice?.lines)
   );
   const payer = payerHint(invoice);
 
@@ -503,11 +501,10 @@ export default function InvoiceLivePreview({
                 const sub = customPrestationSubline(line);
                 const transportDate = lineDetailDateLabel(line, invoice);
                 const patientSub = rideLinePatientSubline(line, invoice);
-                const mergePartner = commercialRoundTripPartner(
-                  line,
-                  rideLinesByReservationId
-                );
-                const isAr = mergePartner != null;
+                const mergePartner =
+                  commercialRoundTripPartner(line, rideLinesByReservationId) ??
+                  getRoundTripPartnerLine(line, invoice?.lines);
+                const isAr = invoiceLineClientArTag(line, invoice?.lines) === 'A/R';
                 const partnerKind = mergePartner
                   ? String(mergePartner.type ?? mergePartner.line_type ?? '')
                       .trim()

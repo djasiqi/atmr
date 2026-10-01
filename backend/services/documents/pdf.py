@@ -2740,6 +2740,43 @@ def _global_discount_hint_flowable(
     return KeepTogether(box)
 
 
+def _pdf_structure_line_view(
+    line: Any,
+    enriched_by_line_id: dict[int, dict[str, Any]] | None,
+) -> dict[str, Any]:
+    """Ligne vue par le prédicat A/R canonique (méta enrichie, jamais le prix)."""
+    return {
+        "id": getattr(line, "id", None),
+        "reservation_id": getattr(line, "reservation_id", None),
+        "line_meta": _resolve_invoice_line_meta(line, enriched_by_line_id or {}),
+    }
+
+
+def _pdf_invoice_structure_line_views(
+    invoice: Any,
+    enriched_by_line_id: dict[int, dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    return [
+        _pdf_structure_line_view(ln, enriched_by_line_id)
+        for ln in (getattr(invoice, "lines", None) or [])
+    ]
+
+
+def _pdf_line_represents_full_round_trip(
+    line: Any,
+    enriched_by_line_id: dict[int, dict[str, Any]] | None,
+    all_line_views: list[dict[str, Any]] | None,
+) -> bool:
+    from application.invoices.invoice_line_round_trip import (
+        invoice_line_represents_full_round_trip,
+    )
+
+    return invoice_line_represents_full_round_trip(
+        _pdf_structure_line_view(line, enriched_by_line_id),
+        all_line_views,
+    )
+
+
 def _pdf_show_ar_legend(
     invoice: Any,
     consolidated: list[dict[str, Any]],
@@ -2748,13 +2785,14 @@ def _pdf_show_ar_legend(
 ) -> bool:
     """Légende [A/R] : uniquement si une ligne du tableau affiche réellement ``[A/R]``.
 
-    Aligné sur ``_build_s2_table`` : blocs consolidés + lignes orphelines RIDE/matériel
-    (sans réservation résolue dans ``bookings_by_id``) avec ``round_trip_merge_partner_*``.
-    Pas de légende sur aller simple sans ces indicateurs.
+    Aligné sur ``InvoiceLivePreview`` et ``invoice_line_represents_full_round_trip``.
     """
     enriched = enriched_by_line_id or {}
+    views = _pdf_invoice_structure_line_views(invoice, enriched)
     for item in consolidated:
-        if _consolidated_item_shows_ar_tag_pdf(item, enriched):
+        if _consolidated_item_shows_ar_tag_pdf(
+            item, enriched, invoice=invoice, all_line_views=views
+        ):
             return True
     bb = bookings_by_id or {}
     for ln in getattr(invoice, "lines", []) or []:
@@ -2766,62 +2804,47 @@ def _pdf_show_ar_legend(
         rid = getattr(ln, "reservation_id", None)
         if rid is not None and bb.get(int(rid)):
             continue
-        lm = _resolve_invoice_line_meta(ln, enriched)
-        if not isinstance(lm, dict):
-            continue
-        if lm.get("preview_hide_merged_round_trip") is True:
-            continue
-        if lm.get("round_trip_merge_partner_reservation_id") is not None:
-            return True
-        if lm.get("round_trip_secondary_reservation_id") is not None:
-            return True
-        if lm.get("billing_unit") == "round_trip":
-            return True
-        if (
-            lm.get("is_round_trip_leg") is True
-            and (lm.get("merged_segment_count") or 0) >= 2
-        ):
+        if _pdf_line_represents_full_round_trip(ln, enriched, views):
             return True
     return False
 
 
 def _consolidated_item_indicates_round_trip_tag(item: dict[str, Any]) -> bool:
     """[A/R] structurel : regroupement détecté aller+retour avec deux segments dans l'item."""
+    has_two_segments = item.get("line1") is not None and item.get("line2") is not None
+    has_two_bookings = (
+        item.get("booking1") is not None and item.get("booking2") is not None
+    )
     return bool(
         item.get("is_round_trip")
         and item.get("aller_detail")
         and item.get("retour_detail")
+        and (has_two_segments or has_two_bookings)
     )
 
 
 def _consolidated_item_shows_ar_tag_pdf(
     item: dict[str, Any],
     enriched_by_line_id: dict[int, dict[str, Any]] | None = None,
+    *,
+    invoice: Any | None = None,
+    all_line_views: list[dict[str, Any]] | None = None,
 ) -> bool:
-    """Une ligne PDF doit afficher [A/R] : statut métier round_trip (indépendant du montant).
+    """Une ligne PDF affiche [A/R] si elle facture réellement un aller-retour.
 
-    Ignore les lignes ``preview_hide_merged_round_trip`` (non rendues comme les lignes masquées HTML).
+    Indépendant du montant. Ne lit jamais ``billing_unit`` / ``is_round_trip`` historique
+    comme preuve suffisante.
     """
     if _consolidated_item_indicates_round_trip_tag(item):
         return True
-    enriched = enriched_by_line_id or {}
+    views = all_line_views
+    if views is None and invoice is not None:
+        views = _pdf_invoice_structure_line_views(invoice, enriched_by_line_id)
     for key in ("line1", "line2", "line"):
         ln = item.get(key)
         if ln is None:
             continue
-        lm = _resolve_invoice_line_meta(ln, enriched)
-        if lm.get("preview_hide_merged_round_trip") is True:
-            continue
-        if lm.get("round_trip_merge_partner_reservation_id") is not None:
-            return True
-        if lm.get("round_trip_secondary_reservation_id") is not None:
-            return True
-        if lm.get("billing_unit") == "round_trip":
-            return True
-        if (
-            lm.get("is_round_trip_leg") is True
-            and (lm.get("merged_segment_count") or 0) >= 2
-        ):
+        if _pdf_line_represents_full_round_trip(ln, enriched_by_line_id, views):
             return True
     return False
 
@@ -3204,7 +3227,7 @@ def _build_enriched_line_meta_by_line_id(
     invoice: Any,
     bookings_by_id: dict[int, Any] | None = None,
 ) -> dict[int, dict[str, Any]]:
-    """Aligne PDF / aperçu HTML : paires A/R, jambe masquée, mono-ligne ``is_round_trip``."""
+    """Aligne PDF / aperçu HTML : paires A/R, jambe masquée, structure canonique."""
     from models.invoice import enrich_invoice_line_payloads_for_api
 
     lines = list(getattr(invoice, "lines", None) or [])
@@ -3260,7 +3283,11 @@ def _pdf_build_preconsolidated_ar_items(
     bookings_by_id: dict[int, Any],
     enriched_by_line_id: dict[int, dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], set[int]]:
-    """Lignes A/R déjà fusionnées via enrichissement (partenaire masqué ou mono-ligne)."""
+    """Lignes A/R déjà fusionnées : paire deux lignes (partenaire présent) ou fusion ≥ 2 réservations."""
+    from application.invoices.invoice_line_round_trip import (
+        invoice_line_has_both_round_trip_legs,
+    )
+
     pre: list[dict[str, Any]] = []
     used_reservation_ids: set[int] = set()
 
@@ -3284,11 +3311,21 @@ def _pdf_build_preconsolidated_ar_items(
             continue
 
         partner_rid = lm.get("round_trip_merge_partner_reservation_id")
-        is_single_rt = lm.get("billing_unit") == "round_trip"
-
+        structure_view = {
+            "reservation_id": bid,
+            "line_meta": lm,
+        }
+        is_merged_both_legs = invoice_line_has_both_round_trip_legs(structure_view)
+        partner_line = None
+        partner_rid_i: int | None = None
         if partner_rid is not None:
             partner_rid_i = int(partner_rid)
             partner_line = _invoice_line_by_reservation_id(invoice, partner_rid_i)
+            if partner_line is None:
+                partner_rid = None
+                partner_rid_i = None
+
+        if partner_rid is not None and partner_rid_i is not None:
             partner_booking = bookings_by_id.get(partner_rid_i)
             used_reservation_ids.add(bid)
             used_reservation_ids.add(partner_rid_i)
@@ -3349,7 +3386,7 @@ def _pdf_build_preconsolidated_ar_items(
             )
             continue
 
-        if is_single_rt:
+        if is_merged_both_legs:
             used_reservation_ids.add(bid)
             pickup = getattr(booking, "pickup_location", "") or ""
             dropoff = getattr(booking, "dropoff_location", "") or ""
@@ -3639,7 +3676,11 @@ def _build_s2_table(
                 f'<br/><font size="{int(FONT_SECONDARY)}" color="#6b7280">'
                 f"<i>{esc_n}</i></font>"
             )
-        is_ar = _consolidated_item_shows_ar_tag_pdf(item, enriched_by_line_id)
+        is_ar = _consolidated_item_shows_ar_tag_pdf(
+            item,
+            enriched_by_line_id,
+            invoice=invoice,
+        )
         is_ride_td = _consolidated_item_is_ride_transport(item)
         is_material_td = _consolidated_item_is_material_delivery(item)
         disc_suffix = ""
@@ -3884,10 +3925,11 @@ def _build_s2_table(
                 disc_or = _pdf_s2_per_line_discount_suffix_html(
                     cat_or, net_or, compact_private_sub=True
                 )
-            orphan_ar = (
-                lm_or.get("round_trip_merge_partner_reservation_id") is not None
-                and lm_or.get("preview_hide_merged_round_trip") is not True
-            ) or lm_or.get("billing_unit") == "round_trip"
+            orphan_ar = _pdf_line_represents_full_round_trip(
+                line,
+                enriched_by_line_id,
+                _pdf_invoice_structure_line_views(invoice, enriched_by_line_id),
+            )
             if is_s2_invoice and line.type == InvoiceLineType.RIDE:
                 esc_d = _pdf_s2_orphan_line_transport_text(
                     line,

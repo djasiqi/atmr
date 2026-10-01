@@ -78,10 +78,12 @@ import useCompanySocket from '../../../../../hooks/useCompanySocket';
 import { normalizeServiceDateToIsoForApi } from '../../../../../utils/invoiceServiceDate';
 import { filterInvoiceLines } from '../../../../../utils/invoiceLineFilter';
 import {
+  ROUND_TRIP_LINE_STRUCTURE,
   getInvoiceLineMeta,
   invertTrajetLineDescription,
   isRoundTripPreviewHiddenLine,
   canShowRoundTripLegExcludeActions,
+  roundTripLineStructure,
   sortInvoiceLinesForEditor,
 } from '../../../../../utils/invoiceLineRoundTrip';
 
@@ -2882,7 +2884,11 @@ const BillPeriodModal = ({
                                         const htId = `period-line-ht-${ln.id}`;
                                         const noteId = `period-line-note-${ln.id}`;
                                         const canExclude = rawBid != null;
+                                        // Structure réelle (réservations rattachées), jamais le badge A/R ni le prix.
                                         const showArLegExclude = canShowRoundTripLegExcludeActions(ln);
+                                        const trashRemovesBothLegs =
+                                          roundTripLineStructure(ln) ===
+                                          ROUND_TRIP_LINE_STRUCTURE.MERGED_BOTH_LEGS;
                                         const rowClassNames = [
                                           isRoundTripPreviewHiddenLine(ln)
                                             ? draftEditorStyles.rowRoundTripReturn
@@ -2990,8 +2996,8 @@ const BillPeriodModal = ({
                                                     type="button"
                                                     className={`${draftEditorStyles.btnTrashXs} ${draftEditorStyles.danger}`}
                                                     title={
-                                                      showArLegExclude
-                                                        ? 'Retirer l’aller-retour complet de la facture (aperçu)'
+                                                      trashRemovesBothLegs
+                                                        ? 'Retirer l’aller-retour complet (aller + retour) de la facture (aperçu)'
                                                         : 'Retirer ce transport de la facture (aperçu)'
                                                     }
                                                     aria-label={`Exclure la ligne ${ln.id}`}

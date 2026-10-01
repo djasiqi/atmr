@@ -86,14 +86,38 @@ def test_pdf_preconsolidated_merges_partner_amounts(monkeypatch):
 
 
 def test_consolidated_ar_tag_independent_of_line_total():
-    """[A/R] ne dépend pas du montant affiché."""
+    """[A/R] ne dépend pas du montant affiché : la structure gagne."""
     from services.documents.pdf import _consolidated_item_shows_ar_tag_pdf
 
-    for amount in (80.0, 90.0, 120.0):
+    for amount in (45.0, 80.0, 90.0, 120.0):
         line = SimpleNamespace(
             id=42,
-            line_meta={"billing_unit": "round_trip"},
+            reservation_id=10,
+            line_meta={
+                "billing_unit": "round_trip",
+                "booking_ids": [10, 11],
+                "round_trip_secondary_reservation_ids": [11],
+            },
         )
-        enriched = {42: {"billing_unit": "round_trip"}}
+        enriched = {
+            42: {
+                "billing_unit": "round_trip",
+                "booking_ids": [10, 11],
+                "round_trip_secondary_reservation_ids": [11],
+            }
+        }
         item = {"line": line, "amount": amount}
         assert _consolidated_item_shows_ar_tag_pdf(item, enriched) is True
+
+    pricey_single = SimpleNamespace(
+        id=43,
+        reservation_id=10,
+        line_meta={"billing_unit": "round_trip", "booking_ids": [10]},
+    )
+    assert (
+        _consolidated_item_shows_ar_tag_pdf(
+            {"line": pricey_single, "amount": 90.0},
+            {43: {"billing_unit": "round_trip", "booking_ids": [10]}},
+        )
+        is False
+    )

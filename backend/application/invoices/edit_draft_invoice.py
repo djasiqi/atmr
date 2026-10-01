@@ -638,7 +638,12 @@ def remove_draft_invoice_line(
                 return EditDraftResult(
                     False,
                     error={
-                        "error": "Impossible d'exclure cette jambe du transport aller-retour.",
+                        "error": (
+                            "Impossible d'exclure cette jambe : la ligne ne porte qu'une seule "
+                            "réservation (pas de jambe retour facturée sur cette ligne). "
+                            "Supprimez la ligne ou modifiez son montant."
+                        ),
+                        "error_code": "ROUND_TRIP_LEG_NOT_SPLITTABLE",
                     },
                     status_code=400,
                 )

@@ -115,3 +115,46 @@ def test_remove_exclude_return_keeps_primary(
     mock_db.session.delete.assert_called_once_with(secondary)
     pri_meta = primary.line_meta or {}
     assert pri_meta.get("round_trip_merge_partner_reservation_id") is None
+
+
+@patch("application.invoices.edit_draft_invoice.CompanyBillingSettingsRepository")
+@patch("application.invoices.edit_draft_invoice._recompute_totals_from_lines")
+@patch("application.invoices.edit_draft_invoice._mark_pdf_stale")
+@patch("application.invoices.edit_draft_invoice.db")
+@patch("application.invoices.edit_draft_invoice._resolve_draft_invoice")
+@patch("application.invoices.edit_draft_invoice.Booking")
+def test_remove_exclude_leg_single_booking_line_is_explicit_400(
+    mock_booking_cls,
+    mock_resolve,
+    mock_db,
+    _mark,
+    _recompute,
+    mock_settings_repo_cls,
+):
+    """Ligne « A/R » (réservation ``is_round_trip``) mais une seule réservation : pas de jambe à exclure."""
+    single = _line(
+        20,
+        5557,
+        {
+            "billing_unit": "round_trip",
+            "transport_type": "A/R",
+            "primary_booking_id": 5557,
+            "booking_ids": [5557],
+        },
+    )
+    inv = _inv(single)
+    mock_resolve.return_value = (inv, None, None)
+    mock_settings_repo_cls.return_value.find_or_create.return_value = SimpleNamespace(
+        vat_rate=None, vat_applicable=False
+    )
+
+    r = remove_draft_invoice_line(1, 1, 20, exclude_round_trip_leg="return")
+
+    assert r.success is False
+    assert r.status_code == 400
+    assert r.error is not None
+    assert r.error.get("error_code") == "ROUND_TRIP_LEG_NOT_SPLITTABLE"
+    assert "une seule" in str(r.error.get("error"))
+    mock_booking_cls.query.filter.assert_not_called()
+    mock_db.session.delete.assert_not_called()
+    mock_db.session.commit.assert_not_called()

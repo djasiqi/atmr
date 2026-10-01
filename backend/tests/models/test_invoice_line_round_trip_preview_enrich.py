@@ -7,6 +7,9 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from application.invoices.invoice_line_round_trip import (
+    enrich_line_dict_round_trip_structure,
+)
 from models.enums import InvoiceLineType
 from models.invoice import (
     _enrich_invoice_line_payloads_round_trip_merge,
@@ -89,9 +92,12 @@ def test_enrich_single_round_trip_booking_marks_billing_unit():
     _enrich_invoice_line_payloads_single_round_trip(
         [ln1], [d1], bookings_by_id={501: b1}
     )
+    enrich_line_dict_round_trip_structure([d1])
 
     assert d1["line_meta"]["billing_unit"] == "round_trip"
     assert d1["line_meta"]["transport_type"] == "A/R"
+    assert d1["invoice_line_round_trip_structure"] == "single"
+    assert d1["invoice_line_represents_full_round_trip"] is False
 
 
 def test_enrich_for_api_skips_single_when_pair_merge_applies():

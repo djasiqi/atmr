@@ -802,7 +802,12 @@ def _enrich_invoice_line_payloads_single_round_trip(
     *,
     bookings_by_id: dict[int, Any] | None = None,
 ) -> None:
-    """Marque les lignes A/R facturées en une seule entrée (réservation ``is_round_trip``)."""
+    """Marque les lignes dont la réservation est historiquement ``is_round_trip``.
+
+    INFORMATION uniquement (badge éditeur). Ne signifie pas que les deux jambes
+    sont facturées : le tag client ``[A/R]`` utilise
+    ``invoice_line_represents_full_round_trip``.
+    """
     rids = [
         int(ln.reservation_id)
         for ln in invoice_lines
@@ -873,7 +878,7 @@ def enrich_invoice_line_payloads_for_api(
     *,
     bookings_by_id: dict[int, Any] | None = None,
 ) -> None:
-    """Enrichit les payloads lignes facture (dates, paires A/R, A/R mono-ligne) pour l'API."""
+    """Enrichit les payloads lignes facture (dates, paires A/R, info, structure canonique)."""
     _enrich_invoice_line_payloads_booking_dates(invoice_lines, line_dicts)
     _enrich_invoice_line_payloads_round_trip_merge(invoice_lines, line_dicts)
     _enrich_invoice_line_payloads_single_round_trip(
@@ -881,6 +886,11 @@ def enrich_invoice_line_payloads_for_api(
         line_dicts,
         bookings_by_id=bookings_by_id,
     )
+    from application.invoices.invoice_line_round_trip import (
+        enrich_line_dict_round_trip_structure,
+    )
+
+    enrich_line_dict_round_trip_structure(line_dicts)
 
 
 class InvoicePayment(db.Model):
