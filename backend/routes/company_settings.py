@@ -1913,6 +1913,7 @@ class BillingParties(Resource):
         contact_email = data.get("contact_email")
         contact_phone = data.get("contact_phone")
         external_ref = data.get("external_ref")
+        recipient_mode = data.get("recipient_mode")
         is_active = data.get("is_active", True)
 
         if not display_name:
@@ -1938,6 +1939,8 @@ class BillingParties(Resource):
             bp.contact_email = contact_email
             bp.contact_phone = contact_phone
             bp.external_ref = external_ref
+            if recipient_mode is not None:
+                bp.recipient_mode = recipient_mode
             bp.is_active = bool(is_active)
             db.session.add(bp)
             db.session.commit()
@@ -1992,6 +1995,7 @@ class BillingPartyById(Resource):
         contact_email = data.get("contact_email")
         contact_phone = data.get("contact_phone")
         is_active = data.get("is_active")
+        recipient_mode = data.get("recipient_mode")
 
         try:
             if display_name is not None:
@@ -2004,6 +2008,8 @@ class BillingPartyById(Resource):
                 bp.contact_email = contact_email.strip() if contact_email else None
             if contact_phone is not None:
                 bp.contact_phone = contact_phone.strip() if contact_phone else None
+            if recipient_mode is not None:
+                bp.recipient_mode = recipient_mode
             if is_active is not None:
                 bp.is_active = bool(is_active)
 

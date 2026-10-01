@@ -156,6 +156,11 @@ def _client_display_name(client: Client) -> str:
     return f"Client #{client.id}"
 
 
+def client_display_name(client: Client) -> str:
+    """Nom affiché du sujet « client » (patient), jamais celui du payeur."""
+    return _client_display_name(client)
+
+
 def _institution_patient_display(
     patient: InstitutionPatient | None, fallback: str
 ) -> str:

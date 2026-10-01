@@ -14,12 +14,9 @@ from typing import Any
 
 from services.billing import BillingProfileService
 from services.documents.invoice_recipient import (
-    append_residence_to_billed_to_name,
-    format_billing_party_recipient_name,
-    institution_patient_billing_address,
-    invoice_residence_label,
-    live_patient_payer_identity,
-    resolve_invoice_institution_patient,
+    billed_to_name_lines,
+    resolve_invoice_billed_to,
+    split_postal_address_lines,
 )
 
 logger = logging.getLogger(__name__)
@@ -303,157 +300,76 @@ class InvoiceTemplateBuilder:
 
         return "Adresse non renseignée"
 
+    @staticmethod
+    def _address_to_html(value: str) -> str:
+        """Normalise une adresse texte (``\\n`` ou « a, b, c ») en HTML multi-ligne."""
+        lines = split_postal_address_lines(value)
+        if not lines:
+            return "Adresse non renseignée"
+        return "<br/>".join(lines)
+
     def _resolve_billed_to(self, invoice) -> tuple[str, str]:
-        """Résout le destinataire de facture (bloc 'Facturé à')."""
-        # 1) BillingParty (nouveau modèle unifié)
+        """Résout le destinataire de facture (bloc « Facturé à »).
+
+        Même source de vérité que le PDF ReportLab (``resolve_invoice_billed_to``) :
+        seul le formatage diffère (``<br/>`` entre les lignes, coordonnées de contact
+        du payeur sous l'adresse).
+        """
         try:
-            from models.billing_party import ClientBillingParty
-            from models.enums import BillingPartyType
-
-            # Un BillingParty PATIENT n'est pas un tiers payeur : le payeur EST le
-            # bénéficiaire, il n'y a aucune délégation de facturation à vérifier.
-            is_patient_party = (
-                getattr(getattr(invoice, "billing_party", None), "type", None)
-                == BillingPartyType.PATIENT
-            )
-
-            # Si le client n'a plus de lien avec ce tiers payeur (lien supprimé), facturer au domicile du client
-            client_id = getattr(invoice, "client_id", None)
-            bp_id = getattr(invoice, "billing_party_id", None)
-            link_for_contact = None
-            if not is_patient_party and client_id is not None and bp_id is not None:
-                link_for_contact = ClientBillingParty.query.filter_by(
-                    client_id=client_id, billing_party_id=bp_id
-                ).first()
-                if link_for_contact is None:
-                    logger.info(
-                        "[InvoiceTemplateBuilder] Lien client↔tiers payeur supprimé (invoice_id=%s). Facturé à = domicile du client.",
-                        getattr(invoice, "id", None),
-                    )
-                    # Ne pas utiliser le tiers payeur : on passe au fallback client plus bas
-                    raise ValueError("use_client_fallback")
-
-            bp = getattr(invoice, "billing_party", None)
-            if bp is not None:
-                bp_name = (getattr(bp, "display_name", None) or "Payeur").strip()
-                addr = (getattr(bp, "billing_address", None) or "").strip()
-                patient = None
-                if is_patient_party:
-                    # Facturation au patient : nom + domicile courants font foi.
-                    # Le snapshot BillingParty peut être vide ou périmé.
-                    patient = resolve_invoice_institution_patient(invoice)
-                    live_name, live_addr = live_patient_payer_identity(invoice)
-                    if live_name:
-                        bp_name = live_name
-                    if live_addr:
-                        addr = live_addr
-                    else:
-                        domicile = institution_patient_billing_address(patient)
-                        if domicile:
-                            addr = domicile
-                if addr:
-                    addr_html = (
-                        addr.replace("\r\n", "\n")
-                        .replace("\r", "\n")
-                        .replace("\n", "<br/>")
-                        .replace(", ", "<br/>")
-                    )
-                else:
-                    addr_html = "Adresse non renseignée"
-                # Contact (optionnel)
-                contact_lines: list[str] = []
-                email = (getattr(bp, "contact_email", None) or "").strip()
-                phone = (getattr(bp, "contact_phone", None) or "").strip()
-                ext = (getattr(bp, "external_ref", None) or "").strip()
-                if email:
-                    contact_lines.append(f"Email facturation : {email}")
-                if phone:
-                    contact_lines.append(f"Téléphone : {phone}")
-                if ext:
-                    contact_lines.append(f"Référence : {ext}")
-                if contact_lines:
-                    addr_html = f"{addr_html}<br/>{'<br/>'.join(contact_lines)}"
-                # Débiteur = BillingParty ; contact facturation = lien client (jamais « curateur »).
-                contact_name = (
-                    getattr(link_for_contact, "contact_name", None)
-                    if link_for_contact is not None
-                    else None
-                )
-                name = format_billing_party_recipient_name(
-                    bp_name,
-                    contact_name,
-                    separator="<br/>",
-                )
-                # Si le tiers payeur est SPC : ajouter le numéro SPC après l'adresse (2 sauts de ligne)
-                if is_patient_party:
-                    name = append_residence_to_billed_to_name(
-                        name,
-                        invoice_residence_label(
-                            patient=patient,
-                            client=getattr(invoice, "client", None),
-                        ),
-                        separator="<br/>",
-                    )
-                if (bp_name or "").upper().find("SPC") >= 0:
-                    link = link_for_contact
-                    if (
-                        link
-                        and getattr(link, "client_reference", None)
-                        and (link.client_reference or "").strip()
-                    ):
-                        # 2 lignes vides puis numéro SPC (3 <br/> = 2 lignes vides)
-                        addr_html = f"{addr_html}<br/><br/><br/>No. SPC : {(link.client_reference or '').strip()}"
-                return (name, addr_html)
-        except Exception:
-            pass
-
-        # Si un billing_party_id est défini mais qu'on n'a pas réussi à charger le BP,
-        # on log pour observabilité (fallback PDF).
-        try:
-            if getattr(invoice, "billing_party_id", None):
-                logger.warning(
-                    "[InvoiceTemplateBuilder] billing_party_id=%s défini mais BillingParty non résolu (invoice_id=%s). Fallback sur legacy/client.",
-                    getattr(invoice, "billing_party_id", None),
-                    getattr(invoice, "id", None),
-                )
-        except Exception:
-            pass
-
-        # 2) Legacy: bill_to_client_id (Client institution)
-        import contextlib
-
-        with contextlib.suppress(Exception):
-            bill_to = getattr(invoice, "bill_to_client", None)
-            if (
-                getattr(invoice, "bill_to_client_id", None)
-                and getattr(invoice, "client_id", None)
-                and invoice.bill_to_client_id != invoice.client_id
-                and bill_to is not None
-            ):
-                logger.info(
-                    "[InvoiceTemplateBuilder] Fallback legacy bill_to_client_id utilisé (invoice_id=%s, bill_to_client_id=%s).",
-                    getattr(invoice, "id", None),
-                    getattr(invoice, "bill_to_client_id", None),
-                )
-                return self._format_client_name(bill_to), self._format_client_address(
-                    bill_to
-                )
-
-        # 3) Fallback: client bénéficiaire (domicile + éventuellement établissement de résidence)
-        client = getattr(invoice, "client", None)
-        if client is None:
-            return "Client", "Adresse non renseignée"
-        with contextlib.suppress(Exception):
-            logger.info(
-                "[InvoiceTemplateBuilder] Fallback client bénéficiaire utilisé (invoice_id=%s, client_id=%s).",
+            party = resolve_invoice_billed_to(invoice)
+        except Exception as e:  # pragma: no cover - observabilité
+            logger.error(
+                "[InvoiceTemplateBuilder] Résolution « Facturé à » impossible (invoice_id=%s): %s",
                 getattr(invoice, "id", None),
-                getattr(invoice, "client_id", None),
+                e,
             )
-        name = self._format_client_name(client)
-        residence_facility = (getattr(client, "residence_facility", None) or "").strip()
-        if residence_facility:
-            name = f"{name}<br/>{residence_facility}"
-        return name, self._format_client_address(client)
+            client = getattr(invoice, "client", None)
+            if client is None:
+                return "Client", "Adresse non renseignée"
+            name = self._format_client_name(client)
+            residence_facility = (
+                getattr(client, "residence_facility", None) or ""
+            ).strip()
+            if residence_facility:
+                name = f"{name}<br/>{residence_facility}"
+            return name, self._format_client_address(client)
+
+        logger.info(
+            "[InvoiceTemplateBuilder] Facturé à : mode=%s (invoice_id=%s, billing_party_id=%s).",
+            party.mode,
+            getattr(invoice, "id", None),
+            getattr(invoice, "billing_party_id", None),
+        )
+
+        if party.mode == "unresolved_party":
+            return "Payeur", "Adresse non renseignée"
+
+        name = "<br/>".join(
+            billed_to_name_lines(
+                party, name_formatter=self._name_with_uppercase_last_name
+            )
+        )
+        addr_html = self._address_to_html(party.address)
+
+        # Coordonnées du payeur (optionnel) : uniquement pour un tiers payeur / organisme,
+        # jamais pour le patient lui-même. Lues sur ``party`` (live ou snapshot figé),
+        # jamais sur le BillingParty courant.
+        if party.mode in {"patient_care_of", "organization_debtor"}:
+            contact_lines: list[str] = []
+            if party.payer_contact_email:
+                contact_lines.append(f"Email facturation : {party.payer_contact_email}")
+            if party.payer_contact_phone:
+                contact_lines.append(f"Téléphone : {party.payer_contact_phone}")
+            if party.payer_external_ref:
+                contact_lines.append(f"Référence : {party.payer_external_ref}")
+            if contact_lines:
+                addr_html = f"{addr_html}<br/>{'<br/>'.join(contact_lines)}"
+
+        if party.client_reference:
+            label = party.client_reference_label or "Référence"
+            # 2 lignes vides puis la référence (3 <br/> = 2 lignes vides)
+            addr_html = f"{addr_html}<br/><br/><br/>{label} : {party.client_reference}"
+        return name, addr_html
 
     def _extract_invoice_lines(self, invoice) -> list[dict[str, Any]]:
         """Extrait les lignes de facture.

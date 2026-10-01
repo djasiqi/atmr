@@ -16,15 +16,27 @@ SAVE si nécessaire
 → reload frontend
 
 Garanties :
-- PATIENT : nom/adresse live
+- PATIENT : nom/adresse live (brouillon)
 - tiers payeur : jamais écrasé par le patient
+- tiers de correspondance (curatelle, OPAD, avocat, famille, autre) : patient facturé,
+  « c/o tiers », adresse du tiers — voir bloc-facture-a-destinataire.md
 - contact : « À l’att. de … », aucune déduction « Curateur »
+- bloc « Facturé à » : BROUILLON = master data courantes (+ snapshot rafraîchi) ;
+  FACTURE FIGÉE (hors DRAFT) = snapshot `meta.billed_to_snapshot` uniquement ;
+  ancienne facture figée sans snapshot = fallback legacy_live journalisé
 - données non sauvegardées de la modale : persistées avant régénération
 - échec : ancien PDF conservé, pdf_url non remplacé, erreur visible
 - hard refresh : dernière version toujours servie
 
-STATUT : CLOSED
+STATUT : CLOSED (amendé 2026-10-01 : immutabilité du bloc « Facturé à »)
 ```
+
+✅ **Implémenté** (2026-10-01) : les garanties « nom/adresse live » ne valent plus que
+pour une facture **brouillon**. Dès qu'une facture quitte DRAFT, son bloc « Facturé à »
+est figé (`application/invoices/billed_to_snapshot_guard.py`) et toute régénération le
+rejoue depuis le snapshot ; `sync_patient_billing_party_from_live` et
+`refresh_recipient_snapshot_meta` ne s'exécutent plus hors DRAFT. Détails et audit du
+cas SENT : [`bloc-facture-a-destinataire.md`](bloc-facture-a-destinataire.md).
 
 ## Points d’entrée autorisés
 
@@ -50,6 +62,8 @@ Ne pas retirer ni affaiblir ces tests : ils figent le contrat.
   - `backend/tests/services/test_pdf_billed_to_patient_domicile.py`
   - `backend/tests/services/test_format_billing_party_recipient_name.py`
   - `backend/tests/services/test_pdf_recipient_block.py`
+  - `backend/tests/services/test_invoice_billed_to_resolver.py` (patient / c/o tiers / organisme, HTML = PDF, régénération)
+  - `backend/tests/services/test_invoice_billed_to_snapshot.py` (facture figée + master data mutées → PDF/HTML inchangés ; gel à chaque sortie de DRAFT ; fallback legacy_live)
 
 ### Frontend
 

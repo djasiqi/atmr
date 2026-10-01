@@ -253,6 +253,7 @@ class GenerateInvoiceUseCase:
             from application.invoices.billing_opportunities import (
                 build_billing_subject_snapshot,
                 build_recipient_snapshot,
+                client_display_name,
                 load_eligible_bookings_for_opportunity,
                 parse_billing_opportunity_key,
                 resolve_recipient_status,
@@ -357,11 +358,15 @@ class GenerateInvoiceUseCase:
                 if ip is None and parsed.subject_type == "institution_patient":
                     ip = db.session.get(InstitutionPatient, parsed.subject_id)
 
+                # Le sujet facturé est le patient : son snapshot ne doit jamais
+                # porter le nom du payeur (tiers) — voir billing_subject_snapshot.
                 display = (bp.display_name or "").strip()
                 if ip is not None:
                     display = (
                         f"{ip.first_name or ''} {ip.last_name or ''}".strip() or display
                     )
+                elif getattr(sample, "client", None) is not None:
+                    display = client_display_name(sample.client) or display
                 recipient_status = resolve_recipient_status(
                     billing_party=bp,
                     institution_patient=ip,

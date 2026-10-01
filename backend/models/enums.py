@@ -759,6 +759,26 @@ class BillingPartyType(str, PyEnum):
         return [e.value for e in cls]
 
 
+class BillingPartyRecipientMode(str, PyEnum):
+    """Rôle du payeur dans le bloc « Facturé à » (relation comptable explicite).
+
+    Le type technique du payeur (``BillingPartyType``) ne dit pas si l'organisme
+    est un simple tiers de correspondance ou le débiteur en nom propre :
+    - ``AUTO`` : inférence par type (compatibilité : ``other`` ⇒ c/o) ;
+    - ``CARE_OF`` : patient facturé, « c/o tiers », adresse du tiers ;
+    - ``DEBTOR`` : organisme / personne facturé(e) en nom propre, jamais de « c/o ».
+    Déclaré sur le payeur ; un lien client↔payeur peut le surcharger.
+    """
+
+    AUTO = "auto"
+    CARE_OF = "care_of"
+    DEBTOR = "debtor"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
 class BillingSource(str, PyEnum):
     """Source de la décision de facturation (traçabilité).
 

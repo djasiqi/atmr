@@ -1601,6 +1601,11 @@ def _serialize_client_billing_party_link(
         "contact_email": link.contact_email,
         "contact_phone": link.contact_phone,
         "client_reference": link.client_reference,
+        "recipient_mode": (
+            getattr(link.recipient_mode, "value", link.recipient_mode)
+            if getattr(link, "recipient_mode", None)
+            else None
+        ),
         "billing_party": bp.to_dict() if bp else None,
         "is_curatelle_protected": is_curatelle,
     }
@@ -2090,6 +2095,7 @@ class ClientBillingParties(Resource):
         contact_email = (validated.get("contact_email") or "").strip() or None
         contact_phone = (validated.get("contact_phone") or "").strip() or None
         client_reference = (validated.get("client_reference") or "").strip() or None
+        recipient_mode = (validated.get("recipient_mode") or "").strip() or None
 
         link = ClientBillingParty.query.filter_by(
             client_id=client.id, billing_party_id=billing_party.id
@@ -2109,6 +2115,7 @@ class ClientBillingParties(Resource):
         link.contact_email = contact_email
         link.contact_phone = contact_phone
         link.client_reference = client_reference
+        link.recipient_mode = recipient_mode
 
         if is_default:
             ClientBillingParty.query.filter(
@@ -2185,6 +2192,9 @@ class ClientBillingPartyLink(Resource):
             link.client_reference = (
                 validated.get("client_reference") or ""
             ).strip() or None
+        if "recipient_mode" in validated:
+            raw_mode = (validated.get("recipient_mode") or "").strip() or None
+            link.recipient_mode = raw_mode
 
         if "is_default" in validated:
             is_default = bool(validated.get("is_default"))

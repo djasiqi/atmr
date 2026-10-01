@@ -21,13 +21,10 @@ from sqlalchemy.orm import joinedload, selectinload
 from infrastructure.invoices.invoice_calculator import round_to_5_cents
 from models import Client, CompanyBillingSettings, Invoice, InvoiceLine, InvoiceLineType
 from services.documents.invoice_recipient import (
-    append_residence_to_billed_to_name,
-    format_billing_party_recipient_name,
-    institution_patient_billing_address,
-    invoice_residence_label,
-    iter_invoice_bookings,
-    live_patient_payer_identity,
-    resolve_invoice_institution_patient,
+    billed_to_name_lines,
+    join_street_and_number,
+    refresh_billed_to_snapshot_if_draft,
+    resolve_invoice_billed_to,
 )
 from services.documents.invoice_template_builder import InvoiceTemplateBuilder
 from services.documents.qrbill import QRBillService
@@ -1950,7 +1947,8 @@ def _format_billed_to_three_lines(raw: str, company_country: str | None = None) 
         return s
     postcode = postal_match.group(1)
     pos = postal_match.start()
-    street = s[:pos].strip().rstrip(" ,")
+    # « Rue Patru, 2 » (saisie « rue, numéro ») → « Rue Patru 2 »
+    street = join_street_and_number(s[:pos].strip().rstrip(" ,"))
     rest = s[pos + 4 :].strip()
     # Détecter le pays dans la partie après le CP (pour décider si on l'affiche)
     address_country_code = None
@@ -2297,6 +2295,11 @@ def _get_billed_to(
 ) -> tuple[str, str]:
     """Retourne (nom, adresse formatée) pour le bloc « Facturé à ».
 
+    La décision « qui est facturé / c/o qui / à quelle adresse » vient exclusivement
+    de ``resolve_invoice_billed_to`` (source de vérité partagée avec le rendu HTML) ;
+    ici on ne fait que formater pour ReportLab (``\\n`` entre les lignes du nom,
+    adresse sur deux lignes rue / NPA ville).
+
     ``bookings_by_id`` : chargé par le pipeline PDF (évite N+1). Si None, requête
     ponctuelle pour S1_PATIENT / appels isolés.
     """
@@ -2307,259 +2310,36 @@ def _get_billed_to(
         company_country = (invoice.company.domicile_country or "CH").strip().upper()
     if not company_country:
         company_country = "CH"
-    if getattr(invoice, "billing_party_id", None):
-        from models import BillingParty as BillingPartyModel
-        from models.billing_party import ClientBillingParty
-        from models.enums import BillingPartyType, InvoiceBillingStrategy
 
-        _client_id = getattr(invoice, "client_id", None)
-        _bp_id = getattr(invoice, "billing_party_id", None)
-        use_billing_party = True
-        _link = None
+    party = resolve_invoice_billed_to(invoice, bookings_by_id=bookings_by_id)
+    app_logger.info(
+        "[PDF] Facturé à : mode=%s (invoice_id=%s, billing_party_id=%s, c/o=%s).",
+        party.mode,
+        getattr(invoice, "id", None),
+        getattr(invoice, "billing_party_id", None),
+        bool(party.has_care_of),
+    )
 
-        # Charger le billing_party en amont pour le bypass S2/clinic
-        bp = BillingPartyModel.query.get(invoice.billing_party_id)
-
-        # ════════════════════════════════════════════════════════════════════
-        # BYPASS pour factures cliniques mensuelles (S2) ou établissements
-        # ════════════════════════════════════════════════════════════════════
-        # Pour ces factures multi-patients, on ne vérifie PAS le lien
-        # ClientBillingParty car le client_id est arbitraire (premier patient).
-        # On utilise directement le billing_party (clinique/EMS/hôpital).
-        # ════════════════════════════════════════════════════════════════════
-        _billing_strategy = getattr(invoice, "billing_strategy", None)
-        _bp_type = getattr(bp, "type", None) if bp else None
-        _is_clinic_invoice = (
-            _billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY
-            or _bp_type
-            in (
-                BillingPartyType.CLINIC,
-                BillingPartyType.EMS,
-                BillingPartyType.HOSPITAL,
-            )
-        )
-
-        # Un BillingParty PATIENT n'est pas un tiers payeur : le payeur EST le
-        # bénéficiaire, il n'y a donc aucune délégation de facturation à vérifier.
-        _is_patient_party = _bp_type == BillingPartyType.PATIENT
-
-        if _is_clinic_invoice or _is_patient_party:
-            app_logger.info(
-                "[PDF] Facture clinique/établissement ou payeur patient (strategy=%s, bp_type=%s) → bypass lien ClientBillingParty (invoice_id=%s).",
-                _billing_strategy.value if _billing_strategy else None,
-                _bp_type.value if _bp_type else None,
-                getattr(invoice, "id", None),
-            )
-            # On force l'utilisation du billing_party, pas de vérification du lien
-            _link = None  # Pas de référence SPC pour les établissements
-        elif _client_id is not None and _bp_id is not None:
-            # ════════════════════════════════════════════════════════════════════
-            # Logique standard : vérifier le lien ClientBillingParty
-            # ════════════════════════════════════════════════════════════════════
-            # Si le client n'a plus de lien avec ce tiers payeur (lien supprimé),
-            # facturer au domicile du client (fallback).
-            _link = ClientBillingParty.query.filter_by(
-                client_id=_client_id, billing_party_id=_bp_id
-            ).first()
-            if _link is None:
-                app_logger.info(
-                    "[PDF] Lien client↔tiers payeur supprimé (invoice_id=%s). Facturé à = domicile du client.",
-                    getattr(invoice, "id", None),
-                )
-                use_billing_party = False
-
-        if use_billing_party and bp:
-            raw = bp.billing_address or ""
-            _ip = None
-            live_patient_name = None
-            if _is_patient_party:
-                # Facturation au patient : nom + domicile légal font foi.
-                # Le snapshot BillingParty peut être vide ou périmé après
-                # modification du client / patient.
-                _ip = resolve_invoice_institution_patient(
-                    invoice, bookings_by_id=bookings_by_id
-                )
-                live_patient_name, live_addr = live_patient_payer_identity(
-                    invoice, bookings_by_id=bookings_by_id
-                )
-                if live_addr:
-                    raw = live_addr
-                else:
-                    _domicile = institution_patient_billing_address(_ip)
-                    if _domicile:
-                        raw = _domicile
-            raw = raw or "Adresse non renseignée"
-            raw = _sanitize_billed_to_address(bp.display_name or "Payeur", raw)
-            addr = _format_billed_to_three_lines(
-                raw or "Adresse non renseignée", company_country=company_country
-            )
-            # Débiteur = BillingParty ; contact = lien ClientBillingParty (jamais déduit du type).
-            # PATIENT : préférer l'identité live (client / patient) au snapshot BP.
-            bp_display = (
-                live_patient_name
-                if _is_patient_party and live_patient_name
-                else (bp.display_name or "Payeur")
-            )
-            bp_name = _name_with_uppercase_last_name(bp_display)
-            contact_name = (
-                getattr(_link, "contact_name", None) if _link is not None else None
-            )
-            if not _is_patient_party:
-                name = format_billing_party_recipient_name(
-                    bp_name,
-                    contact_name,
-                    separator="\n",
-                )
-            else:
-                name = bp_name
-            if _is_patient_party:
-                name = append_residence_to_billed_to_name(
-                    name,
-                    invoice_residence_label(
-                        patient=_ip, client=getattr(invoice, "client", None)
-                    ),
-                    separator="\n",
-                )
-            if (
-                _client_id is not None
-                and _bp_id is not None
-                and (bp.display_name or "").upper().strip().find("SPC") >= 0
-                and _link is not None
-                and getattr(_link, "client_reference", None)
-                and (_link.client_reference or "").strip()
-            ):
-                addr = f"{addr}<br/><br/><br/>No. SPC : {(_link.client_reference or '').strip()}"
-            return (name, addr)
-        if getattr(invoice, "billing_party_id", None) and not bp:
-            app_logger.warning(
-                "[PDF] BillingParty introuvable pour la facture (invoice_id=%s). Fallback.",
-                getattr(invoice, "id", None),
-            )
-            return (_name_with_uppercase_last_name("Payeur"), "Adresse non renseignée")
-    if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
-        from models import Client as ClientModel
-
-        institution = ClientModel.query.get(invoice.bill_to_client_id)
-        if institution and institution.is_institution:
-            app_logger.info(
-                "[PDF] Fallback legacy bill_to_client_id utilisé (invoice_id=%s, bill_to_client_id=%s).",
-                getattr(invoice, "id", None),
-                getattr(invoice, "bill_to_client_id", None),
-            )
-            name = _name_with_uppercase_last_name(
-                institution.institution_name or "Institution"
-            )
-            raw = institution.billing_address or "Adresse non renseignée"
-            raw = _sanitize_billed_to_address(name, raw)
-            return (
-                name,
-                _format_billed_to_three_lines(
-                    raw or "Adresse non renseignée", company_country=company_country
-                ),
-            )
-        app_logger.warning(
-            "[PDF] bill_to_client_id=%s défini mais institution introuvable/invalide (invoice_id=%s). Fallback.",
-            getattr(invoice, "bill_to_client_id", None),
-            getattr(invoice, "id", None),
-        )
+    if party.mode == "unresolved_party":
+        return (_name_with_uppercase_last_name("Payeur"), "Adresse non renseignée")
+    if party.mode == "legacy_institution" and not (party.address or "").strip():
         return (
-            _name_with_uppercase_last_name("Institution"),
+            _name_with_uppercase_last_name(party.addressee),
             "Adresse non renseignée",
         )
-    app_logger.info(
-        "[PDF] Fallback client bénéficiaire utilisé (invoice_id=%s, client_id=%s).",
-        getattr(invoice, "id", None),
-        getattr(invoice, "client_id", None),
+
+    name = "\n".join(
+        billed_to_name_lines(party, name_formatter=_name_with_uppercase_last_name)
     )
-    client = invoice.client
-
-    # ── Institution client avec facturation patient : utiliser le nom/adresse du patient ──
-    from models.enums import InvoiceBillingStrategy as IBS
-
-    _billing_strat = getattr(invoice, "billing_strategy", None)
-    if (
-        client
-        and getattr(client, "is_institution", False)
-        and _billing_strat == IBS.S1_PATIENT
-    ):
-        app_logger.info(
-            "[PDF] Client institution + S1_PATIENT → recherche patient réel (invoice_id=%s).",
-            getattr(invoice, "id", None),
-        )
-        # Chercher le nom du patient depuis le premier booking de la facture
-        _patient_name = None
-        _patient_address = None
-        _ip = None
-        for _bk in iter_invoice_bookings(invoice, bookings_by_id=bookings_by_id):
-            if getattr(_bk, "customer_name", None):
-                _patient_name = _bk.customer_name
-                break
-        # Adresse : uniquement le patient de CETTE facture. Déduire le patient à
-        # l'échelle de l'institution donnerait la même adresse à tous les résidents.
-        try:
-            _ip = resolve_invoice_institution_patient(
-                invoice, bookings_by_id=bookings_by_id
-            )
-            if _ip:
-                if not _patient_name:
-                    _patient_name = (
-                        f"{_ip.first_name or ''} {_ip.last_name or ''}".strip()
-                    )
-                _patient_address = institution_patient_billing_address(_ip)
-        except Exception as e:
-            app_logger.warning("[PDF] Patient lookup error: %s", e)
-
-        if _patient_name:
-            p_name = _name_with_uppercase_last_name(_patient_name)
-            p_name = append_residence_to_billed_to_name(
-                p_name,
-                invoice_residence_label(patient=_ip, client=client),
-                separator="\n",
-            )
-            p_raw = _patient_address or "Adresse non renseignée"
-            p_raw = _sanitize_billed_to_address(p_name, p_raw)
-            return (
-                p_name,
-                _format_billed_to_three_lines(
-                    p_raw or "Adresse non renseignée", company_country=company_country
-                ),
-            )
-
-    client_name = (
-        f"{client.user.first_name or ''} {(client.user.last_name or '').upper()}".strip()
-        or client.user.username
-        or "Client"
+    raw = party.address or "Adresse non renseignée"
+    raw = _sanitize_billed_to_address(party.address_owner or party.addressee, raw)
+    addr = _format_billed_to_three_lines(
+        raw or "Adresse non renseignée", company_country=company_country
     )
-    client_name = _name_with_uppercase_last_name(client_name)
-    # Si établissement de résidence (EMS, fondation, etc.) : Nom client puis nom établissement
-    residence_facility = (getattr(client, "residence_facility", None) or "").strip()
-    name = f"{client_name}\n{residence_facility}" if residence_facility else client_name
-    raw = "Adresse non renseignée"
-    if hasattr(client, "domicile_address") and client.domicile_address:
-        street = client.domicile_address
-        if (
-            hasattr(client, "domicile_zip")
-            and hasattr(client, "domicile_city")
-            and client.domicile_zip
-            and client.domicile_city
-        ):
-            raw = f"{street}, {client.domicile_zip} {client.domicile_city}"
-        else:
-            raw = street
-    elif (
-        hasattr(client, "user")
-        and client.user
-        and hasattr(client.user, "address")
-        and client.user.address
-    ):
-        raw = client.user.address
-    raw = _sanitize_billed_to_address(client_name, raw)
-    return (
-        name,
-        _format_billed_to_three_lines(
-            raw or "Adresse non renseignée", company_country=company_country
-        ),
-    )
+    if party.client_reference:
+        label = party.client_reference_label or "Référence"
+        addr = f"{addr}<br/><br/><br/>{label} : {party.client_reference}"
+    return (name, addr)
 
 
 def _wrap_line_by_words(line: str, max_chars: int = 90) -> str:
@@ -5363,6 +5143,17 @@ class PDFService:
                 "[PDF] Facture %s: données rechargées depuis la DB (client, company, billing_party)",
                 invoice.id,
             )
+
+            # Bloc « Facturé à » : brouillon → le snapshot suit les master data et
+            # reflète le PDF construit ; facture figée → jamais réécrit (le rendu lit
+            # le snapshot). Voir docs/facturation/bloc-facture-a-destinataire.md.
+            try:
+                refresh_billed_to_snapshot_if_draft(invoice, reason="pdf_generation")
+            except Exception:  # pragma: no cover - ne bloque jamais le PDF
+                app_logger.exception(
+                    "[PDF] Snapshot « Facturé à » non rafraîchi (invoice_id=%s)",
+                    invoice.id,
+                )
 
             # ✅ Monitoring performance : mesurer le temps de génération
             start_time = perf_counter()

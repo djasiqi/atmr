@@ -99,6 +99,7 @@ from .enums import (
     InvoiceBillingStatus,
     BookingDisputeStatus,
     BillingPartyType,
+    BillingPartyRecipientMode,
     BillingSource,
     ClientType,
     ManagementMode,
@@ -342,6 +343,7 @@ __all__ = [
     "BillingIntent",  # ✅ Intention facturation
     "BillingParty",
     "BillingPartyType",
+    "BillingPartyRecipientMode",
     "BillingAuditLog",
     "BookingChangeAcknowledgement",
     "BookingChangeEvent",

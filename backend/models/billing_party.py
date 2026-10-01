@@ -15,7 +15,34 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from ext import db
 
-from .enums import BillingPartyType
+from .enums import BillingPartyRecipientMode, BillingPartyType
+
+# Type PostgreSQL partagé par ``billing_parties`` et ``client_billing_parties``.
+_RECIPIENT_MODE_ENUM = SAEnum(
+    BillingPartyRecipientMode,
+    name="billing_party_recipient_mode",
+    values_callable=lambda enum_cls: [e.value for e in enum_cls],
+)
+
+
+def coerce_recipient_mode(value: Any) -> BillingPartyRecipientMode | None:
+    """Normalise une valeur API (« care_of », « DEBTOR », enum, vide) ; ``None`` si vide.
+
+    Lève ``ValueError`` pour une valeur inconnue (message en français pour l'API).
+    """
+    if value is None:
+        return None
+    if isinstance(value, BillingPartyRecipientMode):
+        return value
+    raw = str(getattr(value, "value", value) or "").strip().lower()
+    if not raw:
+        return None
+    try:
+        return BillingPartyRecipientMode(raw)
+    except ValueError as exc:
+        raise ValueError(
+            "recipient_mode invalide (valeurs : auto, care_of, debtor)"
+        ) from exc
 
 
 class BillingParty(db.Model):
@@ -46,6 +73,15 @@ class BillingParty(db.Model):
 
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true"
+    )
+
+    # Rôle dans le bloc « Facturé à » : auto (inférence par type) | care_of | debtor.
+    # Voir docs/facturation/bloc-facture-a-destinataire.md.
+    recipient_mode: Mapped[BillingPartyRecipientMode] = mapped_column(
+        _RECIPIENT_MODE_ENUM,
+        nullable=False,
+        server_default=BillingPartyRecipientMode.AUTO.value,
+        default=BillingPartyRecipientMode.AUTO,
     )
 
     created_at = mapped_column(
@@ -106,7 +142,15 @@ class BillingParty(db.Model):
         v = value.strip()
         return v or None
 
+    @validates("recipient_mode")
+    def _validate_recipient_mode(
+        self, _key: str, value: Any
+    ) -> BillingPartyRecipientMode:
+        # Le payeur porte toujours une valeur : vide ⇒ ``auto``.
+        return coerce_recipient_mode(value) or BillingPartyRecipientMode.AUTO
+
     def to_dict(self) -> dict[str, Any]:
+        mode = self.recipient_mode
         return {
             "id": self.id,
             "company_id": self.company_id,
@@ -117,6 +161,9 @@ class BillingParty(db.Model):
             "contact_phone": self.contact_phone,
             "external_ref": self.external_ref,
             "is_active": bool(self.is_active),
+            "recipient_mode": (
+                getattr(mode, "value", mode) or BillingPartyRecipientMode.AUTO.value
+            ),
         }
 
 
@@ -147,6 +194,12 @@ class ClientBillingParty(db.Model):
 
     # Référence client chez le payeur (ex: numéro SPC quand le tiers payeur est SPC).
     client_reference: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+    # Surcharge, pour CE patient, du rôle de destinataire du payeur.
+    # NULL ou « auto » ⇒ hérite de ``BillingParty.recipient_mode``.
+    recipient_mode: Mapped[BillingPartyRecipientMode | None] = mapped_column(
+        _RECIPIENT_MODE_ENUM, nullable=True
+    )
 
     # Un seul payeur par défaut par client (enforce via logique applicative, puis contrainte DB possible plus tard).
     is_default: Mapped[bool] = mapped_column(
@@ -179,7 +232,15 @@ class ClientBillingParty(db.Model):
         v = value.strip()
         return v or None
 
+    @validates("recipient_mode")
+    def _validate_recipient_mode(
+        self, _key: str, value: Any
+    ) -> BillingPartyRecipientMode | None:
+        # Sur le lien, vide ⇒ NULL (héritage du payeur).
+        return coerce_recipient_mode(value)
+
     def to_dict(self) -> dict[str, Any]:
+        mode = self.recipient_mode
         return {
             "id": self.id,
             "client_id": self.client_id,
@@ -190,6 +251,7 @@ class ClientBillingParty(db.Model):
             "contact_email": self.contact_email,
             "contact_phone": self.contact_phone,
             "client_reference": self.client_reference,
+            "recipient_mode": getattr(mode, "value", mode) if mode else None,
             "billing_party": self.billing_party.to_dict()
             if self.billing_party
             else None,

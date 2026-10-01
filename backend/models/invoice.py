@@ -1442,3 +1442,17 @@ class InvoiceSequence(db.Model):
             f"<InvoiceSequence {self.company_id}-{self.year}-{self.month}: "
             f"{self.sequence}>"
         )
+
+
+# Gel billed_to / QR : accroché au mapper, pas à la factory Flask.
+# Import tardif pour éviter un cycle models ↔ application au chargement du module.
+from sqlalchemy import event as _sa_event  # noqa: E402
+
+
+@_sa_event.listens_for(Invoice, "before_update")
+def _invoice_freeze_identity_snapshots(_mapper, _connection, target: Invoice) -> None:
+    from application.invoices.billed_to_snapshot_guard import (
+        freeze_invoice_if_leaving_draft,
+    )
+
+    freeze_invoice_if_leaving_draft(target)

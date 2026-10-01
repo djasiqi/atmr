@@ -12,6 +12,13 @@
 2. `role` reste une fonction / lien libre sans effet juridique.
 3. Le PDF distingue débiteur (`BillingParty.display_name`) et contact (`À l'att. de {contact_name}`).
 4. `BillingParty.type = curatorship` ne qualifie jamais le contact comme curateur légal.
+5. ✅ **Implémenté** (2026-10-01) : `payer != patient` ne remplace jamais le patient dans
+   le bloc « Facturé à ». Un tiers de correspondance (curatelle, OPAD, avocat, famille,
+   autre) s'imprime `Patient / c/o Tiers / [À l'att. de contact] / adresse du tiers` ;
+   un établissement facturé en nom propre (clinique, EMS, hôpital, assurance, S2) reste
+   seul destinataire. Source unique : `resolve_invoice_billed_to`
+   (`backend/services/documents/invoice_recipient.py`). Détail :
+   [`../facturation/bloc-facture-a-destinataire.md`](../facturation/bloc-facture-a-destinataire.md).
 
 ## Fichiers
 

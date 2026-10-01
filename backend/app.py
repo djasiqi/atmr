@@ -1920,6 +1920,13 @@ def create_app(config_name: str | None = None):
 
         register_demo_soft_delete_guard()
 
+        # Facturation : figer le bloc « Facturé à » dès qu'une facture quitte DRAFT.
+        from application.invoices.billed_to_snapshot_guard import (
+            register_billed_to_snapshot_guard,
+        )
+
+        register_billed_to_snapshot_guard()
+
         if not skip_routes_init:
             from routes_api import init_namespaces
 

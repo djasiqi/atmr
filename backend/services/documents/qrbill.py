@@ -11,13 +11,8 @@ from reportlab.graphics import renderPDF
 from svglib.svglib import svg2rlg
 
 from infrastructure.invoices.invoice_calculator import round_to_5_cents
-from models import CompanyBillingSettings
 from services.billing import BillingProfileService, generate_scor_reference
 
-# Constantes pour éviter les valeurs magiques
-MIN_ADDRESS_PARTS = 2
-MIN_ADDRESS_PARTS_POSTAL = 3
-MIN_ADDRESS_PARTS_CITY = 4
 QR_REFERENCE_LENGTH = 27
 QRR_BASE_LENGTH = 2  # Longueur de creditor_reference_base (ex: "21")
 QRR_INVOICE_NUM_LENGTH = 20  # Longueur max pour partie invoice_number
@@ -231,291 +226,47 @@ class QRBillService:
 
     def _parse_address_for_qrbill(self, address: str) -> tuple[str, str, str]:
         """Parse une adresse pour QR-bill en séparant rue, code postal et ville."""
-        if not address:
-            return ("", "1200", "Genève")
-        parts = [p.strip() for p in address.replace("\n", ",").split(",")]
-        # Format "Rue, Numéro, CP, Ville" ou "Rue Numéro, CP Ville"
-        if len(parts) >= MIN_ADDRESS_PARTS_CITY:
-            street = f"{parts[0]}, {parts[1]}" if len(parts) > 1 else parts[0]
-            return (street, parts[2], parts[3])
-        if len(parts) >= MIN_ADDRESS_PARTS_POSTAL:
-            # "Rue, CP Ville" ou "Rue Numéro, CP, Ville"
-            street = parts[0]
-            pcode_city = parts[1].strip().split()
-            if len(pcode_city) >= MIN_ADDRESS_PARTS:
-                return (street, pcode_city[0], " ".join(pcode_city[1:]))
-            return (
-                street,
-                parts[1],
-                parts[2] if len(parts) >= MIN_ADDRESS_PARTS_POSTAL else "Genève",
-            )
-        if len(parts) >= MIN_ADDRESS_PARTS:
-            last_part = parts[-1].strip().split()
-            if len(last_part) >= MIN_ADDRESS_PARTS:
-                return (parts[0], last_part[0], " ".join(last_part[1:]))
-        return (address, "1200", "Genève")
+        from services.documents.qr_debtor import parse_address_for_qrbill
+
+        return parse_address_for_qrbill(address)
 
     def _get_debtor_info(self, invoice) -> dict[str, Any]:
-        """Résout le débiteur (Payable par) pour le QR-bill."""
-        client = invoice.client
+        """Débiteur « Payable par » : snapshot si facture figée, sinon règles live."""
+        from services.documents.qr_debtor import resolve_invoice_qr_debtor
 
-        # S2 facture clinique mensuelle : débiteur = clinique
-        strategy_val = (
-            getattr(invoice.billing_strategy, "value", None)
-            if invoice.billing_strategy
-            else None
-        ) or str(getattr(invoice, "billing_strategy", "") or "")
-        if strategy_val == "s2_clinic_monthly" and getattr(
-            invoice, "billed_to_company_id", None
-        ):
-            debtor_name = "Clinique"
-            debtor_street = "Adresse non renseignée"
-            debtor_pcode = "1200"
-            debtor_city = "Genève"
-
-            bp = getattr(invoice, "billing_party", None)
-            if bp is not None:
-                debtor_name = (getattr(bp, "display_name", None) or "Clinique").strip()
-                addr = (getattr(bp, "billing_address", None) or "").strip()
-                if addr:
-                    debtor_street, debtor_pcode, debtor_city = (
-                        self._parse_address_for_qrbill(addr)
-                    )
-            else:
-                clinic = getattr(invoice, "billed_to_company", None)
-                if clinic is not None:
-                    debtor_name = (getattr(clinic, "name", None) or "Clinique").strip()
-                    line1 = (
-                        getattr(clinic, "domicile_address_line1", None) or ""
-                    ).strip()
-                    line2 = (
-                        getattr(clinic, "domicile_address_line2", None) or ""
-                    ).strip()
-                    debtor_street = (
-                        f"{line1} {line2}".strip() or "Adresse non renseignée"
-                    )
-                    debtor_pcode = getattr(clinic, "domicile_zip", None) or "1200"
-                    debtor_city = getattr(clinic, "domicile_city", None) or "Genève"
-
-            return {
-                "name": debtor_name,
-                "street": debtor_street,
-                "pcode": debtor_pcode,
-                "city": debtor_city,
-                "country": "CH",
-            }
-
-        # Facturation tierce : institution (bill_to_client_id)
-        if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
-            from models import Client as ClientModel
-
-            institution = ClientModel.query.get(invoice.bill_to_client_id)
-            if institution and institution.is_institution:
-                debtor_name = institution.institution_name or "Institution"
-                debtor_street = (
-                    institution.billing_address
-                    or institution.contact_address
-                    or "Adresse non renseignée"
-                )
-            else:
-                debtor_name = "Institution"
-                debtor_street = "Adresse non renseignée"
-            return {
-                "name": debtor_name,
-                "street": debtor_street,
-                "pcode": "1200",
-                "city": "Genève",
-                "country": "CH",
-            }
-
-        # Facturation directe : client
-        # Pour les clients institution avec facturation patient (S1_PATIENT),
-        # le débiteur est le patient réel, pas la clinique.
-        _is_inst_patient = (
-            client
-            and getattr(client, "is_institution", False)
-            and strategy_val == "s1_patient"
-        )
-        if _is_inst_patient:
-            return self._get_debtor_for_institution_patient(invoice, client)
-
-        debtor_name = (
-            (f"{client.user.first_name or ''} {client.user.last_name or ''}").strip()
-            or client.user.username
-            or "Client"
-        )
-        debtor_street = "Adresse non renseignée"
-        debtor_pcode = "1200"
-        debtor_city = "Genève"
-        if hasattr(client, "domicile_address") and client.domicile_address:
-            debtor_street = client.domicile_address
-            if hasattr(client, "domicile_zip") and client.domicile_zip:
-                debtor_pcode = client.domicile_zip
-            if hasattr(client, "domicile_city") and client.domicile_city:
-                debtor_city = client.domicile_city
-        elif (
-            hasattr(client, "user")
-            and client.user
-            and hasattr(client.user, "address")
-            and client.user.address
-        ):
-            parts = [p.strip() for p in client.user.address.split(",")]
-            if len(parts) >= MIN_ADDRESS_PARTS:
-                debtor_street = f"{parts[0]}, {parts[1]}"
-            if len(parts) >= MIN_ADDRESS_PARTS_POSTAL:
-                debtor_pcode = parts[2]
-            if len(parts) >= MIN_ADDRESS_PARTS_CITY:
-                debtor_city = parts[3]
-
-        return {
-            "name": debtor_name,
-            "street": debtor_street,
-            "pcode": debtor_pcode,
-            "city": debtor_city,
-            "country": "CH",
-        }
+        return resolve_invoice_qr_debtor(invoice).to_qrbill_dict()
 
     def _get_debtor_for_institution_patient(self, invoice, client) -> dict[str, Any]:
-        """Résout le débiteur pour une facture patient d'un client institution.
+        """Compatibilité tests / appels internes : débiteur S1 institution live."""
+        from services.documents.qr_debtor import _live_institution_patient
 
-        Cherche le nom du patient depuis booking.customer_name et l'adresse
-        depuis InstitutionPatient.
-        """
-        from models import Booking
+        return _live_institution_patient(invoice, client).to_qrbill_dict()
 
-        debtor_name = "Patient"
-        debtor_street = "Adresse non renseignée"
-        debtor_pcode = "1200"
-        debtor_city = "Genève"
+    def _get_creditor_info(self, company, invoice=None):
+        """Créancier QR : snapshot si facture figée, sinon master data live."""
+        from services.documents.qr_creditor import (
+            resolve_invoice_qr_creditor,
+            resolve_qr_creditor_live,
+        )
 
-        # Nom du patient depuis le premier booking
-        if hasattr(invoice, "lines") and invoice.lines:
-            for line in invoice.lines:
-                if line.reservation_id:
-                    bk = Booking.query.get(line.reservation_id)
-                    if bk and bk.customer_name:
-                        debtor_name = bk.customer_name
-                        break
-
-        # Adresse du patient depuis InstitutionPatient
-        linked_inst_id = getattr(client, "linked_institution_id", None)
-        if linked_inst_id:
-            try:
-                from models.institution_patient import InstitutionPatient
-                from models.transport_request import TransportRequest
-
-                tr = (
-                    TransportRequest.query.filter_by(
-                        institution_id=linked_inst_id,
-                    )
-                    .order_by(TransportRequest.id.desc())
-                    .first()
-                )
-                if tr and tr.patient_id:
-                    ip = InstitutionPatient.query.get(tr.patient_id)
-                    if ip:
-                        if debtor_name == "Patient":
-                            debtor_name = (
-                                f"{ip.first_name or ''} {ip.last_name or ''}".strip()
-                                or "Patient"
-                            )
-                        addr_parts = [
-                            ip.address or "",
-                            ip.postal_code or "",
-                            ip.city or "",
-                        ]
-                        addr_str = ", ".join(p for p in addr_parts if p)
-                        if addr_str:
-                            debtor_street, debtor_pcode, debtor_city = (
-                                self._parse_address_for_qrbill(addr_str)
-                            )
-            except Exception as e:
-                logging.getLogger(__name__).warning(
-                    "[QR-Bill] Patient lookup error: %s", e
-                )
-
-        return {
-            "name": debtor_name,
-            "street": debtor_street,
-            "pcode": debtor_pcode,
-            "city": debtor_city,
-            "country": "CH",
-        }
-
-    def _get_creditor_info(self, company):
-        """✅ Méthode helper pour obtenir toutes les infos du créancier (entreprise).
-
-        Utilise CompanyBillingProfile comme source unique.
-        Retourne adresse + IBAN + mode de paiement.
-
-        Returns:
-            dict: {
-                'address': {...},  # Adresse structurée
-                'iban': str,       # IBAN du profil
-                'address_type': 'S' ou 'K'  # Type d'adresse QR-Bill
-            }
-        """
-        # Essayer de récupérer le profil de facturation
-        profile = BillingProfileService.get_by_company_id(company.id)
-
-        if profile:
-            # ✅ Utiliser le profil comme source unique
-            # Type S (Structured) : rue et numéro séparés
-            # Si building_number est vide, street_name contient déjà l'adresse complète
-            if profile.building_number and profile.building_number.strip():
-                creditor_street = (
-                    f"{profile.street_name} {profile.building_number}".strip()
-                )
-            else:
-                creditor_street = profile.street_name or ""
-            creditor_pcode = profile.postal_code
-            creditor_city = profile.city
-            creditor_country = profile.country_code
-            creditor_name = profile.legal_name
-
-            # IBAN depuis le profil (priorité : qr_iban puis iban)
-            iban = profile.qr_iban or profile.iban
-
-            address_type = "S"  # Type structuré
-
-            app_logger.debug(
-                "[QR-Bill] Utilisation profil (ID=%s) pour company_id=%s (Type %s)",
-                profile.id,
-                company.id,
-                address_type,
-            )
+        if invoice is not None:
+            creditor = resolve_invoice_qr_creditor(invoice)
         else:
-            # Fallback sur les anciennes données (Type K - Combined)
-            app_logger.warning(
-                "[QR-Bill] Pas de profil pour company_id=%s, utilisation données company.* (Type K)",
-                company.id,
-            )
-            creditor_street = (
-                company.domicile_address_line1
-                or company.address
-                or "[Adresse non configurée]"
-            )
-            creditor_pcode = company.domicile_zip or "0000"
-            creditor_city = company.domicile_city or "[Ville non configurée]"
-            creditor_country = company.domicile_country or "CH"
-            creditor_name = company.name or "[Entreprise non configurée]"
-
-            # IBAN depuis company.iban (fallback)
-            iban = company.iban or None
-
-            address_type = "K"  # Type combiné (fallback)
-
+            proxy = type(
+                "InvoiceProxy", (), {"company": company, "company_id": company.id}
+            )()
+            creditor = resolve_qr_creditor_live(proxy)
         return {
-            "address": {
-                "name": creditor_name,
-                "street": creditor_street,
-                "pcode": creditor_pcode,
-                "city": creditor_city,
-                "country": creditor_country,
-            },
-            "iban": iban,
-            "address_type": address_type,
+            "address": creditor.to_qrbill_address(),
+            "iban": creditor.account or None,
+            "address_type": creditor.address_type,
         }
+
+    def _resolve_qr_account_and_creditor(self, invoice):
+        from services.documents.qr_creditor import resolve_invoice_qr_creditor
+
+        creditor = resolve_invoice_qr_creditor(invoice)
+        return creditor.account or None, creditor.to_qrbill_address()
 
     def generate_qr_bill_svg(self, invoice, override_amount=None):
         """Génère un QR-Bill SVG pour une facture.
@@ -526,25 +277,8 @@ class QRBillService:
                 (ex. total rappel incluant les frais).
         """
         try:
-            # Récupérer les paramètres de facturation
-            billing_settings = CompanyBillingSettings.query.filter_by(
-                company_id=invoice.company_id
-            ).first()
-            # Récupérer les informations de la facture
-            company = invoice.company
-
-            # Débiteur : S2 clinique, institution tierce ou client direct
             debtor_data = self._get_debtor_info(invoice)
-
-            # ✅ Utiliser l'adresse de domiciliation (cohérence avec PDF)
-            creditor_info = self._get_creditor_info(company)
-            creditor_data = creditor_info["address"]
-            iban_from_profile = creditor_info["iban"]
-
-            # Utiliser l'IBAN du profil en priorité (fallback sur billing_settings)
-            iban_to_use = iban_from_profile or (
-                billing_settings.iban if billing_settings else None
-            )
+            iban_to_use, creditor_data = self._resolve_qr_account_and_creditor(invoice)
 
             if not iban_to_use:
                 app_logger.warning(
@@ -599,26 +333,8 @@ class QRBillService:
     def generate_qr_bill(self, invoice):
         """Génère un QR-Bill pour une facture."""
         try:
-            # Récupérer les paramètres de facturation
-            billing_settings = CompanyBillingSettings.query.filter_by(
-                company_id=invoice.company_id
-            ).first()
-
-            # Récupérer les informations de la facture
-            company = invoice.company
-
-            # Débiteur : S2 clinique, institution tierce ou client direct
             debtor_data = self._get_debtor_info(invoice)
-
-            # ✅ Utiliser l'adresse de domiciliation (cohérence avec PDF)
-            creditor_info = self._get_creditor_info(company)
-            creditor_data = creditor_info["address"]
-            iban_from_profile = creditor_info["iban"]
-
-            # Utiliser l'IBAN du profil en priorité (fallback sur billing_settings)
-            iban_to_use = iban_from_profile or (
-                billing_settings.iban if billing_settings else None
-            )
+            iban_to_use, creditor_data = self._resolve_qr_account_and_creditor(invoice)
 
             if not iban_to_use:
                 app_logger.warning(

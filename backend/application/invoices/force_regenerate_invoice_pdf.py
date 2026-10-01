@@ -56,16 +56,23 @@ def reload_invoice_graph_for_pdf(invoice_id: int, company_id: int) -> Invoice | 
 
 
 def sync_patient_billing_party_from_live(invoice: Invoice) -> None:
-    """Aligne un BillingParty PATIENT sur le client / patient actuel.
+    """Aligne un BillingParty PATIENT sur le client / patient actuel (brouillon seulement).
 
     Ne touche pas aux numéros, montants, lignes ni au type de payeur.
     Un tiers payeur (organisme) n'est jamais réécrit depuis le client.
+    Une facture figée (hors DRAFT) rend son bloc « Facturé à » depuis le snapshot :
+    ses master data ne sont jamais réécrites à l'occasion d'une régénération.
     """
     from models.enums import BillingPartyType
-    from services.documents.invoice_recipient import live_patient_payer_identity
+    from services.documents.invoice_recipient import (
+        invoice_billed_to_is_frozen,
+        live_patient_payer_identity,
+    )
 
     bp = getattr(invoice, "billing_party", None)
     if bp is None:
+        return
+    if invoice_billed_to_is_frozen(invoice):
         return
     if getattr(bp, "type", None) != BillingPartyType.PATIENT:
         db.session.refresh(bp)
@@ -90,7 +97,15 @@ def sync_patient_billing_party_from_live(invoice: Invoice) -> None:
 
 
 def refresh_recipient_snapshot_meta(invoice: Invoice) -> None:
-    """Si un recipient_snapshot existe, le remplacer par les valeurs courantes."""
+    """Brouillon : si un recipient_snapshot (payeur) existe, l'aligner sur les valeurs courantes.
+
+    Facture figée : le snapshot payeur n'est plus réécrit (cohérence avec le
+    ``billed_to_snapshot`` immuable).
+    """
+    from services.documents.invoice_recipient import invoice_billed_to_is_frozen
+
+    if invoice_billed_to_is_frozen(invoice):
+        return
     meta = normalize_invoice_meta_dict(invoice.meta)
     if "recipient_snapshot" not in meta:
         return
