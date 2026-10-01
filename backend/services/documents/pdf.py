@@ -2542,33 +2542,39 @@ def _pdf_s2_ar_tag_markup() -> str:
 
 def _collect_adjustment_notes_from_consolidated_item(
     item: dict[str, Any],
-) -> str | None:
-    """Notes d'ajustement (ex. remise %) — trajets A/R = union des deux lignes, sans doublon."""
-    notes: list[str] = []
-    if item.get("is_round_trip"):
-        for key in ("line1", "line2"):
-            ln = item.get(key)
-            raw = getattr(ln, "adjustment_note", None) if ln is not None else None
-            if raw is not None:
-                s = str(raw).strip()
-                if s:
-                    notes.append(s)
-    else:
-        ln = item.get("line")
-        raw = getattr(ln, "adjustment_note", None) if ln is not None else None
-        if raw is not None:
-            s = str(raw).strip()
-            if s:
-                notes.append(s)
-    seen: set[str] = set()
-    unique: list[str] = []
-    for n in notes:
-        if n not in seen:
-            seen.add(n)
-            unique.append(n)
-    if not unique:
-        return None
-    return " · ".join(unique) if len(unique) > 1 else unique[0]
+) -> list[str]:
+    """Notes client-visibles (``adjustment_note``) de toutes les lignes sources.
+
+    Ne se fie pas à ``is_round_trip`` : un A/R fusionné n'a souvent que ``line``.
+    Doublons exacts exclus ; ordre = primaire puis retour puis ``line``.
+    """
+    from application.invoices.invoice_line_customer_note import (
+        collect_notes_from_consolidated_item,
+    )
+
+    return collect_notes_from_consolidated_item(item)
+
+
+def _pdf_customer_visible_note_suffix(notes: list[str]) -> str:
+    """Note(s) sous la prestation, chacune sur sa propre ligne — jamais dans la colonne montant."""
+    if not notes:
+        return ""
+    blocks: list[str] = []
+    for note in notes:
+        escaped_lines = [
+            _xml_escape_for_paragraph(part)
+            for part in str(note).splitlines()
+            if part.strip()
+        ]
+        if not escaped_lines:
+            continue
+        inner = "<br/>".join(escaped_lines)
+        blocks.append(
+            f'<font size="{int(FONT_SECONDARY)}" color="#6b7280"><i>{inner}</i></font>'
+        )
+    if not blocks:
+        return ""
+    return "<br/>" + "<br/>".join(blocks)
 
 
 def _gd_percent_hint_display(raw: Any) -> str:
@@ -3668,14 +3674,8 @@ def _build_s2_table(
         cat_disp, net_disp = _consolidated_row_catalog_net(item)
         if suppress_line_discount_breakdown:
             cat_disp = None
-        adj_note = _collect_adjustment_notes_from_consolidated_item(item)
-        note_suffix = ""
-        if adj_note:
-            esc_n = _xml_escape_for_paragraph(adj_note)
-            note_suffix = (
-                f'<br/><font size="{int(FONT_SECONDARY)}" color="#6b7280">'
-                f"<i>{esc_n}</i></font>"
-            )
+        adj_notes = _collect_adjustment_notes_from_consolidated_item(item)
+        note_suffix = _pdf_customer_visible_note_suffix(adj_notes)
         is_ar = _consolidated_item_shows_ar_tag_pdf(
             item,
             enriched_by_line_id,
@@ -3869,9 +3869,16 @@ def _build_s2_table(
                     desc_html = f'{esc_d}<br/><font size="{FONT_SECONDARY}" color="#64748b">{esc_s}</font>'
                 else:
                     desc_html = esc_d
-                desc_html = f"{desc_html}{disc_o}"
+                from application.invoices.invoice_line_customer_note import (
+                    collect_customer_visible_notes,
+                )
+
                 desc_html = _pdf_limit_html_br_lines(
-                    desc_html, max_simple_description_lines
+                    f"{desc_html}{disc_o}", max_simple_description_lines
+                )
+                desc_html = (
+                    f"{desc_html}"
+                    f"{_pdf_customer_visible_note_suffix(collect_customer_visible_notes([line]))}"
                 )
                 desc_cell = Paragraph(desc_html, s2_main_style)
                 amt_cell_o = _pdf_s2_amount_only_paragraph(
@@ -3900,7 +3907,12 @@ def _build_s2_table(
             if line.line_total is None:
                 continue
             amt = line.line_total
-            if amt == 0:
+            from application.invoices.invoice_line_customer_note import (
+                collect_customer_visible_notes,
+            )
+
+            orphan_notes = collect_customer_visible_notes([line])
+            if amt == 0 and not orphan_notes:
                 continue
             cat_or, net_or = _line_catalog_vs_net_ht(line)
             lm_or = _resolve_invoice_line_meta(line, enriched_by_line_id)
@@ -3989,7 +4001,9 @@ def _build_s2_table(
                         f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : '
                         f"{_xml_escape_for_paragraph(pn_disp)}</font><br/>"
                     )
-            orphan_inner_html = f"{esc_d}{disc_or}"
+            orphan_inner_html = (
+                f"{esc_d}{disc_or}{_pdf_customer_visible_note_suffix(orphan_notes)}"
+            )
             desc_cell = Paragraph(
                 f"{orphan_pn_prefix}{orphan_inner_html}", s2_main_style
             )

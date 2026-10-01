@@ -251,6 +251,7 @@
   font-size: var(--font-secondary-px);
   color: #6b7280;
   font-style: italic;
+  white-space: pre-wrap;
 }
 
 .globalDiscHint {

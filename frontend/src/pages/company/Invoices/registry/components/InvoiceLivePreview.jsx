@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { formatCurrencyCHF } from '../../../../../services/invoiceService';
+import { collectCustomerVisibleNotesForPreview } from '../../../../../utils/invoiceLineCustomerNote';
 import { formatPatientDisplayNameNomPrenom } from '../../../../../utils/patientDisplayName';
 import {
   getRoundTripAuditLegs,
@@ -528,10 +529,10 @@ export default function InvoiceLivePreview({
                     'MATERIAL_DELIVERY',
                   );
                 }
-                const adjNote =
-                  line.adjustment_note != null && line.adjustment_note !== ''
-                    ? safeText(line.adjustment_note, '')
-                    : '';
+                const adjNotes = collectCustomerVisibleNotesForPreview(
+                  line,
+                  invoice?.lines,
+                );
                 const { ht, vat, ttc } = mergedRoundTripAmounts(line, mergePartner);
                 const auditLegs = auditableRoundTrip ? getRoundTripAuditLegs(line) : null;
                 return (
@@ -589,7 +590,11 @@ export default function InvoiceLivePreview({
                           {cn.cat.toFixed(2)} → {cn.net.toFixed(2)} CHF HT
                         </div>
                       ) : null}
-                      {adjNote !== '' ? <div className={styles.lineNote}>{adjNote}</div> : null}
+                      {adjNotes.map((note) => (
+                        <div key={note} className={styles.lineNote}>
+                          {note}
+                        </div>
+                      ))}
                     </td>
                     <td className={styles.colNum}>{Number.isFinite(ht) ? ht.toFixed(2) : '—'}</td>
                     {showVatColumn ? (
