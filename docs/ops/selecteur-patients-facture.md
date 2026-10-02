@@ -9,3 +9,5 @@ Le menu affiche ce total comme **montant estimé**. La prévisualisation et **Pr
 Le résultat est mis en cache Redis 60 secondes (`billing:candidates:patient:company_{id}:{période}`). La création d'une facture patient n'invalide que cette clé : même entreprise, même mois, type patient.
 
 L'index existant `ix_booking_company_scheduled` (`company_id`, `scheduled_time`) borne la recherche au mois de l'entreprise. Institutions et partenaires ne sont chargés que si leur onglet est ouvert.
+
+✅ **Implémenté** : le menu patient lit `pendingValidation.count` et `disputed.count` via `presentPatientInvoiceSummary`. Ces deux objets sont toujours renvoyés (`frontend/src/utils/payerInvoiceSummaryUi.js`). L’accès dans `BillPeriodModal.jsx` tolère leur absence, pour ne plus remplacer toute la page factures par « Cannot read properties of undefined (reading 'count') ».

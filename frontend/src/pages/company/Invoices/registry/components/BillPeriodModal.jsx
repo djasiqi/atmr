@@ -1039,12 +1039,13 @@ const BillPeriodModal = ({
         amt != null && (segments > 0 || Number(amt) > 0 || !summary.gateHeld)
           ? ` · montant estimé ${formatCurrencyCHF(amt)}`
           : '';
-      const pending = summary.pendingValidation.count;
+      const pending = summary.pendingValidation?.count || 0;
+      const disputedCount = summary.disputed?.count || 0;
       const pendingTxt =
         pending > 0
           ? ` — ${pending} en attente de validation institution`
-          : summary.disputed.count > 0
-            ? ` — ${summary.disputed.count} contestée${summary.disputed.count > 1 ? 's' : ''}`
+          : disputedCount > 0
+            ? ` — ${disputedCount} contestée${disputedCount > 1 ? 's' : ''}`
             : '';
       const blocked = summary.blocked ? ' [à compléter]' : '';
       return {

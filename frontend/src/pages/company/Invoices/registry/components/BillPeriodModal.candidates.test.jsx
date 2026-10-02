@@ -58,6 +58,32 @@ describe('BillPeriodModal — sélecteur patient', () => {
     expect(screen.queryByText('Chargement des patients à facturer…')).not.toBeInTheDocument();
   });
 
+  it('affiche les patients reçus sans fermer la fenêtre', async () => {
+    const now = new Date();
+    const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    invoiceService.fetchInvoiceCandidates.mockResolvedValue({
+      period,
+      patients: [
+        {
+          id: 'client:1|billing_party:2',
+          name: 'Jean Dupont',
+          billable_count: 1,
+          amount: 40,
+          client_id: 1,
+          billing_party_id: 2,
+        },
+      ],
+    });
+
+    renderOpen();
+
+    const patient = await screen.findByRole('combobox', { name: 'Patient' });
+    await waitFor(() => expect(patient).toBeEnabled());
+    await userEvent.click(patient);
+    expect(await screen.findByRole('option', { name: /Jean Dupont/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Nouvelle facture' })).toBeInTheDocument();
+  });
+
   it('ne charge les institutions que lorsque leur onglet est choisi', async () => {
     renderOpen();
     await userEvent.click(screen.getByRole('radio', { name: /institution/i }));
