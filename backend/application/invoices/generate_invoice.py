@@ -325,8 +325,23 @@ class GenerateInvoiceUseCase:
                         },
                         status_code=HTTP_422_UNPROCESSABLE,
                     )
+                from services.billing.effective_patient_payer import (
+                    resolve_effective_party_id_for_bookings,
+                )
+
+                # La clé du frontend n'est pas l'autorité : un BP PATIENT
+                # technique cède au tiers payeur résolu sur les courses.
+                resolved_party_id = resolve_effective_party_id_for_bookings(
+                    opportunity_reservations,
+                    company_id=int(input_data.company_id),
+                )
+                party_id = (
+                    int(resolved_party_id)
+                    if resolved_party_id is not None
+                    else int(parsed.billing_party_id)
+                )
                 bp = BillingParty.query.filter_by(
-                    id=int(parsed.billing_party_id),
+                    id=party_id,
                     company_id=input_data.company_id,
                     is_active=True,
                 ).first()
@@ -410,7 +425,7 @@ class GenerateInvoiceUseCase:
                 draft_q = Invoice.query.filter(
                     and_(
                         Invoice.company_id == input_data.company_id,
-                        Invoice.billing_party_id == parsed.billing_party_id,
+                        Invoice.billing_party_id == opportunity_billing_party_id,
                         Invoice.period_year == input_data.period_year,
                         Invoice.period_month == input_data.period_month,
                         Invoice.status == InvoiceStatus.DRAFT,

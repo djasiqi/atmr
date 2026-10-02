@@ -339,13 +339,23 @@ def resolve_billing_party_for_portfolio_patient(
 
 
 def ensure_patient_destination_billing_party(booking) -> BillingParty | None:
-    """Quand ``billed_to_type=patient``, aligne ``billing_party_id`` sur un BP patient.
+    """Quand ``billed_to_type=patient``, aligne ``billing_party_id``.
 
-    - Conserve un BP non-établissement (patient, curatelle, famille…).
-    - Remplace un BP clinique/EMS/hôpital (ou absent) par un BP PATIENT
-      (InstitutionPatient ou portefeuille).
+    - Une décision verrouillée ou un override explicite est conservée.
+    - Un tiers réel (curatelle, famille…) est conservé.
+    - Un BillingParty PATIENT technique, non verrouillé, cède au tiers par défaut.
+    - Un BP établissement (ou absent) est remplacé par le tiers, sinon par un
+      BP PATIENT (InstitutionPatient ou portefeuille).
     - Force ``billed_to_company_id = NULL``.
     """
+    from services.billing.client_stay_resolver import (
+        resolve_default_billing_party_for_client,
+    )
+    from services.billing.effective_patient_payer import (
+        billing_choice_is_locked,
+        is_technical_patient_billing_party,
+    )
+
     btype = str(getattr(booking, "billed_to_type", None) or "").lower().strip()
     if btype != "patient":
         return None
@@ -361,8 +371,26 @@ def ensure_patient_destination_billing_party(booking) -> BillingParty | None:
     if bp_id is not None:
         current_bp = db.session.get(BillingParty, int(bp_id))
 
-    if current_bp is not None and not is_establishment_billing_party(current_bp):
+    if billing_choice_is_locked(booking) and current_bp is not None:
         return current_bp
+
+    replaceable_technical = is_technical_patient_billing_party(current_bp)
+    if (
+        current_bp is not None
+        and not is_establishment_billing_party(current_bp)
+        and not replaceable_technical
+    ):
+        return current_bp
+
+    client_id = getattr(booking, "client_id", None)
+    if client_id is not None:
+        third = resolve_default_billing_party_for_client(
+            client_id=int(client_id),
+            company_id=int(company_id),
+        )
+        if third is not None and not is_establishment_billing_party(third):
+            booking.billing_party_id = int(third.id)
+            return third
 
     ip_id = getattr(booking, "institution_patient_id", None)
     if ip_id is not None:

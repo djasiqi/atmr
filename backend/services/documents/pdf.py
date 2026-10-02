@@ -5147,6 +5147,14 @@ class PDFService:
                 msg = "Facture non trouvée"
                 raise ValueError(msg)
 
+            from application.invoices.force_regenerate_invoice_pdf import (
+                reconcile_draft_invoice_billing_party,
+            )
+
+            # Brouillon seulement : un BP PATIENT technique cède au tiers effectif.
+            # Une facture figée conserve son snapshot.
+            reconcile_draft_invoice_billing_party(invoice)
+
             # Factures éditables : même source de vérité que l'éditeur (Σ TTC lignes après canonique HT+TVA).
             # Sinon le pied de PDF peut rester obsolète après modification des lignes (envoyée, etc.).
             from application.invoices.edit_draft_invoice import (

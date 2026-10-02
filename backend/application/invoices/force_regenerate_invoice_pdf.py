@@ -55,6 +55,94 @@ def reload_invoice_graph_for_pdf(invoice_id: int, company_id: int) -> Invoice | 
     )
 
 
+def reconcile_draft_invoice_billing_party(invoice: Invoice) -> bool:
+    """Brouillon : remplace un BP PATIENT technique par le payeur effectif.
+
+    Ne change ni les montants, ni les lignes, ni une facture déjà figée.
+    ``sync_patient_billing_party_from_live`` ne fait pas cette bascule : il
+    ne réécrit que le nom et l'adresse du BP PATIENT.
+    """
+    from models import Booking
+    from models.billing_party import BillingParty
+    from services.billing.billing_party_linker import is_establishment_billing_party
+    from services.billing.client_stay_resolver import (
+        resolve_default_billing_party_for_client,
+    )
+    from services.billing.effective_patient_payer import (
+        is_technical_patient_billing_party,
+        resolve_effective_party_id_for_bookings,
+    )
+    from services.documents.invoice_recipient import (
+        BILLED_TO_SNAPSHOT_KEY,
+        invoice_billed_to_is_frozen,
+    )
+
+    if invoice_billed_to_is_frozen(invoice):
+        return False
+    party = getattr(invoice, "billing_party", None)
+    if party is None and getattr(invoice, "billing_party_id", None) is not None:
+        party = db.session.get(BillingParty, int(invoice.billing_party_id))
+    if not is_technical_patient_billing_party(party):
+        return False
+
+    company_id = int(invoice.company_id)
+    line_ids = [
+        int(line.id)
+        for line in (getattr(invoice, "lines", None) or [])
+        if getattr(line, "id", None) is not None
+    ]
+    bookings = (
+        Booking.query.filter(Booking.invoice_line_id.in_(line_ids)).all()
+        if line_ids
+        else []
+    )
+    effective_id: int | None
+    if bookings:
+        effective_id = resolve_effective_party_id_for_bookings(
+            bookings, company_id=company_id
+        )
+    else:
+        third = None
+        if getattr(invoice, "client_id", None) is not None:
+            third = resolve_default_billing_party_for_client(
+                client_id=int(invoice.client_id),
+                company_id=company_id,
+            )
+        if third is not None and not is_establishment_billing_party(third):
+            effective_id = int(third.id)
+        else:
+            effective_id = None
+    if effective_id is None or int(effective_id) == int(party.id):
+        return False
+    target = db.session.get(BillingParty, int(effective_id))
+    if target is None or is_technical_patient_billing_party(target):
+        return False
+
+    invoice.billing_party_id = int(target.id)
+    invoice.billing_party = target
+    meta = normalize_invoice_meta_dict(invoice.meta)
+    # Le brouillon se rend depuis les master data ; l'ancien snapshot patient_self
+    # ne doit plus être servi par un client qui lit ``meta``.
+    meta.pop(BILLED_TO_SNAPSHOT_KEY, None)
+    if "recipient_snapshot" in meta:
+        snap = meta.get("recipient_snapshot")
+        snap = dict(snap) if isinstance(snap, dict) else {}
+        snap["billing_party_id"] = target.id
+        snap["display_name"] = target.display_name
+        snap["billing_address"] = target.billing_address
+        snap["type"] = getattr(target.type, "value", None) or str(target.type)
+        meta["recipient_snapshot"] = snap
+    invoice.meta = meta
+    db.session.flush()
+    logger.info(
+        "[PDF] Brouillon réconcilié vers le tiers payeur "
+        "(invoice_id=%s, billing_party_id=%s)",
+        getattr(invoice, "id", None),
+        target.id,
+    )
+    return True
+
+
 def sync_patient_billing_party_from_live(invoice: Invoice) -> None:
     """Aligne un BillingParty PATIENT sur le client / patient actuel (brouillon seulement).
 
@@ -174,6 +262,8 @@ class ForceRegenerateInvoicePdfUseCase:
             )
 
         previous_pdf_url = invoice.pdf_url
+        reconcile_draft_invoice_billing_party(invoice)
+        db.session.flush()
         sync_patient_billing_party_from_live(invoice)
         refresh_recipient_snapshot_meta(invoice)
 

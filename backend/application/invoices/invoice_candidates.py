@@ -74,8 +74,25 @@ def _indicated_amount(booking: Any) -> Decimal:
     return Decimal(str(raw)).quantize(Decimal("0.01"))
 
 
-def group_patient_invoice_candidates(bookings: list[Any]) -> list[dict[str, Any]]:
-    """Regroupe des courses déjà filtrées (facturables, non revendiquées)."""
+def group_patient_invoice_candidates(
+    bookings: list[Any],
+    *,
+    party_id_of: Any = None,
+) -> list[dict[str, Any]]:
+    """Regroupe des courses déjà filtrées (facturables, non revendiquées).
+
+    ``party_id_of`` permet de regrouper sur le payeur effectif sans écrire
+    ``booking.billing_party_id``. Sans ce rappel, la valeur stockée est lue.
+    """
+
+    def _party_id(row: Any) -> int | None:
+        if party_id_of is not None:
+            resolved = party_id_of(row)
+            if resolved is not None:
+                return int(resolved)
+        raw = getattr(row, "billing_party_id", None)
+        return int(raw) if raw is not None else None
+
     grouped: dict[str, list[Any]] = defaultdict(list)
     for booking in bookings:
         subject = resolve_subject_identity(booking)
@@ -86,11 +103,7 @@ def group_patient_invoice_candidates(bookings: list[Any]) -> list[dict[str, Any]
     patients: list[dict[str, Any]] = []
     for subject_key, rows in grouped.items():
         subject = resolve_subject_identity(rows[0])
-        parties = [
-            int(row.billing_party_id)
-            for row in rows
-            if getattr(row, "billing_party_id", None) is not None
-        ]
+        parties = [party_id for row in rows if (party_id := _party_id(row)) is not None]
         if not parties:
             continue
         billing_party_id = sorted(
@@ -236,7 +249,24 @@ def list_patient_invoice_candidates(
     resolve_missing_institution_patient_ids(bookings, persist=False)
     attach_invoice_request_ids(bookings)
     eligible = filter_institution_invoice_eligible(bookings)
-    patients = _apply_display_names(group_patient_invoice_candidates(eligible))
+    def _effective_party_id(booking: Any) -> int | None:
+        # Lecture seule : ne pas assigner booking.billing_party_id (sale la session).
+        from services.billing.effective_patient_payer import (
+            resolve_effective_patient_billing_party,
+        )
+
+        party = resolve_effective_patient_billing_party(
+            booking=booking,
+            company_id=int(company_id),
+        )
+        if party is not None:
+            return int(party.id)
+        raw = getattr(booking, "billing_party_id", None)
+        return int(raw) if raw is not None else None
+
+    patients = _apply_display_names(
+        group_patient_invoice_candidates(eligible, party_id_of=_effective_party_id)
+    )
     payload = {
         "period": f"{int(period_year):04d}-{int(period_month):02d}",
         "patients": patients,
