@@ -79,7 +79,9 @@ def _client(db, company: Company) -> Client:
     return client
 
 
-def _party(db, company, *, party_type, name, address, external_ref=None) -> BillingParty:
+def _party(
+    db, company, *, party_type, name, address, external_ref=None
+) -> BillingParty:
     party = BillingParty()
     party.company_id = company.id
     party.type = party_type

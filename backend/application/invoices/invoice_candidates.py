@@ -249,6 +249,7 @@ def list_patient_invoice_candidates(
     resolve_missing_institution_patient_ids(bookings, persist=False)
     attach_invoice_request_ids(bookings)
     eligible = filter_institution_invoice_eligible(bookings)
+
     def _effective_party_id(booking: Any) -> int | None:
         # Lecture seule : ne pas assigner booking.billing_party_id (sale la session).
         from services.billing.effective_patient_payer import (
