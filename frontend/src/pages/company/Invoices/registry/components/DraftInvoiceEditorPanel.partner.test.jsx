@@ -1,6 +1,5 @@
 /**
- * Une facture partenaire ne doit jamais passer par GET /invoices/{id}
- * ni par l’aperçu HTML client (catalogues isolés).
+ * Facture partenaire : même éditeur, jamais GET /invoices/{id}.
  */
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -14,17 +13,35 @@ const partnerInvoice = {
   invoice_number: 'PARTNER-EM-2026-08-0097',
   is_partner_invoice: true,
   kind: 'partner',
+  billing_strategy: 'partner_monthly',
+  subject_contact: 'Accueil',
+  editor_header: true,
   total_amount: 40.5,
+  subtotal_amount: 40.5,
+  vat_amount: 0,
   issued_at: '2026-09-07T00:00:00',
   due_date: '2026-09-17',
   period_year: 2026,
   period_month: 8,
+  recipient_name: 'MT Genève',
+  recipient_contact: 'Accueil',
   pdf_url: '/uploads/partner-invoices/0097.pdf',
   client: {
     institution_name: 'MT Genève',
     is_institution: true,
   },
-  lines: [],
+  lines: [
+    {
+      id: 1,
+      type: 'ride',
+      description: 'Course Genève',
+      amount: 40.5,
+      line_total: 40.5,
+      quantity: 1,
+      unit_price: 40.5,
+      service_date: '2026-08-04',
+    },
+  ],
 };
 
 const mockGetInvoice = jest.fn(async () => {
@@ -33,11 +50,18 @@ const mockGetInvoice = jest.fn(async () => {
   });
 });
 
+const mockGetPartnerInvoice = jest.fn(async () => partnerInvoice);
+
 jest.mock('../../../../../services/invoiceService', () => ({
   getInvoice: (...args) => mockGetInvoice(...args),
   invoiceService: {
     fetchBillingSettings: jest.fn(async () => ({ vat_applicable: false })),
+    getPartnerInvoice: (...args) => mockGetPartnerInvoice(...args),
+    updatePartnerInvoice: jest.fn(),
     forceRegenerateInvoicePdf: jest.fn(),
+    forceRegeneratePartnerInvoicePdf: jest.fn(async () => ({
+      pdf_url: '/uploads/partner-invoices/0097.pdf',
+    })),
     regenerateInvoicePdf: jest.fn(),
     updateDraftInvoiceLine: jest.fn(),
   },
@@ -59,9 +83,10 @@ jest.mock('../../../../../utils/protectedPdf', () => ({
 describe('DraftInvoiceEditorPanel — facture partenaire', () => {
   beforeEach(() => {
     mockGetInvoice.mockClear();
+    mockGetPartnerInvoice.mockClear();
   });
 
-  it('n’appelle pas GET /invoices/{id} et n’affiche pas l’erreur de chargement', async () => {
+  it('charge le détail partenaire et affiche le même aperçu', async () => {
     render(
       <DraftInvoiceEditorPanel
         open
@@ -70,15 +95,16 @@ describe('DraftInvoiceEditorPanel — facture partenaire', () => {
       />
     );
 
-    await waitFor(() => {
-      expect(
-        screen.queryByText('Impossible de charger la facture.')
-      ).not.toBeInTheDocument();
-    });
+    expect(await screen.findByTestId('invoice-draft-toolbar')).toBeInTheDocument();
+    expect(screen.getByText('Aperçu facture')).toBeInTheDocument();
+    expect(screen.getByRole('document', { name: 'Aperçu facture' })).toBeInTheDocument();
+    expect(screen.getAllByText('PARTNER-EM-2026-08-0097').length).toBeGreaterThan(0);
+    expect(screen.getByText('Partenaire / Contact')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Informations facture' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Remises' })).toBeEnabled();
     expect(mockGetInvoice).not.toHaveBeenCalled();
-    expect(
-      screen.queryByText(/Aperçu HTML — le PDF officiel/i)
-    ).not.toBeInTheDocument();
+    expect(mockGetPartnerInvoice).toHaveBeenCalledWith(1, 34, { cacheBust: true });
+    expect(screen.queryByText('Impossible de charger la facture.')).not.toBeInTheDocument();
   });
 
   it('ignore un 404 /invoices/34 déjà parti quand le catalogue partenaire arrive', async () => {
@@ -117,12 +143,9 @@ describe('DraftInvoiceEditorPanel — facture partenaire', () => {
     );
 
     await waitFor(() => {
-      expect(
-        screen.queryByText('Impossible de charger la facture.')
-      ).not.toBeInTheDocument();
+      expect(mockGetPartnerInvoice).toHaveBeenCalled();
     });
-    expect(
-      screen.queryByText(/Aperçu HTML — le PDF officiel/i)
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Impossible de charger la facture.')).not.toBeInTheDocument();
+    expect(screen.getByRole('document', { name: 'Aperçu facture' })).toBeInTheDocument();
   });
 });

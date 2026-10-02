@@ -8,9 +8,15 @@ from typing import Any
 
 from application.invoices.partner_invoice_access import load_accessible_partner_invoice
 from application.invoices.partner_invoice_lines import (
+    PartnerDraftEditError,
+    add_partner_custom_line,
+    apply_partner_global_discount,
     apply_partner_invoice_line_updates,
+    apply_partner_per_line_discounts,
     ensure_partner_invoice_lines,
     recalculate_partner_invoice_totals,
+    remove_partner_invoice_line,
+    restore_partner_percent_discounts,
 )
 from application.invoices.partner_invoice_serialize import (
     serialize_partner_invoice_detail,
@@ -76,7 +82,68 @@ def update_partner_invoice_draft(
         )
 
     ensure_partner_invoice_lines(partner_invoice)
+    command = str(payload.get("command") or "").strip()
 
+    try:
+        if command:
+            _apply_partner_draft_command(partner_invoice, command, payload)
+            recalculate_partner_invoice_totals(partner_invoice)
+        else:
+            _apply_partner_header_and_lines(partner_invoice, payload)
+    except PartnerDraftEditError as exc:
+        db.session.rollback()
+        return UpdatePartnerInvoiceResult(
+            ok=False,
+            error={"error": str(exc)},
+            status_code=exc.status_code,
+        )
+
+    db.session.commit()
+    refreshed = load_accessible_partner_invoice(company_id, partner_invoice_id)
+    assert refreshed is not None
+    return UpdatePartnerInvoiceResult(
+        ok=True,
+        invoice=serialize_partner_invoice_detail(refreshed, company_id=company_id),
+    )
+
+
+def _apply_partner_draft_command(
+    partner_invoice: Any, command: str, payload: dict[str, Any]
+) -> None:
+    """Commandes d'édition isolées — jamais les routes /invoices/{id}."""
+    if command == "add_custom_line":
+        add_partner_custom_line(partner_invoice, payload)
+        return
+    if command == "remove_line":
+        line_id = payload.get("line_id")
+        if line_id is None:
+            raise PartnerDraftEditError("line_id requis")
+        remove_partner_invoice_line(partner_invoice, int(line_id))
+        return
+    if command == "apply_global_discount":
+        try:
+            percent = float(payload.get("global_discount_percent") or 0)
+        except (TypeError, ValueError) as exc:
+            raise PartnerDraftEditError("Remise: pourcentage invalide (0-100]") from exc
+        apply_partner_global_discount(
+            partner_invoice,
+            percent=percent,
+            note=payload.get("global_discount_note"),
+        )
+        return
+    if command == "apply_per_line_discounts":
+        raw = payload.get("line_discounts")
+        if not isinstance(raw, list):
+            raise PartnerDraftEditError("line_discounts requis")
+        apply_partner_per_line_discounts(partner_invoice, raw)
+        return
+    if command == "remove_discount":
+        restore_partner_percent_discounts(partner_invoice)
+        return
+    raise PartnerDraftEditError(f"Commande partenaire inconnue: {command}")
+
+
+def _apply_partner_header_and_lines(partner_invoice: Any, payload: dict[str, Any]) -> None:
     if "notes" in payload:
         notes = payload.get("notes")
         partner_invoice.notes = str(notes)[:1000] if notes else None
@@ -94,11 +161,7 @@ def update_partner_invoice_draft(
     if "period_month" in payload and payload["period_month"] is not None:
         month = int(payload["period_month"])
         if month < 1 or month > 12:
-            return UpdatePartnerInvoiceResult(
-                ok=False,
-                error={"error": "Mois de période invalide"},
-                status_code=400,
-            )
+            raise PartnerDraftEditError("Mois de période invalide")
         partner_invoice.period_month = month
     if "issued_at" in payload:
         issued = _parse_datetime(payload.get("issued_at"))
@@ -113,11 +176,3 @@ def update_partner_invoice_draft(
     if isinstance(lines_payload, list):
         apply_partner_invoice_line_updates(partner_invoice, lines_payload)
         recalculate_partner_invoice_totals(partner_invoice)
-
-    db.session.commit()
-    refreshed = load_accessible_partner_invoice(company_id, partner_invoice_id)
-    assert refreshed is not None
-    return UpdatePartnerInvoiceResult(
-        ok=True,
-        invoice=serialize_partner_invoice_detail(refreshed, company_id=company_id),
-    )

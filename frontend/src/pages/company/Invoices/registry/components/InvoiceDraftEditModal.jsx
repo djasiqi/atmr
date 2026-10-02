@@ -2,13 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
 import DraftInvoiceEditorPanel from './DraftInvoiceEditorPanel';
-import PartnerInvoiceDraftEditModal from './PartnerInvoiceDraftEditModal';
-import { INVOICE_CATALOG, resolveInvoiceResource } from '../../../../../utils/invoiceCatalog';
+import { invoiceCatalogRowKey } from '../../../../../utils/invoiceCatalog';
 import styles from './InvoiceDraftEditModal.module.css';
 
 /**
- * Édition facture depuis le registre.
- * Catalogue partenaire → éditeur partenaire natif (jamais GET /invoices/{id}).
+ * Éditeur unique (patient, clinique, partenaire).
+ * Le catalogue est porté par l'adaptateur, pas par un second formulaire.
  */
 const InvoiceDraftEditModal = ({
   open,
@@ -33,22 +32,7 @@ const InvoiceDraftEditModal = ({
     };
   }, []);
 
-  if (!open || !initialInvoice) return null;
-
-  const resource = resolveInvoiceResource(initialInvoice, companyId);
-  if (resource.type === INVOICE_CATALOG.PARTNER) {
-    return (
-      <PartnerInvoiceDraftEditModal
-        open={open}
-        initialInvoice={initialInvoice}
-        companyId={companyId}
-        onClose={onClose}
-        onUpdated={onUpdated}
-      />
-    );
-  }
-
-  if (!portalTarget) return null;
+  if (!open || !initialInvoice || !portalTarget) return null;
 
   return createPortal(
     <div className={styles.overlay} onClick={onClose} role="presentation">
@@ -65,7 +49,7 @@ const InvoiceDraftEditModal = ({
           </button>
         </div>
         <DraftInvoiceEditorPanel
-          key={initialInvoice?.id ?? 'draft'}
+          key={invoiceCatalogRowKey(initialInvoice, companyId) || 'draft'}
           open={open}
           initialInvoice={initialInvoice}
           companyId={companyId}

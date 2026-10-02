@@ -2948,3 +2948,29 @@
   }
 }
 
+.infoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.infoField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--text-secondary, #4b5563);
+}
+
+.infoField:nth-child(3),
+.infoField:nth-child(4) {
+  grid-column: 1 / -1;
+}
+
+.infoGrid .btnPrimary {
+  grid-column: 1 / -1;
+  justify-self: start;
+  width: auto;
+}
+

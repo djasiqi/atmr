@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from application.invoices.add_partner_invoice_payment import add_partner_invoice_payment
 from application.invoices.cancel_partner_invoice import cancel_partner_invoice
 from application.invoices.force_regenerate_partner_invoice_pdf import (
@@ -186,3 +188,67 @@ def test_get_inconnu_404(db):
     result = get_partner_invoice(company_id=company.id, partner_invoice_id=34)
     assert result.ok is False
     assert result.status_code == 404
+
+
+def test_ajout_ligne_et_remise_recalculent_le_total(db, monkeypatch):
+    world, invoice = _generated(db, monkeypatch)
+    added = update_partner_invoice_draft(
+        company_id=world.executing.id,
+        partner_invoice_id=invoice.id,
+        payload={
+            "command": "add_custom_line",
+            "description": "Attente",
+            "line_total": "10.00",
+            "qty": 1,
+            "custom_mode": "time",
+            "time_unit": "h",
+        },
+    )
+    assert added.ok is True
+    assert added.invoice["subtotal_amount"] == 50.0
+    custom = next(
+        line for line in added.invoice["lines"] if line["description"] == "Attente"
+    )
+    assert custom["type"] == "custom"
+    assert custom["line_total"] == 10.0
+
+    discounted = update_partner_invoice_draft(
+        company_id=world.executing.id,
+        partner_invoice_id=invoice.id,
+        payload={
+            "command": "apply_global_discount",
+            "global_discount_percent": 10,
+            "global_discount_note": "geste",
+        },
+    )
+    assert discounted.ok is True
+    assert discounted.invoice["meta"]["global_discount"]["percent"] == 10.0
+    assert discounted.invoice["subtotal_amount"] == 45.0
+    assert discounted.invoice["total_amount"] == pytest.approx(
+        discounted.invoice["subtotal_amount"] + discounted.invoice["vat_amount"]
+    )
+
+    restored = update_partner_invoice_draft(
+        company_id=world.executing.id,
+        partner_invoice_id=invoice.id,
+        payload={"command": "remove_discount"},
+    )
+    assert restored.ok is True
+    assert (restored.invoice["meta"] or {}).get("global_discount") is None
+    assert restored.invoice["subtotal_amount"] == 50.0
+
+
+def test_suppression_ligne_partenaire_ne_touche_pas_le_transfert(db, monkeypatch):
+    world, invoice = _generated(db, monkeypatch)
+    source_cost = world.transfer.partner_cost
+    line_id = invoice.lines[0].id
+    result = update_partner_invoice_draft(
+        company_id=world.executing.id,
+        partner_invoice_id=invoice.id,
+        payload={"command": "remove_line", "line_id": line_id},
+    )
+    assert result.ok is True
+    assert result.invoice["lines"] == []
+    assert result.invoice["total_amount"] == 0.0
+    db.session.refresh(world.transfer)
+    assert world.transfer.partner_cost == source_cost

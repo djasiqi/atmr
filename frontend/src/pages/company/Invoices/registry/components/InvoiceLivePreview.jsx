@@ -229,7 +229,7 @@ function primaryPartyLabel(inv) {
   const bs = inv?.billing_strategy;
   /** Facturation mensuelle établissement (S2) — pas le même vocabulaire que le particulier S1. */
   if (bs === 's2_clinic_monthly') return 'Contact clinique';
-  if (bs === 'partner_monthly') return 'Entreprise partenaire';
+  if (bs === 'partner_monthly') return 'Partenaire / Contact';
   return 'Client / Patient';
 }
 
@@ -472,6 +472,9 @@ export default function InvoiceLivePreview({
             <div>
               <div className={styles.labelMuted}>{primaryPartyLabel(invoice)}</div>
               <div className={styles.partyName}>{clientDisplayName(invoice)}</div>
+              {invoice?.subject_contact ? (
+                <div className={styles.lineSub}>{safeText(invoice.subject_contact, '')}</div>
+              ) : null}
             </div>
             {payer ? (
               <div>

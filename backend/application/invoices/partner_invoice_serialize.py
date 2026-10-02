@@ -5,7 +5,10 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from application.invoices.partner_invoice_lines import serialize_partner_invoice_lines
+from application.invoices.partner_invoice_lines import (
+    partner_invoice_editor_meta,
+    serialize_partner_invoice_lines,
+)
 from models.partner_invoice import PartnerInvoice, PartnerInvoiceStatus
 
 
@@ -46,6 +49,13 @@ def serialize_partner_invoice_detail(
         effective_status = partner_invoice.status
 
     partner_name = billed_company_name(partner_invoice, company_id)
+    editor_meta = partner_invoice_editor_meta(partner_invoice)
+    vat_amount = _d(partner_invoice.vat_amount)
+    if vat_amount > 0:
+        editor_meta = {
+            **editor_meta,
+            "vat": {"applicable": True, "label": "TVA"},
+        }
     payments = [
         payment.to_dict() for payment in (partner_invoice.recorded_payments or [])
     ]
@@ -89,6 +99,11 @@ def serialize_partner_invoice_detail(
         },
         "bill_to_client": None,
         "lines": serialize_partner_invoice_lines(partner_invoice),
+        "meta": editor_meta or None,
+        "billing_strategy": "partner_monthly",
+        "editor_header": True,
+        "subject_contact": partner_invoice.recipient_contact,
+        "vat_total_amount": float(vat_amount),
         "payments": payments,
         "reminders": [],
         "reminder_level": 0,

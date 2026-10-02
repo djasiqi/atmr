@@ -1200,7 +1200,7 @@ const InvoicesRegistry = () => {
               setSendEmailModal({ open: true, invoice: inv, isReminder: false, reminderId: null });
             }}
             onMarkAsSent={(inv) => {
-              if (inv?.id) handleMarkAsSent(inv.id, { afterSuccess: closeDraftEdit });
+              if (inv?.id) handleMarkAsSent(inv, { afterSuccess: closeDraftEdit });
             }}
           />
         </Suspense>
