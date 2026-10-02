@@ -351,7 +351,9 @@ def apply_partner_invoice_line_updates(
             line.amount = round_to_5_cents(line.quantity * line.unit_price)
         if "note" in raw or "adjustment_note" in raw:
             state = note_state(line)
-            raw_note = raw["adjustment_note"] if "adjustment_note" in raw else raw.get("note")
+            raw_note = (
+                raw["adjustment_note"] if "adjustment_note" in raw else raw.get("note")
+            )
             state["adjustment_note"] = str(raw_note)[:180] if raw_note else None
             _set_line_note_state(line, state)
         if "service_date" in raw:
@@ -421,7 +423,9 @@ def restore_partner_percent_discounts(partner_invoice: PartnerInvoice) -> None:
         if state.get("original_amount") is not None:
             line.amount = round_to_5_cents(_as_decimal(state["original_amount"]))
         if state.get("original_unit_price") is not None:
-            line.unit_price = round_to_5_cents(_as_decimal(state["original_unit_price"]))
+            line.unit_price = round_to_5_cents(
+                _as_decimal(state["original_unit_price"])
+            )
         if state.get("original_quantity") is not None:
             line.quantity = round_to_5_cents(_as_decimal(state["original_quantity"]))
         for key in (
@@ -467,7 +471,9 @@ def apply_partner_global_discount(
     restore_partner_percent_discounts(partner_invoice)
     eligible = _discountable_partner_lines(partner_invoice)
     if not eligible:
-        raise PartnerDraftEditError("Aucune ligne HT à remiser (transport ou prestation).")
+        raise PartnerDraftEditError(
+            "Aucune ligne HT à remiser (transport ou prestation)."
+        )
     for line in eligible:
         _apply_percent_on_line(line, percent=float(percent), scope="global", note=note)
 
@@ -521,7 +527,9 @@ def remove_partner_invoice_line(partner_invoice: PartnerInvoice, line_id: int) -
     db.session.flush()
 
 
-def add_partner_custom_line(partner_invoice: PartnerInvoice, payload: dict[str, Any]) -> None:
+def add_partner_custom_line(
+    partner_invoice: PartnerInvoice, payload: dict[str, Any]
+) -> None:
     """Ligne HT personnalisée ou déduction libre. N'altère pas les transferts source."""
     desc = str(payload.get("description") or "").strip()[:500]
     if not desc:
@@ -538,7 +546,9 @@ def add_partner_custom_line(partner_invoice: PartnerInvoice, payload: dict[str, 
         unit = line_total
     else:
         try:
-            quantity = _as_decimal(payload.get("qty") or payload.get("quantity") or "1", "1")
+            quantity = _as_decimal(
+                payload.get("qty") or payload.get("quantity") or "1", "1"
+            )
         except Exception:
             quantity = Decimal("1")
         if quantity <= 0:
@@ -558,7 +568,11 @@ def add_partner_custom_line(partner_invoice: PartnerInvoice, payload: dict[str, 
                 )
             state["custom_prestation"] = entry
     service_date = payload.get("service_date_iso") or payload.get("service_date")
-    sort_order = max((line.sort_order or 0) for line in partner_invoice.lines) + 1 if partner_invoice.lines else 0
+    sort_order = (
+        max((line.sort_order or 0) for line in partner_invoice.lines) + 1
+        if partner_invoice.lines
+        else 0
+    )
     line = PartnerInvoiceLine(
         description=desc,
         quantity=quantity,

@@ -143,7 +143,9 @@ def _apply_partner_draft_command(
     raise PartnerDraftEditError(f"Commande partenaire inconnue: {command}")
 
 
-def _apply_partner_header_and_lines(partner_invoice: Any, payload: dict[str, Any]) -> None:
+def _apply_partner_header_and_lines(
+    partner_invoice: Any, payload: dict[str, Any]
+) -> None:
     if "notes" in payload:
         notes = payload.get("notes")
         partner_invoice.notes = str(notes)[:1000] if notes else None
