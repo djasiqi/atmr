@@ -20,6 +20,7 @@ from models.enums import TransferStatus
 from models.partner_invoice import (
     PartnerInvoice,
     PartnerInvoiceStatus,
+    PartnerLineTimeMode,
     partner_invoice_transfers,
 )
 from models.partnership import Partnership
@@ -319,6 +320,7 @@ class PartnerInvoiceService:
         partner_invoice.total_amount = total_with_vat
         partner_invoice.currency = transfers[0].currency if transfers else "CHF"
         partner_invoice.status = PartnerInvoiceStatus.DRAFT
+        partner_invoice.line_time_mode = PartnerLineTimeMode.PICKUP
         partner_invoice.issued_at = now
         partner_invoice.due_date = now + timedelta(days=payment_terms_days)
 

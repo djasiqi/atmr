@@ -25,6 +25,13 @@ from sqlalchemy.orm import (
 from ext import db
 
 
+class PartnerLineTimeMode:
+    """Colonne horaire du PDF partenaire. ``none`` conserve le tableau institutionnel."""
+
+    NONE = "none"
+    PICKUP = "pickup"
+
+
 class PartnerInvoiceStatus:
     """Statuts des factures partenaires."""
 
@@ -108,6 +115,14 @@ class PartnerInvoice(db.Model):
     # Métadonnées
     pdf_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # none = tableau institutionnel historique. pickup = colonne « Prise en charge ».
+    # Les factures déjà émises restent à none ; seules les nouvelles passent à pickup.
+    line_time_mode: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=PartnerLineTimeMode.NONE,
+        server_default=PartnerLineTimeMode.NONE,
+    )
 
     # Overrides destinataire (snapshot facturé, ne réécrit pas Company)
     recipient_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -162,6 +177,7 @@ class PartnerInvoice(db.Model):
             "sent_at": self.sent_at.isoformat() if self.sent_at else None,
             "pdf_url": self.pdf_url,
             "notes": self.notes,
+            "line_time_mode": self.line_time_mode,
             "recipient_name": self.recipient_name,
             "recipient_address": self.recipient_address,
             "recipient_contact": self.recipient_contact,
@@ -215,6 +231,10 @@ class PartnerInvoiceLine(db.Model):
     departure: Mapped[str | None] = mapped_column(String(500), nullable=True)
     arrival: Mapped[str | None] = mapped_column(String(500), nullable=True)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Snapshots HH:MM Europe/Zurich. Jamais relus depuis Booking à la régénération.
+    scheduled_pickup_at: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    boarded_at: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    pickup_time_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -245,6 +265,9 @@ class PartnerInvoiceLine(db.Model):
             "departure": self.departure,
             "arrival": self.arrival,
             "note": self.note,
+            "scheduled_pickup_at": self.scheduled_pickup_at,
+            "boarded_at": self.boarded_at,
+            "pickup_time_source": self.pickup_time_source,
         }
 
 

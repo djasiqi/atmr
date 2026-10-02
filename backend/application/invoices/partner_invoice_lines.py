@@ -6,6 +6,11 @@ import json
 from decimal import Decimal
 from typing import Any
 
+from application.invoices.partner_pickup_time import (
+    SOURCE_UNKNOWN,
+    pickup_display_label,
+    snapshot_pickup_from_booking,
+)
 from ext import db
 from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
@@ -70,6 +75,7 @@ def describe_transfer_line(
     description = f"{client_name} — {departure} → {arrival}".strip(" —→")
     if not description:
         description = client_name
+    pickup = snapshot_pickup_from_booking(booking)
     return {
         "description": description[:500],
         "quantity": Decimal("1"),
@@ -83,6 +89,9 @@ def describe_transfer_line(
         "departure": departure[:500] if departure else None,
         "arrival": arrival[:500] if arrival else None,
         "note": None,
+        "scheduled_pickup_at": pickup["scheduled_pickup_at"],
+        "boarded_at": pickup["boarded_at"],
+        "pickup_time_source": pickup["pickup_time_source"],
     }
 
 
@@ -133,6 +142,9 @@ def persist_partner_invoice_lines_from_transfers(
             client_name=payload["client_name"],
             departure=payload["departure"],
             arrival=payload["arrival"],
+            scheduled_pickup_at=payload["scheduled_pickup_at"],
+            boarded_at=payload["boarded_at"],
+            pickup_time_source=payload["pickup_time_source"],
         )
         partner_invoice.lines.append(line)
         created.append(line)
@@ -231,6 +243,11 @@ def enrich_partner_line_dict(
     enriched["line_total"] = float(amount) if amount is not None else None
     enriched["adjustment_note"] = adjustment
     enriched["line_meta"] = line_meta or None
+    enriched["pickup_label"] = pickup_display_label(
+        payload.get("pickup_time_source") or SOURCE_UNKNOWN,
+        payload.get("scheduled_pickup_at"),
+        payload.get("boarded_at"),
+    )
     if "_v" in note_payload or adjustment is not None:
         enriched["note"] = adjustment
     return enriched
@@ -583,6 +600,7 @@ def add_partner_custom_line(
         sort_order=sort_order,
         service_date=str(service_date)[:20] if service_date else None,
         client_name=desc[:200],
+        pickup_time_source=SOURCE_UNKNOWN,
     )
     active_global = next(
         (

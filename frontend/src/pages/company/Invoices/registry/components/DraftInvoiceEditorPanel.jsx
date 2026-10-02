@@ -1610,6 +1610,9 @@ const DraftInvoiceEditorPanel = ({
         due_date: headerDraft.due_date || null,
         period_year: headerDraft.period_year === '' ? null : Number(headerDraft.period_year),
         period_month: headerDraft.period_month === '' ? null : Number(headerDraft.period_month),
+        ...(inv?.kind === 'partner' || inv?.invoice_type === 'partner'
+          ? { line_time_mode: headerDraft.show_pickup ? 'pickup' : 'none' }
+          : {}),
       });
       if (!res) {
         setError('Enregistrement impossible');
@@ -1719,6 +1722,24 @@ const DraftInvoiceEditorPanel = ({
               }
             />
           </label>
+          {inv?.kind === 'partner' || inv?.invoice_type === 'partner' ? (
+            <fieldset className={styles.infoField}>
+              <legend>Affichage PDF</legend>
+              <label
+                className={styles.infoCheck}
+                title="Affiche en priorité l'heure réelle « À bord » enregistrée par le chauffeur. À défaut, l'heure prévue est indiquée comme telle."
+              >
+                <input
+                  type="checkbox"
+                  checked={Boolean(headerDraft.show_pickup)}
+                  onChange={(e) =>
+                    setHeaderDraft((prev) => ({ ...prev, show_pickup: e.target.checked }))
+                  }
+                />
+                Afficher l'heure de prise en charge
+              </label>
+            </fieldset>
+          ) : null}
           <button
             type="button"
             className={`${styles.btn} ${styles.btnPrimary}`}
@@ -2538,6 +2559,7 @@ const DraftInvoiceEditorPanel = ({
                                       due_date: toDateInputValue(inv.due_date),
                                       period_year: inv.period_year ?? '',
                                       period_month: inv.period_month ?? '',
+                                      show_pickup: inv.line_time_mode === 'pickup',
                                     });
                                   }
                                   return next;
@@ -2676,7 +2698,15 @@ const DraftInvoiceEditorPanel = ({
                   >
                     {showHtmlInvoicePreview ? (
                       <InvoiceLivePreview
-                        invoice={inv}
+                        invoice={
+                          headerDraft &&
+                          (inv?.kind === 'partner' || inv?.invoice_type === 'partner')
+                            ? {
+                                ...inv,
+                                line_time_mode: headerDraft.show_pickup ? 'pickup' : 'none',
+                              }
+                            : inv
+                        }
                         companyVatApplicable={companyVatApplicable}
                         className={styles.draftLivePreviewMount}
                       />

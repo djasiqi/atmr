@@ -101,6 +101,7 @@ def serialize_partner_invoice_detail(
         "lines": serialize_partner_invoice_lines(partner_invoice),
         "meta": editor_meta or None,
         "billing_strategy": "partner_monthly",
+        "line_time_mode": partner_invoice.line_time_mode,
         "editor_header": True,
         "subject_contact": partner_invoice.recipient_contact,
         "vat_total_amount": float(vat_amount),

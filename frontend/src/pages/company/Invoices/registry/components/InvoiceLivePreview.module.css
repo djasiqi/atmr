@@ -170,6 +170,13 @@
   color: #334155;
 }
 
+.colPickup {
+  white-space: nowrap;
+  width: 6.4rem;
+  font-variant-numeric: tabular-nums;
+  color: #334155;
+}
+
 /* Réduit l’espace entre Date et Description (sinon 10px + 10px du padding général). */
 .table th.colDate,
 .table td.colDate {

@@ -22,7 +22,7 @@ from application.invoices.partner_invoice_serialize import (
     serialize_partner_invoice_detail,
 )
 from ext import db
-from models.partner_invoice import PartnerInvoiceStatus
+from models.partner_invoice import PartnerInvoiceStatus, PartnerLineTimeMode
 
 _EDITABLE_STATUSES = {
     PartnerInvoiceStatus.DRAFT,
@@ -173,6 +173,11 @@ def _apply_partner_header_and_lines(
         due = _parse_datetime(payload.get("due_date"))
         if due is not None:
             partner_invoice.due_date = due
+    if "line_time_mode" in payload:
+        mode = str(payload.get("line_time_mode") or "").strip()
+        if mode not in {PartnerLineTimeMode.NONE, PartnerLineTimeMode.PICKUP}:
+            raise PartnerDraftEditError("Mode d'affichage horaire invalide")
+        partner_invoice.line_time_mode = mode
 
     lines_payload = payload.get("lines")
     if isinstance(lines_payload, list):

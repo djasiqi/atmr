@@ -16,6 +16,7 @@ Architecture:
 """
 
 import logging
+from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -78,7 +79,6 @@ MIN_ADDRESS_PARTS = 2
 MIN_ADDRESS_PARTS_POSTAL = 3
 MIN_ADDRESS_PARTS_CITY = 4
 MONTHS_PER_YEAR = 12
-MAX_CLIENT_NAME_LENGTH = 20
 
 app_logger = logging.getLogger("partner_invoice_pdf_service")
 
@@ -498,112 +498,72 @@ def generate_partner_invoice_pdf_content(
     story.append(Paragraph(invoice_info_html, normal_style))
     story.append(Spacer(1, 20))
 
-    # === TABLEAU DES TRANSFERTS (style identique à pdf.py) ===
-    def format_address_for_table(address: str | None, max_len: int = 30) -> str:
-        if not address:
-            return "N/A"
-        clean = address.replace(", Suisse", "").replace(" Suisse", "").strip()
-        if len(clean) <= max_len:
-            return clean
-        return clean[: max_len - 1] + "…"
+    # === TABLEAU DES PRESTATIONS (même contrat que la facture institution) ===
+    from application.invoices.partner_invoice_lines import describe_transfer_line
+    from application.invoices.partner_pickup_time import pickup_display_label
+    from services.documents.invoice_pdf_columns import normalize_line_time_mode
+    from services.documents.invoice_pdf_presentation import build_services_table
 
-    # En-tête du tableau
-    table_data: list[list[Any]] = [
-        ["Date", "Client", "Départ", "Arrivée", "Montant CHF"]
-    ]
-
+    line_time_mode = normalize_line_time_mode(
+        getattr(partner_invoice, "line_time_mode", None)
+    )
+    service_rows: list[dict[str, str]] = []
     if line_snapshots:
         for snap in line_snapshots:
-            client_label = str(
-                snap.get("description") or snap.get("client_name") or "Client"
-            )
-            if len(client_label) > MAX_CLIENT_NAME_LENGTH:
-                client_label = client_label[: MAX_CLIENT_NAME_LENGTH - 1] + "…"
-            table_data.append(
-                [
-                    snap.get("service_date") or "",
-                    client_label,
-                    format_address_for_table(snap.get("departure")),
-                    format_address_for_table(snap.get("arrival")),
-                    f"{float(snap.get('amount') or 0):.2f}",
-                ]
+            amount_value = snap.get("amount")
+            if amount_value is None:
+                amount_value = snap.get("line_total") or 0
+            service_rows.append(
+                {
+                    "date": str(snap.get("service_date") or ""),
+                    "description": str(
+                        snap.get("description") or snap.get("client_name") or "Client"
+                    ),
+                    "amount": f"{float(amount_value):.2f}",
+                    "pickup": str(
+                        snap.get("pickup_label")
+                        or pickup_display_label(
+                            snap.get("pickup_time_source"),
+                            snap.get("scheduled_pickup_at"),
+                            snap.get("boarded_at"),
+                        )
+                    ),
+                }
             )
     else:
-        for transfer in transfers:
-            booking = transfer.booking
-            if booking:
-                date_str = (
-                    booking.scheduled_time.strftime("%d.%m.%Y")
-                    if booking.scheduled_time
-                    else ""
-                )
-                client_name = ""
-                if booking.client and booking.client.user:
-                    client_name = (
-                        booking.customer_name
-                        or f"{booking.client.user.first_name or ''} {booking.client.user.last_name or ''}".strip()
-                        or booking.client.user.username
-                        or "Client"
-                    )
-                    if len(client_name) > MAX_CLIENT_NAME_LENGTH:
-                        client_name = client_name[: MAX_CLIENT_NAME_LENGTH - 1] + "…"
-                else:
-                    client_name = booking.customer_name or "Client"
-
-                departure = format_address_for_table(booking.pickup_location)
-                arrival = format_address_for_table(booking.dropoff_location)
-            else:
-                date_str = ""
-                client_name = "N/A"
-                departure = "N/A"
-                arrival = "N/A"
-
+        for index, transfer in enumerate(transfers):
             line_amt = (line_amounts or {}).get(transfer.id)
             if line_amt is not None:
-                amount = f"{float(line_amt):.2f}"
+                amount = float(line_amt)
             elif transfer.partner_cost is not None:
-                amount = f"{float(transfer.partner_cost):.2f}"
+                amount = float(transfer.partner_cost)
             else:
-                amount = "0.00"
-            table_data.append([date_str, client_name, departure, arrival, amount])
+                amount = 0.0
+            described = describe_transfer_line(
+                transfer, amount=Decimal(str(amount)), sort_order=index
+            )
+            service_rows.append(
+                {
+                    "date": str(described.get("service_date") or ""),
+                    "description": str(described.get("description") or ""),
+                    "amount": f"{amount:.2f}",
+                    "pickup": str(
+                        pickup_display_label(
+                            described.get("pickup_time_source"),
+                            described.get("scheduled_pickup_at"),
+                            described.get("boarded_at"),
+                        )
+                    ),
+                }
+            )
 
-    # Style tableau IDENTIQUE à pdf.py (pas de couleurs de fond) ; largeur totale = zone utile
-    _cols_scale = usable_width_pt / (17 * cm)
-    services_table = Table(
-        table_data,
-        colWidths=[
-            2 * cm * _cols_scale,
-            3.5 * cm * _cols_scale,
-            4.5 * cm * _cols_scale,
-            4.5 * cm * _cols_scale,
-            2.5 * cm * _cols_scale,
-        ],
-    )
-    services_table.setStyle(
-        TableStyle(
-            [
-                # En-tête
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, 0), 9),
-                ("ALIGN", (0, 0), (-1, 0), "LEFT"),
-                ("ALIGN", (-1, 0), (-1, 0), "RIGHT"),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-                ("TOPPADDING", (0, 0), (-1, 0), 8),
-                ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
-                # Corps
-                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-                ("FONTSIZE", (0, 1), (-1, -1), 8),
-                ("ALIGN", (0, 1), (-1, -1), "LEFT"),
-                ("ALIGN", (-1, 1), (-1, -1), "RIGHT"),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("BOTTOMPADDING", (0, 1), (-1, -1), 6),
-                ("TOPPADDING", (0, 1), (-1, -1), 6),
-                ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.lightgrey),
-            ]
+    story.append(
+        build_services_table(
+            service_rows,
+            line_time_mode=line_time_mode,
+            available_width_pt=usable_width_pt,
         )
     )
-
-    story.append(services_table)
     story.append(Spacer(1, 15))
 
     # === TOTAL (style identique à pdf.py) ===
@@ -628,12 +588,12 @@ def generate_partner_invoice_pdf_content(
         total_data = [
             ["Sous-total HT :", f"{subtotal_amount:.2f}"],
             ["TVA :", f"{vat_amount:.2f}"],
-            ["TOTAL :", f"{total_amount:.2f}"],
+            ["TOTAL À FACTURER :", f"{total_amount:.2f}"],
         ]
     else:
         total_data = [
-            [f"Nombre de transferts : {len(transfers)}", ""],
-            ["TOTAL :", f"{total_amount:.2f}"],
+            ["Sous-total HT :", f"{subtotal_amount:.2f}"],
+            ["TOTAL À FACTURER :", f"{total_amount:.2f}"],
         ]
 
     total_table = Table(total_data, colWidths=[_tot_lbl_w, _tot_amt_w])

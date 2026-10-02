@@ -421,11 +421,15 @@ export default function InvoiceLivePreview({
         return a.idx - b.idx;
       })
       .map(({ ln }) => ln)
-      .filter((ln) => !linePreviewHiddenMergedRoundTrip(ln, raw));
-  }, [invoice?.lines]);
+      .filter((ln) => {
+        if (invoice?.billing_strategy === 'partner_monthly') return true;
+        return !linePreviewHiddenMergedRoundTrip(ln, raw);
+      });
+  }, [invoice?.billing_strategy, invoice?.lines]);
   const showTransportDateColumn = lines.some(
     (ln) => lineDetailDateLabel(ln, invoice) != null
   );
+  const showPickupColumn = invoice?.line_time_mode === 'pickup';
   const showRoundTripLegend = lines.some((ln) =>
     invoiceLineRepresentsFullRoundTrip(ln, invoice?.lines)
   );
@@ -493,6 +497,9 @@ export default function InvoiceLivePreview({
                 {showTransportDateColumn ? (
                   <th className={styles.colDate}>Date</th>
                 ) : null}
+                {showPickupColumn ? (
+                  <th className={styles.colPickup}>Prise en charge</th>
+                ) : null}
                 <th>Description</th>
                 <th className={styles.colNum}>Montant</th>
                 {showVatColumn ? <th className={styles.colNum}>TVA</th> : null}
@@ -542,6 +549,9 @@ export default function InvoiceLivePreview({
                   <tr key={line.id ?? `${line.description}-${line.line_total}`}>
                     {showTransportDateColumn ? (
                       <td className={styles.colDate}>{transportDate ?? '—'}</td>
+                    ) : null}
+                    {showPickupColumn ? (
+                      <td className={styles.colPickup}>{line.pickup_label || '—'}</td>
                     ) : null}
                     <td>
                       {patientSub ? (

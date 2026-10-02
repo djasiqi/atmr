@@ -3604,31 +3604,25 @@ def _build_s2_table(
         spaceBefore=0,
         spaceAfter=0,
     )
-    if show_date_column:
-        _header_row = [
+    from services.documents.invoice_pdf_columns import (
+        HEADER_AMOUNT,
+        LINE_TIME_NONE,
+        detail_headers,
+    )
+
+    _institution_headers = detail_headers(
+        show_date=show_date_column, line_time_mode=LINE_TIME_NONE
+    )
+    _header_row = []
+    for _label in _institution_headers:
+        _align = TA_RIGHT if _label == HEADER_AMOUNT else TA_LEFT
+        _shown = f"<nobr>{_label}</nobr>" if _label == HEADER_AMOUNT else _label
+        _header_row.append(
             Paragraph(
-                "Date", ParagraphStyle("ThDate", parent=_thead_ps, alignment=TA_LEFT)
-            ),
-            Paragraph(
-                "Description",
-                ParagraphStyle("ThDesc", parent=_thead_ps, alignment=TA_LEFT),
-            ),
-            Paragraph(
-                "<nobr>Montant</nobr>",
-                ParagraphStyle("ThHt", parent=_thead_ps, alignment=TA_RIGHT),
-            ),
-        ]
-    else:
-        _header_row = [
-            Paragraph(
-                "Description",
-                ParagraphStyle("ThDesc", parent=_thead_ps, alignment=TA_LEFT),
-            ),
-            Paragraph(
-                "<nobr>Montant</nobr>",
-                ParagraphStyle("ThHt", parent=_thead_ps, alignment=TA_RIGHT),
-            ),
-        ]
+                _shown,
+                ParagraphStyle(f"Th{_label}", parent=_thead_ps, alignment=_align),
+            )
+        )
     if is_compact_private:
         # Avec remise globale, l'aperçu HTML conserve les sous-lignes catalogue → net par ligne.
         suppress_line_discount_breakdown = False
