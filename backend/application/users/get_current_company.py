@@ -84,6 +84,7 @@ class GetCurrentCompanyUseCase:
                 "pending",
                 "unapproved",
                 "ineligible",
+                "denied",
             }:
                 return GetCurrentCompanyResult(
                     found=False,

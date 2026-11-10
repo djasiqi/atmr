@@ -245,6 +245,10 @@ def init_namespaces(app):
     from routes.gateway_auth import gateway_auth_bp
     from routes.dispatch_health import dispatch_health_ns  # /company_dispatch_health
     from routes.driver import driver_ns
+
+    import routes.driver_invitations as _driver_invitations
+
+    _ = _driver_invitations
     from routes.driver_tracking_sessions import tracking_sessions_ns
     from routes.email import email_ns  # Configuration emails transactionnels (Brevo)
     from routes.geocode import geocode_ns

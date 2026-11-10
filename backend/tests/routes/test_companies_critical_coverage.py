@@ -342,7 +342,8 @@ class TestCompaniesCriticalCoverage:
                 "license_plate": f"GE-{suffix[:6].upper()}",
             },
         )
-        assert resp.status_code in (200, 201), resp.get_json()
+        assert resp.status_code == 403, resp.get_json()
+        assert resp.get_json()["error"] == "invitation_requise"
 
     def test_driver_put_delete_reset_toggle_completed(
         self, client, companies_world, company_headers, company_fresh_headers, db
@@ -1035,52 +1036,29 @@ class TestCompaniesCriticalCoverage:
     def test_create_driver_validation_and_use_case_failures(
         self, client, companies_world, company_headers, monkeypatch
     ):
+        target = (
+            "application.companies.drivers.create_driver."
+            "CreateCompanyDriverUseCase.execute"
+        )
+        called: list[bool] = []
+
+        def refuse_use_case(self, **_kwargs):  # noqa: ANN001, ARG001
+            called.append(True)
+            return SimpleNamespace(
+                ok=False,
+                error={"error": "chauffeur refusé"},
+                status_code=409,
+            )
+
+        monkeypatch.setattr(target, refuse_use_case)
         missing = client.post(
             "/api/v1/companies/me/drivers/create",
             headers=company_headers,
             json={},
         )
-        assert missing.status_code == 400
-
-        target = (
-            "application.companies.drivers.create_driver."
-            "CreateCompanyDriverUseCase.execute"
-        )
-        payload = {
-            "username": f"err_{uuid.uuid4().hex[:8]}",
-            "first_name": "Erreur",
-            "last_name": "Couverture",
-            "email": f"err_{uuid.uuid4().hex[:8]}@example.com",
-            "password": _SAFE_PASSWORD,
-            "vehicle_assigned": "Van erreur",
-            "brand": "Test",
-            "license_plate": f"ER{uuid.uuid4().hex[:8].upper()}",
-        }
-        monkeypatch.setattr(
-            target,
-            lambda self, **_kwargs: SimpleNamespace(  # noqa: ARG005
-                ok=False,
-                error={"error": "chauffeur refusé"},
-                status_code=409,
-            ),
-        )
-        refused = client.post(
-            "/api/v1/companies/me/drivers/create",
-            headers=company_headers,
-            json=payload,
-        )
-        assert refused.status_code == 409
-
-        def raise_unexpected_error(self, **_kwargs):  # noqa: ANN001
-            raise RuntimeError("panne création chauffeur")
-
-        monkeypatch.setattr(target, raise_unexpected_error)
-        failed = client.post(
-            "/api/v1/companies/me/drivers/create",
-            headers=company_headers,
-            json=payload,
-        )
-        assert failed.status_code == 500
+        assert missing.status_code == 403
+        assert missing.get_json()["error"] == "invitation_requise"
+        assert called == []
 
     def test_partnership_statement_validation_and_errors(
         self, client, companies_world, company_headers, monkeypatch
