@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, validates
@@ -41,7 +42,16 @@ class BookingMessage(db.Model):
     """Message dans le mini-chat d'un booking institution."""
 
     __tablename__ = "booking_messages"
-    __table_args__ = (Index("ix_bmsg_booking_created", "booking_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_bmsg_booking_created", "booking_id", "created_at"),
+        Index(
+            "uq_booking_messages_client_attempt",
+            "booking_id",
+            "client_message_id",
+            unique=True,
+            postgresql_where=text("client_message_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     booking_id = Column(
@@ -60,6 +70,9 @@ class BookingMessage(db.Model):
     )
     sender_label = Column(String(200), nullable=False)
     content = Column(Text, nullable=False)
+    # Identifiant stable d'une tentative, généré par le client. NULL pour les
+    # anciens clients Web qui ne le transmettent pas encore.
+    client_message_id = Column(String(64), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -96,6 +109,7 @@ class BookingMessage(db.Model):
             "sender_label": self.sender_label,
             "content": self.content,
             "created_at": _iso(self.created_at),
+            "client_message_id": self.client_message_id,
         }
 
     def __repr__(self):  # type: ignore[override]

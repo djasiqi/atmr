@@ -32,6 +32,26 @@ from .base import (
 from .booking import Booking
 from .booking_message import BookingMessage, BookingMessageSender
 from .booking_transfer import BookingTransfer
+from .settlement_policy import (
+    BookingSettlementPatientNotice,
+    BookingSettlementPolicy,
+    CompanySettlementCapability,
+    CompanySettlementCapabilityRevision,
+)
+from .settlement_simulation import (
+    SettlementSimulationCase,
+    SettlementSimulationEvent,
+)
+from .convention_demo import PatientCompanyConventionDemo
+from .settlement_production import (
+    CashCollection,
+    CashCollectionEvent,
+    CashHandover,
+    CashReceipt,
+    CashReconciliation,
+    PatientBillingDossier,
+    PatientBillingEvent,
+)
 from .client import Client
 from .client_stay import ClientStay
 from .client_booking_contract_event import ClientBookingContractEvent
@@ -97,6 +117,9 @@ from .driver import (
     DriverWeeklyTemplate,
     DriverWorkingConfig,
 )
+from .driver_invitation import DriverInvitation
+from .external_auth_transaction import ExternalAuthTransaction
+from .user_external_identity import UserExternalIdentity
 from .enums import (
     AssignmentStatus,
     BillingIntent,
@@ -164,6 +187,10 @@ from .enums import (
     TransportVoucherType,
     UnavailabilityReason,
     UserRole,
+    PortalKind,
+    PortalGrantStatus,
+    OrganizationApplicationKind,
+    OrganizationApplicationStatus,
     VacationType,
 )
 from .billing_profile import CompanyBillingProfile
@@ -237,8 +264,12 @@ from .eta_accuracy_log import EtaAccuracyLog
 from .invoice import (
     CompanyBillingSettings,
     Invoice,
+    InvoiceCreditNote,
+    InvoiceCreditNoteLine,
+    InvoiceCreditSequence,
     InvoiceLine,
     InvoicePayment,
+    InvoiceRefund,
     InvoiceReminder,
     InvoiceSequence,
 )
@@ -271,6 +302,12 @@ from .control_plane import (
     ServiceCatalog,
 )
 from .platform_admin_permission_grant import PlatformAdminPermissionGrant
+from .portal_grant import PortalGrant
+from .organization_application import (
+    OrganizationApplication,
+    OrganizationApplicationEvent,
+    OrganizationApplicationToken,
+)
 from .platform_billing import (
     BookingBillingOriginAudit,
     CompanyPlatformBillingConfig,
@@ -300,6 +337,11 @@ from .platform_change_request import PlatformChangeRequest
 from .platform_runbook_execution import PlatformRunbookExecution
 from .password_history import PasswordHistory  # ✅ S3: Historique mots de passe
 from .payment import Payment
+from .private_passenger import PrivatePassenger
+from .guest_payment_incident import GuestPaymentIncident, GuestPaymentIncidentEvent
+from .operational_incident import OperationalIncident, OperationalIncidentEvent
+from .transport_attestation import TransportAttestation, TransportAttestationEvent
+from .saferpay_refund_case import SaferpayRefundCase, SaferpayRefundCaseEvent
 from .worldline_webhook_event import WorldlineWebhookEvent
 from .profiling_metrics import ProfilingMetrics  # ✅ 3.4: Profiling automatique
 from .refresh_token import RefreshToken
@@ -402,6 +444,9 @@ __all__ = [
     "DispatchRun",
     "DispatchStatus",
     "Driver",
+    "DriverInvitation",
+    "ExternalAuthTransaction",
+    "UserExternalIdentity",
     "DriverCompensationLedger",
     "DriverCompensationPolicy",
     "DriverManualWorkEntry",
@@ -452,9 +497,13 @@ __all__ = [
     "validate_scopes",  # ✅ Utilitaire API Keys
     "Invoice",
     "InvoiceBillingStrategy",
+    "InvoiceCreditNote",
+    "InvoiceCreditNoteLine",
+    "InvoiceCreditSequence",
     "InvoiceLine",
     "InvoiceLineType",
     "InvoicePayment",
+    "InvoiceRefund",
     "InvoiceReminder",
     "InvoiceSequence",
     "InvoiceStatus",
@@ -477,6 +526,14 @@ __all__ = [
     "PartnerInvoicePayment",
     "Partnership",
     "PlatformAdminPermissionGrant",
+    "PortalGrant",
+    "PortalGrantStatus",
+    "PortalKind",
+    "OrganizationApplication",
+    "OrganizationApplicationEvent",
+    "OrganizationApplicationKind",
+    "OrganizationApplicationStatus",
+    "OrganizationApplicationToken",
     "BookingBillingOriginAudit",
     "PlatformBillingCreditor",
     "PlatformBillingLineType",
@@ -523,6 +580,13 @@ __all__ = [
     "PartnershipStatus",
     "PasswordHistory",  # ✅ S3: Historique mots de passe
     "Payment",
+    "PrivatePassenger",
+    "GuestPaymentIncident",
+    "GuestPaymentIncidentEvent",
+    "TransportAttestation",
+    "TransportAttestationEvent",
+    "SaferpayRefundCase",
+    "SaferpayRefundCaseEvent",
     "WorldlineWebhookEvent",
     "PaymentMethod",
     "PaymentStatus",

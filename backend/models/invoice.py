@@ -21,6 +21,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -28,6 +29,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
@@ -58,7 +60,7 @@ def _ordered_unique_booking_ids_from_lines(
     def add(value: Any) -> None:
         if value is None:
             return
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, list | tuple):
             for item in value:
                 add(item)
             return
@@ -161,6 +163,9 @@ class Invoice(db.Model):
     balance_due: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, default=0
     )
+    refundable_chf: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, server_default=text("0")
+    )
 
     # Dates clés
     issued_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
@@ -204,6 +209,24 @@ class Invoice(db.Model):
     qr_reference: Mapped[str] = mapped_column(String(50), nullable=True)
     meta = Column(JSONB, nullable=True)
 
+    # Correction documentaire (facture rectificative ≠ édition de l'original)
+    corrects_invoice_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("invoices.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    correction_credit_note_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("invoice_credit_note.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    correction_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    correction_idempotency_key: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
+
     # Relations
     # NOTE: invoices a 2 FK vers Company (company_id + billed_to_company_id),
     # donc il faut expliciter la FK pour éviter AmbiguousForeignKeysError.
@@ -223,10 +246,19 @@ class Invoice(db.Model):
         "InvoiceLine", back_populates="invoice", cascade="all, delete-orphan"
     )
     payments = relationship(
-        "InvoicePayment", back_populates="invoice", cascade="all, delete-orphan"
+        "InvoicePayment",
+        back_populates="invoice",
+        cascade="all, delete-orphan",
+        order_by="InvoicePayment.paid_at",
     )
     reminders = relationship(
         "InvoiceReminder", back_populates="invoice", cascade="all, delete-orphan"
+    )
+    corrects_invoice = relationship(
+        "Invoice",
+        remote_side="Invoice.id",
+        foreign_keys=[corrects_invoice_id],
+        backref="corrective_invoices",
     )
 
     # Index et contraintes
@@ -247,6 +279,13 @@ class Invoice(db.Model):
         CheckConstraint("total_amount >= 0", name="chk_invoice_amount_positive"),
         CheckConstraint("balance_due >= 0", name="chk_invoice_balance_nonneg"),
         CheckConstraint("amount_paid >= 0", name="chk_invoice_paid_nonneg"),
+        CheckConstraint("refundable_chf >= 0", name="chk_invoice_refundable_nonneg"),
+        UniqueConstraint("id", "company_id", name="uq_invoice_id_company"),
+        UniqueConstraint(
+            "company_id",
+            "correction_idempotency_key",
+            name="uq_invoice_correction_idempotency",
+        ),
     )
 
     @validates("bill_to_client_id", "billing_party_id", "billed_to_company_id")
@@ -306,15 +345,59 @@ class Invoice(db.Model):
         )
 
     def update_balance(self):
-        """Met à jour le solde et le statut basé sur les paiements."""
-        self.amount_paid = sum(payment.amount for payment in self.payments)
-        self.balance_due = self.total_amount - self.amount_paid
+        """Recalcule le solde sans réécrire le total facturé.
 
-        # Mise à jour du statut
+        ``amount_paid`` reste la somme des paiements positifs. Les avoirs
+        réduisent la créance. Un trop-perçu va dans ``refundable_chf``,
+        jamais dans un paiement négatif.
+        """
+        from decimal import Decimal
+
+        from domain.end_of_trip_settlement.financial_contract import settle
+
+        cent = Decimal("0.01")
+        payment_amounts = [
+            Decimal(str(payment.amount or 0)) for payment in self.payments
+        ]
+        paid = sum(payment_amounts, Decimal("0.00")).quantize(cent)
+        self.amount_paid = paid
+        note_amounts = [
+            Decimal(str(note.amount_chf))
+            for note in InvoiceCreditNote.query.filter_by(
+                invoice_id=self.id, company_id=self.company_id
+            ).all()
+        ]
+        refund_amounts = [
+            Decimal(str(refund.amount_chf))
+            for refund in InvoiceRefund.query.filter_by(
+                invoice_id=self.id,
+                company_id=self.company_id,
+                status="confirmed",
+            ).all()
+        ]
+        try:
+            settlement = settle(
+                self.total_amount,
+                note_amounts,
+                payment_amounts,
+                refund_amounts,
+            )
+        except ValueError:
+            claim = Decimal(str(self.total_amount or 0)).quantize(cent)
+            self.balance_due = max(Decimal("0.00"), (claim - paid).quantize(cent))
+            self.refundable_chf = Decimal("0.00")
+        else:
+            self.balance_due = settlement.balance_due_chf
+            self.refundable_chf = settlement.refundable_chf
+
+        current = getattr(self.status, "value", self.status)
+        if str(current or "").lower() == InvoiceStatus.CANCELLED.value:
+            return
         if self.balance_due <= 0:
             self.status = InvoiceStatus.PAID
-            self.paid_at = datetime.now(UTC)
-        elif self.amount_paid > 0:
+            if self.paid_at is None and paid > 0:
+                self.paid_at = datetime.now(UTC)
+        elif paid > 0:
             self.status = InvoiceStatus.PARTIALLY_PAID
         elif self.is_overdue:
             self.status = InvoiceStatus.OVERDUE
@@ -521,6 +604,10 @@ class Invoice(db.Model):
             "total_amount": float(self.total_amount),
             "amount_paid": float(self.amount_paid),
             "balance_due": float(self.balance_due),
+            "refundable_chf": float(self.refundable_chf or 0),
+            "credit_notes": (
+                [] if list_view else _credit_notes_payload(self)
+            ),
             "issued_at": _iso(self.issued_at),
             "due_date": _iso(self.due_date),
             "effective_due_date": _iso(effective_due),
@@ -537,6 +624,16 @@ class Invoice(db.Model):
             "pdf_url": self.pdf_url,
             "qr_reference": self.qr_reference,
             "meta": None if list_view else self.meta,
+            "specimen": bool(
+                isinstance(self.meta, dict) and self.meta.get("specimen") is True
+            ),
+            "payable": not (
+                isinstance(self.meta, dict)
+                and (
+                    self.meta.get("specimen") is True
+                    or self.meta.get("payable") is False
+                )
+            ),
             "client": self._serialize_client(),
             "bill_to_client": {
                 "id": self.bill_to_client.id,
@@ -585,6 +682,17 @@ class Invoice(db.Model):
                 "legacy_billed_to_company_id": self.billed_to_company_id,
             },
             "default_recipient_email": self._default_recipient_email(),
+            "corrects_invoice_id": self.corrects_invoice_id,
+            "correction_credit_note_id": self.correction_credit_note_id,
+            "correction_reason": self.correction_reason,
+            "corrected_by_invoice_ids": (
+                []
+                if list_view
+                else [
+                    int(row.id)
+                    for row in (getattr(self, "corrective_invoices", None) or [])
+                ]
+            ),
             "lines": lines_out,
             "payments": payments_out,
             "reminders": reminder_payload,
@@ -912,6 +1020,11 @@ class InvoicePayment(db.Model):
         nullable=False,
     )
     reference: Mapped[str] = mapped_column(String(100), nullable=True)
+    cash_collection_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("cash_collection.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
 
     # ✅ NOUVEAU : Lien vers le rappel (pour ventilation automatique)
     reminder_id: Mapped[int | None] = mapped_column(
@@ -923,6 +1036,22 @@ class InvoicePayment(db.Model):
     # Relations
     invoice = relationship("Invoice", back_populates="payments")
     reminder = relationship("InvoiceReminder", foreign_keys=[reminder_id])
+
+    __table_args__ = (
+        Index(
+            "uq_invoice_payments_cash_collection",
+            "cash_collection_id",
+            unique=True,
+            postgresql_where=text("cash_collection_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_invoice_payments_reference",
+            "invoice_id",
+            "reference",
+            unique=True,
+            postgresql_where=text("reference IS NOT NULL"),
+        ),
+    )
 
     @override
     def __repr__(self):
@@ -938,6 +1067,7 @@ class InvoicePayment(db.Model):
             "method": self.method.value,
             "reference": self.reference,
             "reminder_id": self.reminder_id,
+            "cash_collection_id": self.cash_collection_id,
         }
 
 
@@ -1452,6 +1582,267 @@ class InvoiceSequence(db.Model):
             f"<InvoiceSequence {self.company_id}-{self.year}-{self.month}: "
             f"{self.sequence}>"
         )
+
+
+class InvoiceCreditSequence(db.Model):
+    """Compteur d'avoirs par entreprise et année. Indépendant des factures."""
+
+    __tablename__ = "invoice_credit_sequence"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id", "year", name="uq_invoice_credit_sequence_company_year"
+        ),
+        CheckConstraint(
+            "last_value >= 0", name="ck_invoice_credit_sequence_nonneg"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    company_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("company.id", ondelete="RESTRICT"), nullable=False
+    )
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_value: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+
+
+class InvoiceCreditNote(db.Model):
+    """Avoir patient. Il réduit la créance et n'est pas un paiement."""
+
+    __tablename__ = "invoice_credit_note"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id", "credit_number", name="uq_invoice_credit_note_number"
+        ),
+        UniqueConstraint(
+            "company_id",
+            "idempotency_key",
+            name="uq_invoice_credit_note_idempotency",
+        ),
+        CheckConstraint("amount_chf > 0", name="ck_invoice_credit_note_amount"),
+        CheckConstraint(
+            "char_length(idempotency_key) > 0",
+            name="ck_invoice_credit_note_key",
+        ),
+        CheckConstraint(
+            "char_length(reason) > 0",
+            name="ck_invoice_credit_note_reason",
+        ),
+        CheckConstraint("status = 'issued'", name="ck_invoice_credit_note_status"),
+        CheckConstraint(
+            "credit_number ~ ('^AV-' || company_id::text || '-[0-9]{4}-[0-9]+$')",
+            name="ck_invoice_credit_note_number_format",
+        ),
+        ForeignKeyConstraint(
+            ["invoice_id", "company_id"],
+            ["invoices.id", "invoices.company_id"],
+            name="fk_invoice_credit_note_invoice_company",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_invoice_credit_note_invoice", "company_id", "invoice_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    company_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("company.id", ondelete="RESTRICT"), nullable=False
+    )
+    invoice_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    credit_number: Mapped[str] = mapped_column(String(40), nullable=False)
+    amount_chf: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'issued'")
+    )
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_by_user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("user.id", ondelete="RESTRICT"), nullable=False
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    pdf_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    line_allocations = relationship(
+        "InvoiceCreditNoteLine",
+        back_populates="credit_note",
+        cascade="all, delete-orphan",
+        order_by="InvoiceCreditNoteLine.id",
+    )
+
+
+class InvoiceCreditNoteLine(db.Model):
+    """Répartition d'un avoir sur une ligne de facture (HT / TVA / TTC serveur)."""
+
+    __tablename__ = "invoice_credit_note_line"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["credit_note_id"],
+            ["invoice_credit_note.id"],
+            name="fk_invoice_credit_note_line_note",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["invoice_line_id"],
+            ["invoice_lines.id"],
+            name="fk_invoice_credit_note_line_invoice_line",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("amount_ht >= 0", name="ck_invoice_credit_note_line_ht"),
+        CheckConstraint("vat_amount >= 0", name="ck_invoice_credit_note_line_vat"),
+        CheckConstraint("amount_ttc > 0", name="ck_invoice_credit_note_line_ttc"),
+        CheckConstraint(
+            "amount_ht + vat_amount = amount_ttc",
+            name="ck_invoice_credit_note_line_sum",
+        ),
+        Index(
+            "ix_invoice_credit_note_line_invoice_line",
+            "invoice_line_id",
+        ),
+        UniqueConstraint(
+            "credit_note_id",
+            "invoice_line_id",
+            name="uq_invoice_credit_note_line_note_line",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    credit_note_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    invoice_line_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount_ht: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    vat_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    amount_ttc: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    vat_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+
+    credit_note = relationship(
+        "InvoiceCreditNote", back_populates="line_allocations"
+    )
+    invoice_line = relationship("InvoiceLine")
+
+
+def _credit_notes_payload(invoice: Invoice) -> list[dict[str, Any]]:
+    """Avoirs de la facture. Liste vide si la table n'est pas migrée."""
+    from sqlalchemy import text
+
+    present = db.session.scalar(text("SELECT to_regclass('public.invoice_credit_note')"))
+    if present is None:
+        return []
+    rows = (
+        InvoiceCreditNote.query.filter_by(
+            invoice_id=invoice.id, company_id=invoice.company_id
+        )
+        .order_by(InvoiceCreditNote.id)
+        .all()
+    )
+    lines_present = db.session.scalar(
+        text("SELECT to_regclass('public.invoice_credit_note_line')")
+    )
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        item = {
+            "id": row.id,
+            "credit_number": row.credit_number,
+            "amount_chf": float(row.amount_chf),
+            "reason": row.reason,
+            "issued_at": row.issued_at.isoformat() if row.issued_at else None,
+            "pdf_url": row.pdf_url,
+            "idempotency_key": row.idempotency_key,
+            "lines": [],
+        }
+        if lines_present is not None:
+            item["lines"] = [
+                {
+                    "invoice_line_id": int(alloc.invoice_line_id),
+                    "amount_ht": float(alloc.amount_ht),
+                    "vat_amount": float(alloc.vat_amount),
+                    "amount_ttc": float(alloc.amount_ttc),
+                    "vat_rate": (
+                        float(alloc.vat_rate) if alloc.vat_rate is not None else None
+                    ),
+                }
+                for alloc in (row.line_allocations or [])
+            ]
+        out.append(item)
+    return out
+
+
+class InvoiceRefund(db.Model):
+    """Restitution d'argent. Distincte d'un avoir, d'une correction et d'un paiement.
+
+    Seul le statut ``confirmed`` consomme ``refundable_chf``. Une demande
+    sans confirmation ne prouve pas que l'argent a été remis.
+    """
+
+    __tablename__ = "invoice_refund"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id", "idempotency_key", name="uq_invoice_refund_idempotency"
+        ),
+        CheckConstraint("amount_chf > 0", name="ck_invoice_refund_amount"),
+        CheckConstraint(
+            "char_length(idempotency_key) > 0",
+            name="ck_invoice_refund_key",
+        ),
+        CheckConstraint(
+            "char_length(reason) > 0",
+            name="ck_invoice_refund_reason",
+        ),
+        CheckConstraint(
+            "status IN ('requested', 'authorized', 'confirmed', 'refused', 'cancelled')",
+            name="ck_invoice_refund_status",
+        ),
+        CheckConstraint(
+            "nature IN ('restitution_especes', 'restitution_facture')",
+            name="ck_invoice_refund_nature",
+        ),
+        CheckConstraint(
+            "(invoice_id IS NOT NULL) OR (cash_collection_id IS NOT NULL)",
+            name="ck_invoice_refund_target",
+        ),
+        CheckConstraint(
+            "(status = 'confirmed' AND confirmed_at IS NOT NULL) "
+            "OR (status <> 'confirmed' AND confirmed_at IS NULL)",
+            name="ck_invoice_refund_confirmed_at",
+        ),
+        ForeignKeyConstraint(
+            ["invoice_id", "company_id"],
+            ["invoices.id", "invoices.company_id"],
+            name="fk_invoice_refund_invoice_company",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["cash_collection_id", "company_id"],
+            ["cash_collection.id", "cash_collection.company_id"],
+            name="fk_invoice_refund_collection_company",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_invoice_refund_invoice", "company_id", "invoice_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    company_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("company.id", ondelete="RESTRICT"), nullable=False
+    )
+    invoice_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    booking_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("booking.id", ondelete="RESTRICT"), nullable=True
+    )
+    amount_chf: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    nature: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'requested'")
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    cash_collection_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by_user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("user.id", ondelete="RESTRICT"), nullable=False
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 # Gel billed_to / QR : accroché au mapper, pas à la factory Flask.

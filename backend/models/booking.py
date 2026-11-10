@@ -213,13 +213,13 @@ class Booking(db.Model):
     )
 
     parent_booking_id = Column(
-        Integer, ForeignKey("booking.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("booking.id", ondelete="RESTRICT"), nullable=True
     )
 
     # ✅ NOUVEAU: Groupe de courses (pour courses groupées)
     booking_group_id = Column(
         Integer,
-        ForeignKey("booking.id", ondelete="SET NULL"),
+        ForeignKey("booking.id", ondelete="RESTRICT"),
         nullable=True,
         index=True,
     )
@@ -373,6 +373,8 @@ class Booking(db.Model):
     # Mission entreprise canonique. Null = réservation legacy.
     # customer_name reste le nom client ; passenger_name est distinct.
     passenger_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    passenger_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    passenger_access_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     external_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
     needs_assistance = Column(Boolean, nullable=False, server_default=text("false"))
     assistance_detail: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -750,6 +752,10 @@ class Booking(db.Model):
                 "wheelchair_need": _as_bool(self.wheelchair_need),
                 "needs_assistance": _as_bool(getattr(self, "needs_assistance", False)),
                 "assistance_detail": getattr(self, "assistance_detail", None) or None,
+                "passenger_name": getattr(self, "passenger_name", None) or None,
+                "passenger_phone": getattr(self, "passenger_phone", None) or None,
+                "passenger_access_notes": getattr(self, "passenger_access_notes", None)
+                or None,
                 "is_urgent": _as_bool(getattr(self, "is_urgent", False)),
                 "requester_name": getattr(self, "requester_name", None) or None,
                 "requester_phone": getattr(self, "requester_phone", None) or None,
@@ -959,6 +965,10 @@ class Booking(db.Model):
                 "wheelchair_need": _as_bool(self.wheelchair_need),
                 "needs_assistance": _as_bool(getattr(self, "needs_assistance", False)),
                 "assistance_detail": getattr(self, "assistance_detail", None) or None,
+                "passenger_name": getattr(self, "passenger_name", None) or None,
+                "passenger_phone": getattr(self, "passenger_phone", None) or None,
+                "passenger_access_notes": getattr(self, "passenger_access_notes", None)
+                or None,
                 "is_urgent": _as_bool(getattr(self, "is_urgent", False)),
                 "requester_phone": getattr(self, "requester_phone", None) or None,
                 "amount": round(_as_float(self.amount), 2),
@@ -1033,11 +1043,18 @@ class Booking(db.Model):
                     pending_session = bool(row.saferpay_token) or bool(
                         getattr(row, "saferpay_transaction_id", None)
                     )
+            amount_raw = getattr(row, "amount", None)
+            try:
+                amount_value = float(amount_raw) if amount_raw is not None else None
+            except (TypeError, ValueError):
+                amount_value = None
             return {
                 "payment_id": row.id,
                 "status": st.lower(),
                 "provider": prov or None,
                 "has_pending_session": pending_session,
+                "amount": amount_value,
+                "currency": "CHF" if amount_value is not None else None,
             }
         except Exception:
             logger.warning(

@@ -15,9 +15,11 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
@@ -32,8 +34,24 @@ class Payment(db.Model):
     __tablename__ = "payment"
     __table_args__ = (
         CheckConstraint("amount > 0", name="chk_payment_amount_positive"),
+        CheckConstraint(
+            "saferpay_capture_status IS NULL OR saferpay_capture_status IN "
+            "('sent', 'captured', 'failed', 'uncertain', 'missing_id')",
+            name="ck_payment_saferpay_capture_status",
+        ),
+        CheckConstraint(
+            "saferpay_capture_retry_indicator IS NULL OR "
+            "(saferpay_capture_retry_indicator >= 0 AND saferpay_capture_retry_indicator <= 9)",
+            name="ck_payment_saferpay_capture_retry",
+        ),
         Index("ix_payment_booking_status", "booking_id", "status"),
         Index("ix_payment_client_date", "client_id", "date"),
+        Index(
+            "uq_payment_saferpay_capture_id",
+            "saferpay_capture_id",
+            unique=True,
+            postgresql_where=text("saferpay_capture_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -66,7 +84,7 @@ class Payment(db.Model):
     )
     booking_id = Column(
         Integer,
-        ForeignKey("booking.id", ondelete="CASCADE"),
+        ForeignKey("booking.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
@@ -79,6 +97,13 @@ class Payment(db.Model):
     saferpay_token = Column(Text, nullable=True)
     saferpay_transaction_id = Column(String(128), nullable=True, index=True)
     saferpay_notify_key = Column(String(64), nullable=True)
+    # CaptureId réellement renvoyé par Saferpay. Jamais dérivé du TransactionId.
+    saferpay_capture_id = Column(String(64), nullable=True)
+    saferpay_captured_amount = Column(Numeric(12, 2), nullable=True)
+    saferpay_captured_currency = Column(String(3), nullable=True)
+    saferpay_capture_request_id = Column(String(50), nullable=True)
+    saferpay_capture_retry_indicator = Column(Integer, nullable=True)
+    saferpay_capture_status = Column(String(16), nullable=True)
 
     # Relations
     client = relationship("Client", back_populates="payments", passive_deletes=True)
@@ -106,6 +131,9 @@ class Payment(db.Model):
             "worldline_payment_id": getattr(self, "worldline_payment_id", None),
             "saferpay_transaction_id": getattr(self, "saferpay_transaction_id", None),
             "saferpay_has_token": bool(getattr(self, "saferpay_token", None)),
+            "saferpay_capture_reference_present": bool(
+                getattr(self, "saferpay_capture_id", None)
+            ),
             "booking_info": {
                 "pickup_location": bk.pickup_location if bk else None,
                 "dropoff_location": bk.dropoff_location if bk else None,
@@ -173,6 +201,12 @@ class Payment(db.Model):
 
     @validates("status")
     def validate_status(self, _key, status):
+        from models.payment_status_policy import (
+            PaymentStatusTransitionError,
+            assert_payment_status_transition,
+            remember_payment_status,
+        )
+
         if isinstance(status, str):
             key = status.upper().strip()
             if key not in PaymentStatus.__members__:
@@ -185,6 +219,13 @@ class Payment(db.Model):
         if not isinstance(status, PaymentStatus):
             msg = "Statut invalide (PaymentStatus attendu)."
             raise ValueError(msg)
+        current = self.__dict__.get("status")
+        try:
+            assert_payment_status_transition(current, status)
+        except PaymentStatusTransitionError:
+            remember_payment_status(self, current, status, allowed=False)
+            raise
+        remember_payment_status(self, current, status, allowed=True)
         return status
 
     # Métier

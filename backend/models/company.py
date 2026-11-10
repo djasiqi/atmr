@@ -80,6 +80,13 @@ class Company(db.Model):
             "'admin_manual'::character varying]::text[]))",
             name="ck_company_billing_state_source",
         ),
+        CheckConstraint(
+            "(provides_manual_wheelchair IS NOT TRUE OR "
+            "(manual_wheelchair_count IS NOT NULL AND manual_wheelchair_count >= 1)) "
+            "AND (provides_manual_wheelchair IS NOT FALSE OR manual_wheelchair_count IS NULL) "
+            "AND (provides_manual_wheelchair IS NOT NULL OR manual_wheelchair_count IS NULL)",
+            name="ck_company_manual_wheelchair_stock",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -102,6 +109,11 @@ class Company(db.Model):
     # Contact
     contact_email: Mapped[str] = mapped_column(String(100), nullable=True)
     contact_phone: Mapped[str] = mapped_column(String(20), nullable=True)
+    # Numéro professionnel distinct, montré aux clients seulement si l'entreprise l'autorise.
+    client_contact_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    client_contact_published: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
 
     # Légal & Facturation
     # ✅ S2: IBAN chiffré en base de données (conformité RGPD)
@@ -151,6 +163,15 @@ class Company(db.Model):
     dispatch_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
+    # NULL = non déclaré, donc inéligible. false = prestation refusée.
+    # true = déclaration volontaire. Aucune valeur par défaut compatible.
+    provides_standard_assistance: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True
+    )
+    provides_manual_wheelchair: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True
+    )
+    manual_wheelchair_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_partner = Column(Boolean, nullable=False, server_default="false")
     logo_url: Mapped[str] = mapped_column(String(255), nullable=True)
 
@@ -333,6 +354,9 @@ class Company(db.Model):
             if isinstance(created_dt, datetime)
             else None,
             "dispatch_enabled": _as_bool(self.dispatch_enabled),
+            "provides_standard_assistance": self.provides_standard_assistance,
+            "provides_manual_wheelchair": self.provides_manual_wheelchair,
+            "manual_wheelchair_count": self.manual_wheelchair_count,
             "accepted_at": accepted_dt.isoformat()
             if isinstance(accepted_dt, datetime)
             else None,
@@ -349,7 +373,7 @@ class Company(db.Model):
             raise ValueError(msg)
         return v
 
-    @validates("contact_phone")
+    @validates("contact_phone", "client_contact_phone")
     def validate_contact_phone(self, _key, value):
         if not value:
             return value
