@@ -141,6 +141,12 @@ function GoogleMapsRouteScope({ children }) {
 const AdminSettings = lazy(() => import('./pages/admin/Settings/AdminSettings'));
 const AdminDemoRequests = lazy(() => import('./pages/admin/DemoRequests/AdminDemoRequests'));
 const AdminContactRequests = lazy(() => import('./pages/admin/ContactRequests/AdminContactRequests'));
+const AdminOrganizationApplications = lazy(
+  () => import('./pages/admin/OrganizationApplications/AdminOrganizationApplications')
+);
+const AdminOrganizationApplicationDetail = lazy(
+  () => import('./pages/admin/OrganizationApplications/AdminOrganizationApplicationDetail')
+);
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
 const PlatformLayout = lazy(() => import('./pages/admin/PlatformOps/PlatformLayout'));
 const PlatformOverviewPage = lazy(() => import('./pages/admin/PlatformOps/PlatformOverviewPage'));
@@ -187,6 +193,18 @@ const AnalyticsDashboard = lazy(() => import('./pages/company/Analytics/Analytic
 const PrivacyPolicy = lazy(() => import('./pages/Legal/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./pages/Legal/TermsOfService'));
 const LegalNotice = lazy(() => import('./pages/Legal/LegalNotice'));
+const OrganizationSignupChoice = lazy(() =>
+  import('./pages/Public/organizationSignup/OrganizationSignupChoice')
+);
+const OrganizationSignupForm = lazy(() =>
+  import('./pages/Public/organizationSignup/OrganizationSignupForm')
+);
+const OrganizationEmailVerify = lazy(() =>
+  import('./pages/Public/organizationSignup/OrganizationEmailVerify')
+);
+const OrganizationApplicationFollow = lazy(() =>
+  import('./pages/Public/organizationSignup/OrganizationApplicationFollow')
+);
 const DeplacezVousPage = lazy(() => import('./pages/Public/DeplacezVousPage'));
 const ConduirePage = lazy(() => import('./pages/Public/ConduirePage'));
 const ProfessionnelPage = lazy(() => import('./pages/Public/ProfessionnelPage'));
@@ -411,6 +429,46 @@ const App = () => {
               }
             />
             <Route
+              path="/inscription/organisation"
+              element={
+                <DefaultLayout>
+                  <OrganizationSignupChoice />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/inscription/organisation/entreprise"
+              element={
+                <DefaultLayout>
+                  <OrganizationSignupForm kind="company" />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/inscription/organisation/institution"
+              element={
+                <DefaultLayout>
+                  <OrganizationSignupForm kind="institution" />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/inscription/organisation/verifier"
+              element={
+                <DefaultLayout>
+                  <OrganizationEmailVerify />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/inscription/organisation/suivi"
+              element={
+                <DefaultLayout>
+                  <OrganizationApplicationFollow />
+                </DefaultLayout>
+              }
+            />
+            <Route
               path="/login"
               element={
                 <DefaultLayout>
@@ -625,6 +683,14 @@ const App = () => {
               <Route path="partners/users" element={<AdminUsers />} />
               <Route path="partners/demo-requests" element={<AdminDemoRequests />} />
               <Route path="partners/contact-requests" element={<AdminContactRequests />} />
+              <Route
+                path="partners/organization-applications"
+                element={<AdminOrganizationApplications />}
+              />
+              <Route
+                path="partners/organization-applications/:applicationId"
+                element={<AdminOrganizationApplicationDetail />}
+              />
 
               <Route path="finance" element={<AdminBillingHub />}>
                 <Route index element={<Navigate to="factures" replace />} />

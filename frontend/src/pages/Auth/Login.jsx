@@ -1161,6 +1161,11 @@ const Login = () => {
             </Link>
           </p>
           <p className={styles.footerText}>
+            <Link to="/inscription/organisation" className={styles.forgotLink}>
+              Entreprise ou institution
+            </Link>
+          </p>
+          <p className={styles.footerText}>
             Lirie — Plateforme de transport sanitaire
           </p>
         </div>
