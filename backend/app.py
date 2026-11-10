@@ -2056,7 +2056,7 @@ def create_app(config_name: str | None = None):
                 app.logger.info("✅ Import init_chat_socket réussi")
 
                 # Hors SKIP_SOCKETIO : instance réelle (ext peut typer NoOp | SocketIO)
-                init_chat_socket(cast(Any, socketio))
+                init_chat_socket(cast(Any, socketio), app)
                 app.logger.info("✅ init_chat_socket(socketio) exécuté")
             except Exception as e:
                 app.logger.exception(
