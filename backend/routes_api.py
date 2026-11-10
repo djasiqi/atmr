@@ -225,6 +225,10 @@ def init_namespaces(app):
     from routes.client_portal_receivables import client_portal_receivables_ns
     from routes.contact import contact_ns
     from routes.admin_contact_requests import admin_contact_requests_ns
+    from routes.organization_applications import organization_applications_ns
+    from routes.admin_organization_applications import (
+        admin_organization_applications_ns,
+    )
     from routes.demo_requests import (
         admin_demo_accesses_ns,
         admin_demo_requests_ns,
@@ -479,6 +483,11 @@ def init_namespaces(app):
     api_v1.add_namespace(contact_ns, path="/contact")
     api_v1.add_namespace(admin_contact_requests_ns, path="/admin/contact_requests")
     api_v1.add_namespace(demo_requests_ns, path="/demo-requests")
+    api_v1.add_namespace(organization_applications_ns, path="/organization-applications")
+    api_v1.add_namespace(
+        admin_organization_applications_ns,
+        path="/admin/organization-applications",
+    )
     api_v1.add_namespace(admin_demo_requests_ns, path="/admin/demo_requests")
     api_v1.add_namespace(admin_demo_accesses_ns, path="/admin/demo_accesses")
     api_v1.add_namespace(demo_access_ns, path="/demo_access")
