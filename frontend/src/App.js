@@ -205,6 +205,9 @@ const OrganizationEmailVerify = lazy(() =>
 const OrganizationApplicationFollow = lazy(() =>
   import('./pages/Public/organizationSignup/OrganizationApplicationFollow')
 );
+const DriverInvitationPage = lazy(() =>
+  import('./pages/Public/driverInvitation/DriverInvitationPage')
+);
 const DeplacezVousPage = lazy(() => import('./pages/Public/DeplacezVousPage'));
 const ConduirePage = lazy(() => import('./pages/Public/ConduirePage'));
 const ProfessionnelPage = lazy(() => import('./pages/Public/ProfessionnelPage'));
@@ -465,6 +468,14 @@ const App = () => {
               element={
                 <DefaultLayout>
                   <OrganizationApplicationFollow />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/invitation/chauffeur"
+              element={
+                <DefaultLayout>
+                  <DriverInvitationPage />
                 </DefaultLayout>
               }
             />

@@ -97,6 +97,12 @@
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.inviteTrigger {
+  min-height: 2.75rem;
+  height: auto;
 }
 
 /* Buttons */

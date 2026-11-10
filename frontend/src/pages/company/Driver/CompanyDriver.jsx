@@ -20,11 +20,10 @@ import DriverLiveMap from '../Dashboard/components/DriverLiveMap';
 import useDriver from '../../../hooks/useDriver';
 import CompanyDriverTable from '../components/CompanyDriverTable';
 import CompanyDriverTableSkeleton from '../components/CompanyDriverTableSkeleton';
-import AddDriverForm from '../components/AddDriverForm';
+import DriverInvitationsPanel from './DriverInvitationsPanel';
 import EditDriverForm from '../components/EditDriverForm';
 import useAuthToken from '../../../hooks/useAuthToken';
 import {
-  createDriver,
   fetchCompanyReservationById,
   updateDriverDetails,
   updateReservation,
@@ -153,7 +152,7 @@ const CompanyDriver = () => {
     refreshDrivers,
   } = useDriver();
 
-  const [showAddDriverModal, setShowAddDriverModal] = useState(false);
+  const [showInviteForm, setShowInviteForm] = useState(false);
   const [showEditDriverModal, setShowEditDriverModal] = useState(false);
   const [driverToEdit, setDriverToEdit] = useState(null);
   const [_driverToDelete, setDriverToDelete] = useState(null);
@@ -214,25 +213,6 @@ const CompanyDriver = () => {
   }, [drivers, searchTerm, statusFilter, availabilityFilter]);
 
   // Handlers
-  const handleAddSubmit = useCallback(
-    async (payload) => {
-      try {
-        await createDriver(payload);
-        refreshDrivers();
-        setShowAddDriverModal(false);
-        toast.success('Chauffeur ajoute avec succes');
-      } catch (err) {
-        console.error("Erreur lors de l'ajout du chauffeur:", err);
-        let errorMessage = err?.message || err?.error || 'Une erreur est survenue.';
-        if (err?.status === 409 || errorMessage.includes('Conflict')) {
-          errorMessage = "Ce nom d'utilisateur ou cet email est deja utilise.";
-        }
-        toast.error(errorMessage);
-      }
-    },
-    [refreshDrivers]
-  );
-
   const handleEditSubmit = useCallback(
     async (driverId, payload) => {
       try {
@@ -275,20 +255,20 @@ const CompanyDriver = () => {
 
   const openEditModal = useCallback((driver) => {
     closeReservationPanel();
-    setShowAddDriverModal(false);
+    setShowInviteForm(false);
     setDriverToEdit(driver);
     setShowEditDriverModal(true);
   }, [closeReservationPanel]);
 
-  const openAddPanel = useCallback(() => {
+  const openInvitePanel = useCallback(() => {
     closeReservationPanel();
     setShowEditDriverModal(false);
     setDriverToEdit(null);
-    setShowAddDriverModal(true);
+    setShowInviteForm(true);
   }, [closeReservationPanel]);
 
   const closeSidePanel = useCallback(() => {
-    setShowAddDriverModal(false);
+    setShowInviteForm(false);
     setShowEditDriverModal(false);
     setDriverToEdit(null);
     closeReservationPanel();
@@ -299,7 +279,7 @@ const CompanyDriver = () => {
     const id = Number(bookingId);
     const requestId = reservationRequestRef.current + 1;
     reservationRequestRef.current = requestId;
-    setShowAddDriverModal(false);
+    setShowInviteForm(false);
     setShowEditDriverModal(false);
     setDriverToEdit(null);
     setReservationHint({
@@ -330,7 +310,7 @@ const CompanyDriver = () => {
     }
   }, []);
 
-  const driverFormOpen = showAddDriverModal || (showEditDriverModal && driverToEdit);
+  const driverFormOpen = Boolean(showEditDriverModal && driverToEdit);
   const reservationPanelOpen =
     Boolean(selectedReservation) || reservationLoading || Boolean(reservationHint);
   const panelOpen = driverFormOpen || reservationPanelOpen;
@@ -382,12 +362,17 @@ const CompanyDriver = () => {
               <FiCalendar size={16} />
               Voir le planning
             </Link>
-            <button type="button" className={s.btnPrimary} onClick={openAddPanel}>
+            <button type="button" className={s.btnPrimary} onClick={openInvitePanel}>
               <FiPlus size={16} />
-              Ajouter un chauffeur
+              Inviter un chauffeur
             </button>
           </div>
         </div>
+
+        <DriverInvitationsPanel
+          formOpen={showInviteForm}
+          onCloseForm={() => setShowInviteForm(false)}
+        />
 
         {/* ===== ZONE B — Command Bar ===== */}
         <div className={s.commandBar}>
@@ -581,7 +566,7 @@ const CompanyDriver = () => {
                   <>
                     <h3 className={s.emptyTitle}>Aucun chauffeur enregistré</h3>
                     <p className={s.emptySubtitle}>
-                      Ajoutez un chauffeur pour commencer le suivi GPS.
+                      Invitez un chauffeur pour commencer le suivi GPS.
                     </p>
                   </>
                 ) : searchTerm.trim() || statusFilter !== 'all' || availabilityFilter !== 'all' ? (
@@ -601,13 +586,13 @@ const CompanyDriver = () => {
                   <>
                     <h3 className={s.emptyTitle}>Aucun chauffeur dans cette categorie</h3>
                     <p className={s.emptySubtitle}>
-                      Ajustez vos filtres ou ajoutez un nouveau chauffeur.
+                      Ajustez vos filtres ou invitez un nouveau chauffeur.
                     </p>
                   </>
                 )}
-                <button type="button" className={s.btnPrimary} onClick={openAddPanel}>
+                <button type="button" className={s.btnPrimary} onClick={openInvitePanel}>
                   <FiPlus size={14} />
-                  Ajouter un chauffeur
+                  Inviter un chauffeur
                 </button>
               </div>
             ) : (
@@ -669,9 +654,6 @@ const CompanyDriver = () => {
       {driverFormOpen ? (
         <aside className={s.sidePanel}>
           <div className={s.sidePanelInner}>
-            {showAddDriverModal && (
-              <AddDriverForm onSubmit={handleAddSubmit} onClose={closeSidePanel} />
-            )}
             {showEditDriverModal && driverToEdit && (
               <EditDriverForm
                 key={driverToEdit.id}
