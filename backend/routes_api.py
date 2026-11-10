@@ -211,6 +211,9 @@ def init_namespaces(app):
     from routes.analytics import analytics_ns  # /analytics
     from routes.app_version import app_version_ns  # Version check mobile
     from routes.auth import auth_ns
+    import routes.external_auth as _external_auth
+
+    _ = _external_auth
     from routes.billing_review import billing_review_ns  # ✅ P5: Contrôle facturation
     from routes.bookings import bookings_ns
     from routes.clients import clients_ns
