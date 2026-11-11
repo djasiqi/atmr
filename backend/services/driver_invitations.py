@@ -425,6 +425,8 @@ def _create_client(row: DriverInvitation, password: str) -> User:
     user.account_status = "active"
     user.force_password_change = False
     _validate_chosen_password(password)
+    # Mot de passe déjà passé par _validate_chosen_password (semgrep Django FP).
+    # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
     user.set_password(password)
     db.session.add(user)
     db.session.flush()

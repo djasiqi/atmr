@@ -355,6 +355,8 @@ def fetch_jwks(provider: str) -> dict[str, Any]:
     if cached is not None and cached[0] > now:
         return cached[1]
     try:
+        # JWKS URL constante fournisseur (GOOGLE_JWKS/APPLE_JWKS), hors contrôle utilisateur.
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         with urlopen(url, timeout=8) as response:
             data = json.loads(response.read().decode("utf-8"))
     except (URLError, TimeoutError, json.JSONDecodeError) as error:
@@ -765,6 +767,8 @@ def _post_form(url: str, body: dict[str, str]) -> dict[str, Any]:
         method="POST",
     )
     try:
+        # Token endpoint constant (GOOGLE_TOKEN/APPLE_TOKEN), hors contrôle utilisateur.
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         with urlopen(request, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (URLError, TimeoutError, json.JSONDecodeError) as error:
