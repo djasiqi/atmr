@@ -28,7 +28,11 @@ class AuthorizationService:
         Returns:
             User si trouvé, None sinon
         """
-        user_public_id = get_jwt_identity()
+        try:
+            user_public_id = get_jwt_identity()
+        except Exception:
+            # Hors contexte JWT (API Key, jobs) : pas d'identité utilisable.
+            return None
         if not user_public_id:
             return None
 
@@ -315,7 +319,11 @@ class AuthorizationService:
             institution_role_from_grant,
         )
 
-        user = AuthorizationService.get_current_user()
+        try:
+            user = AuthorizationService.get_current_user()
+        except Exception:
+            # Auth API Key / hors contexte JWT : pas de rôle institution JWT.
+            return None
         if user is not None and grants_are_authoritative(user):
             return institution_role_from_grant(user)
 

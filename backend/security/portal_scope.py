@@ -292,15 +292,29 @@ def _historical_scope(
         if role != UserRole.COMPANY.value:
             return _deny(portal, "role_mismatch")
         owned = _companies_owned(int(user.id))
-        if len(owned) > 1:
-            return _deny(portal, "ambiguous_company")
         if len(owned) == 0:
             return _deny(portal, "no_organization")
-        company = owned[0]
-        if claimed_company_id is not None and int(claimed_company_id) != int(
-            company.id
-        ):
-            return _deny(portal, "cross_tenant")
+        company: Company | None
+        if len(owned) == 1:
+            company = owned[0]
+            if claimed_company_id is not None and int(claimed_company_id) != int(
+                company.id
+            ):
+                return _deny(portal, "cross_tenant")
+        else:
+            # Multi-sociétés : le claim (JWT / en-tête) désambigüe ; sinon refus.
+            if claimed_company_id is None:
+                return _deny(portal, "ambiguous_company")
+            company = next(
+                (row for row in owned if int(row.id) == int(claimed_company_id)),
+                None,
+            )
+            if company is None:
+                company = Company.query.filter_by(
+                    user_id=int(user.id), id=int(claimed_company_id)
+                ).first()
+            if company is None:
+                return _deny(portal, "cross_tenant")
         if require_company_approval and not bool(company.is_approved):
             return _deny(portal, "unapproved")
         return PortalScope(
@@ -316,13 +330,14 @@ def _historical_scope(
         driver = getattr(user, "driver", None)
         if driver is None:
             driver = Driver.query.filter_by(user_id=user.id).first()
-        if driver is None or driver.company_id is None:
+        driver_company_id = getattr(driver, "company_id", None)
+        if driver is None or driver_company_id is None:
             return _deny(portal, "no_organization")
         if claimed_company_id is not None and int(claimed_company_id) != int(
-            driver.company_id
+            driver_company_id
         ):
             return _deny(portal, "cross_tenant")
-        company = Company.query.get(int(driver.company_id))
+        company = Company.query.get(int(driver_company_id))
         return PortalScope(
             allowed=True,
             portal=portal,
@@ -443,23 +458,24 @@ def _grant_scope(
         driver = getattr(user, "driver", None)
         if driver is None:
             driver = Driver.query.filter_by(user_id=user.id).first()
-        if driver is None or driver.company_id is None:
+        driver_company_id = getattr(driver, "company_id", None) if driver else None
+        if driver is None or driver_company_id is None:
             return _deny(portal, "no_organization")
         if claimed_company_id is not None and claimed_company_id != int(
-            driver.company_id
+            driver_company_id
         ):
             return _deny(portal, "cross_tenant")
-        if int(driver.company_id) in revoked_companies and not any(
-            row.company_id == driver.company_id for row in active
+        if int(driver_company_id) in revoked_companies and not any(
+            row.company_id == driver_company_id for row in active
         ):
             return _deny(portal, "revoked")
         match = next(
-            (row for row in active if row.company_id == driver.company_id),
+            (row for row in active if row.company_id == driver_company_id),
             None,
         )
         if match is None:
             return _deny(portal, "cross_tenant")
-        company = Company.query.get(int(driver.company_id))
+        company = Company.query.get(int(driver_company_id))
         return PortalScope(
             allowed=True,
             portal=portal,

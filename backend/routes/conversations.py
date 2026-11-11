@@ -32,7 +32,31 @@ def _resolve_conversation_actor(user):
         return None, ({"error": "Utilisateur introuvable"}, 404)
     role = _normalized_role(user)
     if role == "COMPANY":
-        company = getattr(user, "company", None)
+        from models import Company
+
+        owned = Company.query.filter_by(user_id=int(user.id)).order_by(Company.id).all()
+        if len(owned) > 1:
+            # Sans contexte d'organisation unique : refus (évite la fuite cross-tenant).
+            active_ctx = (request.headers.get("X-Active-Context-Id") or "").strip()
+            chosen = None
+            if active_ctx.startswith("company:"):
+                try:
+                    ctx_id = int(active_ctx.split(":", 1)[1].strip())
+                except (ValueError, IndexError):
+                    ctx_id = None
+                if ctx_id is not None:
+                    chosen = next((c for c in owned if int(c.id) == ctx_id), None)
+            if chosen is None:
+                return None, (
+                    {
+                        "error": "Contexte entreprise requis",
+                        "error_code": "company_context_required",
+                    },
+                    403,
+                )
+            company = chosen
+        else:
+            company = owned[0] if owned else getattr(user, "company", None)
         if company is None:
             return None, ({"error": "Profil entreprise introuvable"}, 404)
         return {

@@ -236,6 +236,27 @@ def skip_integration_if_schema_missing(request, postgresql_schema_ready):
         )
 
 
+@pytest.fixture(autouse=True)
+def _reset_portal_grant_flags(app):
+    """Évite la pollution inter-tests des drapeaux d'habilitation portail."""
+    had_enforcement = "PORTAL_GRANT_ENFORCEMENT" in app.config
+    had_observation = "PORTAL_GRANT_OBSERVATION" in app.config
+    previous_enforcement = app.config.get("PORTAL_GRANT_ENFORCEMENT")
+    previous_observation = app.config.get("PORTAL_GRANT_OBSERVATION")
+    # Défaut produit : drapeaux éteints hors tests ciblés.
+    app.config["PORTAL_GRANT_ENFORCEMENT"] = False
+    app.config["PORTAL_GRANT_OBSERVATION"] = False
+    yield
+    if had_enforcement:
+        app.config["PORTAL_GRANT_ENFORCEMENT"] = previous_enforcement
+    else:
+        app.config.pop("PORTAL_GRANT_ENFORCEMENT", None)
+    if had_observation:
+        app.config["PORTAL_GRANT_OBSERVATION"] = previous_observation
+    else:
+        app.config.pop("PORTAL_GRANT_OBSERVATION", None)
+
+
 @pytest.fixture
 def app_context(app):
     """Crée un contexte d'application Flask pour les tests."""
@@ -430,7 +451,7 @@ def auth_headers(client, sample_user, sample_company):
 
     claims = {
         "role": sample_user.role.value,
-        "company_id": sample_company.id,
+        "company_id": int(sample_company.id),
         "driver_id": getattr(sample_user, "driver_id", None),
         "aud": "atmr-api",
     }
@@ -469,7 +490,7 @@ def admin_headers(client, sample_admin_user):
 
 
 @pytest.fixture
-def authenticated_client(client, sample_user):
+def authenticated_client(client, sample_user, sample_company):
     """Client Flask authentifié avec token JWT."""
     from datetime import timedelta
 
@@ -477,7 +498,8 @@ def authenticated_client(client, sample_user):
 
     claims = {
         "role": sample_user.role.value,
-        "company_id": getattr(sample_user, "company_id", None),
+        # User n'a pas company_id : revendiquer la société de fixture.
+        "company_id": int(sample_company.id),
         "driver_id": getattr(sample_user, "driver_id", None),
         "aud": "atmr-api",
     }
