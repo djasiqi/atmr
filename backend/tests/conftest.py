@@ -62,6 +62,10 @@ import importlib.util
 import os
 from unittest import mock
 
+# Découpage CI uniquement. Sans PYTEST_SHARD, la collecte reste monolithique.
+if os.environ.get("PYTEST_SHARD"):
+    pytest_plugins.append("tests.ci_shard")
+
 # Note: Les tests backend utilisent PostgreSQL par défaut (voir DATABASE_URL plus bas),
 # on conserve donc le type JSONB natif pour préserver les index GIN en migrations.
 import pytest  # noqa: E402

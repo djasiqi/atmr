@@ -137,8 +137,15 @@ jobs:
           echo "✅ Tous les contrôles qualité bloquants sont passés."
 
   test:
-    name: Tests (pytest)
+    # Quatre runners isolés. La suite monolithique avec Socket.IO réel est
+    # coupée par le runner (signal 143 / perte de communication) vers 50 %,
+    # bien avant le timeout de 75 min. Chaque shard a ses propres services.
+    name: Tests (pytest) shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     # ✅ Variables d'environnement au niveau du job pour éviter les connexions "root"
     env:
@@ -280,71 +287,147 @@ jobs:
           echo "✅ Migrations exécutées avec succès"
 
       - name: Run pytest with coverage
-        # Socket.IO réel (SKIP_SOCKETIO=false) allonge la suite au-delà de 30 min.
+        # Le timeout reste 75 min : les arrêts observés sont à 8–15 min.
         timeout-minutes: 75
+        env:
+          PYTEST_SHARD: ${{ matrix.shard }}
+          PYTEST_SHARD_TOTAL: "4"
+          PYTEST_SHARD_REPORT: ${{ github.workspace }}/backend/ci-shard-report.json
+          COVERAGE_FILE: ${{ github.workspace }}/backend/coverage.data
+          PYTHONUNBUFFERED: "1"
         run: |
-          # Lancer pytest depuis la racine pour que les imports 'backend' fonctionnent
-          # Politique de mesure : backend/.coveragerc uniquement (--cov-config)
+          # Mesures non sensibles, écrites dans le journal du step.
+          sampler() {
+            while true; do
+              mem_avail=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
+              mem_total=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
+              cgroup="na"
+              if [ -r /sys/fs/cgroup/memory.current ]; then
+                cgroup=$(cat /sys/fs/cgroup/memory.current)
+              elif [ -r /sys/fs/cgroup/memory/memory.usage_in_bytes ]; then
+                cgroup=$(cat /sys/fs/cgroup/memory/memory.usage_in_bytes)
+              fi
+              nproc=$(ps -e --no-headers | wc -l)
+              disk=$(df -BM --output=avail / | tail -1 | tr -d ' ')
+              pg=$(ps -C postgres -o rss= | awk '{s+=$1} END {print s+0}')
+              rd=$(ps -C redis-server -o rss= | awk '{s+=$1} END {print s+0}')
+              echo "CI_RESOURCE shard=${PYTEST_SHARD} avail_kb=${mem_avail} total_kb=${mem_total} cgroup_bytes=${cgroup} procs=${nproc} disk_free=${disk} pg_rss_kb=${pg} redis_rss_kb=${rd}"
+              sleep 20
+            done
+          }
+          sampler &
+          sampler_pid=$!
+          set +e
           pytest backend/tests -v \
             --cov=backend \
             --cov-config=backend/.coveragerc \
-            --cov-report=xml:backend/coverage.xml \
-            --cov-report=html:backend/htmlcov \
-            --cov-report=term-missing \
+            --cov-report=xml:backend/coverage-shard.xml \
+            --cov-report=term:skip-covered \
             --timeout=120 \
             --timeout-method=thread
+          status=$?
+          set -e
+          kill "$sampler_pid" || true
+          wait "$sampler_pid" || true
+          if [ "$status" -eq 0 ]; then
+            test -s backend/ci-shard-report.json
+            test -s backend/coverage.data
+          fi
+          echo "CI_RESOURCE_END shard=${PYTEST_SHARD} status=${status}"
+          exit "$status"
 
-      # Plancher anti-régression.
-      # Objectif global: 70% (voir politique de couverture).
-      # Ne pas abaisser ce baseline sans mise à jour explicite de la politique.
-      - name: Check global coverage >= baseline (50%)
+      - name: Upload shard report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-shard-${{ matrix.shard }}
+          if-no-files-found: error
+          path: |
+            backend/ci-shard-report.json
+            backend/coverage.data
+          retention-days: 7
+
+  pytest-gate:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install coverage tools
         run: |
-          cd backend
-          echo "📊 Vérification couverture globale >= baseline 50%..."
-          python scripts/check_coverage.py \
-            --coverage-xml coverage.xml \
-            --fail-under 50.0 \
-            --json coverage_report.json
-          echo "✅ Couverture globale >= baseline 50%"
+          python -m pip install --upgrade pip
+          pip install pytest coverage defusedxml
 
-      # Rapport dispatch / modules critiques. Non bloquant :
-      # le plancher CI reste le step « baseline 50% ». Ne PAS relancer pytest
-      # ici (2e session après 5k+ tests → hang / sortie bufferisée ~1h).
+      - name: Download shard artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pytest-shard-*
+          path: backend/ci-shards
+
+      - name: Verify shards, combine coverage, enforce 50%
+        run: |
+          set +e
+          python backend/tests/ci_shard.py verify backend/ci-shards
+          verify_status=$?
+          set -e
+          # Même répertoire que pytest (racine du dépôt) : chemins relatifs .coveragerc.
+          coverage combine --rcfile=backend/.coveragerc \
+            backend/ci-shards/pytest-shard-1/coverage.data \
+            backend/ci-shards/pytest-shard-2/coverage.data \
+            backend/ci-shards/pytest-shard-3/coverage.data \
+            backend/ci-shards/pytest-shard-4/coverage.data
+          coverage xml --rcfile=backend/.coveragerc -o backend/coverage.xml
+          coverage html --rcfile=backend/.coveragerc -d backend/htmlcov
+          echo "📊 Vérification couverture globale >= baseline 50%..."
+          python backend/scripts/check_coverage.py \
+            --coverage-xml backend/coverage.xml \
+            --fail-under 50.0 \
+            --json backend/coverage_report.json
+          echo "✅ Couverture globale >= baseline 50%"
+          if [ "$verify_status" -ne 0 ]; then
+            echo "❌ Un shard a échoué, manque, ou la partition est incomplète."
+            exit 1
+          fi
+
       - name: Report critical module coverage
         timeout-minutes: 3
         continue-on-error: true
+        if: always()
         run: |
           echo "📋 Rapport couverture modules critiques (non bloquant)..."
           cd backend
-          # Rapport seul sur le XML déjà produit par « Run pytest with coverage ».
           python scripts/check_coverage.py \
             --coverage-xml coverage.xml \
             --quiet \
-            --json coverage_report.json
-
+            --json coverage_report.json || true
           python -c "
           import json
-          with open('coverage_report.json') as f:
-              report = json.load(f)
+          from pathlib import Path
+          path = Path('coverage_report.json')
+          if not path.exists():
+              print('Rapport critique indisponible')
+              raise SystemExit(0)
+          report = json.loads(path.read_text(encoding='utf-8'))
           critical_low = report.get('critical_low_coverage') or {}
           if critical_low:
-              print('⚠️ Modules critiques sous leur seuil (rapport):')
-              for path, stats in list(critical_low.items())[:15]:
+              print('Modules critiques sous leur seuil (rapport):')
+              for module_path, stats in list(critical_low.items())[:15]:
                   req = stats.get('required_threshold', 80)
-                  print(f'  {path}: {stats[\"percentage\"]:.2f}% (requis {req:.0f}%)')
+                  print(f'  {module_path}: {stats[\"percentage\"]:.2f}% (requis {req:.0f}%)')
           else:
-              print('✅ Tous les modules critiques mesurés respectent leur seuil')
-          missing = report.get('critical_missing_from_xml') or []
-          if missing:
-              print('ℹ️ Critiques absents du XML (omis / hors mesure):')
-              for path in missing[:10]:
-                  print(f'  {path}')
+              print('Tous les modules critiques mesurés respectent leur seuil')
           "
 
-          echo "✅ Rapport modules critiques terminé"
-          echo "ℹ️ Promotion bloquante: check_coverage.py --require-critical (voir docs/backend/coverage-policy.md)"
-
       - name: Upload coverage artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage-report
