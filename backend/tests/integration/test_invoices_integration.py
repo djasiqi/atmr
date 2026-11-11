@@ -1086,6 +1086,8 @@ class TestInvoicesIntegration:
         # La facture doit être SENT pour être dupliquée
         test_invoice.status = InvoiceStatus.SENT
         db.session.commit()
+        original_number = test_invoice.invoice_number
+        original_total = test_invoice.total_amount
 
         # Dupliquer la facture
         # ✅ FIX: Le namespace invoices_ns a path="/invoices", donc la route complète est:
@@ -1106,6 +1108,10 @@ class TestInvoicesIntegration:
         assert "client_id" in draft_context
         assert "period_year" in draft_context
         assert "period_month" in draft_context
+        db.session.refresh(test_invoice)
+        assert test_invoice.status == InvoiceStatus.SENT
+        assert test_invoice.invoice_number == original_number
+        assert test_invoice.total_amount == original_total
 
     def test_consolidated_invoice_multiple_clients(
         self,
@@ -1329,13 +1335,19 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         import uuid as u
 
         from ext import bcrypt
-        from models import Client, ClientStay, User
+        from models import Client, ClientStay, Company, User
         from models.enums import UserRole
 
         mid = datetime.now(UTC) + timedelta(hours=3)
         y, m = mid.year, mid.month
         start = datetime(y, m, 1, tzinfo=UTC)
-        clinic_company_id = test_company.id
+        clinic = Company()
+        clinic.name = f"Clinique {u.uuid4().hex[:6]}"
+        clinic.address = "Avenue Clinique 1, 1200 Genève"
+        clinic.user_id = test_company.user_id
+        db.session.add(clinic)
+        db.session.flush()
+        clinic_company_id = clinic.id
         company_id = test_company.id
 
         uobj = User(
