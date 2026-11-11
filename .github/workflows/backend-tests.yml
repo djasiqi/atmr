@@ -280,7 +280,8 @@ jobs:
           echo "✅ Migrations exécutées avec succès"
 
       - name: Run pytest with coverage
-        timeout-minutes: 30
+        # Socket.IO réel (SKIP_SOCKETIO=false) allonge la suite au-delà de 30 min.
+        timeout-minutes: 75
         run: |
           # Lancer pytest depuis la racine pour que les imports 'backend' fonctionnent
           # Politique de mesure : backend/.coveragerc uniquement (--cov-config)
