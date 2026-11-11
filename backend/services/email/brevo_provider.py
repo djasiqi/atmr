@@ -577,7 +577,14 @@ class BrevoEmailProvider:
             with smtplib.SMTP(host, port, timeout=30) as smtp:
                 smtp.starttls()
                 smtp.login(smtp_user, smtp_password)
-                smtp.sendmail(from_email, [to_email], msg.as_string())
+                # sendmail encode une str en ascii et casse « période » / « échéance ».
+                from email import policy as email_policy
+
+                smtp.sendmail(
+                    from_email,
+                    [to_email],
+                    msg.as_bytes(policy=email_policy.SMTP),
+                )
 
             if EMAIL_SIGNATURE_DEBUG:
                 logger.info(
