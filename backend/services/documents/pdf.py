@@ -5184,13 +5184,23 @@ def _build_totals_table(
         if is_reminder or amount_paid <= 0
         else persisted_invoice_payment_lines(invoice)
     )
+    balance = _driver_deposit_balance(invoice, amount_paid)
+    # NET À PAYER seulement s'il reste un solde après acompte.
+    # Un solde nul n'est pas « à payer » : Payée si des règlements couvrent
+    # la créance, Solde nul seul si elle a été éteinte autrement (avoir).
     show_acomptes = (not is_reminder) and amount_paid > 0
+    settled = (not is_reminder) and balance <= 0
     if not is_reminder:
-        # Maquette V1 : toujours NET À PAYER ; acomptes seulement s'il y a eu paiement.
         settlement_rows = _with_driver_deposit_summary_rows(invoice)
-        total_data = list(total_data) + (
-            settlement_rows if show_acomptes else settlement_rows[1:]
-        )
+        # Avec acompte : acomptes + NET À PAYER (0.00 si la facture est soldée).
+        # Sans acompte : pas de NET À PAYER, le total facturé suffit.
+        if amount_paid > 0:
+            total_data = list(total_data) + settlement_rows
+        else:
+            total_data = list(total_data)
+        if settled:
+            caption = "Payée. Solde nul." if amount_paid > 0 else "Solde nul."
+            total_data.append([caption, ""])
 
     total_table = Table(total_data, colWidths=col_widths)
     # Aligner la table des totaux sur le bord droit du frame pour que
@@ -5243,7 +5253,8 @@ def _build_totals_table(
         style_rules.append(("FONTSIZE", (0, 0), (-1, -1), FONT_TOTAL))
     # Ligne « Acomptes déjà encaissés » juste avant le NET.
     if show_acomptes and len(total_data) >= 2:
-        acompte_idx = len(total_data) - 2
+        # Soldée : la légende suit le NET, l'acompte est donc une ligne plus haut.
+        acompte_idx = len(total_data) - (3 if settled else 2)
         style_rules.extend(
             [
                 ("FONTNAME", (0, acompte_idx), (-1, acompte_idx), font_name),
@@ -5259,7 +5270,7 @@ def _build_totals_table(
         )
     total_table.setStyle(TableStyle(style_rules))
 
-    if not deposit_lines:
+    if not deposit_lines or settled:
         return total_table
 
     from reportlab.platypus import Spacer
