@@ -2,11 +2,11 @@
 
 **PR** : [#101](https://github.com/djasiqi/atmr/pull/101) (Draft, non mergée)  
 **Branche** : `candidate/lirie-auth-pro-ci-20261111`  
-**SHA validé par les CI** : `afbc17845ef96df156e15d78be28a23eae9ff494`  
+**SHA validé par les CI** : `48d0dfe96cc4ab0a34bd89aac4a264d760e816ce`  
 **Base** : `main` (`afea1f0049afa04c385f3f6b7b66c7c1c182f55e`) intacte.  
 Aucun merge, aucun déploiement, aucune migration de production, aucun feature flag, aucune publication mobile.
 
-Ce document est un commit de documentation ajouté après la validation de `afbc1784`. Il ne change ni les tests ni les dépendances. Les workflows filtrés (Backend Tests, Frontend Tests) sont relancés par dispatch sur le SHA de ce fichier. Leurs identifiants sont ajoutés dès qu’ils se terminent.
+Le SHA `48d0dfe9` est celui dont la matrice ci-dessous est verte. Le commit de ce document ne change que ce texte. La pull request rejoue Backend Tests sur ce commit, parce que le filtre de chemins porte sur l’ensemble du diff. Ce run-là confirme le même arbre de tests. Il ne faut pas présenter un run de `afbc1784` comme la validation de ce fichier.
 
 ---
 
@@ -41,6 +41,8 @@ Mesure ajoutée sur les shards (run `99a8555e`, shard 2, job `130498213587`) : `
 
 3. **Date de test portail** (`afbc1784`) : `planDeparture('2026-09-30', …)` est dans le passé au 11 novembre 2026. Le champ date reste `aria-invalid` et le récapitulatif « Prise en charge » n’apparaît pas. Le test reprend `2027-03-15`, déjà acceptée par le scénario rendez-vous du même fichier. L’assertion est inchangée.
 
+4. **Compteur `Path.open`** (`48d0dfe9`) : sur le commit documentaire `2395b00a`, le shard 3 a échoué une fois sur `test_edge_case_pruned_trials` (`assert 4 == 3`). Le même test était vert sur `afbc1784`. pytest-cov peut appeler `Path.open` pendant le patch global. Le test vérifie maintenant les trois JSON du tuner (`config`, `metrics_*.json`, `comparison_results_*.json`). L’exigence d’écriture reste.
+
 Rejeu local Docker (`lirie-ci-gate`, Postgres `5433`, Redis `6381` / `6383`, image `atmr-backend_tests`, aucune écriture sur la base `atmr`) :
 
 - les 4 tests non atteints en CI, plus les 2 tests de partition : 6 passed ;
@@ -51,9 +53,9 @@ Rejeu local Docker (`lirie-ci-gate`, Postgres `5433`, Redis `6381` / `6383`, ima
 
 ## C. Résultats des 15 tests initiaux
 
-Les 15 échecs du run `42940978749` (`SKIP_SOCKETIO=true`) sont PASS dans la suite CI de `afbc1784` (0 failed sur 8006 collectés). Rejeu local groupé : 15/15 PASS.
+Les 15 échecs du run `42940978749` (`SKIP_SOCKETIO=true`) sont PASS dans la suite CI de `48d0dfe9` (0 failed sur 8006 collectés). Rejeu local groupé : 15/15 PASS.
 
-| Groupe | Tests | Statut sur `afbc1784` |
+| Groupe | Tests | Statut sur `48d0dfe9` |
 |---|---|---|
 | Entreprises / partenariats | recherche sociétés, deux 403 partenariat | PASS |
 | Invitations chauffeur | deux 404 profil après acceptation | PASS |
@@ -74,7 +76,7 @@ Historique des causes, non refaites dans ce lot :
 
 ## D. Résultat global pytest et couverture
 
-Run Backend Tests `43015501088`, SHA `afbc17845ef96df156e15d78be28a23eae9ff494`, job porte `Tests (pytest)` `130510031192`.
+Run Backend Tests `43019506274`, SHA `48d0dfe96cc4ab0a34bd89aac4a264d760e816ce`, job porte `Tests (pytest)` `130524716884`.
 
 | Métrique | Valeur |
 |---|---|
@@ -86,8 +88,8 @@ Run Backend Tests `43015501088`, SHA `afbc17845ef96df156e15d78be28a23eae9ff494`,
 | XFAILED | 1 |
 | XPASS | 0 |
 | Erreurs | 0 |
-| Durée cumulée des shards | 1007,7 s |
-| Couverture globale | **62,58 %** (seuil 50 %, contrôle vert) |
+| Durée cumulée des shards | 1084,6 s |
+| Couverture globale | **62,57 %** (seuil 50 %, contrôle vert) |
 | Partition | OK, aucun nodeid manquant ou doublé |
 
 Les deux tests de partition ajoutés en `99a8555e` expliquent l’écart avec les 8004 tests du run initial (7896 + 92 + 1 + 15).
@@ -96,18 +98,18 @@ Les deux tests de partition ajoutés en `99a8555e` expliquent l’écart avec le
 
 | Shard | Job | Exit | Sélectionnés | PASS | FAIL | SKIPPED | XFAILED | Durée |
 |---|---|---|---|---|---|---|---|---|
-| 1/4 | `130505414559` | 0 | 2002 | 1981 | 0 | 21 | 0 | 228,6 s |
-| 2/4 | `130505414570` | 0 | 2002 | 1979 | 0 | 23 | 0 | 278,0 s |
-| 3/4 | `130505414701` | 0 | 2001 | 1977 | 0 | 24 | 0 | 300,7 s |
-| 4/4 | `130505414293` | 0 | 2001 | 1980 | 0 | 20 | 1 | 200,4 s |
+| 1/4 | `130518855704` | 0 | 2002 | 1981 | 0 | 21 | 0 | 245,1 s |
+| 2/4 | `130518855598` | 0 | 2002 | 1979 | 0 | 23 | 0 | 283,1 s |
+| 3/4 | `130518855757` | 0 | 2001 | 1977 | 0 | 24 | 0 | 285,1 s |
+| 4/4 | `130518855693` | 0 | 2001 | 1980 | 0 | 20 | 1 | 271,3 s |
 
 `fail-fast` est désactivé. Le job global échoue si un shard échoue ou si `ci_shard.py verify` rejette la partition. Chaque shard a ses services Postgres et Redis.
 
 ## F. SHA final
 
-`afbc17845ef96df156e15d78be28a23eae9ff494`
+`48d0dfe96cc4ab0a34bd89aac4a264d760e816ce`
 
-HEAD de la branche au moment de la validation CI complète (hors commit de ce document).
+Dernier commit qui modifie du code de test. Le commit de ce document vient ensuite et ne change que ce fichier.
 
 ## G. Nouveaux commits
 
@@ -131,28 +133,30 @@ Depuis `main` local `25faab10`, poussés uniquement sur la branche candidate :
 | `99a8555e` | Quatre shards pytest isolés |
 | `81d998b3` | Isolation `UPLOADS_DIR` et float de ponctualité |
 | `afbc1784` | Date future du test portail |
+| `2395b00a` | Rapport intermédiaire ; shard 3 flaky sur `Path.open`, corrigé ensuite |
+| `48d0dfe9` | Les trois JSON du tuner, sans compteur global de `Path.open` |
 
 ## H. Matrice GitHub Actions
 
-Tous les runs ci-dessous ont le SHA `afbc17845ef96df156e15d78be28a23eae9ff494`.
+Tous les runs ci-dessous ont le SHA `48d0dfe96cc4ab0a34bd89aac4a264d760e816ce`.
 
 | Workflow | Run ID | Événement | Conclusion |
 |---|---|---|---|
-| Backend Tests | `43015501088` | pull_request | success |
-| Frontend Tests | `43015543756` | workflow_dispatch | success (Cypress skipped par le workflow, Jest vert) |
-| Security Gate | `43015501022` | pull_request | success |
-| Security Scan | `43015501095` | pull_request | success |
-| CodeQL (dynamique, nom `PR #101`) | `43015495363` | dynamic | success |
-| Phase 1 Gates | `43015500979` | pull_request | success |
-| Repository integrity | `43015501058` | pull_request | success |
-| Architecture Review | `43015501078` | pull_request | success |
-| Secret Pattern Scan | `43015501103` | pull_request | success |
-| Secret Pattern Scan | `43015493711` | push | success |
-| Mobile unified-app | `43015501173` | pull_request | success |
+| Backend Tests | `43019506274` | pull_request | success |
+| Frontend Tests | `43019516112` | workflow_dispatch | success (Cypress skipped par le workflow, Jest vert) |
+| Security Gate | `43019506087` | pull_request | success |
+| Security Scan | `43019506111` | pull_request | success |
+| CodeQL (dynamique, nom `PR #101`) | `43019498088` | dynamic | success |
+| Phase 1 Gates | `43019506079` | pull_request | success |
+| Repository integrity | `43019506090` | pull_request | success |
+| Architecture Review | `43019506190` | pull_request | success |
+| Secret Pattern Scan | `43019506140` | pull_request | success |
+| Secret Pattern Scan | `43019495573` | push | success |
+| Mobile unified-app | `43019506084` | pull_request | success |
 
 Checks de la PR au même SHA, tous SUCCESS : lint backend, migrations, intégration factures, E2E backend, pip-audit (trois fichiers), SAST CodeQL, Bandit, Semgrep (workflow et cloud), Analyze python / javascript / actions, Trivy filesystem et IaC, Gitleaks, GitGuardian, gates phase 1 (booking, mobile auth, mobile tracking, deployment, tenant), frontières unified-app, verdict Security Gate. `trigger-backend-deploy` est SKIPPED : aucun déploiement n’a été lancé.
 
-Le run précédent `43013357252` (`99a8555e`) est failure et ne valide pas `afbc1784`.
+Les runs `43013357252` (`99a8555e`, pollution d’ordre) et `43017503835` (`2395b00a`, compteur `Path.open`) sont failure. Ils ne valident pas `48d0dfe9`.
 
 ## I. Dependabot et Code Scanning
 
@@ -191,7 +195,7 @@ Aucune vulnérabilité critique encore exploitable dans l’arbre candidat : she
 
 | Dimension | Verdict |
 |---|---|
-| **CI** | **GREEN** sur `afbc1784` |
+| **CI** | **GREEN** sur `48d0dfe9` |
 | **Sécurité** | **PARTIAL** — correctifs présents dans le candidat, résiduels justifiés, alertes `main` encore ouvertes |
 | **Livraison** | **READY FOR HUMAN REVIEW** |
 
@@ -199,4 +203,4 @@ READY FOR HUMAN REVIEW n’est pas READY FOR PRODUCTION. Merge, déploiement et 
 
 ---
 
-✅ **Implémenté** : diagnostic de l’exit 143, quatre shards avec contrôle de partition et couverture 62,58 %, correction de la fuite `UPLOADS_DIR` et du type `punctuality_weight`, date future du test portail, CI obligatoires vertes sur `afbc17845ef96df156e15d78be28a23eae9ff494`.
+✅ **Implémenté** : diagnostic de l’exit 143, quatre shards, couverture 62,57 %, isolation `UPLOADS_DIR`, float de ponctualité, date future du test portail, assertions du tuner sur les trois JSON, CI obligatoires vertes sur `48d0dfe96cc4ab0a34bd89aac4a264d760e816ce`.
