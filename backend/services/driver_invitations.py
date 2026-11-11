@@ -359,6 +359,22 @@ def accept_invitation(
             status=409,
         ) from error
     logger.info("invitation_chauffeur_acceptee public_id=%s", row.public_id)
+    driver_id = int(created.id) if created is not None else None
+    if driver_id is None:
+        existing = Driver.query.filter_by(user_id=int(user.id)).one_or_none()
+        if existing is not None:
+            driver_id = int(existing.id)
+    if driver_id is not None:
+        try:
+            from routes.auth import _save_active_context
+
+            _save_active_context(str(user.public_id), f"driver:{driver_id}")
+        except Exception:
+            logger.warning(
+                "contexte_chauffeur_non_persiste public_id=%s driver_id=%s",
+                user.public_id,
+                driver_id,
+            )
     return {
         "status": "accepted",
         "already_accepted": False,
@@ -366,6 +382,7 @@ def accept_invitation(
         "activation": _activation_state(),
         "company_name": _company_name(row),
         "portal_open": _driver_portal_open(user, int(row.company_id)),
+        "active_context_id": f"driver:{driver_id}" if driver_id is not None else None,
     }
 
 
