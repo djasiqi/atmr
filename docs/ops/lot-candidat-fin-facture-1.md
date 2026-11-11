@@ -109,7 +109,7 @@ Jest, cache dans le dossier temporaire, dépendances jointes puis non commitées
 2. `d220fd14` — feat(facture): consolider avoirs, rectificatives et factures emises
 3. `6f9d6a57` — feat(facture): aligner PDF, QR, duplicata et facture partenaire
 4. `8800bd07` — feat(facture): brancher l'editeur, l'apercu et la situation
-5. tests de non-régression, correctifs ESLint du build React, et ce rapport. Le SHA est celui de HEAD sur `candidate/lirie-fin-facture-20261111` au moment de la livraison locale.
+5. `125af0d6` — test(facture): verrouiller le lot et corriger le build
 
 ## M. Bloqueurs et anomalies restantes
 
