@@ -11,6 +11,24 @@ from domain.invoice_dto import InvoiceLineDTO
 logger = logging.getLogger(__name__)
 
 
+def finalize_invoice_vat(
+    subtotal: Decimal, line_vat_sum: Decimal
+) -> tuple[Decimal, Decimal, Decimal]:
+    """Clôture unique de l'aperçu et de la préparation.
+
+    Le sous-total et la somme des TVA de ligne sont d'abord ramenés au 5 centimes.
+    Le total TTC est ensuite arrondi au 5 centimes, et la TVA affichée est le
+    résidu ``total − sous-total``. Aucune autre règle d'arrondi n'est introduite.
+    """
+    net = round_to_5_cents(subtotal)
+    vat_total = round_to_5_cents(line_vat_sum)
+    total = round_to_5_cents(net + vat_total)
+    vat_total = total - net
+    if vat_total < 0:
+        vat_total = Decimal("0.00")
+    return net, vat_total, total
+
+
 def round_to_5_cents(amount: Decimal) -> Decimal:
     """Arrondit un montant à 5 centimes (0.05 CHF), demi au supérieur.
 
