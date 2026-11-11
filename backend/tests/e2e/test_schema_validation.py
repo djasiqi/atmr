@@ -4268,16 +4268,18 @@ class TestCompaniesMisc:
 
     def test_company_drivers_create_invalid(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
-        # Payload vide -> 400 attendu (ou 429 RL)
+        # Création directe fermée : invitation chauffeur obligatoire (403).
         resp = client.post(
             "/api/v1/companies/me/drivers/create", json={}, headers=headers
         )
-        assert resp.status_code in [400, 404, 405, 429]
+        assert resp.status_code in [400, 403, 404, 405, 429]
         data = resp.get_json() if resp.status_code != 429 else {}
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         if resp.status_code != 429:
             assert ("message" in data) or ("errors" in data) or ("error" in data)
+        if resp.status_code == 403:
+            assert data.get("error") == "invitation_requise"
 
     def test_company_client_reservations_list(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
