@@ -156,7 +156,8 @@ jobs:
       API_LEGACY_ENABLED: "false"
       PYTHONPATH: ${{ github.workspace }}
       SOCKETIO_ASYNC_MODE: threading
-      SKIP_SOCKETIO: "true"
+      # Socket.IO réel requis pour les contrôles portal-grant (phase 1d/1e/1f).
+      SKIP_SOCKETIO: "false"
       # Les tests (unitaires + intégration) partagent une app Flask session-scoped :
       # les routes doivent être enregistrées pour les tests HTTP (factures, auth, etc.).
       SKIP_ROUTES_INIT: "false"

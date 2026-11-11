@@ -10,6 +10,7 @@ import time
 import uuid
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 import redis
@@ -25,6 +26,8 @@ from models.portal_grant import (
     REVOKED_DELETE_GUARD_SQL,
     PortalGrant,
 )
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
 from security.portal_grant_access import revoke_portal_grant
 from security.portal_scope import authorized_company_id
 from security.web_handoff_service import _resolve_company_id
@@ -298,7 +301,7 @@ def test_socket_deux_processus_coupure_reception(
     ready = threading.Event()
     process = subprocess.Popen(
         ["python", "-m", "tests.security.portal_grant_socket_worker"],
-        cwd="/app",
+        cwd=str(BACKEND_ROOT),
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

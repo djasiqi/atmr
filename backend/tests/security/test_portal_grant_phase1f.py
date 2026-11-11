@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 from contextlib import suppress
+from pathlib import Path
 
 import pytest
 import redis
@@ -26,6 +27,8 @@ from tests.security.test_portal_grant_phase1e import (
     _redis_client,
     _token,
 )
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 pytestmark = pytest.mark.integration
 
@@ -109,7 +112,7 @@ def _start_worker() -> tuple[subprocess.Popen[str], list[str], threading.Event]:
     ready = threading.Event()
     process = subprocess.Popen(
         ["python", "-m", "tests.security.portal_grant_socket_worker"],
-        cwd="/app",
+        cwd=str(BACKEND_ROOT),
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

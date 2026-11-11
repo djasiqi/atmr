@@ -8,7 +8,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, or_, text
 
 from ext import db
 from models import (
@@ -62,6 +62,33 @@ _TERMINAL = {
 
 class ConversationService:
     # --- Provisioning ---
+
+    @staticmethod
+    def _server_clock() -> datetime:
+        """Horloge PostgreSQL, capturée après le verrou, jamais un now() Python."""
+        value = db.session.execute(text("SELECT clock_timestamp()")).scalar()
+        if not isinstance(value, datetime):
+            raise RuntimeError("horloge serveur indisponible")
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
+
+    @staticmethod
+    def message_timestamp_for_send(conv: Conversation | None) -> datetime:
+        """Horodatage d'un message. Une mission partage le verrou de la réaffectation."""
+        if (
+            conv is not None
+            and str(getattr(conv, "conversation_type", "") or "")
+            == ConversationType.MISSION.value
+        ):
+            (
+                db.session.query(Conversation)
+                .filter_by(id=int(conv.id))
+                .with_for_update()
+                .one()
+            )
+            return ConversationService._server_clock()
+        return datetime.now(UTC)
 
     @staticmethod
     def _fanout_join_conversation_room(conv: Conversation) -> None:
