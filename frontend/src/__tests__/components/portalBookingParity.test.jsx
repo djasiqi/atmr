@@ -191,7 +191,7 @@ describe('Parité formulaire PORTAL', () => {
   it('heure de départ confirme la prise en charge', async () => {
     renderDashboard();
     await fillAddresses();
-    planDeparture('2026-09-30', '08:15');
+    planDeparture('2027-03-15', '08:15');
     fireEvent.click(screen.getByRole('button', { name: /Vérifier la demande/i }));
     expect((await screen.findAllByText(/Prise en charge ·/)).length).toBeGreaterThan(0);
     expect((await screen.findAllByText(/08:15/)).length).toBeGreaterThan(0);
