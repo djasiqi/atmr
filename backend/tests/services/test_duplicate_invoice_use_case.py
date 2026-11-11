@@ -67,12 +67,19 @@ class _MockInvoice:
 
 @dataclass
 class _MockCancelInvoiceUseCase:
-    """Mock pour CancelInvoiceUseCase."""
+    """Mock pour CancelInvoiceUseCase. Le duplicata ne doit pas l'appeler."""
 
     _should_succeed: bool = True
+    calls: list[Any] | None = None
+
+    def __post_init__(self) -> None:
+        if self.calls is None:
+            self.calls = []
 
     def execute(self, input_data: Any) -> CancelInvoiceOutput:
         """Retourne un résultat mocké."""
+        assert self.calls is not None
+        self.calls.append(input_data)
         if self._should_succeed:
             return CancelInvoiceOutput(success=True)
         return CancelInvoiceOutput(
@@ -83,7 +90,7 @@ class _MockCancelInvoiceUseCase:
 
 
 def test_duplicate_invoice_success() -> None:
-    """Test de duplication réussie d'une facture."""
+    """Duplicata fidèle : brouillon de saisie, facture émise inchangée."""
     # Arrange
     invoice = _MockInvoice(
         id=1,
@@ -118,11 +125,15 @@ def test_duplicate_invoice_success() -> None:
     result = uc.execute(DuplicateInvoiceInput(invoice=invoice))
 
     # Assert
-    assert result.success is False
-    assert result.status_code == 409
-    assert result.error is not None
-    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
-    assert result.draft_context is None
+    assert result.success is True
+    assert result.draft_context is not None
+    assert result.draft_context["client_id"] == 10
+    assert result.draft_context["period_year"] == 2025
+    assert result.draft_context["period_month"] == 1
+    assert result.draft_context["reservation_ids"] == [100, 200]
+    assert result.draft_context["client"]["display_name"] == "John Doe"
+    assert invoice.status == InvoiceStatus.SENT
+    assert cancel_uc.calls == []
 
 
 def test_duplicate_invoice_already_draft() -> None:
@@ -167,13 +178,15 @@ def test_duplicate_invoice_no_reservations() -> None:
 
     # Assert
     assert result.success is False
-    assert result.status_code == 409
+    assert result.status_code == 400
     assert result.error is not None
-    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
+    assert "error_code" not in result.error
+    assert "course" in result.error["error"].lower()
+    assert cancel_uc.calls == []
 
 
-def test_duplicate_invoice_cancel_fails() -> None:
-    """Test d'erreur si l'annulation de la facture échoue."""
+def test_duplicate_invoice_does_not_cancel_issued() -> None:
+    """Le duplicata n'annule pas l'original, même si l'annulation échouerait."""
     # Arrange
     invoice = _MockInvoice(
         id=1,
@@ -188,10 +201,11 @@ def test_duplicate_invoice_cancel_fails() -> None:
     result = uc.execute(DuplicateInvoiceInput(invoice=invoice))
 
     # Assert
-    assert result.success is False
-    assert result.status_code == 409
-    assert result.error is not None
-    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
+    assert result.success is True
+    assert result.draft_context is not None
+    assert result.draft_context["reservation_ids"] == [100]
+    assert invoice.status == InvoiceStatus.SENT
+    assert cancel_uc.calls == []
 
 
 def test_duplicate_invoice_third_party_billing() -> None:
@@ -215,10 +229,13 @@ def test_duplicate_invoice_third_party_billing() -> None:
     result = uc.execute(DuplicateInvoiceInput(invoice=invoice))
 
     # Assert
-    assert result.success is False
-    assert result.status_code == 409
-    assert result.draft_context is None
-    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
+    assert result.success is True
+    assert result.draft_context is not None
+    assert result.draft_context["bill_to_client_id"] == 20
+    assert result.draft_context["period_month"] == 2
+    assert result.draft_context["reservation_ids"] == [100]
+    assert invoice.status == InvoiceStatus.SENT
+    assert cancel_uc.calls == []
 
 
 def test_duplicate_invoice_builds_overrides() -> None:
@@ -245,8 +262,12 @@ def test_duplicate_invoice_builds_overrides() -> None:
     result = uc.execute(DuplicateInvoiceInput(invoice=invoice))
 
     # Assert
-    assert result.success is False
-    assert result.status_code == 409
-    assert result.draft_context is None
-    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
+    assert result.success is True
+    assert result.draft_context is not None
+    assert result.draft_context["overrides"]["100"] == {
+        "line_total": "50.00",
+        "vat_rate": "7.70",
+        "adjustment_note": "Note spéciale",
+    }
     assert invoice.status == InvoiceStatus.SENT
+    assert cancel_uc.calls == []

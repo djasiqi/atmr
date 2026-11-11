@@ -215,7 +215,7 @@ const InvoiceRowActions = ({
       icon: <FiEdit size={14} />,
       onClick: onDuplicate,
       className: styles.actionBtnSecondary,
-      // Endpoint /duplicate refuse toute facture émise — ne plus proposer ce faux positif.
+      // Duplicata distinct de l'avoir et de la rectificative : non proposé ici.
       show: Boolean(capabilities.canDuplicate && onDuplicate),
     },
     {

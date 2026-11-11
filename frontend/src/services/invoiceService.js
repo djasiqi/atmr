@@ -946,9 +946,8 @@ export const canCancelInvoice = (invoice) => {
 };
 
 /**
- * Ancien « Créer un correctif » (= duplicate qui annulait l'original).
- * Toujours faux : le backend refuse toute facture émise (409 ISSUED_INVOICE_IMMUTABLE).
- * Ne pas réactiver sans endpoint d'orchestration avoir + facture rectificative.
+ * Le menu ne propose pas le duplicata : ce n'est ni un avoir ni une rectificative.
+ * L'endpoint prépare un brouillon sans modifier la facture émise.
  */
 export const canDuplicateInvoice = (_invoice) => false;
 

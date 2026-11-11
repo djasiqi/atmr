@@ -5309,9 +5309,9 @@ class DuplicateInvoice(Resource):
 
             return {
                 "message": (
-                    "Les transports ont été libérés. "
-                    "Veuillez corriger le brouillon puis générer "
-                    "une nouvelle facture."
+                    "Duplicata préparé. La facture émise n'a pas été modifiée : "
+                    "son numéro, ses montants et ses lignes restent en place. "
+                    "Le brouillon reprend le client, la période et les courses."
                 ),
                 "draft": duplicate_result.draft_context,
             }, 200
