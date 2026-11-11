@@ -250,9 +250,7 @@ def test_entreprise_non_approuvee(app, portal_grant_table, enforce_grants):
         )
 
 
-def test_institution_en_attente_activation(
-    app, portal_grant_table, enforce_grants
-):
+def test_institution_en_attente_activation(app, portal_grant_table, enforce_grants):
     user = _user(portal_grant_table, UserRole.CLIENT)
     institution = Institution()
     institution.name = "Clinique test"

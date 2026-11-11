@@ -52,9 +52,11 @@ class TestSchemaValidationE2E:
             f"(Location: {response.headers.get('Location', 'N/A')})"
         )
         # Vérifier que c'est soit 400 (validation) soit 404/500 (erreur) mais pas 302
-        assert response.status_code in [400, 404, 500], (
-            f"Status code inattendu pour login invalide: {response.status_code}"
-        )
+        assert response.status_code in [
+            400,
+            404,
+            500,
+        ], f"Status code inattendu pour login invalide: {response.status_code}"
 
         # Tester register avec payload invalide (devrait retourner 400, pas 302)
         response = client.post("/api/v1/auth/register", json={"email": "invalid"})
@@ -64,9 +66,11 @@ class TestSchemaValidationE2E:
             f"(Location: {response.headers.get('Location', 'N/A')})"
         )
         # Vérifier que c'est soit 400 (validation) soit 404/500 (erreur) mais pas 302
-        assert response.status_code in [400, 404, 500], (
-            f"Status code inattendu pour register invalide: {response.status_code}"
-        )
+        assert response.status_code in [
+            400,
+            404,
+            500,
+        ], f"Status code inattendu pour register invalide: {response.status_code}"
 
     # ========== AUTH ENDPOINTS ==========
 

@@ -44,7 +44,9 @@ def resolve_jwt_token_locations(
         return ["headers"]
 
     ua = (user_agent or "").lower()
-    if any(marker in ua for marker in ("expo", "okhttp", "darwin", "cfnetwork", "dalvik")):
+    if any(
+        marker in ua for marker in ("expo", "okhttp", "darwin", "cfnetwork", "dalvik")
+    ):
         return ["headers"]
 
     return ["cookies", "headers"]

@@ -55,9 +55,7 @@ def publish_portal_revocation_payload(payload: dict[str, Any]) -> None:
             payload.get("portal"),
         )
     except Exception:
-        logger.exception(
-            "portal_grant_revocation_publish_failed user_id=%s", user_id
-        )
+        logger.exception("portal_grant_revocation_publish_failed user_id=%s", user_id)
         _set_unhealthy("publish_failed")
 
 

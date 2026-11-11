@@ -67,12 +67,16 @@ class GuestPaymentIncident(db.Model):
         unique=True,
         default=lambda: str(uuid.uuid4()),
     )
-    guest_booking_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    guest_booking_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True
+    )
     saferpay_transaction_id: Mapped[str | None] = mapped_column(
         String(128), nullable=True, unique=True
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default=text("'CHF'"))
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default=text("'CHF'")
+    )
     financial_state: Mapped[str] = mapped_column(String(16), nullable=False)
     booking_ids_text: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'[]'")
@@ -89,7 +93,9 @@ class GuestPaymentIncident(db.Model):
         server_default=func.now(),
         onupdate=func.now(),
     )
-    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     events: Mapped[list[GuestPaymentIncidentEvent]] = relationship(
         "GuestPaymentIncidentEvent",
@@ -102,9 +108,7 @@ class GuestPaymentIncidentEvent(db.Model):
     """Piste d'audit append-only. Le client et le chauffeur ne peuvent pas l'écrire."""
 
     __tablename__ = "guest_payment_incident_event"
-    __table_args__ = (
-        Index("ix_guest_payment_incident_event_incident", "incident_id"),
-    )
+    __table_args__ = (Index("ix_guest_payment_incident_event_incident", "incident_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     incident_id: Mapped[int] = mapped_column(
@@ -116,7 +120,9 @@ class GuestPaymentIncidentEvent(db.Model):
     actor_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("user.id", ondelete="RESTRICT"), nullable=True
     )
-    payload_text: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'{}'"))
+    payload_text: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'{}'")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

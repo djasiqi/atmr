@@ -73,8 +73,7 @@ _EVENT_LABELS = {
     "notification_failed": "Notification non remise",
 }
 _APPROVAL_DISABLED = (
-    "L'approbation qui crée une organisation ou une habilitation "
-    "n'est pas disponible."
+    "L'approbation qui crée une organisation ou une habilitation n'est pas disponible."
 )
 
 
@@ -85,13 +84,10 @@ def list_applications(
     status: str = "",
 ) -> dict[str, Any]:
     """Liste les dossiers. Un e-mail non confirmé n'est jamais un dossier complet."""
-    rows = (
-        OrganizationApplication.query.order_by(
-            OrganizationApplication.submitted_at.desc().nullslast(),
-            OrganizationApplication.created_at.desc(),
-        )
-        .all()
-    )
+    rows = OrganizationApplication.query.order_by(
+        OrganizationApplication.submitted_at.desc().nullslast(),
+        OrganizationApplication.created_at.desc(),
+    ).all()
     needle = query.strip().lower()
     items = []
     for row in rows:
@@ -211,7 +207,9 @@ def _start_review(row: OrganizationApplication, actor: User) -> dict[str, Any] |
     )
 
 
-def _request_info(row: OrganizationApplication, actor: User, note: str | None) -> dict[str, Any] | None:
+def _request_info(
+    row: OrganizationApplication, actor: User, note: str | None
+) -> dict[str, Any] | None:
     if row.status == OrganizationApplicationStatus.NEEDS_INFO.value:
         return None
     text = _required_note(note)
@@ -231,7 +229,9 @@ def _request_info(row: OrganizationApplication, actor: User, note: str | None) -
     )
 
 
-def _record_info(row: OrganizationApplication, actor: User, note: str | None) -> dict[str, Any] | None:
+def _record_info(
+    row: OrganizationApplication, actor: User, note: str | None
+) -> dict[str, Any] | None:
     text = _required_note(note)
     if row.status != OrganizationApplicationStatus.NEEDS_INFO.value:
         raise ApplicationRejected(
@@ -272,7 +272,9 @@ def _resume_review(row: OrganizationApplication, actor: User) -> dict[str, Any] 
     )
 
 
-def _refuse(row: OrganizationApplication, actor: User, note: str | None) -> dict[str, Any] | None:
+def _refuse(
+    row: OrganizationApplication, actor: User, note: str | None
+) -> dict[str, Any] | None:
     if row.status == OrganizationApplicationStatus.REFUSED.value:
         return None
     if row.status == OrganizationApplicationStatus.EMAIL_UNVERIFIED.value:
@@ -305,7 +307,9 @@ def _check_flag(
     note: str | None,
 ) -> None:
     if confirmed is None:
-        raise ApplicationRejected("confirmation_requise", "Indiquez si la vérification est positive.")
+        raise ApplicationRejected(
+            "confirmation_requise", "Indiquez si la vérification est positive."
+        )
     text = _required_note(note)
     prefix = "identity" if subject == "identity" else "organization"
     event_type = f"{prefix}_confirmed" if confirmed else f"{prefix}_rejected"
@@ -378,7 +382,9 @@ def _notify(row: OrganizationApplication, template: str, body: str) -> dict[str,
     return _hand_to_mailer(row, template, body)
 
 
-def _hand_to_mailer(row: OrganizationApplication, template: str, body: str) -> dict[str, Any]:
+def _hand_to_mailer(
+    row: OrganizationApplication, template: str, body: str
+) -> dict[str, Any]:
     if current_app.config.get("MAIL_SUPPRESS_SEND", True):
         return {"state": "queued", "delivered": False, "template": template}
     sender = (
@@ -538,7 +544,9 @@ def _sla(row: OrganizationApplication) -> dict[str, Any]:
 def _checks(row: OrganizationApplication) -> dict[str, Any]:
     return {
         "identity": _latest_flag(row, "identity_confirmed", "identity_rejected"),
-        "organization": _latest_flag(row, "organization_confirmed", "organization_rejected"),
+        "organization": _latest_flag(
+            row, "organization_confirmed", "organization_rejected"
+        ),
     }
 
 
@@ -599,12 +607,16 @@ def _search_blob(row: OrganizationApplication) -> str:
 
 def _find(public_id: str) -> OrganizationApplication:
     row = (
-        OrganizationApplication.query.options(joinedload(OrganizationApplication.events))
+        OrganizationApplication.query.options(
+            joinedload(OrganizationApplication.events)
+        )
         .filter_by(public_id=public_id)
         .one_or_none()
     )
     if row is None:
-        raise ApplicationRejected("dossier_introuvable", "Dossier introuvable.", status=404)
+        raise ApplicationRejected(
+            "dossier_introuvable", "Dossier introuvable.", status=404
+        )
     return row
 
 
@@ -615,7 +627,9 @@ def _locked(public_id: str) -> OrganizationApplication:
         .one_or_none()
     )
     if row is None:
-        raise ApplicationRejected("dossier_introuvable", "Dossier introuvable.", status=404)
+        raise ApplicationRejected(
+            "dossier_introuvable", "Dossier introuvable.", status=404
+        )
     return row
 
 
@@ -659,12 +673,7 @@ def _optional_note(note: str | None) -> str | None:
 
 
 def _like_term(needle: str) -> str:
-    cleaned = (
-        needle.strip()
-        .replace("\\", "")
-        .replace("%", "")
-        .replace("_", "")
-    )
+    cleaned = needle.strip().replace("\\", "").replace("%", "").replace("_", "")
     if len(cleaned) < 2:
         return ""
     return f"%{cleaned}%"

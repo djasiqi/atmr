@@ -605,9 +605,7 @@ class Invoice(db.Model):
             "amount_paid": float(self.amount_paid),
             "balance_due": float(self.balance_due),
             "refundable_chf": float(self.refundable_chf or 0),
-            "credit_notes": (
-                [] if list_view else _credit_notes_payload(self)
-            ),
+            "credit_notes": ([] if list_view else _credit_notes_payload(self)),
             "issued_at": _iso(self.issued_at),
             "due_date": _iso(self.due_date),
             "effective_due_date": _iso(effective_due),
@@ -1592,9 +1590,7 @@ class InvoiceCreditSequence(db.Model):
         UniqueConstraint(
             "company_id", "year", name="uq_invoice_credit_sequence_company_year"
         ),
-        CheckConstraint(
-            "last_value >= 0", name="ck_invoice_credit_sequence_nonneg"
-        ),
+        CheckConstraint("last_value >= 0", name="ck_invoice_credit_sequence_nonneg"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -1713,9 +1709,7 @@ class InvoiceCreditNoteLine(db.Model):
     amount_ttc: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     vat_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
 
-    credit_note = relationship(
-        "InvoiceCreditNote", back_populates="line_allocations"
-    )
+    credit_note = relationship("InvoiceCreditNote", back_populates="line_allocations")
     invoice_line = relationship("InvoiceLine")
 
 
@@ -1723,7 +1717,9 @@ def _credit_notes_payload(invoice: Invoice) -> list[dict[str, Any]]:
     """Avoirs de la facture. Liste vide si la table n'est pas migrée."""
     from sqlalchemy import text
 
-    present = db.session.scalar(text("SELECT to_regclass('public.invoice_credit_note')"))
+    present = db.session.scalar(
+        text("SELECT to_regclass('public.invoice_credit_note')")
+    )
     if present is None:
         return []
     rows = (

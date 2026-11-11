@@ -75,12 +75,16 @@ class OrganizationApplication(db.Model):
     applicant_first_name: Mapped[str] = mapped_column(String(80), nullable=False)
     applicant_last_name: Mapped[str] = mapped_column(String(80), nullable=False)
     applicant_function: Mapped[str] = mapped_column(String(80), nullable=False)
-    applicant_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    applicant_email: Mapped[str] = mapped_column(
+        String(255), nullable=False, index=True
+    )
     applicant_phone: Mapped[str] = mapped_column(String(30), nullable=False)
     legal_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     ide_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     establishment_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    establishment_category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    establishment_category: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
     street: Mapped[str] = mapped_column(String(255), nullable=False)
     postal_code: Mapped[str] = mapped_column(String(12), nullable=False)
     city: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -185,8 +189,12 @@ class OrganizationApplicationToken(db.Model):
     )
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     purpose: Mapped[str] = mapped_column(String(32), nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

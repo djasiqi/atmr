@@ -39,7 +39,9 @@ def upgrade():
             server_default="false",
             nullable=False,
         ),
-        sa.Column("specimen_trace", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "specimen_trace", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -56,7 +58,9 @@ def upgrade():
             "status IN ('demo_draft', 'demo_specimen_signed', 'demo_valid_simulated')",
             name="ck_convention_demo_status",
         ),
-        sa.CheckConstraint("legally_effective = false", name="ck_convention_demo_not_legal"),
+        sa.CheckConstraint(
+            "legally_effective = false", name="ck_convention_demo_not_legal"
+        ),
         sa.ForeignKeyConstraint(["client_id"], ["client.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),

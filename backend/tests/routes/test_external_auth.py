@@ -484,9 +484,7 @@ def test_apple_form_post_nom_relais_et_annulation(client, external_auth, db, cap
     assert "code-apple-ne-pas-journaliser" not in posted.headers["Location"]
     assert "code-apple-ne-pas-journaliser" not in caplog.text
     assert "pirate@example.com" not in caplog.text
-    created = client.post(
-        "/api/v1/auth/external/register", json={"accept_terms": True}
-    )
+    created = client.post("/api/v1/auth/external/register", json={"accept_terms": True})
     assert created.status_code == 200
     user = User.query.filter_by(email=email).one()
     assert user.first_name == "Iris"
@@ -563,9 +561,7 @@ def test_apple_form_post_sans_cookie_entrant(client, external_auth, app, db, cap
         data={
             "state": state,
             "code": "code-apple-lax-ne-pas-journaliser",
-            "user": json.dumps(
-                {"name": {"firstName": "Noa", "lastName": "Relais"}}
-            ),
+            "user": json.dumps({"name": {"firstName": "Noa", "lastName": "Relais"}}),
         },
         headers={"Origin": "https://appleid.apple.com"},
     )
@@ -697,9 +693,7 @@ def test_injection_oauth_entre_navigateurs(client, external_auth, db):
     assert _cookie(accepted, "external_signup")
 
 
-def test_lien_refuse_sans_cookie_du_navigateur_origine(
-    client, external_auth, app, db
-):
+def test_lien_refuse_sans_cookie_du_navigateur_origine(client, external_auth, app, db):
     owner = _user(db, UserRole.CLIENT)
     intruder = _user(db, UserRole.CLIENT)
     subject = f"apple-lien-{uuid.uuid4().hex}"
@@ -1193,12 +1187,18 @@ def test_jeton_expire_audience_issuer_et_algorithme(client, external_auth):
     assert "erreur=jeton_invalide" in party.headers["Location"]
 
     state, nonce = _start(client)
-    header = base64.urlsafe_b64encode(
-        json.dumps({"alg": "none", "typ": "JWT"}).encode("utf-8")
-    ).rstrip(b"=").decode("ascii")
-    body = base64.urlsafe_b64encode(
-        json.dumps(_claims("google", nonce)).encode("utf-8")
-    ).rstrip(b"=").decode("ascii")
+    header = (
+        base64.urlsafe_b64encode(
+            json.dumps({"alg": "none", "typ": "JWT"}).encode("utf-8")
+        )
+        .rstrip(b"=")
+        .decode("ascii")
+    )
+    body = (
+        base64.urlsafe_b64encode(json.dumps(_claims("google", nonce)).encode("utf-8"))
+        .rstrip(b"=")
+        .decode("ascii")
+    )
     external_auth["token"] = f"{header}.{body}."
     unsigned = _callback(client, state)
     assert "erreur=jeton_invalide" in unsigned.headers["Location"]
@@ -1280,9 +1280,7 @@ def test_email_fournisseur_ne_prend_pas_un_autre_compte(client, external_auth, d
         owner = User.query.filter_by(email=email).one()
         owner_id = int(owner.id)
         _drop_session(client)
-        changed = _prepare(
-            client, external_auth, email=other.email, sub=subject
-        )
+        changed = _prepare(client, external_auth, email=other.email, sub=subject)
         assert changed.status_code == 302
         assert "erreur=" not in changed.headers["Location"]
         access = _cookie(changed, "access_token")
@@ -1413,13 +1411,16 @@ def test_session_expiree_et_login_classique(client, app, db, external_auth):
     )
     assert "erreur=compte_existant" in collision.headers["Location"]
     assert owner.role == UserRole.CLIENT
-    assert PortalGrant.query.filter(
-        PortalGrant.user_id == owner.id,
-        PortalGrant.portal.in_(
-            (
-                PortalKind.COMPANY.value,
-                PortalKind.DRIVER.value,
-                PortalKind.INSTITUTION.value,
-            )
-        ),
-    ).count() == 0
+    assert (
+        PortalGrant.query.filter(
+            PortalGrant.user_id == owner.id,
+            PortalGrant.portal.in_(
+                (
+                    PortalKind.COMPANY.value,
+                    PortalKind.DRIVER.value,
+                    PortalKind.INSTITUTION.value,
+                )
+            ),
+        ).count()
+        == 0
+    )

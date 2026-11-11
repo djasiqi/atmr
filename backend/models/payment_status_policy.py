@@ -70,9 +70,7 @@ def remember_payment_status(
         return
     row = AuditLog()
     row.user_type = "system"
-    row.action_type = (
-        "payment_status_applied" if allowed else "payment_status_refused"
-    )
+    row.action_type = "payment_status_applied" if allowed else "payment_status_refused"
     row.action_category = "payment"
     row.action_details = json.dumps(
         {

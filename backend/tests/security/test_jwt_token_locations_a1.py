@@ -21,9 +21,7 @@ from security.jwt_token_locations import resolve_jwt_token_locations
     ],
 )
 def test_resolve_jwt_token_locations_contracts(path, authorization, expected):
-    assert (
-        resolve_jwt_token_locations(path, authorization=authorization) == expected
-    )
+    assert resolve_jwt_token_locations(path, authorization=authorization) == expected
 
 
 def test_driver_web_ignores_mobile_user_agent_without_bearer():

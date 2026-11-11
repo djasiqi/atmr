@@ -51,7 +51,9 @@ def issue_mobile_device_contract(user: User):
     )
 
     device_id = (
-        request.headers.get("X-Device-ID") or request.headers.get("X-Installation-ID") or ""
+        request.headers.get("X-Device-ID")
+        or request.headers.get("X-Installation-ID")
+        or ""
     ).strip()
     contract = (request.headers.get("X-Auth-Contract-Version") or "").strip()
     if contract != "mobile-device-session-v1" or not device_id:

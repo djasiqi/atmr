@@ -60,7 +60,9 @@ def upgrade():
     )
 
     with op.batch_alter_table("invoices", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("corrects_invoice_id", sa.Integer(), nullable=True))
+        batch_op.add_column(
+            sa.Column("corrects_invoice_id", sa.Integer(), nullable=True)
+        )
         batch_op.add_column(
             sa.Column("correction_credit_note_id", sa.Integer(), nullable=True)
         )
@@ -100,7 +102,9 @@ def upgrade():
 
 def downgrade():
     with op.batch_alter_table("invoices", schema=None) as batch_op:
-        batch_op.drop_constraint("fk_invoices_correction_credit_note_id", type_="foreignkey")
+        batch_op.drop_constraint(
+            "fk_invoices_correction_credit_note_id", type_="foreignkey"
+        )
         batch_op.drop_constraint("fk_invoices_corrects_invoice_id", type_="foreignkey")
         batch_op.drop_constraint("uq_invoice_correction_idempotency", type_="unique")
         batch_op.drop_index(batch_op.f("ix_invoices_corrects_invoice_id"))

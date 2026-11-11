@@ -52,8 +52,12 @@ class SaferpayRefundCase(db.Model):
             name="ck_saferpay_refund_execution_status",
         ),
         CheckConstraint("currency = 'CHF'", name="ck_saferpay_refund_currency_chf"),
-        CheckConstraint("captured_amount > 0", name="ck_saferpay_refund_captured_positive"),
-        CheckConstraint("proposed_amount > 0", name="ck_saferpay_refund_proposed_positive"),
+        CheckConstraint(
+            "captured_amount > 0", name="ck_saferpay_refund_captured_positive"
+        ),
+        CheckConstraint(
+            "proposed_amount > 0", name="ck_saferpay_refund_proposed_positive"
+        ),
         CheckConstraint(
             "proposed_amount <= captured_amount",
             name="ck_saferpay_refund_proposed_within_capture",
@@ -127,20 +131,33 @@ class SaferpayRefundCase(db.Model):
     proposed_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     eligibility_justification: Mapped[str] = mapped_column(Text, nullable=False)
     request_status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default=REQUEST_CREATED, server_default=REQUEST_CREATED
+        String(16),
+        nullable=False,
+        default=REQUEST_CREATED,
+        server_default=REQUEST_CREATED,
     )
     approver_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("user.id", ondelete="RESTRICT"), nullable=True
     )
-    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     execution_status: Mapped[str] = mapped_column(
         String(16), nullable=False, default=EXEC_NOT_SENT, server_default=EXEC_NOT_SENT
     )
-    operation_reference: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
-    provider_refund_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    confirmed_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    operation_reference: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True
+    )
+    provider_refund_reference: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
+    confirmed_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     proof_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -163,9 +180,7 @@ class SaferpayRefundCaseEvent(db.Model):
     """Journal d'audit append-only. Le client ne peut pas le réécrire."""
 
     __tablename__ = "saferpay_refund_case_event"
-    __table_args__ = (
-        Index("ix_saferpay_refund_event_case", "case_id"),
-    )
+    __table_args__ = (Index("ix_saferpay_refund_event_case", "case_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     case_id: Mapped[int] = mapped_column(
@@ -177,7 +192,9 @@ class SaferpayRefundCaseEvent(db.Model):
     actor_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("user.id", ondelete="RESTRICT"), nullable=True
     )
-    payload_text: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'{}'"))
+    payload_text: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'{}'")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

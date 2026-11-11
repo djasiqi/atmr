@@ -218,7 +218,9 @@ def test_http_courses_dispatch_institution(app, portal_grant_table, enforce_gran
     )
     assert opened.status_code == 200, opened.get_data(as_text=True)[:400]
     body = opened.get_json()
-    assert body["id"] == institution.id or body.get("data", {}).get("id") == institution.id
+    assert (
+        body["id"] == institution.id or body.get("data", {}).get("id") == institution.id
+    )
 
 
 def test_lectures_company_id_passent_par_le_perimetre(app, portal_grant_table):
@@ -272,7 +274,9 @@ def test_delete_sql_d_une_revocation_est_refuse(portal_grant_table):
             portal_grant_table.session.execute(text(statement))
 
 
-def test_socket_deux_processus_coupure_reception(app, portal_grant_table, enforce_grants):
+def test_socket_deux_processus_coupure_reception(
+    app, portal_grant_table, enforce_grants
+):
     user = _user(portal_grant_table, UserRole.COMPANY)
     company = _company(portal_grant_table, user, approved=True)
     grant = _grant(
@@ -320,9 +324,7 @@ def test_socket_deux_processus_coupure_reception(app, portal_grant_table, enforc
         base = f"http://127.0.0.1:{_WORKER_PORT}/socket.io/"
         http_session, sid, handshake = _open_socket(base, token)
         assert f"company_{company.id}" in handshake, handshake[:400]
-        assert all(
-            claims.get("user_id") != user.id for claims in _SID_INDEX.values()
-        )
+        assert all(claims.get("user_id") != user.id for claims in _SID_INDEX.values())
         bus = _redis_client()
         room = f"company_{company.id}"
         bus.publish(

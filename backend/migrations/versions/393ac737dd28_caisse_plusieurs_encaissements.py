@@ -105,29 +105,21 @@ def downgrade():
         "cash_collection",
         type_="foreignkey",
     )
-    op.drop_constraint(
-        "uq_cash_collection_scope", "cash_collection", type_="unique"
-    )
+    op.drop_constraint("uq_cash_collection_scope", "cash_collection", type_="unique")
     op.drop_constraint(
         "uq_cash_collection_booking_operation",
         "cash_collection",
         type_="unique",
     )
-    op.drop_index(
-        "ix_cash_collection_company_booking", table_name="cash_collection"
-    )
+    op.drop_index("ix_cash_collection_company_booking", table_name="cash_collection")
     op.create_unique_constraint(
         "uq_cash_collection_booking", "cash_collection", ["booking_id"]
     )
-    op.drop_constraint(
-        "ck_cash_collection_kind_net", "cash_collection", type_="check"
-    )
+    op.drop_constraint("ck_cash_collection_kind_net", "cash_collection", type_="check")
     op.drop_constraint(
         "ck_cash_collection_operation_key", "cash_collection", type_="check"
     )
-    op.drop_constraint(
-        "ck_cash_collection_kind", "cash_collection", type_="check"
-    )
+    op.drop_constraint("ck_cash_collection_kind", "cash_collection", type_="check")
     op.drop_column("cash_collection", "compensates_collection_id")
     op.drop_column("cash_collection", "client_operation_key")
     op.drop_column("cash_collection", "kind")

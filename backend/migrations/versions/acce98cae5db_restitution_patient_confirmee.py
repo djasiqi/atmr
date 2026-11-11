@@ -20,7 +20,9 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column("invoice_refund", sa.Column("booking_id", sa.Integer(), nullable=True))
+    op.add_column(
+        "invoice_refund", sa.Column("booking_id", sa.Integer(), nullable=True)
+    )
     op.add_column("invoice_refund", sa.Column("reason", sa.Text(), nullable=False))
     op.add_column(
         "invoice_refund", sa.Column("nature", sa.String(length=40), nullable=False)
@@ -108,7 +110,9 @@ def downgrade():
     op.drop_constraint(
         "fk_invoice_refund_created_by", "invoice_refund", type_="foreignkey"
     )
-    op.drop_constraint("fk_invoice_refund_booking", "invoice_refund", type_="foreignkey")
+    op.drop_constraint(
+        "fk_invoice_refund_booking", "invoice_refund", type_="foreignkey"
+    )
     op.drop_index("ix_invoice_refund_invoice", table_name="invoice_refund")
     op.alter_column(
         "invoice_refund",

@@ -101,18 +101,10 @@ def upgrade():
             "provider_refund_reference IS NOT NULL AND confirmed_amount IS NOT NULL)",
             name="ck_saferpay_refund_confirmed_has_proof",
         ),
-        sa.ForeignKeyConstraint(
-            ["booking_id"], ["booking.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["payment_id"], ["payment.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["holder_user_id"], ["user.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["approver_user_id"], ["user.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["payment_id"], ["payment.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["holder_user_id"], ["user.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["approver_user_id"], ["user.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("public_id"),
         sa.UniqueConstraint("operation_reference"),
@@ -155,9 +147,7 @@ def upgrade():
         sa.ForeignKeyConstraint(
             ["case_id"], ["saferpay_refund_case.id"], ondelete="RESTRICT"
         ),
-        sa.ForeignKeyConstraint(
-            ["actor_user_id"], ["user.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["actor_user_id"], ["user.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

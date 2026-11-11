@@ -84,7 +84,9 @@ def test_parcours_http_drapeau_eteint(app, portal_grant_table):
     assert logout.status_code == 200
 
 
-def test_client_et_entreprise_sur_la_meme_identite(app, portal_grant_table, enforce_grants):
+def test_client_et_entreprise_sur_la_meme_identite(
+    app, portal_grant_table, enforce_grants
+):
     user = _user(portal_grant_table, UserRole.CLIENT)
     _client_profile(portal_grant_table, user)
     company = _company(portal_grant_table, user, approved=True)
@@ -125,7 +127,9 @@ def test_chauffeur_et_institution(app, portal_grant_table, enforce_grants):
         company_id=company.id,
     )
     assert portal_company_allowed(driver_user, "driver", company.id) is True
-    other = _company(portal_grant_table, _user(portal_grant_table, UserRole.COMPANY), approved=True)
+    other = _company(
+        portal_grant_table, _user(portal_grant_table, UserRole.COMPANY), approved=True
+    )
     assert portal_company_allowed(driver_user, "driver", other.id) is False
 
     institution_user = _user(portal_grant_table, UserRole.INSTITUTION)
@@ -237,7 +241,9 @@ def test_observation_ne_change_pas_la_reponse(app, portal_grant_table, caplog):
     assert response.status_code == 200
     assert response.get_json()["data"]["id"] == company.id
     assert any("portal_scope_divergence" in message for message in caplog.messages)
-    assert not any("Bearer" in message or user.email in message for message in caplog.messages)
+    assert not any(
+        "Bearer" in message or user.email in message for message in caplog.messages
+    )
     app.config["PORTAL_GRANT_OBSERVATION"] = False
     app.config.pop("PORTAL_GRANT_LEGACY_CUTOFF", None)
 

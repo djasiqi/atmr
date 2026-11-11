@@ -568,8 +568,10 @@ def _assert_account_open(user: User) -> None:
             "Ce compte n'est pas disponible.",
             status=403,
         )
-    if user.role == UserRole.CLIENT and list(user.clients or []) and not any(
-        getattr(item, "is_active", False) for item in user.clients
+    if (
+        user.role == UserRole.CLIENT
+        and list(user.clients or [])
+        and not any(getattr(item, "is_active", False) for item in user.clients)
     ):
         raise ExternalAuthRejected(
             "compte_indisponible",
@@ -670,9 +672,7 @@ def _email_claims(claims: dict[str, Any]) -> tuple[str | None, bool]:
     return raw, verified
 
 
-def _browser_binding_ok(
-    row: ExternalAuthTransaction, presented: str | None
-) -> bool:
+def _browser_binding_ok(row: ExternalAuthTransaction, presented: str | None) -> bool:
     """Le state seul ne prouve pas le navigateur qui a ouvert la tentative."""
     secret = str(presented or "").strip()
     stored = str(row.ticket_hash or "")

@@ -35,7 +35,9 @@ SLA_NOTICE = (
     "Votre demande sera examinée dans un délai maximal de 24 heures "
     "administratives cumulées, à compter de la réception de votre dossier complet."
 )
-INVALID_LINK = "Ce lien n'est plus valable. Demandez un nouvel envoi depuis le formulaire."
+INVALID_LINK = (
+    "Ce lien n'est plus valable. Demandez un nouvel envoi depuis le formulaire."
+)
 VERIFY_TTL = timedelta(hours=24)
 TRACK_TTL = timedelta(days=14)
 OPEN_STATUSES = (
@@ -63,7 +65,18 @@ _IDE_RE = re.compile(
     r"^CHE[- ]?\d{3}\.\d{3}\.\d{3}(\s*TVA)?$|^CHE[- ]?\d{9}(\s*TVA)?$",
     flags=re.IGNORECASE,
 )
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _is_valid_email(value: str) -> bool:
+    """Validation e-mail bornée (évite ReDoS CodeQL sur quantifiers imbriqués)."""
+    if len(value) > 255 or value.count("@") != 1:
+        return False
+    local, domain = value.split("@", 1)
+    if not local or not domain or " " in value or "\t" in value:
+        return False
+    return "." in domain and not domain.startswith(".") and not domain.endswith(".")
+
+
 _EVENT_LABELS = {
     "created": "Demande enregistrée",
     "verification_sent": "Lien de confirmation envoyé",
@@ -248,13 +261,19 @@ def _validated_fields(payload: dict[str, Any]) -> dict[str, Any]:
         OrganizationApplicationKind.COMPANY.value,
         OrganizationApplicationKind.INSTITUTION.value,
     }:
-        raise ApplicationRejected("kind_invalide", "Choisissez une entreprise ou une institution.")
+        raise ApplicationRejected(
+            "kind_invalide", "Choisissez une entreprise ou une institution."
+        )
     email = str(payload.get("applicant_email") or "").strip().lower()
-    if not _EMAIL_RE.match(email) or len(email) > 255:
-        raise ApplicationRejected("email_invalide", "Indiquez une adresse e-mail professionnelle valide.")
+    if not _is_valid_email(email):
+        raise ApplicationRejected(
+            "email_invalide", "Indiquez une adresse e-mail professionnelle valide."
+        )
     phone = re.sub(r"[^\d+]", "", str(payload.get("applicant_phone") or ""))
     if len(phone) < 8 or len(phone) > 30:
-        raise ApplicationRejected("telephone_invalide", "Indiquez un téléphone professionnel valide.")
+        raise ApplicationRejected(
+            "telephone_invalide", "Indiquez un téléphone professionnel valide."
+        )
     first_name = _required_text(payload, "applicant_first_name", "le prénom", 80)
     last_name = _required_text(payload, "applicant_last_name", "le nom", 80)
     function = _required_text(payload, "applicant_function", "la fonction", 80)
@@ -262,12 +281,19 @@ def _validated_fields(payload: dict[str, Any]) -> dict[str, Any]:
     city = _required_text(payload, "city", "la localité", 100)
     postal_code = str(payload.get("postal_code") or "").strip()
     if not re.fullmatch(r"\d{4}", postal_code):
-        raise ApplicationRejected("npa_invalide", "Indiquez un code postal suisse à 4 chiffres.")
+        raise ApplicationRejected(
+            "npa_invalide", "Indiquez un code postal suisse à 4 chiffres."
+        )
     if payload.get("privacy_consent") is not True:
-        raise ApplicationRejected("consentement_requis", "Le consentement au traitement du dossier est requis.")
+        raise ApplicationRejected(
+            "consentement_requis",
+            "Le consentement au traitement du dossier est requis.",
+        )
     note = str(payload.get("review_note") or "").strip()
     if len(note) > 500:
-        raise ApplicationRejected("note_trop_longue", "La précision dépasse 500 caractères.")
+        raise ApplicationRejected(
+            "note_trop_longue", "La précision dépasse 500 caractères."
+        )
     fields: dict[str, Any] = {
         "kind": kind,
         "applicant_email": email,
@@ -285,7 +311,9 @@ def _validated_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "establishment_category": None,
     }
     if kind == OrganizationApplicationKind.COMPANY.value:
-        fields["legal_name"] = _required_text(payload, "legal_name", "la raison sociale", 200)
+        fields["legal_name"] = _required_text(
+            payload, "legal_name", "la raison sociale", 200
+        )
         raw_ide = str(payload.get("ide_number") or "").strip()
         fields["ide_number"] = _normalize_ide(raw_ide) if raw_ide else None
     else:
@@ -446,7 +474,9 @@ def _required_text(payload: dict[str, Any], key: str, label: str, limit: int) ->
     if not value:
         raise ApplicationRejected("champ_manquant", f"Indiquez {label}.")
     if len(value) > limit:
-        raise ApplicationRejected("champ_trop_long", f"Le champ « {label} » est trop long.")
+        raise ApplicationRejected(
+            "champ_trop_long", f"Le champ « {label} » est trop long."
+        )
     return value
 
 

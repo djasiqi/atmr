@@ -414,9 +414,7 @@ class ExternalAppleNative(Resource):
         except ExternalAuthRejected as error:
             return _rejected(error)
         if result["kind"] == "consent":
-            return json_response(
-                {"kind": "consent", "ticket": result["ticket"]}, 200
-            )
+            return json_response({"kind": "consent", "ticket": result["ticket"]}, 200)
         return _issue_for_client(result["user"])
 
 

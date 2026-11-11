@@ -181,7 +181,9 @@ def test_redis_coupe_pendant_revocation_deux_processus(
         session_a, sid_a, handshake_a = _open_socket(base, token_a)
         sessions.append(session_a)
         assert room_a in handshake_a, handshake_a[:400]
-        assert all(claims.get("user_id") != owner_a.id for claims in _SID_INDEX.values())
+        assert all(
+            claims.get("user_id") != owner_a.id for claims in _SID_INDEX.values()
+        )
         _probe(bus, room_a, "avant-a")
         status_a, body_a = _poll_socket(session_a, base, sid_a)
         assert status_a == 200
@@ -230,7 +232,9 @@ def test_redis_coupe_pendant_revocation_deux_processus(
         print(f"REDIS_DOWN_DETECTION_MS={detection_ms:.1f}")
         print(f"REVOCATION_TO_DROP_MS={revocation_gap_ms:.1f}")
 
-        assert _wait_log(logs, "portal_grant_channel_recovered", 10), "".join(logs[-40:])
+        assert _wait_log(logs, "portal_grant_channel_recovered", 10), "".join(
+            logs[-40:]
+        )
         assert _wait_log(logs, "portal_grant_reconciliation_closed", 5)
         again_b, _again_sid_b, again_body_b = _open_socket(base, token_b)
         sessions.append(again_b)

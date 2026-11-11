@@ -19,10 +19,14 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column("payment", sa.Column("saferpay_capture_id", sa.String(length=64), nullable=True))
+    op.add_column(
+        "payment", sa.Column("saferpay_capture_id", sa.String(length=64), nullable=True)
+    )
     op.add_column(
         "payment",
-        sa.Column("saferpay_captured_amount", sa.Numeric(precision=12, scale=2), nullable=True),
+        sa.Column(
+            "saferpay_captured_amount", sa.Numeric(precision=12, scale=2), nullable=True
+        ),
     )
     op.add_column(
         "payment",

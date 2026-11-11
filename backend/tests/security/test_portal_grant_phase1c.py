@@ -102,9 +102,7 @@ def test_nouveau_compte_sans_repli_professionnel(app, portal_grant_table):
 
 
 def test_ancien_compte_eligible_au_repli(app, portal_grant_table):
-    user, company = _legacy_company(
-        app, portal_grant_table, created_before_cutoff=True
-    )
+    user, company = _legacy_company(app, portal_grant_table, created_before_cutoff=True)
     resolved, _same = _require_company(
         app, user, context=None, claims={"role": "COMPANY"}
     )
@@ -155,7 +153,9 @@ def test_jwt_entreprise_differente_et_lien_ambigu(app, portal_grant_table):
     with app.test_request_context("/api/v1/companies/me"):
         from unittest.mock import patch
 
-        with patch("security.portal_scope._jwt_claims", return_value={"role": "COMPANY"}):
+        with patch(
+            "security.portal_scope._jwt_claims", return_value={"role": "COMPANY"}
+        ):
             ambiguous = use_case.execute()
     assert ambiguous.found is False
     assert ambiguous.status_code == 403
@@ -249,7 +249,9 @@ def test_observation_ne_change_pas_la_reponse(
     app.config["PORTAL_GRANT_OBSERVATION"] = False
 
 
-def test_institution_en_attente_conserve_le_client(app, portal_grant_table, enforce_grants):
+def test_institution_en_attente_conserve_le_client(
+    app, portal_grant_table, enforce_grants
+):
     from models import Institution
 
     user = _user(portal_grant_table, UserRole.CLIENT)

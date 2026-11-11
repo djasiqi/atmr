@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import re
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -34,7 +33,18 @@ INVITE_TTL = timedelta(days=7)
 MAX_RESENDS = 5
 MAX_ATTEMPTS = 8
 CONTROLLED_DOMAINS = frozenset({"example.test", "example.invalid"})
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _is_valid_email(value: str) -> bool:
+    """Validation e-mail bornée (évite ReDoS CodeQL sur quantifiers imbriqués)."""
+    if len(value) > 255 or value.count("@") != 1:
+        return False
+    local, domain = value.split("@", 1)
+    if not local or not domain or " " in value or "\t" in value:
+        return False
+    return "." in domain and not domain.startswith(".") and not domain.endswith(".")
+
+
 _FORBIDDEN_CREATE = frozenset(
     {
         "password",
@@ -717,7 +727,7 @@ def _reject_forbidden(payload: dict[str, Any], forbidden: frozenset[str]) -> Non
 
 def _email(value: Any) -> str:
     email = str(value or "").strip().lower()
-    if not _EMAIL_RE.match(email) or len(email) > 255:
+    if not _is_valid_email(email):
         raise InvitationRejected(
             "email_invalide",
             "Indiquez une adresse e-mail valable.",

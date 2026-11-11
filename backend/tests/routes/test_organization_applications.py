@@ -197,14 +197,17 @@ def test_organisation_connue_sans_rattachement(client, app, org_tables):
     org_tables.session.flush()
     companies_before = org_tables.session.query(Company).count()
     email = _email()
-    assert _post(
-        client,
-        _company_payload(
-            email,
-            legal_name=company.name,
-            ide_number="CHE-999.888.777",
-        ),
-    ).status_code == 202
+    assert (
+        _post(
+            client,
+            _company_payload(
+                email,
+                legal_name=company.name,
+                ide_number="CHE-999.888.777",
+            ),
+        ).status_code
+        == 202
+    )
     row = OrganizationApplication.query.filter_by(applicant_email=email).one()
     assert row.matched_company_id == company.id
     assert org_tables.session.query(Company).count() == companies_before
@@ -236,14 +239,20 @@ def test_suivi_isole_entre_deux_demandes(client, app, org_tables):
     app.config["_ORG_APP_LINKS"] = []
     first_email = _email()
     second_email = _email()
-    assert _post(
-        client, _company_payload(first_email, legal_name="Alpha Transport")
-    ).status_code == 202
+    assert (
+        _post(
+            client, _company_payload(first_email, legal_name="Alpha Transport")
+        ).status_code
+        == 202
+    )
     first_link = _token(app)
-    assert _post(
-        client,
-        _institution_payload(second_email, establishment_name="Beta Soins"),
-    ).status_code == 202
+    assert (
+        _post(
+            client,
+            _institution_payload(second_email, establishment_name="Beta Soins"),
+        ).status_code
+        == 202
+    )
     second_link = _token(app)
     first = _verify(client, first_link).get_json()
     second = _verify(client, second_link).get_json()
@@ -284,10 +293,13 @@ def test_payload_professionnel_et_contournement_refuses(client, app, org_tables)
     )
     assert approve.status_code == 405
     honeypot_email = _email()
-    honeypot = _post(client, _company_payload(honeypot_email, website="https://spam.example"))
+    honeypot = _post(
+        client, _company_payload(honeypot_email, website="https://spam.example")
+    )
     assert honeypot.status_code == 202
     assert (
-        OrganizationApplication.query.filter_by(applicant_email=honeypot_email).count() == 0
+        OrganizationApplication.query.filter_by(applicant_email=honeypot_email).count()
+        == 0
     )
 
 

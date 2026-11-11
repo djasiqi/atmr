@@ -88,16 +88,22 @@ def accept_institution_invitation(raw_token: str) -> dict[str, str]:
     """Active le premier administrateur. Un autre jeton ne convient pas."""
     token = _usable_token(raw_token, _INVITE_PURPOSE)
     if token is None:
-        raise ApplicationRejected("lien_invalide", "Ce lien d'activation n'est pas valable.")
+        raise ApplicationRejected(
+            "lien_invalide", "Ce lien d'activation n'est pas valable."
+        )
     row = token.application
     grant = _institution_grant(row)
     if grant is None or grant.status == PortalGrantStatus.REVOKED.value:
-        raise ApplicationRejected("lien_invalide", "Ce lien d'activation n'est pas valable.")
+        raise ApplicationRejected(
+            "lien_invalide", "Ce lien d'activation n'est pas valable."
+        )
     if grant.status == PortalGrantStatus.ACTIVE.value and token.used_at is not None:
         return {"message": "Cette invitation est déjà acceptée."}
     user = db.session.get(User, grant.user_id)
     if user is None:
-        raise ApplicationRejected("lien_invalide", "Ce lien d'activation n'est pas valable.")
+        raise ApplicationRejected(
+            "lien_invalide", "Ce lien d'activation n'est pas valable."
+        )
     role_before = user.role
     token.used_at = datetime.now(UTC)
     grant.status = PortalGrantStatus.ACTIVE.value
@@ -128,7 +134,9 @@ def revoke_approved_grant(public_id: str, actor: User) -> dict:
         )
     grant = _grant_for(row)
     if grant is None:
-        raise ApplicationRejected("habilitation_absente", "Aucune habilitation à révoquer.")
+        raise ApplicationRejected(
+            "habilitation_absente", "Aucune habilitation à révoquer."
+        )
     if grant.status != PortalGrantStatus.REVOKED.value:
         grant.status = PortalGrantStatus.REVOKED.value
         grant.revoked_at = datetime.now(UTC)
@@ -209,14 +217,20 @@ def _require_admissible(row: OrganizationApplication) -> None:
             "Une demande refusée ne peut pas être approuvée.",
             status=409,
         )
-    if row.status != OrganizationApplicationStatus.IN_REVIEW.value or row.email_verified_at is None:
+    if (
+        row.status != OrganizationApplicationStatus.IN_REVIEW.value
+        or row.email_verified_at is None
+    ):
         raise ApplicationRejected(
             "transition_refusee",
             "Ce dossier ne peut pas être approuvé depuis son état actuel.",
             status=409,
         )
     checks = _checks(row)
-    if checks["identity"]["confirmed"] is not True or checks["organization"]["confirmed"] is not True:
+    if (
+        checks["identity"]["confirmed"] is not True
+        or checks["organization"]["confirmed"] is not True
+    ):
         raise ApplicationRejected(
             "dossier_inadmissible",
             "L'identité et l'organisation doivent être confirmées avant l'approbation.",
@@ -228,7 +242,9 @@ def _applicant_user(row: OrganizationApplication) -> User:
     if row.user_id is not None:
         user = db.session.get(User, row.user_id)
     if user is None:
-        user = User.query.filter(func.lower(User.email) == row.applicant_email.lower()).one_or_none()
+        user = User.query.filter(
+            func.lower(User.email) == row.applicant_email.lower()
+        ).one_or_none()
     role_before = None if user is None else user.role
     if user is None:
         user = User()

@@ -72,9 +72,7 @@ def upgrade():
             nullable=False,
         ),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["author_user_id"], ["user.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["author_user_id"], ["user.id"], ondelete="RESTRICT"),
         sa.UniqueConstraint(
             "company_id",
             "revision",
@@ -106,15 +104,9 @@ def upgrade():
             "receipt_proven = false",
             name="ck_patient_notice_not_proof",
         ),
-        sa.ForeignKeyConstraint(
-            ["booking_id"], ["booking.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["company_id"], ["company.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["author_user_id"], ["user.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["author_user_id"], ["user.id"], ondelete="RESTRICT"),
     )
 
 

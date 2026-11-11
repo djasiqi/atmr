@@ -273,9 +273,10 @@ def test_compose_config_json_fused_with_p0_hold_override(tmp_path):
         env = svc.get("environment") or {}
         for key in _EMPTY_DSN_KEYS:
             assert key in env, f"{svc_name} manque {key}"
-            assert env[key] in ("", None), (
-                f"{svc_name}.{key} doit être vide, got {env[key]!r}"
-            )
+            assert env[key] in (
+                "",
+                None,
+            ), f"{svc_name}.{key} doit être vide, got {env[key]!r}"
         assert env.get("POSTGRES_HOST") == "pgbouncer", svc_name
         assert str(env.get("POSTGRES_PORT")) == "6432", svc_name
         for val in env.values():

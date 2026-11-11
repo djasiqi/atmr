@@ -38,7 +38,9 @@ class UserExternalIdentity(db.Model):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE", name="fk_user_external_identity_user"),
+        ForeignKey(
+            "user.id", ondelete="CASCADE", name="fk_user_external_identity_user"
+        ),
         nullable=False,
         index=True,
     )

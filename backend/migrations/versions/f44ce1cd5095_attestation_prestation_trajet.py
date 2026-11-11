@@ -136,7 +136,9 @@ def downgrade():
     )
     op.drop_table("transport_attestation_event")
     op.drop_index("ix_transport_attestation_driver", table_name="transport_attestation")
-    op.drop_index("ix_transport_attestation_company", table_name="transport_attestation")
+    op.drop_index(
+        "ix_transport_attestation_company", table_name="transport_attestation"
+    )
     op.drop_index(
         "ix_transport_attestation_booking_id", table_name="transport_attestation"
     )

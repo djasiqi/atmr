@@ -56,8 +56,7 @@ def grants_are_authoritative(user: User) -> bool:
     if user_id is None:
         return False
     return (
-        db.session.query(PortalGrant.id).filter_by(user_id=user_id).first()
-        is not None
+        db.session.query(PortalGrant.id).filter_by(user_id=user_id).first() is not None
     )
 
 
@@ -153,9 +152,7 @@ def _active_portal_count(user_id: int) -> int:
     return len(rows)
 
 
-def _select_company_grant(
-    user: User, context_id: str | None
-) -> PortalGrant | None:
+def _select_company_grant(user: User, context_id: str | None) -> PortalGrant | None:
     grants = _active_grants(user.id, PortalKind.COMPANY.value)
     if not grants:
         return None
@@ -205,9 +202,7 @@ def _select_driver_grant(user: User, context_id: str | None) -> PortalGrant | No
     )
 
 
-def _select_institution_grant(
-    user: User, context_id: str | None
-) -> PortalGrant | None:
+def _select_institution_grant(user: User, context_id: str | None) -> PortalGrant | None:
     grants = _active_grants(user.id, PortalKind.INSTITUTION.value)
     if not grants:
         return None
@@ -289,7 +284,8 @@ def role_required_grant_gate(user: User, allowed_roles: list[object]) -> str:
     if any(scope.allowed and scope.source == "legacy" for scope in scopes):
         return "legacy"
     if any(
-        scope.reason == "revoked" and _role_value(user) == _PORTAL_TO_ROLE_CLAIM.get(scope.portal)
+        scope.reason == "revoked"
+        and _role_value(user) == _PORTAL_TO_ROLE_CLAIM.get(scope.portal)
         for scope in scopes
     ):
         return "deny"
@@ -384,9 +380,7 @@ def institution_role_from_grant(user: User) -> str | None:
     return grant.internal_role
 
 
-def company_access_decision(
-    user: User, company_id: int | None
-) -> bool | None:
+def company_access_decision(user: User, company_id: int | None) -> bool | None:
     """Vrai si le portail entreprise autorise exactement cette société."""
     if company_id is None:
         return None
@@ -406,9 +400,7 @@ def transport_company_access(user: User, company_id: int | None) -> bool | None:
     return portal_company_allowed(user, PortalKind.DRIVER.value, int(company_id))
 
 
-def institution_access_decision(
-    user: User, institution_id: int | None
-) -> bool | None:
+def institution_access_decision(user: User, institution_id: int | None) -> bool | None:
     if institution_id is None or not grants_are_authoritative(user):
         return None
     return any(
@@ -768,9 +760,7 @@ def _classify_user(
                 internal_role=None,
             )
         elif len(owned) == 0:
-            report["missing"].append(
-                _missing(user, "compte_entreprise_sans_societe")
-            )
+            report["missing"].append(_missing(user, "compte_entreprise_sans_societe"))
         else:
             report["ambiguous"].append(
                 _ambiguous(user, "plusieurs_societes_meme_utilisateur", owned)

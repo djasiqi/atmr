@@ -64,12 +64,21 @@ def test_liste_distingue_le_dossier_incomplet(client, app, org_tables):
     unverified = _email()
     company_email = _email()
     institution_email = _email()
-    assert _post(client, _company_payload(unverified, legal_name="Incomplet SA")).status_code == 202
-    _received(client, app, _company_payload(company_email, legal_name="Transports du Lac"))
+    assert (
+        _post(
+            client, _company_payload(unverified, legal_name="Incomplet SA")
+        ).status_code
+        == 202
+    )
+    _received(
+        client, app, _company_payload(company_email, legal_name="Transports du Lac")
+    )
     _received(
         client,
         app,
-        _institution_payload(institution_email, establishment_name="Clinique des Alpes"),
+        _institution_payload(
+            institution_email, establishment_name="Clinique des Alpes"
+        ),
     )
     admin, headers = _admin(app, org_tables)
     listed = client.get("/api/v1/admin/organization-applications", headers=headers)
@@ -170,7 +179,13 @@ def test_parcours_examen_complement_reprise_et_refus(client, app, org_tables):
     assert repeat.status_code == 200
     assert repeat.get_json()["notification"] is None
     notices = [item["template"] for item in app.config["_ORG_APP_NOTICES"]]
-    assert notices == ["review_started", "info_requested", "info_received", "review_resumed", "refused"]
+    assert notices == [
+        "review_started",
+        "info_requested",
+        "info_received",
+        "review_resumed",
+        "refused",
+    ]
     mine = client.get(
         "/api/v1/organization-applications/mine",
         headers={"Authorization": f"Bearer {tracking}"},
@@ -215,7 +230,9 @@ def test_observation_interne_et_approbation_bloquee(client, app, org_tables):
         "/api/v1/organization-applications/mine",
         headers={"Authorization": f"Bearer {tracking}"},
     )
-    public_notes = " ".join(event.get("note") or "" for event in mine.get_json()["events"])
+    public_notes = " ".join(
+        event.get("note") or "" for event in mine.get_json()["events"]
+    )
     assert "Pièce d'identité" not in public_notes
     blocked = client.post(
         f"/api/v1/admin/organization-applications/{row.public_id}/approve",

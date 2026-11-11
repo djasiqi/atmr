@@ -162,9 +162,9 @@ class TestDriverWebCookieAuthA1:
             headers={"X-Requested-With": "Expo"},
         )
         assert login.status_code == 200
-        token = (login.get_json() or {}).get("token") or (
-            login.get_json() or {}
-        ).get("access_token")
+        token = (login.get_json() or {}).get("token") or (login.get_json() or {}).get(
+            "access_token"
+        )
         assert token
         client.set_cookie("access_token", "trapped-web-cookie")
         assert resolve_jwt_token_locations(

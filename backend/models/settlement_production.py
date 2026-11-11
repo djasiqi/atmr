@@ -352,7 +352,9 @@ class CashReconciliation(db.Model):
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(80), nullable=False)
     regularizes_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("cash_reconciliation.id", ondelete="RESTRICT"), nullable=True
+        Integer,
+        ForeignKey("cash_reconciliation.id", ondelete="RESTRICT"),
+        nullable=True,
     )
     author_user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("user.id", ondelete="RESTRICT"), nullable=False

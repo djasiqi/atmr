@@ -69,17 +69,27 @@ def _ready(client, app, db, payload):
     row = _received(client, app, payload)
     admin = _user(db, UserRole.ADMIN)
     headers = _headers(app, admin)
-    assert client.post(
-        f"/api/v1/admin/organization-applications/{row.public_id}/decisions",
-        json={"action": "start_review"},
-        headers=headers,
-    ).status_code == 200
-    for action in ("check_identity", "check_organization"):
-        assert client.post(
+    assert (
+        client.post(
             f"/api/v1/admin/organization-applications/{row.public_id}/decisions",
-            json={"action": action, "confirmed": True, "note": "Vérification administrative faite."},
+            json={"action": "start_review"},
             headers=headers,
-        ).status_code == 200
+        ).status_code
+        == 200
+    )
+    for action in ("check_identity", "check_organization"):
+        assert (
+            client.post(
+                f"/api/v1/admin/organization-applications/{row.public_id}/decisions",
+                json={
+                    "action": action,
+                    "confirmed": True,
+                    "note": "Vérification administrative faite.",
+                },
+                headers=headers,
+            ).status_code
+            == 200
+        )
     return applicant, admin, headers, row
 
 
@@ -130,7 +140,9 @@ def test_verrou_ferme_ne_cree_rien(client, app, org_tables):
     assert row.status == "in_review"
     assert org_tables.session.query(Company).count() == companies
     assert org_tables.session.query(PortalGrant).count() == grants
-    assert "company_approved" not in [item["template"] for item in app.config["_ORG_APP_NOTICES"]]
+    assert "company_approved" not in [
+        item["template"] for item in app.config["_ORG_APP_NOTICES"]
+    ]
 
 
 def test_entreprise_atomique_rejeu_et_acces(client, app, org_tables):
@@ -165,10 +177,14 @@ def test_entreprise_atomique_rejeu_et_acces(client, app, org_tables):
     org_tables.session.refresh(applicant)
     assert applicant.role == role_before
     assert org_tables.session.query(Company).count() == companies + 1
-    grants = PortalGrant.query.filter_by(user_id=applicant.id, portal=PortalKind.COMPANY.value).all()
+    grants = PortalGrant.query.filter_by(
+        user_id=applicant.id, portal=PortalKind.COMPANY.value
+    ).all()
     assert len(grants) == 1
     assert grants[0].status == PortalGrantStatus.ACTIVE.value
-    assert portal_company_allowed(applicant, PortalKind.COMPANY.value, grants[0].company_id)
+    assert portal_company_allowed(
+        applicant, PortalKind.COMPANY.value, grants[0].company_id
+    )
     notices = [item["template"] for item in app.config["_ORG_APP_NOTICES"]]
     assert notices.count("company_approved") == 1
 
@@ -221,7 +237,9 @@ def test_institution_reste_inactive_jusqu_a_son_jeton(client, app, org_tables):
     assert grant.status == PortalGrantStatus.PENDING_ACTIVATION.value
     assert grant.internal_role == "institution_admin"
     assert grant.portal == PortalKind.INSTITUTION.value
-    before = resolve_portal_scope(applicant, PortalKind.INSTITUTION.value, use_request_claim=False)
+    before = resolve_portal_scope(
+        applicant, PortalKind.INSTITUTION.value, use_request_claim=False
+    )
     assert before.allowed is False
     wrong = client.post(
         "/api/v1/organization-applications/institution-activation",
@@ -245,14 +263,18 @@ def test_institution_reste_inactive_jusqu_a_son_jeton(client, app, org_tables):
     assert grant.status == PortalGrantStatus.ACTIVE.value
     assert applicant.role == UserRole.CLIENT
     assert applicant.institution_role == "institution_admin"
-    opened = resolve_portal_scope(applicant, PortalKind.INSTITUTION.value, use_request_claim=False)
+    opened = resolve_portal_scope(
+        applicant, PortalKind.INSTITUTION.value, use_request_claim=False
+    )
     assert opened.allowed is True
     assert org_tables.session.query(Institution).filter_by(name=name).count() == 1
 
 
 def test_refus_auto_approbation_et_revocation(client, app, org_tables):
     email = _email()
-    payload = _company_payload(email, legal_name=f"Refus {uuid.uuid4().hex[:8]}", ide_number=_ide())
+    payload = _company_payload(
+        email, legal_name=f"Refus {uuid.uuid4().hex[:8]}", ide_number=_ide()
+    )
     applicant, _admin, headers, row = _ready(client, app, org_tables, payload)
     refused = client.post(
         f"/api/v1/admin/organization-applications/{row.public_id}/decisions",
@@ -270,17 +292,27 @@ def test_refus_auto_approbation_et_revocation(client, app, org_tables):
         ide_number=_ide(),
     )
     self_row = _received(client, app, other)
-    assert client.post(
-        f"/api/v1/admin/organization-applications/{self_row.public_id}/decisions",
-        json={"action": "start_review"},
-        headers=headers,
-    ).status_code == 200
-    for action in ("check_identity", "check_organization"):
-        assert client.post(
+    assert (
+        client.post(
             f"/api/v1/admin/organization-applications/{self_row.public_id}/decisions",
-            json={"action": action, "confirmed": True, "note": "Vérification administrative faite."},
+            json={"action": "start_review"},
             headers=headers,
-        ).status_code == 200
+        ).status_code
+        == 200
+    )
+    for action in ("check_identity", "check_organization"):
+        assert (
+            client.post(
+                f"/api/v1/admin/organization-applications/{self_row.public_id}/decisions",
+                json={
+                    "action": action,
+                    "confirmed": True,
+                    "note": "Vérification administrative faite.",
+                },
+                headers=headers,
+            ).status_code
+            == 200
+        )
     approver = _user(org_tables, UserRole.ADMIN)
     approver.email = other["applicant_email"]
     org_tables.session.flush()
@@ -288,7 +320,9 @@ def test_refus_auto_approbation_et_revocation(client, app, org_tables):
     assert own.status_code == 403
     assert own.get_json()["code"] == "auto_decision_refusee"
     companies = org_tables.session.query(Company).count()
-    fresh = _company_payload(_email(), legal_name=f"Revo {uuid.uuid4().hex[:8]}", ide_number=_ide())
+    fresh = _company_payload(
+        _email(), legal_name=f"Revo {uuid.uuid4().hex[:8]}", ide_number=_ide()
+    )
     person, _actor, actor_headers, dossier = _ready(client, app, org_tables, fresh)
     assert _approve(client, actor_headers, dossier.public_id).status_code == 200
     revoked = client.post(
@@ -299,7 +333,11 @@ def test_refus_auto_approbation_et_revocation(client, app, org_tables):
     assert revoked.status_code == 200
     grant = PortalGrant.query.filter_by(user_id=person.id).one()
     assert grant.status == PortalGrantStatus.REVOKED.value
-    assert portal_company_allowed(person, PortalKind.COMPANY.value, grant.company_id) is False
+    assert (
+        portal_company_allowed(person, PortalKind.COMPANY.value, grant.company_id)
+        is False
+    )
+
     def _orm_delete() -> None:
         with org_tables.session.begin_nested():
             org_tables.session.delete(grant)
@@ -311,6 +349,7 @@ def test_refus_auto_approbation_et_revocation(client, app, org_tables):
     for statement in REVOKED_DELETE_GUARD_SQL:
         org_tables.session.execute(text(statement))
     try:
+
         def _sql_delete() -> None:
             with org_tables.session.begin_nested():
                 org_tables.session.execute(

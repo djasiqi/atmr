@@ -69,9 +69,7 @@ def upgrade():
             "status IN ('pending_activation', 'active', 'revoked')",
             name="ck_portal_grant_status",
         ),
-        sa.ForeignKeyConstraint(
-            ["company_id"], ["company.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["institution_id"], ["institutions.id"], ondelete="CASCADE"
         ),

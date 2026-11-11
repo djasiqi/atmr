@@ -297,7 +297,9 @@ def _historical_scope(
         if len(owned) == 0:
             return _deny(portal, "no_organization")
         company = owned[0]
-        if claimed_company_id is not None and int(claimed_company_id) != int(company.id):
+        if claimed_company_id is not None and int(claimed_company_id) != int(
+            company.id
+        ):
             return _deny(portal, "cross_tenant")
         if require_company_approval and not bool(company.is_approved):
             return _deny(portal, "unapproved")
@@ -329,7 +331,9 @@ def _historical_scope(
             source="legacy",
         )
     if portal == PortalKind.INSTITUTION.value:
-        if role != UserRole.INSTITUTION.value or not getattr(user, "institution_id", None):
+        if role != UserRole.INSTITUTION.value or not getattr(
+            user, "institution_id", None
+        ):
             return _deny(portal, "role_mismatch")
         institution_id = int(user.institution_id)
         if (
@@ -533,10 +537,7 @@ def _observe(
 ) -> None:
     if not observation_enabled():
         return
-    if (
-        historical.allowed == future.allowed
-        and _org_id(historical) == _org_id(future)
-    ):
+    if historical.allowed == future.allowed and _org_id(historical) == _org_id(future):
         return
     logger.info(
         "portal_scope_divergence user_id=%s portal=%s historical=%s future=%s "
@@ -584,9 +585,7 @@ def resolve_portal_scope(
     if enforcement_enabled():
         decision = future
     else:
-        decision = _revoked_overlay(
-            user, historical, company_claim, institution_claim
-        )
+        decision = _revoked_overlay(user, historical, company_claim, institution_claim)
     _observe(user, portal, historical, future, decision)
     return decision
 

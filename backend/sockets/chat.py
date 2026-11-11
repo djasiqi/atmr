@@ -275,9 +275,7 @@ def reconcile_open_professional_sockets() -> None:
                 continue
             user_id = claims.get("user_id")
             user = (
-                db.session.get(User, int(user_id))
-                if isinstance(user_id, int)
-                else None
+                db.session.get(User, int(user_id)) if isinstance(user_id, int) else None
             )
             if user is None or not _professional_scope_matches(user, claims, role):
                 _disconnect_indexed_sid(sid)
@@ -1187,9 +1185,7 @@ def init_chat_socket(socketio: SocketIO, flask_app: Any | None = None) -> None:
                     raise SocketConnectionRefusedError("DRIVER_OR_COMPANY_NOT_FOUND")
                 from security.portal_scope import portal_company_allowed
 
-                if not portal_company_allowed(
-                    user, "driver", int(driver.company_id)
-                ):
+                if not portal_company_allowed(user, "driver", int(driver.company_id)):
                     raise SocketConnectionRefusedError("PORTAL_ACCESS_DENIED")
                 if not _try_acquire_company_slot(int(driver.company_id)):
                     ws_metrics.on_error("realtime_company_capacity_exceeded")
@@ -3740,9 +3736,7 @@ def init_chat_socket(socketio: SocketIO, flask_app: Any | None = None) -> None:
 
                 from security.portal_scope import portal_company_allowed
 
-                if not portal_company_allowed(
-                    user, "driver", int(driver.company_id)
-                ):
+                if not portal_company_allowed(user, "driver", int(driver.company_id)):
                     emit("error", {"error": "Accès retiré."})
                     with suppress(Exception):
                         socketio.server.disconnect(sid, namespace="/")

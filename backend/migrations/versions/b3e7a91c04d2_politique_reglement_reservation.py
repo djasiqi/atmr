@@ -29,7 +29,9 @@ def upgrade():
         sa.Column("route_group_id", sa.String(length=36), nullable=True),
         sa.Column("revision", sa.Integer(), nullable=False),
         sa.Column("modality", sa.String(length=40), nullable=False),
-        sa.Column("authorized_modes", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column(
+            "authorized_modes", postgresql.JSONB(astext_type=sa.Text()), nullable=False
+        ),
         sa.Column("payment_scope", sa.String(length=20), nullable=True),
         sa.Column("collection_moment", sa.String(length=20), nullable=True),
         sa.Column("amount_chf", sa.Numeric(10, 2), nullable=True),
@@ -45,7 +47,9 @@ def upgrade():
         sa.Column("locked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("locked_by_user_id", sa.Integer(), nullable=True),
         sa.Column("invoice_signature_text", sa.Text(), nullable=True),
-        sa.Column("invoice_signature_text_version", sa.String(length=40), nullable=True),
+        sa.Column(
+            "invoice_signature_text_version", sa.String(length=40), nullable=True
+        ),
         sa.Column("validated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("validated_by_user_id", sa.Integer(), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
@@ -95,9 +99,7 @@ def upgrade():
             "(locked_at IS NOT NULL AND locked_by_user_id IS NOT NULL)",
             name="ck_settlement_policy_lock",
         ),
-        sa.ForeignKeyConstraint(
-            ["booking_id"], ["booking.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["locked_by_user_id"], ["user.id"], ondelete="RESTRICT"
         ),

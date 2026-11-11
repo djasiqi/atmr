@@ -91,18 +91,26 @@ class TestHyperparameterTunerSanity:
             assert 10 <= config["max_bookings"] <= 50, "max_bookings hors bornes"
 
             # Vérifier les choix catégoriques
-            assert config["batch_size"] in [32, 64, 128, 256], (
-                "batch_size choix invalide"
-            )
-            assert config["buffer_size"] in [50000, 100000, 200000, 500000], (
-                "buffer_size choix invalide"
-            )
-            assert config["use_double_dqn"] in [True, False], (
-                "use_double_dqn choix invalide"
-            )
-            assert config["use_prioritized_replay"] in [True, False], (
-                "use_prioritized_replay choix invalide"
-            )
+            assert config["batch_size"] in [
+                32,
+                64,
+                128,
+                256,
+            ], "batch_size choix invalide"
+            assert config["buffer_size"] in [
+                50000,
+                100000,
+                200000,
+                500000,
+            ], "buffer_size choix invalide"
+            assert config["use_double_dqn"] in [
+                True,
+                False,
+            ], "use_double_dqn choix invalide"
+            assert config["use_prioritized_replay"] in [
+                True,
+                False,
+            ], "use_prioritized_replay choix invalide"
             assert config["use_n_step"] in [True, False], "use_n_step choix invalide"
             assert config["use_dueling"] in [True, False], "use_dueling choix invalide"
 

@@ -52,7 +52,9 @@ class ExternalAuthTransaction(db.Model):
         String(16), nullable=False, default="pending", server_default="pending"
     )
     # Pending : empreinte du cookie oauth_browser. Ready : empreinte du ticket.
-    ticket_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    ticket_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True
+    )
     provider_sub: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email_verified: Mapped[bool] = mapped_column(
@@ -60,8 +62,12 @@ class ExternalAuthTransaction(db.Model):
     )
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

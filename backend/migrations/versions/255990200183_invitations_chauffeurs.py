@@ -30,7 +30,9 @@ def upgrade():
         sa.Column("first_name", sa.String(length=80), nullable=False),
         sa.Column("last_name", sa.String(length=80), nullable=False),
         sa.Column("token_hash", sa.String(length=64), nullable=False),
-        sa.Column("status", sa.String(length=32), server_default="pending", nullable=False),
+        sa.Column(
+            "status", sa.String(length=32), server_default="pending", nullable=False
+        ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),

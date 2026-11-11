@@ -52,7 +52,9 @@ def main() -> None:
     application.config["JWT_SECRET_KEY"] = os.getenv(
         "PORTAL_GRANT_TEST_JWT_SECRET", "test-secret-key"
     )
-    Thread(target=_serve_probe_emits, name="portal-grant-test-probe", daemon=True).start()
+    Thread(
+        target=_serve_probe_emits, name="portal-grant-test-probe", daemon=True
+    ).start()
     server = make_server("127.0.0.1", port, application)
     print("LISTENER_READY", flush=True)
     server.serve_forever()

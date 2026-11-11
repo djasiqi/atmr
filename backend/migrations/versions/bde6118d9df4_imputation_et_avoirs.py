@@ -108,12 +108,8 @@ def upgrade():
             server_default=sa.text("0"),
             nullable=False,
         ),
-        sa.CheckConstraint(
-            "last_value >= 0", name="ck_invoice_credit_sequence_nonneg"
-        ),
-        sa.ForeignKeyConstraint(
-            ["company_id"], ["company.id"], ondelete="RESTRICT"
-        ),
+        sa.CheckConstraint("last_value >= 0", name="ck_invoice_credit_sequence_nonneg"),
+        sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "company_id",
@@ -157,9 +153,7 @@ def upgrade():
         sa.CheckConstraint(
             "char_length(reason) > 0", name="ck_invoice_credit_note_reason"
         ),
-        sa.ForeignKeyConstraint(
-            ["company_id"], ["company.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["created_by_user_id"], ["user.id"], ondelete="RESTRICT"
         ),
@@ -209,9 +203,7 @@ def upgrade():
             name="fk_invoice_refund_collection_company",
             ondelete="RESTRICT",
         ),
-        sa.ForeignKeyConstraint(
-            ["company_id"], ["company.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["invoice_id", "company_id"],
             ["invoices.id", "invoices.company_id"],
@@ -229,9 +221,7 @@ def upgrade():
 
 def downgrade():
     op.drop_table("invoice_refund")
-    op.drop_index(
-        "ix_invoice_credit_note_invoice", table_name="invoice_credit_note"
-    )
+    op.drop_index("ix_invoice_credit_note_invoice", table_name="invoice_credit_note")
     op.drop_table("invoice_credit_note")
     op.drop_table("invoice_credit_sequence")
     op.execute("DROP TRIGGER trg_invoice_payment_same_company ON invoice_payments")
@@ -251,7 +241,5 @@ def downgrade():
         "uq_cash_collection_id_company", "cash_collection", type_="unique"
     )
     op.drop_constraint("uq_invoice_id_company", "invoices", type_="unique")
-    op.drop_constraint(
-        "chk_invoice_refundable_nonneg", "invoices", type_="check"
-    )
+    op.drop_constraint("chk_invoice_refundable_nonneg", "invoices", type_="check")
     op.drop_column("invoices", "refundable_chf")

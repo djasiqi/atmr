@@ -27,7 +27,6 @@ from flask_restx import (
 )
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
-from werkzeug.exceptions import HTTPException
 
 from ext import db, limiter, redis_client, role_required
 

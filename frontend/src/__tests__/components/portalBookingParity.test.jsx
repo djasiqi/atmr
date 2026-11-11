@@ -109,14 +109,14 @@ function isoToPickerDisplay(iso) {
   return `${day}.${month}.${year}`;
 }
 
-function plan(date = '2026-09-30', time = '09:00') {
+function plan(date = '2027-03-15', time = '09:00') {
   fireEvent.change(screen.getByLabelText('Date du transport'), {
     target: { value: isoToPickerDisplay(date) },
   });
   fireEvent.change(screen.getByLabelText('Heure du rendez-vous'), { target: { value: time } });
 }
 
-function planDeparture(date = '2026-09-30', time = '08:15') {
+function planDeparture(date = '2027-03-15', time = '08:15') {
   fireEvent.change(screen.getByLabelText('Date du transport'), {
     target: { value: isoToPickerDisplay(date) },
   });
@@ -205,14 +205,14 @@ describe('Parité formulaire PORTAL', () => {
     plan();
     fireEvent.click(screen.getByRole('button', { name: 'Autre jour' }));
     fireEvent.change(document.getElementById('client-booking-return-date'), {
-      target: { value: '2026-10-15' },
+      target: { value: '2027-03-20' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Vérifier la demande/i }));
     expect((await screen.findAllByText(/Heure à définir/)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer la demande de transport' }));
     await waitFor(() => expect(previewPayload().is_round_trip).toBe(true));
     const body = previewPayload();
-    expect(body.return_date).toBe('2026-10-15');
+    expect(body.return_date).toBe('2027-03-20');
     expect(body.return_time).toBeUndefined();
   });
 
@@ -221,7 +221,7 @@ describe('Parité formulaire PORTAL', () => {
     await fillAddresses();
     plan();
     fireEvent.change(document.getElementById('client-booking-return-date'), {
-      target: { value: '2026-09-30' },
+      target: { value: '2027-03-15' },
     });
     fireEvent.change(document.getElementById('client-booking-return-time'), {
       target: { value: '16:30' },

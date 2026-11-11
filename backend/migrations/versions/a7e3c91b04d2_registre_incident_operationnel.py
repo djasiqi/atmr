@@ -65,19 +65,13 @@ def upgrade():
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.CheckConstraint(
-            "state = 'signale'", name="ck_operational_incident_state"
-        ),
+        sa.CheckConstraint("state = 'signale'", name="ck_operational_incident_state"),
         sa.CheckConstraint(
             "formally_released = false",
             name="ck_operational_incident_not_released",
         ),
-        sa.ForeignKeyConstraint(
-            ["booking_id"], ["booking.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["actor_user_id"], ["user.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["actor_user_id"], ["user.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("public_id"),
         sa.UniqueConstraint("idempotency_key"),
@@ -125,10 +119,6 @@ def downgrade():
         table_name="operational_incident_event",
     )
     op.drop_table("operational_incident_event")
-    op.drop_index(
-        "ix_operational_incident_booking", table_name="operational_incident"
-    )
-    op.drop_index(
-        "ix_operational_incident_state", table_name="operational_incident"
-    )
+    op.drop_index("ix_operational_incident_booking", table_name="operational_incident")
+    op.drop_index("ix_operational_incident_state", table_name="operational_incident")
     op.drop_table("operational_incident")

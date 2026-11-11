@@ -133,15 +133,19 @@ class TestAPIVersioning:
             # Vérifier docs v1
             response_v1 = client.get(f"{api_docs}/v1", follow_redirects=True)
             # Peut être 200 (Swagger UI) ou 404 si désactivé
-            assert response_v1.status_code in (200, 404, 302), (
-                f"Docs v1 doivent être accessibles (status: {response_v1.status_code})"
-            )
+            assert response_v1.status_code in (
+                200,
+                404,
+                302,
+            ), f"Docs v1 doivent être accessibles (status: {response_v1.status_code})"
 
             # Vérifier docs v2
             response_v2 = client.get(f"{api_docs}/v2", follow_redirects=True)
-            assert response_v2.status_code in (200, 404, 302), (
-                f"Docs v2 doivent être accessibles (status: {response_v2.status_code})"
-            )
+            assert response_v2.status_code in (
+                200,
+                404,
+                302,
+            ), f"Docs v2 doivent être accessibles (status: {response_v2.status_code})"
 
     def test_same_endpoint_v1_v2_behavior(self, client, auth_headers):
         """Test que /api/v1/* et /api/v2/* ont des comportements différents
@@ -161,6 +165,9 @@ class TestAPIVersioning:
         # La route /api/v<int:version>/companies/me existe dans app.py (ligne 1000)
         # comme route de compatibilité, donc v2 peut retourner 200 même si l'API v2
         # Flask-RESTX est vide
-        assert response_v2.status_code in (200, 404, 403, 500), (
-            "v2 peut retourner 200 (route de compatibilité), 404, 403, ou 500"
-        )
+        assert response_v2.status_code in (
+            200,
+            404,
+            403,
+            500,
+        ), "v2 peut retourner 200 (route de compatibilité), 404, 403, ou 500"

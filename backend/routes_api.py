@@ -487,7 +487,9 @@ def init_namespaces(app):
     api_v1.add_namespace(contact_ns, path="/contact")
     api_v1.add_namespace(admin_contact_requests_ns, path="/admin/contact_requests")
     api_v1.add_namespace(demo_requests_ns, path="/demo-requests")
-    api_v1.add_namespace(organization_applications_ns, path="/organization-applications")
+    api_v1.add_namespace(
+        organization_applications_ns, path="/organization-applications"
+    )
     api_v1.add_namespace(
         admin_organization_applications_ns,
         path="/admin/organization-applications",

@@ -1891,9 +1891,7 @@ def _resolve_company_id(user: User) -> int | None:
         return None
     from security.portal_scope import resolve_portal_scope
 
-    company_scope = resolve_portal_scope(
-        user, "company", use_request_claim=False
-    )
+    company_scope = resolve_portal_scope(user, "company", use_request_claim=False)
     if company_scope.allowed and company_scope.company is not None:
         return int(company_scope.company.id)
     driver_scope = resolve_portal_scope(user, "driver", use_request_claim=False)
@@ -2117,9 +2115,7 @@ def _build_available_contexts(user: User) -> list[dict[str, object]]:
     elif role == UserRole.COMPANY:
         from security.portal_scope import resolve_portal_scope
 
-        company_scope = resolve_portal_scope(
-            user, "company", use_request_claim=False
-        )
+        company_scope = resolve_portal_scope(user, "company", use_request_claim=False)
         company = company_scope.company if company_scope.allowed else None
         if company is not None:
             add_context(
@@ -2169,9 +2165,7 @@ def _build_available_contexts(user: User) -> list[dict[str, object]]:
     from security.portal_scope import resolve_portal_scope
 
     if getattr(user, "driver", None):
-        driver_scope = resolve_portal_scope(
-            user, "driver", use_request_claim=False
-        )
+        driver_scope = resolve_portal_scope(user, "driver", use_request_claim=False)
         if driver_scope.allowed:
             drv = user.driver
             d_company = getattr(drv, "company", None)
@@ -4293,10 +4287,7 @@ class AuthSwitchContext(Resource):
         ):
             from security.portal_grant_access import grants_are_authoritative
 
-            if (
-                not grants_are_authoritative(user)
-                and user.role is not UserRole.COMPANY
-            ):
+            if not grants_are_authoritative(user) and user.role is not UserRole.COMPANY:
                 return {
                     "error_code": "context_switch_company_account_only",
                     "error_message": (

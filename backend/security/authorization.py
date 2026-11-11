@@ -139,9 +139,7 @@ class AuthorizationService:
         response = jsonify(
             {
                 "error": "company_profile_missing",
-                "message": (
-                    "Ce compte entreprise n'est rattaché à aucune entreprise."
-                ),
+                "message": ("Ce compte entreprise n'est rattaché à aucune entreprise."),
                 "support_code": "CP-COMPANY-PROFILE-MISSING",
             }
         )
@@ -442,9 +440,7 @@ class AuthorizationService:
         if user_role_value == UserRole.company.value:
             from security.portal_scope import portal_company_allowed
 
-            if portal_company_allowed(
-                user, "company", int(booking.company_id)
-            ):
+            if portal_company_allowed(user, "company", int(booking.company_id)):
                 return True, None
             logger.warning(
                 "[Authorization] Accès réservation refusé user_id=%s booking_id=%s",

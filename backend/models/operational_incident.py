@@ -63,7 +63,9 @@ class OperationalIncident(db.Model):
         unique=True,
         default=lambda: str(uuid.uuid4()),
     )
-    idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    idempotency_key: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True
+    )
     booking_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("booking.id", ondelete="RESTRICT"),
@@ -106,9 +108,7 @@ class OperationalIncidentEvent(db.Model):
     """Piste d'audit du signalement. Elle n'autorise aucune libération."""
 
     __tablename__ = "operational_incident_event"
-    __table_args__ = (
-        Index("ix_operational_incident_event_incident", "incident_id"),
-    )
+    __table_args__ = (Index("ix_operational_incident_event_incident", "incident_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     incident_id: Mapped[int] = mapped_column(

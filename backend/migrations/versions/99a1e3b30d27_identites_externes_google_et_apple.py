@@ -29,11 +29,15 @@ def upgrade():
         sa.Column("code_verifier", sa.String(length=128), nullable=True),
         sa.Column("intent", sa.String(length=16), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=True),
-        sa.Column("status", sa.String(length=16), server_default="pending", nullable=False),
+        sa.Column(
+            "status", sa.String(length=16), server_default="pending", nullable=False
+        ),
         sa.Column("ticket_hash", sa.String(length=64), nullable=True),
         sa.Column("provider_sub", sa.String(length=255), nullable=True),
         sa.Column("email", sa.String(length=255), nullable=True),
-        sa.Column("email_verified", sa.Boolean(), server_default="false", nullable=False),
+        sa.Column(
+            "email_verified", sa.Boolean(), server_default="false", nullable=False
+        ),
         sa.Column("first_name", sa.String(length=100), nullable=True),
         sa.Column("last_name", sa.String(length=100), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),

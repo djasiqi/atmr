@@ -16,9 +16,7 @@ from ext import db
 
 class PrivatePassenger(db.Model):
     __tablename__ = "private_passenger"
-    __table_args__ = (
-        Index("ix_private_passenger_owner", "owner_user_id"),
-    )
+    __table_args__ = (Index("ix_private_passenger_owner", "owner_user_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     public_id: Mapped[str] = mapped_column(
@@ -55,5 +53,7 @@ class PrivatePassenger(db.Model):
             "access_notes": self.access_notes,
             "wheelchair_need": bool(self.wheelchair_need),
             "assistance_required": bool(self.assistance_required),
-            "assistance_note": self.assistance_note if self.assistance_required else None,
+            "assistance_note": self.assistance_note
+            if self.assistance_required
+            else None,
         }
