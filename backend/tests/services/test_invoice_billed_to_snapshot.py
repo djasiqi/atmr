@@ -277,8 +277,17 @@ def _emit_then_mutate_and_regenerate(db, company) -> tuple[list[str], list[str]]
 
 
 def _invoice_page(pages: list[str]) -> str:
-    page = next(p for p in pages if "Facturé à" in p)
-    return page.split("Numéro de facture")[0]
+    """Bloc destinataire réel : nom figé, sans titre de fenêtre.
+
+    La zone enveloppe n'imprime pas « Facturé à », et le numéro est rendu
+    « N° … », pas « Numéro de facture ». On isole l'adresse avant le titre.
+    """
+    page = next(p for p in pages if "Arnaud JACQUEMOUD" in p and "Rue Patru 2" in p)
+    rest = page[page.index("Arnaud JACQUEMOUD") :]
+    for marker in ("FACTURE", "Numéro de facture"):
+        if marker in rest:
+            return rest.split(marker)[0]
+    return rest
 
 
 @pytest.mark.integration
