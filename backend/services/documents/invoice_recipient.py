@@ -834,9 +834,9 @@ def _resolve_invoice_billed_to_live(
             party = BillingPartyModel.query.get(bp_id)
         if party is None:
             logger.warning(
-                "[Facturé à] BillingParty introuvable (invoice_id=%s, billing_party_id=%s).",
+                "[Facturé à] BillingParty introuvable (invoice_id=%s, party_ref_present=%s).",
                 invoice_id,
-                bp_id,
+                bool(bp_id),
             )
             return BilledToParty(
                 mode="unresolved_party", addressee="Payeur", address=""

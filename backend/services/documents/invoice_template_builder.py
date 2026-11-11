@@ -335,10 +335,10 @@ class InvoiceTemplateBuilder:
             return name, self._format_client_address(client)
 
         logger.info(
-            "[InvoiceTemplateBuilder] Facturé à : mode=%s (invoice_id=%s, billing_party_id=%s).",
+            "[InvoiceTemplateBuilder] Facturé à : mode=%s (invoice_id=%s, party_ref_present=%s).",
             party.mode,
             getattr(invoice, "id", None),
-            getattr(invoice, "billing_party_id", None),
+            bool(getattr(invoice, "billing_party_id", None)),
         )
 
         if party.mode == "unresolved_party":
