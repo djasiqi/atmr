@@ -18,9 +18,13 @@ jest.mock('../userActivityTracker', () => ({
   SESSION_WORKING_LOOKBACK_MS: 30 * 60 * 1000,
 }));
 
-jest.mock('../authNavigation', () => ({
-  requestAuthNavigate: jest.fn(),
-}));
+jest.mock('../authNavigation', () => {
+  const actual = jest.requireActual('../authNavigation');
+  return {
+    ...actual,
+    requestAuthNavigate: jest.fn(),
+  };
+});
 
 jest.mock('../../services/companySocket', () => ({
   disconnectCompanySocket: jest.fn(),
@@ -73,6 +77,7 @@ describe('isRevokedRefreshErrorPayload', () => {
 
 describe('apiClient — missing_token', () => {
   let previousAdapter;
+  let originalLocation;
 
   beforeEach(() => {
     notifySessionReauthRequired.mockClear();
@@ -84,6 +89,18 @@ describe('apiClient — missing_token', () => {
     );
     localStorage.setItem('app_access_token', 'stale-token');
     sessionStorage.clear();
+
+    // jsdom démarre souvent sur `/` (page publique) : forcer un portail protégé
+    // pour vérifier la redirection login des sessions mortes.
+    originalLocation = window.location;
+    delete window.location;
+    window.location = {
+      pathname: '/dashboard/company/u-test',
+      search: '',
+      href: '/dashboard/company/u-test',
+      replace: jest.fn(),
+      assign: jest.fn(),
+    };
 
     previousAdapter = apiClient.defaults.adapter;
     apiClient.defaults.adapter = (config) => {
@@ -128,11 +145,10 @@ describe('apiClient — missing_token', () => {
     apiClient.defaults.adapter = previousAdapter;
     localStorage.clear();
     sessionStorage.clear();
+    window.location = originalLocation;
   });
 
   it('refresh révoqué malgré skipAuthRedirect → redirect login', async () => {
-    const originalLocation = window.location;
-    delete window.location;
     window.location = {
       pathname: '/institution/requests',
       search: '',
@@ -191,7 +207,22 @@ describe('apiClient — missing_token', () => {
     expect(requestAuthNavigate).toHaveBeenCalled();
     expect(localStorage.getItem('app_access_token')).toBeNull();
     expect(sessionStorage.getItem(AUTH_LOGOUT_REASON_KEY)).toBe('session_expired');
-    window.location = originalLocation;
+  });
+
+  it('401 missing_token sur page publique AUTH-PRO → pas de redirect login', async () => {
+    window.location = {
+      pathname: '/inscription/organisation/entreprise',
+      search: '',
+      href: '/inscription/organisation/entreprise',
+      replace: jest.fn(),
+      assign: jest.fn(),
+    };
+
+    await expect(apiClient.get('/companies/me')).rejects.toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(requestAuthNavigate).not.toHaveBeenCalled();
+    expect(localStorage.getItem('app_access_token')).toBeNull();
   });
 
   it('401 missing_token après échec refresh → session expirée + redirect login', async () => {

@@ -748,6 +748,12 @@ def publish_session_revoked(session_id: uuid.UUID | str) -> None:
     except (ValueError, TypeError):
         return
     _cache_session_revoked(sid)
+    try:
+        from security.portal_grant_socket_bus import publish_mobile_session_socket_cut
+
+        publish_mobile_session_socket_cut(str(sid))
+    except Exception:
+        logger.warning("mobile_session_socket_cut_failed session=%s", sid)
 
 
 def revoke_session(

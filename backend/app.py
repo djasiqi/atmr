@@ -655,26 +655,21 @@ def create_app(config_name: str | None = None):
     except Exception as e:
         app.logger.warning("[CSRF] ⚠️ Échec activation protection CSRF: %s", e)
 
-    # Lot 1-E : web = cookies ; mobile / endpoints dédiés = Bearer headers only
-    # (cookies web présents ignorés pour l'auth)
+    # Lot 1-E / AUTH-PRO-4C A1 :
+    # - company_mobile : Bearer only
+    # - driver + Authorization Bearer : headers only (mobile ; ignore cookies)
+    # - driver sans Bearer : cookies + headers (portail chauffeur web)
+    # - autres : cookies + headers (web) ; Expo header / UA mobile historique
     @app.before_request
     def _lot1_jwt_locations_web_mobile_split():  # pyright: ignore[reportUnusedFunction]
-        path = request.path or ""
-        mobile_path = path.startswith(
-            (
-                "/api/v1/company_mobile/",
-                "/api/v1/driver/",
-            )
+        from security.jwt_token_locations import resolve_jwt_token_locations
+
+        app.config["JWT_TOKEN_LOCATION"] = resolve_jwt_token_locations(
+            request.path or "",
+            authorization=request.headers.get("Authorization"),
+            x_requested_with=request.headers.get("X-Requested-With"),
+            user_agent=request.headers.get("User-Agent"),
         )
-        is_expo = request.headers.get("X-Requested-With") == "Expo"
-        ua = (request.headers.get("User-Agent") or "").lower()
-        mobile_ua = any(
-            m in ua for m in ("expo", "okhttp", "darwin", "cfnetwork", "dalvik")
-        )
-        if mobile_path or is_expo or mobile_ua:
-            app.config["JWT_TOKEN_LOCATION"] = ["headers"]
-        else:
-            app.config["JWT_TOKEN_LOCATION"] = ["cookies", "headers"]
 
     # ✅ 2.9: Setup OpenTelemetry avec instrumentation complète
     try:
@@ -2056,7 +2051,7 @@ def create_app(config_name: str | None = None):
                 app.logger.info("✅ Import init_chat_socket réussi")
 
                 # Hors SKIP_SOCKETIO : instance réelle (ext peut typer NoOp | SocketIO)
-                init_chat_socket(cast(Any, socketio))
+                init_chat_socket(cast(Any, socketio), app)
                 app.logger.info("✅ init_chat_socket(socketio) exécuté")
             except Exception as e:
                 app.logger.exception(

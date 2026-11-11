@@ -1886,18 +1886,18 @@ class Login(Resource):
 # Helper: résolution company_id pour JWT claims
 # ========================
 def _resolve_company_id(user: User) -> int | None:
-    """Résout le company_id depuis la relation User -> Company.
-
-    Le modèle User n'a pas de colonne company_id directe ;
-    la relation est Company.user_id -> User.id.
-
-    Les comptes ADMIN plateforme n'obtiennent jamais de company_id JWT :
-    ils restent strictement sur le périmètre admin.
-    """
+    """Identifiant d'entreprise autorisé pour un claim, jamais un lien ambigu."""
     if getattr(user, "role", None) == UserRole.ADMIN:
         return None
-    company = getattr(user, "company", None)
-    return company.id if company else None
+    from security.portal_scope import resolve_portal_scope
+
+    company_scope = resolve_portal_scope(user, "company", use_request_claim=False)
+    if company_scope.allowed and company_scope.company is not None:
+        return int(company_scope.company.id)
+    driver_scope = resolve_portal_scope(user, "driver", use_request_claim=False)
+    if driver_scope.allowed and driver_scope.company is not None:
+        return int(driver_scope.company.id)
+    return None
 
 
 # ========================
@@ -2055,6 +2055,12 @@ def _allow_mobile_company_driver_context_switch(
 
 
 def _build_available_contexts(user: User) -> list[dict[str, object]]:
+    from security.portal_grant_access import contexts_from_active_grants
+
+    granted_contexts = contexts_from_active_grants(user)
+    if granted_contexts is not None:
+        return granted_contexts
+
     contexts: list[dict[str, object]] = []
 
     def add_context(
@@ -2107,18 +2113,22 @@ def _build_available_contexts(user: User) -> list[dict[str, object]]:
             ),
         )
     elif role == UserRole.COMPANY:
-        company = getattr(user, "company", None)
-        add_context(
-            context_id=f"company:{company.id if company else user.public_id}",
-            context_type="company",
-            label="Espace entreprise",
-            organization_id=getattr(company, "id", None),
-            organization_name=getattr(company, "name", None),
-            is_default=True,
-            allow_mobile_context_switch=_allow_mobile_company_driver_context_switch(
-                user, context_type="company", company=company
-            ),
-        )
+        from security.portal_scope import resolve_portal_scope
+
+        company_scope = resolve_portal_scope(user, "company", use_request_claim=False)
+        company = company_scope.company if company_scope.allowed else None
+        if company is not None:
+            add_context(
+                context_id=f"company:{company.id}",
+                context_type="company",
+                label="Espace entreprise",
+                organization_id=company.id,
+                organization_name=getattr(company, "name", None),
+                is_default=True,
+                allow_mobile_context_switch=_allow_mobile_company_driver_context_switch(
+                    user, context_type="company", company=company
+                ),
+            )
     elif role == UserRole.INSTITUTION:
         institution_id = cast("int | None", getattr(user, "institution_id", None))
         add_context(
@@ -2152,21 +2162,26 @@ def _build_available_contexts(user: User) -> list[dict[str, object]]:
             organization_id=None,
             organization_name=None,
         )
+    from security.portal_scope import resolve_portal_scope
+
     if getattr(user, "driver", None):
-        drv = user.driver
-        d_company = getattr(drv, "company", None)
-        add_context(
-            context_id=f"driver:{drv.id}",
-            context_type="driver",
-            label="Espace chauffeur",
-            organization_id=getattr(drv, "company_id", None),
-            organization_name=getattr(d_company, "name", None),
-            allow_mobile_context_switch=_allow_mobile_company_driver_context_switch(
-                user, context_type="driver", company=d_company
-            ),
-        )
-    if getattr(user, "company", None):
-        cmp = user.company
+        driver_scope = resolve_portal_scope(user, "driver", use_request_claim=False)
+        if driver_scope.allowed:
+            drv = user.driver
+            d_company = getattr(drv, "company", None)
+            add_context(
+                context_id=f"driver:{drv.id}",
+                context_type="driver",
+                label="Espace chauffeur",
+                organization_id=getattr(drv, "company_id", None),
+                organization_name=getattr(d_company, "name", None),
+                allow_mobile_context_switch=_allow_mobile_company_driver_context_switch(
+                    user, context_type="driver", company=d_company
+                ),
+            )
+    company_scope = resolve_portal_scope(user, "company", use_request_claim=False)
+    if company_scope.allowed and company_scope.company is not None:
+        cmp = company_scope.company
         add_context(
             context_id=f"company:{cmp.id}",
             context_type="company",
@@ -2177,8 +2192,11 @@ def _build_available_contexts(user: User) -> list[dict[str, object]]:
                 user, context_type="company", company=cmp
             ),
         )
-    institution_id = cast("int | None", getattr(user, "institution_id", None))
-    if institution_id:
+    institution_scope = resolve_portal_scope(
+        user, "institution", use_request_claim=False
+    )
+    if institution_scope.allowed and institution_scope.institution is not None:
+        institution_id = int(institution_scope.institution.id)
         add_context(
             context_id=f"institution:{institution_id}",
             context_type="institution",
@@ -3262,6 +3280,24 @@ class RefreshToken(Resource):
                     claims["sid"] = str(old_web_sid)
 
             # 6. Générer nouveau access_token
+            from security.portal_grant_access import adjust_refresh_access_claims
+
+            refresh_context = (
+                request.headers.get("X-Active-Context-Id") or ""
+            ).strip() or _get_saved_active_context(str(user.public_id))
+            adjusted_claims = adjust_refresh_access_claims(
+                user,
+                claims,
+                active_context_id=refresh_context,
+            )
+            if adjusted_claims is None:
+                return {
+                    "error": "portal_grant_revoked",
+                    "error_code": "portal_grant_revoked",
+                    "message": "Cette habilitation n'est plus active.",
+                    "retryable": False,
+                }, 403
+            claims = adjusted_claims
             access_expires_delta = _resolve_access_token_expires(is_mobile_request)
             new_access_token = create_access_token(
                 identity=str(user.public_id),
@@ -3955,11 +3991,17 @@ class Logout(Resource):
                                 driver_id=driver.id,
                                 device_id=device_id,
                             )
-                    elif user.role == UserRole.company and user.company:
-                        tokens_invalidated = deactivate_device_tokens_for_logout(
-                            company_id=int(user.company.id),
-                            device_id=device_id,
+                    elif user.role == UserRole.company:
+                        from security.portal_scope import resolve_portal_scope
+
+                        company_scope = resolve_portal_scope(
+                            user, "company", use_request_claim=False
                         )
+                        if company_scope.allowed and company_scope.company is not None:
+                            tokens_invalidated = deactivate_device_tokens_for_logout(
+                                company_id=int(company_scope.company.id),
+                                device_id=device_id,
+                            )
 
                     if tokens_invalidated > 0:
                         db.session.commit()
@@ -4243,7 +4285,9 @@ class AuthSwitchContext(Resource):
             and from_ctx
             and _is_company_driver_cross_context_switch(from_ctx, to_ctx)
         ):
-            if user.role is not UserRole.COMPANY:
+            from security.portal_grant_access import grants_are_authoritative
+
+            if not grants_are_authoritative(user) and user.role is not UserRole.COMPANY:
                 return {
                     "error_code": "context_switch_company_account_only",
                     "error_message": (

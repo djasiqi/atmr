@@ -13,7 +13,7 @@ import {
   removeLegacyGlobalTokens,
   setAuthEnv as setSessionAuthEnv,
 } from './webAuthSession';
-import { requestAuthNavigate } from './authNavigation';
+import { isAnonymousPublicPath, requestAuthNavigate } from './authNavigation';
 import {
   beginExplicitLogout,
   endExplicitLogout,
@@ -699,6 +699,11 @@ const finalizeLocalLogout = ({ redirect, preserveNext, reason }) => {
 
   window.dispatchEvent(new Event('auth-changed'));
   endExplicitLogout();
+
+  // Pages publiques (AUTH-PRO / SEO) : nettoyer la session morte sans forcer /login.
+  if (redirect !== false && isAnonymousPublicPath(window.location.pathname)) {
+    return;
+  }
 
   if (redirect !== false) {
     const path = `${window.location.pathname}${window.location.search || ''}`;

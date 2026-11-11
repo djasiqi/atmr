@@ -331,7 +331,49 @@ def _issue_tokens(
             if scope not in scopes:
                 scopes.append(scope)
 
-    session_identifier = session_id or str(uuid.uuid4())
+    # Session durable alignée sur le garde JWT global (sinon 401 session_revoked).
+    session_identifier = session_id
+    session_epoch: int | None = None
+    try:
+        from security.mobile_device_session_service import create_or_reuse_session
+
+        installation = (
+            str(device_id).strip()
+            if device_id and str(device_id).strip()
+            else f"company-mobile:{user.public_id}"
+        )
+        driver = getattr(user, "driver", None)
+        sess, _recovery, _revocation, _reaped = create_or_reuse_session(
+            user_id=int(user.id),
+            device_installation_id=installation,
+            device_name="company_mobile",
+            driver_id=int(driver.id) if driver is not None else None,
+            role=str(user.role.value),
+            platform="company_mobile",
+            context_id=f"company:{company.id}",
+        )
+        if session_identifier:
+            # Réutiliser l'identifiant demandé si la session créée diffère :
+            # le JWT doit coller à la ligne persistée.
+            session_identifier = str(sess.session_id)
+        else:
+            session_identifier = str(sess.session_id)
+        session_epoch = int(
+            getattr(sess, "session_epoch", None)
+            or getattr(sess, "credential_generation", None)
+            or getattr(sess, "generation", None)
+            or 1
+        )
+        from ext import db as _db
+
+        _db.session.commit()
+    except Exception as sess_exc:
+        logger.warning(
+            "[AUTH][Enterprise] session durable non créée user_id=%s: %s",
+            getattr(user, "id", None),
+            sess_exc,
+        )
+        session_identifier = session_identifier or str(uuid.uuid4())
 
     additional_claims = {
         "role": user.role.value,
@@ -340,6 +382,9 @@ def _issue_tokens(
         "scopes": scopes,
         "session_id": session_identifier,
     }
+    if session_epoch is not None:
+        additional_claims["session_epoch"] = session_epoch
+        additional_claims["session_generation"] = session_epoch
     if device_id:
         additional_claims["device_id"] = device_id
 
@@ -360,6 +405,14 @@ def _issue_tokens(
         additional_claims={
             "aud": MOBILE_AUDIENCE,
             "session_id": session_identifier,
+            **(
+                {
+                    "session_epoch": session_epoch,
+                    "session_generation": session_epoch,
+                }
+                if session_epoch is not None
+                else {}
+            ),
         },
         expires_delta=refresh_expires,
     )
@@ -433,19 +486,33 @@ def _consume_mfa_challenge(challenge_id: str) -> Dict[str, Any] | None:
 
 def _find_company_user_by_email(email: str) -> Tuple[User | None, Company | None]:
     # Utiliser le repository pour récupérer l'utilisateur
+    from sqlalchemy import func
+
     from repositories.user_repository import UserRepository
+    from security.portal_grant_access import authoritative_company
+    from security.portal_scope import enforcement_enabled
 
     user_repo = UserRepository()
     # ADMIN plateforme exclu : ne peut pas se connecter à l'espace entreprise
     user = user_repo.find_by_email_with_role_filter(email, (UserRole.COMPANY,))
-    if not user:
+    if user and user.role != UserRole.ADMIN:
+        company = user.company
+        if company:
+            return user, company
+    # Habilitations : un CLIENT (ou autre) avec grant COMPANY actif peut ouvrir
+    # l'espace entreprise mobile uniquement si le drapeau est allumé.
+    if not enforcement_enabled():
         return None, None
-    if user.role == UserRole.ADMIN:
+    normalized = str(email or "").strip().lower()
+    if not normalized:
         return None, None
-    company = user.company
-    if not company:
+    candidate = User.query.filter(func.lower(User.email) == normalized).first()
+    if candidate is None or candidate.role == UserRole.ADMIN:
         return None, None
-    return user, company
+    decision, company = authoritative_company(candidate)
+    if decision == "allow" and company is not None:
+        return candidate, company
+    return None, None
 
 
 def _handle_oidc_login(

@@ -27,16 +27,20 @@ def _watermark_page_bytes(width: float, height: float) -> bytes:
 
 
 def apply_draft_watermark(pdf_bytes: bytes) -> bytes:
-    """Retourne un PDF temporaire filigrané (non stocké, non hashé)."""
+    """Retourne un PDF temporaire filigrané (non stocké, non hashé).
+
+    pypdf 7 exige que la page soit rattachée au writer avant fusion
+    (``merge_page`` / ``replace_contents``).
+    """
     reader = PdfReader(BytesIO(pdf_bytes))
     writer = PdfWriter()
     for page in reader.pages:
-        box = page.mediabox
+        attached = writer.add_page(page)
+        box = attached.mediabox
         width = float(box.width)
         height = float(box.height)
         wm_reader = PdfReader(BytesIO(_watermark_page_bytes(width, height)))
-        page.merge_page(wm_reader.pages[0])
-        writer.add_page(page)
+        attached.merge_page(wm_reader.pages[0])
     out = BytesIO()
     writer.write(out)
     return out.getvalue()

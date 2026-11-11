@@ -324,6 +324,9 @@ const ProfessionnelPage = () => {
                 Organiser une démonstration
                 <IcoChevR s={13} />
               </Link>
+              <Link to="/inscription/organisation/institution" className={styles.inlineLink}>
+                Déposer une demande d’inscription
+              </Link>
             </article>
             <article className={styles.joinPath}>
               <h3 className={styles.joinPathTitle}>Entreprise</h3>
@@ -335,6 +338,9 @@ const ProfessionnelPage = () => {
               <Link to="/contact/transport" className={styles.btnPrimary}>
                 Contacter l’équipe transport
                 <IcoChevR s={13} />
+              </Link>
+              <Link to="/inscription/organisation/entreprise" className={styles.inlineLink}>
+                Déposer une demande d’inscription
               </Link>
             </article>
           </div>

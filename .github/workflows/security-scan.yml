@@ -178,13 +178,10 @@ jobs:
 
       - name: Comment PR with results
         if: github.event_name == 'pull_request' && steps.scan.outputs.report_file != ''
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            const path = require('path');
-
-            const reportFile = '${{ steps.scan.outputs.report_file }}';
             const criticalCount = parseInt('${{ steps.scan.outputs.critical_count }}') || 0;
             const highCount = parseInt('${{ steps.scan.outputs.high_count }}') || 0;
             const mediumCount = parseInt('${{ steps.scan.outputs.medium_count }}') || 0;
@@ -211,12 +208,17 @@ jobs:
               comment += `\n📥 Download the full audit report from the workflow artifacts.\n`;
             }
 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (err) {
+              // Draft / permissions limitées : le scan reste valide sans commentaire PR.
+              core.warning(`Commentaire PR non publié: ${err.message}`);
+            }
 
   summary:
     name: Security Scan Summary

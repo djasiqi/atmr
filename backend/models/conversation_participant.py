@@ -41,6 +41,9 @@ class ConversationParticipant(db.Model):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     left_at = mapped_column(DateTime(timezone=True), nullable=True)
+    # NULL : pas de borne (affectation active, entreprise, ou participation historique).
+    # Renseigné uniquement par le serveur au retrait réel du chauffeur.
+    read_cutoff_at = mapped_column(DateTime(timezone=True), nullable=True)
 
     conversation = relationship("Conversation", back_populates="participants")
     user = relationship("User", lazy="joined")
@@ -64,6 +67,9 @@ class ConversationParticipant(db.Model):
             "can_manage": self.can_manage,
             "joined_at": self.joined_at.isoformat() if self.joined_at else None,
             "left_at": self.left_at.isoformat() if self.left_at else None,
+            "read_cutoff_at": self.read_cutoff_at.isoformat()
+            if self.read_cutoff_at
+            else None,
         }
 
     @staticmethod

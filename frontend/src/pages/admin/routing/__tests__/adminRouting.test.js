@@ -21,6 +21,9 @@ describe('adminRoutePaths', () => {
     expect(adminPaths.partnersContactRequests(id)).toBe(
       '/dashboard/admin/pub-1/partners/contact-requests'
     );
+    expect(adminPaths.partnersOrganizationApplication(id, 'dos-1')).toBe(
+      '/dashboard/admin/pub-1/partners/organization-applications/dos-1'
+    );
     expect(adminPaths.financeReleves(id)).toBe('/dashboard/admin/pub-1/finance/releves');
     expect(adminPaths.financeFactures(id)).toBe('/dashboard/admin/pub-1/finance/factures');
     expect(adminPaths.configuration(id)).toBe('/dashboard/admin/pub-1/configuration');

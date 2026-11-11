@@ -2313,10 +2313,10 @@ def _get_billed_to(
 
     party = resolve_invoice_billed_to(invoice, bookings_by_id=bookings_by_id)
     app_logger.info(
-        "[PDF] Facturé à : mode=%s (invoice_id=%s, billing_party_id=%s, c/o=%s).",
+        "[PDF] Facturé à : mode=%s (invoice_id=%s, party_ref_present=%s, c/o=%s).",
         party.mode,
         getattr(invoice, "id", None),
-        getattr(invoice, "billing_party_id", None),
+        bool(getattr(invoice, "billing_party_id", None)),
         bool(party.has_care_of),
     )
 

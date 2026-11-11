@@ -34,6 +34,7 @@ export const ADMIN_WORKSPACES = [
       { id: 'users', label: 'Comptes et accès', path: 'partners/users' },
       { id: 'demo-requests', label: 'Démonstrations', path: 'partners/demo-requests' },
       { id: 'contact-requests', label: 'Demandes de contact', path: 'partners/contact-requests' },
+      { id: 'organization-applications', label: 'Inscriptions', path: 'partners/organization-applications' },
     ],
   },
   {

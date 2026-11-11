@@ -10,6 +10,42 @@ import pytest
 from services.ml.rl.hyperparameter_tuner import HyperparameterTuner
 
 
+def _fake_path_open(opened: list):
+    """Enregistre chaque ``Path.open`` et renvoie un contexte d'écriture.
+
+    pytest-cov peut appeler ``Path.open`` pendant le patch. Le test vérifie
+    les fichiers du tuner, pas le nombre total d'ouvertures du processus.
+    """
+
+    def _open(self, mode="r", *_args, **kwargs):
+        opened.append((self, mode, kwargs.get("encoding")))
+        handle = Mock()
+        handle.write = Mock()
+        manager = Mock()
+        manager.__enter__ = Mock(return_value=handle)
+        manager.__exit__ = Mock(return_value=False)
+        return manager
+
+    return _open
+
+
+def _assert_tuner_json_writes(opened: list, config_name: str) -> None:
+    """Les trois JSON du tuner sont écrits en UTF-8."""
+    writes = [
+        path.name
+        for path, mode, encoding in opened
+        if mode == "w" and encoding == "utf-8"
+    ]
+    assert config_name in writes
+    assert any(
+        name.startswith("metrics_") and name.endswith(".json") for name in writes
+    )
+    assert any(
+        name.startswith("comparison_results_") and name.endswith(".json")
+        for name in writes
+    )
+
+
 class TestHyperparameterTuner:
     """Tests complets pour HyperparameterTuner"""
 
@@ -326,14 +362,11 @@ class TestHyperparameterTuner:
             trial.number = i
             trial.params = {"learning_rate": 0.001}
 
+        opened: list = []
         with (
             patch("pathlib.Path.mkdir") as mock_mkdir,
-            patch("pathlib.Path.open") as mock_open,
+            patch("pathlib.Path.open", new=_fake_path_open(opened)),
         ):
-            # ✅ FIX: Path.open() retourne un context manager
-            mock_file_handle = Mock()
-            mock_file_handle.write = Mock()
-            mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "test_params.json")
 
             # ✅ FIX: mkdir est appelé deux fois :
@@ -345,14 +378,7 @@ class TestHyperparameterTuner:
             for call in mock_mkdir.call_args_list:
                 assert call.kwargs == {"parents": True, "exist_ok": True}
 
-            # ✅ FIX: Path.open() est appelé 3 fois :
-            # 1. Pour le fichier de configuration (save_best_params)
-            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
-            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
-            assert mock_open.call_count == 3
-            # Vérifier que tous les appels utilisent les bons paramètres
-            for call in mock_open.call_args_list:
-                assert call == (("w",), {"encoding": "utf-8"})
+            _assert_tuner_json_writes(opened, "test_params.json")
 
     def test_save_best_params_with_custom_filename(self):
         """Test save_best_params avec nom de fichier personnalisé"""
@@ -373,26 +399,13 @@ class TestHyperparameterTuner:
             trial.number = i
             trial.params = {"learning_rate": 0.001}
 
+        opened: list = []
         with (
             patch("pathlib.Path.mkdir"),
-            patch("pathlib.Path.open") as mock_open,
+            patch("pathlib.Path.open", new=_fake_path_open(opened)),
         ):
-            # ✅ FIX: Path.open() retourne un context manager
-            mock_file_handle = Mock()
-            mock_file_handle.write = Mock()
-            mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "custom_params.json")
-
-            # ✅ FIX: open est appelé 3 fois :
-            # 1. Pour le fichier de configuration (custom_params.json)
-            # 2. Pour le fichier de métriques (dans _log_metrics_and_comparisons)
-            # 3. Pour le fichier de comparaison (dans _log_metrics_and_comparisons)
-            assert mock_open.call_count == 3
-            # Vérifier que tous les appels utilisent les bons paramètres
-            for call in mock_open.call_args_list:
-                assert call == (("w",), {"encoding": "utf-8"})
-            # Note: Le nom de fichier est passé à Path(), pas à open(),
-            # donc on vérifie seulement que open() est appelé correctement
+            _assert_tuner_json_writes(opened, "custom_params.json")
 
     def test_log_metrics_and_comparisons(self):
         """Test _log_metrics_and_comparisons method"""
@@ -417,23 +430,27 @@ class TestHyperparameterTuner:
             trial.system_attrs = {}
             sorted_trials.append(trial)
 
+        opened: list = []
         with (
             patch("pathlib.Path.mkdir") as mock_mkdir,
-            patch("pathlib.Path.open") as mock_open,
+            patch("pathlib.Path.open", new=_fake_path_open(opened)),
         ):
-            # ✅ FIX: Path.open() retourne un context manager
-            mock_file_handle = Mock()
-            mock_file_handle.write = Mock()
-            mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner._log_metrics_and_comparisons(mock_study, sorted_trials)
 
-            # Vérifier que le répertoire est créé (peut être appelé plusieurs
-            # fois pour différents fichiers)
             assert mock_mkdir.call_count >= 1
-
-            # Vérifier que les fichiers sont ouverts en écriture
-            # _log_metrics_and_comparisons ouvre 2 fichiers : metrics et comparison
-            assert mock_open.call_count == 2
+            writes = [
+                path.name
+                for path, mode, encoding in opened
+                if mode == "w" and encoding == "utf-8"
+            ]
+            assert any(
+                name.startswith("metrics_") and name.endswith(".json")
+                for name in writes
+            )
+            assert any(
+                name.startswith("comparison_results_") and name.endswith(".json")
+                for name in writes
+            )
 
     def test_analyze_triplet_gagnant(self):
         """Test _analyze_triplet_gagnant method"""
@@ -512,24 +529,13 @@ class TestHyperparameterTuner:
         mock_study.best_trial = Mock()
         mock_study.best_trial.number = 0
 
+        opened: list = []
         with (
             patch("pathlib.Path.mkdir"),
-            patch("pathlib.Path.open") as mock_open,
+            patch("pathlib.Path.open", new=_fake_path_open(opened)),
         ):
-            # ✅ FIX: Path.open() retourne un context manager
-            mock_file_handle = Mock()
-            mock_file_handle.write = Mock()
-            mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "empty_trials.json")
-
-            # ✅ FIX: Path.open() est appelé 3 fois :
-            # 1. Pour le fichier de configuration (save_best_params)
-            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
-            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
-            assert mock_open.call_count == 3
-            # Vérifier que tous les appels utilisent les bons paramètres
-            for call in mock_open.call_args_list:
-                assert call == (("w",), {"encoding": "utf-8"})
+            _assert_tuner_json_writes(opened, "empty_trials.json")
 
     def test_edge_case_none_study(self):
         """Test avec study None"""
@@ -592,24 +598,13 @@ class TestHyperparameterTuner:
             trial.number = i
             trial.params = {"learning_rate": 0.001}
 
+        opened: list = []
         with (
             patch("pathlib.Path.mkdir"),
-            patch("pathlib.Path.open") as mock_open,
+            patch("pathlib.Path.open", new=_fake_path_open(opened)),
         ):
-            # ✅ FIX: Path.open() retourne un context manager
-            mock_file_handle = Mock()
-            mock_file_handle.write = Mock()
-            mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "pruned_trials.json")
-
-            # ✅ FIX: Path.open() est appelé 3 fois :
-            # 1. Pour le fichier de configuration (save_best_params)
-            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
-            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
-            assert mock_open.call_count == 3
-            # Vérifier que tous les appels utilisent les bons paramètres
-            for call in mock_open.call_args_list:
-                assert call == (("w",), {"encoding": "utf-8"})
+            _assert_tuner_json_writes(opened, "pruned_trials.json")
 
     def test_edge_case_none_values(self):
         """Test avec valeurs None"""
@@ -633,24 +628,13 @@ class TestHyperparameterTuner:
             trial.number = i
             trial.params = {"learning_rate": 0.001}
 
+        opened: list = []
         with (
             patch("pathlib.Path.mkdir"),
-            patch("pathlib.Path.open") as mock_open,
+            patch("pathlib.Path.open", new=_fake_path_open(opened)),
         ):
-            # ✅ FIX: Path.open() retourne un context manager
-            mock_file_handle = Mock()
-            mock_file_handle.write = Mock()
-            mock_open.return_value.__enter__.return_value = mock_file_handle
             tuner.save_best_params(mock_study, "none_values.json")
-
-            # ✅ FIX: Path.open() est appelé 3 fois :
-            # 1. Pour le fichier de configuration (save_best_params)
-            # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
-            # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
-            assert mock_open.call_count == 3
-            # Vérifier que tous les appels utilisent les bons paramètres
-            for call in mock_open.call_args_list:
-                assert call == (("w",), {"encoding": "utf-8"})
+            _assert_tuner_json_writes(opened, "none_values.json")
 
     def test_edge_case_empty_params(self):
         """Test avec paramètres vides"""

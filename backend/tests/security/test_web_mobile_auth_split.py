@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from models.enums import UserRole
+from models.user import User
+from security.jwt_token_locations import resolve_jwt_token_locations
+
 
 class TestWebMobileAuthSplit:
     def test_mobile_refresh_with_trapped_cookies_and_json_body(
@@ -116,3 +120,68 @@ class TestWebMobileAuthSplit:
         )
         assert resp.status_code == 403
         assert resp.get_json().get("error") == "missing_origin"
+
+
+class TestDriverWebCookieAuthA1:
+    """AUTH-PRO-4C A1 : /api/v1/driver/* accepte cookies web sans Bearer."""
+
+    def _ensure_driver_login(self, db, sample_driver, password: str = "password123"):
+        user = User.query.get(sample_driver.user_id)
+        assert user is not None
+        user.role = UserRole.DRIVER
+        user.set_password(password, force_change=False)
+        db.session.commit()
+        return user
+
+    def test_driver_profile_accepts_web_cookies(self, client, db, sample_driver):
+        user = self._ensure_driver_login(db, sample_driver)
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"email": user.email, "password": "password123"},
+            headers={"Origin": "http://localhost"},
+        )
+        assert login.status_code == 200
+        assert "token" not in (login.get_json() or {})
+        # Pas de Bearer : contrat portail web
+        assert resolve_jwt_token_locations("/api/v1/driver/me/profile") == [
+            "cookies",
+            "headers",
+        ]
+        resp = client.get("/api/v1/driver/me/profile")
+        assert resp.status_code == 200
+        body = resp.get_json() or {}
+        assert body.get("profile") or body.get("id") or "user" in body
+
+    def test_driver_profile_bearer_ignores_trapped_cookie(
+        self, client, db, sample_driver
+    ):
+        user = self._ensure_driver_login(db, sample_driver)
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"email": user.email, "password": "password123"},
+            headers={"X-Requested-With": "Expo"},
+        )
+        assert login.status_code == 200
+        token = (login.get_json() or {}).get("token") or (login.get_json() or {}).get(
+            "access_token"
+        )
+        assert token
+        client.set_cookie("access_token", "trapped-web-cookie")
+        assert resolve_jwt_token_locations(
+            "/api/v1/driver/me/profile",
+            authorization=f"Bearer {token}",
+        ) == ["headers"]
+        resp = client.get(
+            "/api/v1/driver/me/profile",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+
+    def test_driver_profile_without_token_401(self, client):
+        resp = client.get("/api/v1/driver/me/profile")
+        assert resp.status_code == 401
+        assert (resp.get_json() or {}).get("error") in {
+            "missing_token",
+            "authorization_required",
+            "invalid_token",
+        }

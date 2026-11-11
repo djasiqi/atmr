@@ -22,8 +22,9 @@ def test_role_required_returns_active_driver_context_required_for_company_with_d
         id=1,
         username="company_user",
         role=UserRole.company,
-        driver=SimpleNamespace(id=7514),
+        driver=SimpleNamespace(id=7514, company_id=1),
         force_password_change=False,
+        public_id="pub-1",
     )
 
     mock_query = MagicMock()
@@ -38,6 +39,11 @@ def test_role_required_returns_active_driver_context_required_for_company_with_d
         patch("ext.get_jwt_identity", return_value="pub-1"),
         patch("flask_jwt_extended.get_jwt", return_value={}),
         patch("models.User.query", mock_query),
+        # Contrat P0 hors habilitations : legacy + en-tête chauffeur obligatoire.
+        patch(
+            "security.portal_grant_access.role_required_grant_gate",
+            return_value="legacy",
+        ),
     ):
         result = protected()
 
@@ -58,8 +64,9 @@ def test_role_required_allows_company_when_active_context_is_driver(app):
         id=1,
         username="company_user",
         role=UserRole.company,
-        driver=SimpleNamespace(id=7514),
+        driver=SimpleNamespace(id=7514, company_id=1),
         force_password_change=False,
+        public_id="pub-1",
     )
 
     mock_query = MagicMock()
@@ -74,6 +81,10 @@ def test_role_required_allows_company_when_active_context_is_driver(app):
         patch("ext.get_jwt_identity", return_value="pub-1"),
         patch("flask_jwt_extended.get_jwt", return_value={}),
         patch("models.User.query", mock_query),
+        patch(
+            "security.portal_grant_access.role_required_grant_gate",
+            return_value="legacy",
+        ),
     ):
         result = protected()
 

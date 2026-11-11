@@ -74,6 +74,17 @@ def _pending_change_request_view(booking: Any) -> dict[str, Any] | None:
         return None
 
 
+def _recent_change_decision_view(booking: Any) -> dict[str, Any] | None:
+    try:
+        from services.institutions.booking_change_service import (
+            get_recent_change_decision_view,
+        )
+
+        return get_recent_change_decision_view(booking)
+    except Exception:
+        return None
+
+
 def _compute_overall_status(outbound: str, return_: str) -> str:
     """Calcule un statut agrégé pour un A/R (R1)."""
     if outbound == "CANCELED" or return_ == "CANCELED":
@@ -313,6 +324,8 @@ class TransportRequest(db.Model):
         default=CarrierSource.LIRIE.value,
         server_default=CarrierSource.LIRIE.value,
     )
+    # network = réseau LIRIE ; partners = préférences. NULL : choisi à l'envoi.
+    dispatch_target: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Snapshot transporteur externe (historique figé, jamais remplacé par une FK)
     external_carrier_name: Mapped[str | None] = mapped_column(
@@ -535,7 +548,7 @@ class TransportRequest(db.Model):
         from services.institutions.mission_schedule import get_effective_dispatch_time
 
         next_confirmed = get_effective_dispatch_time(self)
-        return {
+        payload = {
             "id": self.id,
             "public_id": self.public_id,
             "external_reference": self.external_reference,
@@ -587,6 +600,7 @@ class TransportRequest(db.Model):
             "status_label": RequestStatus.display_label(self.status),
             "carrier_source": self.carrier_source,
             "carrier_source_label": CarrierSource.display_label(self.carrier_source),
+            "dispatch_target": self.dispatch_target,
             "external_carrier": self._serialize_external_carrier(),
             "is_editable": self.is_editable,
             "is_cancellable": self.is_cancellable,
@@ -608,6 +622,11 @@ class TransportRequest(db.Model):
             **self._serialize_dispatch_state(),
             **self._canonical_display_payload(),
         }
+        from services.institutions.operational_projection import (
+            project_operational_reservation,
+        )
+
+        return project_operational_reservation(payload, self)
 
     def to_dict(self) -> dict[str, Any]:
         """Alias pour serialize."""
@@ -821,6 +840,7 @@ class TransportRequest(db.Model):
             ),
             # ✅ PR2: demande de validation transporteur en attente (révalidation)
             "pending_change_request": _pending_change_request_view(booking),
+            "recent_change_decision": _recent_change_decision_view(booking),
         }
 
     def _serialize_billing_summary(self) -> dict[str, Any]:

@@ -27,7 +27,6 @@ from flask_restx import (
 )
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
-from werkzeug.exceptions import HTTPException
 
 from ext import db, limiter, redis_client, role_required
 
@@ -752,6 +751,13 @@ class CompanyMe(Resource):
         uc = GetCurrentCompanyUseCase()
         result = uc.execute()
 
+        if result.status_code and result.status_code != 404:
+            body = (
+                result.error
+                if isinstance(result.error, dict)
+                else {"error": "Accès non autorisé"}
+            )
+            return body, result.status_code
         if result.error or result.status_code:
             return APIErrorHandler.handle_not_found(
                 "Company",
@@ -6104,175 +6110,27 @@ class CreateDriver(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @limiter.limit("20 per hour")  # ✅ 2.8: Rate limiting création chauffeur
-    # validate=False : évite flask_restx/resource.py qui appelle request.get_json()
-    # sans silent=True (400 « JSON invalide » si corps vide / parse fragile).
-    # La validation réelle est faite via DriverCreateSchema + validate_request ci-dessous.
+    # Le corps n'est plus lu : un nouveau chauffeur passe par une invitation.
     @companies_ns.expect(create_driver_model, validate=False)
     def post(self):
-        """Crée un nouvel utilisateur avec le rôle chauffeur
-        et l'associe à l'entreprise.
+        """Ancien parcours : l'entreprise choisissait le mot de passe.
+
+        Les chauffeurs déjà actifs restent gérés par les autres routes.
+        Un nouveau chauffeur rejoint l'entreprise par invitation.
         """
         # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
-        # ✅ DDD: Utilise use-case au lieu de service directement
-        company, error_response, status_code = _get_current_company_via_use_case()
+        _company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
-            # Utiliser abort au lieu de return pour réduire le nombre de returns
             companies_ns.abort(
                 status_code or 400, error_response.get("error", "Unauthorized")
             )
-
-        # 🔒 company.id → int sûr (évite Column[int]/Optional)
-        cid_obj = getattr(company, "id", None)
-        try:
-            cid = int(cid_obj) if cid_obj is not None else None
-        except Exception:
-            cid = None
-        if cid is None:
-            companies_ns.abort(500, "Entreprise introuvable (ID invalide).")
-
-        from schemas.validation_utils import parse_request_json
-
-        data = parse_request_json()
-        if not data:
-            return {
-                "error": "validation_error",
-                "message": (
-                    "Corps de requête JSON manquant ou invalide. "
-                    "Vérifiez le format du body."
-                ),
-                "details": {
-                    "fields": {
-                        "body": ["Un objet JSON est requis pour créer un chauffeur."]
-                    }
-                },
-            }, 400
-
-        # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-        from marshmallow import ValidationError
-
-        from schemas.company_schemas import DriverCreateSchema
-        from schemas.validation_utils import handle_validation_error, validate_request
-
-        try:
-            validated_data = validate_request(DriverCreateSchema(), data)
-        except ValidationError as e:
-            # Utiliser abort au lieu de return pour réduire le nombre de returns
-            body, code = handle_validation_error(e)
-            companies_ns.abort(code or 400, body.get("error", "Validation error"))
-            validated_data = {}
-
-        # validated_data is guaranteed to be defined here (abort() raises exception)
-        # Défense en profondeur : vérification explicite
-        # pour robustesse en production
-        # Note: Le type checker considère cette vérification inatteignable,
-        # mais elle reste utile pour la robustesse si abort() ne lève pas
-        # d'exception dans un contexte non-Flask
-        if validated_data is None:  # type: ignore[comparison-overlap]
-            error_msg = (
-                "[Companies] validated_data is None after validation "
-                + "(should not happen)"
-            )
-            logger.error(error_msg)
-            companies_ns.abort(500, "Erreur interne de validation")
-
-        from application.companies.drivers.create_driver import (
-            CreateCompanyDriverUseCase,
-        )
-        from infrastructure.persistence.companies.driver_writer import (
-            SqlAlchemyDriverWriter,
-        )
-        from repositories.user_repository import UserRepository
-        from routes.utils import validate_password
-
-        import uuid as _uuid
-
-        def _make_public_id() -> str:
-            return str(_uuid.uuid4())
-
-        uc = CreateCompanyDriverUseCase(
-            user_repo=UserRepository(),
-            driver_writer=SqlAlchemyDriverWriter(),
-            password_validator_fn=validate_password,
-            make_public_id_fn=_make_public_id,
-        )
-
-        try:
-            assert cid is not None
-            cid_int = int(cid)
-            uc_result = uc.execute(company_id=cid_int, validated_data=validated_data)
-            if not uc_result.ok:
-                companies_ns.abort(
-                    uc_result.status_code or 400,
-                    (uc_result.error or {}).get("error", "Erreur"),
-                )
-
-            new_user = uc_result.user
-            new_driver = uc_result.driver
-            assert new_driver is not None
-            db.session.commit()
-
-            # ✅ Priorité 7: Audit logging et métriques
-            # pour création utilisateur (chauffeur)
-            try:
-                from security.audit_log import AuditLogger
-                from security.security_metrics import security_sensitive_actions_total
-                from shared.logging_utils import mask_email
-
-                current_user_id = get_jwt_identity()
-                from repositories.user_repository import UserRepository
-
-                user_repo = UserRepository()
-                current_user = user_repo.find_by_public_id(public_id=current_user_id)
-
-                AuditLogger.log_action(
-                    action_type="user_created",
-                    action_category="security",
-                    user_id=current_user.id if current_user else None,
-                    user_type=current_user.role.value
-                    if current_user and current_user.role
-                    else "unknown",
-                    result_status="success",
-                    action_details={
-                        "created_user_id": getattr(new_user, "id", None),
-                        "created_user_email": mask_email(validated_data["email"]),
-                        "created_user_role": "driver",
-                        "driver_id": getattr(new_driver, "id", None),
-                    },
-                    company_id=cid,
-                    driver_id=getattr(new_driver, "id", None),
-                    ip_address=request.remote_addr,
-                    user_agent=request.headers.get("User-Agent"),
-                )
-                # ✅ Priorité 7: Métrique Prometheus pour action sensible
-                security_sensitive_actions_total.labels(
-                    action_type="user_created"
-                ).inc()
-            except Exception as audit_error:
-                # Ne pas bloquer la création si l'audit logging échoue
-                logger.warning(
-                    "Échec audit logging user_created (driver): %s", audit_error
-                )
-
-            logger.info(
-                "✅ Nouveau chauffeur %s créé pour l'entreprise %s",
-                getattr(new_driver, "id", "?"),
-                cid,
-            )
-            if company:
-                _driver_trigger(company, "availability")
-            return new_driver.serialize, 201
-
-        except HTTPException:
-            # ✅ Ne pas attraper les HTTPException (409, 400, etc.)
-            # qui sont déjà gérées par Flask et doivent être propagées
-            db.session.rollback()
-            raise
-        except Exception as e:
-            db.session.rollback()
-            logger.error("❌ ERREUR create_driver: %s", str(e))
-            companies_ns.abort(
-                500, "Une erreur interne est survenue lors de la création du chauffeur."
-            )
+        return {
+            "error": "invitation_requise",
+            "message": (
+                "Un nouveau chauffeur rejoint l'entreprise par invitation. "
+                "L'entreprise ne choisit pas son mot de passe."
+            ),
+        }, 403
 
 
 # ======================================================

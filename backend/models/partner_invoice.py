@@ -123,6 +123,8 @@ class PartnerInvoice(db.Model):
         default=PartnerLineTimeMode.NONE,
         server_default=PartnerLineTimeMode.NONE,
     )
+    # SCOR ISO 11649 compacte, enregistrée avant le QR. Jamais tronquée.
+    payment_reference: Mapped[str | None] = mapped_column(String(35), nullable=True)
 
     # Overrides destinataire (snapshot facturé, ne réécrit pas Company)
     recipient_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -178,6 +180,7 @@ class PartnerInvoice(db.Model):
             "pdf_url": self.pdf_url,
             "notes": self.notes,
             "line_time_mode": self.line_time_mode,
+            "payment_reference": self.payment_reference,
             "recipient_name": self.recipient_name,
             "recipient_address": self.recipient_address,
             "recipient_contact": self.recipient_contact,

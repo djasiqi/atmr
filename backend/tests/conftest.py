@@ -62,6 +62,10 @@ import importlib.util
 import os
 from unittest import mock
 
+# Découpage CI uniquement. Sans PYTEST_SHARD, la collecte reste monolithique.
+if os.environ.get("PYTEST_SHARD"):
+    pytest_plugins.append("tests.ci_shard")
+
 # Note: Les tests backend utilisent PostgreSQL par défaut (voir DATABASE_URL plus bas),
 # on conserve donc le type JSONB natif pour préserver les index GIN en migrations.
 import pytest  # noqa: E402
@@ -234,6 +238,65 @@ def skip_integration_if_schema_missing(request, postgresql_schema_ready):
             "PostgreSQL schema not ready (table 'user' missing). "
             + "Run: docker compose -f docker-compose.test.yml up -d postgres_test && flask db upgrade"
         )
+
+
+@pytest.fixture(autouse=True)
+def _reset_portal_grant_flags(request):
+    """Évite la pollution inter-tests des drapeaux d'habilitation portail.
+
+    Ne force pas la fixture ``app`` : certains tests unitaires doivent rester
+    hors contexte Flask (gardes prod Redis, use cases booking sans DB).
+    """
+    uses_app = any(
+        name in request.fixturenames for name in ("app", "client", "db", "app_context")
+    )
+    if not uses_app:
+        yield
+        return
+    app = request.getfixturevalue("app")
+    had_enforcement = "PORTAL_GRANT_ENFORCEMENT" in app.config
+    had_observation = "PORTAL_GRANT_OBSERVATION" in app.config
+    previous_enforcement = app.config.get("PORTAL_GRANT_ENFORCEMENT")
+    previous_observation = app.config.get("PORTAL_GRANT_OBSERVATION")
+    # Défaut produit : drapeaux éteints hors tests ciblés.
+    app.config["PORTAL_GRANT_ENFORCEMENT"] = False
+    app.config["PORTAL_GRANT_OBSERVATION"] = False
+    yield
+    if had_enforcement:
+        app.config["PORTAL_GRANT_ENFORCEMENT"] = previous_enforcement
+    else:
+        app.config.pop("PORTAL_GRANT_ENFORCEMENT", None)
+    if had_observation:
+        app.config["PORTAL_GRANT_OBSERVATION"] = previous_observation
+    else:
+        app.config.pop("PORTAL_GRANT_OBSERVATION", None)
+
+
+@pytest.fixture(autouse=True)
+def _restore_upload_dirs(request):
+    """Restaure les racines d'upload après chaque test.
+
+    L'application Flask est partagée pour toute la session. Un test qui
+    redirige ``UPLOADS_DIR`` vers un répertoire temporaire (décomptes PDF)
+    laisse cette valeur en place. Les tests suivants, qui écrivent leurs
+    factures ailleurs, lèvent alors ``InvalidUploadPath``.
+    """
+    uses_app = any(
+        name in request.fixturenames for name in ("app", "client", "db", "app_context")
+    )
+    if not uses_app:
+        yield
+        return
+    app = request.getfixturevalue("app")
+    keys = ("UPLOADS_DIR", "UPLOAD_FOLDER")
+    present = {key: key in app.config for key in keys}
+    saved = {key: app.config.get(key) for key in keys}
+    yield
+    for key in keys:
+        if present[key]:
+            app.config[key] = saved[key]
+        else:
+            app.config.pop(key, None)
 
 
 @pytest.fixture
@@ -430,7 +493,7 @@ def auth_headers(client, sample_user, sample_company):
 
     claims = {
         "role": sample_user.role.value,
-        "company_id": sample_company.id,
+        "company_id": int(sample_company.id),
         "driver_id": getattr(sample_user, "driver_id", None),
         "aud": "atmr-api",
     }
@@ -469,7 +532,7 @@ def admin_headers(client, sample_admin_user):
 
 
 @pytest.fixture
-def authenticated_client(client, sample_user):
+def authenticated_client(client, sample_user, sample_company):
     """Client Flask authentifié avec token JWT."""
     from datetime import timedelta
 
@@ -477,7 +540,8 @@ def authenticated_client(client, sample_user):
 
     claims = {
         "role": sample_user.role.value,
-        "company_id": getattr(sample_user, "company_id", None),
+        # User n'a pas company_id : revendiquer la société de fixture.
+        "company_id": int(sample_company.id),
         "driver_id": getattr(sample_user, "driver_id", None),
         "aud": "atmr-api",
     }

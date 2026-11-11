@@ -21,7 +21,7 @@ permissions:
 jobs:
   lint:
     name: Lint (ESLint + Prettier)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -54,7 +54,7 @@ jobs:
 
   test:
     name: Unit Tests (Jest)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -91,7 +91,7 @@ jobs:
 
   build:
     name: Build Production
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -136,7 +136,7 @@ jobs:
 
   security:
     name: Security Audit (npm audit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -171,7 +171,7 @@ jobs:
   e2e:
     name: E2E Tests (Cypress)
     if: false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
