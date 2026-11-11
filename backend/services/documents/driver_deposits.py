@@ -152,11 +152,47 @@ def driver_deposit_total(invoice: Any) -> Decimal:
     return sum(persisted_driver_deposits(invoice), Decimal("0.00")).quantize(_CENT)
 
 
-def persisted_invoice_payment_lines(invoice: Any) -> list[DriverDepositLine]:
-    """Tous les paiements positifs imputés (PDF détail), sans recalcul métier.
+def _amount_paid(invoice: Any) -> Decimal:
+    try:
+        return Decimal(str(getattr(invoice, "amount_paid", 0) or 0)).quantize(_CENT)
+    except (ArithmeticError, ValueError, TypeError):
+        return Decimal("0.00")
 
-    Inclut virement / carte / espèces. Les espèces liées à une collection
-    portent le ``booking_id`` lorsque disponible ; sinon référence paiement.
+
+def _is_declared_cash(line: DriverDepositLine) -> bool:
+    """Espèces sans collecte : règlement manuel ou montant seulement déclaré."""
+    return (line.method or "").strip().lower() == "cash" and line.cash_collection_id is None
+
+
+def _lines_covered_by_amount_paid(
+    lines: list[DriverDepositLine], amount_paid: Decimal
+) -> list[DriverDepositLine]:
+    """Ne présente comme encaissé que ce que ``amount_paid`` couvre.
+
+    Les écritures confirmées (virement, carte, espèces liées à une collecte)
+    sont prises en premier. Un montant espèces sans collecte n'est gardé que
+    s'il tient encore dans le reste encaissé : c'est alors un règlement manuel.
+    Le surplus est un montant déclaré, non présenté comme encaissé.
+    """
+    remaining = amount_paid if amount_paid > 0 else Decimal("0.00")
+    confirmed = [line for line in lines if not _is_declared_cash(line)]
+    declared_cash = [line for line in lines if _is_declared_cash(line)]
+    covered: list[DriverDepositLine] = []
+    for line in confirmed + declared_cash:
+        if line.amount_chf <= remaining:
+            remaining -= line.amount_chf
+            covered.append(line)
+    covered_ids = {id(line) for line in covered}
+    return [line for line in lines if id(line) in covered_ids]
+
+
+def persisted_invoice_payment_lines(invoice: Any) -> list[DriverDepositLine]:
+    """Paiements positifs réellement couverts par ``amount_paid``.
+
+    Inclut virement, carte et espèces manuelles imputées. Les espèces liées
+    à une collecte portent le ``booking_id`` lorsque disponible. Un montant
+    espèces sans collecte qui dépasse le montant encaissé n'est pas une
+    écriture : il n'apparaît pas.
     """
     cash_linked = {
         int(line.payment_id): line
@@ -203,4 +239,4 @@ def persisted_invoice_payment_lines(invoice: Any) -> list[DriverDepositLine]:
                 mode_label=_mode_label(method, has_collection=cid is not None),
             )
         )
-    return lines
+    return _lines_covered_by_amount_paid(lines, _amount_paid(invoice))

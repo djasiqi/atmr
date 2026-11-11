@@ -92,7 +92,7 @@ def invoice_pdf_qr_amount(
 
     Sans acompte chauffeur imputé, le texte reste le total contractuel.
     Avec acompte, le montant est le solde persisté, sans seconde soustraction.
-    ``None`` : ne pas émettre de QR (facture déjà soldée).
+    ``None`` : ne pas émettre de QR (solde nul, avec ou sans acompte).
     Un rappel transmet son propre montant et n'est pas recalculé ici.
     """
     from services.documents.driver_deposits import persisted_driver_deposits
@@ -104,6 +104,12 @@ def invoice_pdf_qr_amount(
         return _format_amount_for_qrbill(due)
     if override_amount is not None:
         return str(override_amount)
+    balance = getattr(invoice, "balance_due", None)
+    try:
+        if balance is not None and Decimal(str(balance)) <= Decimal("0.00"):
+            return None
+    except (ArithmeticError, ValueError, TypeError):
+        pass
     return str(getattr(invoice, "total_amount", ""))
 
 

@@ -163,6 +163,59 @@ def test_paiement_sans_collection_et_autre_montant_exclus():
     assert invoice_pdf_qr_amount(invoice) == "45.00"
 
 
+def test_reglement_manuel_especes_confirme_apparait():
+    invoice = _invoice(
+        "45.00",
+        "15.00",
+        "30.00",
+        [_payment("15.00", None, method="cash")],
+    )
+    text = _render(invoice, ["Prestation de transport 45.00 CHF"])
+    assert "15.00 CHF" in text
+    assert "Espèces" in text
+    assert "Espèces chauffeur" not in text
+    assert "Acomptes déjà encaissés" in text
+    assert "30.00 CHF" in text
+
+
+def test_especes_declarees_non_couvertes_absentes_du_pdf():
+    invoice = _invoice(
+        "45.00",
+        "20.00",
+        "25.00",
+        [_payment("20.00", 71), _payment("99.00", None)],
+    )
+    text = _render(invoice, ["Prestation de transport 45.00 CHF"])
+    assert "20.00 CHF" in text
+    assert "25.00 CHF" in text
+    assert "99.00" not in text
+    assert "Espèces chauffeur" in text
+
+
+def test_facture_partiellement_payee_par_virement():
+    invoice = _invoice(
+        "45.00",
+        "20.00",
+        "25.00",
+        [_payment("20.00", None, method="bank_transfer")],
+    )
+    text = _render(invoice, ["Prestation de transport 45.00 CHF"])
+    assert "20.00 CHF" in text
+    assert "Virement" in text
+    assert "25.00 CHF" in text
+    assert "99.00" not in text
+
+
+def test_solde_nul_par_avoir_sans_reglement():
+    invoice = _invoice("45.00", "0.00", "0.00", [_payment("99.00", None)])
+    text = _render(invoice, ["Prestation de transport 45.00 CHF"])
+    assert "Solde nul." in text
+    assert "Payée" not in text
+    assert "99.00" not in text
+    assert "Acomptes déjà encaissés" not in text
+    assert invoice_pdf_qr_amount(invoice) is None
+
+
 def test_regeneration_ne_duplique_pas_le_paiement():
     payments = [_payment("20.00", 6)]
     invoice = _invoice("45.00", "20.00", "25.00", payments)
@@ -280,6 +333,13 @@ def test_sql_concordance_et_reprise():
     url = __import__("os").environ.get("P3L03_DATABASE_URL")
     if not url:
         pytest.skip("P3L03_DATABASE_URL absent")
+    from wsgi import app
+
+    with app.app_context():
+        _sql_concordance_et_reprise(url)
+
+
+def _sql_concordance_et_reprise(url: str) -> None:
     from sqlalchemy import create_engine, text
 
     engine = create_engine(url)
