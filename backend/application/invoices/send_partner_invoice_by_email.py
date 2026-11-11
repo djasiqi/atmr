@@ -16,6 +16,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from application.invoices.issued_invoice_guard import (
+    issued_invoice_pdf_missing_error,
+    partner_invoice_is_issued,
+)
 from ext import db
 from models import Company, CompanyBillingSettings
 from models.partner_invoice import PartnerInvoice, PartnerInvoiceStatus
@@ -161,7 +165,33 @@ class SendPartnerInvoiceByEmailUseCase:
                 input_data.force_regenerate_pdf,
             )
 
-            if not partner_invoice.pdf_url or input_data.force_regenerate_pdf:
+            partner_is_issued = partner_invoice_is_issued(partner_invoice)
+            if partner_is_issued:
+                # Facture partenaire émise (étape 22) : PDF original figé. Le
+                # drapeau force_regenerate_pdf est ignoré ; un PDF absent n'est
+                # jamais fabriqué (409, signalement administratif).
+                if input_data.force_regenerate_pdf:
+                    logger.warning(
+                        "[ISSUED INVOICE GUARD] force_regenerate_pdf ignoré pour la "
+                        "facture partenaire émise %s (id=%s, status=%s).",
+                        partner_invoice.invoice_number,
+                        partner_invoice.id,
+                        partner_invoice.status,
+                    )
+                if not partner_invoice.pdf_url:
+                    missing_err = issued_invoice_pdf_missing_error(
+                        partner_invoice,
+                        "send_partner_invoice_by_email",
+                        catalog="partner_invoice",
+                    )
+                    return SendPartnerInvoiceByEmailResult(
+                        success=False,
+                        partner_invoice_id=input_data.partner_invoice_id,
+                        recipient=recipient_email,
+                        error=missing_err.message,
+                        status_code=missing_err.status_code,
+                    )
+            elif not partner_invoice.pdf_url or input_data.force_regenerate_pdf:
                 logger.info(
                     "Régénération du PDF pour la facture partenaire %s",
                     partner_invoice.invoice_number,
@@ -282,6 +312,22 @@ class SendPartnerInvoiceByEmailUseCase:
                     "[PARTNER INVOICE EMAIL] Aucun PDF disponible pour la facture %s (pdf_path=%s)",
                     partner_invoice.invoice_number,
                     pdf_path,
+                )
+
+            if partner_is_issued and not pdf_bytes:
+                # Fichier original absent / illisible sur une facture émise : pas
+                # d'envoi sans l'original, aucun document de remplacement.
+                missing_err = issued_invoice_pdf_missing_error(
+                    partner_invoice,
+                    "send_partner_invoice_by_email",
+                    catalog="partner_invoice",
+                )
+                return SendPartnerInvoiceByEmailResult(
+                    success=False,
+                    partner_invoice_id=input_data.partner_invoice_id,
+                    recipient=recipient_email,
+                    error=missing_err.message,
+                    status_code=missing_err.status_code,
                 )
 
             # 8. Générer le contenu HTML de l'email

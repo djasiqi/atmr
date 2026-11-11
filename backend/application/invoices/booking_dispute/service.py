@@ -610,6 +610,22 @@ def decide_dispute(
         return DisputeResult(ok=True, dispute=dispute)
 
     now = _now()
+    if dispute.carrier_stance == "needs_correction" and (
+        dispute.proposed_payer_type or dispute.proposed_amount_ht is not None
+    ):
+        from application.billing.settlement_payer_lock import (
+            ordinary_payer_change_message,
+            refuse_ordinary_payer_change,
+        )
+
+        settlement_reason = refuse_ordinary_payer_change(int(booking.id))
+        if settlement_reason is not None:
+            return DisputeResult(
+                ok=False,
+                error=ordinary_payer_change_message(settlement_reason),
+                status_code=409,
+                dispute=dispute,
+            )
     if dispute.carrier_stance == "needs_correction":
         _apply_proposed_correction(booking, dispute)
     dispute.status = BookingDisputeStatus.RESOLVED_CARRIER.value

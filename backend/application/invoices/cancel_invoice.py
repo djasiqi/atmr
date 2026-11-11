@@ -56,7 +56,8 @@ class CancelInvoiceInput:
 
     Attributes:
         invoice: La facture à annuler
-        force: Si True, annule même si le statut n'est pas DRAFT ou CANCELLED
+        force: Si True, les appelants historiques demandent d'annuler hors
+            brouillon. Ce drapeau ne contourne plus une facture émise.
     """
 
     invoice: _InvoiceLike
@@ -74,7 +75,7 @@ class CancelInvoiceOutput:
     """
 
     success: bool
-    error: dict[str, str] | None = None
+    error: dict[str, Any] | None = None
     status_code: int | None = None
 
 
@@ -127,32 +128,66 @@ class CancelInvoiceUseCase:
                     status_code=400,
                 )
 
-        if not input_data.force and status_value not in {
-            InvoiceStatus.DRAFT,
-            InvoiceStatus.CANCELLED,
-        }:
-            return CancelInvoiceOutput(
-                success=False,
-                error={
-                    "error": (
-                        "Seules les factures au statut 'draft' peuvent être annulées."
-                    )
-                },
-                status_code=400,
+        from sqlalchemy import select
+        from sqlalchemy.orm import Query
+
+        from models import Booking, InvoicePayment, db
+        from models import Invoice as InvoiceModel
+
+        working: Any = invoice
+        if isinstance(invoice, InvoiceModel):
+            locked = db.session.scalar(
+                select(InvoiceModel)
+                .where(InvoiceModel.id == int(invoice.id))
+                .with_for_update()
             )
+            if locked is None:
+                return CancelInvoiceOutput(
+                    success=False,
+                    error={"error": "Facture introuvable"},
+                    status_code=404,
+                )
+            db.session.refresh(locked)
+            working = locked
+            current_status = working.status
+            if isinstance(current_status, InvoiceStatus):
+                status_value = current_status
+            else:
+                try:
+                    status_value = InvoiceStatus(current_status)
+                except (ValueError, TypeError):
+                    return CancelInvoiceOutput(
+                        success=False,
+                        error={"error": "Statut de facture invalide"},
+                        status_code=400,
+                    )
 
         if status_value == InvoiceStatus.CANCELLED:
-            # Rien à faire, déjà annulée
             return CancelInvoiceOutput(success=True)
 
-        # Libérer les réservations liées à chaque ligne
-        from models import Booking, db
+        if status_value != InvoiceStatus.DRAFT:
+            from application.invoices.issued_invoice_guard import (
+                invoice_status_value,
+                issued_invoice_refusal_payload,
+            )
 
-        is_direct_client = _is_direct_client_invoice(invoice)
+            return CancelInvoiceOutput(
+                success=False,
+                error=issued_invoice_refusal_payload(
+                    invoice_id=getattr(working, "id", None),
+                    status=invoice_status_value(working),
+                    operation="cancel_invoice",
+                ),
+                status_code=409,
+            )
+
+        # Libérer les réservations liées à chaque ligne
+
+        is_direct_client = _is_direct_client_invoice(working)
         freed_count = 0
 
         line_ids: set[int] = set()
-        for line in invoice.lines:
+        for line in working.lines:
             lid = getattr(line, "id", None)
             if lid is not None:
                 line_ids.add(int(lid))
@@ -161,10 +196,13 @@ class CancelInvoiceUseCase:
         # segments A/R secondaires non couverts par line.reservation_id seul).
         bookings_by_id: dict[int, Any] = {}
         if line_ids:
-            for b in Booking.query.filter(Booking.invoice_line_id.in_(line_ids)).all():
+            booking_query = Booking.query.filter(Booking.invoice_line_id.in_(line_ids))
+            if isinstance(booking_query, Query):
+                booking_query = booking_query.with_for_update()
+            for b in booking_query.all():
                 bookings_by_id[int(b.id)] = b
 
-        for line in invoice.lines:
+        for line in working.lines:
             if hasattr(line, "reservation_id") and line.reservation_id:
                 booking_dto = self._booking_repo.find_by_id(line.reservation_id)
                 if booking_dto:
@@ -181,17 +219,20 @@ class CancelInvoiceUseCase:
                 continue
             booking.invoice_line_id = None
             booking.updated_at = datetime.now(UTC)
-            # Facture client directe : NE JAMAIS recalculer billed_to_type ni
-            # appliquer résolution patient→clinique. Ré-asserter l'override
-            # « facturer client » pour garder billed_to_type = 'patient'
-            # (idempotent sur le payeur).
+            # Facture client directe : ne pas réécrire un payeur verrouillé
+            # pour un règlement sur place. Sans ce verrou, ré-asserter le client.
             if is_direct_client:
-                try:
-                    booking.billed_to_type = "patient"
-                    booking.billed_to_company_id = None
-                    booking.billing_party_id = None
-                except Exception:  # best-effort (DTO / champs absents)
-                    pass
+                from application.billing.settlement_payer_lock import (
+                    refuse_ordinary_payer_change,
+                )
+
+                if refuse_ordinary_payer_change(int(booking.id)) is None:
+                    try:
+                        booking.billed_to_type = "patient"
+                        booking.billed_to_company_id = None
+                        booking.billing_party_id = None
+                    except Exception:  # best-effort (DTO / champs absents)
+                        pass
             freed_count += 1
             if os.getenv("BILLING_DEBUG", "0") == "1":
                 _fmt = (
@@ -215,8 +256,23 @@ class CancelInvoiceUseCase:
             freed_count,
         )
 
-        # Mettre à jour la facture
-        invoice_any: Any = invoice
+        if isinstance(working, InvoiceModel):
+            allocations = InvoicePayment.query.filter(
+                InvoicePayment.invoice_id == int(working.id),
+                InvoicePayment.cash_collection_id.isnot(None),
+            ).all()
+            for allocation in allocations:
+                db.session.delete(allocation)
+            db.session.flush()
+            kept = InvoicePayment.query.filter_by(invoice_id=int(working.id)).all()
+            working.amount_paid = sum(
+                (Decimal(str(payment.amount or 0)) for payment in kept),
+                Decimal("0.00"),
+            )
+
+        # Le brouillon reste en base, avec ses lignes. Seule l'imputation
+        # d'espèces est retirée : la collection et ses événements demeurent.
+        invoice_any: Any = working
         invoice_any.status = InvoiceStatus.CANCELLED
         invoice_any.cancelled_at = datetime.now(UTC)
         invoice_any.updated_at = datetime.now(UTC)

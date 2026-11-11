@@ -70,94 +70,39 @@ class DuplicateInvoiceUseCase:
         )
 
     def execute(self, input_data: DuplicateInvoiceInput) -> DuplicateInvoiceOutput:
-        """Prépare un brouillon correctif à partir d'une facture existante.
+        """Refuse la duplication d'une facture émise.
 
-        Cette méthode annule la facture originale (en libérant les trajets) et renvoie
-        le contexte nécessaire côté frontend pour pré-remplir le formulaire de création.
-
-        Args:
-            input_data: Données d'entrée du use case
-
-        Returns:
-            DuplicateInvoiceOutput avec le contexte du brouillon créé
+        Dupliquer annulait la facture d'origine avec ``force`` et libérait
+        ses courses. Une facture émise reste en place. Le brouillon se
+        modifie directement. L'avoir viendra dans un lot séparé.
         """
         invoice = input_data.invoice
 
         try:
-            # 1. Vérifier que la facture n'est pas déjà un brouillon
             if invoice.status == InvoiceStatus.DRAFT:
                 msg = (
                     "La facture est déjà un brouillon et peut être modifiée "
                     "directement."
                 )
                 raise ValueError(msg)
+            from application.invoices.issued_invoice_guard import invoice_is_issued
 
-            # 2. Récupérer les lignes avec réservations
-            reservation_lines = [line for line in invoice.lines if line.reservation_id]
-            if not reservation_lines:
-                msg = "Aucune course liée à cette facture ne peut être dupliquée."
-                raise ValueError(msg)
-
-            # 3. Construire les overrides à partir des lignes
-            bill_to_client_id: int | None = invoice.bill_to_client_id
-            billing_type = "third_party" if bill_to_client_id else "direct"
-            reservation_ids: list[int] = []
-            overrides: dict[str, dict[str, Any]] = {}
-
-            for line in reservation_lines:
-                if not line.reservation_id:
-                    continue
-
-                reservation_ids.append(line.reservation_id)
-                override: dict[str, Any] = {
-                    "amount": float(line.line_total),
-                }
-                if line.vat_rate is not None:
-                    override["vat_rate"] = float(line.vat_rate)
-                if line.adjustment_note:
-                    override["note"] = line.adjustment_note
-                overrides[str(line.reservation_id)] = override
-
-            # 4. Construire le payload client
-            client_payload: dict[str, Any] | None = None
-            if invoice.client:
-                client = invoice.client
-                user = getattr(client, "user", None)
-                client_payload = {
-                    "id": client.id,
-                    "first_name": getattr(user, "first_name", None) if user else None,
-                    "last_name": getattr(user, "last_name", None) if user else None,
-                    "username": getattr(user, "username", None) if user else None,
-                    "full_name": (
-                        f"{getattr(user, 'first_name', '') or ''} "
-                        f"{getattr(user, 'last_name', '') or ''}"
-                    ).strip()
-                    if user
-                    else None,
-                }
-
-            # 5. Annuler la facture d'origine pour libérer les réservations
-            from application.invoices.cancel_invoice import CancelInvoiceInput
-
-            cancel_input = CancelInvoiceInput(invoice=invoice, force=True)
-            cancel_result = self.cancel_invoice_use_case.execute(cancel_input)
-            if not cancel_result.success:
-                msg = "Erreur lors de l'annulation de la facture"
-                raise ValueError(msg)
-
-            # 6. Retourner le contexte pour pré-remplir le formulaire
-            draft_context = {
-                "billing_type": billing_type,
-                "client_id": invoice.client_id,
-                "bill_to_client_id": invoice.bill_to_client_id,
-                "period_year": invoice.period_year,
-                "period_month": invoice.period_month,
-                "reservation_ids": reservation_ids,
-                "overrides": overrides,
-                "client": client_payload,
-            }
-
-            return DuplicateInvoiceOutput(success=True, draft_context=draft_context)
+            if invoice_is_issued(invoice):
+                return DuplicateInvoiceOutput(
+                    success=False,
+                    error={
+                        "error": (
+                            "Une facture émise ne s'annule pas par duplication."
+                        ),
+                        "error_code": "ISSUED_INVOICE_IMMUTABLE",
+                    },
+                    status_code=409,
+                )
+            return DuplicateInvoiceOutput(
+                success=False,
+                error={"error": "Statut de facture invalide"},
+                status_code=400,
+            )
 
         except ValueError as e:
             logger.warning(

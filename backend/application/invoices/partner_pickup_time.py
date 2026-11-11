@@ -7,7 +7,9 @@ Priorité figée à la création de la ligne :
 3. sinon « — »
 
 Une régénération de PDF relit ce snapshot, jamais le booking live.
-``00:00`` n'est jamais une heure affichée : c'est la sentinelle « heure à définir ».
+``00:00`` local n'est une sentinelle que si l'heure n'est pas confirmée.
+Une prise en charge confirmée ou déclarée « à bord » à minuit local s'affiche ``00:00``.
+La conversion se fait en ``Europe/Zurich`` à la date du transport, jamais avec le fuseau du navigateur.
 """
 
 from __future__ import annotations
@@ -40,8 +42,10 @@ def _wall_clock(value: datetime | None, *, naive_is_zurich: bool) -> datetime | 
     return value.astimezone(ZURICH)
 
 
-def _hhmm(wall: datetime | None) -> str | None:
-    if wall is None or _is_artificial_midnight(wall):
+def _hhmm(wall: datetime | None, *, keep_local_midnight: bool) -> str | None:
+    if wall is None:
+        return None
+    if _is_artificial_midnight(wall) and not keep_local_midnight:
         return None
     return f"{wall.hour:02d}:{wall.minute:02d}"
 
@@ -61,8 +65,11 @@ def snapshot_pickup_from_booking(booking: Any) -> dict[str, str | None]:
         getattr(booking, "boarded_at", None), naive_is_zurich=False
     )
     confirmed = bool(getattr(booking, "time_confirmed", True))
-    scheduled_hhmm = _hhmm(scheduled_wall) if confirmed else None
-    boarded_hhmm = _hhmm(boarded_wall)
+    # Minuit local confirmé est une vraie heure. Minuit non confirmé reste la sentinelle.
+    scheduled_hhmm = (
+        _hhmm(scheduled_wall, keep_local_midnight=confirmed) if confirmed else None
+    )
+    boarded_hhmm = _hhmm(boarded_wall, keep_local_midnight=True)
     if boarded_hhmm:
         source = SOURCE_ACTUAL_BOARDED
     elif scheduled_hhmm:
@@ -84,10 +91,6 @@ def pickup_display_label(
     """Libellé PDF / aperçu. Ne relit aucune réservation."""
     boarded = (boarded_at or "").strip()
     scheduled = (scheduled_pickup_at or "").strip()
-    if boarded in {"", "00:00"}:
-        boarded = ""
-    if scheduled in {"", "00:00"}:
-        scheduled = ""
     if source == SOURCE_ACTUAL_BOARDED and boarded:
         return boarded
     if source == SOURCE_SCHEDULED_FALLBACK and scheduled:

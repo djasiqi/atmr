@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from application.invoices.invoice_statement import assemble_statement
 from application.invoices.partner_invoice_lines import (
     partner_invoice_editor_meta,
     serialize_partner_invoice_lines,
@@ -56,9 +57,27 @@ def serialize_partner_invoice_detail(
             **editor_meta,
             "vat": {"applicable": True, "label": "TVA"},
         }
-    payments = [
-        payment.to_dict() for payment in (partner_invoice.recorded_payments or [])
-    ]
+    recorded = list(partner_invoice.recorded_payments or [])
+    payments = [payment.to_dict() for payment in recorded]
+    statement = assemble_statement(
+        total=total_amount,
+        issued_at=partner_invoice.issued_at,
+        invoice_number=partner_invoice.invoice_number,
+        pdf_url=partner_invoice.pdf_url,
+        payments=[
+            {
+                "amount": payment.amount,
+                "paid_at": payment.paid_at,
+                "reference": payment.note,
+                "cash_collection_id": None,
+            }
+            for payment in recorded
+        ],
+        credit_notes=None,
+        refunds=None,
+        balance_due=balance_due,
+        refundable=None,
+    )
     return {
         "id": partner_invoice.id,
         "invoice_number": partner_invoice.invoice_number,
@@ -106,6 +125,7 @@ def serialize_partner_invoice_detail(
         "subject_contact": partner_invoice.recipient_contact,
         "vat_total_amount": float(vat_amount),
         "payments": payments,
+        "statement": statement,
         "reminders": [],
         "reminder_level": 0,
         "last_reminder_at": None,

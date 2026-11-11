@@ -599,6 +599,13 @@ def list_billing_opportunities(
 
     # BUG B : exclure les bookings revendiqués par une InvoiceLine active.
     patient_bookings = filter_bookings_without_active_invoice_claim(patient_bookings)
+    from application.invoices.confirmed_payment_coverage import (
+        apply_confirmed_payment_coverage,
+    )
+
+    patient_bookings = apply_confirmed_payment_coverage(
+        patient_bookings, billing_settings=billing_settings
+    )
 
     # Gate Market LIRIE : résoudre les demandes institution en un seul lot
     # (le filtre par sujet plus bas ne refait alors aucune requête).

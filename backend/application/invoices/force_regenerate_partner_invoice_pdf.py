@@ -3,15 +3,27 @@
 Même contrat que le catalogue standard, catalogue isolé :
 relecture DB partenaire → lignes snapshot / destinataire live → nouveau fichier
 → remplacement de pdf_url seulement après succès. Échec = ancien PDF conservé.
+
+Étape 22 (LIRIE) : **brouillon uniquement**. Une facture partenaire émise
+(``sent``, ``partially_paid``, ``paid``, ``overdue``, ``cancelled`` ou statut
+inconnu) est refusée (409 ``ISSUED_INVOICE_IMMUTABLE``) **avant**
+``ensure_partner_invoice_lines`` (qui écrit des lignes au taux TVA courant) et
+avant toute suppression de fichier.
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from application.invoices.force_regenerate_invoice_pdf import (
     _delete_replaced_invoice_pdf,
+)
+from application.invoices.issued_invoice_guard import (
+    IssuedInvoiceImmutableError,
+    assert_partner_invoice_mutable,
+    partner_invoice_is_issued,
 )
 from application.invoices.partner_invoice_access import load_accessible_partner_invoice
 from application.invoices.partner_invoice_lines import (
@@ -20,7 +32,6 @@ from application.invoices.partner_invoice_lines import (
     load_partner_invoice_transfers,
 )
 from ext import db
-from models.partner_invoice import PartnerInvoiceStatus
 from services.partnerships.invoices import PartnerInvoiceService
 
 logger = logging.getLogger(__name__)
@@ -31,11 +42,8 @@ class ForceRegeneratePartnerInvoicePdfResult:
     ok: bool
     pdf_url: str | None = None
     previous_pdf_url: str | None = None
-    error: dict[str, str] | None = None
+    error: dict[str, Any] | None = None
     status_code: int | None = None
-
-
-_BLOCKED_STATUSES = {PartnerInvoiceStatus.CANCELLED, PartnerInvoiceStatus.PAID}
 
 
 def force_regenerate_partner_invoice_pdf(
@@ -50,17 +58,16 @@ def force_regenerate_partner_invoice_pdf(
             error={"error": "Facture partenaire introuvable"},
             status_code=404,
         )
-    if partner_invoice.status in _BLOCKED_STATUSES:
+    try:
+        assert_partner_invoice_mutable(
+            partner_invoice, "force_regenerate_partner_invoice_pdf"
+        )
+    except IssuedInvoiceImmutableError as guard_err:
         return ForceRegeneratePartnerInvoicePdfResult(
             ok=False,
             previous_pdf_url=partner_invoice.pdf_url,
-            error={
-                "error": (
-                    "Impossible de régénérer le PDF: la facture partenaire est "
-                    f"{partner_invoice.status}."
-                )
-            },
-            status_code=400,
+            error=guard_err.to_error_payload(),
+            status_code=guard_err.status_code,
         )
 
     previous_pdf_url = partner_invoice.pdf_url
@@ -103,8 +110,24 @@ def force_regenerate_partner_invoice_pdf(
             status_code=500,
         )
 
+    if partner_invoice_is_issued(partner_invoice):
+        # Émise pendant la génération : ni remplacement de référence ni suppression.
+        db.session.rollback()
+        err = IssuedInvoiceImmutableError(
+            invoice_id=partner_invoice.id,
+            status=str(partner_invoice.status),
+            operation="force_regenerate_partner_invoice_pdf",
+            catalog="partner_invoice",
+        )
+        return ForceRegeneratePartnerInvoicePdfResult(
+            ok=False,
+            previous_pdf_url=previous_pdf_url,
+            error=err.to_error_payload(),
+            status_code=err.status_code,
+        )
     partner_invoice.pdf_url = pdf_url
     db.session.commit()
+    # Suppression de l'ancien fichier : chemin brouillon uniquement, après commit.
     _delete_replaced_invoice_pdf(previous_pdf_url, pdf_url)
     return ForceRegeneratePartnerInvoicePdfResult(
         ok=True,

@@ -148,6 +148,34 @@ invoice_line_model = invoices_ns.model(
     },
 )
 
+credit_note_model = invoices_ns.model(
+    "CreditNote",
+    {
+        "amount_chf": fields.Float(required=False),
+        "reason": fields.String(required=True),
+        "idempotency_key": fields.String(required=True),
+        "lines": fields.List(fields.Raw, required=False),
+        "prepare_corrective": fields.Boolean(required=False),
+        "corrective_idempotency_key": fields.String(required=False),
+    },
+)
+
+credit_note_preview_model = invoices_ns.model(
+    "CreditNotePreview",
+    {
+        "lines": fields.List(fields.Raw, required=True),
+    },
+)
+
+corrective_invoice_model = invoices_ns.model(
+    "CorrectiveInvoice",
+    {
+        "credit_note_id": fields.Integer(required=True),
+        "reason": fields.String(required=True),
+        "idempotency_key": fields.String(required=True),
+    },
+)
+
 payment_model = invoices_ns.model(
     "Payment",
     {
@@ -317,7 +345,18 @@ invoice_generate_model = invoices_ns.model(
         ),
         "excluded_booking_ids": fields.List(
             fields.Integer(description="ID booking à exclure", minimum=1),
-            description="Exclusions optionnelles (génération par opportunité)",
+            description="Exclusions optionnelles (tous parcours)",
+        ),
+        "strict_reservation_ids": fields.Boolean(
+            description=(
+                "Si true : facturer uniquement reservation_ids, sans élargissement. "
+                "Absent/false : comportement historique."
+            ),
+            allow_null=True,
+        ),
+        "confirmed_selection_fingerprint": fields.String(
+            description="Empreinte SHA-256 des réservations validées à la prévisualisation",
+            allow_null=True,
         ),
         "billing_party_id": fields.Integer(
             description="ID BillingParty (destinataire unifié) - alternative à bill_to_client_id",
@@ -972,6 +1011,14 @@ class EligibleClients(Resource):
                 Booking.scheduled_time >= start_date,
                 Booking.scheduled_time < end_date,
             )
+
+        from application.invoices.confirmed_payment_coverage import (
+            fully_covered_booking_ids_query,
+        )
+
+        unbilled_query = unbilled_query.filter(
+            ~Booking.id.in_(fully_covered_booking_ids_query())
+        )
 
         unbilled_subquery = unbilled_query.group_by(Booking.client_id).subquery()
         # Note: Les courses transférées ont toujours company_id = entreprise propriétaire,
@@ -2398,6 +2445,12 @@ class GenerateInvoice(Resource):
                         logger_instance=logger,
                     )
                     return result, status_code
+                if int(clinic_company_id) == int(company_id):
+                    result, status_code = APIErrorHandler.handle_validation_error(
+                        "Le débiteur institutionnel ne peut pas être l'entreprise créancière.",
+                        logger_instance=logger,
+                    )
+                    return result, status_code
 
                 logger.info(
                     "Génération facture clinique mensuelle (S2): clinique %s, période %s/%s",
@@ -2461,7 +2514,17 @@ class GenerateInvoice(Resource):
             # Cas opportunité patient (sujet + payeur) — autorité serveur
             if billing_opportunity_key:
                 from application.invoices import GenerateInvoiceInput
+                from application.invoices.booking_selection import (
+                    derive_reservation_ids_from_client_map,
+                )
 
+                opportunity_reservation_ids = validated_data.get("reservation_ids")
+                if not opportunity_reservation_ids and client_id:
+                    opportunity_reservation_ids = (
+                        derive_reservation_ids_from_client_map(
+                            client_reservations, client_id
+                        )
+                    )
                 uc = GenerateInvoiceUseCase()
                 input_data = GenerateInvoiceInput(
                     company_id=company_id,
@@ -2471,7 +2534,7 @@ class GenerateInvoice(Resource):
                     billing_party_id=None,
                     bill_to_client_id=None,
                     clinic_company_id=None,
-                    reservation_ids=None,
+                    reservation_ids=opportunity_reservation_ids,
                     overrides=overrides,
                     global_discount_percent=validated_data.get(
                         "global_discount_percent"
@@ -2479,6 +2542,12 @@ class GenerateInvoice(Resource):
                     global_discount_note=validated_data.get("global_discount_note"),
                     billing_opportunity_key=billing_opportunity_key,
                     excluded_booking_ids=excluded_booking_ids,
+                    strict_reservation_ids=bool(
+                        validated_data.get("strict_reservation_ids")
+                    ),
+                    confirmed_selection_fingerprint=validated_data.get(
+                        "confirmed_selection_fingerprint"
+                    ),
                     delivery_method=validated_data.get("delivery_method"),
                 )
                 invoice_result = uc.execute(input_data)
@@ -2623,7 +2692,19 @@ class GenerateInvoice(Resource):
                     else:
                         # ✅ DDD: Générer la facture via use case
                         from application.invoices import GenerateInvoiceInput
+                        from application.invoices.booking_selection import (
+                            derive_reservation_ids_from_client_map,
+                        )
 
+                        third_party_reservation_ids = validated_data.get(
+                            "reservation_ids"
+                        )
+                        if not third_party_reservation_ids:
+                            third_party_reservation_ids = (
+                                derive_reservation_ids_from_client_map(
+                                    client_reservations, client_id
+                                )
+                            )
                         uc = GenerateInvoiceUseCase()
                         input_data = GenerateInvoiceInput(
                             company_id=company_id,
@@ -2633,13 +2714,20 @@ class GenerateInvoice(Resource):
                             billing_party_id=None,
                             bill_to_client_id=bill_to_client_id,
                             clinic_company_id=None,
-                            reservation_ids=validated_data.get("reservation_ids"),
+                            reservation_ids=third_party_reservation_ids,
                             overrides=overrides,
                             global_discount_percent=validated_data.get(
                                 "global_discount_percent"
                             ),
                             global_discount_note=validated_data.get(
                                 "global_discount_note"
+                            ),
+                            excluded_booking_ids=excluded_booking_ids,
+                            strict_reservation_ids=bool(
+                                validated_data.get("strict_reservation_ids")
+                            ),
+                            confirmed_selection_fingerprint=validated_data.get(
+                                "confirmed_selection_fingerprint"
                             ),
                             delivery_method=validated_data.get("delivery_method"),
                         )
@@ -2678,7 +2766,15 @@ class GenerateInvoice(Resource):
                 else:
                     # ✅ DDD: Générer la facture sans facturation tierce via use case
                     from application.invoices import GenerateInvoiceInput
+                    from application.invoices.booking_selection import (
+                        derive_reservation_ids_from_client_map,
+                    )
 
+                    plain_reservation_ids = validated_data.get("reservation_ids")
+                    if not plain_reservation_ids:
+                        plain_reservation_ids = derive_reservation_ids_from_client_map(
+                            client_reservations, client_id
+                        )
                     uc = GenerateInvoiceUseCase()
                     input_data = GenerateInvoiceInput(
                         company_id=company_id,
@@ -2692,12 +2788,18 @@ class GenerateInvoice(Resource):
                             "billing_opportunity_key"
                         ),
                         excluded_booking_ids=validated_data.get("excluded_booking_ids"),
-                        reservation_ids=validated_data.get("reservation_ids"),
+                        reservation_ids=plain_reservation_ids,
                         overrides=overrides,
                         global_discount_percent=validated_data.get(
                             "global_discount_percent"
                         ),
                         global_discount_note=validated_data.get("global_discount_note"),
+                        strict_reservation_ids=bool(
+                            validated_data.get("strict_reservation_ids")
+                        ),
+                        confirmed_selection_fingerprint=validated_data.get(
+                            "confirmed_selection_fingerprint"
+                        ),
                         delivery_method=validated_data.get("delivery_method"),
                     )
                     invoice_result = uc.execute(input_data)
@@ -2960,6 +3062,9 @@ class PartnerInvoiceDetail(Resource):
                 return APIErrorHandler.handle_not_found(
                     "PartnerInvoice", partner_invoice_id, logger
                 )
+            if result.status_code == 409 and result.error:
+                # Facture partenaire émise : payload normalisé du garde-fou.
+                return result.error, 409
             return APIErrorHandler.handle_validation_error(
                 (result.error or {}).get("error", "Mise à jour refusée"),
                 logger_instance=logger,
@@ -2993,6 +3098,9 @@ class PartnerInvoiceRegeneratePdf(Resource):
                 return APIErrorHandler.handle_not_found(
                     "PartnerInvoice", partner_invoice_id, logger
                 )
+            if result.status_code == 409 and result.error:
+                # Facture partenaire émise : payload normalisé du garde-fou.
+                return result.error, 409
             return {
                 "success": False,
                 "error": (result.error or {}).get("error", "Régénération impossible"),
@@ -3198,7 +3306,23 @@ class InvoiceDetail(Resource):
                     logger_instance=logger,
                 )
 
-            return success_response(data=result.invoice.to_dict())
+            payload = result.invoice.to_dict()
+            from models.invoice import _credit_notes_payload
+
+            model = db.session.get(Invoice, int(invoice_id))
+            if model is not None and int(model.company_id) == int(company_id):
+                payload["credit_notes"] = _credit_notes_payload(model)
+                payload["refundable_chf"] = float(model.refundable_chf or 0)
+                from application.invoices.invoice_statement import statement_for_invoice
+
+                payload["statement"] = statement_for_invoice(model)
+            else:
+                payload["credit_notes"] = []
+                payload["statement"] = {
+                    "disponible": False,
+                    "message": "Entreprise non trouvée ou accès refusé",
+                }
+            return success_response(data=payload)
 
         except (OperationalError, DBAPIError) as e:
             # Erreurs DB attendues : connexion, timeout
@@ -3422,6 +3546,17 @@ class SendInvoice(Resource):
             except InvoiceBookingLinkIncompleteError as link_err:
                 return link_err.to_error_payload(), 409
 
+            from application.invoices.specimen_document import (
+                SPECIMEN_REFUSAL,
+                is_non_payable_specimen,
+            )
+
+            if is_non_payable_specimen(invoice):
+                return APIErrorHandler.handle_validation_error(
+                    SPECIMEN_REFUSAL,
+                    logger_instance=logger,
+                )
+
             invoice.status = InvoiceStatus.SENT
             invoice.sent_at = datetime.now(UTC)
             db.session.commit()
@@ -3461,6 +3596,409 @@ class SendInvoice(Resource):
             return APIErrorHandler.handle_exception(e, logger)
 
 
+def _record_company_refund(company_id: int, payload: dict, *, invoice_id: int | None, collection_id: int | None):
+    """Point commun des restitutions patient. Le chauffeur n'atteint pas cette fonction."""
+    from flask_jwt_extended import get_jwt_identity
+
+    from application.invoices.issue_refund import RefundRefusal, record_refund
+    from routes.companies import _get_current_company_via_use_case
+
+    company, error_response, status_code = _get_current_company_via_use_case()
+    if error_response or not company:
+        return error_response, status_code
+    try:
+        cid = int(getattr(company, "id", 0) or 0)
+    except (TypeError, ValueError):
+        cid = 0
+    if cid != int(company_id):
+        return APIErrorHandler.handle_permission_error(
+            "Non autorisé",
+            logger_instance=logger,
+        )
+    actor = User.query.filter_by(public_id=str(get_jwt_identity())).first()
+    if actor is None:
+        return APIErrorHandler.handle_permission_error(
+            "Non autorisé",
+            logger_instance=logger,
+        )
+    raw_amount = payload.get("amount_chf")
+    try:
+        amount = Decimal(str(raw_amount))
+    except Exception:
+        return {"error": "montant_invalide", "code": "montant_invalide"}, 400
+    try:
+        recorded = record_refund(
+            company_id=int(company_id),
+            created_by_user_id=int(actor.id),
+            amount_chf=amount,
+            reason=str(payload.get("reason") or ""),
+            idempotency_key=str(payload.get("idempotency_key") or ""),
+            confirm=bool(payload.get("confirm")),
+            decision=None if payload.get("decision") in (None, "") else str(payload.get("decision")),
+            invoice_id=invoice_id,
+            cash_collection_id=collection_id,
+        )
+    except RefundRefusal as refusal:
+        db.session.rollback()
+        return {"error": refusal.code, "code": refusal.code}, refusal.status
+    status = 200 if recorded["replay"] else 201
+    return success_response(data=recorded, status_code=status, message="Remboursement enregistré")
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/cash-collections/<int:collection_id>/refunds"
+)
+class CashCollectionRefunds(Resource):
+    """Restitution d'espèces pas encore imputées, ou liées à la facture citée."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def post(self, company_id, collection_id):
+        data = request.get_json(silent=True) or {}
+        raw_invoice = data.get("invoice_id")
+        invoice_id = None
+        if raw_invoice not in (None, ""):
+            try:
+                invoice_id = int(raw_invoice)
+            except (TypeError, ValueError):
+                return {"error": "facture_invalide", "code": "facture_invalide"}, 400
+        try:
+            return _record_company_refund(
+                int(company_id),
+                data,
+                invoice_id=invoice_id,
+                collection_id=int(collection_id),
+            )
+        except Exception as exc:
+            logger.exception("Erreur lors du remboursement d'espèces")
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(exc, logger)
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/refunds"
+)
+class InvoiceRefunds(Resource):
+    """Restitution sur une facture. Ne crée pas d'avoir."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def post(self, company_id, invoice_id):
+        data = request.get_json(silent=True) or {}
+        raw_collection = data.get("cash_collection_id")
+        collection_id = None
+        if raw_collection not in (None, ""):
+            try:
+                collection_id = int(raw_collection)
+            except (TypeError, ValueError):
+                return {"error": "collection_invalide", "code": "collection_invalide"}, 400
+        try:
+            return _record_company_refund(
+                int(company_id),
+                data,
+                invoice_id=int(invoice_id),
+                collection_id=collection_id,
+            )
+        except Exception as exc:
+            logger.exception("Erreur lors du remboursement de facture")
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(exc, logger)
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/credit-notes"
+)
+class InvoiceCreditNotes(Resource):
+    """Émet un avoir sur une facture patient déjà émise."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.expect(credit_note_model, validate=False)
+    @invoices_ns.response(201, "Avoir émis")
+    @invoices_ns.response(200, "Avoir rejoué")
+    @invoices_ns.response(400, "Montant ou motif invalide")
+    @invoices_ns.response(403, "Non autorisé")
+    @invoices_ns.response(404, "Facture non trouvée")
+    @invoices_ns.response(409, "Plafond, conflit ou facture non éligible")
+    def post(self, company_id, invoice_id):
+        """Réduit la créance. Ne crée ni paiement ni remboursement."""
+        try:
+            from flask_jwt_extended import get_jwt_identity
+
+            from application.invoices.issue_credit_note import (
+                CreditNoteRefusal,
+                issue_credit_note,
+            )
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+            try:
+                cid = int(getattr(company, "id", 0) or 0)
+            except (TypeError, ValueError):
+                cid = 0
+            if cid != int(company_id):
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+            actor = User.query.filter_by(public_id=str(get_jwt_identity())).first()
+            if actor is None:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+            data = request.get_json(silent=True) or {}
+            raw_amount = data.get("amount_chf", None)
+            amount = None
+            if raw_amount is not None and raw_amount != "":
+                try:
+                    amount = Decimal(str(raw_amount))
+                except Exception:
+                    return {
+                        "error": "montant_invalide",
+                        "code": "montant_invalide",
+                    }, 400
+            line_selections = data.get("lines")
+            if line_selections is not None and not isinstance(line_selections, list):
+                return {"error": "lignes_invalides", "code": "lignes_invalides"}, 400
+            try:
+                recorded = issue_credit_note(
+                    company_id=int(company_id),
+                    invoice_id=int(invoice_id),
+                    amount_chf=amount,
+                    reason=str(data.get("reason") or ""),
+                    idempotency_key=str(data.get("idempotency_key") or ""),
+                    created_by_user_id=int(actor.id),
+                    lines=line_selections,
+                )
+            except CreditNoteRefusal as refusal:
+                db.session.rollback()
+                return {"error": refusal.code, "code": refusal.code}, refusal.status
+
+            corrective_payload = None
+            if bool(data.get("prepare_corrective")):
+                from application.invoices.prepare_corrective_invoice import (
+                    CorrectiveInvoiceRefusal,
+                    prepare_corrective_invoice,
+                )
+
+                try:
+                    corrective_payload = prepare_corrective_invoice(
+                        company_id=int(company_id),
+                        invoice_id=int(invoice_id),
+                        credit_note_id=int(recorded["credit_note_id"]),
+                        reason=str(data.get("reason") or ""),
+                        idempotency_key=str(
+                            data.get("corrective_idempotency_key")
+                            or f"corr-{data.get('idempotency_key') or ''}"
+                        )[:80],
+                        created_by_user_id=int(actor.id),
+                    )
+                except CorrectiveInvoiceRefusal as refusal:
+                    db.session.rollback()
+                    return {
+                        "error": refusal.code,
+                        "code": refusal.code,
+                        "credit_note": recorded,
+                    }, refusal.status
+
+            status = 200 if recorded["replay"] else 201
+            body = {
+                **recorded,
+                "amount_chf": float(recorded["amount_chf"]),
+                "original_total": float(recorded["original_total"]),
+                "credit_notes_total": float(recorded["credit_notes_total"]),
+                "net_invoiced_total": float(recorded["net_invoiced_total"]),
+                "amount_paid": float(recorded["amount_paid"]),
+                "balance_due": float(recorded["balance_due"]),
+                "overpayment_amount": float(recorded["overpayment_amount"]),
+            }
+            if corrective_payload is not None:
+                body["corrective_invoice"] = corrective_payload
+            return success_response(
+                data=body,
+                status_code=status,
+                message="Avoir enregistré",
+            )
+        except Exception as exc:
+            logger.exception("Erreur lors de l'émission de l'avoir")
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(exc, logger)
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/credit-notes/preview"
+)
+class InvoiceCreditNotesPreview(Resource):
+    """Aperçu serveur d'un avoir par prestations (sans écriture)."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.expect(credit_note_preview_model, validate=False)
+    def post(self, company_id, invoice_id):
+        try:
+            from application.invoices.credit_note_line_math import (
+                line_credit_residuals,
+                preview_credit_for_lines,
+            )
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+            if int(getattr(company, "id", 0) or 0) != int(company_id):
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+            invoice = Invoice.query.filter_by(
+                id=int(invoice_id), company_id=int(company_id)
+            ).first()
+            if invoice is None:
+                return APIErrorHandler.handle_not_found("Facture", invoice_id, logger)
+            data = request.get_json(silent=True) or {}
+            selections = data.get("lines")
+            if not isinstance(selections, list):
+                return {"error": "lignes_requises", "code": "lignes_requises"}, 400
+            try:
+                if not selections:
+                    return success_response(
+                        data={
+                            "invoice_id": int(invoice.id),
+                            "invoice_number": invoice.invoice_number,
+                            "proposed_amount_ttc": 0,
+                            "lines": [],
+                            "line_residuals": line_credit_residuals(invoice),
+                        },
+                        message="Aperçu",
+                    )
+                preview = preview_credit_for_lines(invoice, selections)
+            except ValueError as exc:
+                code = str(exc)
+                return {"error": code, "code": code}, 400
+            return success_response(data=preview, message="Aperçu avoir")
+        except Exception as exc:
+            logger.exception("Erreur aperçu avoir")
+            return APIErrorHandler.handle_exception(exc, logger)
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/corrective"
+)
+class InvoiceCorrectivePrepare(Resource):
+    """Prépare un brouillon de facture rectificative lié à un avoir."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.expect(corrective_invoice_model, validate=False)
+    def post(self, company_id, invoice_id):
+        try:
+            from flask_jwt_extended import get_jwt_identity
+
+            from application.invoices.prepare_corrective_invoice import (
+                CorrectiveInvoiceRefusal,
+                prepare_corrective_invoice,
+            )
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+            if int(getattr(company, "id", 0) or 0) != int(company_id):
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+            actor = User.query.filter_by(public_id=str(get_jwt_identity())).first()
+            if actor is None:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+            data = request.get_json(silent=True) or {}
+            try:
+                credit_note_id = int(data.get("credit_note_id"))
+            except (TypeError, ValueError):
+                return {
+                    "error": "avoir_introuvable",
+                    "code": "avoir_introuvable",
+                }, 400
+            try:
+                recorded = prepare_corrective_invoice(
+                    company_id=int(company_id),
+                    invoice_id=int(invoice_id),
+                    credit_note_id=credit_note_id,
+                    reason=str(data.get("reason") or ""),
+                    idempotency_key=str(data.get("idempotency_key") or ""),
+                    created_by_user_id=int(actor.id),
+                )
+            except CorrectiveInvoiceRefusal as refusal:
+                db.session.rollback()
+                return {"error": refusal.code, "code": refusal.code}, refusal.status
+            status = 200 if recorded["replay"] else 201
+            return success_response(
+                data=recorded,
+                status_code=status,
+                message="Facture rectificative préparée",
+            )
+        except Exception as exc:
+            logger.exception("Erreur préparation rectificative")
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(exc, logger)
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/credit-notes/<int:credit_note_id>/pdf"
+)
+class InvoiceCreditNotePdfDownload(Resource):
+    """Téléchargement PDF d'avoir via lookup DB (JWT, pas d'uploads publics)."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id, invoice_id, credit_note_id):
+        from werkzeug.exceptions import NotFound as WzNotFound
+
+        from models.invoice import InvoiceCreditNote
+        from shared.tenant_guard import assert_company_access
+        from shared.upload_path_resolver import serve_stored_upload
+
+        _user, access_err = assert_company_access(
+            company_id, resource="invoice_credit_note_pdf"
+        )
+        if access_err:
+            return access_err
+
+        invoice = Invoice.query.get(invoice_id)
+        if not invoice or int(invoice.company_id) != int(company_id):
+            return APIErrorHandler.handle_not_found("Facture", invoice_id, logger)
+
+        note = InvoiceCreditNote.query.filter_by(
+            id=int(credit_note_id),
+            invoice_id=int(invoice_id),
+            company_id=int(company_id),
+        ).first()
+        if note is None:
+            return APIErrorHandler.handle_not_found(
+                "Avoir", credit_note_id, logger
+            )
+        if not note.pdf_url:
+            return APIErrorHandler.handle_not_found(
+                "PDF d'avoir", credit_note_id, logger
+            )
+        try:
+            download_name = f"{note.credit_number or f'avoir-{credit_note_id}'}.pdf"
+            return serve_stored_upload(
+                note.pdf_url,
+                download_filename=download_name,
+            )
+        except WzNotFound:
+            return APIErrorHandler.handle_not_found(
+                "PDF d'avoir", credit_note_id, logger
+            )
+
+
 @invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/payments")
 class InvoicePayments(Resource):
     """Endpoint pour enregistrer un paiement."""
@@ -3483,29 +4021,24 @@ class InvoicePayments(Resource):
         ✅ P0: Support idempotency-key pour éviter les doublons de paiement.
         """
         try:
-            # ✅ P0: Vérifier idempotency-key (CRITIQUE pour les paiements)
+            # La facture patient décide en base. Redis ne sert qu'au
+            # rejeu déjà en place des factures partenaires.
             idempotency_key = IdempotencyService.get_idempotency_key_from_request()
+            cached_partner_payment = None
             if idempotency_key:
                 cached_response = IdempotencyService.check_key(idempotency_key)
-                if cached_response[0]:  # Key exists
-                    logger.info(
-                        "Idempotency key found for payment, returning cached response",
-                        extra={
-                            "trace_id": get_trace_id(),
-                            "idempotency_key": idempotency_key,
-                            "invoice_id": invoice_id,
-                        },
-                    )
+                if cached_response[0]:
                     cached_payload = cached_response[1] or {}
                     if (
                         isinstance(cached_payload, dict)
                         and "response" in cached_payload
                     ):
-                        return (
+                        cached_partner_payment = (
                             cached_payload["response"],
                             cached_payload.get("status_code", 200),
                         )
-                    return cached_payload, 200
+                    else:
+                        cached_partner_payment = (cached_payload, 200)
 
             # ✅ DDD: Utilise use-case au lieu de service directement
             from routes.companies import _get_current_company_via_use_case
@@ -3569,6 +4102,16 @@ class InvoicePayments(Resource):
                     )
 
                     if transfers_count > 0:
+                        if cached_partner_payment is not None:
+                            logger.info(
+                                "Rejeu Redis du paiement partenaire",
+                                extra={
+                                    "trace_id": get_trace_id(),
+                                    "idempotency_key": idempotency_key,
+                                    "invoice_id": invoice_id,
+                                },
+                            )
+                            return cached_partner_payment
                         # Gérer le paiement pour une facture partenaire
                         data = request.get_json()
                         raw_amount = data.get("amount", 0)
@@ -3682,43 +4225,34 @@ class InvoicePayments(Resource):
                     logger,
                 )
 
-            # Valider le montant (combiner validation format et valeur)
-            data = request.get_json()
-            raw_amount = data.get("amount")
+            from application.invoices.specimen_document import (
+                SPECIMEN_REFUSAL,
+                is_non_payable_specimen,
+            )
 
-            # Calculer le solde restant dû pour la facture
-            current_paid = Decimal(str(invoice.amount_paid or 0))
-            total_amount = Decimal(str(invoice.total_amount or 0))
-            balance_due = total_amount - current_paid
-
-            # Si aucun montant n'est fourni, utiliser le solde restant (paiement complet)
-            if raw_amount is None or raw_amount == "":
-                amount = balance_due
-                logger.info(
-                    "Paiement complet sans montant spécifié, utilisation du solde restant: %s",
-                    float(amount),
+            if is_non_payable_specimen(invoice):
+                return APIErrorHandler.handle_validation_error(
+                    SPECIMEN_REFUSAL,
+                    logger_instance=logger,
                 )
-            else:
+
+            # Valider le montant. Un trop-perçu est refusé, jamais plafonné.
+            data = request.get_json(silent=True) or {}
+            raw_amount = data.get("amount")
+            amount_given = raw_amount not in (None, "")
+            requested_amount = None
+            if amount_given:
                 try:
-                    amount = Decimal(str(raw_amount))
-                    # Vérifier que le montant est positif
-                    if amount <= AMOUNT_ZERO:
-                        return APIErrorHandler.handle_validation_error(
-                            "Le montant doit être positif",
-                            field="amount",
-                            logger_instance=logger,
-                        )
-                    # Limiter le montant au solde restant (éviter surpaiement)
-                    if amount > balance_due:
-                        logger.warning(
-                            "Montant saisi (%s) supérieur au solde restant (%s), limitation au solde",
-                            float(amount),
-                            float(balance_due),
-                        )
-                        amount = balance_due
-                except (ValueError, TypeError, Exception):
+                    requested_amount = Decimal(str(raw_amount))
+                except (ValueError, TypeError, ArithmeticError):
                     return APIErrorHandler.handle_validation_error(
                         "Montant invalide",
+                        field="amount",
+                        logger_instance=logger,
+                    )
+                if requested_amount <= AMOUNT_ZERO:
+                    return APIErrorHandler.handle_validation_error(
+                        "Le montant doit être positif",
                         field="amount",
                         logger_instance=logger,
                     )
@@ -3741,7 +4275,11 @@ class InvoicePayments(Resource):
             raw_method = str(method).strip() if method is not None else "bank_transfer"
             method_norm = method_map.get(raw_method.lower(), raw_method.lower())
             if method_norm not in PaymentMethod.choices():
-                method_norm = "bank_transfer"
+                return APIErrorHandler.handle_validation_error(
+                    "Moyen de paiement invalide",
+                    field="method",
+                    logger_instance=logger,
+                )
             payment_method = PaymentMethod(method_norm)
             method_value = payment_method.value
             logger.info(
@@ -3752,8 +4290,37 @@ class InvoicePayments(Resource):
             )
             waive_reminder_fees = bool(data.get("waive_reminder_fees", False))
 
+            # Étape 23 : sur une facture émise, « remettre les frais de rappel »
+            # réécrivait total_amount (sous-total + pénalité, TVA écartée).
+            # Ce n'est pas une annulation traçable : refus avant toute écriture.
+            # Le paiement sans ce drapeau reste possible. Une procédure
+            # d'ajustement comptable n'est pas activée ici.
+            if waive_reminder_fees:
+                from application.invoices.issued_invoice_guard import (
+                    invoice_is_issued,
+                    invoice_status_value,
+                    issued_invoice_refusal_payload,
+                )
+
+                if invoice_is_issued(invoice):
+                    logger.warning(
+                        "[ISSUED INVOICE GUARD] waive_reminder_fees refusé "
+                        "invoice_id=%s status=%s (aucune écriture).",
+                        invoice.id,
+                        invoice_status_value(invoice),
+                    )
+                    db.session.rollback()
+                    return (
+                        issued_invoice_refusal_payload(
+                            invoice_id=invoice.id,
+                            status=invoice_status_value(invoice),
+                            operation="waive_reminder_fees",
+                        ),
+                        409,
+                    )
+
             # Optionnel: annuler les frais de rappel avant d'appliquer le
-            # paiement
+            # paiement (brouillon uniquement — facture émise refusée ci-dessus)
             if waive_reminder_fees and hasattr(invoice, "reminder_fee_amount"):
                 try:
                     current_reminder_fee = Decimal(
@@ -3785,6 +4352,85 @@ class InvoicePayments(Resource):
                         late_fee = Decimal(str(invoice.late_fee_amount or 0))
                         raw_total = (subtotal + late_fee).quantize(Decimal("0.01"))
                         invoice.total_amount = round_to_5_cents(raw_total)
+
+            if not waive_reminder_fees:
+                from application.invoices.post_issue_payment import (
+                    PaymentRefusal,
+                    record_later_payment,
+                )
+
+                raw_paid_at = data.get("paid_at")
+                paid_at_given = raw_paid_at not in (None, "")
+                if paid_at_given:
+                    try:
+                        paid_at = datetime.fromisoformat(
+                            str(raw_paid_at).replace("Z", "+00:00")
+                        )
+                    except ValueError:
+                        return APIErrorHandler.handle_validation_error(
+                            "Date de paiement invalide",
+                            field="paid_at",
+                            logger_instance=logger,
+                        )
+                    if paid_at.tzinfo is None:
+                        paid_at = paid_at.replace(tzinfo=UTC)
+                else:
+                    paid_at = datetime.now(UTC)
+                body_key = data.get("idempotency_key") or data.get("reference")
+                replay_key = idempotency_key or (
+                    str(body_key).strip() if body_key else None
+                )
+                raw_collection = data.get("cash_collection_id")
+                collection_id = None
+                if raw_collection not in (None, ""):
+                    try:
+                        collection_id = int(raw_collection)
+                    except (TypeError, ValueError):
+                        collection_id = -1
+                try:
+                    recorded = record_later_payment(
+                        company_id=int(company_id),
+                        invoice_id=int(invoice.id),
+                        amount=requested_amount,
+                        method=method_value,
+                        paid_at=paid_at,
+                        idempotency_key=replay_key,
+                        cash_collection_id=collection_id,
+                        amount_given=amount_given,
+                        paid_at_given=paid_at_given,
+                    )
+                except PaymentRefusal as refusal:
+                    db.session.rollback()
+                    return {"error": refusal.code, "code": refusal.code}, refusal.status
+                trace_id = get_trace_id()
+                logger.info(
+                    "Paiement ultérieur enregistré: invoice_id=%s amount=%s replay=%s",
+                    invoice_id,
+                    recorded["amount"],
+                    recorded["replay"],
+                )
+                return success_response(
+                    data={
+                        "payment_id": recorded["payment_id"],
+                        "reference": recorded["reference"],
+                        "balance_due": float(recorded["balance_due"]),
+                        "amount_paid": float(recorded["amount_paid"]),
+                        "status": recorded["status"],
+                        "replay": recorded["replay"],
+                        "cash_collection_id": recorded["cash_collection_id"],
+                        "trace_id": trace_id,
+                    },
+                    message="Paiement enregistré",
+                )
+
+            # Brouillon + remise des frais : ancien chemin, hors facture émise.
+            current_paid = Decimal(str(invoice.amount_paid or 0))
+            total_amount = Decimal(str(invoice.total_amount or 0))
+            balance_due = total_amount - current_paid
+            if requested_amount is None:
+                amount = balance_due
+            else:
+                amount = min(requested_amount, balance_due)
 
             # ✅ VENTILATION AUTOMATIQUE : Détecter si c'est un paiement pour un rappel consolidé
             from models import InvoiceReminder
@@ -3962,6 +4608,17 @@ class InvoiceReminders(Resource):
                     "Facture",
                     invoice_id if "invoice_id" in locals() else None,
                     logger,
+                )
+
+            from application.invoices.specimen_document import (
+                SPECIMEN_REFUSAL,
+                is_non_payable_specimen,
+            )
+
+            if is_non_payable_specimen(invoice):
+                return APIErrorHandler.handle_validation_error(
+                    SPECIMEN_REFUSAL,
+                    logger_instance=logger,
                 )
 
             data = request.get_json()
@@ -4210,6 +4867,9 @@ class RegenerateInvoicePdf(Resource):
 
                     if transfers_count > 0:
                         # Régénérer le PDF pour les factures partenaires
+                        from application.invoices.issued_invoice_guard import (
+                            IssuedInvoiceImmutableError,
+                        )
                         from services.partnerships.invoices import (
                             PartnerInvoiceService,
                         )
@@ -4218,6 +4878,9 @@ class RegenerateInvoicePdf(Resource):
                             partner_service = PartnerInvoiceService()
                             pdf_url = partner_service.regenerate_pdf(partner_invoice.id)
                             return {"message": "PDF régénéré", "pdf_url": pdf_url}
+                        except IssuedInvoiceImmutableError as guard_err:
+                            # Facture partenaire émise : PDF original conservé (409).
+                            return guard_err.to_error_payload(), guard_err.status_code
                         except ValueError as e:
                             return APIErrorHandler.handle_validation_error(
                                 str(e), logger_instance=logger
@@ -4235,27 +4898,32 @@ class RegenerateInvoicePdf(Resource):
                     logger,
                 )
 
-            # Même périmètre que l'édition des lignes : pas de régénération si payée / annulée.
-            from application.invoices.edit_draft_invoice import (
-                invoice_allows_line_editing,
+            # Garde-fou d'immutabilité (étape 22) : brouillon uniquement. Refus
+            # explicite 409 avant toute file d'attente ; le use case re-vérifie le
+            # statut sous verrou de ligne (source de vérité backend).
+            from application.invoices.issued_invoice_guard import (
+                invoice_is_issued,
+                invoice_status_value,
+                issued_invoice_refusal_payload,
             )
 
-            if not invoice_allows_line_editing(invoice):
+            if invoice_is_issued(invoice):
                 logger.warning(
                     (
-                        "[PDF PROTECTION] Tentative de régénération PDF pour facture non éditable: "
-                        "invoice_id=%s, status=%s, pdf_url=%s. Opération refusée."
+                        "[PDF PROTECTION] Tentative de régénération PDF pour facture émise: "
+                        "invoice_id=%s, status=%s, pdf_url=%s. Opération refusée (409)."
                     ),
                     invoice.id,
-                    invoice.status.value,
+                    invoice_status_value(invoice),
                     invoice.pdf_url,
                 )
-                return APIErrorHandler.handle_validation_error(
-                    (
-                        f"Impossible de régénérer le PDF: la facture est {invoice.status.value} "
-                        "et ne peut plus être modifiée."
+                return (
+                    issued_invoice_refusal_payload(
+                        invoice_id=invoice.id,
+                        status=invoice_status_value(invoice),
+                        operation="force_regenerate_invoice_pdf",
                     ),
-                    logger_instance=logger,
+                    409,
                 )
 
             # V2 : file d'attente Celery (même use case, hors thread HTTP)
@@ -4301,6 +4969,9 @@ class RegenerateInvoicePdf(Resource):
             )
             if pdf_result.status_code == 404:
                 return APIErrorHandler.handle_not_found("Facture", invoice_id, logger)
+            if pdf_result.status_code == 409:
+                # Refus du garde-fou (facture émise sous verrou) : payload normalisé.
+                return err, 409
             return APIErrorHandler.handle_validation_error(
                 err_txt,
                 logger_instance=logger,
@@ -4721,13 +5392,27 @@ class InstitutionsList(Resource):
             # avec le même nom (migration/historique), ce qui duplique le sélecteur côté UI.
             # Règle: 1 ligne par nom normalisé, en privilégiant la fiche avec mapping S2 explicite.
             dedup_by_name: dict[str, dict[str, Any]] = {}
+            from models.company import Company as CompanyModel
+
             for inst in institutions:
                 institution_name = inst.institution_name or "Institution sans nom"
-                clinic_company_id = (
-                    inst.default_billed_to_company_id
-                    if inst.default_billed_to_company_id is not None
-                    else inst.company_id
-                )
+                # Le propriétaire de la fiche est le créancier. Il ne devient jamais
+                # le débiteur par défaut : une institution sans entreprise distincte
+                # reste non facturable tant qu'un débiteur propre n'est pas lié.
+                explicit_debtor = inst.default_billed_to_company_id
+                clinic_company_id = None
+                if (
+                    explicit_debtor is not None
+                    and int(explicit_debtor) != int(company_id)
+                ):
+                    clinic_company_id = int(explicit_debtor)
+                elif institution_name and institution_name != "Institution sans nom":
+                    named = CompanyModel.query.filter(
+                        CompanyModel.name == institution_name,
+                        CompanyModel.id != int(company_id),
+                    ).first()
+                    if named is not None:
+                        clinic_company_id = int(named.id)
                 row: dict[str, Any] = {
                     "id": inst.id,
                     "institution_name": institution_name,
@@ -5867,6 +6552,10 @@ class BillablePartners(Resource):
                     t for t in unbilled_transfers if t.is_validated
                 ]
 
+                from application.invoices.partner_invoice_lines import (
+                    partner_preview_line,
+                )
+
                 preview_lines: list[dict[str, Any]] = []
                 for t in validated_unbilled_transfers:
                     b = t.booking
@@ -5875,21 +6564,8 @@ class BillablePartners(Resource):
                     if b is not None and b.scheduled_time is not None:
                         st = b.scheduled_time
                         sched = st.isoformat() if hasattr(st, "isoformat") else str(st)
-                    pu = (
-                        str(getattr(b, "pickup_location", "") or "").strip()
-                        if b
-                        else ""
-                    )
-                    do = (
-                        str(getattr(b, "dropoff_location", "") or "").strip()
-                        if b
-                        else ""
-                    )
-                    if pu or do:
-                        desc = f"Transfert partenaire — {pu} → {do}"
-                    else:
-                        desc = f"Transfert partenaire #{t.id} (course {bid})"
                     amt = float(t.partner_cost or 0)
+                    presented = partner_preview_line(t, amount=amt)
                     preview_lines.append(
                         {
                             "booking_id": bid,
@@ -5897,7 +6573,15 @@ class BillablePartners(Resource):
                             "scheduled_at": sched,
                             "amount_ht": amt,
                             "origin_amount_ht": amt,
-                            "description": desc[:500],
+                            "description": presented["description"],
+                            "patient_name": presented["patient_name"],
+                            "client_name": presented["client_name"],
+                            "departure": presented["departure"],
+                            "arrival": presented["arrival"],
+                            "pickup_label": presented["pickup_label"],
+                            "pickup_time_source": presented["pickup_time_source"],
+                            "scheduled_pickup_at": presented["scheduled_pickup_at"],
+                            "boarded_at": presented["boarded_at"],
                             "source_type": "ride",
                             "is_locked": False,
                             "already_invoiced": False,
@@ -5906,9 +6590,46 @@ class BillablePartners(Resource):
                     )
 
                 if unbilled_transfers:
-                    # Montant total des transferts validés et non facturés
-                    total_amount = sum(
-                        float(t.partner_cost or 0) for t in validated_unbilled_transfers
+                    from decimal import Decimal
+
+                    from infrastructure.invoices.invoice_calculator import (
+                        InvoiceCalculator,
+                        round_to_5_cents,
+                    )
+                    from repositories.company_billing_settings_repository import (
+                        CompanyBillingSettingsRepository,
+                    )
+
+                    # Même clôture que PartnerInvoiceService.generate_monthly_invoice :
+                    # chaque coût au 5 centimes, puis une seule TVA sur le sous-total.
+                    rounded_lines = [
+                        round_to_5_cents(Decimal(str(t.partner_cost or 0)))
+                        for t in validated_unbilled_transfers
+                    ]
+                    subtotal = round_to_5_cents(sum(rounded_lines, Decimal("0")))
+                    total_amount = float(subtotal)
+                    settings = CompanyBillingSettingsRepository().find_or_create(
+                        int(company.id)
+                    )
+                    rate = Decimal("0")
+                    vat_on = bool(getattr(settings, "vat_applicable", False)) and (
+                        getattr(settings, "vat_rate", None) is not None
+                    )
+                    if vat_on:
+                        try:
+                            rate = Decimal(str(settings.vat_rate)).quantize(
+                                Decimal("0.01")
+                            )
+                            if rate <= 0:
+                                vat_on = False
+                        except (ArithmeticError, ValueError):
+                            vat_on = False
+                            rate = Decimal("0")
+                    calculator = InvoiceCalculator()
+                    estimated_vat_total, estimated_total_with_vat = (
+                        calculator.calculate_vat(
+                            subtotal, rate if vat_on else Decimal("0")
+                        )
                     )
                     result.append(
                         {
@@ -5927,8 +6648,8 @@ class BillablePartners(Resource):
                             else "CHF",
                             "preview_lines": preview_lines,
                             "estimated_subtotal_ht": float(total_amount),
-                            "estimated_vat_total": 0.0,
-                            "estimated_total_with_vat": float(total_amount),
+                            "estimated_vat_total": float(estimated_vat_total),
+                            "estimated_total_with_vat": float(estimated_total_with_vat),
                         }
                     )
 
@@ -6694,7 +7415,7 @@ class BulkSendInvoices(Resource):
             )
 
         except Exception as e:
-            if isinstance(e, (OperationalError, DBAPIError, IntegrityError)):
+            if isinstance(e, OperationalError | DBAPIError | IntegrityError):
                 logger.error("Erreur DB bulk-send: %s", str(e))
             else:
                 logger.exception("Erreur inattendue bulk-send")

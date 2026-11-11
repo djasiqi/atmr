@@ -76,11 +76,14 @@ def _invoice_status_value(invoice: Invoice) -> str:
 
 
 def _locked_non_draft(invoice: Invoice) -> bool:
-    return _invoice_status_value(invoice) in (
-        InvoiceStatus.SENT.value,
-        InvoiceStatus.PARTIALLY_PAID.value,
-        InvoiceStatus.PAID.value,
-    )
+    """Facture émise (tout sauf brouillon, statut inconnu inclus) : PDF figé.
+
+    Délègue au garde-fou central (étape 22) : ``overdue`` et ``cancelled`` sont
+    verrouillés au même titre que ``sent`` / ``partially_paid`` / ``paid``.
+    """
+    from application.invoices.issued_invoice_guard import invoice_is_issued
+
+    return invoice_is_issued(invoice)
 
 
 def get_pdf_state(invoice: Invoice) -> PdfState:
