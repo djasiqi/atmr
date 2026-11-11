@@ -8,6 +8,7 @@ from __future__ import annotations  # noqa: I001
 
 import logging
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 from models import Invoice, InvoiceStatus
@@ -70,21 +71,17 @@ class DuplicateInvoiceUseCase:
         )
 
     def execute(self, input_data: DuplicateInvoiceInput) -> DuplicateInvoiceOutput:
-        """Prépare un brouillon correctif à partir d'une facture existante.
+        """Prépare un duplicata fidèle sans toucher la facture d'origine.
 
-        Cette méthode annule la facture originale (en libérant les trajets) et renvoie
-        le contexte nécessaire côté frontend pour pré-remplir le formulaire de création.
-
-        Args:
-            input_data: Données d'entrée du use case
-
-        Returns:
-            DuplicateInvoiceOutput avec le contexte du brouillon créé
+        Une facture émise reste immuable : ni numéro, ni montants, ni lignes,
+        ni annulation. Le résultat est seulement le contexte d'un nouveau
+        brouillon (client, période, courses, ajustements de ligne).
+        L'avoir et la rectificative sont d'autres opérations.
+        ``cancel_invoice_use_case`` n'est pas appelé.
         """
         invoice = input_data.invoice
 
         try:
-            # 1. Vérifier que la facture n'est pas déjà un brouillon
             if invoice.status == InvoiceStatus.DRAFT:
                 msg = (
                     "La facture est déjà un brouillon et peut être modifiée "
@@ -92,71 +89,7 @@ class DuplicateInvoiceUseCase:
                 )
                 raise ValueError(msg)
 
-            # 2. Récupérer les lignes avec réservations
-            reservation_lines = [line for line in invoice.lines if line.reservation_id]
-            if not reservation_lines:
-                msg = "Aucune course liée à cette facture ne peut être dupliquée."
-                raise ValueError(msg)
-
-            # 3. Construire les overrides à partir des lignes
-            bill_to_client_id: int | None = invoice.bill_to_client_id
-            billing_type = "third_party" if bill_to_client_id else "direct"
-            reservation_ids: list[int] = []
-            overrides: dict[str, dict[str, Any]] = {}
-
-            for line in reservation_lines:
-                if not line.reservation_id:
-                    continue
-
-                reservation_ids.append(line.reservation_id)
-                override: dict[str, Any] = {
-                    "amount": float(line.line_total),
-                }
-                if line.vat_rate is not None:
-                    override["vat_rate"] = float(line.vat_rate)
-                if line.adjustment_note:
-                    override["note"] = line.adjustment_note
-                overrides[str(line.reservation_id)] = override
-
-            # 4. Construire le payload client
-            client_payload: dict[str, Any] | None = None
-            if invoice.client:
-                client = invoice.client
-                user = getattr(client, "user", None)
-                client_payload = {
-                    "id": client.id,
-                    "first_name": getattr(user, "first_name", None) if user else None,
-                    "last_name": getattr(user, "last_name", None) if user else None,
-                    "username": getattr(user, "username", None) if user else None,
-                    "full_name": (
-                        f"{getattr(user, 'first_name', '') or ''} "
-                        f"{getattr(user, 'last_name', '') or ''}"
-                    ).strip()
-                    if user
-                    else None,
-                }
-
-            # 5. Annuler la facture d'origine pour libérer les réservations
-            from application.invoices.cancel_invoice import CancelInvoiceInput
-
-            cancel_input = CancelInvoiceInput(invoice=invoice, force=True)
-            cancel_result = self.cancel_invoice_use_case.execute(cancel_input)
-            if not cancel_result.success:
-                msg = "Erreur lors de l'annulation de la facture"
-                raise ValueError(msg)
-
-            # 6. Retourner le contexte pour pré-remplir le formulaire
-            draft_context = {
-                "billing_type": billing_type,
-                "client_id": invoice.client_id,
-                "bill_to_client_id": invoice.bill_to_client_id,
-                "period_year": invoice.period_year,
-                "period_month": invoice.period_month,
-                "reservation_ids": reservation_ids,
-                "overrides": overrides,
-                "client": client_payload,
-            }
-
+            draft_context = _faithful_draft_context(invoice)
             return DuplicateInvoiceOutput(success=True, draft_context=draft_context)
 
         except ValueError as e:
@@ -175,3 +108,57 @@ class DuplicateInvoiceUseCase:
                 error={"error": "Erreur interne"},
                 status_code=500,
             )
+
+
+def _money(value: object) -> str:
+    return format(Decimal(str(value)).quantize(Decimal("0.01")), "f")
+
+
+def _faithful_draft_context(invoice: Invoice) -> dict[str, object]:
+    """Copie de lecture : aucune écriture sur la facture émise."""
+    lines = list(invoice.lines or [])
+    reservation_ids = sorted(
+        {
+            int(line.reservation_id)
+            for line in lines
+            if getattr(line, "reservation_id", None) is not None
+        }
+    )
+    if not reservation_ids:
+        msg = "Aucune course liée à cette facture : le duplicata est impossible."
+        raise ValueError(msg)
+
+    overrides: dict[str, dict[str, str]] = {}
+    for line in lines:
+        reservation_id = getattr(line, "reservation_id", None)
+        if reservation_id is None:
+            continue
+        entry: dict[str, str] = {}
+        line_total = getattr(line, "line_total", None)
+        if line_total is not None:
+            entry["line_total"] = _money(line_total)
+        vat_rate = getattr(line, "vat_rate", None)
+        if vat_rate is not None:
+            entry["vat_rate"] = _money(vat_rate)
+        note = getattr(line, "adjustment_note", None)
+        if note:
+            entry["adjustment_note"] = str(note)
+        if entry:
+            overrides[str(int(reservation_id))] = entry
+
+    draft: dict[str, object] = {
+        "source_invoice_id": int(invoice.id),
+        "client_id": invoice.client_id,
+        "bill_to_client_id": invoice.bill_to_client_id,
+        "period_year": invoice.period_year,
+        "period_month": invoice.period_month,
+        "reservation_ids": reservation_ids,
+        "overrides": overrides,
+    }
+    user = getattr(getattr(invoice, "client", None), "user", None)
+    if user is not None:
+        first = getattr(user, "first_name", None) or ""
+        last = getattr(user, "last_name", None) or ""
+        display = f"{first} {last}".strip() or getattr(user, "username", None)
+        draft["client"] = {"id": invoice.client_id, "display_name": display}
+    return draft

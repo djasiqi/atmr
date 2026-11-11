@@ -198,37 +198,44 @@ def test_frozen_invoice_block_survives_master_data_mutation(db, company):
     assert "Renommée" not in _get_billed_to(invoice)[0]
     assert "NOUVEAU" not in _get_billed_to(invoice)[0]
 
-    # 5. Régénération forcée (SENT autorisé) : même bloc, snapshot intact.
-    seen: dict[str, tuple[str, str]] = {}
-
-    def _fake_execute(*, invoice, force_regenerate):
-        seen["pdf"] = _get_billed_to(invoice)
-        seen["html"] = _html_block(invoice)
-        return SimpleNamespace(
-            ok=True, pdf_url="/uploads/invoices/regen.pdf", error=None, status_code=None
-        )
-
+    # 5. Régénération forcée d'une facture émise (étape 22) : REFUSÉE avant toute
+    #    écriture — aucun nouveau PDF, aucune suppression, snapshot et bloc intacts.
+    pdf_url_before = invoice.pdf_url
     with (
         patch(
             "application.invoices.force_regenerate_invoice_pdf.GenerateInvoicePdfUseCase"
         ) as uc_cls,
         patch(
             "application.invoices.force_regenerate_invoice_pdf._delete_replaced_invoice_pdf"
-        ),
+        ) as del_old,
     ):
-        uc_cls.return_value.execute.side_effect = _fake_execute
+        uc_cls.return_value.execute.return_value = SimpleNamespace(
+            ok=True, pdf_url="/uploads/invoices/regen.pdf", error=None, status_code=None
+        )
         result = ForceRegenerateInvoicePdfUseCase().execute(
             company_id=company.id, invoice_id=invoice.id
         )
-    assert result.ok is True
-    assert seen["pdf"] == pdf_before
-    assert seen["html"] == html_before
+    assert result.ok is False
+    assert result.status_code == 409
+    assert (result.error or {}).get("error_code") == "ISSUED_INVOICE_IMMUTABLE"
+    uc_cls.return_value.execute.assert_not_called()
+    del_old.assert_not_called()
     invoice = _reload(invoice.id)
+    assert invoice.pdf_url == pdf_url_before
     assert read_billed_to_snapshot(invoice) == snap
+    # Le rendu (lecture seule) d'une facture figée reste celui du snapshot.
+    assert _get_billed_to(invoice) == pdf_before
+    assert _html_block(invoice) == html_before
 
 
 def _emit_then_mutate_and_regenerate(db, company) -> tuple[list[str], list[str]]:
-    """Pipeline PDF réel : (pages du PDF émis, pages du PDF régénéré après mutation)."""
+    """Pipeline PDF réel : (pages du PDF émis, pages du rendu figé après mutation).
+
+    Étape 22 : la régénération forcée d'une facture émise est refusée et le PDF
+    original reste intact octet pour octet ; le second jeu de pages provient d'un
+    rendu en lecture seule (même moteur que les rappels), qui doit reproduire
+    le bloc snapshoté.
+    """
     db.session.add(
         CompanyBillingSettings(
             company_id=company.id,
@@ -255,23 +262,32 @@ def _emit_then_mutate_and_regenerate(db, company) -> tuple[list[str], list[str]]
     db.session.commit()
     _mutate_master_data(db, _reload(invoice.id))
 
-    with patch(
-        "application.invoices.force_regenerate_invoice_pdf._delete_replaced_invoice_pdf"
-    ):
-        result = ForceRegenerateInvoicePdfUseCase().execute(
-            company_id=company.id, invoice_id=invoice.id
-        )
-    assert result.ok is True
-    assert result.pdf_url
-    second_pdf = Path(
-        service.invoices_dir, result.pdf_url.rsplit("/", 1)[-1]
-    ).read_bytes()
+    result = ForceRegenerateInvoicePdfUseCase().execute(
+        company_id=company.id, invoice_id=invoice.id
+    )
+    assert result.ok is False
+    assert result.status_code == 409
+    invoice = _reload(invoice.id)
+    assert invoice.pdf_url == url
+    original_path = Path(service.invoices_dir, url.rsplit("/", 1)[-1])
+    assert original_path.exists()
+    assert original_path.read_bytes() == first_pdf
+    second_pdf, _rows = service._create_invoice_pdf_content(invoice)
     return extract_text_per_page(first_pdf), extract_text_per_page(second_pdf)
 
 
 def _invoice_page(pages: list[str]) -> str:
-    page = next(p for p in pages if "Facturé à" in p)
-    return page.split("Numéro de facture")[0]
+    """Bloc destinataire réel : nom figé, sans titre de fenêtre.
+
+    La zone enveloppe n'imprime pas « Facturé à », et le numéro est rendu
+    « N° … », pas « Numéro de facture ». On isole l'adresse avant le titre.
+    """
+    page = next(p for p in pages if "Arnaud JACQUEMOUD" in p and "Rue Patru 2" in p)
+    rest = page[page.index("Arnaud JACQUEMOUD") :]
+    for marker in ("FACTURE", "Numéro de facture"):
+        if marker in rest:
+            return rest.split(marker)[0]
+    return rest
 
 
 @pytest.mark.integration

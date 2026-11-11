@@ -5,21 +5,37 @@ brouillon, tâche Celery) : relire la facture et ses relations, ignorer l'ancien
 binaire / snapshot périmé, écrire un nouveau fichier, remplacer la référence
 seulement après succès. En cas d'échec, l'ancien PDF reste servi.
 
-Voir docs/facturation/regenerer-pdf-contrat.md.
+Étape 22 (LIRIE) — ce contrat ne s'applique qu'aux **brouillons**. Une facture
+émise (tout statut autre que ``draft``) est refusée **avant** toute écriture en
+base, tout recalcul et toute suppression de fichier : son PDF original, ses
+lignes, ses totaux, sa TVA, ses références QR et ses snapshots restent
+intacts (409 ``ISSUED_INVOICE_IMMUTABLE``). Le statut faisant autorité est lu
+sous verrou de ligne (``SELECT … FOR UPDATE``) afin de sérialiser deux
+régénérations concurrentes et une régénération concurrente d'un changement de
+statut.
+
+Voir docs/facturation/regenerer-pdf-contrat.md et
+docs/contracts/encaissement-audit/etape-22/.
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import joinedload, selectinload
 
-from application.invoices.edit_draft_invoice import invoice_allows_line_editing
 from application.invoices.generate_invoice_pdf import GenerateInvoicePdfUseCase
 from application.invoices.invoice_pdf_state import (
     mark_pdf_ready,
     normalize_invoice_meta_dict,
+)
+from application.invoices.issued_invoice_guard import (
+    IssuedInvoiceImmutableError,
+    assert_invoice_mutable,
+    invoice_is_issued,
 )
 from application.invoices.paper_invoice_fee import ensure_paper_invoice_fee_line
 from ext import db
@@ -34,8 +50,17 @@ class ForceRegenerateInvoicePdfResult:
     pdf_url: str | None = None
     generated_at: str | None = None
     previous_pdf_url: str | None = None
-    error: dict[str, str] | None = None
+    error: dict[str, Any] | None = None
     status_code: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _LockedInvoiceView:
+    """Projection minimale (id, statut, pdf_url) lue sous verrou de ligne."""
+
+    id: int
+    status: object
+    pdf_url: str | None
 
 
 def reload_invoice_graph_for_pdf(invoice_id: int, company_id: int) -> Invoice | None:
@@ -162,6 +187,24 @@ def sync_patient_billing_party_from_live(invoice: Invoice) -> None:
         return
     if invoice_billed_to_is_frozen(invoice):
         return
+    clinic_ref = str(getattr(bp, "external_ref", "") or "")
+    if clinic_ref.startswith("clinic_company:"):
+        # Parti auto de la clinique : le brouillon suit le nom et l'adresse courants.
+        # Un parti mappé à la main (autre external_ref) n'est pas réécrit.
+        from services.billing.billing_party_linker import (
+            get_or_create_billing_party_for_clinic_company,
+        )
+
+        try:
+            clinic_company_id = int(clinic_ref.split(":", 1)[1])
+        except ValueError:
+            return
+        get_or_create_billing_party_for_clinic_company(
+            company_id=int(invoice.company_id),
+            clinic_company_id=clinic_company_id,
+        )
+        db.session.refresh(bp)
+        return
     if getattr(bp, "type", None) != BillingPartyType.PATIENT:
         db.session.refresh(bp)
         return
@@ -234,31 +277,81 @@ def _delete_replaced_invoice_pdf(old_url: str | None, new_url: str | None) -> No
         )
 
 
+def lock_invoice_row_for_regeneration(
+    invoice_id: int, company_id: int
+) -> tuple[int, object, str | None] | None:
+    """Verrouille la ligne facture et renvoie ``(id, status, pdf_url)`` faisant autorité.
+
+    ``SELECT … FOR UPDATE`` sérialise deux régénérations concurrentes et attend
+    la fin d'un changement de statut en cours (envoi, encaissement) : le statut
+    relu après l'obtention du verrou est celui qui décide du refus.
+    """
+    row = db.session.execute(
+        select(Invoice.id, Invoice.status, Invoice.pdf_url)
+        .where(Invoice.id == invoice_id, Invoice.company_id == company_id)
+        .with_for_update()
+    ).first()
+    if row is None:
+        return None
+    return int(row[0]), row[1], row[2]
+
+
 class ForceRegenerateInvoicePdfUseCase:
-    """Opération unique : reconstruction forcée du PDF depuis la DB courante."""
+    """Opération unique : reconstruction forcée du PDF depuis la DB courante.
+
+    Brouillon uniquement. Une facture émise est refusée avant toute mutation.
+    """
 
     def execute(
         self, *, company_id: int, invoice_id: int
     ) -> ForceRegenerateInvoicePdfResult:
-        invoice = reload_invoice_graph_for_pdf(invoice_id, company_id)
-        if invoice is None:
+        # 1) Statut faisant autorité, sous verrou de ligne, AVANT toute écriture.
+        db.session.expire_all()
+        locked = lock_invoice_row_for_regeneration(invoice_id, company_id)
+        if locked is None:
+            db.session.rollback()
             return ForceRegenerateInvoicePdfResult(
                 ok=False,
                 error={"error": "Facture non trouvée"},
                 status_code=404,
             )
+        _locked_id, locked_status, locked_pdf_url = locked
+        locked_view = _LockedInvoiceView(
+            id=_locked_id, status=locked_status, pdf_url=locked_pdf_url
+        )
+        try:
+            assert_invoice_mutable(locked_view, "force_regenerate_invoice_pdf")
+        except IssuedInvoiceImmutableError as guard_err:
+            # Refus : aucune écriture n'a eu lieu ; on libère le verrou.
+            db.session.rollback()
+            return ForceRegenerateInvoicePdfResult(
+                ok=False,
+                previous_pdf_url=locked_pdf_url,
+                error=guard_err.to_error_payload(),
+                status_code=guard_err.status_code,
+            )
 
-        if not invoice_allows_line_editing(invoice):
+        invoice = reload_invoice_graph_for_pdf(invoice_id, company_id)
+        if invoice is None:
+            db.session.rollback()
+            return ForceRegenerateInvoicePdfResult(
+                ok=False,
+                error={"error": "Facture non trouvée"},
+                status_code=404,
+            )
+        # Défense en profondeur : l'objet rechargé doit lui aussi être un brouillon.
+        if invoice_is_issued(invoice):
+            db.session.rollback()
+            err = IssuedInvoiceImmutableError(
+                invoice_id=invoice.id,
+                status=getattr(invoice.status, "value", str(invoice.status)),
+                operation="force_regenerate_invoice_pdf",
+            )
             return ForceRegenerateInvoicePdfResult(
                 ok=False,
                 previous_pdf_url=invoice.pdf_url,
-                error={
-                    "error": (
-                        f"Impossible de régénérer le PDF: la facture est "
-                        f"{invoice.status.value} et ne peut plus être modifiée."
-                    )
-                },
-                status_code=400,
+                error=err.to_error_payload(),
+                status_code=err.status_code,
             )
 
         previous_pdf_url = invoice.pdf_url
@@ -297,8 +390,24 @@ class ForceRegenerateInvoicePdfUseCase:
         if pdf_result.ok and pdf_result.pdf_url:
             # Recharger l'identité après expire_all interne à generate_invoice_pdf.
             invoice = Invoice.query.get(invoice_id) or invoice
+            if invoice_is_issued(invoice):
+                # La facture a été émise pendant la génération : on ne remplace
+                # ni la référence ni le fichier original (aucune suppression).
+                db.session.rollback()
+                err = IssuedInvoiceImmutableError(
+                    invoice_id=invoice.id,
+                    status=getattr(invoice.status, "value", str(invoice.status)),
+                    operation="force_regenerate_invoice_pdf",
+                )
+                return ForceRegenerateInvoicePdfResult(
+                    ok=False,
+                    previous_pdf_url=previous_pdf_url,
+                    error=err.to_error_payload(),
+                    status_code=err.status_code,
+                )
             mark_pdf_ready(invoice, pdf_result.pdf_url)
             db.session.commit()
+            # Suppression de l'ancien fichier : chemin brouillon uniquement, après commit.
             _delete_replaced_invoice_pdf(previous_pdf_url, pdf_result.pdf_url)
             generated_at = None
             meta = normalize_invoice_meta_dict(invoice.meta)

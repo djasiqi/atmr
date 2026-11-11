@@ -94,6 +94,12 @@ jest.mock('../../../../../services/invoiceService', () => ({
     markPartnerInvoiceAsSent: jest.fn(),
   },
   formatCurrencyCHF: (n) => `${Number(n).toFixed(2)} CHF`,
+  invoiceIsNonPayableSpecimen: () => false,
+  canCorrectIssuedInvoice: (inv) => {
+    const s = String(inv?.status || '').toLowerCase();
+    return ['sent', 'partially_paid', 'paid', 'overdue'].includes(s);
+  },
+  canEditDraft: (inv) => String(inv?.status || '').toLowerCase() === 'draft',
 }));
 
 jest.mock('../../../../../utils/invoicePdfPrint', () => ({
@@ -124,7 +130,7 @@ async function expectSharedToolbar(invoiceNumber) {
       })
     ).toBeEnabled();
   });
-  expect(screen.getByRole('button', { name: 'Agrandir la zone d’aperçu PDF' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'Agrandir la zone d’aperçu PDF' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Plein écran dans le navigateur' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Générer et télécharger le PDF' })).toBeEnabled();
   expect(
@@ -132,7 +138,7 @@ async function expectSharedToolbar(invoiceNumber) {
   ).toBeEnabled();
   expect(screen.getByRole('document', { name: 'Aperçu facture' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Envoyer' })).toBeEnabled();
-  expect(screen.getByRole('button', { name: 'Marquer envoyée' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Marquer envoyée (papier, sans courriel)' })).toBeEnabled();
 }
 
 describe('éditeur de facture unique', () => {

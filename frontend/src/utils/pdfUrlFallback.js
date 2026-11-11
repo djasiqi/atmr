@@ -106,6 +106,18 @@ export function buildReminderPdfApiUrl(invoice, reminder) {
 }
 
 /**
+ * Chemin API JWT pour le PDF d'un avoir (pas d'URL /uploads publique).
+ *
+ * @param {{ id: number, company_id?: number }} invoice
+ * @param {{ id: number }} creditNote
+ * @returns {string|null}
+ */
+export function buildCreditNotePdfApiUrl(invoice, creditNote) {
+  if (!invoice?.id || !invoice?.company_id || !creditNote?.id) return null;
+  return `/invoices/companies/${invoice.company_id}/invoices/${invoice.id}/credit-notes/${creditNote.id}/pdf`;
+}
+
+/**
  * Construit le chemin API (relatif à apiClient.baseURL `/api/v1`) pour le PDF
  * d'une facture partenaire (Lot 0 SEC-06).
  *

@@ -247,8 +247,10 @@ def test_pdf_url_variants_et_regeneration():
     r, _, _ = _run(invoice=inv, executing=executing, settings=_settings())
     assert r.success is True
 
+    # Étape 22 : facture partenaire ÉMISE sans PDF original → aucune régénération
+    # (force_regenerate_pdf ignoré), refus 409 « PDF original absent », pas d'envoi.
     inv = _invoice(partnership, pdf_url=None, status=PartnerInvoiceStatus.SENT)
-    r, _, uc = _run(
+    r, send_email, uc = _run(
         invoice=inv,
         executing=executing,
         settings=_settings(),
@@ -256,8 +258,27 @@ def test_pdf_url_variants_et_regeneration():
         regenerate_url="/uploads/partners/new.pdf",
         path_exists=False,
     )
-    uc.partner_invoice_service.regenerate_pdf.assert_called_once_with(1)
+    assert r.success is False
+    assert r.status_code == 409
+    uc.partner_invoice_service.regenerate_pdf.assert_not_called()
+    send_email.assert_not_called()
+    assert inv.pdf_url is None
     assert inv.status == PartnerInvoiceStatus.SENT
+
+    # Facture partenaire ÉMISE avec PDF original présent : force_regenerate_pdf
+    # ignoré, l'original est envoyé tel quel.
+    inv = _invoice(partnership, status=PartnerInvoiceStatus.SENT)
+    r, send_email, uc = _run(
+        invoice=inv,
+        executing=executing,
+        settings=_settings(),
+        input_data=_input(force_regenerate_pdf=True, recipient_email="x@y.ch"),
+        regenerate_url="/uploads/partners/new.pdf",
+    )
+    assert r.success is True
+    uc.partner_invoice_service.regenerate_pdf.assert_not_called()
+    assert inv.pdf_url == "/uploads/partners/PI-001.pdf"
+    send_email.assert_called_once()
 
     inv = _invoice(partnership, pdf_url=None)
     r, _, _ = _run(

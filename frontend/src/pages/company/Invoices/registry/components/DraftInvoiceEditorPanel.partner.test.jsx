@@ -66,6 +66,7 @@ jest.mock('../../../../../services/invoiceService', () => ({
     updateDraftInvoiceLine: jest.fn(),
   },
   formatCurrencyCHF: (n) => `${Number(n).toFixed(2)} CHF`,
+  invoiceIsNonPayableSpecimen: () => false,
 }));
 
 jest.mock('../../../../../utils/invoicePdfPrint', () => ({

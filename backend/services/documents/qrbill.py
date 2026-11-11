@@ -85,6 +85,34 @@ def resolve_qr_bill_amount_decimal(
     return out
 
 
+def invoice_pdf_qr_amount(
+    invoice: Any, override_amount: Any | None = None
+) -> str | None:
+    """Montant QR du PDF de facture.
+
+    Sans acompte chauffeur imputé, le texte reste le total contractuel.
+    Avec acompte, le montant est le solde persisté, sans seconde soustraction.
+    ``None`` : ne pas émettre de QR (solde nul, avec ou sans acompte).
+    Un rappel transmet son propre montant et n'est pas recalculé ici.
+    """
+    from services.documents.driver_deposits import persisted_driver_deposits
+
+    if override_amount is None and persisted_driver_deposits(invoice):
+        due = resolve_qr_bill_amount_decimal(invoice, None)
+        if due <= Decimal("0.00"):
+            return None
+        return _format_amount_for_qrbill(due)
+    if override_amount is not None:
+        return str(override_amount)
+    balance = getattr(invoice, "balance_due", None)
+    try:
+        if balance is not None and Decimal(str(balance)) <= Decimal("0.00"):
+            return None
+    except (ArithmeticError, ValueError, TypeError):
+        pass
+    return str(getattr(invoice, "total_amount", ""))
+
+
 def warn_if_invoice_line_totals_mismatch_invoice_total(invoice: Any) -> None:
     """Journalise un avertissement si Σ total_with_vat des lignes ≠ total_amount."""
     if getattr(invoice, "id", None) is None:
@@ -287,12 +315,13 @@ class QRBillService:
                 )
                 return None
 
-            # Créer le QR-Bill avec la vraie bibliothèque qrbill
-            qr_amount = (
-                str(override_amount)
-                if override_amount is not None
-                else str(invoice.total_amount)
-            )
+            qr_amount = invoice_pdf_qr_amount(invoice, override_amount)
+            if qr_amount is None:
+                app_logger.info(
+                    "QR-Bill omis: facture %s soldée après acompte chauffeur",
+                    getattr(invoice, "invoice_number", "?"),
+                )
+                return None
             qr_bill = QRBill(
                 account=iban_to_use,
                 creditor=creditor_data,
@@ -344,7 +373,16 @@ class QRBillService:
                 return None
 
             warn_if_invoice_line_totals_mismatch_invoice_total(invoice)
+            from services.documents.driver_deposits import persisted_driver_deposits
+
+            deposits = persisted_driver_deposits(invoice)
             qr_dec = resolve_qr_bill_amount_decimal(invoice, None)
+            if deposits and qr_dec <= Decimal("0.00"):
+                app_logger.info(
+                    "QR-Bill omis: facture %s soldée après acompte chauffeur",
+                    getattr(invoice, "invoice_number", "?"),
+                )
+                return None
             qr_amount = _format_amount_for_qrbill(qr_dec)
             app_logger.debug(
                 "[QR-Bill] Montant encodé (CHF)=%s pour facture %s",

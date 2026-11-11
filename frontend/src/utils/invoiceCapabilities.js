@@ -6,11 +6,13 @@ import { INVOICE_CATALOG, resolveInvoiceResource } from './invoiceCatalog';
 import {
   canAddPayment,
   canCancelInvoice,
+  canCorrectIssuedInvoice,
   canDuplicateInvoice,
   canEditDraft,
   canGenerateReminder,
   canRegeneratePdf,
   canSendInvoice,
+  getInvoicePrimaryActionLabel,
   invoiceStatusLower,
 } from '../services/invoiceService';
 
@@ -27,25 +29,35 @@ export function getInvoiceCapabilities(invoice, companyId) {
   const amountPaid = Number(invoice?.amount_paid || 0);
 
   if (resource.type === INVOICE_CATALOG.PARTNER) {
-    const editable = ['draft', 'sent', 'partially_paid', 'overdue'].includes(status);
     return {
       resource,
-      canEdit: editable,
+      canEdit: draft,
+      /** Ouverture de l’éditeur unique (brouillon seulement pour partenaire). */
+      canOpenEditor: draft,
+      primaryActionLabel: draft ? 'Éditer la facture' : 'Voir la facture',
       canViewPdf: true,
       canSend: draft,
       canAddPayment: !paid && !cancelled,
       canGenerateReminder: false,
       canSendReminderEmail: false,
       canViewReminder: false,
-      canRegeneratePdf: !paid && !cancelled,
+      canRegeneratePdf: draft,
       canCancel: (draft || status === 'sent' || status === 'overdue') && amountPaid === 0,
+      /** Ancien duplicate — désactivé (annulait l'original). */
       canDuplicate: false,
+      /** Pas d'endpoint d'avoir sur partner_invoices. */
+      canCorrect: false,
+      correctionBlockedReason: null,
     };
   }
 
+  const canEdit = canEditDraft(invoice);
+  const canCorrect = canCorrectIssuedInvoice(invoice);
   return {
     resource,
-    canEdit: canEditDraft(invoice),
+    canEdit,
+    canOpenEditor: canEdit || canCorrect,
+    primaryActionLabel: getInvoicePrimaryActionLabel(invoice),
     canViewPdf: true,
     canSend: canSendInvoice(invoice),
     canAddPayment: canAddPayment(invoice),
@@ -56,5 +68,7 @@ export function getInvoiceCapabilities(invoice, companyId) {
     canRegeneratePdf: canRegeneratePdf(invoice),
     canCancel: canCancelInvoice(invoice),
     canDuplicate: canDuplicateInvoice(invoice),
+    canCorrect,
+    correctionBlockedReason: null,
   };
 }

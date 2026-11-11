@@ -443,14 +443,23 @@ class PartnerInvoiceService:
 
         Raises:
             ValueError: Si la facture partenaire n'existe pas
+            IssuedInvoiceImmutableError: Si la facture partenaire est émise
             Exception: Si la génération PDF échoue
         """
+        from application.invoices.issued_invoice_guard import (
+            assert_partner_invoice_mutable,
+        )
+
         # Forcer le rechargement depuis la DB pour avoir les données à jour
         db.session.expire_all()
 
         partner_invoice = PartnerInvoice.query.get(partner_invoice_id)
         if not partner_invoice:
             raise ValueError(f"Facture partenaire {partner_invoice_id} introuvable")
+
+        assert_partner_invoice_mutable(
+            partner_invoice, "regenerate_partner_invoice_pdf"
+        )
 
         # Récupérer les transferts associés à cette facture avec eager loading
         # pour avoir les données les plus récentes (booking, client, adresses)

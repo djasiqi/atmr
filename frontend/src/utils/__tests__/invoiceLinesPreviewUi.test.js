@@ -1,6 +1,7 @@
 import {
   compactInvoiceRoute,
   formatPreviewDayMonth,
+  presentCashPreview,
   presentInvoiceLinesPreview,
 } from '../invoiceLinesPreviewUi';
 
@@ -139,5 +140,112 @@ describe('invoiceLinesPreviewUi', () => {
     ]);
     expect(chain.rows.map((row) => row.isRoundTrip)).toEqual([false, false]);
     expect(chain.rows.map((row) => row.legLabel)).toEqual(['Étape 2', 'Retour']);
+  });
+});
+
+describe('presentCashPreview', () => {
+  it('affiche 45 / 20 / 25 sans changer le tarif', () => {
+    const shown = presentCashPreview({
+      estimated_subtotal_ht: '45.00',
+      collected_chf: '20.00',
+      remaining_due_chf: '25.00',
+      preview_lines: [
+        {
+          booking_id: 70,
+          amount_ht: 45,
+          description: 'Transport',
+          recognized_net_chf: '20.00',
+          remaining_due_chf: '25.00',
+          contractual_chf: '45.00',
+          cash_legs: [
+            {
+              booking_id: 70,
+              contractual_chf: '45.00',
+              recognized_net_chf: '20.00',
+              remaining_due_chf: '25.00',
+            },
+          ],
+        },
+      ],
+    });
+    const lines = presentInvoiceLinesPreview([
+      { booking_id: 70, amount_ht: 45, description: 'Transport' },
+    ]);
+    expect(shown.services).toBe('45.00 CHF');
+    expect(shown.collected).toBe('20.00 CHF');
+    expect(shown.remaining).toBe('25.00 CHF');
+    expect(shown.legs[0].contractual).toBe('45.00 CHF');
+    expect(lines.rows[0].amountHt).toBe(45);
+    expect(lines.totalHt).toBe(45);
+  });
+
+  it('affiche l aller-retour 90 / 20 / 70 sans répartir l acompte', () => {
+    const shown = presentCashPreview({
+      estimated_subtotal_ht: '90.00',
+      collected_chf: '20.00',
+      remaining_due_chf: '70.00',
+      preview_lines: [
+        {
+          booking_id: 71,
+          amount_ht: 90,
+          cash_legs: [
+            {
+              booking_id: 71,
+              contractual_chf: '45.00',
+              recognized_net_chf: '20.00',
+              remaining_due_chf: '25.00',
+            },
+            {
+              booking_id: 72,
+              contractual_chf: '45.00',
+              recognized_net_chf: '0.00',
+              remaining_due_chf: '45.00',
+            },
+          ],
+        },
+      ],
+    });
+    expect(shown.services).toBe('90.00 CHF');
+    expect(shown.collected).toBe('20.00 CHF');
+    expect(shown.remaining).toBe('70.00 CHF');
+    expect(shown.legs.map((leg) => leg.contractual)).toEqual(['45.00 CHF', '45.00 CHF']);
+    expect(shown.legs.map((leg) => leg.remaining)).toEqual(['25.00 CHF', '45.00 CHF']);
+  });
+
+  it('affiche un solde nul sans remplacer le tarif', () => {
+    const shown = presentCashPreview({
+      estimated_subtotal_ht: '45.00',
+      collected_chf: '45.00',
+      remaining_due_chf: '0.00',
+      preview_lines: [
+        {
+          booking_id: 73,
+          amount_ht: 45,
+          cash_legs: [
+            {
+              booking_id: 73,
+              contractual_chf: '45.00',
+              recognized_net_chf: '45.00',
+              remaining_due_chf: '0.00',
+            },
+          ],
+        },
+      ],
+    });
+    expect(shown.remaining).toBe('0.00 CHF');
+    expect(shown.services).toBe('45.00 CHF');
+    expect(shown.legs[0].contractual).toBe('45.00 CHF');
+  });
+
+  it('n invente pas de paiement si les champs sont absents', () => {
+    expect(presentCashPreview({ estimated_subtotal_ht: '45.00' })).toBeNull();
+    expect(presentCashPreview(null)).toBeNull();
+    expect(
+      presentCashPreview({
+        estimated_subtotal_ht: '45.00',
+        collected_chf: null,
+        remaining_due_chf: null,
+      })
+    ).toBeNull();
   });
 });

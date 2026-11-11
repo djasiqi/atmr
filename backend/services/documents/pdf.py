@@ -43,18 +43,18 @@ TEMPLATE_VERSION = "unified_v1"
 PERF_WARNING_ROWS_THRESHOLD = 40
 PERF_WARNING_MS_THRESHOLD = 1500
 
-# --- Zone destinataire compatible enveloppe C5 à fenêtre ---
-# Standard pratique: bloc adresse ~45mm haut, ~20mm du haut, ~20mm du bord gauche.
-# Ajuster X/Y si besoin (ex: DEST_ADDR_X_MM +6 à +12 pour décalage droite).
-# 85mm par défaut (fenêtres C5 parfois étroites) — augmenter si validation physique.
-# 18mm = décalage -7mm vs 25mm pour visibilité complète dans fenêtre C5 (ne pas toucher au reste).
-DEST_ADDR_X_MM = 18.0  # Position X depuis bord gauche (mm) — zone fenêtre C5
-DEST_ADDR_Y_MM = (
-    20.0  # Position Y depuis bord haut (mm) — converti en canvas (origine bas)
-)
-DEST_ADDR_MAX_WIDTH_MM = 85.0  # Largeur max wrapping (zone fenêtre C5, safe par défaut)
-DEST_ADDR_LINE_HEIGHT_MM = 4.0  # Interligne (mm)
-DEST_ADDR_ZONE_HEIGHT_MM = 45.0  # Hauteur zone fenêtre C5
+# --- Zone destinataire : enveloppe suisse C5/6 à fenêtre DROITE (A4) ---
+# Form B / fenêtre droite : ~105–120 mm du bord gauche, haut ~45 mm, largeur ~85 mm.
+# Calé pour rester dans une marge droite ≥ 20 mm : X=105 → fin à 190 mm.
+# Aucun label ni cadre dans la zone visible par la fenêtre.
+DEST_ADDR_X_MM = 105.0  # mm depuis le bord gauche de la page A4
+DEST_ADDR_Y_MM = 45.0  # mm depuis le bord haut (canvas : origine bas)
+DEST_ADDR_MAX_WIDTH_MM = 85.0
+DEST_ADDR_LINE_HEIGHT_MM = 4.0
+DEST_ADDR_ZONE_HEIGHT_MM = 45.0
+
+# Accent LIRIE (maquette facture V1) — usage limité (identité + NET À PAYER).
+COLOR_LIRIE_ACCENT = "#1F7A54"
 
 # Dimensions normées de la QR-facture suisse (Implementation Guidelines v2.3) :
 # récépissé 62 mm + section paiement 148 mm = 210 mm de large, 105 mm de haut,
@@ -250,6 +250,20 @@ def _make_qr_bill_flowable(drawing: Any) -> Any:
     return _QRBillBottomFlowable(drawing)
 
 
+def append_qr_bill_page(story: list[Any], drawing: Any | None) -> None:
+    """Ajoute le bulletin QR seulement s'il existe.
+
+    Sans dessin, aucune page ne contient uniquement « QR-Bill non disponible ».
+    """
+    if drawing is None:
+        return
+    from reportlab.platypus import NextPageTemplate, PageBreak
+
+    story.append(NextPageTemplate("QRBill"))
+    story.append(PageBreak())
+    story.append(_make_qr_bill_flowable(drawing))
+
+
 def _compute_c5_zone_canvas_coords(
     _page_w: float, page_h: float
 ) -> tuple[float, float, float, float]:
@@ -272,7 +286,7 @@ def _compute_c5_zone_canvas_coords(
 
 
 def _on_first_page_debug_envelope(canvas: Any, doc: Any) -> None:
-    """Dessine un rectangle guide « fenêtre enveloppe C5 » si PDF_DEBUG_ENVELOPE=1.
+    """Dessine un rectangle guide « fenêtre C5/6 droite » si PDF_DEBUG_ENVELOPE=1.
 
     DEV uniquement : rectangle rouge + repères mm pour vérifier le positionnement.
     Jamais activé par défaut en prod (opt-in explicite via env).
@@ -295,7 +309,10 @@ def _on_first_page_debug_envelope(canvas: Any, doc: Any) -> None:
     canvas.setFont("Helvetica", 6)
     canvas.setFillColor(colors.red)
     canvas.drawString(
-        x_pt, rect_bottom - 8, f"C5 window {DEST_ADDR_X_MM:.0f}x{DEST_ADDR_Y_MM:.0f}mm"
+        x_pt,
+        rect_bottom - 8,
+        f"C5/6 right window {DEST_ADDR_X_MM:.0f},{DEST_ADDR_Y_MM:.0f}mm "
+        f"{DEST_ADDR_MAX_WIDTH_MM:.0f}x{DEST_ADDR_ZONE_HEIGHT_MM:.0f}",
     )
     canvas.restoreState()
 
@@ -529,7 +546,18 @@ def _compute_invoice_first_page_bottom_margin_cm(
 
 
 def _flowable_height_pt(flowable: Any, avail_width_pt: float) -> float:
-    """Hauteur rendue d'un flowable ReportLab."""
+    """Hauteur rendue d'un flowable ReportLab.
+
+    ``KeepTogether.wrap`` exige un canvas déjà attaché. La réserve de pied de page
+    est mesurée avant la construction du document : on mesure alors le contenu.
+    """
+    from reportlab.platypus.flowables import KeepTogether
+
+    if isinstance(flowable, KeepTogether):
+        return sum(
+            _flowable_height_pt(child, avail_width_pt)
+            for child in getattr(flowable, "_content", []) or []
+        )
     _, h = flowable.wrap(avail_width_pt, 1_000_000)
     return float(h)
 
@@ -739,6 +767,15 @@ def _append_paginated_detail_table_with_tail(
     )
     first_table_avail = max(frame_first - pre_table_height_pt, 24.0)
     trailer_reserve = _sum_flowables_height_pt(post_table_flowables, usable_width_pt)
+    body_rows = list(s2_table._cellvalues[1:])
+    if body_rows:
+        full_h = _measure_table_chunk_pt(s2_table, body_rows, usable_width_pt)
+        # Quatre prestations + totaux tiennent sur la page 1 : ne pas isoler
+        # la dernière ligne dans un KeepTogether qui bascule trop tôt.
+        if full_h + trailer_reserve <= first_table_avail:
+            story.append(s2_table)
+            story.extend(post_table_flowables)
+            return
     body_table, tail_table = _paginate_table_no_orphan_totals(
         s2_table,
         avail_width_pt=usable_width_pt,
@@ -785,6 +822,11 @@ def _resolve_invoice_pdf_footer_message(
     append_iban_if_missing: bool = False,
 ) -> str:
     """Message HTML du pied de page légal (facture ou rappel)."""
+    meta = getattr(invoice, "meta", None)
+    if isinstance(meta, dict) and (
+        meta.get("specimen") is True or meta.get("payable") is False
+    ):
+        return "SPÉCIMEN — NON ÉMIS — NE PAS PAYER. Ce document n'est pas une facture payable."
     payment_terms_days = 10
     if billing_settings and billing_settings.payment_terms_days:
         payment_terms_days = int(billing_settings.payment_terms_days)
@@ -950,7 +992,7 @@ def _inset_swiss_qrbill_svg_text(
 
     raw = (
         svg_content.decode("utf-8")
-        if isinstance(svg_content, (bytes, bytearray))
+        if isinstance(svg_content, bytes | bytearray)
         else str(svg_content)
     )
     left_mm = (
@@ -2455,21 +2497,32 @@ def _build_recipient_block_flowable(
             for wline in wrapped:
                 visual_rows.append((wline, role))
 
-    if len(visual_rows) > max_lines:
-        visual_rows = visual_rows[:max_lines]
-        last_t, last_role = visual_rows[-1]
-        if last_t == "":
-            pass
-        elif len(last_t) + 1 > max_chars_fallback:
-            truncated = last_t[: max_chars_fallback - 1]
-            last_t = (
+    def _ellipsis_line(text: str) -> str:
+        if not text:
+            return text
+        if len(text) + 1 > max_chars_fallback:
+            truncated = text[: max_chars_fallback - 1]
+            return (
                 truncated.rsplit(" ", 1)[0] + "…"
                 if " " in truncated
                 else truncated + "…"
             )
-            visual_rows[-1] = (last_t, last_role)
-        else:
-            visual_rows[-1] = (last_t + "…", last_role)
+        return text + "…"
+
+    name_rows = [row for row in visual_rows if row[1] in {"name_primary", "name_co"}]
+    other_rows = [
+        row for row in visual_rows if row[1] not in {"name_primary", "name_co"}
+    ]
+    # Le nom légal du débiteur n'est jamais coupé. Seule l'adresse dépasse
+    # la hauteur de la fenêtre peut recevoir une ellipse.
+    room = max_lines - len(name_rows)
+    if room < 0 or not other_rows:
+        visual_rows = name_rows
+    elif len(other_rows) > room:
+        kept = other_rows[:room]
+        if kept and kept[-1][0]:
+            kept[-1] = (_ellipsis_line(kept[-1][0]), kept[-1][1])
+        visual_rows = name_rows + kept
 
     parts: list[str] = []
     for vl, role in visual_rows:
@@ -3430,6 +3483,39 @@ def _pdf_build_preconsolidated_ar_items(
     return pre, used_reservation_ids
 
 
+def _pdf_keep_one_row_per_prestation(
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Une ligne de facture = une ligne du tableau, comme l'aperçu HTML.
+
+    La fusion visuelle aller-retour reste réservée aux paires déjà marquées
+    dans la méta (traitées avant cet appel).
+    """
+    rows: list[dict[str, Any]] = []
+    for item in items:
+        item["is_round_trip"] = False
+        item["transport_type"] = "Aller"
+        pickup = str(item.get("pickup") or "")
+        dropoff = str(item.get("dropoff") or "")
+        line = item.get("line")
+        booking = item.get("booking")
+        if _is_booking_cancelled(booking):
+            item["transport_display"] = _get_cancellation_transport_display(booking)
+        elif (
+            line is not None
+            and getattr(line, "type", None) == InvoiceLineType.MATERIAL_DELIVERY
+        ):
+            desc = getattr(line, "description", None) or ""
+            item["transport_display"] = desc[:80] if desc else "Livraison"
+        elif pickup or dropoff:
+            item["transport_display"] = f"{pickup} → {dropoff}"
+        else:
+            item["transport_display"] = ""
+        item["earliest_scheduled"] = item.get("date")
+        rows.append(item)
+    return rows
+
+
 def _build_s2_table(
     invoice: "Invoice",
     font_name: str,
@@ -3451,11 +3537,8 @@ def _build_s2_table(
     Si ``available_width_pt`` est fourni (ex. ``doc.width``), la colonne description
     prend la largeur restante. Sinon, largeurs fixes de repli.
     """
-    from reportlab.lib import colors
-    from reportlab.lib.enums import TA_LEFT, TA_RIGHT
-    from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import cm
-    from reportlab.platypus import Paragraph, Table, TableStyle
+    from reportlab.platypus import Paragraph
     from application.invoices.invoice_line_customer_note import (
         collect_customer_visible_notes,
     )
@@ -3482,10 +3565,8 @@ def _build_s2_table(
         )
         or is_s2_invoice
     )
-    # Aligné InvoiceLivePreview : afficher « catalogue → net HT » sur chaque ligne si
-    # `original_line_total` est en méta, y compris lorsqu'une remise globale est enregistrée
-    # (l'encadré et le bloc totaux restent la synthèse).
-    suppress_line_discount_breakdown = False
+    # Réduction globale : uniquement dans les totaux. Le détail de ligne reste pour une remise par ligne.
+    suppress_line_discount_breakdown = _invoice_has_global_discount(invoice)
 
     enriched_by_line_id = _build_enriched_line_meta_by_line_id(invoice, bookings_by_id)
     pre_consolidated, used_ar_reservation_ids = _pdf_build_preconsolidated_ar_items(
@@ -3586,7 +3667,7 @@ def _build_s2_table(
                 "amount": line.line_total,
             }
         )
-    consolidated = _detect_and_group_round_trips(lines_with_bookings)
+    consolidated = _pdf_keep_one_row_per_prestation(lines_with_bookings)
     if pre_consolidated:
         consolidated = pre_consolidated + consolidated
     consolidated = _sort_consolidated_lines_for_s2(consolidated)
@@ -3594,37 +3675,16 @@ def _build_s2_table(
 
     # Client privé direct : pas tierce / pas S2 (comportement remise globale dans le détail).
     is_compact_private = not is_third_party_invoice and not is_s2_invoice
-    _thead_lead = round(FONT_TABLE_HEADER * 1.3)
-    _thead_ps = ParagraphStyle(
-        "InvoiceCompactThead",
-        fontName=font_name_bold,
-        fontSize=FONT_TABLE_HEADER,
-        leading=_thead_lead,
-        textColor=colors.black,
-        spaceBefore=0,
-        spaceAfter=0,
-    )
-    from services.documents.invoice_pdf_columns import (
-        HEADER_AMOUNT,
-        LINE_TIME_NONE,
-        detail_headers,
+    from services.documents.invoice_pdf_presentation import (
+        client_meta_line_html,
+        finalize_prestation_table,
+        prestation_header_row,
     )
 
-    _institution_headers = detail_headers(
-        show_date=show_date_column, line_time_mode=LINE_TIME_NONE
+    _header_row = prestation_header_row(
+        show_date=show_date_column, font_name_bold=font_name_bold
     )
-    _header_row = []
-    for _label in _institution_headers:
-        _align = TA_RIGHT if _label == HEADER_AMOUNT else TA_LEFT
-        _shown = f"<nobr>{_label}</nobr>" if _label == HEADER_AMOUNT else _label
-        _header_row.append(
-            Paragraph(
-                _shown,
-                ParagraphStyle(f"Th{_label}", parent=_thead_ps, alignment=_align),
-            )
-        )
-    if is_compact_private:
-        # Avec remise globale, l'aperçu HTML conserve les sous-lignes catalogue → net par ligne.
+    if is_compact_private and not _invoice_has_global_discount(invoice):
         suppress_line_discount_breakdown = False
     # Largeur utile texte colonne Description (retrait padding L/R — aligné TableStyle body).
     _s2_desc_hpad_pt = 7.5 + 3.0
@@ -3669,6 +3729,13 @@ def _build_s2_table(
         ):
             pn_raw = format_patient_display_name_nom_prenom(str(pn_raw))
         cat_disp, net_disp = _consolidated_row_catalog_net(item)
+        column_amount = net_disp
+        if (
+            suppress_line_discount_breakdown
+            and cat_disp is not None
+            and cat_disp > net_disp
+        ):
+            column_amount = cat_disp
         if suppress_line_discount_breakdown:
             cat_disp = None
         adj_notes = _collect_adjustment_notes_from_consolidated_item(item)
@@ -3702,7 +3769,7 @@ def _build_s2_table(
             )
             inner_html = f"{transport_html}{disc_suffix}{note_suffix}"
             amount_cell = _pdf_s2_amount_only_paragraph(
-                net_disp,
+                column_amount,
                 s2_main_style,
                 is_round_trip=False,
                 ht_column_plain=True,
@@ -3755,7 +3822,7 @@ def _build_s2_table(
                         f"{body_tr}&nbsp;{ar_suffix_html}{disc_suffix}{note_suffix}"
                     )
             amount_cell = _pdf_s2_amount_only_paragraph(
-                net_disp,
+                column_amount,
                 s2_main_style,
                 is_round_trip=False,
                 ht_column_plain=True,
@@ -3796,29 +3863,19 @@ def _build_s2_table(
                 )
                 inner_html = f"{body_tr}{disc_suffix}{note_suffix}"
             amount_cell = _pdf_s2_amount_only_paragraph(
-                net_disp,
+                column_amount,
                 s2_main_style,
                 is_round_trip=False,
                 ht_column_plain=True,
             )
         patient_prefix_html = ""
-        if is_compact_private:
-            if (
-                strategy_value == "s1_patient"
-                and invoice.client
-                and getattr(invoice.client, "is_institution", False)
-                and pn_raw
-            ):
-                patient_prefix_html = (
-                    f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : '
-                    f"{_xml_escape_for_paragraph(pn_raw)}</font><br/>"
-                )
-        elif pn_raw and str(pn_raw).strip() not in ("Patient",):
-            # Clinique S2 / tierce : ``InvoiceLivePreview`` `.lineClinicContext` (#475569, ~11px).
-            patient_prefix_html = (
-                f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : '
-                f"{_xml_escape_for_paragraph(pn_raw)}</font><br/>"
-            )
+        _pn_show = str(pn_raw or "").strip()
+        if (
+            _pn_show
+            and _pn_show not in ("Patient", "Client")
+            and not _pn_show.startswith("Client #")
+        ):
+            patient_prefix_html = f"{client_meta_line_html(pn_raw)}<br/>"
         desc_cell = Paragraph(f"{patient_prefix_html}{inner_html}", s2_main_style)
         if show_date_column:
             table_data.append(
@@ -3845,6 +3902,13 @@ def _build_s2_table(
                 ):
                     continue
                 cat_o, net_o = _line_catalog_vs_net_ht(line)
+                column_o = (
+                    cat_o
+                    if suppress_line_discount_breakdown
+                    and abs(cat_o - net_o) > _PDF_CATALOG_NET_EPS
+                    and cat_o > net_o
+                    else net_o
+                )
                 cat_show = cat_o if abs(cat_o - net_o) > _PDF_CATALOG_NET_EPS else None
                 if suppress_line_discount_breakdown:
                     cat_show = None
@@ -3875,7 +3939,7 @@ def _build_s2_table(
                 )
                 desc_cell = Paragraph(desc_html, s2_main_style)
                 amt_cell_o = _pdf_s2_amount_only_paragraph(
-                    net_o,
+                    column_o,
                     s2_main_style,
                     is_round_trip=False,
                     ht_column_plain=True,
@@ -3986,10 +4050,7 @@ def _build_s2_table(
                     pn_disp = format_patient_display_name_nom_prenom(
                         str(raw_pn).strip()
                     )
-                    orphan_pn_prefix = (
-                        f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : '
-                        f"{_xml_escape_for_paragraph(pn_disp)}</font><br/>"
-                    )
+                    orphan_pn_prefix = f"{client_meta_line_html(pn_disp)}<br/>"
             orphan_inner_html = (
                 f"{esc_d}{disc_or}{_pdf_customer_visible_note_suffix(orphan_notes)}"
             )
@@ -3997,7 +4058,9 @@ def _build_s2_table(
                 f"{orphan_pn_prefix}{orphan_inner_html}", s2_main_style
             )
             amt_cell_or = _pdf_s2_amount_only_paragraph(
-                net_or,
+                _initial_price_if_global(
+                    cat_or, net_or, use_initial=suppress_line_discount_breakdown
+                ),
                 s2_main_style,
                 is_round_trip=False,
                 ht_column_plain=True,
@@ -4009,96 +4072,14 @@ def _build_s2_table(
             else:
                 table_data.append([desc_cell, amt_cell_or])
 
-    # Largeurs : Date / Montant assez larges pour éviter coupures (nobr + police date réduite).
-    date_w = 2.95 * cm
-    amount_w = 2.75 * cm
-    if available_width_pt is not None and available_width_pt > 0:
-        if show_date_column:
-            desc_w = max(available_width_pt - date_w - amount_w, 1 * cm)
-            col_widths = [date_w, desc_w, amount_w]
-        else:
-            desc_w = max(available_width_pt - amount_w, 1 * cm)
-            col_widths = [desc_w, amount_w]
-    elif show_date_column:
-        desc_w = 12 * cm
-        col_widths = [date_w, desc_w, amount_w]
-    else:
-        desc_w = 13 * cm
-        col_widths = [desc_w, amount_w]
-
-    tbl = Table(table_data, colWidths=col_widths, repeatRows=1, splitInRow=0)
-    _hdr_bg = colors.HexColor("#f8fafc")
-    _row_sep = colors.HexColor("#f1f5f9")
-    # Aligné InvoiceLivePreview : th padding 8px 10px ; date / desc resserrés (.colDate + td).
-    _pad_tb_h = 6.0
-    _pad_tb_body = 6.0
-    _pad_lr = 7.5
-    _pad_date_r = 1.0
-    _pad_desc_l = 3.0
-    if show_date_column:
-        style_rules = [
-            ("BACKGROUND", (0, 0), (-1, 0), _hdr_bg),
-            ("ALIGN", (0, 0), (0, -1), "LEFT"),
-            ("ALIGN", (1, 0), (1, -1), "LEFT"),
-            ("ALIGN", (2, 0), (2, -1), "RIGHT"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING", (0, 0), (-1, 0), _pad_tb_h),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), _pad_tb_h),
-            ("LEFTPADDING", (0, 0), (0, 0), _pad_lr),
-            ("RIGHTPADDING", (0, 0), (0, 0), _pad_date_r),
-            ("LEFTPADDING", (1, 0), (1, 0), _pad_desc_l),
-            ("RIGHTPADDING", (1, 0), (1, 0), _pad_lr),
-            ("LEFTPADDING", (2, 0), (2, 0), _pad_lr),
-            ("RIGHTPADDING", (2, 0), (2, 0), _pad_lr),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.75, _row_sep),
-            ("FONTNAME", (0, 1), (-1, -1), font_name),
-            ("FONTSIZE", (0, 1), (-1, -1), FONT_BODY),
-            ("TEXTCOLOR", (0, 1), (-1, -1), colors.black),
-            ("FONTNAME", (0, 0), (-1, 0), font_name_bold),
-            ("FONTSIZE", (0, 0), (-1, 0), FONT_TABLE_HEADER),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
-            ("TOPPADDING", (0, 1), (-1, -1), _pad_tb_body),
-            ("BOTTOMPADDING", (0, 1), (-1, -1), _pad_tb_body),
-            ("LEFTPADDING", (0, 1), (0, -1), _pad_lr),
-            ("RIGHTPADDING", (0, 1), (0, -1), _pad_date_r),
-            ("LEFTPADDING", (1, 1), (1, -1), _pad_desc_l),
-            ("RIGHTPADDING", (1, 1), (1, -1), _pad_lr),
-            ("LEFTPADDING", (2, 1), (2, -1), _pad_lr),
-            ("RIGHTPADDING", (2, 1), (2, -1), _pad_lr),
-        ]
-    else:
-        style_rules = [
-            ("BACKGROUND", (0, 0), (-1, 0), _hdr_bg),
-            ("ALIGN", (0, 0), (0, -1), "LEFT"),
-            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING", (0, 0), (-1, 0), _pad_tb_h),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), _pad_tb_h),
-            ("LEFTPADDING", (0, 0), (0, 0), _pad_desc_l),
-            ("RIGHTPADDING", (0, 0), (0, 0), _pad_lr),
-            ("LEFTPADDING", (1, 0), (1, 0), _pad_lr),
-            ("RIGHTPADDING", (1, 0), (1, 0), _pad_lr),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.75, _row_sep),
-            ("FONTNAME", (0, 1), (-1, -1), font_name),
-            ("FONTSIZE", (0, 1), (-1, -1), FONT_BODY),
-            ("TEXTCOLOR", (0, 1), (-1, -1), colors.black),
-            ("FONTNAME", (0, 0), (-1, 0), font_name_bold),
-            ("FONTSIZE", (0, 0), (-1, 0), FONT_TABLE_HEADER),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
-            ("TOPPADDING", (0, 1), (-1, -1), _pad_tb_body),
-            ("BOTTOMPADDING", (0, 1), (-1, -1), _pad_tb_body),
-            ("LEFTPADDING", (0, 1), (0, -1), _pad_desc_l),
-            ("RIGHTPADDING", (0, 1), (0, -1), _pad_lr),
-            ("LEFTPADDING", (1, 1), (1, -1), _pad_lr),
-            ("RIGHTPADDING", (1, 1), (1, -1), _pad_lr),
-        ]
-    n_rows = len(table_data)
-    if n_rows > LEVEL_THRESHOLD:
-        for r in range(1, n_rows - 1):
-            style_rules.append(("LINEBELOW", (0, r), (-1, r), 0.35, _row_sep))
-    for r in s2_patient_separator_after_rows:
-        style_rules.append(("LINEBELOW", (0, r), (-1, r), 0.15, colors.lightgrey))
-    tbl.setStyle(TableStyle(style_rules))
+    tbl = finalize_prestation_table(
+        table_data,
+        available_width_pt=available_width_pt,
+        show_date_column=show_date_column,
+        font_name=font_name,
+        font_name_bold=font_name_bold,
+        patient_separator_after_rows=s2_patient_separator_after_rows,
+    )
     return (tbl, consolidated)
 
 
@@ -4361,6 +4342,22 @@ def _pdf_detail_table_show_date_column(
     return False
 
 
+def _invoice_has_global_discount(invoice: Any) -> bool:
+    """Vrai si la remise est globale : elle se lit dans les totaux, pas sous chaque ligne."""
+    meta = getattr(invoice, "meta", None)
+    if not isinstance(meta, dict):
+        return False
+    discount = meta.get("global_discount")
+    if not isinstance(discount, dict):
+        return False
+    try:
+        percent = float(discount.get("percent") or 0)
+        amount = float(discount.get("amount_ht") or 0)
+    except (TypeError, ValueError):
+        return False
+    return percent > 0 or amount > 0.005
+
+
 def _invoice_preview_chf_amount(amount: float) -> str:
     """Comme le frontend ``formatCurrencyCHF`` : « 67.50 CHF »."""
     return f"{float(amount):.2f} CHF"
@@ -4397,6 +4394,17 @@ def _custom_line_include_in_s2_detail_table(line: Any) -> bool:
 # Aligné sur application/invoices/edit_draft_invoice._META_ORIGINAL_LINE_TOTAL
 _META_ORIGINAL_LINE_TOTAL_HT = "original_line_total"
 _PDF_CATALOG_NET_EPS = Decimal("0.02")
+
+
+def _initial_price_if_global(
+    catalog: Decimal, net: Decimal, *, use_initial: bool
+) -> Decimal:
+    """Colonne Montant : prix initial quand la remise est globale."""
+    net_d = Decimal(str(net))
+    cat_d = Decimal(str(catalog))
+    if use_initial and cat_d > net_d and abs(cat_d - net_d) > _PDF_CATALOG_NET_EPS:
+        return cat_d
+    return net_d
 
 
 def _decimal_from_meta_original(raw: Any) -> Decimal | None:
@@ -4459,24 +4467,60 @@ def _consolidated_row_catalog_net(
     return (cat_sum, out_net)
 
 
+def _line_discount_caption(catalog: Decimal, net: Decimal) -> str:
+    """Même phrase que ``lineDiscountCaption`` (aperçu HTML) : %, prix initial, déduction.
+
+    La colonne Montant reste le net. Patient, institution et partenaire partagent ce texte.
+    """
+    cat = Decimal(catalog).quantize(Decimal("0.01"))
+    net_d = Decimal(net).quantize(Decimal("0.01"))
+    deduction = (cat - net_d).quantize(Decimal("0.01"))
+    if deduction <= 0 or cat <= 0:
+        return ""
+    percent = (deduction / cat * Decimal("100")).quantize(Decimal("0.01"))
+    percent_label = f"{percent:.2f}".rstrip("0").rstrip(".")
+    return (
+        f"Rabais {percent_label} % · prix initial {cat:.2f} CHF · -{deduction:.2f} CHF"
+    )
+
+
+def _pdf_discount_caption_html(caption: str) -> str:
+    """Le montant et « CHF » restent sur la même ligne (espace insécable visuel via nobr)."""
+    import re
+
+    escaped = _xml_escape_for_paragraph(caption)
+    escaped = re.sub(
+        r"(\d+(?:\.\d+)? %)",
+        lambda match: f"<nobr>{match.group(1)}</nobr>",
+        escaped,
+    )
+    return re.sub(
+        r"(-?\d+\.\d{2} CHF)",
+        lambda match: f"<nobr>{match.group(1)}</nobr>",
+        escaped,
+    )
+
+
 def _pdf_s2_per_line_discount_suffix_html(
     catalog: Decimal,
     net: Decimal,
     *,
     compact_private_sub: bool = False,
 ) -> str:
-    """Sous le libellé transport / prestation : catalogue → net HT (colonne Montant = montant final seul).
+    """Sous le libellé transport / prestation. Colonne Montant = montant final seul.
 
     ``compact_private_sub`` : style ``InvoiceLivePreview`` `.lineSub` (≈12px, ``#64748b``).
     """
-    esc_cat = _xml_escape_for_paragraph(f"{Decimal(catalog):.2f}")
-    esc_net = _xml_escape_for_paragraph(f"{Decimal(net):.2f}")
+    caption = _line_discount_caption(catalog, net)
+    if not caption:
+        return ""
+    escaped = _pdf_discount_caption_html(caption)
     if compact_private_sub:
         return (
             f'<br/><font size="{FONT_SECONDARY}" color="{COLOR_MUTED_PDF}">'
-            f"{esc_cat} → {esc_net} CHF HT</font>"
+            f"{escaped}</font>"
         )
-    return f'<br/><font size="7" color="#6b7280">{esc_cat} → {esc_net} CHF HT</font>'
+    return f'<br/><font size="7" color="#6b7280">{escaped}</font>'
 
 
 def _compact_private_date_paragraph(date_str: str, font_name: str) -> Any:
@@ -4587,6 +4631,64 @@ def _format_global_discount_pdf_label(pct_gd: float) -> str:
     return f"Réduction globale ({pct_gd:g} %)"
 
 
+def _preview_global_discount_footer_rows(
+    gd_meta: dict[str, Any],
+    *,
+    subtotal: float,
+    total: float,
+    total_label: str,
+    vat_is_applicable: bool,
+    vat_label_display: str,
+    vat_total: float,
+) -> list[list[str]] | None:
+    """Même pied que InvoiceLivePreview : 303.00 CHF, − 30.30 CHF, puis le net.
+
+    Le sous-total « avant » vient de ``meta.global_discount.subtotal_before_ht``.
+    La somme des ``line_total`` est déjà nette et ne doit pas remplacer ce montant.
+    La note reste dans l'encadré, pas dans ce tableau.
+    """
+    disc_ht = abs(float(gd_meta.get("amount_ht") or 0))
+    gross_ht = float(gd_meta.get("subtotal_before_ht") or 0)
+    if disc_ht <= 0.005 or gross_ht <= 0.005:
+        return None
+    pct_gd = float(gd_meta.get("percent") or 0)
+    rows = [
+        [
+            "Sous-total HT (avant réduction globale)",
+            _invoice_preview_chf_amount(gross_ht),
+        ],
+        [
+            _format_global_discount_pdf_label(pct_gd),
+            f"\u2212 {_invoice_preview_chf_amount(disc_ht)}",
+        ],
+    ]
+    if vat_is_applicable:
+        rows.extend(
+            [
+                [
+                    "Total HT après réduction globale",
+                    _invoice_preview_chf_amount(subtotal),
+                ],
+                [
+                    f"{vat_label_display} :",
+                    _invoice_preview_chf_amount(vat_total),
+                ],
+                [total_label, _invoice_preview_chf_amount(total)],
+            ]
+        )
+    else:
+        rows.extend(
+            [
+                [
+                    "Total HT après réduction globale",
+                    _invoice_preview_chf_amount(subtotal),
+                ],
+                [total_label, _invoice_preview_chf_amount(total)],
+            ]
+        )
+    return rows
+
+
 def _sum_positive_billed_lines_excluding_global_discount(
     invoice: "Invoice",
 ) -> float | None:
@@ -4609,6 +4711,225 @@ def _sum_positive_billed_lines_excluding_global_discount(
     return None
 
 
+def _format_deposit_paid_at(value: Any) -> str:
+    """Date/heure d'encaissement serveur (compat. tests / libellés courts)."""
+    if value is None:
+        return "—"
+    try:
+        if getattr(value, "tzinfo", None) is not None:
+            local = value.astimezone()
+        else:
+            local = value
+        return local.strftime("%d.%m.%Y %H:%M")
+    except Exception:
+        return "—"
+
+
+def _deposit_paid_local(value: Any) -> Any | None:
+    if value is None:
+        return None
+    try:
+        if getattr(value, "tzinfo", None) is not None:
+            return value.astimezone()
+        return value
+    except Exception:
+        return None
+
+
+def _format_deposit_paid_date(value: Any) -> str:
+    local = _deposit_paid_local(value)
+    if local is None:
+        return "—"
+    try:
+        return local.strftime("%d.%m.%Y")
+    except Exception:
+        return "—"
+
+
+def _format_deposit_paid_time(value: Any) -> str | None:
+    local = _deposit_paid_local(value)
+    if local is None:
+        return None
+    try:
+        return local.strftime("%H:%M")
+    except Exception:
+        return None
+
+
+def _deposit_payment_ref_label(line: Any) -> str:
+    payment_id = getattr(line, "payment_id", None) or 0
+    if payment_id:
+        return f"paiement {payment_id}"
+    collection_id = getattr(line, "cash_collection_id", None)
+    if collection_id:
+        return f"collecte {collection_id}"
+    return "acompte"
+
+
+def _driver_deposit_balance(invoice: Any, collected: Decimal) -> Decimal:
+    raw_balance = getattr(invoice, "balance_due", None)
+    try:
+        if raw_balance is None:
+            total = Decimal(str(getattr(invoice, "total_amount", 0) or 0))
+            balance = (total - collected).quantize(Decimal("0.01"))
+        else:
+            balance = Decimal(str(raw_balance)).quantize(Decimal("0.01"))
+    except (ArithmeticError, ValueError, TypeError):
+        balance = Decimal("0.00")
+    if balance < 0:
+        balance = Decimal("0.00")
+    return balance
+
+
+def _compact_deposit_line_text(line: Any) -> str:
+    """Une ligne secondaire : date · mode · trajet/réf : montant."""
+    date_txt = _format_deposit_paid_date(getattr(line, "paid_at", None))
+    mode = str(getattr(line, "mode_label", None) or "Paiement").strip() or "Paiement"
+    booking_id = getattr(line, "booking_id", None)
+    if booking_id is not None:
+        ref = f"Trajet {int(booking_id)}"
+    else:
+        ref = _deposit_payment_ref_label(line)
+    amount = getattr(line, "amount_chf", None)
+    try:
+        amount_txt = f"{Decimal(str(amount)):.2f} CHF"
+    except (ArithmeticError, ValueError, TypeError):
+        amount_txt = "0.00 CHF"
+    return f"{date_txt} · {mode} · {ref} : {amount_txt}"
+
+
+def _build_driver_deposits_detail_table(
+    deposit_lines: list[Any],
+    *,
+    font_name: str,
+    font_name_bold: str,
+) -> Any:
+    """Détail compact des acomptes (sous le récap), sans grand tableau autonome."""
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, Table, TableStyle
+
+    page_w = (21.0 - INVOICE_PAGE_LEFT_MARGIN_CM - INVOICE_PAGE_RIGHT_MARGIN_CM) * cm
+    title = Paragraph(
+        "<b>Détail des acomptes déduits</b>"
+        f'&nbsp;&nbsp;<font size="{FONT_SECONDARY}" color="{COLOR_MUTED_PDF}">'
+        f"{len(deposit_lines)} encaissement"
+        f"{'s' if len(deposit_lines) != 1 else ''}</font>",
+        ParagraphStyle(
+            "DepositTitleCompact",
+            fontName=font_name_bold,
+            fontSize=FONT_BODY,
+            leading=FONT_BODY + 3,
+            textColor=colors.black,
+            spaceAfter=2,
+        ),
+    )
+    line_style = ParagraphStyle(
+        "DepositCompactLine",
+        fontName=font_name,
+        fontSize=FONT_SECONDARY,
+        leading=FONT_SECONDARY + 3,
+        textColor=colors.HexColor(COLOR_MUTED_PDF),
+        spaceBefore=1,
+        spaceAfter=1,
+    )
+    rows: list[list[Any]] = [[title]]
+    for line in deposit_lines:
+        rows.append(
+            [
+                Paragraph(
+                    _xml_escape_for_paragraph(_compact_deposit_line_text(line)),
+                    line_style,
+                )
+            ]
+        )
+    table = Table(rows, colWidths=[page_w])
+    table.hAlign = "LEFT"
+    table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 1),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                ("LINEABOVE", (0, 0), (-1, 0), 0.4, colors.HexColor("#e2e8f0")),
+                ("TOPPADDING", (0, 0), (-1, 0), 8),
+            ]
+        )
+    )
+    return table
+
+
+def _with_driver_deposit_summary_rows(
+    invoice: Any,
+) -> list[list[Any]]:
+    """Acomptes (amount_paid serveur) + NET À PAYER (balance_due serveur)."""
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import Paragraph
+
+    try:
+        collected = Decimal(str(getattr(invoice, "amount_paid", 0) or 0)).quantize(
+            Decimal("0.01")
+        )
+    except (ArithmeticError, ValueError, TypeError):
+        collected = Decimal("0.00")
+    balance = _driver_deposit_balance(invoice, collected)
+    rows: list[list[Any]] = [
+        ["Acomptes déjà encaissés", f"−{collected:.2f} CHF"],
+    ]
+    net_label = Paragraph(
+        f'<font color="{COLOR_LIRIE_ACCENT}"><b>NET À PAYER</b></font>',
+        ParagraphStyle(
+            "NetAPayerLabel",
+            fontSize=FONT_TOTAL,
+            leading=FONT_TOTAL + 2,
+            textColor=colors.HexColor(COLOR_LIRIE_ACCENT),
+        ),
+    )
+    net_amount = Paragraph(
+        f'<font color="{COLOR_LIRIE_ACCENT}"><b>{balance:.2f} CHF</b></font>',
+        ParagraphStyle(
+            "NetAPayerAmount",
+            fontSize=FONT_TOTAL,
+            leading=FONT_TOTAL + 2,
+            alignment=2,
+            textColor=colors.HexColor(COLOR_LIRIE_ACCENT),
+        ),
+    )
+    rows.append([net_label, net_amount])
+    return rows
+
+
+def _with_driver_deposit_rows(
+    total_data: list[list[Any]], invoice: Any
+) -> list[list[Any]]:
+    """Compat. : réservé aux appels qui n'utilisent plus le détail concaténé.
+
+    Le détail est rendu via ``_build_driver_deposits_detail_table``.
+    """
+    from services.documents.driver_deposits import persisted_driver_deposit_lines
+
+    if not persisted_driver_deposit_lines(invoice):
+        try:
+            paid = Decimal(str(getattr(invoice, "amount_paid", 0) or 0))
+        except (ArithmeticError, ValueError, TypeError):
+            paid = Decimal("0.00")
+        if paid <= 0:
+            return total_data
+    return list(total_data) + _with_driver_deposit_summary_rows(invoice)
+
+
+def _extend_totals_flowables(target: list[Any], built: Any) -> None:
+    """``_build_totals_table`` peut renvoyer une Table ou une liste de flowables."""
+    if isinstance(built, list):
+        target.extend(built)
+    else:
+        target.append(built)
+
+
 def _build_totals_table(
     invoice: "Invoice",
     is_s2: bool,
@@ -4621,6 +4942,7 @@ def _build_totals_table(
     reminder_fee: Decimal | None = None,
     reminder_total_due: Decimal | None = None,
     reminder_principal: Decimal | float | None = None,
+    grand_total_label: str | None = None,
 ) -> Any:
     """Construit le tableau des totaux (sous-total, TVA, total).
 
@@ -4672,7 +4994,7 @@ def _build_totals_table(
         reminder_fee_float = 0.0
         principal_float = subtotal
 
-    total_label = "TOTAL À FACTURER :" if is_s2 else "TOTAL :"
+    total_label = grand_total_label or ("TOTAL À FACTURER :")
     total_amt = _invoice_preview_chf_amount(final_total)
 
     reminder_fee_label = "Frais de rappel :"
@@ -4709,63 +5031,21 @@ def _build_totals_table(
         col_widths = list(_tot_col_widths)
     elif template == "detailed":
         if is_third_party:
-            if gd_meta is not None and not is_reminder:
-                _detail_sum = _sum_positive_billed_lines_excluding_global_discount(
-                    invoice
+            preview_rows = (
+                _preview_global_discount_footer_rows(
+                    gd_meta,
+                    subtotal=subtotal,
+                    total=total,
+                    total_label=total_label,
+                    vat_is_applicable=vat_is_applicable,
+                    vat_label_display=vat_label_display,
+                    vat_total=vat_total,
                 )
-                gross_ht = (
-                    _detail_sum
-                    if _detail_sum is not None
-                    else float(gd_meta.get("subtotal_before_ht", subtotal))
-                )
-                disc_ht = float(gd_meta.get("amount_ht", 0))
-                pct_gd = float(gd_meta.get("percent", 0))
-                note_gd = str(gd_meta.get("note") or "").strip()
-                disc_label = _format_global_discount_pdf_label(pct_gd)
-                total_data = [
-                    [
-                        "Sous-total HT (avant réduction globale)",
-                        _invoice_preview_chf_amount(gross_ht),
-                    ],
-                    [disc_label, _format_chf_discount_pdf(disc_ht)],
-                ]
-                if note_gd:
-                    total_data.append(
-                        [_pdf_note_global_discount_for_totals_table(note_gd), ""]
-                    )
-                    totals_extra_style_rules.extend(
-                        [
-                            ("SPAN", (0, 2), (1, 2)),
-                            ("ALIGN", (0, 2), (1, 2), "LEFT"),
-                            ("FONTSIZE", (0, 2), (1, 2), 8),
-                            ("TEXTCOLOR", (0, 2), (1, 2), colors.HexColor("#4b5563")),
-                            ("FONTNAME", (0, 2), (1, 2), font_name),
-                        ]
-                    )
-                if vat_is_applicable:
-                    total_data.extend(
-                        [
-                            [
-                                "Total HT après réduction globale",
-                                _invoice_preview_chf_amount(subtotal),
-                            ],
-                            [
-                                f"{vat_label_display} :",
-                                _invoice_preview_chf_amount(vat_total),
-                            ],
-                            [total_label, _invoice_preview_chf_amount(total)],
-                        ]
-                    )
-                else:
-                    total_data.extend(
-                        [
-                            [
-                                "Total HT après réduction globale",
-                                _invoice_preview_chf_amount(subtotal),
-                            ],
-                            [total_label, _invoice_preview_chf_amount(total)],
-                        ]
-                    )
+                if gd_meta is not None and not is_reminder
+                else None
+            )
+            if preview_rows is not None:
+                total_data = preview_rows
             elif vat_is_applicable:
                 total_data = [
                     ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
@@ -4789,23 +5069,21 @@ def _build_totals_table(
                 ]
             col_widths = list(_tot_col_widths)
         else:
-            if gd_meta is not None and not is_reminder:
-                # Aligné InvoiceLivePreview : encadré au-dessus du tableau des totaux ;
-                # pied = sous-total HT et TOTAL (nets après remise globale).
-                if vat_is_applicable:
-                    total_data = [
-                        ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
-                        [
-                            f"{vat_label_display} :",
-                            _invoice_preview_chf_amount(vat_total),
-                        ],
-                        [total_label, _invoice_preview_chf_amount(total)],
-                    ]
-                else:
-                    total_data = [
-                        ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
-                        [total_label, _invoice_preview_chf_amount(total)],
-                    ]
+            preview_rows = (
+                _preview_global_discount_footer_rows(
+                    gd_meta,
+                    subtotal=subtotal,
+                    total=total,
+                    total_label=total_label,
+                    vat_is_applicable=vat_is_applicable,
+                    vat_label_display=vat_label_display,
+                    vat_total=vat_total,
+                )
+                if gd_meta is not None and not is_reminder
+                else None
+            )
+            if preview_rows is not None:
+                total_data = preview_rows
             elif vat_is_applicable:
                 total_data = [
                     ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
@@ -4823,67 +5101,21 @@ def _build_totals_table(
                 ]
             col_widths = list(_tot_col_widths)
     elif is_third_party:
-        if gd_meta is not None and not is_reminder:
-            _detail_sum = _sum_positive_billed_lines_excluding_global_discount(invoice)
-            gross_ht = (
-                _detail_sum
-                if _detail_sum is not None
-                else float(gd_meta.get("subtotal_before_ht", subtotal))
+        preview_rows = (
+            _preview_global_discount_footer_rows(
+                gd_meta,
+                subtotal=subtotal,
+                total=total,
+                total_label=total_label,
+                vat_is_applicable=vat_is_applicable,
+                vat_label_display=vat_label_display,
+                vat_total=vat_total,
             )
-            disc_ht = float(gd_meta.get("amount_ht", 0))
-            pct_gd = float(gd_meta.get("percent", 0))
-            note_gd = str(gd_meta.get("note") or "").strip()
-            disc_label = _format_global_discount_pdf_label(pct_gd)
-            total_data = [
-                [
-                    "Sous-total HT (avant réduction globale)",
-                    _invoice_preview_chf_amount(gross_ht),
-                ],
-                [disc_label, _format_chf_discount_pdf(disc_ht)],
-            ]
-            if note_gd:
-                total_data.append(
-                    [_pdf_note_global_discount_for_totals_table(note_gd), ""]
-                )
-                _note_row = len(total_data) - 1
-                totals_extra_style_rules.extend(
-                    [
-                        ("SPAN", (0, _note_row), (1, _note_row)),
-                        ("ALIGN", (0, _note_row), (1, _note_row), "LEFT"),
-                        ("FONTSIZE", (0, _note_row), (1, _note_row), 8),
-                        (
-                            "TEXTCOLOR",
-                            (0, _note_row),
-                            (1, _note_row),
-                            colors.HexColor("#4b5563"),
-                        ),
-                        ("FONTNAME", (0, _note_row), (1, _note_row), font_name),
-                    ]
-                )
-            if vat_is_applicable:
-                total_data.extend(
-                    [
-                        [
-                            "Total HT après réduction globale",
-                            _invoice_preview_chf_amount(subtotal),
-                        ],
-                        [
-                            f"{vat_label_display} :",
-                            _invoice_preview_chf_amount(vat_total),
-                        ],
-                        [total_label, _invoice_preview_chf_amount(total)],
-                    ]
-                )
-            else:
-                total_data.extend(
-                    [
-                        [
-                            "Total HT après réduction globale",
-                            _invoice_preview_chf_amount(subtotal),
-                        ],
-                        [total_label, _invoice_preview_chf_amount(total)],
-                    ]
-                )
+            if gd_meta is not None and not is_reminder
+            else None
+        )
+        if preview_rows is not None:
+            total_data = preview_rows
         elif vat_is_applicable:
             total_data = [
                 ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
@@ -4904,21 +5136,21 @@ def _build_totals_table(
             ]
         col_widths = list(_tot_col_widths)
     else:
-        if gd_meta is not None and not is_reminder:
-            if vat_is_applicable:
-                total_data = [
-                    ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
-                    [
-                        f"{vat_label_display} :",
-                        _invoice_preview_chf_amount(vat_total),
-                    ],
-                    [total_label, _invoice_preview_chf_amount(total)],
-                ]
-            else:
-                total_data = [
-                    ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
-                    [total_label, _invoice_preview_chf_amount(total)],
-                ]
+        preview_rows = (
+            _preview_global_discount_footer_rows(
+                gd_meta,
+                subtotal=subtotal,
+                total=total,
+                total_label=total_label,
+                vat_is_applicable=vat_is_applicable,
+                vat_label_display=vat_label_display,
+                vat_total=vat_total,
+            )
+            if gd_meta is not None and not is_reminder
+            else None
+        )
+        if preview_rows is not None:
+            total_data = preview_rows
         elif vat_is_applicable:
             total_data = [
                 ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
@@ -4932,6 +5164,39 @@ def _build_totals_table(
                 [total_label, _invoice_preview_chf_amount(total)],
             ]
         col_widths = list(_tot_col_widths)
+
+    from services.documents.driver_deposits import persisted_invoice_payment_lines
+
+    try:
+        amount_paid = Decimal(str(getattr(invoice, "amount_paid", 0) or 0)).quantize(
+            Decimal("0.01")
+        )
+    except (ArithmeticError, ValueError, TypeError):
+        amount_paid = Decimal("0.00")
+    # Détail / acomptes seulement si le solde serveur reflète des paiements
+    # (évite d'afficher des paiements orphelins non imputés).
+    deposit_lines = (
+        []
+        if is_reminder or amount_paid <= 0
+        else persisted_invoice_payment_lines(invoice)
+    )
+    balance = _driver_deposit_balance(invoice, amount_paid)
+    # NET À PAYER seulement s'il reste un solde après acompte.
+    # Un solde nul n'est pas « à payer » : Payée si des règlements couvrent
+    # la créance, Solde nul seul si elle a été éteinte autrement (avoir).
+    show_acomptes = (not is_reminder) and amount_paid > 0
+    settled = (not is_reminder) and balance <= 0
+    if not is_reminder:
+        settlement_rows = _with_driver_deposit_summary_rows(invoice)
+        # Avec acompte : acomptes + NET À PAYER (0.00 si la facture est soldée).
+        # Sans acompte : pas de NET À PAYER, le total facturé suffit.
+        if amount_paid > 0:
+            total_data = list(total_data) + settlement_rows
+        else:
+            total_data = list(total_data)
+        if settled:
+            caption = "Payée. Solde nul." if amount_paid > 0 else "Solde nul."
+            total_data.append([caption, ""])
 
     total_table = Table(total_data, colWidths=col_widths)
     # Aligner la table des totaux sur le bord droit du frame pour que
@@ -4957,12 +5222,11 @@ def _build_totals_table(
         ("TOPPADDING", (0, 0), (-1, -1), 6),
     ]
     style_rules.extend(totals_extra_style_rules)
+    # Ligne NET À PAYER (ou Total TTC si pas d'acomptes) : trait + emphase.
     style_rules.append(
         ("LINEABOVE", (0, -1), (-1, -1), 0.5, colors.HexColor("#e2e8f0"))
     )
     style_rules.append(("TOPPADDING", (0, -1), (-1, -1), 8))
-    # Aligner strictement à droite la dernière ligne (TOTAL À FACTURER)
-    # pour caler le dernier chiffre sur l'axe X de la colonne montant.
     if is_s2:
         style_rules.extend(
             [
@@ -4970,7 +5234,7 @@ def _build_totals_table(
                 ("LEFTPADDING", (amount_col_idx, -1), (amount_col_idx, -1), 0),
             ]
         )
-    # Lignes intermédiaires corps ; dernière ligne (TOTAL) en gras.
+    # Corps normal ; dernière ligne (NET ou total) en gras / taille totale.
     if len(total_data) > 1:
         style_rules.extend(
             [
@@ -4983,8 +5247,121 @@ def _build_totals_table(
     else:
         style_rules.append(("FONTNAME", (0, 0), (-1, -1), font_name_bold))
         style_rules.append(("FONTSIZE", (0, 0), (-1, -1), FONT_TOTAL))
+    # Ligne « Acomptes déjà encaissés » juste avant le NET.
+    if show_acomptes and len(total_data) >= 2:
+        # Soldée : la légende suit le NET, l'acompte est donc une ligne plus haut.
+        acompte_idx = len(total_data) - (3 if settled else 2)
+        style_rules.extend(
+            [
+                ("FONTNAME", (0, acompte_idx), (-1, acompte_idx), font_name),
+                ("FONTSIZE", (0, acompte_idx), (-1, acompte_idx), FONT_BODY),
+                (
+                    "LINEABOVE",
+                    (0, acompte_idx),
+                    (-1, acompte_idx),
+                    0.4,
+                    colors.HexColor("#e2e8f0"),
+                ),
+            ]
+        )
     total_table.setStyle(TableStyle(style_rules))
-    return total_table
+
+    if not deposit_lines or settled:
+        return total_table
+
+    from reportlab.platypus import Spacer
+
+    detail = _build_driver_deposits_detail_table(
+        deposit_lines,
+        font_name=font_name,
+        font_name_bold=font_name_bold,
+    )
+    # Variante A (défaut) : détail immédiatement sous le récap.
+    # Au-delà de 8 acomptes : le détail peut paginer (variante B fonctionnelle).
+    return [
+        total_table,
+        Spacer(1, 10),
+        detail,
+    ]
+
+
+def _format_vat_rate_for_header(rate: Any) -> str | None:
+    """``7.7`` / ``8.1`` / ``"8.10"`` → ``"7.7"`` / ``"8.1"`` ; None si illisible."""
+    if rate is None:
+        return None
+    try:
+        dec = Decimal(str(rate)).quantize(Decimal("0.01"))
+    except (ArithmeticError, ValueError, TypeError):
+        return None
+    text = f"{dec:f}"
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _vat_status_text_for_invoice(invoice, billing_settings) -> str:
+    """Mention TVA de l'en-tête (« N° TVA : … » / « TVA x% incluse » / vide).
+
+    Séparation rendu / calcul (étape 22) : une facture **émise** se rend depuis
+    ses données figées, jamais depuis les paramètres TVA courants de l'entreprise.
+    Priorité pour une facture émise :
+
+    1. snapshot ``invoice.meta["vat"]`` (``applicable``, ``number``,
+       ``default_rate``) écrit à la création ;
+    2. à défaut, le taux figé des lignes (``InvoiceLine.vat_rate``) ;
+    3. à défaut seulement (facture historique sans snapshot ni taux de ligne),
+       repli sur les paramètres courants, journalisé ``legacy_live``.
+
+    Un brouillon continue d'utiliser les paramètres courants (comportement
+    existant). Aucun snapshot n'est inventé ni écrit par cette fonction.
+    """
+    from application.invoices.invoice_pdf_state import normalize_invoice_meta_dict
+    from application.invoices.issued_invoice_guard import invoice_is_issued
+
+    if invoice_is_issued(invoice):
+        meta = normalize_invoice_meta_dict(getattr(invoice, "meta", None))
+        snap = meta.get("vat")
+        if isinstance(snap, dict) and "applicable" in snap:
+            if not snap.get("applicable"):
+                return ""
+            number = str(snap.get("number") or "").strip()
+            if number:
+                return f"N° TVA : {number}"
+            rate_text = _format_vat_rate_for_header(snap.get("default_rate"))
+            if rate_text is not None:
+                return f"TVA {rate_text}% incluse"
+        line_rates = [
+            ln.vat_rate
+            for ln in (getattr(invoice, "lines", None) or [])
+            if ln is not None and ln.vat_rate is not None and ln.vat_rate > 0
+        ]
+        if line_rates:
+            rate_text = _format_vat_rate_for_header(max(line_rates))
+            if rate_text is not None:
+                return f"TVA {rate_text}% incluse"
+        app_logger.warning(
+            "[PDF] Facture émise sans snapshot TVA ni taux de ligne "
+            "(invoice_id=%s, status=%s) : mention TVA rendue depuis les paramètres "
+            "courants (legacy_live).",
+            getattr(invoice, "id", None),
+            getattr(getattr(invoice, "status", None), "value", None),
+        )
+        if billing_settings and billing_settings.vat_applicable:
+            vat_number = billing_settings.vat_number or ""
+            if vat_number:
+                return f"N° TVA : {vat_number}"
+            return f"TVA {billing_settings.vat_rate or 7.7}% incluse"
+        return ""
+
+    # Brouillon : calculate_vat ajoute la TVA au hors taxe. « incluse » serait faux.
+    if billing_settings and billing_settings.vat_applicable:
+        vat_number = billing_settings.vat_number or ""
+        if vat_number:
+            return f"N° TVA : {vat_number}"
+        if billing_settings.vat_rate is None:
+            return "TVA — taux non documenté"
+        return f"TVA {billing_settings.vat_rate}% en sus"
+    return ""
 
 
 class PDFService:
@@ -5062,45 +5439,53 @@ class PDFService:
         invoice,
         *,
         force_regenerate: bool = False,
-        force_bypass_locked: bool = False,
     ):
-        """Génère le PDF d'une facture.
+        """Génère le PDF d'une facture **brouillon**.
 
         Args:
             invoice: La facture pour laquelle générer le PDF
             force_regenerate: Si True, régénère même si pdf_url existe déjà
                 (utilisé par l'endpoint regenerate-pdf)
-            force_bypass_locked: Si True, régénère même pour factures non éditables (payée, annulée)
-                — réservé aux corrections admin manuelles.
 
-        ⚠️ PROTECTION IMMUTABILITÉ:
-        Ne régénère pas le contenu PDF si la facture n'est pas éditable (payée, annulée),
-        sauf ``force_bypass_locked=True``. Réutilise ``invoice.pdf_url`` si présent.
+        ⚠️ PROTECTION IMMUTABILITÉ (étape 22) :
+        Une facture émise (tout statut autre que brouillon, statut inconnu inclus)
+        n'est jamais régénérée : aucune écriture financière, aucun nouveau fichier.
+        - PDF original référencé → il est retourné tel quel ;
+        - PDF original absent → ``IssuedInvoiceImmutableError``
+          (``ISSUED_INVOICE_PDF_MISSING``) : on ne fabrique pas silencieusement un
+          document présenté comme l'original, le dossier est à signaler.
+        Il n'existe aucun paramètre de contournement de cette protection.
         Si ``invoice.pdf_url`` existe déjà et ``force_regenerate=False``, retourne l'existant.
         """
-        from application.invoices.edit_draft_invoice import invoice_allows_line_editing
+        from application.invoices.issued_invoice_guard import (
+            invoice_is_issued,
+            invoice_is_mutable,
+            issued_invoice_pdf_missing_error,
+        )
 
         # ✅ Garde-fou 2: Log explicite pour diagnostic (invoice_id, force_regenerate, action)
         invoice_id = getattr(invoice, "id", None)
         has_existing_pdf_url = bool(getattr(invoice, "pdf_url", None))
         app_logger.info(
-            "[PDF] generate_invoice_pdf entry: invoice_id=%s, force_regenerate=%s, force_bypass_locked=%s, has_existing_pdf_url=%s",
+            "[PDF] generate_invoice_pdf entry: invoice_id=%s, force_regenerate=%s, has_existing_pdf_url=%s",
             invoice_id,
             force_regenerate,
-            force_bypass_locked,
             has_existing_pdf_url,
         )
 
-        # Aligné sur l'édition des lignes : pas de nouvelle génération si payée / annulée (sauf bypass admin).
-        if not invoice_allows_line_editing(invoice) and not force_bypass_locked:
-            app_logger.warning(
-                "[PDF PROTECTION] Facture non éditable: invoice_id=%s, status=%s, pdf_url=%s. Action=SKIP_LOCKED",
-                invoice.id,
-                invoice.status.value,
-                invoice.pdf_url,
-            )
-            # Retourner le PDF existant si disponible, sinon None
-            return invoice.pdf_url if invoice.pdf_url else None
+        # Facture émise : PDF original conservé, aucune génération ni écriture.
+        if invoice_is_issued(invoice):
+            status_value = getattr(invoice.status, "value", invoice.status)
+            if invoice.pdf_url:
+                app_logger.warning(
+                    "[PDF PROTECTION] Facture émise: invoice_id=%s, status=%s, pdf_url=%s. "
+                    "Action=KEEP_ORIGINAL (aucune régénération)",
+                    invoice.id,
+                    status_value,
+                    invoice.pdf_url,
+                )
+                return invoice.pdf_url
+            raise issued_invoice_pdf_missing_error(invoice, "generate_invoice_pdf")
 
         # ✅ Si un PDF existe déjà et qu'on ne force pas la régénération, retourner l'existant
         if invoice.pdf_url and not force_regenerate:
@@ -5141,6 +5526,18 @@ class PDFService:
                 msg = "Facture non trouvée"
                 raise ValueError(msg)
 
+            # Relecture : si la facture a été émise entre-temps, aucune écriture.
+            if invoice_is_issued(invoice):
+                if invoice.pdf_url:
+                    app_logger.warning(
+                        "[PDF PROTECTION] Facture émise pendant la préparation: "
+                        "invoice_id=%s, pdf_url=%s. Action=KEEP_ORIGINAL",
+                        invoice.id,
+                        invoice.pdf_url,
+                    )
+                    return invoice.pdf_url
+                raise issued_invoice_pdf_missing_error(invoice, "generate_invoice_pdf")
+
             from application.invoices.force_regenerate_invoice_pdf import (
                 reconcile_draft_invoice_billing_party,
             )
@@ -5149,27 +5546,29 @@ class PDFService:
             # Une facture figée conserve son snapshot.
             reconcile_draft_invoice_billing_party(invoice)
 
-            # Factures éditables : même source de vérité que l'éditeur (Σ TTC lignes après canonique HT+TVA).
-            # Sinon le pied de PDF peut rester obsolète après modification des lignes (envoyée, etc.).
+            # Brouillon : même source de vérité que l'éditeur (Σ TTC lignes après canonique HT+TVA).
+            # Les écritures financières ci-dessous sont réservées au brouillon (étape 22).
             from application.invoices.edit_draft_invoice import (
                 _recompute_totals_from_lines,
             )
 
-            if invoice.lines and invoice_allows_line_editing(invoice):
+            if invoice.lines and invoice_is_mutable(invoice):
                 db.session.expire(invoice, ["lines"])
                 _recompute_totals_from_lines(invoice)
                 db.session.flush()
 
             # ════════════════════════════════════════════════════════════════════
-            # FILET DE SÉCURITÉ: Recalculer les totaux si incohérents
+            # FILET DE SÉCURITÉ (brouillon) : recalculer les totaux si incohérents
             # ════════════════════════════════════════════════════════════════════
-            # Protège contre les factures avec totaux à 0 alors que des lignes existent.
+            # Protège contre les brouillons avec totaux à 0 alors que des lignes existent.
             from infrastructure.invoices.invoice_calculator import (
                 recompute_invoice_totals,
             )
 
-            if invoice.lines and (invoice.total_amount or Decimal("0.00")) == Decimal(
-                "0.00"
+            if (
+                invoice.lines
+                and invoice_is_mutable(invoice)
+                and (invoice.total_amount or Decimal("0.00")) == Decimal("0.00")
             ):
                 app_logger.warning(
                     "[PDF] Facture %s a des lignes mais total_amount=0. Recalcul automatique...",
@@ -5777,6 +6176,27 @@ class PDFService:
 
         # Contenu
         story = []
+        _specimen_meta = getattr(invoice, "meta", None)
+        specimen_document = isinstance(_specimen_meta, dict) and (
+            _specimen_meta.get("specimen") is True
+            or _specimen_meta.get("payable") is False
+        )
+        if specimen_document:
+            story.append(
+                Paragraph(
+                    "SPÉCIMEN — NON ÉMIS — NE PAS PAYER",
+                    ParagraphStyle(
+                        "SpecimenBanner",
+                        parent=styles["Normal"],
+                        fontName=font_name_bold,
+                        fontSize=12,
+                        leading=15,
+                        textColor=colors.HexColor("#9B1C1C"),
+                        alignment=TA_CENTER,
+                        spaceAfter=12,
+                    ),
+                )
+            )
 
         # === EN-TÊTE AVEC LOGO ET INFORMATIONS ENTREPRISE ===
         company = invoice.company
@@ -5831,16 +6251,10 @@ class PDFService:
             company.billing_email or company.contact_email or "[Email non configuré]"
         )
         company_uid = company.uid_ide or "[IDE/UID non configuré]"
-        # ✅ Statut TVA : afficher uniquement si assujetti (pas de mention si non assujetti)
-        vat_status_text = ""
-        if billing_settings and billing_settings.vat_applicable:
-            vat_number = billing_settings.vat_number or ""
-            if vat_number:
-                vat_status_text = f"N° TVA : {vat_number}"
-            else:
-                vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
+        # ✅ Statut TVA : uniquement si assujetti ; facture émise → données figées (étape 22)
+        vat_status_text = _vat_status_text_for_invoice(invoice, billing_settings)
 
-        # === EN-TÊTE : ENTREPRISE (gauche) | DESTINATAIRE (droite) — convention comptable ---
+        # === EN-TÊTE : ENTREPRISE (gauche) | DESTINATAIRE fenêtre droite (sans label) ---
         recipient_para, _ = _build_recipient_block_flowable(
             invoice,
             normal_style,
@@ -5848,18 +6262,18 @@ class PDFService:
             name_font_size=FONT_CLIENT_NAME,
             addr_font_size=FONT_BODY,
         )
-        recipient_top_padding_mm = 25.0  # destinataire légèrement plus bas
-        recipient_left_padding_mm = 15.0  # déplace le bloc destinataire vers la droite (pas d'espace volé à l'expéditeur)
         dest_width_pt = DEST_ADDR_MAX_WIDTH_MM * mm
         page_width_pt = A4[0]
+        left_margin_pt = INVOICE_PAGE_LEFT_MARGIN_CM * cm
         usable_width_pt = (
-            page_width_pt
-            - INVOICE_PAGE_LEFT_MARGIN_CM * cm
-            - INVOICE_PAGE_RIGHT_MARGIN_CM * cm
+            page_width_pt - left_margin_pt - INVOICE_PAGE_RIGHT_MARGIN_CM * cm
         )
-        company_width_pt = (
-            usable_width_pt - dest_width_pt
-        )  # expéditeur garde toute sa largeur
+        # Aligner la colonne destinataire sur DEST_ADDR_X_MM (repère postal mm).
+        dest_offset_in_frame_pt = max(0.0, DEST_ADDR_X_MM * mm - left_margin_pt)
+        company_width_pt = max(4.0 * cm, dest_offset_in_frame_pt)
+        # Si company + dest dépasse la largeur utile, compresser l'émetteur.
+        if company_width_pt + dest_width_pt > usable_width_pt:
+            company_width_pt = max(3.5 * cm, usable_width_pt - dest_width_pt)
 
         vat_line = (
             f'<br/><font size="{FONT_BODY}" color="{COLOR_MUTED_PDF}">'
@@ -5868,9 +6282,10 @@ class PDFService:
             else ""
         )
         company_info_left = (
-            f'<font size="{FONT_HEADER_COMPANY}"><b>'
+            f'<font size="{FONT_HEADER_COMPANY}" color="{COLOR_LIRIE_ACCENT}"><b>'
             f"{_xml_escape_for_paragraph(company_name)}</b></font><br/>"
-            f'<font size="{FONT_BODY}">{_reportlab_safe_footer_html(company_address)}</font>'
+            f'<font size="{FONT_BODY}" color="{COLOR_MUTED_PDF}">'
+            f"{_reportlab_safe_footer_html(company_address)}</font>"
             f"{vat_line}"
         )
         contact_bar = _format_company_contact_footer_bar(
@@ -5922,15 +6337,9 @@ class PDFService:
         left_cell_content.append(company_para)
 
         if recipient_para is not None:
-            label_style = ParagraphStyle(
-                "DestLabel",
-                parent=normal_style,
-                fontSize=FONT_SECONDARY,
-                spaceAfter=2,
-            )
-            label_para = Paragraph("<b>Facturé à :</b>", label_style)
+            # Zone fenêtre : adresse seule, aucun titre « Facturé à ».
             recipient_block = Table(
-                [[label_para], [recipient_para]],
+                [[recipient_para]],
                 colWidths=[dest_width_pt],
             )
             recipient_block.setStyle(
@@ -5942,8 +6351,11 @@ class PDFService:
                     ]
                 )
             )
-            # Convention comptable : entreprise (expéditeur) à gauche, destinataire (client) à droite
-            # 2 colonnes : pas de spacer (évite de condenser l'expéditeur). LEFTPADDING déplace le destinataire à droite.
+            # Top padding : caler le haut de l'adresse près de DEST_ADDR_Y_MM
+            # (marge page haute 2 cm ≈ 20 mm → reste ~25 mm vers 45 mm).
+            recipient_top_padding_mm = max(
+                0.0, DEST_ADDR_Y_MM - INVOICE_PAGE_TOP_MARGIN_CM * 10.0
+            )
             header_table = Table(
                 [[left_cell_content, recipient_block]],
                 colWidths=[company_width_pt, dest_width_pt],
@@ -5954,12 +6366,7 @@ class PDFService:
                         ("VALIGN", (0, 0), (-1, -1), "TOP"),
                         ("LEFTPADDING", (0, 0), (0, -1), 0),
                         ("RIGHTPADDING", (0, 0), (0, -1), 6),
-                        (
-                            "LEFTPADDING",
-                            (1, 0),
-                            (1, -1),
-                            recipient_left_padding_mm * mm,
-                        ),
+                        ("LEFTPADDING", (1, 0), (1, -1), 0),
                         ("RIGHTPADDING", (1, 0), (1, -1), 0),
                         ("TOPPADDING", (1, 0), (1, -1), recipient_top_padding_mm * mm),
                     ]
@@ -6062,33 +6469,114 @@ class PDFService:
                 f'<font size="{FONT_META_DATES}">{delay_hint}</font>'
             )
         else:
-            invoice_info_left = (
-                f'<font size="{FONT_META_NUMBER}"><b>Numéro de facture :</b></font> '
-                f'<font size="{FONT_META_NUMBER}">{_inv_n}</font><br/>'
-                f'<font size="{FONT_META_DATES}"><b>Date d\'émission :</b></font> '
-                f'<font size="{FONT_META_DATES}">{invoice.issued_at.strftime("%d.%m.%Y")}</font><br/>'
-                f'<font size="{FONT_META_DATES}"><b>Date d\'échéance :</b></font> '
-                f'<font size="{FONT_META_DATES}">{invoice.due_date.strftime("%d.%m.%Y")}</font><br/>'
-                f'<font size="{FONT_META_DATES}"><b>Période de facturation :</b></font> '
-                f'<font size="{FONT_META_DATES}">{_per_lbl}</font>'
-            )
+            from services.documents.invoice_pdf_presentation import invoice_meta_html
 
-        invoice_info_table = Table(
-            [[Paragraph(invoice_info_left, normal_style)]],
-            colWidths=[usable_width_pt],
-        )
-        invoice_info_table.setStyle(
-            TableStyle(
-                [
-                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                    ("TOPPADDING", (0, 0), (-1, -1), 0),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-                ]
+            correction_meta = (
+                invoice.meta.get("correction")
+                if isinstance(getattr(invoice, "meta", None), dict)
+                else None
             )
-        )
-        story.append(invoice_info_table)
-        story.append(Spacer(1, 14))
+            if not isinstance(correction_meta, dict):
+                correction_meta = {}
+            # Maquette V1 : FACTURE + n° à gauche ; dates à droite.
+            title_style = ParagraphStyle(
+                "InvoiceTitleFacture",
+                parent=normal_style,
+                fontName=font_name_bold,
+                fontSize=16,
+                leading=20,
+                spaceAfter=2,
+            )
+            number_style = ParagraphStyle(
+                "InvoiceNumberFacture",
+                parent=normal_style,
+                fontSize=FONT_META_NUMBER,
+                leading=FONT_META_NUMBER + 2,
+                textColor=colors.HexColor(COLOR_MUTED_PDF),
+            )
+            dates_style = ParagraphStyle(
+                "InvoiceDatesRight",
+                parent=normal_style,
+                fontSize=FONT_META_DATES,
+                leading=FONT_META_DATES + 3,
+                alignment=2,  # TA_RIGHT
+            )
+            left_block = [
+                Paragraph("<b>FACTURE</b>", title_style),
+                Paragraph(
+                    f"N° {_xml_escape_for_paragraph(str(invoice.invoice_number or ''))}",
+                    number_style,
+                ),
+            ]
+            corr_bits: list[str] = []
+            orig = str(correction_meta.get("corrects_invoice_number") or "").strip()
+            credit = str(correction_meta.get("credit_number") or "").strip()
+            if orig:
+                corr_bits.append(f"Rectifie {orig}")
+            if credit:
+                corr_bits.append(f"Avoir {credit}")
+            corr_html = (
+                f"<br/>{_xml_escape_for_paragraph(' · '.join(corr_bits))}"
+                if corr_bits
+                else ""
+            )
+            right_html = (
+                f"Émise le {invoice.issued_at.strftime('%d.%m.%Y')}<br/>"
+                f"Échéance le {invoice.due_date.strftime('%d.%m.%Y')}<br/>"
+                f"Prestations de {_xml_escape_for_paragraph(period_label)}"
+                f"{corr_html}"
+            )
+            # Conservé pour rappels / variantes qui lisent encore invoice_meta_html.
+            invoice_info_left = invoice_meta_html(
+                invoice_number=str(invoice.invoice_number or ""),
+                issued_on=invoice.issued_at.strftime("%d.%m.%Y"),
+                due_on=invoice.due_date.strftime("%d.%m.%Y"),
+                period_label=period_label,
+                corrects_invoice_number=orig or None,
+                credit_number=credit or None,
+            )
+            meta_table = Table(
+                [[left_block, Paragraph(right_html, dates_style)]],
+                colWidths=[usable_width_pt * 0.48, usable_width_pt * 0.52],
+            )
+            meta_table.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                        (
+                            "LINEBELOW",
+                            (0, 0),
+                            (-1, -1),
+                            0.6,
+                            colors.HexColor("#e2e8f0"),
+                        ),
+                    ]
+                )
+            )
+            story.append(meta_table)
+            story.append(Spacer(1, 14))
+
+        if is_reminder_doc:
+            invoice_info_table = Table(
+                [[Paragraph(invoice_info_left, normal_style)]],
+                colWidths=[usable_width_pt],
+            )
+            invoice_info_table.setStyle(
+                TableStyle(
+                    [
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+            story.append(invoice_info_table)
+            story.append(Spacer(1, 14))
 
         # === TABLEAU DES COURSES ===
         # Fonction pour formater les adresses longues avec retour à la ligne
@@ -6274,19 +6762,22 @@ class PDFService:
             )
         )
         post_table_flowables.extend([total_separator, Spacer(1, 12)])
-        total_table = _build_totals_table(
-            invoice,
-            is_s2,
-            is_third_party,
-            font_name,
-            font_name_bold,
-            template="standard",
-            reminder_level=reminder_ctx.get("reminder_level"),
-            reminder_fee=reminder_ctx.get("reminder_fee"),
-            reminder_total_due=reminder_ctx.get("reminder_total_due"),
-            reminder_principal=reminder_ctx.get("reminder_principal"),
+        _extend_totals_flowables(
+            post_table_flowables,
+            _build_totals_table(
+                invoice,
+                is_s2,
+                is_third_party,
+                font_name,
+                font_name_bold,
+                template="standard",
+                reminder_level=reminder_ctx.get("reminder_level"),
+                reminder_fee=reminder_ctx.get("reminder_fee"),
+                reminder_total_due=reminder_ctx.get("reminder_total_due"),
+                reminder_principal=reminder_ctx.get("reminder_principal"),
+            ),
         )
-        post_table_flowables.extend([total_table, Spacer(1, 30)])
+        post_table_flowables.append(Spacer(1, 30))
 
         _append_paginated_detail_table_with_tail(
             story,
@@ -6321,16 +6812,9 @@ class PDFService:
         )
 
         # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
-        # Forcer une nouvelle page pour le QR-Bill (marge bas 2 cm)
-        from reportlab.platypus import (
-            NextPageTemplate,
-            PageBreak,
-        )
-
-        story.append(NextPageTemplate("QRBill"))
-        story.append(PageBreak())
-
+        # La page n'est créée que si le bulletin existe.
         _perf_qr_start = perf_counter()
+        drawing = None
         try:
             qr_bill_service = self.qrbill_service
             qr_override = (
@@ -6338,22 +6822,22 @@ class PDFService:
                 if reminder_ctx.get("is_reminder")
                 else None
             )
-            qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(
-                invoice, override_amount=qr_override
+            qr_bill_svg_content = (
+                None
+                if specimen_document
+                else qr_bill_service.generate_qr_bill_svg(
+                    invoice, override_amount=qr_override
+                )
             )
 
             if qr_bill_svg_content:
                 drawing = _svg_content_to_drawing(
                     qr_bill_svg_content, inset_qrbill_text=True
                 )
-                if drawing:
-                    story.append(_make_qr_bill_flowable(drawing))
-            else:
-                story.append(Paragraph("QR-Bill non disponible", normal_style))
-
         except Exception as e:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
-            story.append(Paragraph("QR-Bill non disponible", normal_style))
+            drawing = None
+        append_qr_bill_page(story, drawing)
         app_logger.info(
             "[PDF_PERF] qr_bill_section_ms=%s invoice_id=%s",
             int((perf_counter() - _perf_qr_start) * 1000),
@@ -6487,13 +6971,8 @@ class PDFService:
             company.billing_email or company.contact_email or "[Email non configuré]"
         )
         company_uid = company.uid_ide or "[IDE/UID non configuré]"
-        vat_status_text_m = ""
-        if billing_settings and billing_settings.vat_applicable:
-            vat_number = billing_settings.vat_number or ""
-            if vat_number:
-                vat_status_text_m = f"N° TVA : {vat_number}"
-            else:
-                vat_status_text_m = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
+        # Facture émise → mention TVA depuis les données figées (étape 22)
+        vat_status_text_m = _vat_status_text_for_invoice(invoice, billing_settings)
         vat_line_m = (
             f'<br/><font size="{FONT_BODY}" color="{COLOR_MUTED_PDF}">'
             f"{_xml_escape_for_paragraph(vat_status_text_m)}</font>"
@@ -6518,26 +6997,24 @@ class PDFService:
             name_font_size=FONT_CLIENT_NAME,
             addr_font_size=FONT_BODY,
         )
-        recipient_top_padding_mm_min = 25.0  # destinataire légèrement plus bas
-        recipient_left_padding_mm_min = (
-            15.0  # déplace destinataire à droite (pas d'espace volé à l'expéditeur)
-        )
         dest_width_pt_min = DEST_ADDR_MAX_WIDTH_MM * mm
+        left_margin_pt_min = INVOICE_PAGE_LEFT_MARGIN_CM * cm
         usable_width_pt_min = (
-            A4[0] - INVOICE_PAGE_LEFT_MARGIN_CM * cm - INVOICE_PAGE_RIGHT_MARGIN_CM * cm
+            A4[0] - left_margin_pt_min - INVOICE_PAGE_RIGHT_MARGIN_CM * cm
         )
-        company_width_pt_min = usable_width_pt_min - dest_width_pt_min
+        dest_offset_min = max(0.0, DEST_ADDR_X_MM * mm - left_margin_pt_min)
+        company_width_pt_min = max(3.5 * cm, dest_offset_min)
+        if company_width_pt_min + dest_width_pt_min > usable_width_pt_min:
+            company_width_pt_min = max(
+                3.5 * cm, usable_width_pt_min - dest_width_pt_min
+            )
+        recipient_top_padding_mm_min = max(
+            0.0, DEST_ADDR_Y_MM - INVOICE_PAGE_TOP_MARGIN_CM * 10.0
+        )
 
         if recipient_para_min is not None:
-            label_style_min = ParagraphStyle(
-                "DestLabelMin",
-                parent=normal_style,
-                fontSize=FONT_SECONDARY,
-                spaceAfter=2,
-            )
-            label_para_min = Paragraph("<b>Facturé à :</b>", label_style_min)
             recipient_block_min = Table(
-                [[label_para_min], [recipient_para_min]],
+                [[recipient_para_min]],
                 colWidths=[dest_width_pt_min],
             )
             recipient_block_min.setStyle(
@@ -6549,7 +7026,6 @@ class PDFService:
                     ]
                 )
             )
-            # Convention comptable : entreprise à gauche, destinataire à droite. 2 colonnes, LEFTPADDING déplace destinataire.
             header_table_min = Table(
                 [[company_para_min, recipient_block_min]],
                 colWidths=[company_width_pt_min, dest_width_pt_min],
@@ -6560,12 +7036,7 @@ class PDFService:
                         ("VALIGN", (0, 0), (-1, -1), "TOP"),
                         ("LEFTPADDING", (0, 0), (0, -1), 0),
                         ("RIGHTPADDING", (0, 0), (0, -1), 6),
-                        (
-                            "LEFTPADDING",
-                            (1, 0),
-                            (1, -1),
-                            recipient_left_padding_mm_min * mm,
-                        ),
+                        ("LEFTPADDING", (1, 0), (1, -1), 0),
                         ("RIGHTPADDING", (1, 0), (1, -1), 0),
                         (
                             "TOPPADDING",
@@ -6691,7 +7162,7 @@ class PDFService:
         )
         story.append(detail_title_min)
         story.append(Spacer(1, 6))
-        suppress_line_discount_breakdown_min = False
+        suppress_line_discount_breakdown_min = _invoice_has_global_discount(invoice)
         table_data: list[list[Any]] = (
             [["Date", "Patient", "Montant"]]
             if is_third_party
@@ -6716,7 +7187,12 @@ class PDFService:
                     and abs(cat_mc - net_mc) > _PDF_CATALOG_NET_EPS
                 ):
                     disc_mc = _pdf_s2_per_line_discount_suffix_html(cat_mc, net_mc)
-                amt_flow_mc = _pdf_minimal_amount_only_flowable(net_mc, normal_style)
+                amt_flow_mc = _pdf_minimal_amount_only_flowable(
+                    _initial_price_if_global(
+                        cat_mc, net_mc, use_initial=suppress_line_discount_breakdown_min
+                    ),
+                    normal_style,
+                )
                 detail_para = _minimal_custom_detail_paragraph(
                     line, normal_style, extra_html_suffix=disc_mc
                 )
@@ -6761,7 +7237,12 @@ class PDFService:
                     ):
                         disc_mb = _pdf_s2_per_line_discount_suffix_html(cat_mb, net_mb)
                     amt_flow_mb = _pdf_minimal_amount_only_flowable(
-                        net_mb, normal_style
+                        _initial_price_if_global(
+                            cat_mb,
+                            net_mb,
+                            use_initial=suppress_line_discount_breakdown_min,
+                        ),
+                        normal_style,
                     )
                     if is_third_party:
                         # ✅ S2: Utiliser le snapshot patient_name depuis line_meta (traçabilité juridique)
@@ -6807,7 +7288,12 @@ class PDFService:
                     ):
                         disc_mz = _pdf_s2_per_line_discount_suffix_html(cat_mz, net_mz)
                     amt_flow_mz = _pdf_minimal_amount_only_flowable(
-                        net_mz, normal_style
+                        _initial_price_if_global(
+                            cat_mz,
+                            net_mz,
+                            use_initial=suppress_line_discount_breakdown_min,
+                        ),
+                        normal_style,
                     )
                     if is_third_party:
                         date_mz = _minimal_date_cell_with_discount_suffix(
@@ -6836,7 +7322,12 @@ class PDFService:
                     and abs(cat_mw - net_mw) > _PDF_CATALOG_NET_EPS
                 ):
                     disc_mw = _pdf_s2_per_line_discount_suffix_html(cat_mw, net_mw)
-                amt_flow_mw = _pdf_minimal_amount_only_flowable(net_mw, normal_style)
+                amt_flow_mw = _pdf_minimal_amount_only_flowable(
+                    _initial_price_if_global(
+                        cat_mw, net_mw, use_initial=suppress_line_discount_breakdown_min
+                    ),
+                    normal_style,
+                )
                 if is_third_party:
                     date_mw = _minimal_date_cell_with_discount_suffix("", line, disc_mw)
                     table_data.append([date_mw, "N/A", amt_flow_mw])
@@ -6912,7 +7403,6 @@ class PDFService:
         # === TOTAL SIMPLIFIÉ ===
         # ✅ Mode rappel : mini-table (Sous-total facture + Frais + TOTAL)
         gd_min: dict[str, Any] | None = None
-        gd_min_style_extra: list[tuple[Any, ...]] = []
         if (
             is_reminder
             and reminder_ctx.get("reminder_fee") is not None
@@ -6923,7 +7413,7 @@ class PDFService:
             reminder_fee_float = float(reminder_ctx["reminder_fee"])
             final_total = float(reminder_ctx["reminder_total_due"])
             reminder_fee_label = "Frais de rappel :"
-            _tot_lbl_rem = "TOTAL À FACTURER :" if is_s2 else "TOTAL :"
+            _tot_lbl_rem = "TOTAL À FACTURER :"
             total_data = [
                 ["Montant facture initiale :", f"CHF {principal_float:.2f}"],
                 [reminder_fee_label, f"CHF {reminder_fee_float:.2f}"],
@@ -6934,82 +7424,41 @@ class PDFService:
             if isinstance(invoice.meta, dict) and invoice.meta.get("global_discount"):
                 gd_min = cast(dict[str, Any], invoice.meta["global_discount"])
             if gd_min is not None:
-                # Priorité au catalogue « avant remise » en méta (apply_draft_global_discount).
-                # La somme des lignes HT > 0 inclut déjà les transports remisés : elle ne doit pas servir de sous-total « avant % ».
-                _detail_min = _sum_positive_billed_lines_excluding_global_discount(
-                    invoice
-                )
-                gross_ht = float(gd_min.get("subtotal_before_ht") or 0)
-                if gross_ht <= 0 and _detail_min is not None:
-                    gross_ht = float(_detail_min)
-                disc_ht = float(gd_min.get("amount_ht", 0))
-                pct_gd = float(gd_min.get("percent", 0))
-                note_gd = str(gd_min.get("note") or "").strip()
-                disc_label = _format_global_discount_pdf_label(pct_gd)
-                net_ht = float(invoice.subtotal_amount)
                 vat_min = float(invoice.vat_total_amount)
                 vat_appl_min = False
-                if isinstance(invoice.meta, dict) and "vat" in invoice.meta:
+                vat_label_min = "TVA"
+                if isinstance(invoice.meta, dict) and isinstance(
+                    invoice.meta.get("vat"), dict
+                ):
                     vat_appl_min = bool(invoice.meta["vat"].get("applicable"))
-                total_data = [
-                    [
-                        "Sous-total HT (avant réduction globale)",
-                        _format_chf_pdf_mono(gross_ht),
-                    ],
-                    [disc_label, _format_chf_discount_pdf(disc_ht)],
-                ]
-                if note_gd:
-                    total_data.append(
-                        [_pdf_note_global_discount_for_totals_table(note_gd), ""]
-                    )
-                    gd_min_style_extra.extend(
-                        [
-                            ("SPAN", (0, 2), (1, 2)),
-                            ("ALIGN", (0, 2), (1, 2), "LEFT"),
-                            ("FONTSIZE", (0, 2), (1, 2), 8),
-                            ("TEXTCOLOR", (0, 2), (1, 2), colors.HexColor("#4b5563")),
-                            ("FONTNAME", (0, 2), (1, 2), font_name),
-                        ]
-                    )
-                if vat_appl_min and vat_min > 0:
-                    total_data.extend(
-                        [
-                            [
-                                "Total HT après réduction globale",
-                                _format_chf_pdf_mono(net_ht),
-                            ],
-                            ["TVA :", _format_chf_pdf_mono(vat_min)],
-                            [
-                                ("TOTAL À FACTURER :" if is_s2 else "TOTAL :"),
-                                _format_chf_pdf_mono(total_amount),
-                            ],
-                        ]
-                    )
-                elif abs(net_ht - total_amount) < _PDF_CHF_AMOUNT_EQ_EPS:
-                    # Sans TVA : net_ht et total_amount identiques -> une seule ligne finale.
-                    total_data.append(
-                        [
-                            ("TOTAL À FACTURER :" if is_s2 else "TOTAL :"),
-                            _format_chf_pdf_mono(total_amount),
-                        ]
-                    )
+                    if invoice.meta["vat"].get("label"):
+                        vat_label_min = str(invoice.meta["vat"]["label"])
+                preview_rows_min = _preview_global_discount_footer_rows(
+                    gd_min,
+                    subtotal=float(invoice.subtotal_amount),
+                    total=total_amount,
+                    total_label=("TOTAL À FACTURER :"),
+                    vat_is_applicable=vat_appl_min,
+                    vat_label_display=vat_label_min,
+                    vat_total=vat_min,
+                )
+                if preview_rows_min is not None:
+                    total_data = preview_rows_min
                 else:
-                    total_data.extend(
+                    total_data = [
                         [
-                            [
-                                "Total HT après réduction globale",
-                                _format_chf_pdf_mono(net_ht),
-                            ],
-                            [
-                                ("TOTAL À FACTURER :" if is_s2 else "TOTAL :"),
-                                _format_chf_pdf_mono(total_amount),
-                            ],
+                            ("TOTAL À FACTURER :"),
+                            (
+                                f"CHF {total_amount:.2f}"
+                                if is_s2
+                                else f"{total_amount:.2f} CHF"
+                            ),
                         ]
-                    )
+                    ]
             else:
                 total_data = [
                     [
-                        ("TOTAL À FACTURER :" if is_s2 else "TOTAL :"),
+                        ("TOTAL À FACTURER :"),
                         (
                             f"CHF {total_amount:.2f}"
                             if is_s2
@@ -7049,7 +7498,6 @@ class PDFService:
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
         ]
-        style_rules.extend(gd_min_style_extra)
         if is_reminder or gd_min is not None:
             style_rules.extend(
                 [
@@ -7162,8 +7610,6 @@ class PDFService:
         )
         from reportlab.lib.units import cm, mm
         from reportlab.platypus import (
-            NextPageTemplate,
-            PageBreak,
             Paragraph,
             Spacer,
             Table,
@@ -7254,7 +7700,7 @@ class PDFService:
             except Exception:
                 pass
 
-        # === EN-TÊTE DETAILED : ENTREPRISE (gauche) | DESTINATAIRE (droite) ===
+        # === EN-TÊTE DETAILED : ENTREPRISE (gauche) | DESTINATAIRE fenêtre droite ===
         recipient_para, _ = _build_recipient_block_flowable(
             invoice,
             normal_style,
@@ -7262,12 +7708,15 @@ class PDFService:
             name_font_size=FONT_CLIENT_NAME,
             addr_font_size=FONT_BODY,
         )
-        recipient_top_padding_mm = 25.0  # destinataire légèrement plus bas
-        recipient_left_padding_mm = (
-            15.0  # déplace destinataire à droite (pas d'espace volé à l'expéditeur)
-        )
         dest_width_pt = DEST_ADDR_MAX_WIDTH_MM * mm
-        company_width_pt = usable_width_pt - dest_width_pt
+        left_margin_pt_d = INVOICE_PAGE_LEFT_MARGIN_CM * cm
+        dest_offset_d = max(0.0, DEST_ADDR_X_MM * mm - left_margin_pt_d)
+        company_width_pt = max(3.5 * cm, dest_offset_d)
+        if company_width_pt + dest_width_pt > usable_width_pt:
+            company_width_pt = max(3.5 * cm, usable_width_pt - dest_width_pt)
+        recipient_top_padding_mm = max(
+            0.0, DEST_ADDR_Y_MM - INVOICE_PAGE_TOP_MARGIN_CM * 10.0
+        )
 
         company_name = company.name or "[Nom entreprise non configuré]"
         company_address = self._get_company_address_for_pdf(company)
@@ -7276,14 +7725,8 @@ class PDFService:
             company.billing_email or company.contact_email or "[Email non configuré]"
         )
         company_uid = company.uid_ide or "[IDE/UID non configuré]"
-        # ✅ Statut TVA : afficher uniquement si assujetti (pas de mention si non assujetti)
-        vat_status_text = ""
-        if billing_settings and billing_settings.vat_applicable:
-            vat_number = billing_settings.vat_number or ""
-            if vat_number:
-                vat_status_text = f"N° TVA : {vat_number}"
-            else:
-                vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
+        # ✅ Statut TVA : uniquement si assujetti ; facture émise → données figées (étape 22)
+        vat_status_text = _vat_status_text_for_invoice(invoice, billing_settings)
 
         vat_line_d = (
             f'<br/><font size="{FONT_BODY}" color="{COLOR_MUTED_PDF}">'
@@ -7292,9 +7735,10 @@ class PDFService:
             else ""
         )
         company_info_detailed = (
-            f'<font size="{FONT_HEADER_COMPANY}"><b>'
+            f'<font size="{FONT_HEADER_COMPANY}" color="{COLOR_LIRIE_ACCENT}"><b>'
             f"{_xml_escape_for_paragraph(company_name)}</b></font><br/>"
-            f'<font size="{FONT_BODY}">{_reportlab_safe_footer_html(company_address)}</font>'
+            f'<font size="{FONT_BODY}" color="{COLOR_MUTED_PDF}">'
+            f"{_reportlab_safe_footer_html(company_address)}</font>"
             f"{vat_line_d}"
         )
         contact_bar_det = _format_company_contact_footer_bar(
@@ -7341,15 +7785,8 @@ class PDFService:
         left_cell_content_d.append(company_para)
 
         if recipient_para is not None:
-            label_style_d = ParagraphStyle(
-                "DestLabelD",
-                parent=normal_style,
-                fontSize=FONT_SECONDARY,
-                spaceAfter=2,
-            )
-            label_para_d = Paragraph("<b>Facturé à :</b>", label_style_d)
             recipient_block_d = Table(
-                [[label_para_d], [recipient_para]],
+                [[recipient_para]],
                 colWidths=[dest_width_pt],
             )
             recipient_block_d.setStyle(
@@ -7361,7 +7798,6 @@ class PDFService:
                     ]
                 )
             )
-            # Convention comptable : entreprise à gauche, destinataire à droite. 2 colonnes, LEFTPADDING déplace destinataire.
             header_table_d = Table(
                 [[left_cell_content_d, recipient_block_d]],
                 colWidths=[company_width_pt, dest_width_pt],
@@ -7372,12 +7808,7 @@ class PDFService:
                         ("VALIGN", (0, 0), (-1, -1), "TOP"),
                         ("LEFTPADDING", (0, 0), (0, -1), 0),
                         ("RIGHTPADDING", (0, 0), (0, -1), 6),
-                        (
-                            "LEFTPADDING",
-                            (1, 0),
-                            (1, -1),
-                            recipient_left_padding_mm * mm,
-                        ),
+                        ("LEFTPADDING", (1, 0), (1, -1), 0),
                         ("RIGHTPADDING", (1, 0), (1, -1), 0),
                         ("TOPPADDING", (1, 0), (1, -1), recipient_top_padding_mm * mm),
                     ]
@@ -7675,19 +8106,22 @@ class PDFService:
         post_table_flowables_d.extend([total_separator, Spacer(1, 12)])
         if reminder_ctx.get("is_reminder"):
             post_table_flowables_d.append(Spacer(1, 16))
-        total_table = _build_totals_table(
-            invoice,
-            is_s2,
-            is_third_party,
-            font_name,
-            font_name_bold,
-            template="detailed",
-            reminder_level=reminder_ctx.get("reminder_level"),
-            reminder_fee=reminder_ctx.get("reminder_fee"),
-            reminder_total_due=reminder_ctx.get("reminder_total_due"),
-            reminder_principal=reminder_ctx.get("reminder_principal"),
+        _extend_totals_flowables(
+            post_table_flowables_d,
+            _build_totals_table(
+                invoice,
+                is_s2,
+                is_third_party,
+                font_name,
+                font_name_bold,
+                template="detailed",
+                reminder_level=reminder_ctx.get("reminder_level"),
+                reminder_fee=reminder_ctx.get("reminder_fee"),
+                reminder_total_due=reminder_ctx.get("reminder_total_due"),
+                reminder_principal=reminder_ctx.get("reminder_principal"),
+            ),
         )
-        post_table_flowables_d.extend([total_table, Spacer(1, 30)])
+        post_table_flowables_d.append(Spacer(1, 30))
         if invoice.notes:
             post_table_flowables_d.extend(
                 [
@@ -7721,10 +8155,8 @@ class PDFService:
             _on_first_page_debug_envelope(canvas, doc)
 
         # === QR-BILL ===
-        story.append(NextPageTemplate("QRBill"))
-        story.append(PageBreak())
-
         _perf_qrd_start = perf_counter()
+        drawing_d = None
         try:
             qr_bill_service = self.qrbill_service
             qr_override_d = (
@@ -7736,13 +8168,13 @@ class PDFService:
                 invoice, override_amount=qr_override_d
             )
             if qr_bill_svg_content:
-                drawing = _svg_content_to_drawing(
+                drawing_d = _svg_content_to_drawing(
                     qr_bill_svg_content, inset_qrbill_text=True
                 )
-                if drawing:
-                    story.append(_make_qr_bill_flowable(drawing))
         except Exception as e:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
+            drawing_d = None
+        append_qr_bill_page(story, drawing_d)
         app_logger.info(
             "[PDF_PERF] qr_bill_section_ms=%s invoice_id=%s",
             int((perf_counter() - _perf_qrd_start) * 1000),

@@ -740,8 +740,29 @@ def _patient_self_party(
         invoice, bookings_by_id=bookings_by_id
     )
     client = getattr(invoice, "client", None)
+    user = getattr(client, "user", None) if client is not None else None
+    legal_name = ""
+    username = ""
+    if user is not None:
+        legal_name = (
+            f"{(getattr(user, 'first_name', None) or '').strip()} "
+            f"{(getattr(user, 'last_name', None) or '').strip()}"
+        ).strip()
+        username = (getattr(user, "username", None) or "").strip()
+    party_name = (getattr(billing_party, "display_name", None) or "").strip()
+    # Un login technique n'est pas une identité. On ne le substitue au payeur
+    # du dossier que lorsqu'aucun nom et prénom ne sont renseignés.
+    if (
+        party_name
+        and not legal_name
+        and name
+        and username
+        and name.casefold() == username.casefold()
+        and party_name.casefold() != username.casefold()
+    ):
+        name = party_name
     if not name:
-        name = (getattr(billing_party, "display_name", None) or "").strip() or "Client"
+        name = party_name or "Client"
     if not address:
         address = (fallback_address or "").strip() or ""
     if not address and billing_party is not None:

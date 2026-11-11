@@ -317,16 +317,24 @@ function preserveSpaShell() {
 
 function ensureLocalPlaywrightChromium() {
   console.log('[prerender] Installation locale Chromium Playwright (si besoin)…');
+  // Windows : npx.cmd n'est pas un exécutable. Sans shell, spawnSync
+  // renvoie status null et le prerender s'arrête avant le lancement.
   const result = spawnSync(
     process.platform === 'win32' ? 'npx.cmd' : 'npx',
     ['playwright', 'install', 'chromium'],
     {
       cwd: FRONTEND_ROOT,
       stdio: 'inherit',
+      shell: process.platform === 'win32',
       env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: undefined },
     }
   );
-  if (result.status !== 0) {
+  if (result.error) {
+    throw new Error(
+      `Échec npx playwright install chromium (${result.error.message}).`
+    );
+  }
+  if (result.status !== 0 && result.status !== null) {
     throw new Error(`Échec npx playwright install chromium (code ${result.status}).`);
   }
 }

@@ -318,3 +318,299 @@ def test_s2_pdf_mono_line_round_trip_contains_inline_ar(db):
     assert ar_count >= 4, (
         f"Attendu ≥4 occurrences [A/R] (3 inline + légende), trouvé {ar_count}"
     )
+
+
+def test_s2_discount_line_matches_live_preview():
+    """Le PDF clinique reprend la phrase de rabais de l'aperçu, montant net seul."""
+    from io import BytesIO
+
+    from pypdf import PdfReader
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import Paragraph, SimpleDocTemplate
+
+    from services.documents.invoice_pdf_presentation import client_meta_line_html
+    from services.documents.pdf import (
+        FONT_BODY,
+        _consolidated_row_catalog_net,
+        _ensure_dejavu_pdf_fonts,
+        _pdf_s2_amount_only_paragraph,
+        _pdf_s2_full_address_transport_text,
+        _pdf_s2_per_line_discount_suffix_html,
+    )
+
+    line = SimpleNamespace(
+        line_total=Decimal("64.80"),
+        line_meta={"original_line_total": "72.00"},
+        type=InvoiceLineType.RIDE,
+    )
+    item = {
+        "line": line,
+        "amount": Decimal("64.80"),
+        "pickup": "Chemin des Vignes 4, 1247 Anieres",
+        "dropoff": "Clinique les Hauts d'Anieres, Chemin des Courbes 9, 1247 Anieres",
+    }
+    catalog, net = _consolidated_row_catalog_net(item)
+    assert catalog == Decimal("72.00")
+    font_name, _bold = _ensure_dejavu_pdf_fonts()
+    transport = _pdf_s2_full_address_transport_text(
+        item,
+        font_name=font_name,
+        desc_inner_pt=320,
+        is_ar=False,
+        is_ride_line=True,
+        is_material_delivery=False,
+    )
+    suffix = _pdf_s2_per_line_discount_suffix_html(
+        catalog, net, compact_private_sub=True
+    )
+    html = f"{client_meta_line_html('BONVIN Claire')}<br/>{transport}{suffix}"
+    style = ParagraphStyle(
+        "DiscountProbe", fontName=font_name, fontSize=FONT_BODY, leading=14
+    )
+    amount = _pdf_s2_amount_only_paragraph(
+        net, style, is_round_trip=False, ht_column_plain=True
+    )
+    buffer = BytesIO()
+    SimpleDocTemplate(buffer, pagesize=A4).build([Paragraph(html, style), amount])
+    text = " ".join(
+        " ".join((page.extract_text() or "").split())
+        for page in PdfReader(BytesIO(buffer.getvalue())).pages
+    )
+    assert "Client : BONVIN Claire" in text
+    assert "Trajet :" in text
+    assert "Rabais 10 % · prix initial 72.00 CHF · -7.20 CHF" in text
+    assert "72.00 →" not in text
+    assert "64.80" in text
+
+    plain = {
+        "line": SimpleNamespace(line_total=Decimal("72"), line_meta={}),
+        "amount": Decimal("72"),
+    }
+    assert _consolidated_row_catalog_net(plain)[0] is None
+
+
+def test_s2_table_matches_live_preview_four_discounted_lines(monkeypatch):
+    """Quatre prestations clinique : une ligne chacune, rabais et montant net."""
+    from datetime import datetime
+    from io import BytesIO
+
+    from pypdf import PdfReader
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.platypus import SimpleDocTemplate
+
+    from services.documents.pdf import (
+        FONT_BODY,
+        _build_s2_table,
+        _build_totals_table,
+        _detail_lines_heading_paragraph,
+        _ensure_dejavu_pdf_fonts,
+        _flowable_height_pt,
+        _global_discount_hint_flowable,
+    )
+
+    monkeypatch.setattr(
+        "models.invoice.enrich_invoice_line_payloads_for_api",
+        lambda *args, **kwargs: None,
+    )
+
+    clinic = SimpleNamespace(
+        is_institution=True,
+        institution_name="Clinique les Hauts d'Anieres",
+    )
+    specs = [
+        (
+            1,
+            101,
+            "Claire BONVIN",
+            "06.10.2026 08:00",
+            "Chemin des Vignes 4, 1247 Anieres",
+            "Clinique les Hauts d'Anieres, Chemin des Courbes 9, 1247 Anieres",
+            Decimal("72.00"),
+            Decimal("64.80"),
+        ),
+        (
+            2,
+            102,
+            "Claire BONVIN",
+            "06.10.2026 16:00",
+            "Clinique les Hauts d'Anieres, Chemin des Courbes 9, 1247 Anieres",
+            "Chemin des Vignes 4, 1247 Anieres",
+            Decimal("72.00"),
+            Decimal("64.80"),
+        ),
+        (
+            3,
+            103,
+            "Marc DUVAL",
+            "08.10.2026 09:00",
+            "Route de Hermance 8, 1222 Vesenaz",
+            "Hopitaux Universitaires de Geneve, Rue Gabrielle-Perret-Gentil 4, 1205 Geneve",
+            Decimal("95.00"),
+            Decimal("85.50"),
+        ),
+        (
+            4,
+            104,
+            "Sophie KELLER",
+            "14.10.2026 11:00",
+            "Avenue de Champel 20, 1206 Geneve",
+            "Clinique les Hauts d'Anieres, Chemin des Courbes 9, 1247 Anieres",
+            Decimal("64.00"),
+            Decimal("57.60"),
+        ),
+    ]
+    lines = []
+    bookings = {}
+    for line_id, booking_id, customer, when, pickup, dropoff, catalog, net in specs:
+        scheduled = datetime.strptime(when, "%d.%m.%Y %H:%M")
+        lines.append(
+            SimpleNamespace(
+                id=line_id,
+                type=InvoiceLineType.RIDE,
+                reservation_id=booking_id,
+                description=f"{pickup} → {dropoff}",
+                line_total=net,
+                line_meta={
+                    "original_line_total": str(catalog),
+                    "patient_name": customer,
+                },
+                adjustment_note=None,
+                to_dict=lambda line_id=line_id,
+                booking_id=booking_id,
+                pickup=pickup,
+                dropoff=dropoff,
+                catalog=catalog,
+                net=net,
+                customer=customer: {
+                    "id": line_id,
+                    "type": "ride",
+                    "reservation_id": booking_id,
+                    "description": f"{pickup} → {dropoff}",
+                    "line_total": float(net),
+                    "adjustment_note": None,
+                    "line_meta": {
+                        "original_line_total": str(catalog),
+                        "patient_name": customer,
+                    },
+                },
+            )
+        )
+        bookings[booking_id] = SimpleNamespace(
+            id=booking_id,
+            client_id=1,
+            client=clinic,
+            scheduled_time=scheduled,
+            pickup_location=pickup,
+            dropoff_location=dropoff,
+            customer_name=customer,
+            mission_type="patient_transport",
+            status="COMPLETED",
+            is_round_trip=False,
+            parent_booking_id=None,
+            is_return=False,
+        )
+    invoice = SimpleNamespace(
+        id=1,
+        lines=lines,
+        billing_strategy="s2_clinic_monthly",
+        billing_party_id=1,
+        bill_to_client_id=1,
+        client_id=1,
+        client=clinic,
+        meta={
+            "global_discount": {
+                "percent": 10,
+                "amount_ht": 30.30,
+                "subtotal_before_ht": 303,
+                "note": "Rabais sur la facture",
+            }
+        },
+        subtotal_amount=Decimal("272.70"),
+        vat_total_amount=Decimal("0"),
+        total_amount=Decimal("272.70"),
+    )
+    font_name, font_bold = _ensure_dejavu_pdf_fonts()
+    style = ParagraphStyle(
+        "S2Probe", fontName=font_name, fontSize=FONT_BODY, leading=14
+    )
+    table, consolidated = _build_s2_table(
+        invoice,
+        font_name,
+        font_bold,
+        style,
+        bookings,
+        available_width_pt=480,
+    )
+    assert len(consolidated) == 4
+    assert all(item.get("is_round_trip") is not True for item in consolidated)
+
+    header = [
+        getattr(cell, "getPlainText", lambda: str(cell))()
+        for cell in table._cellvalues[0]
+    ]
+    assert header[:3] == ["Date", "Description", "Montant"]
+
+    expected = [
+        ("BONVIN Claire", "Chemin des Vignes 4, 1247 Anieres", "72.00"),
+        ("BONVIN Claire", "Chemin des Vignes 4, 1247 Anieres", "72.00"),
+        ("DUVAL Marc", "Route de Hermance 8, 1222 Vesenaz", "95.00"),
+        ("KELLER Sophie", "Avenue de Champel 20, 1206 Geneve", "64.00"),
+    ]
+    for row, (client, route_bit, net) in zip(
+        table._cellvalues[1:], expected, strict=True
+    ):
+        date_text = row[0].getPlainText()
+        desc_text = row[1].getPlainText()
+        amount_text = row[2].getPlainText()
+        assert date_text
+        assert f"Client : {client}" in desc_text
+        assert "Trajet :" in desc_text
+        assert route_bit in desc_text
+        assert "Rabais" not in desc_text
+        assert amount_text == net
+        assert "CHF" not in amount_text
+
+    totals = _build_totals_table(
+        invoice,
+        True,
+        True,
+        font_name,
+        font_bold,
+        template="standard",
+    )
+    assert [list(row) for row in totals._cellvalues] == [
+        ["Sous-total HT (avant réduction globale)", "303.00 CHF"],
+        ["Réduction globale (10 %)", "\u2212 30.30 CHF"],
+        ["Total HT après réduction globale", "272.70 CHF"],
+        ["TOTAL À FACTURER :", "272.70 CHF"],
+    ]
+    styles = getSampleStyleSheet()
+    hint = _global_discount_hint_flowable(
+        invoice, styles, font_name, content_width_pt=480
+    )
+    assert hint is not None
+    assert _flowable_height_pt(hint, 480) > 0
+    heading = _detail_lines_heading_paragraph(styles, font_bold)
+    buffer = BytesIO()
+    SimpleDocTemplate(buffer, pagesize=A4).build([heading, table, hint, totals])
+    pdf_text = " ".join(
+        " ".join((page.extract_text() or "").split())
+        for page in PdfReader(BytesIO(buffer.getvalue())).pages
+    )
+    assert "DÉTAIL DES PRESTATIONS" in pdf_text
+    assert "Réduction globale enregistrée (10 %)" in pdf_text
+    assert "Rabais sur la facture" in pdf_text
+    assert "Sous-total HT (avant réduction globale)" in pdf_text
+    assert "303.00 CHF" in pdf_text
+    assert "30.30 CHF" in pdf_text
+    assert "Total HT après réduction globale" in pdf_text
+    assert "272.70 CHF" in pdf_text
+    assert "TOTAL À FACTURER" in pdf_text
+    for initial in ("72.00", "95.00", "64.00"):
+        assert initial in pdf_text
+    assert "64.80" not in pdf_text
+    assert "85.50" not in pdf_text
+    assert "57.60" not in pdf_text
+    assert "72.00 →" not in pdf_text

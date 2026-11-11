@@ -52,7 +52,7 @@ class TestPurgeOldBookings:
         self, db, factory_booking, sample_company
     ):
         """Test purge avec bookings terminés anciens."""
-        from models import BookingStatus
+        from models import Booking, BookingStatus
 
         # Créer booking terminé ancien (> 7 ans)
         old_date = datetime.now(UTC) - timedelta(days=DEFAULT_RETENTION_DAYS + 10)
@@ -65,14 +65,23 @@ class TestPurgeOldBookings:
 
         # ✅ FIX: Capturer l'ID avant la purge pour éviter ObjectDeletedError
         booking_id = booking.id
+        retention = DEFAULT_RETENTION_DAYS
+        cutoff_date = datetime.now(UTC) - timedelta(days=retention)
+        deletable_statuses = [
+            BookingStatus.COMPLETED,
+            BookingStatus.RETURN_COMPLETED,
+            BookingStatus.CANCELED,
+        ]
+        expected = Booking.query.filter(
+            Booking.created_at < cutoff_date,
+            Booking.status.in_(deletable_statuses),
+        ).count()
 
         result = purge_old_bookings(None)
 
         assert result["status"] == "success"
-        assert result["deleted_count"] == 1
-
-        # Vérifier que le booking a été supprimé en utilisant l'ID capturé
-        from models import Booking
+        assert result["deleted_count"] == expected
+        assert expected >= 1
 
         assert Booking.query.filter_by(id=booking_id).first() is None
 

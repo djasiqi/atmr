@@ -1,6 +1,13 @@
 import React, { useMemo } from 'react';
 import { formatCurrencyCHF } from '../../../../../services/invoiceService';
 import { collectCustomerVisibleNotesForPreview } from '../../../../../utils/invoiceLineCustomerNote';
+import {
+  invoiceGrandTotalLabel,
+  lineDiscountCaption,
+  linePreviewAmount,
+  presentPrestationParts,
+  usesSharedPrestationLayout,
+} from '../../../../../utils/invoiceLinePresentation';
 import { formatPatientDisplayNameNomPrenom } from '../../../../../utils/patientDisplayName';
 import {
   getRoundTripAuditLegs,
@@ -297,17 +304,6 @@ function mergedRoundTripAmounts(line, partner) {
   };
 }
 
-function catalogNetHint(line) {
-  const m = line?.line_meta;
-  if (!m || typeof m !== 'object') return null;
-  const raw = m.original_line_total;
-  if (raw == null || raw === '') return null;
-  const cat = parseFloat(String(raw).replace(',', '.'));
-  const net = Number(line.line_total);
-  if (!Number.isFinite(cat) || !Number.isFinite(net) || Math.abs(cat - net) < 0.005) return null;
-  return { cat, net };
-}
-
 function customPrestationSubline(line) {
   const meta = parseMeta(line?.line_meta);
   const cp = meta?.custom_prestation;
@@ -429,11 +425,13 @@ export default function InvoiceLivePreview({
   const showTransportDateColumn = lines.some(
     (ln) => lineDetailDateLabel(ln, invoice) != null
   );
-  const showPickupColumn = invoice?.line_time_mode === 'pickup';
+  const showPickupLine = invoice?.line_time_mode === 'pickup';
   const showRoundTripLegend = lines.some((ln) =>
     invoiceLineRepresentsFullRoundTrip(ln, invoice?.lines)
   );
   const payer = payerHint(invoice);
+  const invoiceNumber = String(invoice?.invoice_number || '').trim();
+  const showInvoiceNumber = Boolean(invoiceNumber) && !invoice?.preparation;
 
   const gdBreakdown = useMemo(() => {
     if (!gd || typeof gd !== 'object') return null;
@@ -444,19 +442,22 @@ export default function InvoiceLivePreview({
     return { gross, disc, pct };
   }, [gd]);
 
-  /** Aligné PDF (`pdf.py`) : deux-points séparateur avant les montants du pied. */
-  const totalLabel =
-    invoice?.billing_strategy === 's2_clinic_monthly' ? 'TOTAL À FACTURER :' : 'TOTAL :';
+  const totalLabel = invoiceGrandTotalLabel(invoice?.billing_strategy);
+  const sharedPrestation = usesSharedPrestationLayout(invoice?.billing_strategy);
 
   return (
     <div className={[styles.root, className].filter(Boolean).join(' ')}>
       <div className={styles.sheet} role="document" aria-label="Aperçu facture">
         <header className={styles.header}>
           <div className={styles.headerGrid}>
-            <div>
-              <div className={styles.labelMuted}>Facture</div>
-              <div className={styles.invoiceNumber}>{invoice?.invoice_number || '—'}</div>
-            </div>
+            {showInvoiceNumber ? (
+              <div>
+                <div className={styles.labelMuted}>Facture</div>
+                <div className={styles.invoiceNumber}>{invoiceNumber}</div>
+              </div>
+            ) : (
+              <div />
+            )}
             <div className={styles.headerRight}>
               <div>
                 <span className={styles.labelMuted}>Émission</span>{' '}
@@ -497,9 +498,6 @@ export default function InvoiceLivePreview({
                 {showTransportDateColumn ? (
                   <th className={styles.colDate}>Date</th>
                 ) : null}
-                {showPickupColumn ? (
-                  <th className={styles.colPickup}>Prise en charge</th>
-                ) : null}
                 <th>Description</th>
                 <th className={styles.colNum}>Montant</th>
                 {showVatColumn ? <th className={styles.colNum}>TVA</th> : null}
@@ -508,10 +506,21 @@ export default function InvoiceLivePreview({
             </thead>
             <tbody>
               {lines.map((line) => {
-                const cn = catalogNetHint(line);
                 const sub = customPrestationSubline(line);
                 const transportDate = lineDetailDateLabel(line, invoice);
-                const patientSub = rideLinePatientSubline(line, invoice);
+                const presented = sharedPrestation
+                  ? presentPrestationParts(line, {
+                      showPickup: showPickupLine,
+                      formatClientName: formatPatientDisplayNameNomPrenom,
+                    })
+                  : null;
+                const patientSub = presented
+                  ? presented.clientLine
+                  : rideLinePatientSubline(line, invoice);
+                const pickupLine = presented?.pickupLine || null;
+                const trajetLine = presented
+                  ? presented.trajetLine
+                  : lineDescriptionWithPrefix(line);
                 const mergePartner =
                   commercialRoundTripPartner(line, rideLinesByReservationId) ??
                   getRoundTripPartnerLine(line, invoice?.lines);
@@ -543,22 +552,27 @@ export default function InvoiceLivePreview({
                   line,
                   invoice?.lines,
                 );
-                const { ht, vat, ttc } = mergedRoundTripAmounts(line, mergePartner);
+                const { vat, ttc } = mergedRoundTripAmounts(line, mergePartner);
+                const displayedHt = linePreviewAmount(line, invoice, mergePartner);
+                const discountCaption = lineDiscountCaption(
+                  mergePartner ? [line, mergePartner] : line,
+                  invoice
+                );
                 const auditLegs = auditableRoundTrip ? getRoundTripAuditLegs(line) : null;
                 return (
                   <tr key={line.id ?? `${line.description}-${line.line_total}`}>
                     {showTransportDateColumn ? (
                       <td className={styles.colDate}>{transportDate ?? '—'}</td>
                     ) : null}
-                    {showPickupColumn ? (
-                      <td className={styles.colPickup}>{line.pickup_label || '—'}</td>
-                    ) : null}
                     <td>
                       {patientSub ? (
                         <div className={styles.lineClinicContext}>{patientSub}</div>
                       ) : null}
+                      {pickupLine ? (
+                        <div className={styles.lineClinicContext}>{pickupLine}</div>
+                      ) : null}
                       <div className={styles.lineDesc}>
-                        {lineDescriptionWithPrefix(line)}
+                        {trajetLine}
                         {isAr ? (
                           <span className={styles.lineArTag} title="Transport aller-retour">
                             {' '}
@@ -598,10 +612,8 @@ export default function InvoiceLivePreview({
                         </div>
                       ) : null}
                       {sub ? <div className={styles.lineSub}>{sub}</div> : null}
-                      {cn ? (
-                        <div className={styles.lineSub}>
-                          {cn.cat.toFixed(2)} → {cn.net.toFixed(2)} CHF HT
-                        </div>
+                      {discountCaption ? (
+                        <div className={styles.lineSub}>{discountCaption}</div>
                       ) : null}
                       {adjNotes.map((note) => (
                         <div key={note} className={styles.lineNote}>
@@ -609,7 +621,9 @@ export default function InvoiceLivePreview({
                         </div>
                       ))}
                     </td>
-                    <td className={styles.colNum}>{Number.isFinite(ht) ? ht.toFixed(2) : '—'}</td>
+                    <td className={styles.colNum}>
+                      {Number.isFinite(displayedHt) ? displayedHt.toFixed(2) : '—'}
+                    </td>
                     {showVatColumn ? (
                       <td className={styles.colNum}>{Number.isFinite(vat) ? vat.toFixed(2) : '—'}</td>
                     ) : null}

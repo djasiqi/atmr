@@ -48,10 +48,14 @@ def covered_booking_ids(line: Any) -> set[int]:
     """Bookings explicitement revendiqués par une ligne de facture.
 
     Interprète uniquement reservation_id + clés meta A/R connues.
+    Les lignes de facture rectificative (``do_not_claim_booking``) ne
+    revendiquent aucun transport : elles documentent une correction.
     """
+    meta = getattr(line, "line_meta", None)
+    if isinstance(meta, dict) and meta.get("do_not_claim_booking") is True:
+        return set()
     out: set[int] = set()
     _as_int_ids(getattr(line, "reservation_id", None), into=out)
-    meta = getattr(line, "line_meta", None)
     if isinstance(meta, dict):
         for key in _META_BOOKING_ID_KEYS:
             if key in meta:

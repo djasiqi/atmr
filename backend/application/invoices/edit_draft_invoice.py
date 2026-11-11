@@ -1,6 +1,13 @@
-"""Édition minimale des lignes facture (brouillon ou déjà émise).
+"""Édition minimale des lignes facture (brouillon uniquement).
 
-Statuts éditables : brouillon, envoyée, partiellement payée, en retard — pas payée ni annulée.
+Statut éditable : **brouillon** seulement (LIRIE — étape 22, garde-fou
+``application.invoices.issued_invoice_guard``). Une facture émise (envoyée,
+partiellement payée, payée, en retard, annulée ou statut inconnu) est figée :
+ni ses lignes, ni ses remises, ni ses totaux ne sont modifiés ; le « repair »
+TTC exécuté au GET et l'ajout automatique de la ligne « frais papier » sont
+eux aussi réservés aux brouillons. Toute correction d'une facture émise passe
+par une procédure administrative explicite (refus 409
+``ISSUED_INVOICE_IMMUTABLE``).
 
 Le PDF n'est pas régénéré sur ces mutations : l'éditeur utilise un aperçu HTML ; le fichier PDF est
 produit à la finalisation / envoi / téléchargement ou via ``POST …/regenerate-pdf``.
@@ -18,6 +25,11 @@ from typing import Any, cast
 from sqlalchemy.orm import joinedload
 
 from application.invoices.booking_schedule import booking_schedule_sort_key
+from application.invoices.issued_invoice_guard import (
+    invoice_is_mutable,
+    invoice_status_value,
+    issued_invoice_refusal_payload,
+)
 from ext import db
 from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
@@ -31,19 +43,18 @@ from repositories.company_billing_settings_repository import (
 
 logger = logging.getLogger(__name__)
 
+# Seul le brouillon est éditable : une facture émise est figée (étape 22).
 _EDITABLE_INVOICE_LINE_STATUSES: frozenset[InvoiceStatus] = frozenset(
-    {
-        InvoiceStatus.DRAFT,
-        InvoiceStatus.SENT,
-        InvoiceStatus.PARTIALLY_PAID,
-        InvoiceStatus.OVERDUE,
-    }
+    {InvoiceStatus.DRAFT}
 )
 
 
 def invoice_allows_line_editing(inv: Invoice) -> bool:
-    """True si lignes / remises peuvent être modifiées (pas payée, pas annulée)."""
-    return inv.status in _EDITABLE_INVOICE_LINE_STATUSES
+    """True si lignes / remises / totaux peuvent être modifiés : brouillon uniquement.
+
+    Fail-closed : un statut absent ou inconnu est traité comme émis (non éditable).
+    """
+    return invoice_is_mutable(inv)
 
 
 def _mark_pdf_stale(invoice: Invoice) -> None:
@@ -286,9 +297,11 @@ def _resolve_draft_invoice(
     *,
     expected_updated_at: str | None = None,
 ) -> tuple[Invoice | None, int | None, str | dict[str, Any] | None]:
-    """Charge la facture ; 404 si absente, message si non brouillon.
+    """Charge la facture ; 404 si absente, 409 ``ISSUED_INVOICE_IMMUTABLE`` si émise.
 
-    Le verrou optimiste est vérifié **avant** le repair TTC pour que l'horodatage du GET reste valide.
+    Le garde-fou d'immutabilité est évalué **avant** toute écriture (frais papier,
+    repair TTC). Le verrou optimiste est vérifié **avant** le repair TTC pour que
+    l'horodatage du GET reste valide.
     """
     inv = (
         Invoice.query.options(joinedload(Invoice.lines))
@@ -298,10 +311,19 @@ def _resolve_draft_invoice(
     if not inv:
         return None, 404, "Facture introuvable"
     if not invoice_allows_line_editing(inv):
+        logger.warning(
+            "[ISSUED INVOICE GUARD] Édition de lignes refusée (invoice_id=%s, status=%s)",
+            inv.id,
+            invoice_status_value(inv),
+        )
         return (
             None,
-            400,
-            "Seules les factures non payées et non annulées (brouillon, envoyée, en cours d'encaissement) peuvent être modifiées.",
+            409,
+            issued_invoice_refusal_payload(
+                invoice_id=inv.id,
+                status=invoice_status_value(inv),
+                operation="edit_invoice_lines",
+            ),
         )
     conflict = _expected_updated_at_conflict(inv, expected_updated_at)
     if conflict:

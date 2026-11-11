@@ -14,7 +14,7 @@ Usage:
     # Exécution réelle
     python scripts/repair_invoices_integrity.py --from-date 2026-01-01 --fix
 
-    # Inclure les factures SENT (risqué, à utiliser avec précaution)
+    # --include-sent est ignoré : les factures émises ne sont pas réécrites
     python scripts/repair_invoices_integrity.py --fix --include-sent
 
     # Réparer des IDs spécifiques
@@ -47,11 +47,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Valeurs enum pour requêtes SQL
+# Seuls les brouillons sont réparables (étape 23).
 STATUS_DRAFT = InvoiceStatus.DRAFT.value  # "draft"
-STATUS_SENT = InvoiceStatus.SENT.value  # "sent"
-STATUS_PAID = InvoiceStatus.PAID.value  # "paid"
-STATUS_CANCELLED = InvoiceStatus.CANCELLED.value  # "cancelled"
 
 
 def parse_args():
@@ -66,7 +63,12 @@ def parse_args():
         "--fix", action="store_true", help="Exécuter les corrections (sinon dry-run)"
     )
     parser.add_argument(
-        "--include-sent", action="store_true", help="Inclure les factures SENT (risqué)"
+        "--include-sent",
+        action="store_true",
+        help=(
+            "Ignoré (étape 23) : les factures émises ne sont jamais réécrites. "
+            "Conservé pour compatibilité d'invocation."
+        ),
     )
     parser.add_argument(
         "--limit", type=int, default=100, help="Nombre max de factures à corriger"
@@ -76,14 +78,18 @@ def parse_args():
 
 
 def build_status_filter(include_sent: bool) -> tuple[str, dict]:
-    """Construit le filtre de statut."""
+    """Construit le filtre de statut.
+
+    ``include_sent`` est ignoré : une facture qui n'est plus brouillon
+    ne peut pas être réécrite par ce script (étape 23). Le paramètre reste
+    accepté pour ne pas casser les invocations existantes ; il ne sélectionne
+    plus rien au-delà de DRAFT.
+    """
     if include_sent:
-        # Uniquement exclure PAID et CANCELLED
-        return "i.status NOT IN (:status_paid, :status_cancelled)", {
-            "status_paid": STATUS_PAID,
-            "status_cancelled": STATUS_CANCELLED,
-        }
-    # Par défaut, uniquement DRAFT
+        logger.warning(
+            "[REPAIR] --include-sent ignoré : les factures émises ne sont pas "
+            "modifiées. Seuls les brouillons peuvent être réparés."
+        )
     return "i.status = :status_draft", {
         "status_draft": STATUS_DRAFT,
     }
@@ -212,6 +218,35 @@ def get_invoices_with_balance_mismatch(
     return [row[0] for row in result]
 
 
+def _refuse_issued_invoice(invoice: Invoice) -> dict[str, Any] | None:
+    """Refuse toute réécriture d'une facture qui n'est plus brouillon.
+
+    Aucun appel à ``recompute_invoice_totals`` : même un aperçu modifierait
+    l'objet en session.
+    """
+    from application.invoices.issued_invoice_guard import (
+        invoice_is_issued,
+        invoice_status_value,
+    )
+
+    if not invoice_is_issued(invoice):
+        return None
+    status_value = invoice_status_value(invoice)
+    logger.error(
+        "[REPAIR] Refus facture émise id=%s status=%s : aucune réécriture "
+        "(procédure administrative requise).",
+        invoice.id,
+        status_value,
+    )
+    return {
+        "status": "refused",
+        "reason": "issued_invoice_immutable",
+        "invoice_id": invoice.id,
+        "invoice_number": invoice.invoice_number,
+        "invoice_status": status_value,
+    }
+
+
 def repair_invoice_totals(invoice_id: int, dry_run: bool = True) -> dict[str, Any]:
     """Recalcule les totaux d'une facture.
 
@@ -224,6 +259,10 @@ def repair_invoice_totals(invoice_id: int, dry_run: bool = True) -> dict[str, An
             "invoice_id": invoice_id,
             "reason": "invoice_not_found",
         }
+
+    refused = _refuse_issued_invoice(invoice)
+    if refused is not None:
+        return refused
 
     old_values = {
         "subtotal_amount": float(invoice.subtotal_amount or Decimal("0")),
@@ -281,6 +320,10 @@ def repair_balance_due(invoice_id: int, dry_run: bool = True) -> dict[str, Any]:
             "reason": "invoice_not_found",
         }
 
+    refused = _refuse_issued_invoice(invoice)
+    if refused is not None:
+        return refused
+
     old_balance = float(invoice.balance_due or Decimal("0"))
     amount_paid = invoice.amount_paid or Decimal("0")
     total_amount = invoice.total_amount or Decimal("0")
@@ -325,7 +368,12 @@ def main():
         print("=" * 80)
         print(f"Mode: {'🔴 EXÉCUTION' if args.fix else '🟡 DRY-RUN (preview)'}")
         print(
-            f"Inclure SENT: {'Oui ⚠️' if args.include_sent else 'Non (DRAFT uniquement)'}"
+            "Factures émises: refusées"
+            + (
+                " (--include-sent ignoré)"
+                if args.include_sent
+                else " (DRAFT uniquement)"
+            )
         )
         print(f"Limite: {args.limit} factures max")
 
@@ -383,6 +431,11 @@ def main():
                 )
             elif result["status"] == "repaired":
                 print(f"  [✅ REPAIRED] #{result.get('invoice_number', invoice_id)}")
+            elif result["status"] == "refused":
+                print(
+                    f"  [REFUSÉ] #{invoice_id}: facture émise "
+                    f"({result.get('invoice_status')}), aucune écriture"
+                )
             else:
                 print(f"  [❌ ERROR] #{invoice_id}: {result.get('reason', 'unknown')}")
 
@@ -407,6 +460,11 @@ def main():
                 )
             elif result["status"] == "repaired":
                 print(f"  [✅ REPAIRED] #{result.get('invoice_number', invoice_id)}")
+            elif result["status"] == "refused":
+                print(
+                    f"  [REFUSÉ] #{invoice_id}: facture émise "
+                    f"({result.get('invoice_status')}), aucune écriture"
+                )
             else:
                 print(f"  [❌ ERROR] #{invoice_id}: {result.get('reason', 'unknown')}")
 
@@ -431,6 +489,11 @@ def main():
                 )
             elif result["status"] == "repaired":
                 print(f"  [✅ REPAIRED] #{result.get('invoice_number', invoice_id)}")
+            elif result["status"] == "refused":
+                print(
+                    f"  [REFUSÉ] #{invoice_id}: facture émise "
+                    f"({result.get('invoice_status')}), aucune écriture"
+                )
             else:
                 print(f"  [❌ ERROR] #{invoice_id}: {result.get('reason', 'unknown')}")
 

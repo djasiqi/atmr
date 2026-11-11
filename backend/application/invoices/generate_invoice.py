@@ -20,9 +20,23 @@ from ext import db
 from shared.constants import ErrorCodes
 from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
+    finalize_invoice_vat,
     round_to_5_cents,
 )
 from application.invoices.booking_schedule import booking_schedule_sort_key
+from application.invoices.booking_selection import (
+    BookingSelectionRefusal,
+    apply_excluded,
+    enforce_strict_selection,
+    normalize_id_list,
+    selection_fingerprint,
+)
+from application.invoices.cash_allocation import (
+    AllocationRefusal,
+    find_patient_cash_replay,
+    impute_confirmed_cash,
+    patient_cash_applies,
+)
 from application.invoices.invoice_booking_units import (
     segments_belong_to_longer_route_group,
 )
@@ -139,9 +153,12 @@ class GenerateInvoiceInput:
             Si None, prend toutes les réservations non facturées
         overrides: Dict facultatif {reservation_id: {amount, vat_rate, note}}
         billing_opportunity_key: Clé opportunité sujet|payeur (autorité serveur)
-        excluded_booking_ids: IDs à exclure lors de la génération par opportunité
+        excluded_booking_ids: IDs à exclure sur tous les parcours
         institution_patient_id: Bénéficiaire institutionnel (batch patients)
-        strict_reservation_ids: Ne pas élargir la sélection via le DSU A/R
+        strict_reservation_ids: Si True, pas d'élargissement A/R et refus
+            explicite des IDs non éligibles. Absent/False = historique.
+        confirmed_selection_fingerprint: Empreinte SHA-256 des IDs validés
+            à la prévisualisation ; revalidée en transaction d'émission.
         invoice_meta_extra: Métadonnées fusionnées à la création (idempotence)
         delivery_method: ``email`` (défaut) ou ``paper`` (+ CHF 3 ligne distincte)
     """
@@ -161,6 +178,7 @@ class GenerateInvoiceInput:
     excluded_booking_ids: list[int] | None = None
     institution_patient_id: int | None = None
     strict_reservation_ids: bool = False
+    confirmed_selection_fingerprint: str | None = None
     invoice_meta_extra: dict[str, Any] | None = None
     delivery_method: str | None = None
 
@@ -559,29 +577,106 @@ class GenerateInvoiceUseCase:
 
             # 4. Récupérer les réservations
             target_statuses = ["COMPLETED", "RETURN_COMPLETED", "CANCELED"]
+            requested_reservation_ids = normalize_id_list(input_data.reservation_ids)
+            excluded_ids = normalize_id_list(input_data.excluded_booking_ids)
+            strict_selection = bool(input_data.strict_reservation_ids)
             if opportunity_reservations is not None:
-                reservations = opportunity_reservations
+                reservations = list(opportunity_reservations)
+                if requested_reservation_ids:
+                    allowed = set(requested_reservation_ids)
+                    reservations = [
+                        row
+                        for row in reservations
+                        if int(getattr(row, "id", 0) or 0) in allowed
+                    ]
+                reservations = apply_excluded(reservations, excluded_ids)
                 bookings_by_id = {r.id: r for r in reservations}
-            elif input_data.reservation_ids:
+            elif requested_reservation_ids:
                 # Mode sélection manuelle : accepter aussi les annulations facturables
-                booking_dtos = self.booking_repo.find_by_ids(input_data.reservation_ids)
+                booking_dtos = self.booking_repo.find_by_ids(requested_reservation_ids)
                 # Charger les modèles Booking pour les annulations (vérifier is_cancellation_billable / billing_override_reason)
                 bookings_by_id = {
                     b.id: b
                     for b in Booking.query.filter(
-                        Booking.id.in_(input_data.reservation_ids)
+                        Booking.id.in_(requested_reservation_ids)
                     ).all()
                 }
+                found_ids = {int(dto.id) for dto in booking_dtos}
+                if strict_selection:
+                    unknown = [
+                        rid for rid in requested_reservation_ids if rid not in found_ids
+                    ]
+                    if unknown:
+                        raise BookingSelectionRefusal(
+                            "reservation_introuvable",
+                            (
+                                "Réservation(s) introuvable(s) dans la sélection "
+                                f"stricte : {', '.join(str(i) for i in unknown)}."
+                            ),
+                        )
+                if strict_selection and patient_cash_applies(
+                    clinic_company_id=input_data.clinic_company_id,
+                    bill_to_client_id=input_data.bill_to_client_id,
+                    institution_patient_id=institution_patient_id_for_invoice,
+                ):
+                    already_billed = [
+                        int(dto.id)
+                        for dto in booking_dtos
+                        if getattr(dto, "invoice_line_id", None) is not None
+                        and int(dto.id) not in excluded_ids
+                    ]
+                    expected_strict = [
+                        rid
+                        for rid in requested_reservation_ids
+                        if rid not in excluded_ids
+                    ]
+                    if (
+                        expected_strict
+                        and len(already_billed) == len(expected_strict)
+                        and set(already_billed) == set(expected_strict)
+                    ):
+                        replay_id = find_patient_cash_replay(
+                            int(input_data.company_id),
+                            list(expected_strict),
+                        )
+                        if replay_id is not None:
+                            existing = db.session.get(Invoice, replay_id)
+                            return GenerateInvoiceOutput(
+                                success=True,
+                                invoice_id=replay_id,
+                                invoice=existing,
+                            )
+
                 filtered_booking_dtos = []
                 for dto in booking_dtos:
+                    rid = int(dto.id)
+                    if rid in excluded_ids:
+                        continue
+
+                    def _strict_refuse(code: str, detail: str) -> None:
+                        if strict_selection:
+                            raise BookingSelectionRefusal(code, detail)
+
                     if dto.client_id != effective_client_id:
+                        _strict_refuse(
+                            "reservation_non_eligible",
+                            f"Réservation {rid} : client incompatible avec la facture.",
+                        )
                         continue
                     if getattr(dto, "invoice_line_id", None) is not None:
+                        _strict_refuse(
+                            "reservation_deja_facturee",
+                            f"Réservation {rid} déjà facturée.",
+                        )
                         continue
                     # Annulation : n'accepter que si facturable (montant > 0 et motif)
                     if dto.status.value == "CANCELED":
                         booking = bookings_by_id.get(dto.id)
                         if not booking or not (getattr(dto, "amount", 0) or 0) > 0:
+                            _strict_refuse(
+                                "reservation_non_eligible",
+                                f"Réservation {rid} annulée non facturable.",
+                            )
                             continue
                         is_billable = getattr(
                             booking, "is_cancellation_billable", False
@@ -592,13 +687,26 @@ class GenerateInvoiceUseCase:
                             ).strip()
                         )
                         if not is_billable:
+                            _strict_refuse(
+                                "reservation_non_eligible",
+                                f"Réservation {rid} annulée non facturable.",
+                            )
                             continue
                         is_owner = dto.company_id == input_data.company_id
                         if is_owner:
                             filtered_booking_dtos.append(dto)
+                        else:
+                            _strict_refuse(
+                                "autre_entreprise",
+                                f"Réservation {rid} : autre entreprise.",
+                            )
                         continue
                     # COMPLETED / RETURN_COMPLETED
                     if dto.status.value not in ("COMPLETED", "RETURN_COMPLETED"):
+                        _strict_refuse(
+                            "reservation_non_eligible",
+                            f"Réservation {rid} : statut non facturable.",
+                        )
                         continue
                     is_owner = dto.company_id == input_data.company_id
                     is_executor = (
@@ -620,6 +728,16 @@ class GenerateInvoiceUseCase:
                         ).first()
                         if transfer:
                             filtered_booking_dtos.append(dto)
+                        else:
+                            _strict_refuse(
+                                "reservation_non_eligible",
+                                f"Réservation {rid} : transfert partenaire invalide.",
+                            )
+                    else:
+                        _strict_refuse(
+                            "autre_entreprise",
+                            f"Réservation {rid} : autre entreprise.",
+                        )
 
                 booking_ids = [dto.id for dto in filtered_booking_dtos]
                 if not booking_ids:
@@ -634,7 +752,7 @@ class GenerateInvoiceUseCase:
                 )
                 selected_ids = {int(x) for x in booking_ids}
                 expanded_ids: set[int] = set(selected_ids)
-                if not input_data.strict_reservation_ids:
+                if not strict_selection:
                     comps = round_trip_component_id_sets(
                         eligible_period,
                         amount_ht_fn=None,
@@ -652,20 +770,42 @@ class GenerateInvoiceUseCase:
                 reservations = filter_bookings_open_for_new_invoice_line(
                     expanded_bookings
                 )
+                reservations = apply_excluded(reservations, excluded_ids)
                 if not reservations:
+                    if (
+                        patient_cash_applies(
+                            clinic_company_id=input_data.clinic_company_id,
+                            bill_to_client_id=input_data.bill_to_client_id,
+                            institution_patient_id=institution_patient_id_for_invoice,
+                        )
+                        and requested_reservation_ids
+                    ):
+                        replay_id = find_patient_cash_replay(
+                            int(input_data.company_id),
+                            list(requested_reservation_ids),
+                        )
+                        if replay_id is not None:
+                            existing = db.session.get(Invoice, replay_id)
+                            return GenerateInvoiceOutput(
+                                success=True,
+                                invoice_id=replay_id,
+                                invoice=existing,
+                            )
                     msg = (
                         "Aucune réservation facturable : les courses sélectionnées appartiennent "
                         "à un aller-retour dont un segment est déjà facturé sur une facture valide, "
                         "ou la sélection ne contient aucune course éligible."
                     )
                     raise ValueError(msg)
-                if len(booking_ids) < len(input_data.reservation_ids):
+                if not strict_selection and len(booking_ids) < len(
+                    requested_reservation_ids
+                ):
                     logger.warning(
                         (
                             "Certaines réservations ne sont pas valides ou "
                             "déjà facturées. Demandé: %s, éligibles après filtre: %s"
                         ),
-                        len(input_data.reservation_ids),
+                        len(requested_reservation_ids),
                         len(booking_ids),
                     )
                 bookings_by_id = {r.id: r for r in reservations}
@@ -720,6 +860,7 @@ class GenerateInvoiceUseCase:
                 reservations = filter_bookings_open_for_new_invoice_line(
                     list(merged_for_lock.values())
                 )
+                reservations = apply_excluded(reservations, excluded_ids)
                 # Même accès qu'en mode reservation_ids (annulation / frais d'annulation)
                 bookings_by_id = {r.id: r for r in reservations}
 
@@ -743,6 +884,34 @@ class GenerateInvoiceUseCase:
                     raise ValueError(
                         f"Aucune prestation facturable pour l'instant : {hold_msg}"
                     )
+            candidate_ids = sorted(
+                int(item.id)
+                for item in reservations
+                if getattr(item, "id", None) is not None
+            )
+            if candidate_ids:
+                locked_rows = (
+                    db.session.query(Booking)
+                    .filter(Booking.id.in_(candidate_ids))
+                    .order_by(Booking.id.asc())
+                    .with_for_update()
+                    .all()
+                )
+                reservations = filter_bookings_open_for_new_invoice_line(locked_rows)
+            from application.invoices.confirmed_payment_coverage import (
+                apply_confirmed_payment_coverage,
+            )
+
+            before_payment_filter = list(reservations)
+            payment_notes: list[str] = []
+            reservations = apply_confirmed_payment_coverage(reservations, payment_notes)
+            if payment_notes:
+                logger.info("Couverture paiement confirmé : %s", payment_notes)
+            if before_payment_filter and not reservations:
+                raise ValueError(
+                    "Prestation déjà réglée par un paiement confirmé : "
+                    "elle ne peut pas être facturée une seconde fois."
+                )
             from application.invoices.billable_amount import (
                 partition_invoiceable_bookings,
             )
@@ -750,13 +919,45 @@ class GenerateInvoiceUseCase:
             reservations, _unresolved_fees = partition_invoiceable_bookings(
                 reservations, billing_settings=billing_settings_dto
             )
-            if input_data.strict_reservation_ids and input_data.reservation_ids:
-                allowed_ids = {int(x) for x in input_data.reservation_ids}
+            reservations = apply_excluded(reservations, excluded_ids)
+            if requested_reservation_ids:
+                allowed_ids = set(requested_reservation_ids) - set(excluded_ids)
                 reservations = [
                     r
                     for r in reservations
                     if int(getattr(r, "id", 0) or 0) in allowed_ids
                 ]
+            final_ids = [
+                int(getattr(r, "id", 0) or 0)
+                for r in reservations
+                if getattr(r, "id", None) is not None
+            ]
+            if strict_selection:
+                if not requested_reservation_ids:
+                    raise BookingSelectionRefusal(
+                        "selection_stricte_vide",
+                        "Sélection stricte exige reservation_ids.",
+                    )
+                enforce_strict_selection(
+                    requested_ids=requested_reservation_ids,
+                    eligible_ids=final_ids,
+                    excluded_ids=excluded_ids,
+                    final_ids=final_ids,
+                    confirmed_fingerprint=input_data.confirmed_selection_fingerprint,
+                )
+            elif input_data.confirmed_selection_fingerprint:
+                actual_fp = selection_fingerprint(final_ids)
+                expected_fp = (
+                    str(input_data.confirmed_selection_fingerprint).strip().lower()
+                )
+                if actual_fp != expected_fp:
+                    raise BookingSelectionRefusal(
+                        "previsualisation_perimee",
+                        (
+                            "La sélection a changé depuis la prévisualisation. "
+                            "Relancez l'aperçu avant d'émettre."
+                        ),
+                    )
             bookings_by_id = {r.id: r for r in reservations}
 
             if not reservations:
@@ -825,11 +1026,21 @@ class GenerateInvoiceUseCase:
                     ).lower()
                     current_billing_party_id = getattr(r, "billing_party_id", None)
 
-                    # Si pas de payeur explicite, utiliser la résolution automatique
-                    if (
+                    would_fill_payer = (
                         current_billed_to_type == "patient"
                         and not current_billing_party_id
-                    ):
+                    )
+                    payer_change_allowed = True
+                    if would_fill_payer:
+                        from application.billing.settlement_payer_lock import (
+                            refuse_ordinary_payer_change,
+                        )
+
+                        payer_change_allowed = (
+                            refuse_ordinary_payer_change(int(r.id)) is None
+                        )
+                    # Si pas de payeur explicite, utiliser la résolution automatique
+                    if would_fill_payer and payer_change_allowed:
                         try:
                             if payer_resolved.get("billed_to_type"):
                                 r.billed_to_type = payer_resolved["billed_to_type"]
@@ -1072,6 +1283,48 @@ class GenerateInvoiceUseCase:
                         },
                         status_code=HTTP_409_CONFLICT,
                     )
+            # Le commit de la séquence de numérotation relâche le premier
+            # verrou. On reprend les courses ici, avant toute écriture de
+            # facture, pour qu'un brouillon chauffeur concurrent ne passe pas.
+            final_ids = sorted(
+                int(item.id)
+                for item in reservations
+                if getattr(item, "id", None) is not None
+            )
+            if final_ids:
+                locked_final = (
+                    db.session.query(Booking)
+                    .filter(Booking.id.in_(final_ids))
+                    .order_by(Booking.id.asc())
+                    .populate_existing()
+                    .with_for_update()
+                    .all()
+                )
+                reservations = filter_bookings_open_for_new_invoice_line(locked_final)
+                reservations = apply_confirmed_payment_coverage(reservations, [])
+                bookings_by_id = {r.id: r for r in reservations}
+            if (
+                patient_cash_applies(
+                    clinic_company_id=input_data.clinic_company_id,
+                    bill_to_client_id=input_data.bill_to_client_id,
+                    institution_patient_id=institution_patient_id_for_invoice,
+                )
+                and input_data.reservation_ids
+            ):
+                replay_id = find_patient_cash_replay(
+                    int(input_data.company_id),
+                    [int(item) for item in input_data.reservation_ids],
+                )
+                if replay_id is not None:
+                    existing = db.session.get(Invoice, replay_id)
+                    return GenerateInvoiceOutput(
+                        success=True, invoice_id=replay_id, invoice=existing
+                    )
+            if not reservations:
+                raise ValueError(
+                    "La prestation n'est plus facturable : elle est déjà "
+                    "facturée ou déjà réglée par un paiement confirmé."
+                )
             two_places = Decimal("0.01")
             meta: dict[str, Any] | None = None
             if payer_needs_review_reason:
@@ -1459,12 +1712,7 @@ class GenerateInvoiceUseCase:
                         lm.vat_amount = Decimal("0.00")
                         lm.total_with_vat = lm.line_total
 
-                subtotal = net_ht
-                vat_total = round_to_5_cents(vat_total)
-                total = round_to_5_cents(subtotal + vat_total)
-                vat_total = total - subtotal
-                if vat_total < 0:
-                    vat_total = Decimal("0.00")
+                subtotal, vat_total, total = finalize_invoice_vat(net_ht, vat_total)
 
                 global_discount_meta = {
                     "percent": float(gd_pct_dec),
@@ -1474,12 +1722,9 @@ class GenerateInvoiceUseCase:
                 if gd_note_stripped:
                     global_discount_meta["note"] = gd_note_stripped
             else:
-                subtotal = gross_subtotal
-                vat_total = round_to_5_cents(vat_total)
-                total = round_to_5_cents(subtotal + vat_total)
-                vat_total = total - subtotal
-                if vat_total < 0:
-                    vat_total = Decimal("0.00")
+                subtotal, vat_total, total = finalize_invoice_vat(
+                    gross_subtotal, vat_total
+                )
 
             # Frais facture papier : ligne distincte, hors plafond / hors remise transport
             from application.invoices.paper_invoice_fee import (
@@ -1532,7 +1777,31 @@ class GenerateInvoiceUseCase:
             invoice.subtotal_amount = subtotal
             invoice.vat_total_amount = vat_total
             invoice.total_amount = total
-            invoice.balance_due = total
+            cash_settlement_status: InvoiceStatus | None = None
+            if patient_cash_applies(
+                clinic_company_id=input_data.clinic_company_id,
+                bill_to_client_id=input_data.bill_to_client_id,
+                institution_patient_id=institution_patient_id_for_invoice,
+            ):
+                dues = {
+                    int(reservation.id): drafts[int(reservation.id)].base_amount
+                    for reservation in reservations
+                    if int(reservation.id) in drafts
+                }
+                db.session.flush()
+                paid, due = impute_confirmed_cash(
+                    int(input_data.company_id), int(invoice.id), total, dues
+                )
+                invoice.amount_paid = paid
+                invoice.balance_due = due
+                # Le premier PDF doit encore voir un brouillon. Le statut payé
+                # est posé seulement après le fichier, dans la transaction documentaire.
+                if due <= 0 and paid > 0:
+                    cash_settlement_status = InvoiceStatus.PAID
+                elif paid > 0:
+                    cash_settlement_status = InvoiceStatus.PARTIALLY_PAID
+            else:
+                invoice.balance_due = total
             vat_payload: dict[str, dict[str, float]] = {
                 rate: {
                     "base": float(values["base"].quantize(two_places)),
@@ -1598,6 +1867,10 @@ class GenerateInvoiceUseCase:
                 pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
                 generated_pdf_url = pdf_url or None
                 if pdf_url:
+                    if cash_settlement_status is not None:
+                        invoice.status = cash_settlement_status
+                        if cash_settlement_status == InvoiceStatus.PAID:
+                            invoice.paid_at = datetime.now(UTC)
                     mark_pdf_ready(invoice, pdf_url)
                 else:
                     mark_pdf_failed(invoice, "PDF_EMPTY")
@@ -1761,6 +2034,45 @@ class GenerateInvoiceUseCase:
                 },
                 status_code=400,
             )
+        except BookingSelectionRefusal as refusal:
+            if generated_pdf_url:
+                logger.warning(
+                    "Rollback après génération PDF — fichier possiblement orphelin (pdf_url=%s)",
+                    generated_pdf_url,
+                )
+            db.session.rollback()
+            # L'autre émission a gagné la course : renvoyer la même facture.
+            if refusal.code == "reservation_non_eligible":
+                requested = normalize_id_list(input_data.reservation_ids)
+                if requested and patient_cash_applies(
+                    clinic_company_id=input_data.clinic_company_id,
+                    bill_to_client_id=input_data.bill_to_client_id,
+                    institution_patient_id=getattr(
+                        input_data, "institution_patient_id", None
+                    ),
+                ):
+                    replay_id = find_patient_cash_replay(
+                        int(input_data.company_id),
+                        requested,
+                    )
+                    if replay_id is not None:
+                        return GenerateInvoiceOutput(
+                            success=True,
+                            invoice_id=replay_id,
+                            invoice=db.session.get(Invoice, replay_id),
+                        )
+            logger.warning(
+                "Sélection refusée lors de la génération de facture: %s", refusal
+            )
+            return GenerateInvoiceOutput(
+                success=False,
+                error={
+                    "error": str(refusal),
+                    "code": refusal.code,
+                    "error_code": refusal.code,
+                },
+                status_code=409,
+            )
         except ValueError as e:
             if generated_pdf_url:
                 logger.warning(
@@ -1775,6 +2087,13 @@ class GenerateInvoiceUseCase:
                 success=False,
                 error={"error": str(e)},
                 status_code=400,
+            )
+        except AllocationRefusal as refusal:
+            db.session.rollback()
+            return GenerateInvoiceOutput(
+                success=False,
+                error={"error": refusal.code, "code": refusal.code},
+                status_code=refusal.status,
             )
         except Exception:
             if generated_pdf_url:

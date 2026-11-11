@@ -656,8 +656,9 @@ def publish_platform_invoice_pdf(
 ) -> tuple[str, str]:
     """Publie un PDF sous clé immuable {number}_{checksum}.pdf.
 
-    N'écrase pas l'ancien fichier : le pointeur DB est mis à jour par l'appelant
-    après commit ; l'ancien fichier est supprimé en best-effort.
+    N'écrase pas l'ancien fichier. Le pointeur est mis à jour par l'appelant
+    après commit. L'ancien fichier est conservé : un document déjà émis
+    n'est pas détruit par une republication (étape 23).
     """
     _PDF_ROOT.mkdir(parents=True, exist_ok=True)
     checksum = hashlib.sha256(pdf_bytes).hexdigest()
@@ -669,10 +670,9 @@ def publish_platform_invoice_pdf(
         tmp.write_bytes(pdf_bytes)
         tmp.replace(path)
     if previous_path and previous_path != str(path):
-        try:
-            old = Path(previous_path)
-            if old.is_file() and old.resolve() != path.resolve():
-                old.unlink(missing_ok=True)
-        except OSError:
-            pass
+        logger.info(
+            "[PLATFORM PDF] ancien fichier conservé (previous=%s, current=%s)",
+            previous_path,
+            path,
+        )
     return str(path), checksum

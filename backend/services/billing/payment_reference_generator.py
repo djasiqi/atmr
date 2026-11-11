@@ -10,6 +10,7 @@ les IBAN standard (non QR-IBAN).
 # ruff: noqa: G004
 import logging
 import re
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,10 @@ logger = logging.getLogger(__name__)
 SCOR_MAX_DATA_LENGTH = 21  # Max 21 caractères de données (hors RF + check digits)
 SCOR_MIN_LENGTH = 5  # RF + 2 check digits + au moins 1 caractère
 SCOR_MAX_LENGTH = 25  # Max total ISO 11649
+
+
+class ScorReferenceError(Exception):
+    """Référence SCOR refusée : elle ne tient pas dans ISO 11649 sans troncature."""
 
 
 class PaymentReferenceGenerator:
@@ -135,6 +140,25 @@ class PaymentReferenceGenerator:
         return formatted
 
     @staticmethod
+    def format_scor(reference_base: str) -> str:
+        """Construit une SCOR ISO 11649. Refuse une donnée trop longue."""
+        data = re.sub(r"[^A-Z0-9]", "", (reference_base or "").upper())
+        if not data:
+            raise ScorReferenceError("reference_scor_vide")
+        if len(data) > SCOR_MAX_DATA_LENGTH:
+            logger.error(
+                "Référence SCOR refusée (%s > %s), aucune troncature",
+                len(data),
+                SCOR_MAX_DATA_LENGTH,
+            )
+            raise ScorReferenceError("reference_scor_trop_longue")
+        check_digits = PaymentReferenceGenerator.calculate_check_digits(data)
+        scor_reference = f"RF{check_digits}{data}"
+        return " ".join(
+            scor_reference[i : i + 4] for i in range(0, len(scor_reference), 4)
+        )
+
+    @staticmethod
     def validate_scor(scor_reference: str) -> bool:
         """Valide une référence SCOR.
 
@@ -239,6 +263,44 @@ class PaymentReferenceGenerator:
         except Exception as e:
             logger.error(f"Erreur extraction numéro facture : {e}")
             return None
+
+
+def compact_scor(value: str) -> str:
+    """Forme compacte, sans espaces, pour comparer base, QR et texte imprimé."""
+    return re.sub(r"\s+", "", (value or "").upper())
+
+
+def ensure_partner_scor(partner_invoice: Any) -> str:
+    """Enregistre une SCOR valide et la réutilise telle quelle.
+
+    Le numéro partenaire (préfixe PARTNER-) dépasse souvent 21 caractères.
+    On retire ce préfixe redondant, sans couper le reste. S'il ne tient
+    toujours pas, la donnée est l'identifiant de la facture, jamais une
+    tranche du numéro. Une référence déjà enregistrée n'est pas remplacée.
+    """
+    stored = compact_scor(getattr(partner_invoice, "payment_reference", None) or "")
+    if stored:
+        if not PaymentReferenceGenerator.validate_scor(stored):
+            raise ScorReferenceError("reference_enregistree_invalide")
+        return stored
+    clean = re.sub(
+        r"[^A-Z0-9]",
+        "",
+        str(getattr(partner_invoice, "invoice_number", "") or "").upper(),
+    )
+    body = clean[len("PARTNER") :] if clean.startswith("PARTNER") else clean
+    company_id = getattr(partner_invoice, "executing_company_id", None)
+    prefix = str(int(company_id)) if company_id is not None else ""
+    data = f"{prefix}{body}"
+    if not data or len(data) > SCOR_MAX_DATA_LENGTH:
+        document_id = getattr(partner_invoice, "id", None)
+        if document_id is None:
+            raise ScorReferenceError("reference_scor_sans_identifiant")
+        data = f"{prefix}D{int(document_id)}"
+    formatted = PaymentReferenceGenerator.format_scor(data)
+    compact = compact_scor(formatted)
+    partner_invoice.payment_reference = compact
+    return compact
 
 
 # Alias pour simplifier l'import

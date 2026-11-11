@@ -125,7 +125,9 @@ class TestInvoicePdfUnified:
         assert "DÉTAIL DES PRESTATIONS" in pdf_text, (
             "Section 'DÉTAIL DES PRESTATIONS' manquante"
         )
-        assert "TOTAL :" in pdf_text, "Libellé total manquant pour facture client"
+        assert "TOTAL À FACTURER" in pdf_text, (
+            "Libellé total manquant pour facture client"
+        )
         assert "Test ride" in pdf_text, "Ligne de prestation manquante"
 
     def test_s2_clinic_invoice_header(self, db):

@@ -1,7 +1,7 @@
 """Contrat de colonnes du tableau de prestations (client, clinique, partenaire).
 
-Une seule définition : le PDF institutionnel et le PDF partenaire lisent ces libellés.
-Le mode ``pickup`` ajoute uniquement « Prise en charge ».
+Une seule définition : Date | Description | Montant. L'heure de prise en charge
+n'est pas une colonne ; elle s'affiche dans la description de la prestation.
 """
 
 from __future__ import annotations
@@ -26,13 +26,11 @@ def normalize_line_time_mode(value: object | None) -> str:
 
 
 def detail_headers(*, show_date: bool, line_time_mode: str) -> tuple[str, ...]:
-    """Colonnes du détail. ``pickup`` insère une seule colonne entre Date et Description."""
-    mode = normalize_line_time_mode(line_time_mode)
+    """Colonnes du détail. Le mode horaire ne change pas la grille."""
+    normalize_line_time_mode(line_time_mode)
     headers: list[str] = []
     if show_date:
         headers.append(HEADER_DATE)
-    if mode == LINE_TIME_PICKUP:
-        headers.append(HEADER_PICKUP)
     headers.append(HEADER_DESCRIPTION)
     headers.append(HEADER_AMOUNT)
     return tuple(headers)

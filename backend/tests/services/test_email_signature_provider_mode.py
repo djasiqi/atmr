@@ -132,3 +132,40 @@ class TestSmtpMimeContainsRelatedAndContentId:
         assert related_found, "Une part multipart/related doit être présente"
         assert content_id_found, "Content-ID <company_logo> doit être présent"
         assert html_has_cid, 'Le HTML doit contenir src="cid:company_logo"'
+
+
+class TestSmtpAccepteLesAccents:
+    """Un objet ou un corps avec « é » ne doit pas être encodé en ascii brut."""
+
+    @patch("services.email.brevo_provider.smtplib.SMTP")
+    def test_periode_et_echeance_partent_en_bytes_ascii(
+        self, mock_smtp_class, monkeypatch
+    ):
+        monkeypatch.setenv("EMAIL_PROVIDER_MODE", "brevo_smtp")
+        monkeypatch.setenv("BREVO_SMTP_PASSWORD", "test-smtp-password")
+        mock_smtp = mock_smtp_class.return_value.__enter__.return_value
+        sent = []
+        mock_smtp.sendmail.side_effect = lambda _frm, _to, msg: sent.append(msg)
+
+        provider = BrevoEmailProvider(api_key="test_key")
+        result = provider.send_invoice_email(
+            from_email="factures@e2e.lirie.test",
+            from_name="Transport E2E Alpha",
+            to_email="facturation@e2e.lirie.test",
+            to_name="Donneur E2E",
+            subject="Facture PARTNER-EM-2026-11-0005",
+            html_content="<p>période novembre, échéance</p>",
+            attachments=[],
+        )
+
+        assert result.success, result.error
+        assert sent
+        assert isinstance(sent[0], bytes)
+        parsed = BytesParser(policy=policy.default).parsebytes(sent[0])
+        html = ""
+        for part in parsed.walk():
+            if part.get_content_type() == "text/html":
+                payload = part.get_payload(decode=True) or b""
+                html = payload.decode("utf-8", errors="replace")
+        assert "période" in html
+        assert "échéance" in html

@@ -28,8 +28,6 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm, mm
 from reportlab.platypus import (
-    NextPageTemplate,
-    PageBreak,
     Paragraph,
     Spacer,
     Table,
@@ -45,15 +43,11 @@ from services.documents.pdf import (
     INVOICE_PAGE_LEFT_MARGIN_CM,
     INVOICE_PAGE_RIGHT_MARGIN_CM,
     INVOICE_PAGE_TOP_MARGIN_CM,
-    INVOICE_PREVIEW_TOTALS_AMOUNT_CM,
-    INVOICE_PREVIEW_TOTALS_LABEL_CM,
-    INVOICE_PREVIEW_TOTALS_LABEL_RIGHT_PADDING_PT,
     _build_default_legal_footer_html,
     _format_company_contact_footer_bar,
     _load_logo_ratio_safe,
     _make_invoice_doc_with_qrbill_page,
     _make_legal_footer_page_callback,
-    _make_qr_bill_flowable,
     _svg_content_to_drawing,
     _xml_escape_for_paragraph,
 )
@@ -141,6 +135,40 @@ def _parse_address_for_qrbill(address: str | None) -> tuple[str, str, str]:
     return (address, "1200", "Genève")
 
 
+def _partner_vat_header(billing_settings: Any, partner_invoice: PartnerInvoice) -> str:
+    """Libellé d'en-tête aligné sur les montants enregistrés.
+
+    ``calculate_vat`` ajoute la TVA au hors taxe puis arrondit le total.
+    « incluse » n'est utilisé que si le hors taxe est déjà le total.
+    Le taux 7.7 par défaut du modèle n'est pas réécrit ici.
+    """
+    number = ""
+    rate = None
+    applicable = False
+    if billing_settings is not None:
+        number = str(getattr(billing_settings, "vat_number", None) or "").strip()
+        rate = getattr(billing_settings, "vat_rate", None)
+        applicable = bool(getattr(billing_settings, "vat_applicable", False))
+    if number:
+        return f"N° TVA : {number}"
+    if not applicable:
+        return "TVA non applicable"
+    if rate is None:
+        return "TVA — taux non documenté"
+    subtotal = Decimal(str(partner_invoice.subtotal_amount or 0)).quantize(
+        Decimal("0.01")
+    )
+    vat_amount = Decimal(str(partner_invoice.vat_amount or 0)).quantize(Decimal("0.01"))
+    total = Decimal(str(partner_invoice.total_amount or 0)).quantize(Decimal("0.01"))
+    if vat_amount == 0:
+        return "TVA non applicable"
+    if subtotal + vat_amount == total:
+        return f"TVA {rate}% en sus"
+    if subtotal == total:
+        return f"TVA {rate}% incluse"
+    return f"TVA {rate}% — montants incohérents"
+
+
 def _generate_partner_scor_reference(partner_invoice: PartnerInvoice) -> str | None:
     """Génère une référence SCOR (ISO 11649) pour une facture partenaire.
 
@@ -153,21 +181,33 @@ def _generate_partner_scor_reference(partner_invoice: PartnerInvoice) -> str | N
         Référence SCOR (RF...) ou None si erreur
     """
     try:
-        from services.billing import generate_scor_reference
+        from services.billing.payment_reference_generator import ensure_partner_scor
 
-        # Utiliser le numéro de facture partenaire pour générer la référence SCOR
-        # Le numéro est déjà préfixé "PARTNER-" donc unique
-        return generate_scor_reference(
-            partner_invoice.invoice_number,
-            company_id=partner_invoice.executing_company_id,
-        )
+        return ensure_partner_scor(partner_invoice)
     except Exception as e:
         app_logger.warning(
-            "Impossible de générer la référence SCOR pour facture partenaire %s: %s",
+            "Référence SCOR partenaire refusée pour %s: %s",
             partner_invoice.invoice_number,
             e,
         )
         return None
+
+
+def _route_from_partner_snapshot(snap: dict[str, Any]) -> tuple[str, str]:
+    """Départ et arrivée du snapshot, sans relire la course."""
+    departure = str(snap.get("departure") or "").strip()
+    arrival = str(snap.get("arrival") or "").strip()
+    if departure or arrival:
+        return departure, arrival
+    description = str(snap.get("description") or "")
+    if " → " not in description:
+        return "", ""
+    left, arrival = description.split(" → ", 1)
+    if " — " in left:
+        _client, departure = left.split(" — ", 1)
+    else:
+        departure = left
+    return departure.strip(), arrival.strip()
 
 
 def generate_partner_invoice_pdf_content(
@@ -196,27 +236,36 @@ def generate_partner_invoice_pdf_content(
     """
     buffer = BytesIO()
     styles = getSampleStyleSheet()
+    from services.documents.pdf import (
+        FONT_BODY,
+        FONT_SECONDARY,
+        _ensure_dejavu_pdf_fonts,
+    )
 
-    # === STYLES identiques à pdf.py ===
+    font_name, _font_name_bold = _ensure_dejavu_pdf_fonts()
+    _body_leading = round(FONT_BODY * 1.3)
     normal_style = ParagraphStyle(
         "Normal",
         parent=styles["Normal"],
-        fontSize=9,
+        fontSize=FONT_BODY,
+        leading=_body_leading,
         textColor=colors.black,
         alignment=TA_LEFT,
-        spaceAfter=4,
-        fontName="Helvetica",
-        leading=11,
+        spaceAfter=6,
+        fontName=font_name,
+        leftIndent=0,
+        rightIndent=0,
+        firstLineIndent=0,
     )
-
     centered_style = ParagraphStyle(
         "Centered",
         parent=styles["Normal"],
-        fontSize=8,
-        textColor=colors.HexColor("#4a4a4a"),
+        fontSize=FONT_BODY,
+        leading=_body_leading,
+        textColor=colors.black,
         alignment=TA_CENTER,
-        spaceAfter=4,
-        fontName="Helvetica",
+        spaceAfter=6,
+        fontName=font_name,
     )
 
     # === DÉTERMINER LES ENTREPRISES ===
@@ -339,20 +388,15 @@ def generate_partner_invoice_pdf_content(
     company_name = executing_company.name or "[Nom entreprise non configuré]"
     company_address = _format_address_multiline(executing_company.address)
 
-    # Statut TVA (identique à pdf.py)
-    vat_status_text = ""
-    if billing_settings and billing_settings.vat_applicable:
-        vat_number = billing_settings.vat_number or ""
-        if vat_number:
-            vat_status_text = f"N° TVA : {vat_number}"
-        else:
-            vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
+    vat_status_text = _partner_vat_header(billing_settings, partner_invoice)
+
+    from services.documents.invoice_pdf_presentation import issuer_block_html
 
     _addr_emit = _escape_multiline_address_html(company_address)
-    company_info_html = f"{_xml_escape_for_paragraph(company_name)}<br/>{_addr_emit}"
-    if vat_status_text:
-        company_info_html += f"<br/>{_xml_escape_for_paragraph(vat_status_text)}"
-    company_para = Paragraph(company_info_html, normal_style)
+    company_para = Paragraph(
+        issuer_block_html(company_name, _addr_emit, vat_status_text),
+        normal_style,
+    )
 
     # Informations destinataire (partenaire) — overrides snapshot si présents
     billed_name = (
@@ -388,7 +432,7 @@ def generate_partner_invoice_pdf_content(
     label_style = ParagraphStyle(
         "DestLabel",
         parent=normal_style,
-        fontSize=8,
+        fontSize=FONT_SECONDARY,
         spaceAfter=2,
     )
     label_para = Paragraph("<b>Facturé à :</b>", label_style)
@@ -477,8 +521,8 @@ def generate_partner_invoice_pdf_content(
     else:
         period_label = f"{period_month:02d}.{period_year}"
 
-    _pinv = _xml_escape_for_paragraph(str(partner_invoice.invoice_number or ""))
-    _per_esc = _xml_escape_for_paragraph(period_label)
+    from services.documents.invoice_pdf_presentation import invoice_meta_html
+
     _iss = (
         partner_invoice.issued_at.strftime("%d.%m.%Y")
         if partner_invoice.issued_at
@@ -489,37 +533,63 @@ def generate_partner_invoice_pdf_content(
         if partner_invoice.due_date
         else "N/A"
     )
-    invoice_info_html = (
-        f"<b>Numéro de facture :</b> {_pinv}<br/>"
-        f"<b>Date d'émission :</b> {_iss}<br/>"
-        f"<b>Date d'échéance :</b> {_due}<br/>"
-        f"<b>Période de facturation :</b> {_per_esc}"
+    story.append(
+        Paragraph(
+            invoice_meta_html(
+                invoice_number=str(partner_invoice.invoice_number or ""),
+                issued_on=_iss,
+                due_on=_due,
+                period_label=period_label,
+            ),
+            normal_style,
+        )
     )
-    story.append(Paragraph(invoice_info_html, normal_style))
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 14))
 
-    # === TABLEAU DES PRESTATIONS (même contrat que la facture institution) ===
+    from services.documents.pdf import _detail_lines_heading_paragraph
+
+    story.append(_detail_lines_heading_paragraph(styles, _font_name_bold))
+
+    # === DÉTAIL DES PRESTATIONS (même tableau que client / institution) ===
     from application.invoices.partner_invoice_lines import describe_transfer_line
     from application.invoices.partner_pickup_time import pickup_display_label
-    from services.documents.invoice_pdf_columns import normalize_line_time_mode
-    from services.documents.invoice_pdf_presentation import build_services_table
+    from services.documents.invoice_pdf_columns import (
+        LINE_TIME_PICKUP,
+        normalize_line_time_mode,
+    )
+    from services.documents.invoice_pdf_presentation import (
+        build_prestation_detail_table,
+    )
 
     line_time_mode = normalize_line_time_mode(
         getattr(partner_invoice, "line_time_mode", None)
     )
-    service_rows: list[dict[str, str]] = []
+    service_rows: list[dict[str, Any]] = []
     if line_snapshots:
         for snap in line_snapshots:
             amount_value = snap.get("amount")
             if amount_value is None:
                 amount_value = snap.get("line_total") or 0
+            departure, arrival = _route_from_partner_snapshot(snap)
+            raw_meta = snap.get("line_meta")
+            line_meta = raw_meta if isinstance(raw_meta, dict) else {}
+            catalog_amount = None
+            if line_meta.get("global_discount_applied"):
+                initial = line_meta.get("original_line_total")
+                if initial not in (None, ""):
+                    amount_value = initial
+            else:
+                catalog_amount = line_meta.get("original_line_total")
             service_rows.append(
                 {
                     "date": str(snap.get("service_date") or ""),
-                    "description": str(
-                        snap.get("description") or snap.get("client_name") or "Client"
+                    "client_name": str(
+                        snap.get("client_name") or snap.get("description") or "Client"
                     ),
-                    "amount": f"{float(amount_value):.2f}",
+                    "departure": departure,
+                    "arrival": arrival,
+                    "amount": amount_value,
+                    "catalog_amount": catalog_amount,
                     "pickup": str(
                         snap.get("pickup_label")
                         or pickup_display_label(
@@ -545,8 +615,10 @@ def generate_partner_invoice_pdf_content(
             service_rows.append(
                 {
                     "date": str(described.get("service_date") or ""),
-                    "description": str(described.get("description") or ""),
-                    "amount": f"{amount:.2f}",
+                    "client_name": str(described.get("client_name") or "Client"),
+                    "departure": str(described.get("departure") or ""),
+                    "arrival": str(described.get("arrival") or ""),
+                    "amount": amount,
                     "pickup": str(
                         pickup_display_label(
                             described.get("pickup_time_source"),
@@ -558,84 +630,69 @@ def generate_partner_invoice_pdf_content(
             )
 
     story.append(
-        build_services_table(
+        build_prestation_detail_table(
             service_rows,
-            line_time_mode=line_time_mode,
+            show_pickup=line_time_mode == LINE_TIME_PICKUP,
             available_width_pt=usable_width_pt,
         )
     )
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 12))
 
-    # === TOTAL (style identique à pdf.py) ===
-    total_amount = float(partner_invoice.total_amount)
-    vat_amount = float(partner_invoice.vat_amount)
-    subtotal_amount = float(partner_invoice.subtotal_amount)
-
-    # Ligne de séparation
-    total_separator = Table([[""]], colWidths=[usable_width_pt])
-    total_separator.setStyle(
-        TableStyle([("LINEBELOW", (0, 0), (0, 0), 1, colors.black)])
+    from application.invoices.partner_invoice_lines import partner_invoice_editor_meta
+    from services.documents.invoice_pdf_presentation import GRAND_TOTAL_LABEL
+    from services.documents.pdf import (
+        _build_totals_table,
+        _extend_totals_flowables,
+        _global_discount_hint_flowable,
     )
-    story.append(total_separator)
-    story.append(Spacer(1, 8))
 
-    # Tableau des totaux : 2 colonnes (libellé à gauche, montant à droite), comme pdf.py — évite
-    # le chevauchement observé quand les deux dernières colonnes du tableau principal étaient en RIGHT.
-    _tw_sum_pt = INVOICE_PREVIEW_TOTALS_LABEL_CM + INVOICE_PREVIEW_TOTALS_AMOUNT_CM
-    _tot_lbl_w = (INVOICE_PREVIEW_TOTALS_LABEL_CM / _tw_sum_pt) * usable_width_pt
-    _tot_amt_w = (INVOICE_PREVIEW_TOTALS_AMOUNT_CM / _tw_sum_pt) * usable_width_pt
-    if vat_amount > 0:
-        total_data = [
-            ["Sous-total HT :", f"{subtotal_amount:.2f}"],
-            ["TVA :", f"{vat_amount:.2f}"],
-            ["TOTAL À FACTURER :", f"{total_amount:.2f}"],
-        ]
-    else:
-        total_data = [
-            ["Sous-total HT :", f"{subtotal_amount:.2f}"],
-            ["TOTAL À FACTURER :", f"{total_amount:.2f}"],
-        ]
-
-    total_table = Table(total_data, colWidths=[_tot_lbl_w, _tot_amt_w])
-    total_table.hAlign = "RIGHT"
-    total_table.setStyle(
-        TableStyle(
-            [
-                ("ALIGN", (0, 0), (0, -1), "LEFT"),
-                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                (
-                    "RIGHTPADDING",
-                    (0, 0),
-                    (0, -1),
-                    INVOICE_PREVIEW_TOTALS_LABEL_RIGHT_PADDING_PT,
-                ),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
-                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-            ]
-        )
+    editor_meta = partner_invoice_editor_meta(partner_invoice)
+    hint = _global_discount_hint_flowable(
+        type("_PartnerHint", (), {"meta": editor_meta})(),
+        styles,
+        font_name,
+        content_width_pt=usable_width_pt,
     )
-    story.append(total_table)
+    if hint is not None:
+        story.append(Spacer(1, 10))
+        story.append(hint)
+        story.append(Spacer(1, 9))
+
+    totals_source = type(
+        "_PartnerTotals",
+        (),
+        {
+            "subtotal_amount": partner_invoice.subtotal_amount,
+            "vat_total_amount": partner_invoice.vat_amount,
+            "total_amount": partner_invoice.total_amount,
+            "meta": editor_meta,
+            "lines": [],
+        },
+    )()
+    _extend_totals_flowables(
+        story,
+        _build_totals_table(
+            totals_source,
+            False,
+            False,
+            font_name,
+            _font_name_bold,
+            grand_total_label=GRAND_TOTAL_LABEL,
+        ),
+    )
 
     # NOTE: Le footer est géré par le callback onPage, pas dans le flow
     # C'est IDENTIQUE à pdf.py - le footer est dessiné sur le canvas
 
-    # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE (IDENTIQUE à pdf.py) ===
-    # Forcer une nouvelle page avec le template QRBill (marge bas réduite)
-    story.append(NextPageTemplate("QRBill"))
-    story.append(PageBreak())
-
+    # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
+    # La page n'existe que si le bulletin peut être dessiné.
+    qr_drawing = None
     try:
-        if not billing_settings or not billing_settings.iban:
-            story.append(
-                Paragraph("QR-Bill non disponible - IBAN non configuré", normal_style)
-            )
-        else:
+        if billing_settings and billing_settings.iban:
             # Générer la référence SCOR (comme pour client/clinique)
             scor_reference = _generate_partner_scor_reference(partner_invoice)
+            if not scor_reference:
+                raise ValueError("reference_scor_absente")
 
             app_logger.info(
                 "Génération QR-Bill pour facture partenaire %s avec référence SCOR: %s",
@@ -701,15 +758,14 @@ def generate_partner_invoice_pdf_content(
                 Path(temp_svg.name).unlink()
 
             # Utiliser les mêmes helpers que pdf.py pour le rendu
-            drawing = _svg_content_to_drawing(svg_content, inset_qrbill_text=True)
-            if drawing:
-                story.append(_make_qr_bill_flowable(drawing))
-            else:
-                story.append(Paragraph("QR-Bill non disponible", normal_style))
+            qr_drawing = _svg_content_to_drawing(svg_content, inset_qrbill_text=True)
 
     except Exception as e:
         app_logger.warning("Impossible de générer le QR-Bill: %s", e)
-        story.append(Paragraph("QR-Bill non disponible", normal_style))
+        qr_drawing = None
+    from services.documents.pdf import append_qr_bill_page
+
+    append_qr_bill_page(story, qr_drawing)
 
     # Générer le PDF (callbacks dans PageTemplates - IDENTIQUE à pdf.py)
     doc.build(story)

@@ -19,8 +19,6 @@ import {
   FiPrinter,
   FiPercent,
   FiExternalLink,
-  FiChevronsDown,
-  FiChevronsUp,
   FiMaximize2,
   FiMinimize2,
   FiDownload,
@@ -30,8 +28,13 @@ import {
 import {
   invoiceService,
   formatCurrencyCHF,
+  invoiceIsNonPayableSpecimen,
 } from '../../../../../services/invoiceService';
 import { createInvoiceDraftAdapter } from '../invoiceDraftResourceAdapter';
+import {
+  createPreparationDraftAdapter,
+  isPreparationInvoice,
+} from '../../../../../utils/invoicePreparationDraft';
 import { printPdfBytes, preloadInvoicePdfPrint } from '../../../../../utils/invoicePdfPrint';
 import { appendPdfEmbedChromiumViewerFragment } from '../../../../../utils/pdfUrlFallback';
 import {
@@ -59,8 +62,19 @@ import '../../../../../styles/acrobatPdfEmbedHide.css';
 import styles from './InvoiceDraftEditModal.module.css';
 import InvoiceLivePreview from './InvoiceLivePreview';
 import InvoiceLineEditorContext from './InvoiceLineEditorContext';
+import InvoiceCorrectionConfirmDialog from './InvoiceCorrectionConfirmDialog';
 import InlineDatePicker from '../../../../../components/ui/InlineDatePicker';
 import InlineMonthYearPicker from '../../../../../components/ui/InlineMonthYearPicker';
+import { canCorrectIssuedInvoice } from '../../../../../services/invoiceService';
+import {
+  addLocalCustomLine,
+  applyLocalLinePatch,
+  applyLocalPercentDiscount,
+  buildCreditLinesFromPreparation,
+  cloneInvoiceForCorrection,
+  newIdempotencyKey,
+  removeLocalLine,
+} from '../correctionPreparation';
 
 /** Classe sur body pour masquer l’UI injectée par l’extension Adobe Acrobat sur les PDF embarqués. */
 const HIDE_ACROBAT_PDF_OVERLAY_BODY_CLASS = 'atmr-hide-acrobat-pdf-embed-overlay';
@@ -134,18 +148,6 @@ function parseInvoiceMeta(raw) {
   }
   if (typeof raw === 'object') return raw;
   return null;
-}
-
-function toDateInputValue(value) {
-  if (!value) return '';
-  const text = String(value).trim();
-  const match = /^(\d{4}-\d{2}-\d{2})/.exec(text);
-  if (match) return match[1];
-  const d = new Date(text);
-  if (Number.isNaN(d.getTime())) return '';
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${month}-${day}`;
 }
 
 /**
@@ -276,6 +278,17 @@ const DraftInvoiceEditorPanel = ({
   onOpenSendEmail,
   onMarkAsSent,
   toolbarSubtitle,
+  /** `preparation` : brouillon mémoire, sans facture persistée. `persisted` : comportement actuel. */
+  mode = 'persisted',
+  onPreparationChange,
+  /** Dans une fenêtre déjà bornée : l’aperçu remplit la place disponible. */
+  fillHeight = false,
+  /**
+   * `edit` (défaut) | `correct`.
+   * En correct : même coque / aperçu PDF original ; panneau d’avoir+rectificative.
+   * Jamais de mutation directe de l’original.
+   */
+  editorIntent = 'edit',
 }) => {
   const [inv, setInv] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -309,12 +322,26 @@ const DraftInvoiceEditorPanel = ({
   const [freeRemiseAmount, setFreeRemiseAmount] = useState('');
   const [showAddLinePanel, setShowAddLinePanel] = useState(false);
   const [showLinesSheet, setShowLinesSheet] = useState(false);
-  const [pdfZoneExpanded, setPdfZoneExpanded] = useState(false);
   const [isPdfFullscreen, setIsPdfFullscreen] = useState(false);
   /** Blob URL (API JWT SEC-06) pour l’iframe PDF quand l’aperçu HTML n’est pas utilisé. */
   const [protectedPdfBlobUrl, setProtectedPdfBlobUrl] = useState('');
   /** Aligné sur CompanyBillingSettings.vat_applicable — contrôle colonnes TVA/TTC dans l’aperçu HTML. */
   const [companyVatApplicable, setCompanyVatApplicable] = useState(true);
+  /** Snapshot immuable de la facture émise (mode correction). */
+  const originalIssuedRef = useRef(null);
+  const [correctionResiduals, setCorrectionResiduals] = useState([]);
+  const [correctionConfirmOpen, setCorrectionConfirmOpen] = useState(false);
+  const [correctionPreview, setCorrectionPreview] = useState(null);
+  const [correctionWarnings, setCorrectionWarnings] = useState([]);
+  const [correctionUnsupported, setCorrectionUnsupported] = useState([]);
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [correctionPrepare, setCorrectionPrepare] = useState(true);
+  const [correctionConfirmed, setCorrectionConfirmed] = useState(false);
+  const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
+  const [correctionError, setCorrectionError] = useState('');
+  const [correctionIdemKey, setCorrectionIdemKey] = useState('');
+  const [correctionCorrKey, setCorrectionCorrKey] = useState('');
+  const [correctionResult, setCorrectionResult] = useState(null);
   const pdfWrapRef = useRef(null);
   const pdfIframeRef = useRef(null);
   const protectedPdfBlobUrlRef = useRef('');
@@ -327,7 +354,19 @@ const DraftInvoiceEditorPanel = ({
   const initialLoadKeyRef = useRef('');
   const loadSessionRef = useRef(createInvoiceLoadSession());
   const invRef = useRef(inv);
-  invRef.current = inv;
+  // Préserver le payload d’aperçu avoir (sinon chaque re-render l’efface → « Aperçu périmé »).
+  {
+    const prev = invRef.current;
+    invRef.current = {
+      ...inv,
+      ...(prev?._pending_credit_lines
+        ? {
+            _pending_credit_lines: prev._pending_credit_lines,
+            _pending_preview_amount: prev._pending_preview_amount,
+          }
+        : {}),
+    };
+  }
   const initialInvoiceRef = useRef(initialInvoice);
   initialInvoiceRef.current = initialInvoice;
   /** Dernière date « ligne suppl. » connue (évite perte si blur/changement d’état pas encore rejoué). */
@@ -401,8 +440,29 @@ const DraftInvoiceEditorPanel = ({
     };
   }, [open, companyId]);
 
+  const onPreparationChangeRef = useRef(onPreparationChange);
+  useEffect(() => {
+    onPreparationChangeRef.current = onPreparationChange;
+  }, [onPreparationChange]);
+
+  const editorIntentRef = useRef(editorIntent);
+  editorIntentRef.current = editorIntent;
+
   const applyInvoiceData = useCallback((data) => {
     if (!data || typeof data !== 'object' || data.id == null) return;
+    if (isPreparationInvoice(data)) onPreparationChangeRef.current?.(data);
+    // Mode correction : ne jamais écraser la préparation locale par un GET serveur.
+    if (
+      editorIntentRef.current === 'correct' &&
+      originalIssuedRef.current?._locked &&
+      !data._correction_prep
+    ) {
+      originalIssuedRef.current = {
+        ...cloneInvoiceForCorrection(data),
+        _locked: true,
+      };
+      return;
+    }
     setInv(data);
     setPdfNonce((n) => n + 1);
     const meta = parseInvoiceMeta(data.meta);
@@ -443,11 +503,17 @@ const DraftInvoiceEditorPanel = ({
 
   const initialCatalogKey = invoiceCatalogFingerprint(initialInvoice);
 
+  const preparationInvoiceRef = useRef(initialInvoice);
+  preparationInvoiceRef.current = inv || initialInvoice;
+
   const adapter = useMemo(
-    () => createInvoiceDraftAdapter(initialInvoice, companyId),
+    () =>
+      mode === 'preparation'
+        ? createPreparationDraftAdapter(() => preparationInvoiceRef.current)
+        : createInvoiceDraftAdapter(initialInvoice, companyId),
     // L'identité catalogue (type + id) suffit : l'objet facture change à chaque GET.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [companyId, initialCatalogKey]
+    [mode, companyId, initialCatalogKey]
   );
 
   /**
@@ -498,6 +564,7 @@ const DraftInvoiceEditorPanel = ({
   );
 
   const load = useCallback(async () => {
+    if (mode === 'preparation') return;
     if (!open || !companyId || !initialInvoice?.id) return;
     const token = loadSessionRef.current.begin();
     setLoading(true);
@@ -517,17 +584,26 @@ const DraftInvoiceEditorPanel = ({
         setLoading(false);
       }
     }
-  }, [open, companyId, initialInvoice?.id, reloadPdfPreviewFromServer]);
+  }, [mode, open, companyId, initialInvoice?.id, reloadPdfPreviewFromServer]);
 
   /** Hydratation immédiate depuis la liste (avant peinture) pour éviter un écran « Chargement… » inutile. */
   useLayoutEffect(() => {
     if (!open || initialInvoice?.id == null) return;
+    if (mode === 'preparation') {
+      setInv(initialInvoice);
+      return;
+    }
     setInv(initialInvoice);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialCatalogKey]);
+  }, [mode, open, initialCatalogKey]);
 
   /** Un seul GET initial par (société, facture, catalogue) : le bouton « Recharger » reste la relance manuelle. */
   useEffect(() => {
+    if (mode === 'preparation') {
+      initialLoadKeyRef.current = '';
+      loadSessionRef.current.invalidate();
+      return;
+    }
     if (!open || !companyId || initialInvoice?.id == null) {
       initialLoadKeyRef.current = '';
       loadSessionRef.current.invalidate();
@@ -537,7 +613,7 @@ const DraftInvoiceEditorPanel = ({
     if (initialLoadKeyRef.current === key) return;
     initialLoadKeyRef.current = key;
     void load();
-  }, [open, companyId, initialInvoice?.id, initialCatalogKey, load]);
+  }, [mode, open, companyId, initialInvoice?.id, initialCatalogKey, load]);
 
   useEffect(() => {
     if (!open) {
@@ -566,7 +642,6 @@ const DraftInvoiceEditorPanel = ({
       setRemisePercentMode(REMISE_PCT_MODE.global);
       setPerLinePercents({});
       setShowAddLinePanel(false);
-      setPdfZoneExpanded(false);
     }
   }, [open]);
 
@@ -628,23 +703,80 @@ const DraftInvoiceEditorPanel = ({
 
   const isDraft = invoiceStatusLowerResolved === 'draft';
 
-  /** Même barre d’édition que le brouillon : envoyée / partielle / en retard (pas payée / annulée). */
+  const isCorrectionMode = useMemo(() => {
+    if (editorIntent !== 'correct') return false;
+    if (isDraft || isPreparationInvoice(initialInvoice) || isPreparationInvoice(inv)) {
+      return false;
+    }
+    return canCorrectIssuedInvoice(inv || initialInvoice);
+  }, [editorIntent, isDraft, inv, initialInvoice]);
+
+  /**
+   * Même outils UI en brouillon et en correction.
+   * Les mutations serveur ne partent que si `persistsDraftToServer`.
+   */
   const allowsLineEditing = useMemo(
-    () =>
-      ['draft', 'sent', 'partially_paid', 'overdue'].includes(invoiceStatusLowerResolved),
-    [invoiceStatusLowerResolved]
+    () => invoiceStatusLowerResolved === 'draft' || isCorrectionMode,
+    [invoiceStatusLowerResolved, isCorrectionMode]
   );
 
-  /** Aperçu HTML aligné PDF (A/R, montants fusionnés) : émise éditable ou payée en lecture seule. */
+  const persistsDraftToServer = useMemo(
+    () => invoiceStatusLowerResolved === 'draft' && !isCorrectionMode,
+    [invoiceStatusLowerResolved, isCorrectionMode]
+  );
+
+  /** Hydrate préparation corrective (clone local) + résiduels serveur. */
+  useEffect(() => {
+    if (!open || editorIntent !== 'correct' || !companyId || !initialInvoice?.id) {
+      return undefined;
+    }
+    if (!canCorrectIssuedInvoice(initialInvoice)) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await invoiceService.getInvoice(companyId, initialInvoice.id, {
+          cacheBust: true,
+        });
+        const data = raw?.data || raw;
+        if (cancelled || !data?.id) return;
+        originalIssuedRef.current = {
+          ...cloneInvoiceForCorrection(data),
+          _locked: true,
+        };
+        setInv(cloneInvoiceForCorrection(data));
+        setCorrectionResult(null);
+        setCorrectionConfirmOpen(false);
+        const prev = await invoiceService.previewCreditNote(companyId, data.id, {
+          lines: [],
+        });
+        if (cancelled) return;
+        const pd = prev?.data || prev;
+        setCorrectionResiduals(
+          Array.isArray(pd?.line_residuals) ? pd.line_residuals : []
+        );
+      } catch {
+        if (!cancelled) {
+          setError('Impossible de charger la préparation corrective.');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // L'identité de l'objet initial n'est pas une dépendance : seul l'id ouvre la préparation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editorIntent, companyId, initialInvoice?.id]);
+
+  /** Aperçu HTML aligné PDF : brouillon, mode correctif, ou payée en lecture seule. */
   const showHtmlInvoicePreview = useMemo(() => {
     if (!inv) return false;
-    if (allowsLineEditing) return true;
+    if (allowsLineEditing || isCorrectionMode) return true;
     return (
       invoiceStatusLowerResolved === 'paid' &&
       Array.isArray(inv.lines) &&
       inv.lines.length > 0
     );
-  }, [inv, allowsLineEditing, invoiceStatusLowerResolved]);
+  }, [inv, allowsLineEditing, isCorrectionMode, invoiceStatusLowerResolved]);
 
   const filteredLines = useMemo(
     () => filterInvoiceLines(lines, lineFilter),
@@ -937,7 +1069,6 @@ const DraftInvoiceEditorPanel = ({
   }, [showAddLinePanel, showRemisePanel, showLinesSheet, showInfoPanel, pdfEmbedSrc, showHtmlInvoicePreview, inv]);
 
   useEffect(() => {
-    setPdfZoneExpanded(false);
     setShowLinesSheet(false);
   }, [inv?.id]);
 
@@ -993,13 +1124,17 @@ const DraftInvoiceEditorPanel = ({
         });
       }
 
-      // Facture éditable → toujours régénérer pour coller aux lignes DB (HTML).
+      // Brouillon persisté → régénérer. Mode correction : jamais le PDF original.
       const needsRegen =
-        allowsLineEditing || !bytes || bytes.byteLength < 5;
+        persistsDraftToServer || !bytes || bytes.byteLength < 5;
 
       if (needsRegen) {
-        if (allowsLineEditing) {
+        if (persistsDraftToServer) {
           await forceRegeneratePdfRef.current();
+        } else if (isCorrectionMode) {
+          throw new Error(
+            'En correction, le PDF original n’est pas régénéré. Confirmez l’avoir pour produire les documents de correction.'
+          );
         }
         printPdfBytesCacheRef.current = { key: '', bytes: null };
         void reloadPdfPreviewFromServer().catch(() => {});
@@ -1051,7 +1186,8 @@ const DraftInvoiceEditorPanel = ({
   }, [
     companyId,
     inv,
-    allowsLineEditing,
+    persistsDraftToServer,
+    isCorrectionMode,
     reloadPdfPreviewFromServer,
     adapter,
   ]);
@@ -1061,7 +1197,13 @@ const DraftInvoiceEditorPanel = ({
     setError('');
     setSaving(true);
     try {
-      if (allowsLineEditing) {
+      if (isCorrectionMode) {
+        setError(
+          'En correction, le PDF original n’est pas régénéré. Utilisez la confirmation d’avoir pour les documents de correction.'
+        );
+        return;
+      }
+      if (persistsDraftToServer) {
         await forceRegeneratePdfRef.current();
       }
       const apiPath = adapter.pdfApiUrl(inv);
@@ -1083,7 +1225,14 @@ const DraftInvoiceEditorPanel = ({
     } finally {
       if (mountedRef.current) setSaving(false);
     }
-  }, [companyId, inv, allowsLineEditing, pdfDownloadName, adapter]);
+  }, [
+    companyId,
+    inv,
+    persistsDraftToServer,
+    isCorrectionMode,
+    pdfDownloadName,
+    adapter,
+  ]);
 
   const handleOpenPdfInNewTab = useCallback(async () => {
     if (!companyId || !inv?.id) return;
@@ -1095,9 +1244,10 @@ const DraftInvoiceEditorPanel = ({
     setError('');
     setSaving(true);
     try {
-      if (allowsLineEditing) {
+      if (persistsDraftToServer) {
         await forceRegeneratePdfRef.current();
       }
+      // Mode correction : ouverture du PDF stocké uniquement (jamais de regen).
       const ok = await openProtectedPdfInNewTab(apiPath, null, {
         filename: pdfDownloadName,
         cacheBust: Date.now(),
@@ -1112,17 +1262,33 @@ const DraftInvoiceEditorPanel = ({
     } finally {
       if (mountedRef.current) setSaving(false);
     }
-  }, [companyId, inv, allowsLineEditing, pdfDownloadName, adapter]);
+  }, [
+    companyId,
+    inv,
+    persistsDraftToServer,
+    pdfDownloadName,
+    adapter,
+  ]);
 
   /** Barre PDF : même contrat que « Régénérer PDF » de la ligne de facture. */
   const handleToolbarPdfRefresh = useCallback(async () => {
     if (!companyId || !(inv?.id ?? initialInvoice?.id)) return;
+    if (isCorrectionMode) {
+      setError(
+        'En correction, le PDF original n’est pas régénéré.'
+      );
+      return;
+    }
     setSaving(true);
     setError('');
     try {
       await forceRegeneratePdfRef.current();
     } catch (e) {
       if (e?.message === 'SAVE_REQUIRED') {
+        return;
+      }
+      if (e?.message === 'CORRECTION_PDF_IMMUTABLE') {
+        setError('En correction, le PDF original n’est pas régénéré.');
         return;
       }
       if (e?.message === 'INVALID_INVOICE_PAYLOAD') {
@@ -1135,7 +1301,7 @@ const DraftInvoiceEditorPanel = ({
     } finally {
       setSaving(false);
     }
-  }, [companyId, inv?.id, initialInvoice?.id]);
+  }, [companyId, inv?.id, initialInvoice?.id, isCorrectionMode]);
 
   if (!open || !initialInvoice) return null;
 
@@ -1230,7 +1396,7 @@ const DraftInvoiceEditorPanel = ({
     const nEd = isRideLike(line.type) || lec;
     if (!dEd && !aEd && !nEd) return true;
 
-    const body = { ...draftConcurrencyPayload };
+    const body = persistsDraftToServer ? { ...draftConcurrencyPayload } : {};
 
     if (dEd) {
       const rawD =
@@ -1261,6 +1427,27 @@ const DraftInvoiceEditorPanel = ({
       const rawN =
         localNotes[line.id] !== undefined ? localNotes[line.id] : line.adjustment_note;
       body.adjustment_note = rawN && String(rawN).trim() ? String(rawN) : null;
+    }
+
+    if (isCorrectionMode || !persistsDraftToServer) {
+      setInv((prev) => applyLocalLinePatch(prev, line.id, body));
+      setLocalAmounts((prev) => {
+        const copy = { ...prev };
+        delete copy[line.id];
+        return copy;
+      });
+      setLocalDescriptions((prev) => {
+        const copy = { ...prev };
+        delete copy[line.id];
+        return copy;
+      });
+      setLocalNotes((prev) => {
+        const copy = { ...prev };
+        delete copy[line.id];
+        return copy;
+      });
+      setPdfNonce((n) => n + 1);
+      return true;
     }
 
     try {
@@ -1306,7 +1493,10 @@ const DraftInvoiceEditorPanel = ({
       throw new Error('MISSING_INVOICE_CONTEXT');
     }
     printPdfBytesCacheRef.current = { key: '', bytes: null };
-    if (allowsLineEditing) {
+    if (isCorrectionMode) {
+      throw new Error('CORRECTION_PDF_IMMUTABLE');
+    }
+    if (persistsDraftToServer) {
       const saved = await persistDirtyLines();
       if (!saved) {
         throw new Error('SAVE_REQUIRED');
@@ -1350,6 +1540,11 @@ const DraftInvoiceEditorPanel = ({
     setSaving(true);
     setError('');
     try {
+      if (isCorrectionMode || !persistsDraftToServer) {
+        setInv((prev) => removeLocalLine(prev, line.id));
+        setPdfNonce((n) => n + 1);
+        return;
+      }
       const res = await adapter.removeLine(line.id, draftConcurrencyPayload);
       await afterDraftMutation(res);
     } catch (e) {
@@ -1361,6 +1556,12 @@ const DraftInvoiceEditorPanel = ({
 
   const handleRemoveRoundTripLeg = async (line, leg) => {
     if (!allowsLineEditing) return;
+    if (isCorrectionMode || !persistsDraftToServer) {
+      setError(
+        'En correction, retirez la ligne complète depuis la liste pour l’inclure dans l’avoir.'
+      );
+      return;
+    }
     const legLabel = leg === 'return' ? 'retour' : 'aller';
     if (
       !window.confirm(
@@ -1386,6 +1587,12 @@ const DraftInvoiceEditorPanel = ({
 
   const handleRemoveRemise = async () => {
     if (!allowsLineEditing || !inv?.id) return;
+    if (isCorrectionMode || !persistsDraftToServer) {
+      setError(
+        'En correction, retirez ou réduisez les montants des prestations concernées. Les remises brouillon ne s’appliquent pas à l’original.'
+      );
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -1454,16 +1661,27 @@ const DraftInvoiceEditorPanel = ({
     setSaving(true);
     setError('');
     try {
-      const res = await adapter.addCustomLine({
-        ...draftConcurrencyPayload,
-        description: customLineDesc.trim(),
-        line_total: lineTotal,
-        qty,
-        custom_mode: customLineMode === EXTRA_LINE_MODE.time ? 'time' : 'quantity',
-        time_unit: customLineMode === EXTRA_LINE_MODE.time ? customLineTimeUnit : undefined,
-        service_date_iso: serviceDateIso,
-      });
-      await afterDraftMutation(res);
+      if (isCorrectionMode || !persistsDraftToServer) {
+        setInv((prev) =>
+          addLocalCustomLine(prev, {
+            description: customLineDesc.trim(),
+            line_total: lineTotal,
+            service_date: serviceDateIso || null,
+          })
+        );
+        setPdfNonce((n) => n + 1);
+      } else {
+        const res = await adapter.addCustomLine({
+          ...draftConcurrencyPayload,
+          description: customLineDesc.trim(),
+          line_total: lineTotal,
+          qty,
+          custom_mode: customLineMode === EXTRA_LINE_MODE.time ? 'time' : 'quantity',
+          time_unit: customLineMode === EXTRA_LINE_MODE.time ? customLineTimeUnit : undefined,
+          service_date_iso: serviceDateIso,
+        });
+        await afterDraftMutation(res);
+      }
       setCustomLineDesc('');
       setCustomLineTaux('');
       setCustomLineTimeValue('1');
@@ -1483,13 +1701,22 @@ const DraftInvoiceEditorPanel = ({
   const handleRemoveCustomOrExtraLine = async (line) => {
     if (!allowsLineEditing) return;
     if (
-      !window.confirm('Retirer cette ligne du brouillon ?')
+      !window.confirm(
+        isCorrectionMode
+          ? 'Retirer cette ligne de la préparation corrective ?'
+          : 'Retirer cette ligne du brouillon ?'
+      )
     ) {
       return;
     }
     setSaving(true);
     setError('');
     try {
+      if (isCorrectionMode || !persistsDraftToServer) {
+        setInv((prev) => removeLocalLine(prev, line.id));
+        setPdfNonce((n) => n + 1);
+        return;
+      }
       const res = await adapter.removeLine(line.id, draftConcurrencyPayload);
       await afterDraftMutation(res);
     } catch (e) {
@@ -1516,13 +1743,24 @@ const DraftInvoiceEditorPanel = ({
     setSaving(true);
     setError('');
     try {
-      const res = await adapter.addCustomLine({
-        ...draftConcurrencyPayload,
-        description: desc,
-        line_total: -amt,
-        qty: 1,
-      });
-      await afterDraftMutation(res);
+      if (isCorrectionMode || !persistsDraftToServer) {
+        setInv((prev) =>
+          addLocalCustomLine(prev, {
+            description: desc,
+            line_total: -amt,
+            service_date: null,
+          })
+        );
+        setPdfNonce((n) => n + 1);
+      } else {
+        const res = await adapter.addCustomLine({
+          ...draftConcurrencyPayload,
+          description: desc,
+          line_total: -amt,
+          qty: 1,
+        });
+        await afterDraftMutation(res);
+      }
       setFreeRemiseDesc('');
       setFreeRemiseAmount('');
     } catch (e) {
@@ -1538,13 +1776,24 @@ const DraftInvoiceEditorPanel = ({
       setError('Indiquez un pourcentage de remise entre 0 et 100.');
       return;
     }
-    if (!hasRemisablePositiveLines) {
+    if (!hasRemisablePositiveLines && !isCorrectionMode) {
       setError('Aucune ligne HT à remiser (transport ou prestation).');
       return;
     }
     setSaving(true);
     setError('');
     try {
+      if (isCorrectionMode || !persistsDraftToServer) {
+        const result = applyLocalPercentDiscount(inv, p);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setInv(result.invoice);
+        setPdfNonce((n) => n + 1);
+        setShowRemisePanel(false);
+        return;
+      }
       const res = await adapter.applyGlobalDiscount({
         ...draftConcurrencyPayload,
         global_discount_percent: p,
@@ -1561,6 +1810,12 @@ const DraftInvoiceEditorPanel = ({
 
   const handleApplyPerLineDiscounts = async () => {
     if (!allowsLineEditing || !inv?.id) return;
+    if (isCorrectionMode || !persistsDraftToServer) {
+      setError(
+        'En correction, réduisez les montants des lignes concernées. Les remises % par ligne ne s’écrivent pas sur l’original.'
+      );
+      return;
+    }
     const line_discounts = [];
     for (const line of perLineDiscountableLines) {
       const lid = line.id;
@@ -1596,8 +1851,99 @@ const DraftInvoiceEditorPanel = ({
     }
   };
 
+  const openCorrectionConfirm = async () => {
+    if (!isCorrectionMode || !companyId || !inv?.id) return;
+    setCorrectionError('');
+    setCorrectionConfirmed(false);
+    setCorrectionResult(null);
+    const built = buildCreditLinesFromPreparation({
+      originalInvoice: originalIssuedRef.current || inv,
+      preparationInvoice: inv,
+      residuals: correctionResiduals,
+    });
+    setCorrectionWarnings(built.warnings);
+    setCorrectionUnsupported(built.unsupported);
+    if (built.unsupported.length > 0) {
+      setCorrectionPreview(null);
+      setCorrectionConfirmOpen(true);
+      setCorrectionError(built.unsupported[0].reason);
+      return;
+    }
+    if (built.creditLines.length === 0) {
+      setCorrectionPreview(null);
+      setCorrectionConfirmOpen(true);
+      setCorrectionError(
+        'Aucune différence créditable. Réduisez un montant, retirez une prestation, ou le crédit résiduel est déjà épuisé.'
+      );
+      return;
+    }
+    setSaving(true);
+    try {
+      const preview = await invoiceService.previewCreditNote(companyId, inv.id, {
+        lines: built.creditLines,
+      });
+      const data = preview?.data || preview;
+      setCorrectionPreview(data);
+      setCorrectionIdemKey(newIdempotencyKey('cn', inv.id));
+      setCorrectionCorrKey(newIdempotencyKey('corr', inv.id));
+      setCorrectionConfirmOpen(true);
+      // Mémoriser le payload pour la confirmation (évite aperçu périmé).
+      invRef.current = {
+        ...inv,
+        _pending_credit_lines: built.creditLines,
+        _pending_preview_amount: data?.proposed_amount_ttc,
+      };
+    } catch (e) {
+      setCorrectionError(getApiErrorMessage(e, 'Aperçu serveur indisponible.'));
+      setCorrectionConfirmOpen(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitCorrectionConfirm = async () => {
+    if (!isCorrectionMode || !companyId || !inv?.id) return;
+    const pendingLines = invRef.current?._pending_credit_lines;
+    const pendingAmount = Number(invRef.current?._pending_preview_amount);
+    const liveAmount = Number(correctionPreview?.proposed_amount_ttc);
+    if (
+      !pendingLines?.length ||
+      !Number.isFinite(pendingAmount) ||
+      !Number.isFinite(liveAmount) ||
+      Math.abs(pendingAmount - liveAmount) > 0.001
+    ) {
+      setCorrectionError(
+        'Aperçu périmé ou incohérent. Fermez la confirmation et prévisualisez à nouveau.'
+      );
+      return;
+    }
+    setCorrectionSubmitting(true);
+    setCorrectionError('');
+    try {
+      const response = await invoiceService.issueCreditNote(companyId, inv.id, {
+        reason: String(correctionReason || '').trim(),
+        idempotency_key: correctionIdemKey,
+        lines: pendingLines,
+        prepare_corrective: correctionPrepare,
+        corrective_idempotency_key: correctionPrepare ? correctionCorrKey : undefined,
+      });
+      const data = response?.data || response;
+      setCorrectionResult(data);
+      setCorrectionConfirmOpen(false);
+      onUpdated?.();
+    } catch (e) {
+      setCorrectionError(getApiErrorMessage(e, "Émission de l'avoir refusée."));
+    } finally {
+      setCorrectionSubmitting(false);
+    }
+  };
+
   const handleSaveHeader = async () => {
     if (!allowsLineEditing || !headerDraft || !inv?.editor_header) return;
+    if (isCorrectionMode || !persistsDraftToServer) {
+      setError('En correction, l’en-tête de l’original n’est pas modifiable.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -1606,10 +1952,6 @@ const DraftInvoiceEditorPanel = ({
         recipient_contact: headerDraft.recipient_contact,
         recipient_address: headerDraft.recipient_address,
         notes: headerDraft.notes,
-        issued_at: headerDraft.issued_at || null,
-        due_date: headerDraft.due_date || null,
-        period_year: headerDraft.period_year === '' ? null : Number(headerDraft.period_year),
-        period_month: headerDraft.period_month === '' ? null : Number(headerDraft.period_month),
         ...(inv?.kind === 'partner' || inv?.invoice_type === 'partner'
           ? { line_time_mode: headerDraft.show_pickup ? 'pickup' : 'none' }
           : {}),
@@ -1630,125 +1972,82 @@ const DraftInvoiceEditorPanel = ({
     showRemisePanel || showAddLinePanel || showLinesSheet || showInfoPanel;
 
   const infoPanelContent = (
-    <div className={styles.remiseSheet}>
-      <h3 className={styles.remiseSheetTitle} id={infoHeadingId}>
-        Informations facture
-      </h3>
-      {headerDraft ? (
-        <div className={styles.infoGrid}>
-          <label className={styles.infoField}>
-            Destinataire
-            <input
-              className={styles.input}
-              value={headerDraft.recipient_name}
-              onChange={(e) =>
-                setHeaderDraft((prev) => ({ ...prev, recipient_name: e.target.value }))
-              }
-            />
-          </label>
-          <label className={styles.infoField}>
-            Contact
-            <input
-              className={styles.input}
-              value={headerDraft.recipient_contact}
-              onChange={(e) =>
-                setHeaderDraft((prev) => ({ ...prev, recipient_contact: e.target.value }))
-              }
-            />
-          </label>
-          <label className={styles.infoField}>
-            Adresse de facturation
-            <textarea
-              className={styles.textarea}
-              value={headerDraft.recipient_address}
-              onChange={(e) =>
-                setHeaderDraft((prev) => ({ ...prev, recipient_address: e.target.value }))
-              }
-            />
-          </label>
-          <label className={styles.infoField}>
-            Notes
-            <textarea
-              className={styles.textarea}
-              value={headerDraft.notes}
-              onChange={(e) =>
-                setHeaderDraft((prev) => ({ ...prev, notes: e.target.value }))
-              }
-            />
-          </label>
-          <label className={styles.infoField}>
-            Date d’émission
-            <input
-              type="date"
-              className={styles.input}
-              value={headerDraft.issued_at}
-              onChange={(e) =>
-                setHeaderDraft((prev) => ({ ...prev, issued_at: e.target.value }))
-              }
-            />
-          </label>
-          <label className={styles.infoField}>
-            Échéance
-            <input
-              type="date"
-              className={styles.input}
-              value={headerDraft.due_date}
-              onChange={(e) =>
-                setHeaderDraft((prev) => ({ ...prev, due_date: e.target.value }))
-              }
-            />
-          </label>
-          <label className={styles.infoField}>
-            Année
-            <input
-              type="number"
-              className={styles.input}
-              value={headerDraft.period_year}
-              onChange={(e) =>
-                setHeaderDraft((prev) => ({ ...prev, period_year: e.target.value }))
-              }
-            />
-          </label>
-          <label className={styles.infoField}>
-            Mois
-            <input
-              type="number"
-              min="1"
-              max="12"
-              className={styles.input}
-              value={headerDraft.period_month}
-              onChange={(e) =>
-                setHeaderDraft((prev) => ({ ...prev, period_month: e.target.value }))
-              }
-            />
-          </label>
-          {inv?.kind === 'partner' || inv?.invoice_type === 'partner' ? (
-            <fieldset className={styles.infoField}>
-              <legend>Affichage PDF</legend>
-              <label
-                className={styles.infoCheck}
-                title="Affiche en priorité l'heure réelle « À bord » enregistrée par le chauffeur. À défaut, l'heure prévue est indiquée comme telle."
-              >
-                <input
-                  type="checkbox"
-                  checked={Boolean(headerDraft.show_pickup)}
-                  onChange={(e) =>
-                    setHeaderDraft((prev) => ({ ...prev, show_pickup: e.target.checked }))
-                  }
-                />
-                Afficher l'heure de prise en charge
-              </label>
-            </fieldset>
-          ) : null}
+    <div className={styles.infoSheet}>
+      <div className={styles.infoSheetHead}>
+        <h3 className={styles.infoSheetTitle} id={infoHeadingId}>
+          Informations facture
+        </h3>
+        {headerDraft ? (
           <button
             type="button"
-            className={`${styles.btn} ${styles.btnPrimary}`}
+            className={styles.infoSaveBtn}
             disabled={saving}
             onClick={() => void handleSaveHeader()}
           >
-            Enregistrer les informations
+            Enregistrer
           </button>
-        </div>
+        ) : null}
+      </div>
+      {headerDraft ? (
+        <>
+          <div className={styles.infoGrid}>
+            <label className={styles.infoField}>
+              Nom
+              <input
+                className={styles.infoInput}
+                value={headerDraft.recipient_name}
+                onChange={(e) =>
+                  setHeaderDraft((prev) => ({ ...prev, recipient_name: e.target.value }))
+                }
+              />
+            </label>
+            <label className={styles.infoField}>
+              Contact
+              <input
+                className={styles.infoInput}
+                value={headerDraft.recipient_contact}
+                onChange={(e) =>
+                  setHeaderDraft((prev) => ({ ...prev, recipient_contact: e.target.value }))
+                }
+              />
+            </label>
+            <label className={styles.infoField}>
+              Adresse
+              <input
+                className={styles.infoInput}
+                value={headerDraft.recipient_address}
+                onChange={(e) =>
+                  setHeaderDraft((prev) => ({ ...prev, recipient_address: e.target.value }))
+                }
+              />
+            </label>
+            <label className={styles.infoField}>
+              Notes
+              <input
+                className={styles.infoInput}
+                value={headerDraft.notes}
+                onChange={(e) =>
+                  setHeaderDraft((prev) => ({ ...prev, notes: e.target.value }))
+                }
+              />
+            </label>
+          </div>
+          {inv?.kind === 'partner' || inv?.invoice_type === 'partner' ? (
+            <label
+              className={styles.infoCheck}
+              title="L'heure « À bord » est affichée en priorité. Sans cette heure, l'heure prévue apparaît avec la mention « (prévue) »."
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(headerDraft.show_pickup)}
+                onChange={(e) =>
+                  setHeaderDraft((prev) => ({ ...prev, show_pickup: e.target.checked }))
+                }
+              />
+              Heure de prise en charge
+            </label>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
@@ -1888,20 +2187,10 @@ const DraftInvoiceEditorPanel = ({
                 Ajouter
               </button>
             </div>
-            {freeRemiseImpactPreview ? (
-              <>
-                <p className={styles.remiseDeductionCalc} aria-live="polite">
-                  Impact sur le total TTC actuel ({formatCurrencyCHF(draftTotalTtc)}) :{' '}
-                  <strong>−{formatCurrencyCHF(freeRemiseImpactPreview.htDeduction)}</strong> HT (sans TVA sur cette
-                  ligne) → total TTC estimé{' '}
-                  <strong>{formatCurrencyCHF(freeRemiseImpactPreview.newTtc)}</strong>.
-                </p>
-                {freeRemiseImpactPreview.newTtc < 0 ? (
-                  <p className={styles.remiseDeductionWarn}>
-                    Le total TTC deviendrait négatif : réduisez le montant ou vérifiez les lignes.
-                  </p>
-                ) : null}
-              </>
+            {freeRemiseImpactPreview?.newTtc < 0 ? (
+              <p className={styles.remiseDeductionWarn}>
+                Le total TTC deviendrait négatif : réduisez le montant ou vérifiez les lignes.
+              </p>
             ) : null}
           </section>
         </>
@@ -2426,7 +2715,7 @@ const DraftInvoiceEditorPanel = ({
   );
 
   return (
-        <div className={styles.body}>
+        <div className={`${styles.body}${fillHeight ? ` ${styles.bodyFill}` : ''}`}>
           {loading && !inv && <p className={styles.muted}>Chargement…</p>}
           {error && <p className={styles.err}>{error}</p>}
 
@@ -2436,7 +2725,7 @@ const DraftInvoiceEditorPanel = ({
                 <div
                   ref={pdfWrapRef}
                   className={`${styles.draftPdfWrap}${
-                    pdfZoneExpanded ? ` ${styles.draftPdfWrapExpanded}` : ''
+                    fillHeight ? ` ${styles.draftPdfWrapEmbedded}` : ''
                   }`}
                 >
                   <div
@@ -2454,10 +2743,16 @@ const DraftInvoiceEditorPanel = ({
                     <div className={styles.draftPdfBarLeft}>
                       <div className={styles.draftPdfBarHeadText}>
                         <h3 className={styles.draftPdfHeadTitle}>
-                          {allowsLineEditing ? 'Aperçu facture' : 'Facture PDF'}
+                          {isCorrectionMode
+                            ? 'Corriger la facture'
+                            : allowsLineEditing
+                              ? 'Aperçu facture'
+                              : 'Facture PDF'}
                         </h3>
                         <p className={styles.draftPdfHeadSubtitle}>
-                          {toolbarSubtitle || inv?.invoice_number || '—'}
+                          {isPreparationInvoice(inv)
+                            ? 'Brouillon de préparation'
+                            : toolbarSubtitle || inv?.invoice_number || '—'}
                           {draftPdfStaleHint ? (
                             <span className={styles.draftPdfHeadMeta} role="status">
                               {' '}
@@ -2471,6 +2766,30 @@ const DraftInvoiceEditorPanel = ({
                             </span>
                           ) : null}
                         </p>
+                        {isCorrectionMode ? (
+                          <p
+                            className={styles.issuedInvoiceNotice}
+                            role="status"
+                            data-testid="issued-invoice-notice"
+                          >
+                            Mode correction : mêmes outils que le brouillon. L’original
+                            (PDF, numéro, paiements) reste inchangé jusqu’à la
+                            confirmation d’un avoir.
+                          </p>
+                        ) : !isDraft && !isPreparationInvoice(inv) ? (
+                          <p
+                            className={styles.issuedInvoiceNotice}
+                            role="status"
+                            data-testid="issued-invoice-notice"
+                          >
+                            Cette facture a déjà été émise. Son contenu ne peut plus
+                            être modifié directement. Pour une correction, veuillez
+                            utiliser la procédure administrative prévue.
+                            {!inv?.pdf_url
+                              ? ' Le document original de cette facture est indisponible. Une vérification administrative est nécessaire. Aucun nouveau PDF n\'a été généré.'
+                              : ''}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     <div className={styles.draftPdfBarRightMerged}>
@@ -2536,6 +2855,8 @@ const DraftInvoiceEditorPanel = ({
                           >
                             <FiList size={16} aria-hidden />
                           </button>
+                          {/* Destinataire, dates et option de prise en charge : persistés
+                              uniquement sur le catalogue partenaire (updateHeader). */}
                           {inv?.editor_header ? (
                             <button
                               type="button"
@@ -2555,10 +2876,6 @@ const DraftInvoiceEditorPanel = ({
                                       recipient_contact: inv.recipient_contact || '',
                                       recipient_address: inv.recipient_address || '',
                                       notes: inv.notes || '',
-                                      issued_at: toDateInputValue(inv.issued_at),
-                                      due_date: toDateInputValue(inv.due_date),
-                                      period_year: inv.period_year ?? '',
-                                      period_month: inv.period_month ?? '',
                                       show_pickup: inv.line_time_mode === 'pickup',
                                     });
                                   }
@@ -2572,6 +2889,7 @@ const DraftInvoiceEditorPanel = ({
                               <FiInfo size={16} aria-hidden />
                             </button>
                           ) : null}
+                          {isPreparationInvoice(inv) || !isDraft ? null : (
                           <button
                             type="button"
                             className={`${styles.draftPdfToolBtn} ${styles.draftPdfToolBtnIconOnly}`}
@@ -2582,6 +2900,7 @@ const DraftInvoiceEditorPanel = ({
                           >
                             <FiRefreshCw size={16} aria-hidden />
                           </button>
+                          )}
                         </div>
                       ) : null}
                       <div
@@ -2589,28 +2908,6 @@ const DraftInvoiceEditorPanel = ({
                         role="group"
                         aria-label="Affichage"
                       >
-                        <button
-                          type="button"
-                          className={`${styles.draftPdfToolBtn} ${styles.draftPdfToolBtnIconOnly}`}
-                          title={
-                            pdfZoneExpanded
-                              ? 'Réduire la zone d’aperçu'
-                              : 'Agrandir la zone d’aperçu'
-                          }
-                          aria-label={
-                            pdfZoneExpanded
-                              ? 'Réduire la zone d’aperçu PDF'
-                              : 'Agrandir la zone d’aperçu PDF'
-                          }
-                          aria-pressed={pdfZoneExpanded}
-                          onClick={() => setPdfZoneExpanded((v) => !v)}
-                        >
-                          {pdfZoneExpanded ? (
-                            <FiChevronsUp size={18} aria-hidden />
-                          ) : (
-                            <FiChevronsDown size={18} aria-hidden />
-                          )}
-                        </button>
                         <button
                           type="button"
                           className={`${styles.draftPdfToolBtn} ${styles.draftPdfToolBtnIconOnly}`}
@@ -2634,6 +2931,7 @@ const DraftInvoiceEditorPanel = ({
                           )}
                         </button>
                       </div>
+                      {isPreparationInvoice(inv) ? null : (
                       <div
                         className={`${styles.draftPdfBarToolGroup} ${styles.draftPdfBarToolGroupFile}`}
                         role="group"
@@ -2644,14 +2942,18 @@ const DraftInvoiceEditorPanel = ({
                             type="button"
                             className={`${styles.draftPdfToolBtn} ${styles.draftPdfToolBtnIconOnly} ${styles.draftPdfToolLink}`}
                             title={
-                              allowsLineEditing
-                                ? 'Générer le PDF à jour puis télécharger'
-                                : 'Télécharger le fichier PDF'
+                              isCorrectionMode
+                                ? 'Télécharger le PDF original (sans régénération)'
+                                : persistsDraftToServer
+                                  ? 'Générer le PDF à jour puis télécharger'
+                                  : 'Télécharger le fichier PDF'
                             }
                             aria-label={
-                              allowsLineEditing
-                                ? 'Générer et télécharger le PDF'
-                                : 'Télécharger le fichier PDF'
+                              isCorrectionMode
+                                ? 'Télécharger le PDF original'
+                                : persistsDraftToServer
+                                  ? 'Générer et télécharger le PDF'
+                                  : 'Télécharger le fichier PDF'
                             }
                             onClick={() => void handlePdfDownload()}
                           >
@@ -2687,6 +2989,7 @@ const DraftInvoiceEditorPanel = ({
                           </button>
                         ) : null}
                       </div>
+                      )}
                     </div>
                   </div>
                   <div
@@ -2724,7 +3027,9 @@ const DraftInvoiceEditorPanel = ({
                       <div
                         className={`${styles.draftPdfLineSheetFlow}${
                           showLinesSheet ? ` ${styles.draftPdfLineSheetFlowLines}` : ''
-                        }${showRemisePanel ? ` ${styles.draftPdfLineSheetFlowRemise}` : ''}`}
+                        }${showRemisePanel ? ` ${styles.draftPdfLineSheetFlowRemise}` : ''}${
+                          showInfoPanel ? ` ${styles.draftPdfLineSheetFlowInfo}` : ''
+                        }`}
                       >
                         <div
                           className={styles.draftPdfLineSheetDoc}
@@ -2767,12 +3072,40 @@ const DraftInvoiceEditorPanel = ({
                 )
               )}
 
-              {/* Brouillon : tableau des lignes uniquement dans le panneau sous l’aperçu (bouton liste). */}
+              {/* Brouillon / lecture : tableau hors panneau uniquement si non éditable. */}
               {!allowsLineEditing && draftLinesEditorBody}
 
+              {isCorrectionMode && !correctionResult ? (
+              <div className={styles.footer} data-testid="correction-editor-footer">
+                <div className={styles.footerGroup}>
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.btnPrimary}`}
+                    disabled={saving || loading}
+                    onClick={() => void openCorrectionConfirm()}
+                  >
+                    Prévisualiser la correction
+                  </button>
+                </div>
+              </div>
+              ) : null}
+
+              {isCorrectionMode && correctionResult ? (
+              <div className={styles.correctionSuccess} data-testid="correction-success-inline">
+                <p>
+                  Avoir <strong>{correctionResult.credit_number}</strong> enregistré
+                  {correctionResult.corrective_invoice
+                    ? ` · rectificative ${correctionResult.corrective_invoice.invoice_number}`
+                    : ''}
+                  .
+                </p>
+              </div>
+              ) : null}
+
+              {isDraft && !isPreparationInvoice(inv) && !invoiceIsNonPayableSpecimen(inv) && (onOpenSendEmail || onMarkAsSent) ? (
               <div className={styles.footer}>
                 <div className={styles.footerGroup}>
-                {isDraft && onOpenSendEmail && (
+                {onOpenSendEmail ? (
                   <button
                     type="button"
                     className={`${styles.btn} ${styles.btnPrimary}`}
@@ -2780,14 +3113,43 @@ const DraftInvoiceEditorPanel = ({
                   >
                     <FiSend size={14} /> Envoyer
                   </button>
-                )}
-                {isDraft && onMarkAsSent && (
-                  <button type="button" className={styles.btnMuted} onClick={() => onMarkAsSent(inv || initialInvoice)}>
-                    Marquer envoyée
+                ) : null}
+                {onMarkAsSent ? (
+                  <button
+                    type="button"
+                    className={styles.btnMuted}
+                    title="Passe le statut à SENT sans envoyer de courriel. Ce n'est pas une preuve de transmission."
+                    aria-label="Marquer envoyée (papier, sans courriel)"
+                    onClick={() => onMarkAsSent(inv || initialInvoice)}
+                  >
+                    Marquer envoyée (papier)
                   </button>
-                )}
+                ) : null}
                 </div>
               </div>
+              ) : null}
+
+              <InvoiceCorrectionConfirmDialog
+                open={correctionConfirmOpen}
+                originalNumber={
+                  originalIssuedRef.current?.invoice_number ||
+                  inv?.invoice_number ||
+                  '—'
+                }
+                preview={correctionPreview}
+                warnings={correctionWarnings}
+                unsupported={correctionUnsupported}
+                reason={correctionReason}
+                onReasonChange={setCorrectionReason}
+                prepareCorrective={correctionPrepare}
+                onPrepareCorrectiveChange={setCorrectionPrepare}
+                confirmed={correctionConfirmed}
+                onConfirmedChange={setCorrectionConfirmed}
+                submitting={correctionSubmitting}
+                error={correctionError}
+                onCancel={() => setCorrectionConfirmOpen(false)}
+                onConfirm={() => void submitCorrectionConfirm()}
+              />
             </>
           )}
         </div>

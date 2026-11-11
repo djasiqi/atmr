@@ -27,6 +27,11 @@ from application.invoices.invoice_pdf_state import (
     mark_pdf_failed,
     mark_pdf_ready,
 )
+from application.invoices.issued_invoice_guard import (
+    invoice_is_issued,
+    invoice_status_value,
+    issued_invoice_pdf_missing_error,
+)
 from ext import db
 from models import Client, Company, CompanyBillingSettings, Invoice
 from models.enums import InvoiceStatus
@@ -95,6 +100,18 @@ class SendInvoiceByEmailUseCase:
                     invoice_id=input_data.invoice_id,
                     error=f"Facture #{input_data.invoice_id} introuvable",
                     status_code=404,
+                )
+            from application.invoices.specimen_document import (
+                SPECIMEN_REFUSAL,
+                is_non_payable_specimen,
+            )
+
+            if is_non_payable_specimen(invoice):
+                return SendInvoiceByEmailResult(
+                    success=False,
+                    invoice_id=input_data.invoice_id,
+                    error=SPECIMEN_REFUSAL,
+                    status_code=409,
                 )
 
             # 2. Charger le client et l'entreprise
@@ -214,20 +231,29 @@ class SendInvoiceByEmailUseCase:
                         status_code=400,
                     )
                 db.session.commit()
-            elif not invoice.pdf_url or input_data.force_regenerate_pdf:
-                logger.info(
-                    "Génération du PDF pour la facture %s", invoice.invoice_number
-                )
-                pdf_url = self.pdf_service.generate_invoice_pdf(
-                    invoice, force_regenerate=input_data.force_regenerate_pdf
-                )
-                if pdf_url:
-                    mark_pdf_ready(invoice, pdf_url)
-                    db.session.commit()
-                else:
+            else:
+                # Facture émise (étape 22) : le PDF original est figé. Le drapeau
+                # ``force_regenerate_pdf`` est ignoré (journalisé) et un PDF absent
+                # n'est jamais fabriqué : le dossier est signalé (409).
+                if input_data.force_regenerate_pdf:
                     logger.warning(
-                        "Impossible de générer le PDF pour la facture %s",
+                        "[ISSUED INVOICE GUARD] force_regenerate_pdf ignoré pour la "
+                        "facture émise %s (invoice_id=%s, status=%s) : PDF original conservé.",
                         invoice.invoice_number,
+                        invoice.id,
+                        invoice_status_value(invoice),
+                    )
+                if not invoice.pdf_url:
+                    missing_err = issued_invoice_pdf_missing_error(
+                        invoice, "send_invoice_by_email"
+                    )
+                    return SendInvoiceByEmailResult(
+                        success=False,
+                        invoice_id=input_data.invoice_id,
+                        recipient=recipient_email,
+                        error=missing_err.message,
+                        status_code=missing_err.status_code,
+                        error_payload=missing_err.to_error_payload(),
                     )
 
             pdf_path = _pdf_path_from_url(invoice.pdf_url)
@@ -350,6 +376,20 @@ class SendInvoiceByEmailUseCase:
 
             if not pdf_bytes:
                 db.session.commit()
+                if invoice_is_issued(invoice):
+                    # Fichier original absent / illisible sur une facture émise :
+                    # aucun document de remplacement, signalement administratif.
+                    missing_err = issued_invoice_pdf_missing_error(
+                        invoice, "send_invoice_by_email"
+                    )
+                    return SendInvoiceByEmailResult(
+                        success=False,
+                        invoice_id=input_data.invoice_id,
+                        recipient=recipient_email,
+                        error=missing_err.message,
+                        status_code=missing_err.status_code,
+                        error_payload=missing_err.to_error_payload(),
+                    )
                 return SendInvoiceByEmailResult(
                     success=False,
                     invoice_id=input_data.invoice_id,

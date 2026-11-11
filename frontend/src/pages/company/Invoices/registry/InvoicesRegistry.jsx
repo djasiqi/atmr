@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -17,12 +18,12 @@ import {
   FiList,
 } from 'react-icons/fi';
 import styles from './InvoicesRegistry.module.css';
+import { registryStatusLabel } from './invoiceRegistryStatus';
 import {
   invoiceService,
   fetchInvoices,
   sendReminderByEmail,
   postReminder,
-  duplicateInvoice,
   fetchBillingOpportunities,
   invoiceCandidatesQueryOptions,
   getEffectiveDueDate,
@@ -37,9 +38,6 @@ import {
   resolveInvoiceResource,
   writeInvoiceCatalogSearchParams,
 } from '../../../../utils/invoiceCatalog';
-import { getInvoiceCapabilities } from '../../../../utils/invoiceCapabilities';
-import { openProtectedPdfInNewTab } from '../../../../utils/protectedPdf';
-import { buildInvoicePdfDownloadFilename } from '../../../../utils/invoicePdfFilename';
 import { useLirieCompany } from '../../../../hooks/useLirieCompany';
 import { getApiErrorMessage } from '../../../../utils/apiErrorMessage';
 import { lirieKeys, invoiceFiltersHash } from '../../../../queryKeys/lirie';
@@ -47,6 +45,8 @@ import CommandBar from './components/CommandBar';
 import InvoiceRowActions from './components/InvoiceRowActions';
 import useUrlSearchSync from '../../../../hooks/useUrlSearchSync';
 import InvoicesTableSkeleton from './components/InvoicesTableSkeleton';
+import InvoiceSituation from './components/InvoiceSituation';
+import { formatServerAmount, loadInvoiceSituation } from './invoiceSituation';
 
 // Éditeurs/PDF/composer/modales chargés à la demande uniquement (Lot 6 perf) —
 // jamais dans le bundle initial de la page factures.
@@ -69,6 +69,9 @@ const InvoicesRegistry = () => {
   const searchInputRef = useRef(null);
   const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
   const [actionError, setActionError] = useState(null);
+  const [situation, setSituation] = useState(null);
+  const [situationError, setSituationError] = useState(null);
+  const [situationLoading, setSituationLoading] = useState(false);
   const [listErrorDismissed, setListErrorDismissed] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
@@ -94,9 +97,18 @@ const InvoicesRegistry = () => {
   const [newInvoiceModal, setNewInvoiceModal] = useState({ open: false, invoiceDraft: null });
   const [billPeriodOpen, setBillPeriodOpen] = useState(false);
   const [draftEditInvoice, setDraftEditInvoice] = useState(null);
+  /** Évite que le deep-link rouvre l’éditeur pendant que l’URL n’est pas encore nettoyée. */
+  const suppressDraftDeepLinkRef = useRef(false);
   /** Incrémenté après mutation facture (annulation, régénération PDF, etc.). */
   const [invoiceDataRefreshTrigger, setInvoiceDataRefreshTrigger] = useState(0);
-  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', variant: 'default', onConfirm: null });
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    title: '',
+    message: '',
+    variant: 'default',
+    onConfirm: null,
+    infoOnly: false,
+  });
   const [sendEmailModal, setSendEmailModal] = useState({
     open: false,
     invoice: null,
@@ -436,10 +448,12 @@ const InvoicesRegistry = () => {
         company.id,
         paymentData
       );
+      setActionError(null);
       await loadInvoices();
       setPaymentModal({ open: false, invoice: null });
     } catch (err) {
       setActionError(extractApiError(err, "Erreur lors de l'enregistrement du paiement"));
+      throw err;
     }
   };
 
@@ -450,6 +464,26 @@ const InvoicesRegistry = () => {
       setReminderModal({ open: false, invoice: null });
     } catch (err) {
       setActionError(extractApiError(err, 'Erreur lors de la génération du rappel'));
+    }
+  };
+
+  const openSituation = async (invoice) => {
+    setSituationLoading(true);
+    setSituation(null);
+    setSituationError(null);
+    try {
+      const result = await loadInvoiceSituation({
+        invoiceService,
+        companyId: company?.id,
+        invoice,
+      });
+      setSituation(result.statement);
+      setSituationError(result.error);
+    } catch (err) {
+      setSituation(null);
+      setSituationError(extractApiError(err, 'Impossible de consulter la facture.'));
+    } finally {
+      setSituationLoading(false);
     }
   };
 
@@ -484,28 +518,6 @@ const InvoicesRegistry = () => {
     });
   };
 
-  const handleDuplicateInvoice = (invoiceId) => {
-    setConfirmDialog({
-      open: true,
-      title: 'Brouillon correctif',
-      message: 'Créer un brouillon correctif pour cette facture ? Les courses originales seront libérées.',
-      variant: 'default',
-      onConfirm: async () => {
-        setConfirmDialog((d) => ({ ...d, open: false }));
-        try {
-          const response = await duplicateInvoice(company.id, invoiceId);
-          await loadInvoices();
-          const draftContext = response?.draft;
-          if (draftContext) {
-            setNewInvoiceModal({ open: true, invoiceDraft: draftContext });
-          }
-        } catch (err) {
-          setActionError(extractApiError(err, 'Erreur lors de la duplication de la facture'));
-        }
-      },
-    });
-  };
-
   const handleOpenSettings = () => {
     const companyId = company?.public_id ?? routePublicId;
     if (companyId) {
@@ -531,6 +543,7 @@ const InvoicesRegistry = () => {
   }, [loadInvoices]);
 
   const closeDraftEdit = useCallback(() => {
+    suppressDraftDeepLinkRef.current = true;
     setDraftEditInvoice(null);
     clearDraftEditParams();
   }, [clearDraftEditParams]);
@@ -543,15 +556,7 @@ const InvoicesRegistry = () => {
         ...invoice,
         company_id: invoice.company_id || company?.id,
       };
-      const capabilities = getInvoiceCapabilities(scoped, company?.id);
-      if (resource.type === INVOICE_CATALOG.PARTNER && !capabilities.canEdit) {
-        if (resource.pdfApiUrl) {
-          void openProtectedPdfInNewTab(resource.pdfApiUrl, null, {
-            filename: buildInvoicePdfDownloadFilename(scoped),
-          });
-        }
-        return;
-      }
+      suppressDraftDeepLinkRef.current = false;
       setDraftEditInvoice(scoped);
       setSearchParams((prev) => {
         const p = new URLSearchParams(prev);
@@ -574,8 +579,12 @@ const InvoicesRegistry = () => {
   useEffect(() => {
     if (!company?.id) return;
     const ref = readInvoiceCatalogFromSearch(searchParams);
-    if (!ref) return;
     const wantsDraft = searchParams.get('draft_edit') === '1';
+    if (suppressDraftDeepLinkRef.current) {
+      if (!ref && !wantsDraft) suppressDraftDeepLinkRef.current = false;
+      return;
+    }
+    if (!ref) return;
     const fromList = invoices.find((i) => Number(i.id) === Number(ref.id));
     const resource = fromList
       ? resolveInvoiceResource(fromList, company.id)
@@ -587,16 +596,6 @@ const InvoicesRegistry = () => {
     if (resource.type === INVOICE_CATALOG.PARTNER) {
       if (!wantsDraft || draftEditInvoice) return;
       const scoped = resource.invoice || fromList;
-      const capabilities = getInvoiceCapabilities(scoped, company.id);
-      if (!capabilities.canEdit) {
-        if (resource.pdfApiUrl) {
-          void openProtectedPdfInNewTab(resource.pdfApiUrl, null, {
-            filename: buildInvoicePdfDownloadFilename(resource.invoice),
-          });
-        }
-        clearDraftEditParams();
-        return;
-      }
       if (!fromList) {
         clearDraftEditParams();
         return;
@@ -619,7 +618,10 @@ const InvoicesRegistry = () => {
   ]);
 
   // Formatage des statuts
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (invoice) => {
+    const status = String(invoice?.status || '').toLowerCase();
+    const label = registryStatusLabel(invoice);
+    const settledWithoutPayment = label === 'Solde nul';
     const statusConfig = {
       draft: { label: 'Brouillon', className: styles.badgeDraft },
       sent: { label: 'Envoyée', className: styles.badgeSent },
@@ -627,7 +629,10 @@ const InvoicesRegistry = () => {
         label: 'Partiellement payée',
         className: styles.badgePartiallyPaid,
       },
-      paid: { label: 'Payée', className: styles.badgePaid },
+      paid: {
+        label,
+        className: settledWithoutPayment ? styles.badgeDefault : styles.badgePaid,
+      },
       overdue: { label: 'En retard', className: styles.badgeOverdue },
       cancelled: { label: 'Annulée', className: styles.badgeCancelled },
     };
@@ -855,15 +860,8 @@ const InvoicesRegistry = () => {
             Période {String(opportunityMonth).padStart(2, '0')}/{opportunityYear} (filtre mois) :{' '}
             <strong>{billingOpportunitiesPayload.total_draft_would_create}</strong> payeur
             {billingOpportunitiesPayload.total_draft_would_create > 1 ? 's' : ''} avec courses à
-            facturer (patients + cliniques).
+            facturer (patients + cliniques). L&apos;émission se fait par Nouvelle facture.
           </span>
-          <button
-            type="button"
-            className={styles.alertLink}
-            onClick={() => setBillPeriodOpen(true)}
-          >
-            Nouvelle facture
-          </button>
         </div>
       )}
 
@@ -1079,19 +1077,23 @@ const InvoicesRegistry = () => {
                       </div>
                     </td>
                     <td className={styles.cellAmount}>
-                      {invoice.total_amount.toFixed(2)} CHF
+                      {formatServerAmount(invoice.total_amount)}
                     </td>
                     <td>
                       <div className={styles.cellPayment}>
-                        <span className={styles.paymentPaid}>
-                          Paye: {invoice.amount_paid.toFixed(2)} CHF
-                        </span>
                         <span className={invoice.balance_due > 0 ? styles.paymentBalance : styles.paymentPaid}>
-                          Solde: {invoice.balance_due.toFixed(2)} CHF
+                          Reste à payer : {formatServerAmount(invoice.balance_due)}
                         </span>
+                        <button
+                          type="button"
+                          className={styles.situationButton}
+                          onClick={() => openSituation(invoice)}
+                        >
+                          Situation
+                        </button>
                       </div>
                     </td>
-                    <td>{getStatusBadge(invoice.status)}</td>
+                    <td>{getStatusBadge(invoice)}</td>
                     <td>{getReminderBadge(invoice)}</td>
                     <td>
                       <InvoiceRowActions
@@ -1108,7 +1110,6 @@ const InvoicesRegistry = () => {
                         onSendReminderEmail={() => handleOpenSendReminderEmail(invoice)}
                         onRegeneratePdf={() => handleRegeneratePdf(invoice)}
                         onCancel={() => handleCancelInvoice(invoice)}
-                        onDuplicate={() => handleDuplicateInvoice(invoice.id)}
                         onEditDraft={() => handleOpenDraftEdit(invoice)}
                         onViewPdf={(url) => window.open(url, '_blank')}
                       />
@@ -1120,6 +1121,21 @@ const InvoicesRegistry = () => {
           </table>
           </div>
         </div>
+      )}
+
+      {(situationLoading || situation || situationError) && (
+        <InvoiceSituation
+          statement={situation}
+          error={situationError}
+          loading={situationLoading}
+          onClose={() => {
+            setSituation(null);
+            setSituationError(null);
+          }}
+          onOpenPdf={(url) => {
+            if (url) window.open(url, '_blank', 'noopener');
+          }}
+        />
       )}
 
       {/* Pagination */}
@@ -1245,31 +1261,35 @@ const InvoicesRegistry = () => {
         </Suspense>
       )}
 
-      {/* Confirm dialog */}
-      {confirmDialog.open && (
-        <div className={styles.confirmOverlay} onClick={() => setConfirmDialog((d) => ({ ...d, open: false }))}>
-          <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
-            <h3 className={styles.confirmTitle}>{confirmDialog.title}</h3>
-            <p className={styles.confirmMessage}>{confirmDialog.message}</p>
-            <div className={styles.confirmActions}>
-              <button
-                type="button"
-                className={styles.confirmCancel}
-                onClick={() => setConfirmDialog((d) => ({ ...d, open: false }))}
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                className={`${styles.confirmBtn} ${confirmDialog.variant === 'danger' ? styles.confirmBtnDanger : styles.confirmBtnDefault}`}
-                onClick={confirmDialog.onConfirm}
-              >
-                Confirmer
-              </button>
+      {/* Confirm dialog — portail : au-dessus de « Nouvelle facture » */}
+      {confirmDialog.open &&
+        createPortal(
+          <div className={styles.confirmOverlay} onClick={() => setConfirmDialog((d) => ({ ...d, open: false }))}>
+            <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
+              <h3 className={styles.confirmTitle}>{confirmDialog.title}</h3>
+              <p className={styles.confirmMessage}>{confirmDialog.message}</p>
+              <div className={styles.confirmActions}>
+                {!confirmDialog.infoOnly && (
+                  <button
+                    type="button"
+                    className={styles.confirmCancel}
+                    onClick={() => setConfirmDialog((d) => ({ ...d, open: false }))}
+                  >
+                    Annuler
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`${styles.confirmBtn} ${confirmDialog.variant === 'danger' ? styles.confirmBtnDanger : styles.confirmBtnDefault}`}
+                  onClick={confirmDialog.onConfirm}
+                >
+                  {confirmDialog.infoOnly ? 'Compris' : 'Confirmer'}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </>
   );
 };

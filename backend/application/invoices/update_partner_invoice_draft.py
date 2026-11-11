@@ -1,4 +1,10 @@
-"""PATCH native d'une facture partenaire (brouillon / envoyée non soldée)."""
+"""PATCH native d'une facture partenaire (**brouillon uniquement**).
+
+Étape 22 (LIRIE) : une facture partenaire émise (envoyée, partiellement payée,
+payée, en retard, annulée ou statut inconnu) est figée — refus 409
+``ISSUED_INVOICE_IMMUTABLE`` avant ``ensure_partner_invoice_lines`` et avant
+toute écriture.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +12,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from application.invoices.issued_invoice_guard import (
+    IssuedInvoiceImmutableError,
+    assert_partner_invoice_mutable,
+)
 from application.invoices.partner_invoice_access import load_accessible_partner_invoice
 from application.invoices.partner_invoice_lines import (
     PartnerDraftEditError,
@@ -24,12 +34,9 @@ from application.invoices.partner_invoice_serialize import (
 from ext import db
 from models.partner_invoice import PartnerInvoiceStatus, PartnerLineTimeMode
 
-_EDITABLE_STATUSES = {
-    PartnerInvoiceStatus.DRAFT,
-    PartnerInvoiceStatus.SENT,
-    PartnerInvoiceStatus.PARTIALLY_PAID,
-    PartnerInvoiceStatus.OVERDUE,
-}
+# Seul le brouillon est éditable (étape 22) ; la vérification effective est
+# faite par ``assert_partner_invoice_mutable`` (fail-closed).
+_EDITABLE_STATUSES = {PartnerInvoiceStatus.DRAFT}
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -51,7 +58,7 @@ def _parse_datetime(value: Any) -> datetime | None:
 class UpdatePartnerInvoiceResult:
     ok: bool
     invoice: dict[str, Any] | None = None
-    error: dict[str, str] | None = None
+    error: dict[str, Any] | None = None
     status_code: int | None = None
 
 
@@ -69,16 +76,13 @@ def update_partner_invoice_draft(
             error={"error": "Facture partenaire introuvable"},
             status_code=404,
         )
-    if partner_invoice.status not in _EDITABLE_STATUSES:
+    try:
+        assert_partner_invoice_mutable(partner_invoice, "update_partner_invoice")
+    except IssuedInvoiceImmutableError as guard_err:
         return UpdatePartnerInvoiceResult(
             ok=False,
-            error={
-                "error": (
-                    "Cette facture partenaire ne peut plus être modifiée "
-                    f"(statut: {partner_invoice.status})."
-                )
-            },
-            status_code=400,
+            error=guard_err.to_error_payload(),
+            status_code=guard_err.status_code,
         )
 
     ensure_partner_invoice_lines(partner_invoice)

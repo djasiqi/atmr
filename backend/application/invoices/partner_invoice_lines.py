@@ -95,6 +95,40 @@ def describe_transfer_line(
     }
 
 
+def partner_preview_line(
+    transfer: BookingTransfer, *, amount: Decimal | float
+) -> dict[str, Any]:
+    """Même prestation que l'institution : client, trajet, prise en charge facultative.
+
+    Le libellé « Transfert partenaire — » n'est pas un format de ligne.
+    """
+    described = describe_transfer_line(
+        transfer, amount=_as_decimal(amount), sort_order=0
+    )
+    departure = str(described.get("departure") or "").strip()
+    arrival = str(described.get("arrival") or "").strip()
+    if departure or arrival:
+        description = f"Trajet : {departure} → {arrival}"
+    else:
+        description = str(described.get("description") or "Prestation")
+    client_name = str(described.get("client_name") or "").strip()
+    return {
+        "patient_name": client_name,
+        "client_name": client_name,
+        "description": description[:500],
+        "departure": departure or None,
+        "arrival": arrival or None,
+        "pickup_label": pickup_display_label(
+            described.get("pickup_time_source"),
+            described.get("scheduled_pickup_at"),
+            described.get("boarded_at"),
+        ),
+        "pickup_time_source": described.get("pickup_time_source"),
+        "scheduled_pickup_at": described.get("scheduled_pickup_at"),
+        "boarded_at": described.get("boarded_at"),
+    }
+
+
 def load_partner_invoice_transfers(
     partner_invoice: PartnerInvoice,
 ) -> list[BookingTransfer]:

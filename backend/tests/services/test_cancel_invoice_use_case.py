@@ -158,8 +158,8 @@ def test_cancel_invoice_invalid_status() -> None:
     # Assert
     assert result.success is False
     assert result.error is not None
-    assert "draft" in result.error["error"].lower()
-    assert result.status_code == 400
+    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
+    assert result.status_code == 409
 
 
 def test_cancel_invoice_force(db) -> None:
@@ -180,10 +180,11 @@ def test_cancel_invoice_force(db) -> None:
         result = uc.execute(CancelInvoiceInput(invoice=invoice, force=True))
 
     # Assert
-    assert result.success is True
-    assert result.error is None
-    assert result.status_code is None
-    assert bookings[10].invoice_line_id is None
+    assert result.success is False
+    assert result.status_code == 409
+    assert result.error is not None
+    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
+    assert bookings[10].invoice_line_id == 1
 
 
 def test_cancel_invoice_invalid_status_string() -> None:

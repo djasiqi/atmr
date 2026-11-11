@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
@@ -10,6 +10,10 @@ from typing import Any
 from sqlalchemy import or_
 from sqlalchemy.orm import aliased
 
+from application.invoices.cash_preview import (
+    load_patient_cash_preview,
+    merge_leg_positions,
+)
 from application.invoices.institution_invoice_eligibility import (
     attach_invoice_request_ids,
     build_eligibility_summary,
@@ -31,7 +35,7 @@ from application.invoices.round_trip_billing_lock import (
 from application.invoices.subject_identity import resolve_subject_identity
 from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
-    round_to_5_cents,
+    finalize_invoice_vat,
 )
 from models import Booking, Company
 from models.enums import BookingStatus
@@ -163,10 +167,54 @@ def _round_trip_leg_by_booking_id(bookings: list[Any]) -> dict[int, bool]:
     return out
 
 
+def _preview_amounts_after_merge(
+    preview_lines: list[PeriodPreviewLine],
+    *,
+    vat_applicable: bool,
+    vat_rate: Decimal,
+    calculator: InvoiceCalculator,
+) -> tuple[Decimal, Decimal, Decimal]:
+    """TVA sur les lignes déjà fusionnées, puis la même clôture que la préparation."""
+    gross = Decimal("0.00")
+    vat_sum = Decimal("0.00")
+    rate = vat_rate if vat_applicable else Decimal("0")
+    for row in preview_lines:
+        amount = Decimal(str(row.amount_ht)).quantize(Decimal("0.01"))
+        gross += amount
+        if rate > 0 and amount != 0:
+            vat_amount, _total = calculator.calculate_vat(amount, rate)
+            vat_sum += vat_amount
+    return finalize_invoice_vat(gross, vat_sum)
+
+
+def _column_subject_key(booking: Any) -> str:
+    """Clé de regroupement lue sur les colonnes, sans ``booking.client``.
+
+    L'aperçu agrégé (opportunités) ne doit pas émettre un SELECT client par course.
+    """
+    from models.enums import BookingCreatedVia
+
+    ipid = getattr(booking, "institution_patient_id", None)
+    if ipid is not None:
+        return f"institution_patient:{int(ipid)}"
+    via = getattr(booking, "created_via", None)
+    via_val = via.value if hasattr(via, "value") else str(via or "")
+    if via_val == BookingCreatedVia.INSTITUTION_PORTAL.value:
+        bid = int(getattr(booking, "id", 0) or 0)
+        return f"legacy-institution-booking:{bid}"
+    carrier = getattr(booking, "client_id", None)
+    if carrier is not None:
+        return f"client:{int(carrier)}"
+    bid = int(getattr(booking, "id", 0) or 0)
+    return f"unknown-booking:{bid}"
+
+
 def _consolidate_period_preview_round_trip_rows(
     preview_lines: list[PeriodPreviewLine],
     bookings: list[Any],
     _billing_settings_dto: Any,
+    *,
+    resolve_subjects: bool,
 ) -> list[PeriodPreviewLine]:
     """Une ligne par A/R uniquement si relation métier + même payeur.
 
@@ -188,7 +236,11 @@ def _consolidate_period_preview_round_trip_rows(
     units = resolve_invoice_booking_units(
         selected_ids=None,
         scope_bookings=bookings,
-        subject_key_fn=lambda bk: resolve_subject_identity(bk).key,
+        subject_key_fn=(
+            (lambda bk: resolve_subject_identity(bk).key)
+            if resolve_subjects
+            else _column_subject_key
+        ),
         amount_ht_fn=_amount_for_booking,
         expand_explicit_peers=False,
     )
@@ -284,6 +336,11 @@ class PeriodPreviewLine:
     round_trip_partner_scheduled_at: str | None = None
     round_trip_primary_scheduled_at: str | None = None
     leg_label: str | None = None
+    recognized_net_chf: str | None = None
+    remaining_due_chf: str | None = None
+    imputable_collection_ids: tuple[int, ...] = ()
+    cash_imputable: bool = False
+    cash_legs: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -298,6 +355,8 @@ class PeriodPreviewResult:
     estimated_vat_total: float = 0.0
     estimated_total_with_vat: float = 0.0
     eligibility: dict[str, Any] | None = None
+    collected_chf: str | None = None
+    remaining_due_chf: str | None = None
 
 
 def _eligibility_warnings(eligibility: dict[str, Any]) -> list[str]:
@@ -339,6 +398,35 @@ def _apply_institution_invoice_gate(
         amount_ht_fn=lambda b: _preview_base_amount_ht(b, billing_settings_dto),
     )
     return eligible, summary.to_dict()
+
+
+def _attach_patient_cash(
+    lines: list[PeriodPreviewLine],
+    positions: dict[int, dict[str, Any]],
+    merge_legs: Any,
+) -> list[PeriodPreviewLine]:
+    """Ajoute l'acompte serveur. Le montant de prestation reste le tarif."""
+    annotated: list[PeriodPreviewLine] = []
+    for line in lines:
+        leg_ids = [int(line.booking_id)]
+        if line.round_trip_partner_booking_id is not None:
+            leg_ids.append(int(line.round_trip_partner_booking_id))
+        found = [positions[leg_id] for leg_id in leg_ids if leg_id in positions]
+        if not found:
+            annotated.append(line)
+            continue
+        merged = found[0] if len(found) == 1 else merge_legs(found)
+        annotated.append(
+            replace(
+                line,
+                recognized_net_chf=merged["recognized_net_chf"],
+                remaining_due_chf=merged["remaining_due_chf"],
+                imputable_collection_ids=tuple(merged["imputable_collection_ids"]),
+                cash_imputable=bool(merged["cash_imputable"]),
+                cash_legs=tuple(merged.get("cash_legs") or found),
+            )
+        )
+    return annotated
 
 
 def build_period_invoice_preview(
@@ -448,6 +536,13 @@ def build_period_invoice_preview(
             eligibility=eligibility_patient,
             warnings=warnings,
         )
+        from application.invoices.confirmed_payment_coverage import (
+            apply_confirmed_payment_coverage,
+        )
+
+        bookings = apply_confirmed_payment_coverage(
+            bookings, warnings, billing_settings=billing_settings_dto
+        )
         client = crepo.find_model_by_id_with_user(int(client_id), company_id)
         patient_name = (
             resolve_patient_name_for_invoice(client, bookings)
@@ -483,6 +578,19 @@ def build_period_invoice_preview(
             tw_sum += tw
 
             if not include_line_details:
+                preview_lines_out.append(
+                    PeriodPreviewLine(
+                        booking_id=int(b.id),
+                        scheduled_at=_scheduled_iso(b),
+                        amount_ht=float(amt),
+                        origin_amount_ht=float(amt),
+                        description="",
+                        source_type="ride",
+                        is_locked=False,
+                        already_invoiced=False,
+                        is_round_trip_leg=bool(rt_map.get(int(b.id), False)),
+                    )
+                )
                 continue
 
             desc = build_invoice_line_description(
@@ -517,10 +625,41 @@ def build_period_invoice_preview(
                 )
             )
 
-        if include_line_details:
-            preview_lines_out = _consolidate_period_preview_round_trip_rows(
-                preview_lines_out, bookings, billing_settings_dto
+        preview_lines_out = _consolidate_period_preview_round_trip_rows(
+            preview_lines_out,
+            bookings,
+            billing_settings_dto,
+            resolve_subjects=include_line_details,
+        )
+        dues = {
+            int(b.id): _preview_base_amount_ht(b, billing_settings_dto)
+            for b in bookings
+        }
+        positions = load_patient_cash_preview(int(company_id), dues)
+        collected_chf = None
+        remaining_due_chf = None
+        if positions:
+            preview_lines_out = _attach_patient_cash(
+                preview_lines_out, positions, merge_leg_positions
             )
+            collected = sum(
+                (Decimal(line.recognized_net_chf or "0") for line in preview_lines_out),
+                Decimal("0.00"),
+            )
+            remaining = sum(
+                (Decimal(line.remaining_due_chf or "0") for line in preview_lines_out),
+                Decimal("0.00"),
+            )
+            collected_chf = f"{collected:.2f}"
+            remaining_due_chf = f"{remaining:.2f}"
+        total, total_vat, total_tw = _preview_amounts_after_merge(
+            preview_lines_out,
+            vat_applicable=vat_applicable,
+            vat_rate=default_vat_rate,
+            calculator=calc,
+        )
+        if not include_line_details:
+            preview_lines_out = []
 
         if len(bookings) == 0:
             warnings.insert(
@@ -530,10 +669,6 @@ def build_period_invoice_preview(
                     + "(vérifiez le mois, le payeur facturé « patient » et les courses déjà facturées)."
                 ),
             )
-
-        total = round_to_5_cents(gross)
-        total_tw = round_to_5_cents(tw_sum)
-        total_vat = round_to_5_cents(vat_sum)
 
         return PeriodPreviewResult(
             mode="standard",
@@ -546,12 +681,18 @@ def build_period_invoice_preview(
             estimated_vat_total=float(total_vat),
             estimated_total_with_vat=float(total_tw),
             eligibility=eligibility_patient,
+            collected_chf=collected_chf,
+            remaining_due_chf=remaining_due_chf,
         )
 
     # --- S2 : même filtre que preview clinique / génération ---
     if clinic_company_id is None:
         raise ValueError("clinic_company_id requis pour l'aperçu clinique")
     ccid = int(clinic_company_id)
+    if ccid == int(company_id):
+        raise ValueError(
+            "Le débiteur institutionnel ne peut pas être l'entreprise créancière."
+        )
     if not Company.query.filter_by(id=ccid).first():
         raise ValueError("Clinique (entreprise) introuvable")
 
@@ -608,6 +749,13 @@ def build_period_invoice_preview(
         eligibility=eligibility_s2,
         warnings=warnings,
     )
+    from application.invoices.confirmed_payment_coverage import (
+        apply_confirmed_payment_coverage,
+    )
+
+    eligible_bookings = apply_confirmed_payment_coverage(
+        eligible_bookings, warnings, billing_settings=billing_settings_dto
+    )
     rt_map_s2 = _round_trip_leg_by_booking_id(eligible_bookings)
     leg_labels_s2 = _chain_leg_labels(eligible_bookings)
     crepo = ClientRepository()
@@ -638,6 +786,19 @@ def build_period_invoice_preview(
         tw_sum_s2 += tw
 
         if not include_line_details:
+            preview_lines_out.append(
+                PeriodPreviewLine(
+                    booking_id=int(b.id),
+                    scheduled_at=_scheduled_iso(b),
+                    amount_ht=float(amt),
+                    origin_amount_ht=float(amt),
+                    description="",
+                    source_type="ride",
+                    is_locked=False,
+                    already_invoiced=False,
+                    is_round_trip_leg=bool(rt_map_s2.get(int(b.id), False)),
+                )
+            )
             continue
 
         desc = build_invoice_line_description_clinic_monthly(
@@ -669,10 +830,20 @@ def build_period_invoice_preview(
             )
         )
 
-    if include_line_details:
-        preview_lines_out = _consolidate_period_preview_round_trip_rows(
-            preview_lines_out, eligible_bookings, billing_settings_dto
-        )
+    preview_lines_out = _consolidate_period_preview_round_trip_rows(
+        preview_lines_out,
+        eligible_bookings,
+        billing_settings_dto,
+        resolve_subjects=include_line_details,
+    )
+    total, total_vat, total_tw = _preview_amounts_after_merge(
+        preview_lines_out,
+        vat_applicable=vat_applicable,
+        vat_rate=default_vat_rate,
+        calculator=calc,
+    )
+    if not include_line_details:
+        preview_lines_out = []
 
     if len(eligible_bookings) == 0:
         warnings.insert(
@@ -682,10 +853,6 @@ def build_period_invoice_preview(
                 + "(transports `billed_to_type=clinic` pour cette clinique, non encore facturés)."
             ),
         )
-
-    total = round_to_5_cents(gross_s2)
-    total_tw = round_to_5_cents(tw_sum_s2)
-    total_vat = round_to_5_cents(vat_sum_s2)
 
     return PeriodPreviewResult(
         mode="clinic_monthly",
@@ -749,6 +916,12 @@ def preview_line_to_dict(pl: PeriodPreviewLine) -> dict[str, Any]:
         d["round_trip_primary_scheduled_at"] = pl.round_trip_primary_scheduled_at
     if pl.scheduled_at_end:
         d["scheduled_at_end"] = pl.scheduled_at_end
+    if pl.recognized_net_chf is not None:
+        d["recognized_net_chf"] = pl.recognized_net_chf
+        d["remaining_due_chf"] = pl.remaining_due_chf
+        d["imputable_collection_ids"] = list(pl.imputable_collection_ids)
+        d["cash_imputable"] = pl.cash_imputable
+        d["cash_legs"] = list(pl.cash_legs)
     return d
 
 
@@ -764,6 +937,9 @@ def preview_to_dict(p: PeriodPreviewResult) -> dict[str, Any]:
         "estimated_vat_total": p.estimated_vat_total,
         "estimated_total_with_vat": p.estimated_total_with_vat,
     }
+    if p.collected_chf is not None:
+        out["collected_chf"] = p.collected_chf
+        out["remaining_due_chf"] = p.remaining_due_chf
     if p.eligibility:
         out["eligibility"] = p.eligibility
     return out
