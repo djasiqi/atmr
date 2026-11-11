@@ -1790,7 +1790,7 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         db.session.refresh(ride)
         assert ride.line_total == Decimal("40.00")
 
-    def test_sent_invoice_line_can_be_edited(  # noqa: PLR0917
+    def test_sent_invoice_line_is_immutable(  # noqa: PLR0917
         self,
         authenticated_client,
         test_company,
@@ -1799,6 +1799,9 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         test_completed_booking,
         db,
     ):
+        """Étape 22 (correctif conservatoire) : une facture SENT est émise, ses
+        lignes ne sont plus modifiables (409 ``ISSUED_INVOICE_IMMUTABLE``), et
+        la base reste strictement inchangée."""
         if not all([test_company, test_client, test_invoice, test_completed_booking]):
             pytest.skip("Required fixtures missing")
         from models.enums import InvoiceLineType
@@ -1821,9 +1824,25 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         db.session.flush()
         test_completed_booking.invoice_line_id = il.id
         db.session.commit()
+        total_before = test_invoice.total_amount
+        updated_before = test_invoice.updated_at
+
         purl = f"/api/v1/invoices/companies/{test_company.id}/invoices/{test_invoice.id}/lines/{il.id}"
         pr = authenticated_client.patch(purl, json={"line_total": 5.0})
-        assert_response_status(pr, 200)
+        assert pr.status_code == 409
+        err = pr.get_json() or {}
+        assert err.get("error_code") == "ISSUED_INVOICE_IMMUTABLE"
+        assert err.get("details", {}).get("administrative_procedure_required") is True
+
+        db.session.expire_all()
+        line_after = db.session.get(InvoiceLine, il.id)
+        inv_after = db.session.get(Invoice, test_invoice.id)
+        assert line_after is not None
+        assert inv_after is not None
+        assert line_after.line_total == Decimal("10.00")
+        assert inv_after.status == InvoiceStatus.SENT
+        assert inv_after.total_amount == total_before
+        assert inv_after.updated_at == updated_before
 
     def test_draft_edit_refused_when_invoice_paid(  # noqa: PLR0917
         self,
@@ -1858,9 +1877,15 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         db.session.commit()
         purl = f"/api/v1/invoices/companies/{test_company.id}/invoices/{test_invoice.id}/lines/{il.id}"
         pr = authenticated_client.patch(purl, json={"line_total": 5.0})
-        assert pr.status_code == 400
+        # Étape 22 : refus normalisé 409 (anciennement 400) avec message administratif.
+        assert pr.status_code == 409
         err = pr.get_json() or {}
-        emsg = err.get("error")
-        if emsg is None and isinstance(err.get("data"), dict):
-            emsg = err["data"].get("error")
+        assert err.get("error_code") == "ISSUED_INVOICE_IMMUTABLE"
+        emsg = err.get("error") or ""
         assert emsg
+        assert "administration" in emsg.lower()
+
+        db.session.expire_all()
+        line_after = db.session.get(InvoiceLine, il.id)
+        assert line_after is not None
+        assert line_after.line_total == Decimal("10.00")

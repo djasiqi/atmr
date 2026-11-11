@@ -763,6 +763,8 @@ const DraftInvoiceEditorPanel = ({
     return () => {
       cancelled = true;
     };
+    // L'identité de l'objet initial n'est pas une dépendance : seul l'id ouvre la préparation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editorIntent, companyId, initialInvoice?.id]);
 
   /** Aperçu HTML aligné PDF : brouillon, mode correctif, ou payée en lecture seule. */
@@ -1184,7 +1186,6 @@ const DraftInvoiceEditorPanel = ({
   }, [
     companyId,
     inv,
-    allowsLineEditing,
     persistsDraftToServer,
     isCorrectionMode,
     reloadPdfPreviewFromServer,
@@ -1300,7 +1301,7 @@ const DraftInvoiceEditorPanel = ({
     } finally {
       setSaving(false);
     }
-  }, [companyId, inv?.id, initialInvoice?.id]);
+  }, [companyId, inv?.id, initialInvoice?.id, isCorrectionMode]);
 
   if (!open || !initialInvoice) return null;
 

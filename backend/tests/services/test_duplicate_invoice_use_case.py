@@ -118,16 +118,11 @@ def test_duplicate_invoice_success() -> None:
     result = uc.execute(DuplicateInvoiceInput(invoice=invoice))
 
     # Assert
-    assert result.success is True
-    assert result.draft_context is not None
-    assert result.draft_context["client_id"] == 10
-    assert result.draft_context["period_year"] == 2025
-    assert result.draft_context["period_month"] == 1
-    assert result.draft_context["billing_type"] == "direct"
-    assert "reservation_ids" in result.draft_context
-    assert "overrides" in result.draft_context
-    assert result.error is None
-    assert result.status_code is None
+    assert result.success is False
+    assert result.status_code == 409
+    assert result.error is not None
+    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
+    assert result.draft_context is None
 
 
 def test_duplicate_invoice_already_draft() -> None:
@@ -172,13 +167,9 @@ def test_duplicate_invoice_no_reservations() -> None:
 
     # Assert
     assert result.success is False
-    assert result.draft_context is None
+    assert result.status_code == 409
     assert result.error is not None
-    assert (
-        "course" in result.error["error"].lower()
-        or "réservation" in result.error["error"].lower()
-    )
-    assert result.status_code == 400
+    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
 
 
 def test_duplicate_invoice_cancel_fails() -> None:
@@ -198,9 +189,9 @@ def test_duplicate_invoice_cancel_fails() -> None:
 
     # Assert
     assert result.success is False
-    assert result.draft_context is None
+    assert result.status_code == 409
     assert result.error is not None
-    assert result.status_code == 400
+    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
 
 
 def test_duplicate_invoice_third_party_billing() -> None:
@@ -224,10 +215,10 @@ def test_duplicate_invoice_third_party_billing() -> None:
     result = uc.execute(DuplicateInvoiceInput(invoice=invoice))
 
     # Assert
-    assert result.success is True
-    assert result.draft_context is not None
-    assert result.draft_context["billing_type"] == "third_party"
-    assert result.draft_context["bill_to_client_id"] == 20
+    assert result.success is False
+    assert result.status_code == 409
+    assert result.draft_context is None
+    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
 
 
 def test_duplicate_invoice_builds_overrides() -> None:
@@ -254,11 +245,8 @@ def test_duplicate_invoice_builds_overrides() -> None:
     result = uc.execute(DuplicateInvoiceInput(invoice=invoice))
 
     # Assert
-    assert result.success is True
-    assert result.draft_context is not None
-    assert "overrides" in result.draft_context
-    overrides = result.draft_context["overrides"]
-    assert "100" in overrides
-    assert overrides["100"]["amount"] == 50.0
-    assert overrides["100"]["vat_rate"] == 7.7
-    assert overrides["100"]["note"] == "Note spéciale"
+    assert result.success is False
+    assert result.status_code == 409
+    assert result.draft_context is None
+    assert result.error["error_code"] == "ISSUED_INVOICE_IMMUTABLE"
+    assert invoice.status == InvoiceStatus.SENT

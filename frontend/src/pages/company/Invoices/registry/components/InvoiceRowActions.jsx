@@ -40,7 +40,7 @@ const InvoiceRowActions = ({
   onCancel,
   onViewPdf,
   onDuplicate,
-  onCorrect,
+  onCorrect: _onCorrect,
   onEditDraft,
   isGuideAnchor = false,
 }) => {

@@ -186,7 +186,7 @@ export function recomputePrepTotals(invoice) {
  * - libellé seul sans baisse de montant → erreur explicite (non représentable sans crédit)
  */
 export function buildCreditLinesFromPreparation({
-  originalInvoice,
+  originalInvoice: _originalInvoice,
   preparationInvoice,
   residuals,
 }) {

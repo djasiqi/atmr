@@ -32,6 +32,7 @@ from models.enums import BookingStatus, InvoiceLineType, InvoiceStatus, UserRole
 from services.documents.pdf import (
     PDF_FOOTER_GATE_MIN_PT,
     PDFService,
+    _append_paginated_detail_table_with_tail,
     _clone_table_chunk,
     _compute_invoice_first_page_bottom_margin_cm,
     _measure_closing_block_pt,
@@ -129,22 +130,41 @@ def _assert_no_orphan_totals_pages(pdf_bytes: bytes) -> None:
         )
 
 
+def _iter_text_elements(layout):
+    """Parcourt les boîtes et lignes, y compris celles imbriquées dans une figure."""
+    from pdfminer.layout import LTContainer, LTTextBox, LTTextLine
+
+    stack = [layout]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, LTTextBox | LTTextLine):
+            yield node
+            continue
+        if isinstance(node, LTContainer):
+            stack.extend(list(node))
+
+
 def _bbox_for_text(pdf_content: bytes, snippet: str, page_index: int = 0):
-    """Retourne la bbox pdfminer du premier LTTextBox contenant ``snippet``."""
+    """Retourne la bbox pdfminer du premier bloc contenant ``snippet``.
+
+    ``page_index`` négatif parcourt toutes les pages et retourne la première
+    occurrence. L'analyse de mise en page (``LAParams``) est exigée : sans elle,
+    pdfminer ne groupe pas les caractères et le contrôle géométrique ne peut pas
+    s'exécuter.
+    """
     try:
         from pdfminer.high_level import extract_pages
-        from pdfminer.layout import LTTextBox, LTTextLine
+        from pdfminer.layout import LAParams
     except ImportError:
         return None
 
-    for page_no, layout in enumerate(extract_pages(BytesIO(pdf_content))):
-        if page_no != page_index:
+    for page_no, layout in enumerate(
+        extract_pages(BytesIO(pdf_content), laparams=LAParams())
+    ):
+        if page_index >= 0 and page_no != page_index:
             continue
-        for element in layout:
-            if (
-                isinstance(element, (LTTextBox, LTTextLine))
-                and snippet in element.get_text()
-            ):
+        for element in _iter_text_elements(layout):
+            if snippet in (element.get_text() or ""):
                 return element.bbox
     return None
 
@@ -164,11 +184,43 @@ def _bboxes_overlap(a, b, *, min_gap_pt: float = 2.0) -> bool:
 
 
 def _assert_legend_and_reminder_do_not_overlap(pdf_bytes: bytes) -> None:
-    """La légende [A/R] doit être au-dessus du texte de rappel (pas de chevauchement)."""
-    ar_bbox = _bbox_for_text(pdf_bytes, "[A/R]")
-    reminder_bbox = _bbox_for_text(pdf_bytes, "Sauf erreur")
+    """La légende [A/R] doit être au-dessus du texte de rappel (pas de chevauchement).
+
+    Les deux extraits sont cherchés sur chaque page : un rappel multipage place
+    souvent la légende après la première page. L'assertion géométrique ne
+    s'exécute que lorsque les deux textes sont localisés sur la même page.
+    """
+    ar_bbox = None
+    reminder_bbox = None
+    # page_index négatif : première occurrence, toutes pages, pour savoir
+    # si pdfminer voit le texte. La comparaison se fait page par page.
+    if _bbox_for_text(pdf_bytes, "[A/R]", page_index=-1) is None:
+        pytest.skip("pdfminer n'a pas localisé « [A/R] » dans une boîte de texte")
+    if _bbox_for_text(pdf_bytes, "Sauf erreur", page_index=-1) is None:
+        pytest.skip("pdfminer n'a pas localisé « Sauf erreur » dans une boîte de texte")
+    try:
+        from pdfminer.high_level import extract_pages
+        from pdfminer.layout import LAParams
+    except ImportError:
+        pytest.skip("pdfminer indisponible pour analyse bbox")
+
+    for layout in extract_pages(BytesIO(pdf_bytes), laparams=LAParams()):
+        page_ar = None
+        page_reminder = None
+        for element in _iter_text_elements(layout):
+            text = element.get_text() or ""
+            if page_ar is None and "[A/R]" in text:
+                page_ar = element.bbox
+            if page_reminder is None and "Sauf erreur" in text:
+                page_reminder = element.bbox
+        if page_ar is not None and page_reminder is not None:
+            ar_bbox = page_ar
+            reminder_bbox = page_reminder
+            break
     if ar_bbox is None or reminder_bbox is None:
-        pytest.skip("pdfminer indisponible ou texte non extrait pour analyse bbox")
+        # Les deux extraits existent (contrôles ci-dessus) mais sur des pages
+        # distinctes : ils ne peuvent pas se chevaucher.
+        return
     assert not _bboxes_overlap(ar_bbox, reminder_bbox), (
         "Chevauchement détecté entre la légende [A/R] et le pied de page rappel"
     )
@@ -426,6 +478,41 @@ class TestInvoicePdfFooterHelpers:
         )
         assert measured > 70.0
         assert margin_cm * cm >= PDF_FOOTER_GATE_MIN_PT
+
+    def test_short_invoice_stays_on_first_page(self):
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import cm
+        from reportlab.platypus import PageBreak, Paragraph, Spacer, Table
+
+        styles = getSampleStyleSheet()
+        rows = [["Date", "Description", "Montant"]]
+        rows.extend(
+            [
+                ["06.10.2026", "Client : BONVIN Claire", "72.00"],
+                ["06.10.2026", "Client : BONVIN Claire", "72.00"],
+                ["08.10.2026", "Client : DUVAL Marc", "95.00"],
+                ["14.10.2026", "Client : KELLER Sophie", "64.00"],
+            ]
+        )
+        table = Table(rows, colWidths=[70, 300, 60])
+        post = [
+            Spacer(1, 8),
+            Paragraph("Réduction globale (10 %)", styles["Normal"]),
+            Spacer(1, 6),
+            Paragraph("TOTAL À FACTURER : 272.70 CHF", styles["Normal"]),
+        ]
+        usable = float(A4[0] - 1.9 * cm - 1.9 * cm)
+        story: list = [Paragraph("En-tête facture", styles["Normal"])]
+        _append_paginated_detail_table_with_tail(
+            story,
+            s2_table=table,
+            post_table_flowables=post,
+            usable_width_pt=usable,
+            first_page_bottom_margin_cm=3.53,
+        )
+        assert not any(isinstance(item, PageBreak) for item in story)
+        assert table in story
 
     def test_paginate_table_no_orphan_totals_splits_tail(self):
         from reportlab.platypus import Table
