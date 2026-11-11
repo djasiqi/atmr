@@ -3723,11 +3723,7 @@ class TestSchemaValidationE2E:
         assert resp.status_code in [200, 404]
         if resp.status_code == 200:
             data = resp.get_json() or {}
-            assert (
-                "clients" in data
-                or "data" in data
-                or isinstance(data, list)
-            )
+            assert "clients" in data or "data" in data or isinstance(data, list)
 
     def test_company_dispatch_status(self, authenticated_client):
         """Test GET /api/v1/companies/me/dispatch/status - statut dispatch."""
