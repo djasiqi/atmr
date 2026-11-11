@@ -72,6 +72,21 @@ function MethodChipDropdown({ options, value, onChange }) {
   );
 }
 
+/** Clé stable pour toute la durée d'ouverture : un second clic après une réponse perdue rejoue le même paiement. */
+export function newPaymentAttemptKey() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `pay-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function buildManualPaymentPayload(formData, amount, attemptKey) {
+  return {
+    ...formData,
+    amount,
+    paid_at: new Date(formData.paid_at).toISOString(),
+    idempotency_key: attemptKey,
+  };
+}
+
 const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
   const [formData, setFormData] = useState({
     amount: '',
@@ -82,6 +97,7 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const amountRef = useRef(null);
+  const attemptKeyRef = useRef('');
 
   const paymentMethods = [
     { value: 'bank_transfer', label: 'Virement bancaire' },
@@ -91,7 +107,14 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
   ];
 
   useEffect(() => {
-    if (open && invoice) {
+    if (!open) {
+      attemptKeyRef.current = '';
+      return undefined;
+    }
+    if (invoice) {
+      if (!attemptKeyRef.current) {
+        attemptKeyRef.current = newPaymentAttemptKey();
+      }
       setFormData({
         amount: invoice.balance_due > 0 ? invoice.balance_due.toFixed(2) : '',
         paid_at: new Date().toISOString().split('T')[0],
@@ -101,6 +124,7 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
       setError(null);
       setTimeout(() => amountRef.current?.select(), 100);
     }
+    return undefined;
   }, [open, invoice]);
 
   useEffect(() => {
@@ -145,11 +169,10 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
     try {
       setLoading(true);
       setError(null);
-      await onPayment(invoice.id, {
-        ...formData,
-        amount: amt,
-        paid_at: new Date(formData.paid_at).toISOString(),
-      });
+      await onPayment(
+        invoice.id,
+        buildManualPaymentPayload(formData, amt, attemptKeyRef.current)
+      );
     } catch (err) {
       setError(err.message || "Erreur lors de l'enregistrement du paiement");
     } finally {
@@ -164,6 +187,7 @@ const PaymentModal = ({ open, invoice, onClose, onPayment }) => {
   };
 
   const handleClose = () => {
+    attemptKeyRef.current = '';
     setFormData({
       amount: '',
       paid_at: new Date().toISOString().split('T')[0],

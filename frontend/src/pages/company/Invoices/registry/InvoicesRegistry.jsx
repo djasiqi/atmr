@@ -18,6 +18,7 @@ import {
   FiList,
 } from 'react-icons/fi';
 import styles from './InvoicesRegistry.module.css';
+import { registryStatusLabel } from './invoiceRegistryStatus';
 import {
   invoiceService,
   fetchInvoices,
@@ -447,10 +448,12 @@ const InvoicesRegistry = () => {
         company.id,
         paymentData
       );
+      setActionError(null);
       await loadInvoices();
       setPaymentModal({ open: false, invoice: null });
     } catch (err) {
       setActionError(extractApiError(err, "Erreur lors de l'enregistrement du paiement"));
+      throw err;
     }
   };
 
@@ -615,7 +618,10 @@ const InvoicesRegistry = () => {
   ]);
 
   // Formatage des statuts
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (invoice) => {
+    const status = String(invoice?.status || '').toLowerCase();
+    const label = registryStatusLabel(invoice);
+    const settledWithoutPayment = label === 'Solde nul';
     const statusConfig = {
       draft: { label: 'Brouillon', className: styles.badgeDraft },
       sent: { label: 'Envoyée', className: styles.badgeSent },
@@ -623,7 +629,10 @@ const InvoicesRegistry = () => {
         label: 'Partiellement payée',
         className: styles.badgePartiallyPaid,
       },
-      paid: { label: 'Payée', className: styles.badgePaid },
+      paid: {
+        label,
+        className: settledWithoutPayment ? styles.badgeDefault : styles.badgePaid,
+      },
       overdue: { label: 'En retard', className: styles.badgeOverdue },
       cancelled: { label: 'Annulée', className: styles.badgeCancelled },
     };
@@ -1084,7 +1093,7 @@ const InvoicesRegistry = () => {
                         </button>
                       </div>
                     </td>
-                    <td>{getStatusBadge(invoice.status)}</td>
+                    <td>{getStatusBadge(invoice)}</td>
                     <td>{getReminderBadge(invoice)}</td>
                     <td>
                       <InvoiceRowActions
