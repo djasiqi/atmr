@@ -3031,7 +3031,8 @@ class TestSchemaValidationE2E:
                 "license_plate": "GE-12345",
             },
         )
-        assert response.status_code in [201, 400, 404]  # 404 si pas de company
+        # 403 = invitation chauffeur obligatoire (création directe fermée).
+        assert response.status_code in [201, 400, 403, 404]
 
     def test_create_driver_invalid_schema(self, authenticated_client):
         """Test POST /api/companies/me/drivers/create avec payload invalide
@@ -3632,8 +3633,15 @@ class TestSchemaValidationE2E:
         body = resp.get_json() or {}
         if resp.status_code == 200:
             assert isinstance(body, dict)
-            assert "id" in body
-            assert ("name" in body) or ("contact_email" in body) or ("address" in body)
+            # Enveloppe success_response : {"data": {...}} ou payload plat.
+            company = body.get("data") if isinstance(body.get("data"), dict) else body
+            assert isinstance(company, dict)
+            assert "id" in company
+            assert (
+                ("name" in company)
+                or ("contact_email" in company)
+                or ("address" in company)
+            )
 
     def test_company_me_update_valid_schema(self, authenticated_client, sample_company):  # noqa: ARG002
         url = "/api/v1/companies/me"
@@ -3715,7 +3723,11 @@ class TestSchemaValidationE2E:
         assert resp.status_code in [200, 404]
         if resp.status_code == 200:
             data = resp.get_json() or {}
-            assert "clients" in data or isinstance(data, list)
+            assert (
+                "clients" in data
+                or "data" in data
+                or isinstance(data, list)
+            )
 
     def test_company_dispatch_status(self, authenticated_client):
         """Test GET /api/v1/companies/me/dispatch/status - statut dispatch."""
@@ -3754,8 +3766,8 @@ class TestSchemaValidationE2E:
             "license_plate": f"GE-{unique_suffix[:6]}",
         }
         resp = authenticated_client.post(url, json=payload)
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée
-        assert resp.status_code in [201, 400, 404, 409, 429, 500]
+        # 403 = invitation chauffeur obligatoire (création directe fermée).
+        assert resp.status_code in [201, 400, 403, 404, 409, 429, 500]
         if resp.status_code == 201:
             data = resp.get_json() or {}
             assert "id" in data
@@ -3771,8 +3783,8 @@ class TestSchemaValidationE2E:
             "password": "short",  # trop court (< 8)
         }
         resp = authenticated_client.post(url, json=payload)
-        # ✅ FIX: Accepter 404 si la route n'est pas trouvée
-        assert resp.status_code in [400, 404, 422]
+        # 403 possible si la route refuse avant validation (invitation requise).
+        assert resp.status_code in [400, 403, 404, 422]
         data = resp.get_json() or {}
         assert ("message" in data and "errors" in data) or ("error" in data)
 

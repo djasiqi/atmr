@@ -237,8 +237,19 @@ def skip_integration_if_schema_missing(request, postgresql_schema_ready):
 
 
 @pytest.fixture(autouse=True)
-def _reset_portal_grant_flags(app):
-    """Évite la pollution inter-tests des drapeaux d'habilitation portail."""
+def _reset_portal_grant_flags(request):
+    """Évite la pollution inter-tests des drapeaux d'habilitation portail.
+
+    Ne force pas la fixture ``app`` : certains tests unitaires doivent rester
+    hors contexte Flask (gardes prod Redis, use cases booking sans DB).
+    """
+    uses_app = any(
+        name in request.fixturenames for name in ("app", "client", "db", "app_context")
+    )
+    if not uses_app:
+        yield
+        return
+    app = request.getfixturevalue("app")
     had_enforcement = "PORTAL_GRANT_ENFORCEMENT" in app.config
     had_observation = "PORTAL_GRANT_OBSERVATION" in app.config
     previous_enforcement = app.config.get("PORTAL_GRANT_ENFORCEMENT")
