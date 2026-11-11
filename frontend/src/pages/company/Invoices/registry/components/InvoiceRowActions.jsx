@@ -20,12 +20,11 @@ import {
   buildReminderPdfApiUrl,
   ensurePdfUrlWorksInDev,
 } from '../../../../../utils/pdfUrlFallback';
-import { INVOICE_CATALOG, resolveInvoiceResource } from '../../../../../utils/invoiceCatalog';
+import { resolveInvoiceResource } from '../../../../../utils/invoiceCatalog';
 import { getInvoiceCapabilities } from '../../../../../utils/invoiceCapabilities';
 import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
 import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
 import {
-  invoiceStatusLower,
   getNextReminderLevel,
   getReminderLabel,
 } from '../../../../../services/invoiceService';
@@ -41,6 +40,7 @@ const InvoiceRowActions = ({
   onCancel,
   onViewPdf,
   onDuplicate,
+  onCorrect,
   onEditDraft,
   isGuideAnchor = false,
 }) => {
@@ -116,21 +116,21 @@ const InvoiceRowActions = ({
 
   const partnerResource = resolveInvoiceResource(invoice);
   const capabilities = getInvoiceCapabilities(invoice, invoice?.company_id);
-  const partnerInvoice = partnerResource.type === INVOICE_CATALOG.PARTNER;
   const canEdit = capabilities.canEdit;
+  const canOpenEditor = Boolean(capabilities.canOpenEditor);
+  const primaryLabel =
+    capabilities.primaryActionLabel ||
+    (canEdit ? 'Éditer la facture' : 'Voir la facture');
 
   const actions = [
     {
       key: 'editDraft',
-      label: canEdit
-        ? invoiceStatusLower(invoice) === 'draft'
-          ? 'Éditer le brouillon'
-          : 'Éditer la facture'
-        : 'Voir la facture',
-      icon: canEdit ? <FiEdit size={14} /> : <FiFileText size={14} />,
+      label: primaryLabel,
+      icon: canOpenEditor ? <FiEdit size={14} /> : <FiFileText size={14} />,
       onClick: () => onEditDraft?.(),
       className: styles.actionBtnPrimary,
-      show: Boolean(onEditDraft) && (canEdit || partnerInvoice),
+      /** Éditeur unique : brouillon (édition) ou émise (correction / consultation). */
+      show: Boolean(onEditDraft),
     },
     {
       key: 'viewInitial',
@@ -215,7 +215,8 @@ const InvoiceRowActions = ({
       icon: <FiEdit size={14} />,
       onClick: onDuplicate,
       className: styles.actionBtnSecondary,
-      show: capabilities.canDuplicate,
+      // Endpoint /duplicate refuse toute facture émise — ne plus proposer ce faux positif.
+      show: Boolean(capabilities.canDuplicate && onDuplicate),
     },
     {
       key: 'cancel',
@@ -368,9 +369,11 @@ const InvoiceRowActions = ({
             {visibleActions.map((action) => (
               <button
                 key={action.key}
+                type="button"
                 className={`${styles.menuItem} ${action.className}`}
                 onClick={() => handleAction(action.onClick)}
                 role="menuitem"
+                title={action.title}
                 tabIndex={showMenu ? 0 : -1}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {

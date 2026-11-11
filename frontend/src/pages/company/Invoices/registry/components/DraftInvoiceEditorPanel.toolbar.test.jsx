@@ -38,6 +38,7 @@ jest.mock('../../../../../services/invoiceService', () => ({
     })),
   },
   formatCurrencyCHF: (n) => `${Number(n).toFixed(2)} CHF`,
+  invoiceIsNonPayableSpecimen: () => false,
 }));
 
 jest.mock('../../../../../utils/invoicePdfPrint', () => ({
@@ -82,7 +83,7 @@ describe('DraftInvoiceEditorPanel — toolbar après Prepare', () => {
         })
       ).toBeEnabled();
     });
-    expect(screen.getByRole('button', { name: 'Agrandir la zone d’aperçu PDF' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Agrandir la zone d’aperçu PDF' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Plein écran dans le navigateur' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Générer et télécharger le PDF' })).toBeEnabled();
     expect(
@@ -92,4 +93,5 @@ describe('DraftInvoiceEditorPanel — toolbar après Prepare', () => {
 
     expect(screen.getByRole('document', { name: 'Aperçu facture' })).toBeInTheDocument();
   });
+
 });

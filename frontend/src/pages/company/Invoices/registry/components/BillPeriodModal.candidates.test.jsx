@@ -27,6 +27,25 @@ describe('BillPeriodModal — sélecteur patient', () => {
     jest.spyOn(invoiceService, 'fetchInstitutions').mockResolvedValue({ institutions: [] });
     jest.spyOn(invoiceService, 'fetchBillablePartners').mockResolvedValue([]);
     jest.spyOn(invoiceService, 'fetchBillingOpportunities').mockResolvedValue({});
+    jest.spyOn(invoiceService, 'fetchBillingSettings').mockResolvedValue({ vat_applicable: false });
+    jest.spyOn(invoiceService, 'fetchInstitutionInvoicePlan').mockResolvedValue({
+      clinic: { transports_count: 1, estimated_total: 72 },
+      reconciliation: {
+        bookings: [
+          {
+            booking_id: 52955,
+            payer: 'clinic',
+            eligible: true,
+            invoice_bucket: 'clinic_billable',
+            amount_ht: 72,
+            patient_name: 'Claire Bonvin',
+            scheduled_at: '2026-10-06T09:10:00',
+            pickup_location: 'Anieres',
+            dropoff_location: 'Clinique',
+          },
+        ],
+      },
+    });
   });
 
   afterEach(() => {
@@ -91,5 +110,36 @@ describe('BillPeriodModal — sélecteur patient', () => {
       expect(invoiceService.fetchInstitutions).toHaveBeenCalledWith(7);
     });
     expect(invoiceService.fetchBillablePartners).not.toHaveBeenCalled();
+  });
+
+  it('affiche l’éditeur live dès le choix de l’institution, sans carte récapitulative', async () => {
+    invoiceService.fetchInstitutions.mockResolvedValue({
+      institutions: [
+        {
+          id: 'clinic:1',
+          institution_name: "Clinique les Hauts d'Anières",
+          clinic_company_id: 1,
+        },
+      ],
+    });
+
+    renderOpen();
+    await userEvent.click(screen.getByRole('radio', { name: /institution/i }));
+    const clinic = await screen.findByRole('combobox', { name: 'Institution' });
+    await waitFor(() => expect(clinic).toBeEnabled());
+    await userEvent.click(clinic);
+    await userEvent.click(
+      await screen.findByRole('option', { name: /Clinique les Hauts d'Anières/ }),
+    );
+
+    expect(await screen.findByText('Aperçu facture')).toBeInTheDocument();
+    expect(screen.getByText('Brouillon de préparation')).toBeInTheDocument();
+    expect(screen.queryByTestId('institution-invoice-plan')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('institution-summary-count')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('institution-summary-amount')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Toutes les prestations encore à facturer à cette institution/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Facture non créée')).not.toBeInTheDocument();
   });
 });

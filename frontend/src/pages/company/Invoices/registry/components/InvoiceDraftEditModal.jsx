@@ -7,7 +7,7 @@ import styles from './InvoiceDraftEditModal.module.css';
 
 /**
  * Éditeur unique (patient, clinique, partenaire).
- * Le catalogue est porté par l'adaptateur, pas par un second formulaire.
+ * Brouillon = édition ; facture émise = mode correctif (même coque visuelle).
  */
 const InvoiceDraftEditModal = ({
   open,
@@ -17,6 +17,8 @@ const InvoiceDraftEditModal = ({
   onUpdated,
   onOpenSendEmail,
   onMarkAsSent,
+  /** `edit` | `correct` — déduit du statut si omis. */
+  editorIntent,
 }) => {
   const [portalTarget, setPortalTarget] = useState(null);
 
@@ -34,6 +36,13 @@ const InvoiceDraftEditModal = ({
 
   if (!open || !initialInvoice || !portalTarget) return null;
 
+  const status = String(initialInvoice?.status || '').toLowerCase();
+  const intent =
+    editorIntent ||
+    (status === 'draft' ? 'edit' : 'correct');
+  const ariaLabel =
+    intent === 'correct' ? 'Corriger la facture' : 'Éditer la facture';
+
   return createPortal(
     <div className={styles.overlay} onClick={onClose} role="presentation">
       <div
@@ -41,10 +50,19 @@ const InvoiceDraftEditModal = ({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Édition de la facture"
+        aria-label={ariaLabel}
+        data-editor-intent={intent}
       >
         <div className={styles.headCloseOnly}>
-          <button type="button" className={styles.close} onClick={onClose} aria-label="Fermer">
+          <button
+            type="button"
+            className={styles.close}
+            onClick={(event) => {
+              event.stopPropagation();
+              onClose();
+            }}
+            aria-label="Fermer"
+          >
             <FiX size={18} />
           </button>
         </div>
@@ -56,6 +74,7 @@ const InvoiceDraftEditModal = ({
           onUpdated={onUpdated}
           onOpenSendEmail={onOpenSendEmail}
           onMarkAsSent={onMarkAsSent}
+          editorIntent={intent}
         />
       </div>
     </div>,

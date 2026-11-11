@@ -73,3 +73,42 @@ export const presentInvoiceLinesPreview = (previewLines = [], options = {}) => {
     rows,
   };
 };
+
+/** Affiche les montants déjà calculés. Ne soustrait rien du tarif. */
+export function presentCashPreview(preview) {
+  if (!preview || preview.collected_chf == null || preview.remaining_due_chf == null) {
+    return null;
+  }
+  if (preview.estimated_subtotal_ht == null) return null;
+  const lines = Array.isArray(preview.preview_lines) ? preview.preview_lines : [];
+  const legs = lines.flatMap((line) => {
+    const source = Array.isArray(line.cash_legs) && line.cash_legs.length ? line.cash_legs : [line];
+    return source.flatMap((leg) => {
+      if (leg.recognized_net_chf == null || leg.remaining_due_chf == null) return [];
+      return [
+        {
+          bookingId: leg.booking_id ?? line.booking_id,
+          contractual: formatChfLabel(leg.contractual_chf ?? leg.amount_ht),
+          collected: formatChfLabel(leg.recognized_net_chf),
+          remaining: formatChfLabel(leg.remaining_due_chf),
+        },
+      ];
+    });
+  });
+  return {
+    services: formatChfLabel(preview.estimated_subtotal_ht),
+    collected: formatChfLabel(preview.collected_chf),
+    remaining: formatChfLabel(preview.remaining_due_chf),
+    legs,
+  };
+}
+
+function formatChfLabel(value) {
+  if (value == null || value === '') return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (raw.includes('CHF')) return raw;
+  const amount = Number(raw);
+  if (!Number.isFinite(amount)) return null;
+  return `${amount.toFixed(2)} CHF`;
+}

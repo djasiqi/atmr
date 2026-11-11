@@ -37,4 +37,34 @@ describe('InvoiceRowActions — délégation régénération (contrat figé)', (
     expect(forceSpy).not.toHaveBeenCalled();
     forceSpy.mockRestore();
   });
+
+  it('facture émise : Corriger via l’éditeur unique, jamais Créer un correctif', () => {
+    const onEditDraft = jest.fn();
+    render(
+      <InvoiceRowActions
+        invoice={{
+          id: 3170,
+          company_id: 73011,
+          status: 'partially_paid',
+          invoice_number: 'EM-2026-11-0004',
+          pdf_url: '/uploads/invoices/em.pdf',
+          reminder_level: 0,
+          amount_paid: 20,
+          balance_due: 28.45,
+        }}
+        onEditDraft={onEditDraft}
+        onDuplicate={jest.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle('Actions'));
+    expect(screen.getByRole('menuitem', { name: /Corriger la facture/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /^Éditer la facture$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Creer un correctif/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /^Voir la facture$/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /Corriger la facture/i }));
+    expect(onEditDraft).toHaveBeenCalled();
+  });
 });
+

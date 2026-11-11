@@ -116,7 +116,8 @@
   }
 
   .colNum {
-    width: 3.75rem;
+    width: auto;
+    min-width: 5.25rem;
   }
 }
 
@@ -287,9 +288,19 @@
 .totalRow {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 16px;
   padding: 4px 0;
   font-size: var(--font-body-px);
+}
+
+.totalRow > span:first-child {
+  min-width: 0;
+}
+
+.totalRow > span:last-child {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .totalGrand {

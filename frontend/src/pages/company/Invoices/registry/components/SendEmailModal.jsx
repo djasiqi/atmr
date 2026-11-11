@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FiInfo, FiMail, FiRefreshCw, FiSend, FiX } from 'react-icons/fi';
-import { invoiceService } from '../../../../../services/invoiceService';
+import { invoiceService, invoiceStatusLower } from '../../../../../services/invoiceService';
+import { getApiErrorMessage } from '../../../../../utils/apiErrorMessage';
 import { resolveDefaultRecipientEmail } from '../../../../../utils/portalInvoiceRecipientEmail';
 import styles from './SendEmailModal.module.css';
 
@@ -74,15 +75,17 @@ const SendEmailModal = ({
 
     setSending(true);
     try {
+      const mayRegenerate =
+        isReminder || invoiceStatusLower(invoice) === 'draft';
       await onSend({
         recipient_email: email,
-        force_regenerate_pdf: forceRegenerate,
+        force_regenerate_pdf: mayRegenerate && forceRegenerate,
         reminder_id: reminderId,
       });
       onClose();
     } catch (err) {
       console.error('Erreur lors de l\'envoi:', err);
-      setError(err?.response?.data?.error || 'Erreur lors de l\'envoi de l\'email');
+      setError(getApiErrorMessage(err, 'Erreur lors de l\'envoi de l\'email'));
     } finally {
       setSending(false);
     }
@@ -171,6 +174,7 @@ const SendEmailModal = ({
               </small>
             </div>
 
+            {isReminder || invoiceStatusLower(invoice) === 'draft' ? (
             <div className={styles.checkboxGroup}>
               <label className={styles.checkboxLabel}>
                 <input
@@ -181,13 +185,20 @@ const SendEmailModal = ({
                 />
                 <span>
                   <FiRefreshCw size={14} />
-                  Régénérer le PDF avant envoi
+                  {isReminder ? 'Régénérer le PDF du rappel avant envoi' : 'Régénérer le PDF avant envoi'}
                 </span>
               </label>
               <small className={styles.hint}>
-                Utile si des modifications ont été apportées depuis la dernière génération.
+                {isReminder
+                  ? 'Concerne uniquement le document de rappel, pas la facture déjà émise.'
+                  : 'Utile si des modifications ont été apportées depuis la dernière génération.'}
               </small>
             </div>
+            ) : (
+            <p className={styles.hint} role="status">
+              Cette facture a déjà été émise. L’envoi joint le PDF original, sans le régénérer.
+            </p>
+            )}
 
             {error ? <div className={styles.error}>{error}</div> : null}
 

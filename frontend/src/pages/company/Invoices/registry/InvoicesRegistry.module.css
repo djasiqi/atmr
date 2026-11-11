@@ -669,6 +669,17 @@
   color: var(--text-primary);
 }
 
+.situationButton {
+  margin-top: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-primary, #d1d5db);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
 /* Badges — Status */
 .badge {
   display: inline-block;
@@ -985,7 +996,8 @@
   inset: 0;
   background: rgba(15, 23, 42, 0.25);
   backdrop-filter: blur(2px);
-  z-index: var(--z-modal-app);
+  /* Au-dessus de BillPeriodModal (portail, même --z-modal-app) */
+  z-index: calc(var(--z-modal-app, 10001) + 50);
   display: flex;
   align-items: center;
   justify-content: center;

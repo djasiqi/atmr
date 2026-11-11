@@ -145,6 +145,60 @@ export const invoiceService = {
   },
 
   /**
+   * Aperçu serveur d'un avoir par prestations (sans écriture).
+   */
+  async previewCreditNote(companyId, invoiceId, payload = {}) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/credit-notes/preview`,
+      { lines: Array.isArray(payload.lines) ? payload.lines : [] }
+    );
+    return response.data;
+  },
+
+  /**
+   * Émet un avoir sur une facture patient déjà émise.
+   * Si ``lines`` est fourni, le montant TTC est calculé côté serveur.
+   * Ne crée ni paiement ni remboursement. 201 = créé, 200 = rejeu idempotent.
+   */
+  async issueCreditNote(companyId, invoiceId, payload) {
+    const body = {
+      reason: payload.reason,
+      idempotency_key: payload.idempotency_key,
+    };
+    if (Array.isArray(payload.lines) && payload.lines.length > 0) {
+      body.lines = payload.lines;
+    } else if (payload.amount_chf != null && payload.amount_chf !== '') {
+      body.amount_chf = payload.amount_chf;
+    }
+    if (payload.prepare_corrective) {
+      body.prepare_corrective = true;
+      if (payload.corrective_idempotency_key) {
+        body.corrective_idempotency_key = payload.corrective_idempotency_key;
+      }
+    }
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/credit-notes`,
+      body
+    );
+    return response.data;
+  },
+
+  /**
+   * Prépare un brouillon de facture rectificative lié à un avoir.
+   */
+  async prepareCorrectiveInvoice(companyId, invoiceId, payload) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/corrective`,
+      {
+        credit_note_id: payload.credit_note_id,
+        reason: payload.reason,
+        idempotency_key: payload.idempotency_key,
+      }
+    );
+    return response.data;
+  },
+
+  /**
    * Régénération FORCÉE du PDF depuis l'état courant serveur/DB.
    * Contrat figé (CLOSED) pour InvoiceRowActions et DraftInvoiceEditorPanel.
    * Ne déclare jamais le succès si aucune nouvelle URL n'est retournée.
@@ -853,40 +907,78 @@ export const invoiceStatusLower = (invoice) => {
   return typeof s === 'string' ? s.toLowerCase() : '';
 };
 
-/** Édition lignes / remises : brouillon ou facture émise tant qu’elle n’est pas payée / annulée. */
+/** Spécimen de recette : visible, jamais émissible ni encaissable. */
+export const invoiceIsNonPayableSpecimen = (invoice) => {
+  const meta = invoice?.meta;
+  if (meta && (meta.specimen === true || meta.payable === false)) return true;
+  return invoice?.specimen === true || invoice?.payable === false;
+};
+
+/** Édition des lignes : brouillon uniquement. Une facture émise est en lecture seule. */
 export const canEditDraft = (invoice) => {
-  const s = invoiceStatusLower(invoice);
-  return ['draft', 'sent', 'partially_paid', 'overdue'].includes(s);
+  return invoiceStatusLower(invoice) === 'draft';
 };
 
 export const canSendInvoice = (invoice) => {
+  if (invoiceIsNonPayableSpecimen(invoice)) return false;
   return invoiceStatusLower(invoice) === 'draft';
 };
 
 export const canAddPayment = (invoice) => {
+  if (invoiceIsNonPayableSpecimen(invoice)) return false;
   return !['paid', 'cancelled'].includes(invoiceStatusLower(invoice));
 };
 
 export const canGenerateReminder = (invoice) => {
+  if (invoiceIsNonPayableSpecimen(invoice)) return false;
   return (
     !['paid', 'cancelled'].includes(invoiceStatusLower(invoice)) && invoice.balance_due > 0
   );
 };
 
 export const canRegeneratePdf = (invoice) => {
-  // Les factures payées ne peuvent plus être régénérées, seule la visualisation est possible
-  const s = invoiceStatusLower(invoice);
-  return s !== 'cancelled' && s !== 'paid';
+  // Seul un brouillon peut être régénéré. Une facture émise conserve son PDF.
+  return invoiceStatusLower(invoice) === 'draft';
 };
 
 export const canCancelInvoice = (invoice) => {
   return invoiceStatusLower(invoice) === 'draft' && invoice.amount_paid === 0;
 };
 
-export const canDuplicateInvoice = (invoice) => {
-  // Les factures payées ne peuvent plus avoir de correctif
+/**
+ * Ancien « Créer un correctif » (= duplicate qui annulait l'original).
+ * Toujours faux : le backend refuse toute facture émise (409 ISSUED_INVOICE_IMMUTABLE).
+ * Ne pas réactiver sans endpoint d'orchestration avoir + facture rectificative.
+ */
+export const canDuplicateInvoice = (_invoice) => false;
+
+/**
+ * Une facture patient émise peut ouvrir l'assistant d'avoir.
+ * Pas d'édition silencieuse : original immuable. Hors catalogue partenaire.
+ */
+export const canCorrectIssuedInvoice = (invoice) => {
+  if (invoiceIsNonPayableSpecimen(invoice)) return false;
+  if (
+    invoice?.is_partner_invoice === true ||
+    invoice?.kind === 'partner' ||
+    String(invoice?.invoice_number || '')
+      .toUpperCase()
+      .startsWith('PARTNER-')
+  ) {
+    return false;
+  }
   const s = invoiceStatusLower(invoice);
-  return ['sent', 'partially_paid', 'overdue'].includes(s) || s === 'cancelled';
+  return ['sent', 'partially_paid', 'paid', 'overdue'].includes(s);
+};
+
+export const issueCreditNote = async (companyId, invoiceId, payload) =>
+  invoiceService.issueCreditNote(companyId, invoiceId, payload);
+
+/** Libellé du premier item Actions (édition brouillon / correction / consultation). */
+export const getInvoicePrimaryActionLabel = (invoice) => {
+  if (canEditDraft(invoice)) return 'Éditer la facture';
+  if (canCorrectIssuedInvoice(invoice)) return 'Corriger la facture';
+  return 'Voir la facture';
 };
 
 export const duplicateInvoice = async (companyId, invoiceId) => {

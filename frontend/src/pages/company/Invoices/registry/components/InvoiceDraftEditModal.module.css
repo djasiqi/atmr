@@ -844,10 +844,46 @@
   height: min(56vh, calc(var(--modal-max-height) - var(--modal-invoice-preview-reserve)));
 }
 
-.draftPdfWrapExpanded {
+/** Fenêtre parente déjà limitée : la hauteur suit la place libre, pas un vh fixe. */
+.bodyFill {
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.draftPdfWrap.draftPdfWrapEmbedded {
+  margin: 0;
+  flex: 1 1 auto;
   min-height: 280px;
-  max-height: min(74vh, calc(var(--modal-max-height) - var(--modal-invoice-preview-reserve-expanded)));
-  height: min(70vh, calc(var(--modal-max-height) - var(--modal-invoice-preview-reserve-expanded)));
+  height: min(46vh, 520px);
+  max-height: min(46vh, 520px);
+  overflow: hidden;
+}
+
+.draftPdfWrapEmbedded .draftPdfViewerStack {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.draftPdfWrapEmbedded .draftLivePreviewMount {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 720px) {
+  .draftPdfWrapEmbedded {
+    height: auto;
+    max-height: none;
+    min-height: 420px;
+  }
+
+  .draftPdfWrapEmbedded .draftLivePreviewMount,
+  .draftPdfViewerStack .draftLivePreviewMount {
+    min-height: 320px;
+  }
 }
 
 /**
@@ -907,6 +943,14 @@
 
 .draftPdfLineSheetFlowLines {
   max-height: min(340px, 48vh);
+}
+
+.draftPdfLineSheetFlowInfo {
+  max-height: min(210px, 34vh);
+}
+
+.draftPdfLineSheetFlowInfo .draftPdfLineSheetInner {
+  padding: 8px 10px;
 }
 
 /** Panneau « Lignes » sous PDF : une ligne d’entête */
@@ -1349,21 +1393,6 @@
   font-size: 11px;
   line-height: 1.35;
   color: var(--text-tertiary, #64748b);
-}
-
-.remiseDeductionCalc {
-  margin-top: 4px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--bg-primary, #fff);
-  border: 1px solid var(--border-primary, #e2e8f0);
-  color: var(--text-secondary, #334155);
-  font-weight: 500;
-}
-
-.remiseDeductionCalc strong {
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
 }
 
 .remiseDeductionWarn {
@@ -2948,37 +2977,383 @@
   }
 }
 
+.infoSheet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.infoSheetHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #eef0f3;
+}
+
+.infoSheetTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: #1e293b;
+}
+
+.infoSaveBtn {
+  appearance: none;
+  flex-shrink: 0;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.infoSaveBtn:hover:not(:disabled) {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.infoSaveBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .infoGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 10px;
 }
 
 .infoField {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.82rem;
-  color: var(--text-secondary, #4b5563);
+  gap: 3px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #64748b;
 }
 
-.infoField:nth-child(3),
-.infoField:nth-child(4) {
-  grid-column: 1 / -1;
+.infoInput {
+  width: 100%;
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid #e6e8ec;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  background: #fff;
+  color: #0f172a;
+}
+
+.infoInput:focus {
+  outline: none;
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.06);
 }
 
 .infoCheck {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
-  color: var(--text-primary, #111827);
-  line-height: 1.35;
+  margin: 0;
+  padding-top: 6px;
+  border-top: 1px solid #eef0f3;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #334155;
+  line-height: 1.2;
+  cursor: pointer;
 }
 
-.infoGrid .btnPrimary {
-  grid-column: 1 / -1;
-  justify-self: start;
-  width: auto;
+.infoCheck input {
+  margin: 0;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  accent-color: #334155;
+}
+
+@media (max-width: 640px) {
+  .infoSaveBtn {
+    width: auto;
+    min-height: 24px;
+  }
+}
+
+.issuedInvoiceNotice {
+  margin: 6px 0 0;
+  max-width: 42rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.correctionConfirmOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.correctionConfirmDialog {
+  width: min(520px, 100%);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 18px 12px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.25);
+}
+
+.correctionConfirmHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9a3412;
+  margin-bottom: 8px;
+}
+
+.correctionConfirmHead h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+.correctionWarningList,
+.correctionErrorList {
+  margin: 8px 0;
+  padding-left: 1.1rem;
+  font-size: 0.82rem;
+}
+
+.correctionErrorList {
+  color: #b91c1c;
+}
+
+/* Ancien workbench (pont) — styles conservés */
+.correctionWorkbench {
+  margin-top: 12px;
+  padding: 12px 14px 16px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  max-height: min(52vh, 520px);
+  overflow: auto;
+}
+
+.correctionWorkbenchHead {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+  color: #9a3412;
+}
+
+.correctionWorkbenchTitle {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.correctionWorkbenchHint {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.correctionSnapshot {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px 12px;
+  margin: 0 0 12px;
+}
+
+.correctionSnapshot dt {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #64748b;
+}
+
+.correctionSnapshot dd {
+  margin: 2px 0 0;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+
+.correctionLinesHead,
+.correctionExistingNotes h5,
+.correctionPreview h5 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.correctionLineList,
+.correctionExistingNotes ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.correctionLineItem {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.correctionLineCheck {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.correctionLineMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.correctionLineActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: flex-end;
+  margin: 8px 0 0 26px;
+}
+
+.correctionField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: #475569;
+  flex: 1 1 160px;
+}
+
+.correctionField input,
+.correctionField textarea {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  color: #0f172a;
+  background: #fff;
+}
+
+.correctionConfirm {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 10px 0;
+  font-size: 0.82rem;
+  color: #334155;
+}
+
+.correctionPreview {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.correctionSuccess {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 0.88rem;
+}
+
+.linkBtnQuiet {
+  border: none;
+  background: none;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.linkBtnQuiet:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.correctionExistingNotes {
+  margin: 12px 0;
+  font-size: 0.82rem;
+}
+
+.correctionExistingNotes li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+@media (max-width: 640px) {
+  .issuedInvoiceNotice {
+    max-width: 100%;
+    font-size: 0.78rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .draftPdfWrapEmbedded {
+    height: auto;
+    max-height: none;
+    min-height: 420px;
+  }
+
+  .draftPdfWrapEmbedded .draftLivePreviewMount,
+  .draftPdfViewerStack .draftLivePreviewMount {
+    min-height: 320px;
+    flex: 1 1 auto;
+  }
 }
 
