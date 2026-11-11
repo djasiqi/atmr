@@ -68,9 +68,7 @@ def _sha256(path: Path) -> str:
 
 
 def _url(company_id: int, invoice_id: int) -> str:
-    return (
-        f"/api/v1/invoices/companies/{company_id}/invoices/{invoice_id}/payments"
-    )
+    return f"/api/v1/invoices/companies/{company_id}/invoices/{invoice_id}/payments"
 
 
 def _prepare(
@@ -152,7 +150,9 @@ def test_paiement_ulterieur_reduit_le_solde_sans_toucher_la_prestation(
         issued.billed_to_company_id,
     )
     invoices_before = Invoice.query.filter_by(company_id=world.company_id).count()
-    credits_before = InvoiceCreditNote.query.filter_by(invoice_id=world.invoice_id).count()
+    credits_before = InvoiceCreditNote.query.filter_by(
+        invoice_id=world.invoice_id
+    ).count()
     response = _post(
         client,
         world,
@@ -202,7 +202,9 @@ def test_paiement_ulterieur_reduit_le_solde_sans_toucher_la_prestation(
         .all()
     )
     assert [item.reference for item in ordered] == ["acompte-chauffeur", "reglement-10"]
-    assert Invoice.query.filter_by(company_id=world.company_id).count() == invoices_before
+    assert (
+        Invoice.query.filter_by(company_id=world.company_id).count() == invoices_before
+    )
     assert (
         InvoiceCreditNote.query.filter_by(invoice_id=world.invoice_id).count()
         == credits_before
@@ -303,7 +305,10 @@ def test_rejeu_de_la_meme_cle_ne_cree_pas_de_ligne(client, db, uploads_tmp):
     assert first.status_code == 200, first.get_data(as_text=True)
     assert second.status_code == 200, second.get_data(as_text=True)
     assert second.get_json()["data"]["replay"] is True
-    assert second.get_json()["data"]["payment_id"] == first.get_json()["data"]["payment_id"]
+    assert (
+        second.get_json()["data"]["payment_id"]
+        == first.get_json()["data"]["payment_id"]
+    )
     assert (
         InvoicePayment.query.filter_by(
             invoice_id=world.invoice_id, reference="meme-cle"
@@ -420,7 +425,12 @@ def test_deux_paiements_concurrents_admissibles(app, db, uploads_tmp):
         app,
         world,
         [
-            {"amount": 10.0, "method": "bank_transfer", "paid_at": _PAID_AT, "idempotency_key": "ok-a"},
+            {
+                "amount": 10.0,
+                "method": "bank_transfer",
+                "paid_at": _PAID_AT,
+                "idempotency_key": "ok-a",
+            },
             {
                 "amount": 15.0,
                 "method": "bank_transfer",
@@ -442,7 +452,9 @@ def test_paiement_manuel_sans_collection_et_collection_deja_imputee(
     client, db, uploads_tmp
 ):
     world = _issued_world(db, uploads_tmp, InvoiceStatus.SENT, suffix="_cash")
-    invoice = _prepare(db, world, paid="0.00", balance="45.00", status=InvoiceStatus.SENT)
+    invoice = _prepare(
+        db, world, paid="0.00", balance="45.00", status=InvoiceStatus.SENT
+    )
     owner = User.query.get(world.owner_user_id)
     driver_user = User(
         username=f"drv_{uuid.uuid4().hex[:8]}",
@@ -532,7 +544,9 @@ def test_paiement_manuel_sans_collection_et_collection_deja_imputee(
     assert reused.status_code == 409, reused.get_data(as_text=True)
     assert reused.get_json()["code"] == "collection_interdite"
     db.session.expire_all()
-    linked_again = InvoicePayment.query.filter_by(cash_collection_id=collection.id).all()
+    linked_again = InvoicePayment.query.filter_by(
+        cash_collection_id=collection.id
+    ).all()
     assert len(linked_again) == 1
     assert linked_again[0].amount == Decimal("20.00")
     manual_row = InvoicePayment.query.filter_by(
@@ -570,7 +584,9 @@ def test_isolation_entre_entreprises(client, db, uploads_tmp):
 
 def test_paiements_historiques_restent_intacts(client, db, uploads_tmp):
     world = _issued_world(db, uploads_tmp, InvoiceStatus.SENT, suffix="_hist")
-    invoice = _prepare(db, world, paid="0.00", balance="45.00", status=InvoiceStatus.SENT)
+    invoice = _prepare(
+        db, world, paid="0.00", balance="45.00", status=InvoiceStatus.SENT
+    )
     first = InvoicePayment()
     first.invoice_id = invoice.id
     first.amount = Decimal("15.00")

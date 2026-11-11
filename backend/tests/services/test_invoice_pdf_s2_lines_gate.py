@@ -365,7 +365,9 @@ def test_s2_discount_line_matches_live_preview():
         catalog, net, compact_private_sub=True
     )
     html = f"{client_meta_line_html('BONVIN Claire')}<br/>{transport}{suffix}"
-    style = ParagraphStyle("DiscountProbe", fontName=font_name, fontSize=FONT_BODY, leading=14)
+    style = ParagraphStyle(
+        "DiscountProbe", fontName=font_name, fontSize=FONT_BODY, leading=14
+    )
     amount = _pdf_s2_amount_only_paragraph(
         net, style, is_round_trip=False, ht_column_plain=True
     )
@@ -381,7 +383,10 @@ def test_s2_discount_line_matches_live_preview():
     assert "72.00 →" not in text
     assert "64.80" in text
 
-    plain = {"line": SimpleNamespace(line_total=Decimal("72"), line_meta={}), "amount": Decimal("72")}
+    plain = {
+        "line": SimpleNamespace(line_total=Decimal("72"), line_meta={}),
+        "amount": Decimal("72"),
+    }
     assert _consolidated_row_catalog_net(plain)[0] is None
 
 
@@ -415,10 +420,46 @@ def test_s2_table_matches_live_preview_four_discounted_lines(monkeypatch):
         institution_name="Clinique les Hauts d'Anieres",
     )
     specs = [
-        (1, 101, "Claire BONVIN", "06.10.2026 08:00", "Chemin des Vignes 4, 1247 Anieres", "Clinique les Hauts d'Anieres, Chemin des Courbes 9, 1247 Anieres", Decimal("72.00"), Decimal("64.80")),
-        (2, 102, "Claire BONVIN", "06.10.2026 16:00", "Clinique les Hauts d'Anieres, Chemin des Courbes 9, 1247 Anieres", "Chemin des Vignes 4, 1247 Anieres", Decimal("72.00"), Decimal("64.80")),
-        (3, 103, "Marc DUVAL", "08.10.2026 09:00", "Route de Hermance 8, 1222 Vesenaz", "Hopitaux Universitaires de Geneve, Rue Gabrielle-Perret-Gentil 4, 1205 Geneve", Decimal("95.00"), Decimal("85.50")),
-        (4, 104, "Sophie KELLER", "14.10.2026 11:00", "Avenue de Champel 20, 1206 Geneve", "Clinique les Hauts d'Anieres, Chemin des Courbes 9, 1247 Anieres", Decimal("64.00"), Decimal("57.60")),
+        (
+            1,
+            101,
+            "Claire BONVIN",
+            "06.10.2026 08:00",
+            "Chemin des Vignes 4, 1247 Anieres",
+            "Clinique les Hauts d'Anieres, Chemin des Courbes 9, 1247 Anieres",
+            Decimal("72.00"),
+            Decimal("64.80"),
+        ),
+        (
+            2,
+            102,
+            "Claire BONVIN",
+            "06.10.2026 16:00",
+            "Clinique les Hauts d'Anieres, Chemin des Courbes 9, 1247 Anieres",
+            "Chemin des Vignes 4, 1247 Anieres",
+            Decimal("72.00"),
+            Decimal("64.80"),
+        ),
+        (
+            3,
+            103,
+            "Marc DUVAL",
+            "08.10.2026 09:00",
+            "Route de Hermance 8, 1222 Vesenaz",
+            "Hopitaux Universitaires de Geneve, Rue Gabrielle-Perret-Gentil 4, 1205 Geneve",
+            Decimal("95.00"),
+            Decimal("85.50"),
+        ),
+        (
+            4,
+            104,
+            "Sophie KELLER",
+            "14.10.2026 11:00",
+            "Avenue de Champel 20, 1206 Geneve",
+            "Clinique les Hauts d'Anieres, Chemin des Courbes 9, 1247 Anieres",
+            Decimal("64.00"),
+            Decimal("57.60"),
+        ),
     ]
     lines = []
     bookings = {}
@@ -431,9 +472,18 @@ def test_s2_table_matches_live_preview_four_discounted_lines(monkeypatch):
                 reservation_id=booking_id,
                 description=f"{pickup} → {dropoff}",
                 line_total=net,
-                line_meta={"original_line_total": str(catalog), "patient_name": customer},
+                line_meta={
+                    "original_line_total": str(catalog),
+                    "patient_name": customer,
+                },
                 adjustment_note=None,
-                to_dict=lambda line_id=line_id, booking_id=booking_id, pickup=pickup, dropoff=dropoff, catalog=catalog, net=net, customer=customer: {
+                to_dict=lambda line_id=line_id,
+                booking_id=booking_id,
+                pickup=pickup,
+                dropoff=dropoff,
+                catalog=catalog,
+                net=net,
+                customer=customer: {
                     "id": line_id,
                     "type": "ride",
                     "reservation_id": booking_id,
@@ -482,7 +532,9 @@ def test_s2_table_matches_live_preview_four_discounted_lines(monkeypatch):
         total_amount=Decimal("272.70"),
     )
     font_name, font_bold = _ensure_dejavu_pdf_fonts()
-    style = ParagraphStyle("S2Probe", fontName=font_name, fontSize=FONT_BODY, leading=14)
+    style = ParagraphStyle(
+        "S2Probe", fontName=font_name, fontSize=FONT_BODY, leading=14
+    )
     table, consolidated = _build_s2_table(
         invoice,
         font_name,
@@ -494,7 +546,10 @@ def test_s2_table_matches_live_preview_four_discounted_lines(monkeypatch):
     assert len(consolidated) == 4
     assert all(item.get("is_round_trip") is not True for item in consolidated)
 
-    header = [getattr(cell, "getPlainText", lambda: str(cell))() for cell in table._cellvalues[0]]
+    header = [
+        getattr(cell, "getPlainText", lambda: str(cell))()
+        for cell in table._cellvalues[0]
+    ]
     assert header[:3] == ["Date", "Description", "Montant"]
 
     expected = [
@@ -503,7 +558,9 @@ def test_s2_table_matches_live_preview_four_discounted_lines(monkeypatch):
         ("DUVAL Marc", "Route de Hermance 8, 1222 Vesenaz", "95.00"),
         ("KELLER Sophie", "Avenue de Champel 20, 1206 Geneve", "64.00"),
     ]
-    for row, (client, route_bit, net) in zip(table._cellvalues[1:], expected, strict=True):
+    for row, (client, route_bit, net) in zip(
+        table._cellvalues[1:], expected, strict=True
+    ):
         date_text = row[0].getPlainText()
         desc_text = row[1].getPlainText()
         amount_text = row[2].getPlainText()
@@ -557,4 +614,3 @@ def test_s2_table_matches_live_preview_four_discounted_lines(monkeypatch):
     assert "85.50" not in pdf_text
     assert "57.60" not in pdf_text
     assert "72.00 →" not in pdf_text
-

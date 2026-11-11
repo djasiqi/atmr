@@ -159,7 +159,8 @@ class TestSmtpAccepteLesAccents:
         )
 
         assert result.success, result.error
-        assert sent and isinstance(sent[0], bytes)
+        assert sent
+        assert isinstance(sent[0], bytes)
         parsed = BytesParser(policy=policy.default).parsebytes(sent[0])
         html = ""
         for part in parsed.walk():

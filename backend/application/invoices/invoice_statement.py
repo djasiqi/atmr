@@ -18,9 +18,7 @@ from domain.end_of_trip_settlement.financial_contract import (
 )
 
 _UNAVAILABLE = "Situation financière indisponible."
-_MISMATCH = (
-    "Les montants enregistrés ne concordent pas avec le détail de la facture."
-)
+_MISMATCH = "Les montants enregistrés ne concordent pas avec le détail de la facture."
 
 _MONEY_KEYS = (
     "prestations_chf",
@@ -72,7 +70,9 @@ def _blank_amounts() -> dict[str, None]:
     return dict.fromkeys(_MONEY_KEYS)
 
 
-def _unavailable(message: str, documents: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def _unavailable(
+    message: str, documents: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     payload = _blank_amounts()
     payload.update(
         {
@@ -210,7 +210,10 @@ def _assemble(
     deposits: list[Decimal] = []
     later: list[Decimal] = []
     for payment in payments:
-        if payment.get("origine") == KIND_HANDOVER or payment.get("kind") == KIND_HANDOVER:
+        if (
+            payment.get("origine") == KIND_HANDOVER
+            or payment.get("kind") == KIND_HANDOVER
+        ):
             continue
         amount = money(payment["amount"])
         is_deposit = payment.get("cash_collection_id") is not None
@@ -292,11 +295,17 @@ def _assemble(
     if total is None:
         payload.update(_blank_amounts())
         payload["acomptes_chf"] = _reduction(sum(deposits, Decimal("0.00")))
-        payload["paiements_complementaires_chf"] = _reduction(sum(later, Decimal("0.00")))
+        payload["paiements_complementaires_chf"] = _reduction(
+            sum(later, Decimal("0.00"))
+        )
         payload["disponible"] = balance_due is not None
         payload["message"] = None if payload["disponible"] else _UNAVAILABLE
-        payload["reste_a_payer_chf"] = _plain(balance_due) if balance_due is not None else None
-        payload["a_rembourser_chf"] = _plain(refundable) if refundable is not None else None
+        payload["reste_a_payer_chf"] = (
+            _plain(balance_due) if balance_due is not None else None
+        )
+        payload["a_rembourser_chf"] = (
+            _plain(refundable) if refundable is not None else None
+        )
         return payload
 
     payload["prestations_chf"] = _plain(total)
@@ -320,8 +329,12 @@ def _assemble(
 
     if refunds is None:
         payload["remboursements_confirmes_chf"] = None
-        payload["reste_a_payer_chf"] = _plain(balance_due) if balance_due is not None else None
-        payload["a_rembourser_chf"] = _plain(refundable) if refundable is not None else None
+        payload["reste_a_payer_chf"] = (
+            _plain(balance_due) if balance_due is not None else None
+        )
+        payload["a_rembourser_chf"] = (
+            _plain(refundable) if refundable is not None else None
+        )
         return payload
 
     settlement = settle(total, note_amounts, deposits + later, confirmed)
@@ -428,8 +441,8 @@ def statement_for_invoice(invoice: Any) -> dict[str, Any]:
     ):
         stored_balance = money(invoice.balance_due)
         stored_refundable = money(invoice.refundable_chf)
-        if stored_balance != money(result["reste_a_payer_chf"]) or stored_refundable != money(
-            result["a_rembourser_chf"]
-        ):
+        if stored_balance != money(
+            result["reste_a_payer_chf"]
+        ) or stored_refundable != money(result["a_rembourser_chf"]):
             return _unavailable(_MISMATCH, result.get("documents"))
     return result

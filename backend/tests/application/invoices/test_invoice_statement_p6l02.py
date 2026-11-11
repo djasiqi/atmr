@@ -114,7 +114,9 @@ def test_avoir_partiel_et_total():
     assert partial["net_facture_chf"] == "45.00"
     assert partial["reste_a_payer_chf"] == "45.00"
     assert partial["paiements_complementaires_chf"] == "0.00"
-    assert all(event["label"] != "Paiement complémentaire" for event in partial["events"])
+    assert all(
+        event["label"] != "Paiement complémentaire" for event in partial["events"]
+    )
 
     full = _statement(
         credit_notes=[
@@ -479,15 +481,15 @@ def _issued(company, client, user) -> Invoice:
 
 
 @pytest.mark.integration
-def test_consultation_get_ne_cree_rien(client, db, sample_company, sample_user, sample_client):
+def test_consultation_get_ne_cree_rien(
+    client, db, sample_company, sample_user, sample_client
+):
     invoice = _issued(sample_company, sample_client, sample_user)
     before = InvoicePayment.query.filter_by(invoice_id=invoice.id).count()
     original_pdf = invoice.pdf_url
     original_total = invoice.total_amount
     headers = _company_headers(client, sample_user, sample_company.id)
-    url = (
-        f"/api/v1/invoices/companies/{sample_company.id}/invoices/{invoice.id}"
-    )
+    url = f"/api/v1/invoices/companies/{sample_company.id}/invoices/{invoice.id}"
     response = client.get(url, headers=headers)
     assert response.status_code == 200
     body = response.get_json()["data"]["statement"]

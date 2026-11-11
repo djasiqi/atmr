@@ -20,9 +20,7 @@ def client_meta_line_html(name: str) -> str:
     from services.documents.pdf import FONT_SECONDARY, _xml_escape_for_paragraph
 
     safe = _xml_escape_for_paragraph(str(name or "").strip())
-    return (
-        f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : {safe}</font>'
-    )
+    return f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : {safe}</font>'
 
 
 def pickup_meta_line_html(label: str) -> str:
@@ -36,9 +34,7 @@ def pickup_meta_line_html(label: str) -> str:
     )
 
 
-def issuer_block_html(
-    name: str, address_html: str, vat_status_text: str = ""
-) -> str:
+def issuer_block_html(name: str, address_html: str, vat_status_text: str = "") -> str:
     """Bloc émetteur : même tailles que la facture client."""
     from services.documents.pdf import (
         COLOR_MUTED_PDF,
@@ -107,9 +103,7 @@ def invoice_meta_html(
     return html
 
 
-def prestation_header_row(
-    *, show_date: bool, font_name_bold: str
-) -> list[Any]:
+def prestation_header_row(*, show_date: bool, font_name_bold: str) -> list[Any]:
     """En-tête Date | Description | Montant. Jamais de colonne horaire."""
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_LEFT, TA_RIGHT
@@ -241,7 +235,9 @@ def finalize_prestation_table(
     n_rows = len(table_data)
     if n_rows > LEVEL_THRESHOLD:
         for row_index in range(1, n_rows - 1):
-            style_rules.append(("LINEBELOW", (0, row_index), (-1, row_index), 0.35, row_sep))
+            style_rules.append(
+                ("LINEBELOW", (0, row_index), (-1, row_index), 0.35, row_sep)
+            )
     for row_index in patient_separator_after_rows or []:
         style_rules.append(
             ("LINEBELOW", (0, row_index), (-1, row_index), 0.15, colors.lightgrey)
@@ -325,7 +321,9 @@ def build_prestation_detail_table(
     ]
     for row in rows:
         html = prestation_description_html(
-            client_name=str(row.get("client_name") or row.get("description") or "Client"),
+            client_name=str(
+                row.get("client_name") or row.get("description") or "Client"
+            ),
             departure=str(row.get("departure") or ""),
             arrival=str(row.get("arrival") or ""),
             pickup_label=None if row.get("pickup") is None else str(row.get("pickup")),
@@ -354,7 +352,9 @@ def build_prestation_detail_table(
         if show_date:
             table_data.append(
                 [
-                    _compact_private_date_paragraph(str(row.get("date") or ""), font_name),
+                    _compact_private_date_paragraph(
+                        str(row.get("date") or ""), font_name
+                    ),
                     desc_cell,
                     amount_cell,
                 ]

@@ -103,7 +103,9 @@ def _round_trip_legs(bookings: list[Any]) -> dict[int, list[Any]]:
     if not seeds:
         return {}
     children = Booking.query.filter(Booking.parent_booking_id.in_(seeds)).all()
-    parent_ids = {int(child.parent_booking_id) for child in children if child.parent_booking_id}
+    parent_ids = {
+        int(child.parent_booking_id) for child in children if child.parent_booking_id
+    }
     if not parent_ids:
         return {}
     parents = {
@@ -191,9 +193,7 @@ def apply_confirmed_payment_coverage(
     ids = [int(booking.id) for booking in bookings if getattr(booking, "id", None)]
     announced_groups: set[int] = set()
     groups = _round_trip_legs(bookings)
-    group_ids = {
-        int(leg.id) for legs in groups.values() for leg in legs
-    }
+    group_ids = {int(leg.id) for legs in groups.values() for leg in legs}
     covered = confirmed_amounts_by_booking(ids + list(group_ids))
     kept: list[Any] = []
     for booking in bookings:

@@ -91,7 +91,7 @@ def _allocate_number(company_id: int, year: int, month: int) -> str:
             db.session.add(sequence)
             db.session.flush()
             nested.commit()
-        except IntegrityError:
+        except IntegrityError as err:
             nested.rollback()
             sequence = (
                 InvoiceSequence.query.filter_by(
@@ -101,10 +101,12 @@ def _allocate_number(company_id: int, year: int, month: int) -> str:
                 .first()
             )
             if sequence is None:
-                raise CorrectiveInvoiceRefusal("sequence_indisponible", 500)
+                raise CorrectiveInvoiceRefusal("sequence_indisponible", 500) from err
     sequence.sequence = int(sequence.sequence) + 1
     db.session.flush()
-    settings = CompanyBillingSettings.query.filter_by(company_id=int(company_id)).first()
+    settings = CompanyBillingSettings.query.filter_by(
+        company_id=int(company_id)
+    ).first()
     if settings is None:
         prefix = "EM"
         fmt = "{PREFIX}-{YYYY}-{MM}-{SEQ4}"
@@ -211,9 +213,7 @@ def prepare_corrective_invoice(
     if not allocations:
         raise CorrectiveInvoiceRefusal("lignes_requises_pour_rectificative", 400)
 
-    source_lines = {
-        int(line.id): line for line in (original.lines or [])
-    }
+    source_lines = {int(line.id): line for line in (original.lines or [])}
     now = datetime.now(UTC)
     year, month = now.year, now.month
     number = _allocate_number(company_id, year, month)
@@ -298,9 +298,7 @@ def prepare_corrective_invoice(
         vat = _money(alloc.vat_amount)
         ttc = _money(alloc.amount_ttc)
         rate = alloc.vat_rate if alloc.vat_rate is not None else source.vat_rate
-        src_meta = (
-            dict(source.line_meta) if isinstance(source.line_meta, dict) else {}
-        )
+        src_meta = dict(source.line_meta) if isinstance(source.line_meta, dict) else {}
         for claim_key in (
             "booking_ids",
             "reservation_ids",

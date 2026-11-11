@@ -77,7 +77,9 @@ def _payment_by_reference(invoice_id: int, reference: str) -> InvoicePayment | N
     )
 
 
-def _result(invoice: Invoice, payment: InvoicePayment, *, replay: bool) -> dict[str, Any]:
+def _result(
+    invoice: Invoice, payment: InvoicePayment, *, replay: bool
+) -> dict[str, Any]:
     return {
         "payment_id": int(payment.id),
         "reference": payment.reference,

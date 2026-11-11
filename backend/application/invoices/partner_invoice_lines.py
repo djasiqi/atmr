@@ -95,7 +95,9 @@ def describe_transfer_line(
     }
 
 
-def partner_preview_line(transfer: BookingTransfer, *, amount: Decimal | float) -> dict[str, Any]:
+def partner_preview_line(
+    transfer: BookingTransfer, *, amount: Decimal | float
+) -> dict[str, Any]:
     """Même prestation que l'institution : client, trajet, prise en charge facultative.
 
     Le libellé « Transfert partenaire — » n'est pas un format de ligne.

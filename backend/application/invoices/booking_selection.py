@@ -69,9 +69,7 @@ def apply_excluded(
     if not excluded:
         return list(reservations)
     return [
-        row
-        for row in reservations
-        if int(getattr(row, "id", 0) or 0) not in excluded
+        row for row in reservations if int(getattr(row, "id", 0) or 0) not in excluded
     ]
 
 

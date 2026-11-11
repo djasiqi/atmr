@@ -87,7 +87,13 @@ def _by_key(company_id: int, key: str) -> InvoiceRefund | None:
     )
 
 
-def _same(row: InvoiceRefund, amount: Decimal, reason: str, invoice_id: int | None, collection_id: int | None) -> bool:
+def _same(
+    row: InvoiceRefund,
+    amount: Decimal,
+    reason: str,
+    invoice_id: int | None,
+    collection_id: int | None,
+) -> bool:
     stored_invoice = None if row.invoice_id is None else int(row.invoice_id)
     stored_collection = (
         None if row.cash_collection_id is None else int(row.cash_collection_id)
@@ -100,7 +106,9 @@ def _same(row: InvoiceRefund, amount: Decimal, reason: str, invoice_id: int | No
     )
 
 
-def _cash_room(origin: CashCollection, *, exclude_refund_id: int | None) -> tuple[Decimal, Decimal]:
+def _cash_room(
+    origin: CashCollection, *, exclude_refund_id: int | None
+) -> tuple[Decimal, Decimal]:
     """Encore restituable, et remises déjà confirmées.
 
     Lecture des collections et des remises déjà enregistrées. Le registre
@@ -143,7 +151,9 @@ def _cash_room(origin: CashCollection, *, exclude_refund_id: int | None) -> tupl
     return (held - reserved).quantize(_CENT), handed_total
 
 
-def _refuse_if_cash_short(origin: CashCollection, amount: Decimal, *, exclude_refund_id: int | None) -> None:
+def _refuse_if_cash_short(
+    origin: CashCollection, amount: Decimal, *, exclude_refund_id: int | None
+) -> None:
     room, handed = _cash_room(origin, exclude_refund_id=exclude_refund_id)
     if amount <= room:
         return
@@ -162,9 +172,7 @@ def _invoice_room(invoice: Invoice, *, exclude_refund_id: int | None) -> Decimal
     )
     if exclude_refund_id is not None:
         pending = pending.filter(InvoiceRefund.id != int(exclude_refund_id))
-    reserved = sum(
-        (_money(row.amount_chf) for row in pending.all()), Decimal("0.00")
-    )
+    reserved = sum((_money(row.amount_chf) for row in pending.all()), Decimal("0.00"))
     return (room - reserved).quantize(_CENT)
 
 
@@ -179,7 +187,9 @@ def _linked_invoice_id(collection_id: int) -> int | None:
     return int(payment.invoice_id)
 
 
-def _compensate(origin: CashCollection, amount: Decimal, key: str, actor_id: int, reason: str) -> CashCollection:
+def _compensate(
+    origin: CashCollection, amount: Decimal, key: str, actor_id: int, reason: str
+) -> CashCollection:
     signed = (Decimal("0.00") - amount).quantize(_CENT)
     row = CashCollection(
         booking_id=int(origin.booking_id),
@@ -244,7 +254,9 @@ def _payload(
         "invoice_id": row.invoice_id,
         "cash_collection_id": row.cash_collection_id,
         "booking_id": row.booking_id,
-        "confirmed_at": None if row.confirmed_at is None else row.confirmed_at.isoformat(),
+        "confirmed_at": None
+        if row.confirmed_at is None
+        else row.confirmed_at.isoformat(),
         "replay": replay,
         "credit_notes_created": 0,
         "credit_notes_on_invoice": note_count,
@@ -253,9 +265,7 @@ def _payload(
         "refundable_chf": None
         if invoice is None
         else float(_money(invoice.refundable_chf)),
-        "recognized_net_chf": None
-        if recognized_net is None
-        else float(recognized_net),
+        "recognized_net_chf": None if recognized_net is None else float(recognized_net),
     }
 
 
@@ -392,13 +402,17 @@ def record_refund(
         recognized = None if origin is None else _recognized(int(origin.booking_id))
         if existing.status == "confirmed":
             if confirm and administrative is None:
-                replay = _payload(existing, invoice, replay=True, recognized_net=recognized)
+                replay = _payload(
+                    existing, invoice, replay=True, recognized_net=recognized
+                )
                 db.session.rollback()
                 return replay
             raise RefundRefusal("etat_clos")
         if administrative is not None:
             if existing.status == administrative:
-                replay = _payload(existing, invoice, replay=True, recognized_net=recognized)
+                replay = _payload(
+                    existing, invoice, replay=True, recognized_net=recognized
+                )
                 db.session.rollback()
                 return replay
             if existing.status in _TERMINAL or (
@@ -407,8 +421,12 @@ def record_refund(
                 raise RefundRefusal("etat_clos")
             _close_without_money(existing, administrative)
             db.session.commit()
-            fresh_invoice = None if invoice is None else db.session.get(Invoice, invoice.id)
-            return _payload(existing, fresh_invoice, replay=False, recognized_net=recognized)
+            fresh_invoice = (
+                None if invoice is None else db.session.get(Invoice, invoice.id)
+            )
+            return _payload(
+                existing, fresh_invoice, replay=False, recognized_net=recognized
+            )
         if not confirm or existing.status in _TERMINAL:
             if existing.status in _TERMINAL and confirm:
                 raise RefundRefusal("etat_clos")
@@ -419,7 +437,9 @@ def record_refund(
         db.session.commit()
         fresh_invoice = None if invoice is None else db.session.get(Invoice, invoice.id)
         recognized = None if origin is None else _recognized(int(origin.booking_id))
-        return _payload(existing, fresh_invoice, replay=False, recognized_net=recognized)
+        return _payload(
+            existing, fresh_invoice, replay=False, recognized_net=recognized
+        )
 
     if invoice is not None:
         room = _invoice_room(invoice, exclude_refund_id=None)
@@ -454,7 +474,9 @@ def record_refund(
     except IntegrityError as exc:
         nested.rollback()
         raced = _by_key(company_id, key)
-        if raced is None or not _same(raced, amount, motive, target_invoice, target_collection):
+        if raced is None or not _same(
+            raced, amount, motive, target_invoice, target_collection
+        ):
             raise RefundRefusal("conflit_idempotence") from exc
         recognized = None if origin is None else _recognized(int(origin.booking_id))
         replay = _payload(raced, invoice, replay=True, recognized_net=recognized)

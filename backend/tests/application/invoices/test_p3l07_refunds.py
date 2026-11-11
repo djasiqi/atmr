@@ -53,7 +53,9 @@ def uploads_tmp(app, tmp_path):
                 app.config[key] = value
 
 
-def _facture(db, uploads_tmp: Path, *, total: str, paid: str, status: InvoiceStatus, suffix: str):
+def _facture(
+    db, uploads_tmp: Path, *, total: str, paid: str, status: InvoiceStatus, suffix: str
+):
     world = _issued_world(db, uploads_tmp, status, suffix=suffix)
     invoice = db.session.get(Invoice, world.invoice_id)
     amount = Decimal(total)
@@ -168,14 +170,25 @@ def _refund_cash(client, world, collection_id, payload, headers=None):
 def _credit(client, world, amount, key):
     return client.post(
         f"/api/v1/invoices/companies/{world.company_id}/invoices/{world.invoice_id}/credit-notes",
-        json={"amount_chf": amount, "reason": "Réduction de créance", "idempotency_key": key},
+        json={
+            "amount_chf": amount,
+            "reason": "Réduction de créance",
+            "idempotency_key": key,
+        },
         headers=_headers(client, world),
     )
 
 
 @pytest.mark.skip(reason="FIN-CAISSE hors lot FIN-FACTURE-1")
 def test_especes_non_imputees_remboursement_partiel_et_total(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, total="45.00", paid="0.00", status=InvoiceStatus.SENT, suffix="_cash")
+    world = _facture(
+        db,
+        uploads_tmp,
+        total="45.00",
+        paid="0.00",
+        status=InvoiceStatus.SENT,
+        suffix="_cash",
+    )
     _driver, driver, booking = _driver_booking(db, world, due="45.00")
     origin = _collection(db, world, booking, driver, net="20.00", due="45.00")
     handovers = CashHandover.query.filter_by(company_id=world.company_id).count()
@@ -231,13 +244,23 @@ def test_especes_non_imputees_remboursement_partiel_et_total(client, db, uploads
     )
     assert too_much.status_code == 409
     assert too_much.get_json()["code"] == "depassement_autorise"
-    assert CashHandover.query.filter_by(company_id=world.company_id).count() == handovers
+    assert (
+        CashHandover.query.filter_by(company_id=world.company_id).count() == handovers
+    )
 
 
 @pytest.mark.skip(reason="FIN-CAISSE hors lot FIN-FACTURE-1")
 def test_correction_et_remboursement_se_distinguent(client, db, uploads_tmp):
     from application.settlement.cash_ledger import _operation_lines
-    world = _facture(db, uploads_tmp, total="45.00", paid="0.00", status=InvoiceStatus.SENT, suffix="_dist")
+
+    world = _facture(
+        db,
+        uploads_tmp,
+        total="45.00",
+        paid="0.00",
+        status=InvoiceStatus.SENT,
+        suffix="_dist",
+    )
     _driver, driver, booking = _driver_booking(db, world, due="45.00")
     origin = _collection(db, world, booking, driver, net="20.00", due="45.00")
     correction = CashCollection(
@@ -280,7 +303,14 @@ def test_correction_et_remboursement_se_distinguent(client, db, uploads_tmp):
 
 
 def test_avoir_puis_remboursement_sans_second_avoir(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, total="45.00", paid="20.00", status=InvoiceStatus.PARTIALLY_PAID, suffix="_lien")
+    world = _facture(
+        db,
+        uploads_tmp,
+        total="45.00",
+        paid="20.00",
+        status=InvoiceStatus.PARTIALLY_PAID,
+        suffix="_lien",
+    )
     _driver, driver, booking = _driver_booking(db, world, due="45.00")
     origin = _collection(db, world, booking, driver, net="20.00", due="45.00")
     payment = InvoicePayment.query.filter_by(invoice_id=world.invoice_id).one()
@@ -289,7 +319,9 @@ def test_avoir_puis_remboursement_sans_second_avoir(client, db, uploads_tmp):
     db.session.commit()
     credit = _credit(client, world, 45.0, "avoir-pour-rbt")
     assert credit.status_code == 201, credit.get_data(as_text=True)
-    notes_before = InvoiceCreditNote.query.filter_by(invoice_id=world.invoice_id).count()
+    notes_before = InvoiceCreditNote.query.filter_by(
+        invoice_id=world.invoice_id
+    ).count()
     digest = _sha256(world.pdf_path)
     number = db.session.get(Invoice, world.invoice_id).invoice_number
     refund = _refund_invoice(
@@ -316,13 +348,26 @@ def test_avoir_puis_remboursement_sans_second_avoir(client, db, uploads_tmp):
     assert stored.pdf_url == world.pdf_url
     assert _sha256(world.pdf_path) == digest
     assert InvoicePayment.query.filter_by(invoice_id=stored.id).count() == 1
-    assert InvoicePayment.query.filter_by(invoice_id=stored.id).one().amount == Decimal("20.00")
+    assert InvoicePayment.query.filter_by(invoice_id=stored.id).one().amount == Decimal(
+        "20.00"
+    )
     assert CashCollection.query.get(origin.id).net_chf == Decimal("20.00")
-    assert CashCollection.query.filter_by(compensates_collection_id=origin.id).one().net_chf == Decimal("-20.00")
+    assert CashCollection.query.filter_by(
+        compensates_collection_id=origin.id
+    ).one().net_chf == Decimal("-20.00")
 
 
-def test_trop_percu_deja_credite_est_consomme_sans_nouvel_avoir(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, total="90.00", paid="90.00", status=InvoiceStatus.PAID, suffix="_90")
+def test_trop_percu_deja_credite_est_consomme_sans_nouvel_avoir(
+    client, db, uploads_tmp
+):
+    world = _facture(
+        db,
+        uploads_tmp,
+        total="90.00",
+        paid="90.00",
+        status=InvoiceStatus.PAID,
+        suffix="_90",
+    )
     _driver, driver, booking = _driver_booking(db, world, due="90.00")
     origin = _collection(db, world, booking, driver, net="90.00", due="90.00")
     payment = InvoicePayment.query.filter_by(invoice_id=world.invoice_id).one()
@@ -376,12 +421,16 @@ def test_trop_percu_deja_credite_est_consomme_sans_nouvel_avoir(client, db, uplo
     assert stored.paid_at == paid_at
     assert stored.total_amount == Decimal("90.00")
     assert InvoiceCreditNote.query.filter_by(invoice_id=stored.id).count() == notes
-    assert InvoicePayment.query.filter_by(invoice_id=stored.id).one().amount == Decimal("90.00")
+    assert InvoicePayment.query.filter_by(invoice_id=stored.id).one().amount == Decimal(
+        "90.00"
+    )
     assert CashCollection.query.get(origin.id).net_chf == Decimal("90.00")
     rendered = sum(
         (
             row.net_chf
-            for row in CashCollection.query.filter_by(compensates_collection_id=origin.id).all()
+            for row in CashCollection.query.filter_by(
+                compensates_collection_id=origin.id
+            ).all()
         ),
         Decimal("0.00"),
     )
@@ -389,7 +438,14 @@ def test_trop_percu_deja_credite_est_consomme_sans_nouvel_avoir(client, db, uplo
 
 
 def test_sans_confirmation_rien_nest_restitue(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, total="90.00", paid="90.00", status=InvoiceStatus.PAID, suffix="_attente")
+    world = _facture(
+        db,
+        uploads_tmp,
+        total="90.00",
+        paid="90.00",
+        status=InvoiceStatus.PAID,
+        suffix="_attente",
+    )
     credit = _credit(client, world, 45.0, "avoir-attente")
     assert credit.status_code == 201, credit.get_data(as_text=True)
     asked = _refund_invoice(
@@ -424,11 +480,21 @@ def test_sans_confirmation_rien_nest_restitue(client, db, uploads_tmp):
     assert confirmed.status_code == 201, confirmed.get_data(as_text=True)
     assert confirmed.get_json()["data"]["status"] == "confirmed"
     assert confirmed.get_json()["data"]["refundable_chf"] == 0.0
-    assert confirmed.get_json()["data"]["refund_id"] == asked.get_json()["data"]["refund_id"]
+    assert (
+        confirmed.get_json()["data"]["refund_id"]
+        == asked.get_json()["data"]["refund_id"]
+    )
 
 
 def test_rejeu_conflit_et_echec_avant_commit(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, total="90.00", paid="90.00", status=InvoiceStatus.PAID, suffix="_rejeu")
+    world = _facture(
+        db,
+        uploads_tmp,
+        total="90.00",
+        paid="90.00",
+        status=InvoiceStatus.PAID,
+        suffix="_rejeu",
+    )
     assert _credit(client, world, 45.0, "avoir-rejeu").status_code == 201
     payload = {
         "amount_chf": 10.0,
@@ -441,7 +507,9 @@ def test_rejeu_conflit_et_echec_avant_commit(client, db, uploads_tmp):
     assert first.status_code == 201
     assert second.status_code == 200
     assert second.get_json()["data"]["replay"] is True
-    assert second.get_json()["data"]["refund_id"] == first.get_json()["data"]["refund_id"]
+    assert (
+        second.get_json()["data"]["refund_id"] == first.get_json()["data"]["refund_id"]
+    )
     conflict = _refund_invoice(client, world, {**payload, "amount_chf": 12.0})
     assert conflict.status_code == 409
     assert conflict.get_json()["code"] == "conflit_idempotence"
@@ -466,13 +534,32 @@ def test_rejeu_conflit_et_echec_avant_commit(client, db, uploads_tmp):
 
 
 def test_autre_entreprise_et_chauffeur(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, total="90.00", paid="90.00", status=InvoiceStatus.PAID, suffix="_iso")
-    other = _facture(db, uploads_tmp, total="90.00", paid="90.00", status=InvoiceStatus.PAID, suffix="_iso2")
+    world = _facture(
+        db,
+        uploads_tmp,
+        total="90.00",
+        paid="90.00",
+        status=InvoiceStatus.PAID,
+        suffix="_iso",
+    )
+    other = _facture(
+        db,
+        uploads_tmp,
+        total="90.00",
+        paid="90.00",
+        status=InvoiceStatus.PAID,
+        suffix="_iso2",
+    )
     assert _credit(client, world, 45.0, "avoir-iso").status_code == 201
     owner = User.query.get(world.owner_user_id)
     foreign = client.post(
         f"/api/v1/invoices/companies/{world.company_id}/invoices/{other.invoice_id}/refunds",
-        json={"amount_chf": 10.0, "reason": "Autre", "idempotency_key": "etranger", "confirm": True},
+        json={
+            "amount_chf": 10.0,
+            "reason": "Autre",
+            "idempotency_key": "etranger",
+            "confirm": True,
+        },
         headers=_company_headers(client, owner, world.company_id),
     )
     assert foreign.status_code == 404
@@ -487,7 +574,12 @@ def test_autre_entreprise_et_chauffeur(client, db, uploads_tmp):
     refused = _refund_invoice(
         client,
         world,
-        {"amount_chf": 10.0, "reason": "Chauffeur", "idempotency_key": "drv", "confirm": True},
+        {
+            "amount_chf": 10.0,
+            "reason": "Chauffeur",
+            "idempotency_key": "drv",
+            "confirm": True,
+        },
         headers=_company_headers(client, driver, world.company_id),
     )
     assert refused.status_code == 403
@@ -495,12 +587,24 @@ def test_autre_entreprise_et_chauffeur(client, db, uploads_tmp):
 
 
 def test_paiement_ulterieur_apres_avoir_sans_remboursement(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, total="90.00", paid="0.00", status=InvoiceStatus.SENT, suffix="_suite")
+    world = _facture(
+        db,
+        uploads_tmp,
+        total="90.00",
+        paid="0.00",
+        status=InvoiceStatus.SENT,
+        suffix="_suite",
+    )
     assert _credit(client, world, 45.0, "avoir-suite").status_code == 201
     refused = _refund_invoice(
         client,
         world,
-        {"amount_chf": 10.0, "reason": "Rien reçu", "idempotency_key": "rien", "confirm": True},
+        {
+            "amount_chf": 10.0,
+            "reason": "Rien reçu",
+            "idempotency_key": "rien",
+            "confirm": True,
+        },
     )
     assert refused.status_code == 409
     assert refused.get_json()["code"] == "rien_a_rembourser"
@@ -526,7 +630,9 @@ class SimpleClient:
 
 
 def _concurrent(app, world, payloads):
-    headers = _company_headers(SimpleClient(app), User.query.get(world.owner_user_id), world.company_id)
+    headers = _company_headers(
+        SimpleClient(app), User.query.get(world.owner_user_id), world.company_id
+    )
     url = f"/api/v1/invoices/companies/{world.company_id}/invoices/{world.invoice_id}/refunds"
     codes: list[int] = []
 
@@ -551,10 +657,20 @@ def _concurrent(app, world, payloads):
 def test_remboursements_concurrents(app, db, uploads_tmp):
     client = app.test_client()
     blocked = _facture(
-        db, uploads_tmp, total="90.00", paid="90.00", status=InvoiceStatus.PAID, suffix="_race_over"
+        db,
+        uploads_tmp,
+        total="90.00",
+        paid="90.00",
+        status=InvoiceStatus.PAID,
+        suffix="_race_over",
     )
     admitted = _facture(
-        db, uploads_tmp, total="90.00", paid="90.00", status=InvoiceStatus.PAID, suffix="_race_ok"
+        db,
+        uploads_tmp,
+        total="90.00",
+        paid="90.00",
+        status=InvoiceStatus.PAID,
+        suffix="_race_ok",
     )
     assert _credit(client, blocked, 45.0, "avoir-course-over").status_code == 201
     assert _credit(client, admitted, 45.0, "avoir-course-ok").status_code == 201
@@ -562,8 +678,18 @@ def test_remboursements_concurrents(app, db, uploads_tmp):
         app,
         blocked,
         [
-            {"amount_chf": 30.0, "reason": "Course A", "idempotency_key": "course-a", "confirm": True},
-            {"amount_chf": 30.0, "reason": "Course B", "idempotency_key": "course-b", "confirm": True},
+            {
+                "amount_chf": 30.0,
+                "reason": "Course A",
+                "idempotency_key": "course-a",
+                "confirm": True,
+            },
+            {
+                "amount_chf": 30.0,
+                "reason": "Course B",
+                "idempotency_key": "course-b",
+                "confirm": True,
+            },
         ],
     )
     assert sorted(over_codes) == [201, 409], over_codes
@@ -571,8 +697,18 @@ def test_remboursements_concurrents(app, db, uploads_tmp):
         app,
         admitted,
         [
-            {"amount_chf": 20.0, "reason": "Lot A", "idempotency_key": "lot-a", "confirm": True},
-            {"amount_chf": 20.0, "reason": "Lot B", "idempotency_key": "lot-b", "confirm": True},
+            {
+                "amount_chf": 20.0,
+                "reason": "Lot A",
+                "idempotency_key": "lot-a",
+                "confirm": True,
+            },
+            {
+                "amount_chf": 20.0,
+                "reason": "Lot B",
+                "idempotency_key": "lot-b",
+                "confirm": True,
+            },
         ],
     )
     assert sorted(ok_codes) == [201, 201], ok_codes
@@ -581,13 +717,26 @@ def test_remboursements_concurrents(app, db, uploads_tmp):
         admitted_invoice = app_db.session.get(Invoice, admitted.invoice_id)
         assert blocked_invoice.refundable_chf == Decimal("15.00")
         assert admitted_invoice.refundable_chf == Decimal("5.00")
-        assert InvoiceCreditNote.query.filter_by(invoice_id=blocked.invoice_id).count() == 1
-        assert InvoiceRefund.query.filter_by(invoice_id=blocked.invoice_id, status="confirmed").count() == 1
+        assert (
+            InvoiceCreditNote.query.filter_by(invoice_id=blocked.invoice_id).count()
+            == 1
+        )
+        assert (
+            InvoiceRefund.query.filter_by(
+                invoice_id=blocked.invoice_id, status="confirmed"
+            ).count()
+            == 1
+        )
 
 
 def test_instruction_sans_remise_ne_consomme_pas_le_credit(client, db, uploads_tmp):
     world = _facture(
-        db, uploads_tmp, total="90.00", paid="90.00", status=InvoiceStatus.PAID, suffix="_instruction"
+        db,
+        uploads_tmp,
+        total="90.00",
+        paid="90.00",
+        status=InvoiceStatus.PAID,
+        suffix="_instruction",
     )
     assert _credit(client, world, 45.0, "avoir-instruction").status_code == 201
     body = {
@@ -653,6 +802,7 @@ def test_instruction_sans_remise_ne_consomme_pas_le_credit(client, db, uploads_t
 @pytest.mark.skip(reason="FIN-CAISSE hors lot FIN-FACTURE-1")
 def test_remise_ne_touche_ni_creance_ni_paiement(db, uploads_tmp):
     from application.settlement.cash_ledger import declare_handover
+
     world = _facture(
         db,
         uploads_tmp,

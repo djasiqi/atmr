@@ -32,7 +32,15 @@ def ordinary_payer_change_message(reason: str) -> str:
 
 
 def settlement_policy_table_ready() -> bool:
-    """Vrai seulement si la migration de politique est présente."""
+    """Vrai seulement si la migration de politique est présente.
+
+    Hors contexte Flask, la table n'est pas consultable : le changement
+    ordinaire continue, comme en l'absence de migration.
+    """
+    from flask import has_app_context
+
+    if not has_app_context():
+        return False
     name = db.session.execute(
         text("SELECT to_regclass('public.booking_settlement_policy')")
     ).scalar()

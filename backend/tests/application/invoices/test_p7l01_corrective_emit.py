@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from application.invoices.issue_credit_note import issue_credit_note
 from application.invoices.invoice_line_booking_integrity import covered_booking_ids
 from application.invoices.invoice_pdf_state import get_pdf_state
+from application.invoices.issue_credit_note import issue_credit_note
 from application.invoices.prepare_corrective_invoice import prepare_corrective_invoice
 from models import Invoice, InvoiceLine, InvoicePayment
 from models.enums import InvoiceLineType, InvoiceStatus, PaymentMethod

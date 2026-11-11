@@ -3596,7 +3596,9 @@ class SendInvoice(Resource):
             return APIErrorHandler.handle_exception(e, logger)
 
 
-def _record_company_refund(company_id: int, payload: dict, *, invoice_id: int | None, collection_id: int | None):
+def _record_company_refund(
+    company_id: int, payload: dict, *, invoice_id: int | None, collection_id: int | None
+):
     """Point commun des restitutions patient. Le chauffeur n'atteint pas cette fonction."""
     from flask_jwt_extended import get_jwt_identity
 
@@ -3634,7 +3636,9 @@ def _record_company_refund(company_id: int, payload: dict, *, invoice_id: int | 
             reason=str(payload.get("reason") or ""),
             idempotency_key=str(payload.get("idempotency_key") or ""),
             confirm=bool(payload.get("confirm")),
-            decision=None if payload.get("decision") in (None, "") else str(payload.get("decision")),
+            decision=None
+            if payload.get("decision") in (None, "")
+            else str(payload.get("decision")),
             invoice_id=invoice_id,
             cash_collection_id=collection_id,
         )
@@ -3642,7 +3646,9 @@ def _record_company_refund(company_id: int, payload: dict, *, invoice_id: int | 
         db.session.rollback()
         return {"error": refusal.code, "code": refusal.code}, refusal.status
     status = 200 if recorded["replay"] else 201
-    return success_response(data=recorded, status_code=status, message="Remboursement enregistré")
+    return success_response(
+        data=recorded, status_code=status, message="Remboursement enregistré"
+    )
 
 
 @invoices_ns.route(
@@ -3675,9 +3681,7 @@ class CashCollectionRefunds(Resource):
             return APIErrorHandler.handle_exception(exc, logger)
 
 
-@invoices_ns.route(
-    "/companies/<int:company_id>/invoices/<int:invoice_id>/refunds"
-)
+@invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/refunds")
 class InvoiceRefunds(Resource):
     """Restitution sur une facture. Ne crée pas d'avoir."""
 
@@ -3691,7 +3695,10 @@ class InvoiceRefunds(Resource):
             try:
                 collection_id = int(raw_collection)
             except (TypeError, ValueError):
-                return {"error": "collection_invalide", "code": "collection_invalide"}, 400
+                return {
+                    "error": "collection_invalide",
+                    "code": "collection_invalide",
+                }, 400
         try:
             return _record_company_refund(
                 int(company_id),
@@ -3705,9 +3712,7 @@ class InvoiceRefunds(Resource):
             return APIErrorHandler.handle_exception(exc, logger)
 
 
-@invoices_ns.route(
-    "/companies/<int:company_id>/invoices/<int:invoice_id>/credit-notes"
-)
+@invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/credit-notes")
 class InvoiceCreditNotes(Resource):
     """Émet un avoir sur une facture patient déjà émise."""
 
@@ -3884,9 +3889,7 @@ class InvoiceCreditNotesPreview(Resource):
             return APIErrorHandler.handle_exception(exc, logger)
 
 
-@invoices_ns.route(
-    "/companies/<int:company_id>/invoices/<int:invoice_id>/corrective"
-)
+@invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/corrective")
 class InvoiceCorrectivePrepare(Resource):
     """Prépare un brouillon de facture rectificative lié à un avoir."""
 
@@ -3980,9 +3983,7 @@ class InvoiceCreditNotePdfDownload(Resource):
             company_id=int(company_id),
         ).first()
         if note is None:
-            return APIErrorHandler.handle_not_found(
-                "Avoir", credit_note_id, logger
-            )
+            return APIErrorHandler.handle_not_found("Avoir", credit_note_id, logger)
         if not note.pdf_url:
             return APIErrorHandler.handle_not_found(
                 "PDF d'avoir", credit_note_id, logger
@@ -4353,7 +4354,9 @@ class InvoicePayments(Resource):
                         raw_total = (subtotal + late_fee).quantize(Decimal("0.01"))
                         invoice.total_amount = round_to_5_cents(raw_total)
 
-            if not waive_reminder_fees:
+            from application.invoices.issued_invoice_guard import invoice_is_issued
+
+            if invoice_is_issued(invoice):
                 from application.invoices.post_issue_payment import (
                     PaymentRefusal,
                     record_later_payment,
@@ -5401,9 +5404,8 @@ class InstitutionsList(Resource):
                 # reste non facturable tant qu'un débiteur propre n'est pas lié.
                 explicit_debtor = inst.default_billed_to_company_id
                 clinic_company_id = None
-                if (
-                    explicit_debtor is not None
-                    and int(explicit_debtor) != int(company_id)
+                if explicit_debtor is not None and int(explicit_debtor) != int(
+                    company_id
                 ):
                     clinic_company_id = int(explicit_debtor)
                 elif institution_name and institution_name != "Institution sans nom":

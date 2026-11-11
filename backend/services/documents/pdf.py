@@ -2509,9 +2509,7 @@ def _build_recipient_block_flowable(
             )
         return text + "…"
 
-    name_rows = [
-        row for row in visual_rows if row[1] in {"name_primary", "name_co"}
-    ]
+    name_rows = [row for row in visual_rows if row[1] in {"name_primary", "name_co"}]
     other_rows = [
         row for row in visual_rows if row[1] not in {"name_primary", "name_co"}
     ]
@@ -4812,9 +4810,7 @@ def _build_driver_deposits_detail_table(
     from reportlab.lib.units import cm
     from reportlab.platypus import Paragraph, Table, TableStyle
 
-    page_w = (
-        21.0 - INVOICE_PAGE_LEFT_MARGIN_CM - INVOICE_PAGE_RIGHT_MARGIN_CM
-    ) * cm
+    page_w = (21.0 - INVOICE_PAGE_LEFT_MARGIN_CM - INVOICE_PAGE_RIGHT_MARGIN_CM) * cm
     title = Paragraph(
         "<b>Détail des acomptes déduits</b>"
         f'&nbsp;&nbsp;<font size="{FONT_SECONDARY}" color="{COLOR_MUTED_PDF}">'
@@ -6270,9 +6266,7 @@ class PDFService:
         page_width_pt = A4[0]
         left_margin_pt = INVOICE_PAGE_LEFT_MARGIN_CM * cm
         usable_width_pt = (
-            page_width_pt
-            - left_margin_pt
-            - INVOICE_PAGE_RIGHT_MARGIN_CM * cm
+            page_width_pt - left_margin_pt - INVOICE_PAGE_RIGHT_MARGIN_CM * cm
         )
         # Aligner la colonne destinataire sur DEST_ADDR_X_MM (repère postal mm).
         dest_offset_in_frame_pt = max(0.0, DEST_ADDR_X_MM * mm - left_margin_pt)
@@ -7011,7 +7005,9 @@ class PDFService:
         dest_offset_min = max(0.0, DEST_ADDR_X_MM * mm - left_margin_pt_min)
         company_width_pt_min = max(3.5 * cm, dest_offset_min)
         if company_width_pt_min + dest_width_pt_min > usable_width_pt_min:
-            company_width_pt_min = max(3.5 * cm, usable_width_pt_min - dest_width_pt_min)
+            company_width_pt_min = max(
+                3.5 * cm, usable_width_pt_min - dest_width_pt_min
+            )
         recipient_top_padding_mm_min = max(
             0.0, DEST_ADDR_Y_MM - INVOICE_PAGE_TOP_MARGIN_CM * 10.0
         )

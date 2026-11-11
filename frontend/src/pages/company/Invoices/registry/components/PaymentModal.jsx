@@ -74,7 +74,7 @@ function MethodChipDropdown({ options, value, onChange }) {
 
 /** Clé stable pour toute la durée d'ouverture : un second clic après une réponse perdue rejoue le même paiement. */
 export function newPaymentAttemptKey() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   return `pay-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 

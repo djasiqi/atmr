@@ -632,7 +632,8 @@ def build_period_invoice_preview(
             resolve_subjects=include_line_details,
         )
         dues = {
-            int(b.id): _preview_base_amount_ht(b, billing_settings_dto) for b in bookings
+            int(b.id): _preview_base_amount_ht(b, billing_settings_dto)
+            for b in bookings
         }
         positions = load_patient_cash_preview(int(company_id), dues)
         collected_chf = None
@@ -642,17 +643,11 @@ def build_period_invoice_preview(
                 preview_lines_out, positions, merge_leg_positions
             )
             collected = sum(
-                (
-                    Decimal(line.recognized_net_chf or "0")
-                    for line in preview_lines_out
-                ),
+                (Decimal(line.recognized_net_chf or "0") for line in preview_lines_out),
                 Decimal("0.00"),
             )
             remaining = sum(
-                (
-                    Decimal(line.remaining_due_chf or "0")
-                    for line in preview_lines_out
-                ),
+                (Decimal(line.remaining_due_chf or "0") for line in preview_lines_out),
                 Decimal("0.00"),
             )
             collected_chf = f"{collected:.2f}"

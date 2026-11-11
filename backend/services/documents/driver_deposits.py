@@ -161,7 +161,9 @@ def _amount_paid(invoice: Any) -> Decimal:
 
 def _is_declared_cash(line: DriverDepositLine) -> bool:
     """Espèces sans collecte : règlement manuel ou montant seulement déclaré."""
-    return (line.method or "").strip().lower() == "cash" and line.cash_collection_id is None
+    return (
+        line.method or ""
+    ).strip().lower() == "cash" and line.cash_collection_id is None
 
 
 def _lines_covered_by_amount_paid(

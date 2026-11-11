@@ -71,9 +71,7 @@ def _stub_and_enrich(monkeypatch):
         enriched = []
         for line in lines:
             pay = by_pay.get(line.payment_id)
-            booking_id = (
-                getattr(pay, "_booking_id", None) if pay else line.booking_id
-            )
+            booking_id = getattr(pay, "_booking_id", None) if pay else line.booking_id
             mode = line.mode_label
             if pay and getattr(pay, "_mode_label", None):
                 mode = pay._mode_label

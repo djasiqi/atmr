@@ -59,10 +59,7 @@ def uploads_tmp(app, tmp_path):
 
 
 def _url(company_id: int, invoice_id: int) -> str:
-    return (
-        f"/api/v1/invoices/companies/{company_id}"
-        f"/invoices/{invoice_id}/credit-notes"
-    )
+    return f"/api/v1/invoices/companies/{company_id}/invoices/{invoice_id}/credit-notes"
 
 
 def _facture(
@@ -147,7 +144,9 @@ def _assert_origine_figee(db, world, number: str) -> None:
 
 
 def test_avoir_partiel_sur_facture_impayee(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_p45")
+    world = _facture(
+        db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_p45"
+    )
     invoice = db.session.get(Invoice, world.invoice_id)
     number = invoice.invoice_number
     sequences = [
@@ -210,11 +209,17 @@ def test_avoir_partiel_sur_facture_impayee(client, db, uploads_tmp):
 
 
 def test_avoir_total_sur_facture_impayee(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_p90")
+    world = _facture(
+        db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_p90"
+    )
     response = _post(
         client,
         world,
-        {"amount_chf": 90.0, "reason": "Annulation de créance", "idempotency_key": "avoir-90"},
+        {
+            "amount_chf": 90.0,
+            "reason": "Annulation de créance",
+            "idempotency_key": "avoir-90",
+        },
     )
     assert response.status_code == 201, response.get_data(as_text=True)
     data = _body(response)
@@ -231,13 +236,23 @@ def test_avoir_total_sur_facture_impayee(client, db, uploads_tmp):
 
 def test_avoir_partiel_sur_facture_partiellement_payee(client, db, uploads_tmp):
     world = _facture(
-        db, uploads_tmp, paid="20.00", status=InvoiceStatus.PARTIALLY_PAID, suffix="_part"
+        db,
+        uploads_tmp,
+        paid="20.00",
+        status=InvoiceStatus.PARTIALLY_PAID,
+        suffix="_part",
     )
-    payments_before = InvoicePayment.query.filter_by(invoice_id=world.invoice_id).count()
+    payments_before = InvoicePayment.query.filter_by(
+        invoice_id=world.invoice_id
+    ).count()
     response = _post(
         client,
         world,
-        {"amount_chf": 45.0, "reason": "Geste commercial", "idempotency_key": "avoir-part"},
+        {
+            "amount_chf": 45.0,
+            "reason": "Geste commercial",
+            "idempotency_key": "avoir-part",
+        },
     )
     assert response.status_code == 201, response.get_data(as_text=True)
     data = _body(response)
@@ -249,7 +264,9 @@ def test_avoir_partiel_sur_facture_partiellement_payee(client, db, uploads_tmp):
     db.session.expire_all()
     stored = db.session.get(Invoice, world.invoice_id)
     assert stored.status == InvoiceStatus.PARTIALLY_PAID
-    assert InvoicePayment.query.filter_by(invoice_id=stored.id).count() == payments_before
+    assert (
+        InvoicePayment.query.filter_by(invoice_id=stored.id).count() == payments_before
+    )
     payment = InvoicePayment.query.filter_by(invoice_id=stored.id).one()
     assert payment.amount == Decimal("20.00")
 
@@ -257,12 +274,18 @@ def test_avoir_partiel_sur_facture_partiellement_payee(client, db, uploads_tmp):
 def test_avoir_sur_facture_integralement_payee_identifie_le_trop_percu(
     client, db, uploads_tmp
 ):
-    world = _facture(db, uploads_tmp, paid="90.00", status=InvoiceStatus.PAID, suffix="_paid")
+    world = _facture(
+        db, uploads_tmp, paid="90.00", status=InvoiceStatus.PAID, suffix="_paid"
+    )
     paid_at_before = db.session.get(Invoice, world.invoice_id).paid_at
     response = _post(
         client,
         world,
-        {"amount_chf": 45.0, "reason": "Trop facturé", "idempotency_key": "avoir-solde"},
+        {
+            "amount_chf": 45.0,
+            "reason": "Trop facturé",
+            "idempotency_key": "avoir-solde",
+        },
     )
     assert response.status_code == 201, response.get_data(as_text=True)
     data = _body(response)
@@ -280,7 +303,9 @@ def test_avoir_sur_facture_integralement_payee_identifie_le_trop_percu(
 
 
 def test_plusieurs_avoirs_puis_depassement_et_montants_vides(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_cap")
+    world = _facture(
+        db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_cap"
+    )
     first = _post(
         client,
         world,
@@ -340,12 +365,18 @@ def test_brouillon_et_annulation_refuses(client, db, uploads_tmp):
     assert refused.status_code == 409
     assert refused.get_json()["code"] == "facture_annulee"
     assert InvoiceCreditNote.query.filter_by(invoice_id=draft.id).count() == 0
-    assert InvoiceCreditNote.query.filter_by(invoice_id=cancelled.invoice_id).count() == 0
+    assert (
+        InvoiceCreditNote.query.filter_by(invoice_id=cancelled.invoice_id).count() == 0
+    )
 
 
 def test_autre_entreprise_et_chauffeur_refuses(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_iso")
-    other = _facture(db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_autre")
+    world = _facture(
+        db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_iso"
+    )
+    other = _facture(
+        db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_autre"
+    )
     owner = User.query.get(world.owner_user_id)
     foreign = client.post(
         _url(world.company_id, other.invoice_id),
@@ -372,7 +403,9 @@ def test_autre_entreprise_et_chauffeur_refuses(client, db, uploads_tmp):
 
 
 def test_rejeu_meme_cle_et_conflit(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_rejeu")
+    world = _facture(
+        db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_rejeu"
+    )
     payload = {
         "amount_chf": 45.0,
         "reason": "Rejeu",
@@ -395,7 +428,9 @@ def test_rejeu_meme_cle_et_conflit(client, db, uploads_tmp):
 
 
 def test_echec_pdf_puis_reprise_sans_second_avoir(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_pdf")
+    world = _facture(
+        db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_pdf"
+    )
     payload = {
         "amount_chf": 45.0,
         "reason": "PDF différé",
@@ -448,7 +483,9 @@ class SimpleClient:
 
 
 def test_deux_avoirs_concurrents_sous_le_plafond(app, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_okrace")
+    world = _facture(
+        db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_okrace"
+    )
     codes = _concurrent(
         app,
         world,
@@ -476,7 +513,9 @@ def test_deux_avoirs_concurrents_sous_le_plafond(app, db, uploads_tmp):
 
 
 def test_deux_avoirs_concurrents_au_dessus_du_plafond(app, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_caprace")
+    world = _facture(
+        db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_caprace"
+    )
     codes = _concurrent(
         app,
         world,
@@ -496,7 +535,9 @@ def test_deux_avoirs_concurrents_au_dessus_du_plafond(app, db, uploads_tmp):
 
 
 def test_rappel_et_paiement_ulterieur_suivent_la_creance(client, db, uploads_tmp):
-    world = _facture(db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_suite")
+    world = _facture(
+        db, uploads_tmp, paid="0.00", status=InvoiceStatus.SENT, suffix="_suite"
+    )
     billing = CompanyBillingSettings(
         company_id=world.company_id,
         payment_terms_days=30,
@@ -509,7 +550,11 @@ def test_rappel_et_paiement_ulterieur_suivent_la_creance(client, db, uploads_tmp
     credited = _post(
         client,
         world,
-        {"amount_chf": 45.0, "reason": "Avant rappel", "idempotency_key": "avant-rappel"},
+        {
+            "amount_chf": 45.0,
+            "reason": "Avant rappel",
+            "idempotency_key": "avant-rappel",
+        },
     )
     assert credited.status_code == 201, credited.get_data(as_text=True)
 

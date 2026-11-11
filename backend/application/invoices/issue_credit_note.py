@@ -15,10 +15,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from application.invoices.credit_note_line_math import preview_credit_for_lines
 from domain.end_of_trip_settlement.cash_settlement import money
 from domain.end_of_trip_settlement.financial_contract import credit_room
 from ext import db
-from application.invoices.credit_note_line_math import preview_credit_for_lines
 from models import Invoice, InvoiceCreditNote, InvoiceCreditSequence
 from models.enums import InvoiceStatus
 from models.invoice import InvoiceCreditNoteLine
@@ -173,7 +173,9 @@ def _document(invoice: Invoice, note: InvoiceCreditNote) -> CreditNoteDocument:
         lines = tuple(
             (
                 str(
-                    getattr(line_by_id.get(int(alloc.invoice_line_id)), "description", None)
+                    getattr(
+                        line_by_id.get(int(alloc.invoice_line_id)), "description", None
+                    )
                     or f"Ligne {alloc.invoice_line_id}"
                 ),
                 f"{_money(alloc.amount_ttc):.2f}",
@@ -253,15 +255,15 @@ def _payload(
     }
 
 
-def _ensure_pdf(invoice: Invoice, note: InvoiceCreditNote, *, replay: bool) -> dict[str, Any]:
+def _ensure_pdf(
+    invoice: Invoice, note: InvoiceCreditNote, *, replay: bool
+) -> dict[str, Any]:
     if note.pdf_url:
         return _payload(invoice, note, replay=replay, pdf_pending=False)
     try:
         url = write_credit_note_pdf(_document(invoice, note))
     except Exception:
-        logger.exception(
-            "PDF d'avoir non écrit credit_number=%s", note.credit_number
-        )
+        logger.exception("PDF d'avoir non écrit credit_number=%s", note.credit_number)
         return _payload(invoice, note, replay=replay, pdf_pending=True)
     locked = db.session.scalar(
         select(InvoiceCreditNote)
@@ -377,7 +379,9 @@ def issue_credit_note(
         return _ensure_pdf(reloaded, replayed, replay=True)
 
     try:
-        credit_room(invoice.total_amount, [*_active_amounts(invoice.id, company_id), amount])
+        credit_room(
+            invoice.total_amount, [*_active_amounts(invoice.id, company_id), amount]
+        )
     except ValueError as exc:
         code = str(exc)
         if code == "avoir_au_dela_du_facture":

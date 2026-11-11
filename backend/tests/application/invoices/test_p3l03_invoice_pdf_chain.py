@@ -5,6 +5,7 @@ Base jetable au schéma applicatif complet. Aucune écriture sur atmr.
 
 from __future__ import annotations
 
+import tempfile
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -43,7 +44,7 @@ from tests.services.test_partner_invoice_pdf import (
     _create_test_partner_invoice_setup,
 )
 
-_UPLOADS = Path("/app/uploads")
+_UPLOADS = Path(tempfile.gettempdir()) / "lirie-p3l03-uploads"
 _IBAN = "CH6509000000152631289"
 
 
@@ -62,8 +63,10 @@ def _user(prefix: str, role: UserRole, first: str, last: str) -> User:
 
 
 def _prepare_uploads() -> None:
-    current_app.config["UPLOAD_FOLDER"] = str(_UPLOADS)
+    _UPLOADS.mkdir(parents=True, exist_ok=True)
     (_UPLOADS / "invoices").mkdir(parents=True, exist_ok=True)
+    current_app.config["UPLOADS_DIR"] = str(_UPLOADS)
+    current_app.config["UPLOAD_FOLDER"] = str(_UPLOADS)
 
 
 def _company_world():

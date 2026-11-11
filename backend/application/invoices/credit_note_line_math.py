@@ -66,7 +66,11 @@ def split_ht_vat(
     if ttc > line_ttc + _CENT:
         raise ValueError("avoir_au_dela_de_la_ligne")
     if ttc == line_ttc:
-        return line_ht.quantize(_CENT), line_vat.quantize(_CENT), line_ttc.quantize(_CENT)
+        return (
+            line_ht.quantize(_CENT),
+            line_vat.quantize(_CENT),
+            line_ttc.quantize(_CENT),
+        )
     ratio = ttc / line_ttc
     ht = (line_ht * ratio).quantize(_CENT)
     vat = (ttc - ht).quantize(_CENT)
@@ -79,7 +83,8 @@ def line_credit_residuals(invoice: Invoice) -> list[dict[str, Any]]:
     """État créditable de chaque ligne (montant calculé serveur)."""
     credited = credited_ttc_by_line(int(invoice.id))
     room = (
-        _money(invoice.total_amount) - invoice_credit_total(invoice.id, invoice.company_id)
+        _money(invoice.total_amount)
+        - invoice_credit_total(invoice.id, invoice.company_id)
     ).quantize(_CENT)
     if room < 0:
         room = _ZERO
@@ -90,8 +95,7 @@ def line_credit_residuals(invoice: Invoice) -> list[dict[str, Any]]:
         line_vat = _money(line.vat_amount).quantize(_CENT)
         already = credited.get(int(line.id), _ZERO).quantize(_CENT)
         residual_ttc = max(_ZERO, (line_ttc - already).quantize(_CENT))
-        if residual_ttc > room:
-            residual_ttc = room
+        residual_ttc = min(residual_ttc, room)
         residual_ht = _ZERO
         residual_vat = _ZERO
         if residual_ttc > 0 and line_ttc > 0:
@@ -105,7 +109,9 @@ def line_credit_residuals(invoice: Invoice) -> list[dict[str, Any]]:
                 "invoice_line_id": int(line.id),
                 "description": str(line.description or ""),
                 "reservation_id": (
-                    int(line.reservation_id) if line.reservation_id is not None else None
+                    int(line.reservation_id)
+                    if line.reservation_id is not None
+                    else None
                 ),
                 "service_date": service_date,
                 "qty": float(_money(line.qty)),

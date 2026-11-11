@@ -95,7 +95,7 @@ def _two_line_invoice(db, uploads_tmp: Path, *, paid: Decimal = Decimal("20.00")
 
 
 def test_preview_and_partial_line_credit(db, uploads_tmp, app):
-    world, invoice, line_a, line_b = _two_line_invoice(db, uploads_tmp)
+    world, invoice, line_a, _line_b = _two_line_invoice(db, uploads_tmp)
     preview = preview_credit_for_lines(
         invoice,
         [{"invoice_line_id": line_a.id, "amount_ttc": "24.23"}],

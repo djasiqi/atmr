@@ -614,13 +614,10 @@ class GenerateInvoiceUseCase:
                                 f"stricte : {', '.join(str(i) for i in unknown)}."
                             ),
                         )
-                if (
-                    strict_selection
-                    and patient_cash_applies(
-                        clinic_company_id=input_data.clinic_company_id,
-                        bill_to_client_id=input_data.bill_to_client_id,
-                        institution_patient_id=institution_patient_id_for_invoice,
-                    )
+                if strict_selection and patient_cash_applies(
+                    clinic_company_id=input_data.clinic_company_id,
+                    bill_to_client_id=input_data.bill_to_client_id,
+                    institution_patient_id=institution_patient_id_for_invoice,
                 ):
                     already_billed = [
                         int(dto.id)
@@ -800,9 +797,8 @@ class GenerateInvoiceUseCase:
                         "ou la sélection ne contient aucune course éligible."
                     )
                     raise ValueError(msg)
-                if (
-                    not strict_selection
-                    and len(booking_ids) < len(requested_reservation_ids)
+                if not strict_selection and len(booking_ids) < len(
+                    requested_reservation_ids
                 ):
                     logger.warning(
                         (
@@ -908,9 +904,7 @@ class GenerateInvoiceUseCase:
 
             before_payment_filter = list(reservations)
             payment_notes: list[str] = []
-            reservations = apply_confirmed_payment_coverage(
-                reservations, payment_notes
-            )
+            reservations = apply_confirmed_payment_coverage(reservations, payment_notes)
             if payment_notes:
                 logger.info("Couverture paiement confirmé : %s", payment_notes)
             if before_payment_filter and not reservations:
@@ -953,9 +947,9 @@ class GenerateInvoiceUseCase:
                 )
             elif input_data.confirmed_selection_fingerprint:
                 actual_fp = selection_fingerprint(final_ids)
-                expected_fp = str(
-                    input_data.confirmed_selection_fingerprint
-                ).strip().lower()
+                expected_fp = (
+                    str(input_data.confirmed_selection_fingerprint).strip().lower()
+                )
                 if actual_fp != expected_fp:
                     raise BookingSelectionRefusal(
                         "previsualisation_perimee",
@@ -1306,9 +1300,7 @@ class GenerateInvoiceUseCase:
                     .with_for_update()
                     .all()
                 )
-                reservations = filter_bookings_open_for_new_invoice_line(
-                    locked_final
-                )
+                reservations = filter_bookings_open_for_new_invoice_line(locked_final)
                 reservations = apply_confirmed_payment_coverage(reservations, [])
                 bookings_by_id = {r.id: r for r in reservations}
             if (
@@ -2049,6 +2041,26 @@ class GenerateInvoiceUseCase:
                     generated_pdf_url,
                 )
             db.session.rollback()
+            # L'autre émission a gagné la course : renvoyer la même facture.
+            if refusal.code == "reservation_non_eligible":
+                requested = normalize_id_list(input_data.reservation_ids)
+                if requested and patient_cash_applies(
+                    clinic_company_id=input_data.clinic_company_id,
+                    bill_to_client_id=input_data.bill_to_client_id,
+                    institution_patient_id=getattr(
+                        input_data, "institution_patient_id", None
+                    ),
+                ):
+                    replay_id = find_patient_cash_replay(
+                        int(input_data.company_id),
+                        requested,
+                    )
+                    if replay_id is not None:
+                        return GenerateInvoiceOutput(
+                            success=True,
+                            invoice_id=replay_id,
+                            invoice=db.session.get(Invoice, replay_id),
+                        )
             logger.warning(
                 "Sélection refusée lors de la génération de facture: %s", refusal
             )
