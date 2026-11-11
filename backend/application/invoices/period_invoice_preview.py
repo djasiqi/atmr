@@ -187,10 +187,34 @@ def _preview_amounts_after_merge(
     return finalize_invoice_vat(gross, vat_sum)
 
 
+def _column_subject_key(booking: Any) -> str:
+    """Clé de regroupement lue sur les colonnes, sans ``booking.client``.
+
+    L'aperçu agrégé (opportunités) ne doit pas émettre un SELECT client par course.
+    """
+    from models.enums import BookingCreatedVia
+
+    ipid = getattr(booking, "institution_patient_id", None)
+    if ipid is not None:
+        return f"institution_patient:{int(ipid)}"
+    via = getattr(booking, "created_via", None)
+    via_val = via.value if hasattr(via, "value") else str(via or "")
+    if via_val == BookingCreatedVia.INSTITUTION_PORTAL.value:
+        bid = int(getattr(booking, "id", 0) or 0)
+        return f"legacy-institution-booking:{bid}"
+    carrier = getattr(booking, "client_id", None)
+    if carrier is not None:
+        return f"client:{int(carrier)}"
+    bid = int(getattr(booking, "id", 0) or 0)
+    return f"unknown-booking:{bid}"
+
+
 def _consolidate_period_preview_round_trip_rows(
     preview_lines: list[PeriodPreviewLine],
     bookings: list[Any],
     _billing_settings_dto: Any,
+    *,
+    resolve_subjects: bool,
 ) -> list[PeriodPreviewLine]:
     """Une ligne par A/R uniquement si relation métier + même payeur.
 
@@ -212,7 +236,11 @@ def _consolidate_period_preview_round_trip_rows(
     units = resolve_invoice_booking_units(
         selected_ids=None,
         scope_bookings=bookings,
-        subject_key_fn=lambda bk: resolve_subject_identity(bk).key,
+        subject_key_fn=(
+            (lambda bk: resolve_subject_identity(bk).key)
+            if resolve_subjects
+            else _column_subject_key
+        ),
         amount_ht_fn=_amount_for_booking,
         expand_explicit_peers=False,
     )
@@ -598,7 +626,10 @@ def build_period_invoice_preview(
             )
 
         preview_lines_out = _consolidate_period_preview_round_trip_rows(
-            preview_lines_out, bookings, billing_settings_dto
+            preview_lines_out,
+            bookings,
+            billing_settings_dto,
+            resolve_subjects=include_line_details,
         )
         dues = {
             int(b.id): _preview_base_amount_ht(b, billing_settings_dto) for b in bookings
@@ -805,7 +836,10 @@ def build_period_invoice_preview(
         )
 
     preview_lines_out = _consolidate_period_preview_round_trip_rows(
-        preview_lines_out, eligible_bookings, billing_settings_dto
+        preview_lines_out,
+        eligible_bookings,
+        billing_settings_dto,
+        resolve_subjects=include_line_details,
     )
     total, total_vat, total_tw = _preview_amounts_after_merge(
         preview_lines_out,
