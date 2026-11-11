@@ -272,6 +272,33 @@ def _reset_portal_grant_flags(request):
         app.config.pop("PORTAL_GRANT_OBSERVATION", None)
 
 
+@pytest.fixture(autouse=True)
+def _restore_upload_dirs(request):
+    """Restaure les racines d'upload après chaque test.
+
+    L'application Flask est partagée pour toute la session. Un test qui
+    redirige ``UPLOADS_DIR`` vers un répertoire temporaire (décomptes PDF)
+    laisse cette valeur en place. Les tests suivants, qui écrivent leurs
+    factures ailleurs, lèvent alors ``InvalidUploadPath``.
+    """
+    uses_app = any(
+        name in request.fixturenames for name in ("app", "client", "db", "app_context")
+    )
+    if not uses_app:
+        yield
+        return
+    app = request.getfixturevalue("app")
+    keys = ("UPLOADS_DIR", "UPLOAD_FOLDER")
+    present = {key: key in app.config for key in keys}
+    saved = {key: app.config.get(key) for key in keys}
+    yield
+    for key in keys:
+        if present[key]:
+            app.config[key] = saved[key]
+        else:
+            app.config.pop(key, None)
+
+
 @pytest.fixture
 def app_context(app):
     """Crée un contexte d'application Flask pour les tests."""

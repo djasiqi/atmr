@@ -160,7 +160,7 @@ class OptimalHyperparameters:
     # Configurations de reward shaping
     REWARD_SHAPING_CONFIGS: ClassVar[Dict[str, Any]] = {
         "default": {
-            "punctuality_weight": 1,
+            "punctuality_weight": 1.0,
             "distance_weight": 0.5,
             "equity_weight": 0.3,
             "efficiency_weight": 0.2,
