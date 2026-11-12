@@ -11,7 +11,7 @@ Dépôt principal `C:\Users\jasiq\atmr` : WIP non touché
 
 | Critère | Verdict |
 | --- | --- |
-| CI | **GREEN** sur `cece5aa6` (workflows dépôt) |
+| CI | **GREEN** sur `db9968ef` (workflows dépôt) |
 | SECURITY | **PARTIAL** — Security Gate **PASS** ; GitGuardian externe **FAIL** (dashboard opaque) |
 | READY FOR HUMAN REVIEW | **YES** |
 
@@ -24,7 +24,7 @@ Aucun merge. Aucun déploiement. Aucune migration de production. Flags opératio
 | Élément | Valeur |
 | --- | --- |
 | Branche | `candidate/lirie-fin-caisse-20261112` |
-| HEAD final | `cece5aa60e5f3f82591741259e7bd2517f055247` |
+| HEAD final | voir commit de ce rapport (parent CI-green `db9968ef`) |
 | Base distante FIN-FACTURE | `ade4543468d7a828015cf16773246725341fe140` (compatible, non évoluée) |
 | Draft | oui |
 
@@ -39,6 +39,7 @@ Aucun merge. Aucun déploiement. Aucune migration de production. Flags opératio
 ## C. Commits publiés (depuis FIN-FACTURE)
 
 ```
+db9968ef docs(ops): rapport FIN-CAISSE-4 publication et CI
 cece5aa6 fix(ci): restaurer noqa RET503 sur booking_messages
 27349e4f fix(ci): assouplir compteur open du tuner RL
 83746777 fix(ci): ruff 0.14.10 et assertion RL non fragile
@@ -94,20 +95,20 @@ cf8c980a feat(caisse): rapprochement et routes entreprise
 - UI mobile : lint + Jest settlement verts en CI ; stub attestation hors caisse.
 - **Pas de certification navigateur intégrale** annoncée sur la seule base des tests API.
 
-## G. Matrice CI (SHA final `cece5aa6`)
+## G. Matrice CI (SHA final `db9968ef`)
 
 | Contrôle | Run ID | Conclusion |
 | --- | --- | --- |
-| Backend Tests (lint, shards 1–4, coverage, E2E, migrations, intégration, pip-audit, Bandit/Semgrep) | [43281205391](https://github.com/djasiqi/atmr/actions/runs/43281205391) | **success** |
-| Frontend Tests | [43281211649](https://github.com/djasiqi/atmr/actions/runs/43281211649) | **success** |
-| Security Scan | [43281217549](https://github.com/djasiqi/atmr/actions/runs/43281217549) | **success** |
-| Repository integrity (dispatch) | [43281223906](https://github.com/djasiqi/atmr/actions/runs/43281223906) | **success** |
-| Security Gate (Gitleaks, CodeQL, Semgrep, Trivy, tenant, verdict) | [43281175455](https://github.com/djasiqi/atmr/actions/runs/43281175455) | **success** |
-| Phase 1 Gates | [43281175294](https://github.com/djasiqi/atmr/actions/runs/43281175294) | **success** (`trigger-backend-deploy` skipped) |
-| Architecture Review | [43281175371](https://github.com/djasiqi/atmr/actions/runs/43281175371) | **success** |
-| Mobile Lint + Jest | [43281175324](https://github.com/djasiqi/atmr/actions/runs/43281175324) | **success** |
-| Secret Pattern Scan | [43281175318](https://github.com/djasiqi/atmr/actions/runs/43281175318) / push [43281164757](https://github.com/djasiqi/atmr/actions/runs/43281164757) | **success** |
-| Semgrep cloud | scan 267525858 | **success** |
+| Backend Tests (lint, shards 1–4, coverage, E2E, migrations, intégration, pip-audit, Bandit/Semgrep) | [43283668483](https://github.com/djasiqi/atmr/actions/runs/43283668483) | **success** |
+| Frontend Tests | [43283674701](https://github.com/djasiqi/atmr/actions/runs/43283674701) | **success** |
+| Security Scan | [43283680670](https://github.com/djasiqi/atmr/actions/runs/43283680670) | **success** |
+| Repository integrity (dispatch) | [43283685892](https://github.com/djasiqi/atmr/actions/runs/43283685892) | **success** |
+| Security Gate (Gitleaks, CodeQL, Semgrep, Trivy, tenant, verdict) | [43283647562](https://github.com/djasiqi/atmr/actions/runs/43283647562) | **success** |
+| Phase 1 Gates | [43283647511](https://github.com/djasiqi/atmr/actions/runs/43283647511) | **success** (`trigger-backend-deploy` skipped) |
+| Architecture Review | [43283647541](https://github.com/djasiqi/atmr/actions/runs/43283647541) | **success** |
+| Mobile Lint + Jest | [43283647474](https://github.com/djasiqi/atmr/actions/runs/43283647474) | **success** |
+| Secret Pattern Scan | [43283647546](https://github.com/djasiqi/atmr/actions/runs/43283647546) / push [43283636016](https://github.com/djasiqi/atmr/actions/runs/43283636016) | **success** |
+| Semgrep cloud | (PR #103 sur `db9968ef`) | **success** (précédent scan 267525858 sur `cece5aa6`) |
 | GitGuardian Security Checks | dashboard externe | **fail** |
 
 Les workflows PR ne déploient pas et ne migrent pas une base opérationnelle (`trigger-backend-deploy` skipped).
@@ -147,6 +148,6 @@ Aucune assertion de sécurité affaiblie. Pas d’intégration PAY-SAFERPAY. Pas
 
 ## L. Verdict (rappel)
 
-- **CI : GREEN** sur `cece5aa6` (workflows dépôt requis).
+- **CI : GREEN** sur `db9968ef` (workflows dépôt requis).
 - **SECURITY : PARTIAL** (Gate PASS ; GitGuardian externe FAIL).
 - **READY FOR HUMAN REVIEW : YES**.
