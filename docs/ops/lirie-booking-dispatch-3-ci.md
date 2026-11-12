@@ -16,8 +16,8 @@ Publication GitHub et validation CI finale de BOOKING-DISPATCH.
 |---------|--------|
 | Branche | `candidate/lirie-booking-dispatch-20261112` |
 | Base stack | `candidate/lirie-notif-ios-p0-20261112` (PR #105, tip `7a54ad39`) |
-| SHA CI GREEN initial | `676d09b5` (`676d09b5262e919815c53d73625f04493555d13d`) |
-| SHA final (après rapport) | `03eea7b5` (`03eea7b5d674bf970a8cb89705f53e3fbd928189`) |
+| SHA CI GREEN (code + ack) | `676d09b5` (`676d09b5262e919815c53d73625f04493555d13d`) |
+| SHA final (HEAD PR #106) | `aec4196b` (`aec4196bb29629f0c27845a6c232360128b294b4`) |
 
 Préflight : worktree propre hors commit ack ; 7 commits BOOKING depuis `7a54ad39` + clarification quick-accept ; **aucune** migration Alembic ; **aucun** fichier FIN-FACTURE / FIN-CAISSE / Saferpay ; tests locaux sur `postgres_test` (port 5433, projet `lirie-ci-gate`) — pas d’écriture `atmr`.
 
@@ -50,7 +50,7 @@ Depuis tip NOTIF `7a54ad39` :
 | `f27b79da` | docs(ops): rapport LOT-BOOKING-DISPATCH-2 |
 | `9e95f62f` / `dccfeb08` | docs tampon LOT-2 |
 | `676d09b5` | fix(driver): clarifier quick-accept comme ack ASSIGNED |
-| *(docs CI)* | docs(ops): rapport LOT-BOOKING-DISPATCH-3 CI |
+| `aec4196b` | docs(ops): rapport LOT-BOOKING-DISPATCH-3 CI |
 
 Push : **uniquement** la branche BOOKING. PR #101–#105 non modifiées.
 
@@ -75,7 +75,9 @@ Push : **uniquement** la branche BOOKING. PR #101–#105 non modifiées.
 
 ---
 
-## F. Matrice des CI sur le SHA `676d09b5`
+## F. Matrice des CI sur le SHA final `aec4196b`
+
+(Identique en succès au run `676d09b5` ; matrice ci-dessous = HEAD PR.)
 
 | Check | Résultat |
 |-------|----------|
@@ -149,7 +151,7 @@ Frontend Tests dédiés : non déclenchés comme job nommé (pas de changement f
 
 | Gate | Verdict |
 |------|---------|
-| CI | **GREEN** (preuve obligatoire sur `676d09b5` ; HEAD docs `03eea7b5`) |
+| CI | **GREEN** (HEAD `aec4196b` ; aussi validé sur `676d09b5`) |
 | SECURITY | **PASS** (Security Gate + GG + Gitleaks + CodeQL/Semgrep success) |
 | BOOKING-DISPATCH | **PASS** |
 | READY FOR HUMAN REVIEW | **YES** |
