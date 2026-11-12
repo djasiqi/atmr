@@ -107,9 +107,9 @@ Correctif **séparé** (branche `candidate/lirie-gg-fixture-40006359-20261112`, 
 
 ## H. SHA final (branche MFA)
 
-`a7effb893f05fa2ab97aa24281b8e0951c230608` — tip publié.
+Tip publié : **voir `headRefOid` de la PR #104** (branche `candidate/lirie-security-p0-03-mfa-20261112`).
 
-Chaîne : `2366f6a1` → `aefa42fe` → `a8c5de87` → `51291583` → `2257f208` → docs final.
+Chaîne fonctionnelle : `2366f6a1` → `aefa42fe` → `a8c5de87` → `51291583` → `2257f208` (+ docs / liaison PR).
 
 ---
 
