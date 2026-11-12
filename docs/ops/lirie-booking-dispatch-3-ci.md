@@ -158,3 +158,9 @@ Frontend Tests dédiés : non déclenchés comme job nommé (pas de changement f
 | BOOKING-DISPATCH | **PASS** |
 | READY FOR HUMAN REVIEW | **YES** |
 | READY FOR PRODUCTION | **NO** (Draft, no merge/deploy ; UI/device non certifiés) |
+
+---
+
+## Addendum tip
+
+HEAD PR #106 au moment de la cl�ture LOT-3 : `620e8d19` � CI **GREEN** (`mergeable_state=clean`, combined `success`). Aucun merge / deploy.
