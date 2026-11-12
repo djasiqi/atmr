@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.support.recipe_credentials import RECIPE_PASSWORD
+
 import threading
 import uuid
 from datetime import UTC, datetime
@@ -94,7 +96,7 @@ def _issued_invoice(world, booking) -> Invoice:
     user.email = f"{user.username}@lirie-e2e.invalid"
     user.role = UserRole.client
     user.public_id = str(uuid.uuid4())
-    user.set_password("recette-isolee", force_change=False)
+    user.set_password(RECIPE_PASSWORD, force_change=False)
     db.session.add(user)
     db.session.flush()
     patient = Client(

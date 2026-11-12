@@ -6,6 +6,8 @@ dans le processus de test. Aucun paiement réel n'est écrit.
 
 from __future__ import annotations
 
+from tests.support.recipe_credentials import RECIPE_PASSWORD
+
 import http.client
 import smtplib
 import uuid
@@ -149,7 +151,7 @@ def _user(role: UserRole, label: str) -> User:
     row.email = f"{label}@lirie-e2e.invalid"
     row.role = role
     row.public_id = str(uuid.uuid4())
-    row.set_password("recette-isolee", force_change=False)
+    row.set_password(RECIPE_PASSWORD, force_change=False)
     db.session.add(row)
     db.session.flush()
     return row
@@ -380,7 +382,7 @@ def test_revocation_de_session_distincte_du_rafraichissement(client, world, sort
     }
     login = client.post(
         LOGIN,
-        json={"email": owner.email, "password": "recette-isolee"},
+        json={"email": owner.email, "password": RECIPE_PASSWORD},
         headers=mobile,
     )
     assert login.status_code == 200, login.get_data(as_text=True)

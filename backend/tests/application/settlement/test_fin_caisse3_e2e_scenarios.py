@@ -6,6 +6,8 @@ Flags produit END_OF_TRIP restent OFF ; prep locale SETTLEMENT_PRODUCTION_PREP=1
 
 from __future__ import annotations
 
+from tests.support.recipe_credentials import RECIPE_PASSWORD
+
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -70,7 +72,7 @@ def _user(role: UserRole, label: str) -> User:
     row.email = f"{label}@lirie-e2e.invalid"
     row.role = role
     row.public_id = str(uuid.uuid4())
-    row.set_password("recette-isolee", force_change=False)
+    row.set_password(RECIPE_PASSWORD, force_change=False)
     db.session.add(row)
     db.session.flush()
     return row

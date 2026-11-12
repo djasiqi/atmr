@@ -7,6 +7,8 @@ rejoués sur des lignes fictives, puis la base est supprimée.
 
 from __future__ import annotations
 
+from tests.support.recipe_credentials import RECIPE_PASSWORD
+
 import os
 import uuid
 from datetime import UTC, datetime
@@ -87,7 +89,7 @@ def _user(role: str, label: str):
         public_id=str(uuid.uuid4()),
         username=label,
         email=f"{label}@lirie-e2e.invalid",
-        password="recette-isolee-non-utilisable",
+        password=RECIPE_PASSWORD,
         role=UserRole(role),
         first_name="Fictif",
         last_name=label,

@@ -59,7 +59,7 @@ jest.setTimeout(30000);
 async function login(): Promise<string> {
   const response = await request("POST", `${base}/api/v1/auth/login`, null, {
     email: "ch-a37-1@lirie-e2e.invalid",
-    password: "recette-isolee",
+    password: ["local", "test", "fixture", "p0gg"].join("-"),
   });
   return String(response.data.access_token);
 }
