@@ -187,6 +187,20 @@ def test_device_provider_03_two_physical_devices() -> None:
     assert by_device == {"phone-a": "fcm", "phone-b": "fcm"}
 
 
+def test_prepare_push_targets_company_ios_dedup() -> None:
+    """Company iOS : Expo+FCM même device_id => une seule cible FCM (chemin entreprise)."""
+    from services.notifications.push_device_selection import prepare_push_targets
+
+    rows = [
+        _ios_row(1001, "company-iphone-1", "expo"),
+        _ios_row(1002, "company-iphone-1", "fcm"),
+    ]
+    targets = prepare_push_targets(rows, owner_id=42)
+    assert len(targets) == 1
+    assert targets[0]["id"] == 1002
+    assert targets[0]["provider"] == "fcm"
+
+
 def test_android_has_expo_only() -> None:
     tokens = [
         SimpleNamespace(platform="android", provider="expo"),

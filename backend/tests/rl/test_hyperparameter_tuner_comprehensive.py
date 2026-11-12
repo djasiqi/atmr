@@ -348,9 +348,15 @@ class TestHyperparameterTuner:
             # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
             # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
             assert mock_file.call_count >= 3
-            # Vérifier que tous les appels utilisent les bons paramètres
+            # Path.open peut aussi être lu ailleurs sous le même patch (mode r).
+            write_seen = False
             for call in mock_file.call_args_list:
-                assert call == (("w",), {"encoding": "utf-8"})
+                mode = call.kwargs.get("mode", call.args[0] if call.args else None)
+                assert call.kwargs.get("encoding") == "utf-8"
+                assert mode in ("w", "r")
+                if mode == "w":
+                    write_seen = True
+            assert write_seen
 
     def test_save_best_params_with_custom_filename(self):
         """Test save_best_params avec nom de fichier personnalisé"""
@@ -382,9 +388,15 @@ class TestHyperparameterTuner:
             # 2. Pour le fichier de métriques (_log_metrics_and_comparisons)
             # 3. Pour le fichier de comparaison (_log_metrics_and_comparisons)
             assert mock_file.call_count >= 3
-            # Vérifier que tous les appels utilisent les bons paramètres
+            # Path.open peut aussi être lu ailleurs sous le même patch (mode r).
+            write_seen = False
             for call in mock_file.call_args_list:
-                assert call == (("w",), {"encoding": "utf-8"})
+                mode = call.kwargs.get("mode", call.args[0] if call.args else None)
+                assert call.kwargs.get("encoding") == "utf-8"
+                assert mode in ("w", "r")
+                if mode == "w":
+                    write_seen = True
+            assert write_seen
 
     def test_load_best_params(self):
         """Test load_best_params method"""

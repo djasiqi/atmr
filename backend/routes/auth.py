@@ -3930,6 +3930,7 @@ class Logout(Resource):
                     device_id_for_revoke = (
                         logout_body.get("device_id")
                         or logout_body.get("deviceId")
+                        or logout_body.get("device_installation_id")
                         or request.headers.get("X-Device-ID")
                     )
                     if user and device_id_for_revoke:
@@ -3970,6 +3971,7 @@ class Logout(Resource):
                 device_id = (
                     logout_body.get("device_id")
                     or logout_body.get("deviceId")
+                    or logout_body.get("device_installation_id")
                     or request.headers.get("X-Device-ID")
                 )
                 if device_id:

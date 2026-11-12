@@ -108,19 +108,24 @@ def send_push_to_company_sync(
             _track_new_request_delivery_failed(company_id, "no_token", data)
             return False
 
+        # Même règle chauffeur : 1 alerte / device_id iOS (FCM > Expo), pas de double envoi.
+        from services.notifications.push_device_selection import prepare_push_targets
+
+        push_targets = prepare_push_targets(device_tokens, owner_id=company_id)
+
         from services.notifications.token_audit import (
             _token_hash,
             log_push_recipient_proof,
         )
 
-        token_hashes = [_token_hash(dt.token) for dt in device_tokens if dt.token]
+        token_hashes = [_token_hash(t["token"]) for t in push_targets if t.get("token")]
         log_push_recipient_proof(
             trace_id=data.get("trace_id"),
             booking_id=data.get("booking_id"),
             status=data.get("status"),
             recipient_role="company",
             recipient_id=company.user_id or company_id,
-            token_count=len(device_tokens),
+            token_count=len(push_targets),
             token_hashes=token_hashes,
             collapse_key=data.get("collapse_key"),
             dedupe_key=data.get("dedupe_key"),
@@ -132,7 +137,7 @@ def send_push_to_company_sync(
         )
 
         driver_id_from_booking = data.get("driver_id")
-        if driver_id_from_booking and device_tokens:
+        if driver_id_from_booking and push_targets:
             from services.notifications.token_audit import check_token_collision
 
             driver_tokens = [
@@ -143,7 +148,7 @@ def send_push_to_company_sync(
                 ).all()
                 if dt.token
             ]
-            first_company_token = device_tokens[0].token
+            first_company_token = push_targets[0].get("token")
             if first_company_token:
                 check_token_collision(
                     driver_tokens=driver_tokens,
@@ -154,29 +159,29 @@ def send_push_to_company_sync(
                 )
 
         success_count = 0
-        for device_token in device_tokens:
+        for target in push_targets:
             result = send_push_message(
-                token=device_token.token,
+                token=target["token"],
                 title=title,
                 body=body,
                 data={**data, "company_id": company_id},
                 timeout=timeout,
-                provider=getattr(device_token, "provider", None),
-                platform=getattr(device_token, "platform", None),
-                device_token_id=device_token.id,
+                provider=target.get("provider"),
+                platform=target.get("platform"),
+                device_token_id=target.get("id"),
             )
             if result.get("ok"):
                 success_count += 1
                 app_logger.debug(
                     "[company_push] Push sent to company %s (device %s)",
                     company_id,
-                    device_token.id,
+                    target.get("id"),
                 )
             else:
                 app_logger.warning(
                     "[company_push] Push failed for company %s (device %s): %s",
                     company_id,
-                    device_token.id,
+                    target.get("id"),
                     result.get("error", "Unknown error"),
                 )
 
@@ -188,10 +193,10 @@ def send_push_to_company_sync(
         success = success_count > 0
         if success:
             app_logger.info(
-                "[company_push] Push sent to company %s (%d/%d devices)",
+                "[company_push] Push sent to company %s (%d/%d targets)",
                 company_id,
                 success_count,
-                len(device_tokens),
+                len(push_targets),
             )
         else:
             _track_new_request_delivery_failed(company_id, "provider_rejected", data)

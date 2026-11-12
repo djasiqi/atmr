@@ -7,8 +7,6 @@ rejoués sur des lignes fictives, puis la base est supprimée.
 
 from __future__ import annotations
 
-from tests.support.recipe_credentials import RECIPE_PASSWORD
-
 import os
 import uuid
 from datetime import UTC, datetime
@@ -20,6 +18,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from ext import db
+from tests.support.recipe_credentials import RECIPE_PASSWORD
 
 FORBIDDEN_DATABASES = frozenset({"atmr", "atmr_test", "atmrstg", "postgres", ""})
 HISTORICAL_IDS = (34994, 35027, 35028)

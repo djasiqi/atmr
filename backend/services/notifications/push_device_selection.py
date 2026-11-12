@@ -150,12 +150,12 @@ def device_token_row_to_push_dict(row: Any) -> PushDeviceDict:
     }
 
 
-def prepare_driver_push_targets(
+def prepare_push_targets(
     device_tokens_raw: list[Any],
     *,
-    driver_id: int | None = None,
+    owner_id: int | None = None,
 ) -> list[PushDeviceDict]:
-    """Extrait, déduplique par token, un fournisseur par appareil.
+    """Extrait, déduplique par token, un fournisseur par appareil (driver ou company).
 
     Android : FCM canonique (comportement existant).
     iOS : FCM si une ligne active existe pour ce ``device_id``, sinon Expo.
@@ -169,15 +169,24 @@ def prepare_driver_push_targets(
     deduped = dedupe_push_devices_by_token(extracted)
     if len(deduped) < len(extracted):
         app_logger.info(
-            "[push] dedup tokens driver=%s before=%s after=%s",
-            driver_id,
+            "[push] dedup tokens owner=%s before=%s after=%s",
+            owner_id,
             len(extracted),
             len(deduped),
         )
-    prioritized = prioritize_android_fcm_devices(deduped, driver_id=driver_id)
+    prioritized = prioritize_android_fcm_devices(deduped, driver_id=owner_id)
     result = _keep_latest_android_fcm_only(prioritized)
     # Un appareil iOS = une alerte. FCM prioritaire, Expo seulement s'il n'y a pas de FCM.
-    return _prefer_ios_fcm_when_available(result, driver_id=driver_id)
+    return _prefer_ios_fcm_when_available(result, driver_id=owner_id)
+
+
+def prepare_driver_push_targets(
+    device_tokens_raw: list[Any],
+    *,
+    driver_id: int | None = None,
+) -> list[PushDeviceDict]:
+    """Alias chauffeur de ``prepare_push_targets`` (compat appels existants)."""
+    return prepare_push_targets(device_tokens_raw, owner_id=driver_id)
 
 
 def _latest_push_row(rows: list[PushDeviceDict]) -> PushDeviceDict:

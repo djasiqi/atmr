@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from tests.support.recipe_credentials import RECIPE_PASSWORD
-
 import json
 import os
 import subprocess
@@ -42,6 +40,7 @@ from models.settlement_simulation import (
     SettlementSimulationEvent,
 )
 from services.recipe_environment import database_name
+from tests.support.recipe_credentials import RECIPE_PASSWORD
 
 pytestmark = pytest.mark.integration
 

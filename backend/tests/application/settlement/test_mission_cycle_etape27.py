@@ -6,8 +6,6 @@ dans le processus de test. Aucun paiement réel n'est écrit.
 
 from __future__ import annotations
 
-from tests.support.recipe_credentials import RECIPE_PASSWORD
-
 import http.client
 import smtplib
 import uuid
@@ -31,6 +29,7 @@ from models.settlement_simulation import (
 )
 from models.user import User
 from services.recipe_environment import database_name
+from tests.support.recipe_credentials import RECIPE_PASSWORD
 
 pytestmark = pytest.mark.integration
 

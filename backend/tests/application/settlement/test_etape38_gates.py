@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from tests.support.recipe_credentials import RECIPE_PASSWORD
-
 import threading
 import uuid
 from datetime import UTC, datetime
@@ -46,6 +44,7 @@ from tests.application.settlement.test_production_prep_etape28 import (
     _open_cash,
     _owner,
 )
+from tests.support.recipe_credentials import RECIPE_PASSWORD
 
 pytestmark = pytest.mark.integration
 

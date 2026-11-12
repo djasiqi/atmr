@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from tests.support.recipe_credentials import RECIPE_PASSWORD
-
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -30,6 +28,7 @@ from models.enums import (
 from models.invoice import Invoice, InvoiceLine
 from models.user import User
 from services.recipe_environment import database_name
+from tests.support.recipe_credentials import RECIPE_PASSWORD
 
 pytestmark = pytest.mark.integration
 

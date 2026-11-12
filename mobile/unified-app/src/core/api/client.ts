@@ -1949,6 +1949,8 @@ export async function logoutSession(opts?: { skipLocalPurge?: boolean }): Promis
       if (envelope.status === "found") {
         body.session_id = envelope.value.session_id;
         body.device_installation_id = envelope.value.device_installation_id;
+        // Alias pour invalidation push backend (device_id / X-Device-ID).
+        body.device_id = envelope.value.device_installation_id;
       }
       if (refresh.status === "found") {
         body.refresh_token = refresh.value;
