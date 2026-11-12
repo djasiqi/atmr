@@ -179,6 +179,7 @@ Company `/api/v1/companies/` : hors CSRF_STRICT encore largement exempt (dette p
 3. `cf8c980a` — feat(caisse): rapprochement et routes entreprise  
 4. `cfaad826` — feat(caisse): interfaces entreprise et suivi de caisse  
 5. `debf5eed` — test(caisse): suites reglement et rapport FIN-CAISSE-1  
+6. `4587f0b9` — docs(ops): preciser les SHAs locaux FIN-CAISSE-1  
 
 ---
 
