@@ -4622,8 +4622,10 @@ class QuickAcceptBooking(Resource):
         Returns:
             {
                 "ok": true,
-                "message": "Mission acceptée",
-                "booking_id": int
+                "message": "Attribution accusée (ASSIGNED)",
+                "booking_id": int,
+                "status": "ASSIGNED",
+                "ack": true
             }
         """
         try:
@@ -4668,7 +4670,8 @@ class QuickAcceptBooking(Resource):
             ).upper()
             if status_val == "CANCELED":
                 return {"error": "Mission annulée : acceptation impossible"}, 400
-            # Ack chauffeur : la mission reste ASSIGNED (pas de transition vers ACCEPTED).
+            # Ack chauffeur : la mission reste ASSIGNED (pas de transition vers ACCEPTED
+            # ni début de transport). Ce n'est pas une acceptation définitive métier.
             if status_val != "ASSIGNED":
                 logger.warning(
                     "Booking %s cannot be accepted from status %s",
@@ -4695,7 +4698,8 @@ class QuickAcceptBooking(Resource):
 
             return {
                 "ok": True,
-                "message": "Mission acceptée",
+                "ack": True,
+                "message": "Attribution accusée (ASSIGNED)",
                 "booking_id": booking_id,
                 "status": "ASSIGNED",
             }, 200
