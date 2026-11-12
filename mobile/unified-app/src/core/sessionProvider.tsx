@@ -132,7 +132,11 @@ type SessionContextValue = {
   activeContext: AuthContext | null;
   error: string | null;
   autoBootstrapAllowed: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (
+    email: string,
+    password: string,
+    mfa?: { tempToken: string; code: string }
+  ) => Promise<void>;
   bootstrapSession: (opts?: { trigger?: BootstrapTrigger }) => Promise<void>;
   /** P0-5 : recovery session chaude (foreground / 401) — single-flight via coordinateur. */
   recoverAuthWarm: (reason: string) => Promise<"recovered" | "keep_local" | "terminal" | "no_action">;
@@ -865,11 +869,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
     return setWarmAuthRecoveryHandler(recoverAuthWarm);
   }, [recoverAuthWarm]);
 
-  const loginAndBootstrap = ReactRuntime.useCallback(async (email: string, password: string) => {
+  const loginAndBootstrap = ReactRuntime.useCallback(async (
+    email: string,
+    password: string,
+    mfa?: { tempToken: string; code: string }
+  ) => {
     setError(null);
     setAutoBootstrapAllowedSync(true);
     try {
-      await login(email, password);
+      await login(email, password, mfa);
       await bootstrapSession({ trigger: "login_success" });
       if (isP0ValidateEnabled()) {
         await probeCredentialStatuses("after_login_success", {
@@ -878,6 +886,17 @@ export function SessionProvider({ children }: PropsWithChildren) {
         probeEvent("fresh_login_t0_complete");
       }
     } catch (e) {
+      const maybeMfa = e as { name?: string; code?: string; purpose?: string };
+      // Ne jamais persister / traiter 2fa_challenge ou mfa_enroll comme session.
+      if (
+        maybeMfa?.name === "MfaRequiredError" ||
+        maybeMfa?.code === "mfa_challenge_required" ||
+        maybeMfa?.code === "mfa_enroll_required" ||
+        maybeMfa?.purpose === "2fa_challenge" ||
+        maybeMfa?.purpose === "mfa_enroll"
+      ) {
+        throw e;
+      }
       const message = toUiErrorMessage(e, "Login failed");
       setError(message);
       throw e;
