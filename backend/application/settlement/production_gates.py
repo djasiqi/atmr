@@ -235,6 +235,13 @@ def require_new_cash_declaration(
             and sheet.get("real_collection") is not True
         ):
             return
+    # Préparation financière sur base jetable : écritures de caisse non activées
+    # produit (production_activation=False), distinctes de END_OF_TRIP_COLLECTION.
+    from domain.end_of_trip_settlement.production_prep_barrier import prep_open
+
+    if prep_open():
+        refuse_booking(booking, driver_id=int(driver_id), company_id=int(company_id))
+        return
     raise PrepRefusal("especes_non_autorisees", 409)
 
 

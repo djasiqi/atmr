@@ -183,6 +183,16 @@ def _cash_sheet(
             "register": "cash_v1",
             "local_ledger": True,
         }
+    if reason == "especes_non_autorisees" and prep:
+        # Prep ouverte sur base jetable : feuille de caisse visible, sans activation produit.
+        return {
+            "allowed": True,
+            "reason": None,
+            "real_collection": False,
+            "simulation": False,
+            "register": "cash_prep",
+            "production_prep": True,
+        }
     return {
         "allowed": False,
         "reason": reason,
