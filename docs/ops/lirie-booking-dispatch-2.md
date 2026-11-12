@@ -146,9 +146,10 @@ Niveaux de preuve explicites :
 | SHA | Message |
 |-----|---------|
 | `eca03ac4` | fix(booking-dispatch): missions chauffeur et réseau institution |
-| *(commit docs suivant)* | docs(ops): rapport LOT-BOOKING-DISPATCH-2 |
+| `f27b79da` | docs(ops): rapport LOT-BOOKING-DISPATCH-2 |
+| `3c64fac8` | docs(ops): renseigner le SHA final LOT-BOOKING-DISPATCH-2 |
 
-Tip après commit docs — **aucun push**.
+Tip : `3c64fac8` — **aucun push**.
 
 FIN-FACTURE / FIN-CAISSE / PAY-SAFERPAY : non touchés. Aucune migration Alembic.
 
