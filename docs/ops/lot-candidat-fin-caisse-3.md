@@ -131,7 +131,7 @@ Suites recipe `etape38` / certification sur `atmr_test` restent volontairement h
 ## K. Corrections et commits
 
 1. `7302568b` — fix(caisse): autoriser la declaration en preparation jetable  
-2. (suivant) — test(caisse): scenarios E2E FIN-CAISSE-3 et rapport  
+2. `b1d1a8b0` — test(caisse): scenarios E2E FIN-CAISSE-3 et rapport  
 
 Écritures observées sur `lirie_e2e_fin_caisse` après recettes :  
 `cash_collection` 245 · `cash_handover` 161 · `cash_reconciliation` 67.
