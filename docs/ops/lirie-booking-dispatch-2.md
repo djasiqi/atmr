@@ -147,9 +147,10 @@ Niveaux de preuve explicites :
 |-----|---------|
 | `eca03ac4` | fix(booking-dispatch): missions chauffeur et réseau institution |
 | `f27b79da` | docs(ops): rapport LOT-BOOKING-DISPATCH-2 |
-| `3c64fac8` | docs(ops): renseigner le SHA final LOT-BOOKING-DISPATCH-2 |
 
-Tip : `3c64fac8` — **aucun push**.
+Commits de tampon SHA éventuels ensuite sur la même branche.  
+Tip code+rapport : `f27b79da` (base fonctionnelle `eca03ac4`).
+HEAD branche : voir `git rev-parse HEAD` sur `candidate/lirie-booking-dispatch-20261112` — **aucun push**.
 
 FIN-FACTURE / FIN-CAISSE / PAY-SAFERPAY : non touchés. Aucune migration Alembic.
 
