@@ -6,6 +6,8 @@ import Login from './Login';
 import apiClient from '../../utils/apiClient';
 import { jwtDecode } from 'jwt-decode';
 import { setPendingActivationSession } from '../../utils/activationSessionStore';
+import { challengeTotp, setupTotp, verifyTotp } from '../../services/securityService';
+import { hasActiveSession } from '../../utils/webAuthSession';
 
 const mockHydrateFromLogin = jest.fn();
 const mockNavigate = jest.fn();
@@ -42,6 +44,12 @@ jest.mock('../../contexts/SessionBootstrapContext', () => ({
 }));
 jest.mock('../../services/companySocket', () => ({
   disconnectCompanySocket: jest.fn(),
+}));
+
+jest.mock('../../services/securityService', () => ({
+  challengeTotp: jest.fn(),
+  setupTotp: jest.fn(),
+  verifyTotp: jest.fn(),
 }));
 
 jest.mock('react-router-dom', () => ({
@@ -128,6 +136,124 @@ describe('Login Page', () => {
     });
     expect(mockHydrateFromLogin).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/app/dashboard/company/user-123', { replace: true });
+  });
+
+  it('affiche le challenge MFA sans ouvrir de session', async () => {
+    apiClient.post.mockResolvedValue({
+      status: 202,
+      data: {
+        mfa_required: true,
+        mfa_purpose: '2fa_challenge',
+        temp_token: 'temp-mfa',
+        user: { public_id: 'u1', role: 'client' },
+      },
+    });
+
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'test@test.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/entrez votre mot de passe/i), {
+      target: { value: 'password123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /se connecter/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/code à 6 chiffres/i)).toBeInTheDocument();
+    });
+    expect(mockHydrateFromLogin).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(hasActiveSession()).toBe(false);
+    expect(localStorage.getItem('temp_token')).toBeNull();
+    expect(sessionStorage.getItem('temp_token')).toBeNull();
+    const localDump = Object.keys(localStorage).map((k) => `${k}=${localStorage.getItem(k)}`).join('|');
+    const sessionDump = Object.keys(sessionStorage).map((k) => `${k}=${sessionStorage.getItem(k)}`).join('|');
+    expect(localDump).not.toContain('temp-mfa');
+    expect(sessionDump).not.toContain('temp-mfa');
+  });
+
+  it('démarre l’enrollment MFA et affiche le QR sans session', async () => {
+    apiClient.post.mockResolvedValue({
+      status: 202,
+      data: {
+        mfa_required: true,
+        mfa_purpose: 'mfa_enroll',
+        temp_token: 'temp-enroll',
+        user: { public_id: 'u2', role: 'company' },
+      },
+    });
+    setupTotp.mockResolvedValue({
+      data: {
+        qr_code_base64: 'data:image/png;base64,AAA',
+        secret_display: 'ABCD EFGH',
+      },
+    });
+
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'enroll@test.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/entrez votre mot de passe/i), {
+      target: { value: 'password123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /se connecter/i }));
+
+    await waitFor(() => {
+      expect(setupTotp).toHaveBeenCalledWith('temp-enroll');
+      expect(screen.getByAltText(/qr code de configuration 2fa/i)).toBeInTheDocument();
+      expect(screen.getByText(/clé secrète/i)).toBeInTheDocument();
+    });
+    expect(mockHydrateFromLogin).not.toHaveBeenCalled();
+    expect(hasActiveSession()).toBe(false);
+  });
+
+  it('valide le challenge MFA puis applique le succès login', async () => {
+    apiClient.post.mockResolvedValue({
+      status: 202,
+      data: {
+        mfa_required: true,
+        mfa_purpose: '2fa_challenge',
+        temp_token: 'temp-mfa',
+        user: { public_id: 'u3', role: 'company' },
+      },
+    });
+    challengeTotp.mockResolvedValue({
+      data: {
+        token: 'jwt-after-mfa',
+        user: { public_id: 'u3', role: 'company', first_name: 'A', last_name: 'B' },
+        target_env: 'app',
+        redirect_to: '/app/dashboard/company/u3',
+      },
+    });
+    jwtDecode.mockReturnValue({ sub: 'u3', role: 'company' });
+
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'mfa@test.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/entrez votre mot de passe/i), {
+      target: { value: 'password123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /se connecter/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/code à 6 chiffres/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/code à 6 chiffres/i), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /valider le code/i }));
+
+    await waitFor(() => {
+      expect(challengeTotp).toHaveBeenCalledWith('temp-mfa', '123456');
+      expect(mockHydrateFromLogin).toHaveBeenCalled();
+      expect(mockNavigate).toHaveBeenCalledWith('/app/dashboard/company/u3', { replace: true });
+    });
+    expect(verifyTotp).not.toHaveBeenCalled();
   });
 
   it('redirige vers ?next= après connexion (chemin interne)', async () => {

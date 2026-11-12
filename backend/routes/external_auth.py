@@ -31,6 +31,7 @@ from routes.auth import (
     _user_token_version,
     auth_ns,
 )
+from security.mfa_login import maybe_interrupt_login_for_mfa
 from security.refresh_token_service import store_refresh_token
 from services.apple_native_session import open_native_apple_session
 from services.external_auth import (
@@ -100,6 +101,10 @@ def _actor_id() -> int | None:
 
 def _issue(user: User):
     """Émet la session LIRIE existante, sans rôle ni habilitation nouveaux."""
+    mfa_interrupt = maybe_interrupt_login_for_mfa(user, remember_me=False)
+    if mfa_interrupt is not None:
+        return mfa_interrupt
+
     claims = {
         "role": user.role.value,
         "company_id": _resolve_company_id(user),
@@ -362,6 +367,9 @@ def _mobile_contract() -> bool:
 
 
 def _issue_for_client(user: User):
+    mfa_interrupt = maybe_interrupt_login_for_mfa(user, remember_me=False)
+    if mfa_interrupt is not None:
+        return mfa_interrupt
     if not _mobile_contract():
         return _issue(user)
     try:

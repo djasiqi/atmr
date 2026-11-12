@@ -167,6 +167,9 @@ describe("login contrat session durable P0", () => {
     mockWriteSessionEnvelope.mockResolvedValue({ status: "ok" });
     mockDeleteRefreshToken.mockResolvedValue({ status: "ok" });
     mockDeleteRecoveryCredential.mockResolvedValue({ status: "ok" });
+    Object.keys(mockCommonHeaders).forEach((key) => {
+      delete mockCommonHeaders[key];
+    });
   });
 
   it("n'envoie pas POST /auth/login si getStableDeviceId échoue", async () => {
@@ -313,5 +316,62 @@ describe("login contrat session durable P0", () => {
     expect(mockWriteRecoveryCredential).toHaveBeenCalled();
     expect(mockWriteSessionEnvelope).toHaveBeenCalled();
     expect(mockBumpAuthEpoch).toHaveBeenCalled();
+  });
+
+  it("202 MFA challenge → MfaRequiredError sans persistance session", async () => {
+    mockPost.mockResolvedValue({
+      status: 202,
+      data: {
+        mfa_required: true,
+        mfa_purpose: "2fa_challenge",
+        temp_token: "temp-mfa-token",
+        user: { public_id: "u1", role: "driver" },
+      },
+    });
+
+    const { login, MfaRequiredError, hasAuthToken } = require("./client") as typeof import("./client");
+    await expect(login("a@b.ch", "x")).rejects.toBeInstanceOf(MfaRequiredError);
+    expect(mockWriteRefreshToken).not.toHaveBeenCalled();
+    expect(mockWriteSessionEnvelope).not.toHaveBeenCalled();
+    expect(hasAuthToken()).toBe(false);
+  });
+
+  it("challengeTotp puis login MFA finalise la session", async () => {
+    mockPost
+      .mockResolvedValueOnce({
+        status: 202,
+        data: {
+          mfa_required: true,
+          mfa_purpose: "2fa_challenge",
+          temp_token: "temp-mfa-token",
+          user: { public_id: "u1", role: "driver" },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          access_token: "access",
+          refresh_token: "refresh",
+          recovery_credential: "recovery",
+          revocation_secret: "revocation",
+          session_id: "session-1",
+          refresh_generation: 1,
+          user: { public_id: "u1", role: "driver" },
+        },
+      });
+
+    const { login, MfaRequiredError } = require("./client") as typeof import("./client");
+    await expect(login("a@b.ch", "x")).rejects.toBeInstanceOf(MfaRequiredError);
+    await login("a@b.ch", "x", { tempToken: "temp-mfa-token", code: "123456" });
+    expect(mockPost).toHaveBeenNthCalledWith(
+      2,
+      "/auth/totp/challenge",
+      { temp_token: "temp-mfa-token", code: "123456" },
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "X-Device-ID": "stable-device-id",
+        }),
+      })
+    );
+    expect(mockWriteSessionEnvelope).toHaveBeenCalled();
   });
 });

@@ -22,6 +22,8 @@ import {
   hasStoredRefreshToken,
   canReplaceDeviceSession,
   replaceDeviceSessionOnLimit,
+  setupTotp,
+  verifyTotp,
 } from "../../src/core/api/client";
 import {
   authenticateWithBiometric,
@@ -91,6 +93,10 @@ export default function LoginScreen() {
   );
   const [resolutionToken, setResolutionToken] = ReactRuntime.useState(null as string | null);
   const [replacingSessionId, setReplacingSessionId] = ReactRuntime.useState(null as string | null);
+  const [mfaTempToken, setMfaTempToken] = ReactRuntime.useState(null as string | null);
+  const [mfaPurpose, setMfaPurpose] = ReactRuntime.useState(null as string | null);
+  const [mfaCode, setMfaCode] = ReactRuntime.useState("");
+  const [mfaSecret, setMfaSecret] = ReactRuntime.useState(null as string | null);
   const [preferencesLoaded, setPreferencesLoaded] = ReactRuntime.useState(false);
   const [biometricLoginAvailable, setBiometricLoginAvailable] = ReactRuntime.useState(false);
   const [biometricPending, setBiometricPending] = ReactRuntime.useState(false);
@@ -226,11 +232,86 @@ export default function LoginScreen() {
     }
     setSubmitting(true);
     try {
-      await login(email, password);
+      if (mfaTempToken) {
+        if (!mfaCode.trim()) {
+          setLocalError("Code de validation requis.");
+          return;
+        }
+        if (mfaPurpose === "mfa_enroll") {
+          const verified = await verifyTotp(mfaCode.trim(), mfaTempToken);
+          const nextToken = asString(verified.temp_token);
+          if (!nextToken) {
+            setLocalError("Enrollment incomplet : challenge manquant.");
+            return;
+          }
+          setMfaPurpose("2fa_challenge");
+          setMfaTempToken(nextToken);
+          setMfaCode("");
+          setMfaSecret(null);
+          setLocalError(
+            verified.recovery_codes?.length
+              ? "Conservez vos codes de secours, puis saisissez un code de votre application."
+              : "Saisissez un code de votre application."
+          );
+          return;
+        }
+        await login(email, password, { tempToken: mfaTempToken, code: mfaCode.trim() });
+        setMfaTempToken(null);
+        setMfaPurpose(null);
+        setMfaCode("");
+        setMfaSecret(null);
+      } else {
+        await login(email, password);
+      }
       await persistLoginRememberMe(email, password, rememberSession);
       await navigateAfterAuth();
     } catch (e) {
-      const typedError = (typeof e === "object" && e ? e : {}) as LoginApiError;
+      const typedError = (typeof e === "object" && e ? e : {}) as LoginApiError & {
+        name?: string;
+        tempToken?: string;
+        purpose?: string;
+        details?: Record<string, unknown>;
+      };
+      const mfaToken =
+        asString(typedError.tempToken) ||
+        asString(typedError.details?.temp_token);
+      const mfaNextPurpose =
+        asString(typedError.purpose) ||
+        asString(typedError.details?.mfa_purpose) ||
+        asString(typedError.code);
+      if (mfaToken || typedError.name === "MfaRequiredError" || /mfa_/.test(mfaNextPurpose)) {
+        const purpose =
+          mfaNextPurpose.includes("enroll")
+            ? "mfa_enroll"
+            : mfaNextPurpose.includes("challenge") || mfaNextPurpose === "2fa_challenge"
+              ? "2fa_challenge"
+              : mfaNextPurpose || "2fa_challenge";
+        if (mfaToken) {
+          setMfaTempToken(mfaToken);
+          setMfaPurpose(purpose);
+          setMfaCode("");
+          if (purpose === "mfa_enroll") {
+            try {
+              const setup = await setupTotp(mfaToken);
+              setMfaSecret(asString(setup.secret_display) || null);
+              setLocalError(
+                setup.secret_display
+                  ? `Scannez / saisissez la clé (${setup.secret_display}), puis entrez le code à 6 chiffres.`
+                  : "Activez la validation en deux étapes, puis saisissez le code à 6 chiffres."
+              );
+            } catch {
+              setMfaSecret(null);
+              setLocalError(
+                "Impossible de démarrer l'enrollment 2FA. Réessayez ou configurez-la sur le web."
+              );
+            }
+          } else {
+            setMfaSecret(null);
+            setLocalError("Saisissez le code de votre application d'authentification.");
+          }
+          return;
+        }
+      }
       const message = asString(typedError.message) || "Echec de connexion.";
       const reason = asString(typedError.reason).toLowerCase();
       const errorCode = asString(typedError.code);
@@ -250,13 +331,6 @@ export default function LoginScreen() {
           return;
         }
         setLocalError("Compte en attente d'activation. Vérifiez votre email et SMS.");
-        return;
-      }
-      if (/mfa|required|otp/i.test(message) || reason.includes("mfa")) {
-        router.push({
-          pathname: "/(public)/mfa",
-          params: { email: email.trim() },
-        } as any);
         return;
       }
       if (errorCode === "device_session_limit_reached") {
@@ -320,7 +394,11 @@ export default function LoginScreen() {
   };
 
   const submitDisabled =
-    submitting || !email.trim() || !password.trim() || updateGate.requiresUpdate;
+    submitting ||
+    !email.trim() ||
+    !password.trim() ||
+    Boolean(mfaTempToken && !mfaCode.trim()) ||
+    updateGate.requiresUpdate;
 
   return (
     <View style={styles.screen}>
@@ -465,6 +543,46 @@ export default function LoginScreen() {
             </View>
           </View>
 
+          {mfaTempToken ? (
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>
+                {mfaPurpose === "mfa_enroll"
+                  ? "Activation 2FA — code à 6 chiffres"
+                  : "Code de validation"}
+              </Text>
+              {mfaSecret ? (
+                <Text style={styles.fieldHint} accessibilityRole="text">
+                  Clé secrète : {mfaSecret}
+                </Text>
+              ) : null}
+              <TextInput
+                value={mfaCode}
+                onChangeText={(v: string) => setMfaCode(v.replace(/[^\d]/g, "").slice(0, 8))}
+                keyboardType="number-pad"
+                maxLength={8}
+                textContentType="oneTimeCode"
+                autoComplete="one-time-code"
+                placeholder="000000"
+                placeholderTextColor="#91A59D"
+                style={styles.fieldInput}
+                onSubmitEditing={() => void onSubmit()}
+              />
+              <Pressable
+                onPress={() => {
+                  setMfaTempToken(null);
+                  setMfaPurpose(null);
+                  setMfaCode("");
+                  setMfaSecret(null);
+                  setLocalError(null);
+                }}
+                hitSlop={8}
+                style={{ marginTop: 8 }}
+              >
+                <Text style={styles.forgotLink}>Annuler et revenir à la connexion</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           <AppSwitch
             value={rememberSession}
             onValueChange={(next: boolean) => {
@@ -598,7 +716,7 @@ export default function LoginScreen() {
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <AppText variant="label" style={styles.submitText}>
-                Se connecter
+                {mfaTempToken ? "Valider le code" : "Se connecter"}
               </AppText>
             )}
           </Pressable>
@@ -732,6 +850,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: UI_TEXT,
     marginBottom: 8,
+  },
+  fieldHint: {
+    color: UI_MUTED,
+    fontSize: FONT_SIZE.px13,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  forgotLink: {
+    color: BRAND,
+    fontSize: FONT_SIZE.px13,
+    fontWeight: "600",
   },
   fieldInput: {
     minHeight: 50,

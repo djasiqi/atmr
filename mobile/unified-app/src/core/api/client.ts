@@ -372,6 +372,27 @@ export class AuthContractError extends Error {
   }
 }
 
+export class MfaRequiredError extends AuthContractError {
+  readonly tempToken: string;
+  readonly purpose: string;
+
+  constructor(tempToken: string, purpose: string, message: string) {
+    super(
+      purpose === "mfa_enroll" ? "mfa_enroll_required" : "mfa_challenge_required",
+      message
+    );
+    this.name = "MfaRequiredError";
+    this.tempToken = tempToken;
+    this.purpose = purpose;
+  }
+}
+
+const MFA_RESTRICTED_PURPOSES = new Set(["2fa_challenge", "mfa_enroll"]);
+
+function isRestrictedMfaPurpose(purpose: unknown): boolean {
+  return typeof purpose === "string" && MFA_RESTRICTED_PURPOSES.has(purpose);
+}
+
 function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -1116,6 +1137,17 @@ function buildNoHttpResponseHint(requestUrl: string, error: AxiosError): string 
 }
 
 function toApiError(error: unknown): ApiCallError {
+  if (error instanceof MfaRequiredError) {
+    return {
+      status: 202,
+      code: error.code,
+      message: error.message,
+      details: {
+        temp_token: error.tempToken,
+        mfa_purpose: error.purpose,
+      },
+    };
+  }
   if (error instanceof AuthContractError) {
     return {
       status: null,
@@ -1446,7 +1478,66 @@ export async function fetchBootstrap(activeContextId?: string | null): Promise<B
   }
 }
 
-export async function login(email: string, password: string): Promise<void> {
+export async function setupTotp(tempToken?: string): Promise<{
+  qr_code_base64?: string;
+  secret_display?: string;
+}> {
+  const { data } = await apiClient.post(
+    "/auth/totp/setup",
+    tempToken ? { temp_token: tempToken } : {},
+    tempToken
+      ? { headers: { Authorization: `Bearer ${tempToken}` } }
+      : undefined
+  );
+  const payload = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  return {
+    qr_code_base64:
+      typeof payload.qr_code_base64 === "string" ? payload.qr_code_base64 : undefined,
+    secret_display:
+      typeof payload.secret_display === "string" ? payload.secret_display : undefined,
+  };
+}
+
+export async function verifyTotp(
+  code: string,
+  tempToken?: string
+): Promise<{ temp_token?: string; recovery_codes?: string[] }> {
+  const { data } = await apiClient.post(
+    "/auth/totp/verify",
+    tempToken ? { code, temp_token: tempToken } : { code },
+    tempToken
+      ? { headers: { Authorization: `Bearer ${tempToken}` } }
+      : undefined
+  );
+  const payload = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const codes = Array.isArray(payload.recovery_codes)
+    ? payload.recovery_codes.filter((item): item is string => typeof item === "string")
+    : undefined;
+  return {
+    temp_token: typeof payload.temp_token === "string" ? payload.temp_token : undefined,
+    recovery_codes: codes,
+  };
+}
+
+export async function challengeTotp(tempToken: string, code: string): Promise<unknown> {
+  const { data } = await apiClient.post(
+    "/auth/totp/challenge",
+    { temp_token: tempToken, code },
+    {
+      headers: {
+        ...(await buildRequiredAuthDeviceHeaders()),
+        "X-Auth-Contract-Version": "mobile-device-session-v1",
+      },
+    }
+  );
+  return data;
+}
+
+export async function login(
+  email: string,
+  password: string,
+  mfa?: { tempToken: string; code: string }
+): Promise<void> {
   if (useMockBootstrap) return;
   try {
     const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
@@ -1472,19 +1563,53 @@ export async function login(email: string, password: string): Promise<void> {
     }
 
     const deviceHeaders = await buildRequiredAuthDeviceHeaders();
-    const { data } = await apiClient.post(
-      "/auth/login",
-      {
-        email: email.trim(),
-        password,
-      },
-      {
-        headers: {
-          ...deviceHeaders,
-          "X-Auth-Contract-Version": "mobile-device-session-v1",
-        },
+    const { data } = mfa
+      ? await apiClient.post(
+          "/auth/totp/challenge",
+          {
+            temp_token: mfa.tempToken,
+            code: mfa.code,
+          },
+          {
+            headers: {
+              ...deviceHeaders,
+              "X-Auth-Contract-Version": "mobile-device-session-v1",
+            },
+          }
+        )
+      : await apiClient.post(
+          "/auth/login",
+          {
+            email: email.trim(),
+            password,
+          },
+          {
+            headers: {
+              ...deviceHeaders,
+              "X-Auth-Contract-Version": "mobile-device-session-v1",
+            },
+          }
+        );
+    const responsePreview =
+      data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+    if (!mfa && (responsePreview.mfa_required || isRestrictedMfaPurpose(responsePreview.mfa_purpose))) {
+      const purpose = String(responsePreview.mfa_purpose || "2fa_challenge");
+      const tempToken = String(responsePreview.temp_token || "");
+      if (!tempToken) {
+        throw new AuthContractError(
+          "AUTH_LOGIN_CONTRACT_INCOMPLETE",
+          "Le serveur n'a pas retourné le jeton de validation en deux étapes."
+        );
       }
-    );
+      // Ne jamais traiter 202 MFA comme un login OK / session métier.
+      throw new MfaRequiredError(
+        tempToken,
+        purpose,
+        purpose === "mfa_enroll"
+          ? "Activez la validation en deux étapes pour ce compte."
+          : "Code de validation en deux étapes requis."
+      );
+    }
     const token = extractToken(data);
     const refreshToken = extractRefreshToken(data);
     const responseObj = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
@@ -1494,6 +1619,18 @@ export async function login(email: string, password: string): Promise<void> {
       responseObj.user && typeof responseObj.user === "object"
         ? (responseObj.user as Record<string, unknown>)
         : {};
+
+    const accessClaimsPreview = token ? decodeJwtClaims(token) : null;
+    if (
+      isRestrictedMfaPurpose(accessClaimsPreview?.purpose) ||
+      isRestrictedMfaPurpose(responseObj.mfa_purpose) ||
+      responseObj.mfa_required
+    ) {
+      throw new AuthContractError(
+        "AUTH_LOGIN_CONTRACT_INCOMPLETE",
+        "Jeton MFA temporaire refusé comme session."
+      );
+    }
 
     // Fail-closed : toutes les écritures doivent réussir avant de publier l'access
     if (!refreshToken || typeof recovery !== "string" || !recovery) {
@@ -1642,6 +1779,9 @@ export async function login(email: string, password: string): Promise<void> {
       void schedulePendingSessionConfirmation(sessionId, deviceId);
     }
   } catch (error) {
+    if (error instanceof MfaRequiredError) {
+      throw error;
+    }
     // Best-effort : flush pending créés lors d'un échec d'écriture login.
     try {
       const recoveryMod = require("../auth/authRecoveryCoordinator") as typeof import("../auth/authRecoveryCoordinator");

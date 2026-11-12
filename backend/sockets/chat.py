@@ -989,6 +989,11 @@ def init_chat_socket(socketio: SocketIO, flask_app: Any | None = None) -> None:
                 if decoded is None:
                     raise last_decode_error or Exception("Token decode error")
 
+                from security.mfa_login import is_restricted_mfa_jwt
+
+                if is_restricted_mfa_jwt(decoded):
+                    raise Exception("Token MFA restreint")
+
                 from security.mobile_session_guard import (
                     is_mobile_jwt_revoked_by_session,
                 )
