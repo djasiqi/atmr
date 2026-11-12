@@ -234,8 +234,14 @@ class RequestOffer(db.Model):
         request = self.transport_request
         patient = request.patient
         next_confirmed = get_effective_dispatch_time(request)
-        price_estimate = estimate_offer_price(self)
-        return {
+        from application.institutions.network_offer_disclosure import (
+            apply_pending_network_disclosure,
+            precise_itinerary_allowed,
+        )
+
+        restricted = not precise_itinerary_allowed(self)
+        price_estimate = None if restricted else estimate_offer_price(self)
+        payload = {
             "id": self.id,
             "status": self.status,
             "mode": self.mode,
@@ -305,6 +311,9 @@ class RequestOffer(db.Model):
                 "billing_intent": request.billing_intent,
             },
         }
+        if restricted:
+            apply_pending_network_disclosure(payload["transport_request"], request)
+        return payload
 
     def to_dict(self) -> dict[str, Any]:
         """Alias pour serialize."""

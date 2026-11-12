@@ -224,10 +224,12 @@ def init_namespaces(app):
     import routes.company_settlement_settings as _company_settlement_settings
     import routes.company_settlement_simulation as _company_settlement_simulation
     import routes.company_settlement_production as _company_settlement_production
+    import routes.company_transport_capabilities as _company_transport_capabilities
 
     _ = _company_settlement_settings
     _ = _company_settlement_simulation
     _ = _company_settlement_production
+    _ = _company_transport_capabilities
     from routes.portal_receivables import portal_receivables_ns
     from routes.client_portal_receivables import client_portal_receivables_ns
     from routes.contact import contact_ns

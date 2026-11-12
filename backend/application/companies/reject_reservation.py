@@ -33,7 +33,8 @@ class RejectReservationUseCase:
     def execute(
         self, booking: _BookingLike, *, company_id: int
     ) -> RejectReservationResult:
-        if _status_value(getattr(booking, "status", None)) != "pending":
+        status = _status_value(getattr(booking, "status", None))
+        if status.lower() != "pending":
             return RejectReservationResult(
                 ok=False,
                 error={"error": "Reservation not found or cannot be rejected"},

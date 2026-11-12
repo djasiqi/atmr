@@ -169,6 +169,18 @@ class AcceptReservationUseCase:
                 status_code=400,
             )
 
+        # Isolation : une course déjà rattachée à une autre entreprise n'est pas
+        # acceptable silencieusement par un tiers.
+        existing_company_id = getattr(booking, "company_id", None)
+        if existing_company_id is not None and int(existing_company_id) != int(
+            company_id
+        ):
+            return AcceptReservationResult(
+                ok=False,
+                error={"error": "Reservation belongs to another company"},
+                status_code=403,
+            )
+
         # --- PORTAL v2 : offre en attente de confirmation client ---
         if (
             client is not None
