@@ -324,6 +324,80 @@ def _csrf_strict_enabled() -> bool:
     return _is_production()
 
 
+# Écritures financières sous préfixes historiquement exempts (driver / companies).
+# Les routes opérationnelles (GPS, messages) restent exemptes.
+_DRIVER_FINANCIAL_MARKERS = (
+    "/cash-collection",
+    "/cash-receipt",
+    "/patient-billing-dossier",
+    "/settlement-simulation-case",
+)
+_COMPANY_FINANCIAL_MARKERS = (
+    "/cash-register/",
+    "/confirm-handover",
+    "/patient-billing-",
+    "/settlement-settings",
+    "/settlement-simulations",
+)
+
+
+def authorization_has_bearer(authorization: str | None = None) -> bool:
+    """AUTH-PRO A1 : présence d'un en-tête Authorization Bearer."""
+    raw = (
+        authorization
+        if authorization is not None
+        else (request.headers.get("Authorization") if request else None)
+    )
+    return (raw or "").strip().lower().startswith("bearer ")
+
+
+def is_financial_settlement_mutation_path(path: str | None) -> bool:
+    """Chemins mutatifs d'encaissement / caisse / facturation patient."""
+    normalized = path or ""
+    if normalized.startswith("/api/v1/driver/"):
+        return any(marker in normalized for marker in _DRIVER_FINANCIAL_MARKERS)
+    if normalized.startswith("/api/v1/companies/"):
+        return any(marker in normalized for marker in _COMPANY_FINANCIAL_MARKERS)
+    return False
+
+
+def financial_cookie_csrf_required(
+    path: str | None = None, *, authorization: str | None = None
+) -> bool:
+    """CSRF obligatoire pour une écriture financière authentifiée par cookie.
+
+    Bearer mobile : pas de CSRF cookie (contrat A1 headers-only).
+    Cookie web sans Bearer : CSRF exigé même si le préfixe driver/companies
+    reste exempt pour les routes historiques.
+    """
+    if authorization_has_bearer(authorization):
+        return False
+    return is_financial_settlement_mutation_path(
+        path if path is not None else (request.path if request else "")
+    )
+
+
+def get_csrf_token_for_financial_request() -> str | None:
+    """Jeton CSRF pour écritures financières cookie.
+
+    N'accepte pas le seul cookie ``csrf_token`` : un attaquant CSRF enverrait
+    aussi les cookies. Header ``X-CSRF-Token`` ou corps JSON explicite.
+    """
+    token = request.headers.get(CSRF_HEADER_NAME) or request.headers.get("X-Csrf-Token")
+    if token:
+        return token
+    if request.is_json:
+        try:
+            data = request.get_json(silent=True)
+            if data and isinstance(data, dict):
+                body_token = data.get("csrf_token") or data.get("csrfToken")
+                if body_token:
+                    return body_token
+        except Exception:
+            pass
+    return None
+
+
 def setup_csrf_protection(app: Any) -> None:
     """Configure la protection CSRF globale pour l'application.
 
@@ -441,11 +515,37 @@ def setup_csrf_protection(app: Any) -> None:
         if request.path.startswith(csrf_exempt_prefixes):
             should_check = False
 
+        # FIN-CAISSE-2 : écritures financières cookie malgré exemption préfixe.
+        # Ne s'applique que si CSRF globalement actif (hors TESTING / CSRF_ENABLED).
+        financial_cookie = False
+        try:
+            from flask import current_app as _app
+
+            csrf_runtime_on = (
+                bool(_app)
+                and bool(_app.config.get("CSRF_ENABLED", True))
+                and bool(_app.config.get("WTF_CSRF_ENABLED", True))
+                and not bool(_app.config.get("TESTING", False))
+            )
+        except Exception:
+            csrf_runtime_on = True
+        if (
+            csrf_runtime_on
+            and request.method in {"POST", "PUT", "PATCH", "DELETE"}
+            and financial_cookie_csrf_required(request.path)
+        ):
+            should_check = True
+            financial_cookie = True
+
         if not should_check:
             return None
 
-        # Récupérer le token depuis la requête
-        token = get_csrf_token_from_request()
+        # Cookie seul insuffisant pour les écritures financières web.
+        token = (
+            get_csrf_token_for_financial_request()
+            if financial_cookie
+            else get_csrf_token_from_request()
+        )
         if not token:
             logger.warning(
                 "[CSRF] Token manquant pour %s %s",

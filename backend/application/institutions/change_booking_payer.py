@@ -134,6 +134,19 @@ def change_booking_payer(
             status_code=409,
         )
 
+    from application.billing.settlement_payer_lock import (
+        ordinary_payer_change_message,
+        refuse_ordinary_payer_change,
+    )
+
+    settlement_reason = refuse_ordinary_payer_change(int(booking.id))
+    if settlement_reason is not None:
+        return ChangeBookingPayerResult(
+            ok=False,
+            error=ordinary_payer_change_message(settlement_reason),
+            status_code=409,
+        )
+
     if transport_request is None:
         resolve_fn = getattr(booking, "_resolve_source_transport_request", None)
         transport_request = resolve_fn() if callable(resolve_fn) else None

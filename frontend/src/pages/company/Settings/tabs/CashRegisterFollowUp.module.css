@@ -1,0 +1,79 @@
+.wrap {
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.actions,
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.list li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.actions button,
+.list button {
+  min-height: 48px;
+  flex: 1 1 140px;
+  font-size: 16px;
+}
+
+.amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 4px 0;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0;
+}
+
+.banner {
+  font-weight: 700;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  min-width: 8rem;
+  font-size: 14px;
+}
+
+.scroll,
+.wrap pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.wrap pre {
+  white-space: pre-wrap;
+}
+
+.wrap > button {
+  min-height: 48px;
+}
+
+@media (max-width: 412px) {
+  .amount {
+    font-size: 1.25rem;
+  }
+}

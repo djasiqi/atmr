@@ -1,39 +1,38 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useActiveMissionScreenTracking } from "../../../../src/core/notifications/useActiveScreenTracking";
 import { DriverContextGuard, PermissionGuard } from "../../../../src/core/guards";
 import {
-  useDriverMissionDetailQuery,
   useDriverMissionDetailOpenResync,
-  useDriverStatusTransition,
+  useDriverMissionDetailQuery,
   useDynamicEtaQuery,
 } from "../../../../src/features/driver/hooks";
-import { getDriverStatusUx } from "../../../../src/features/driver/statusDictionary";
-import { DriverMissionStatus, type DriverTransitionStatus } from "../../../../src/features/driver/types";
+import { driverCoursePickupIsLate } from "../../../../src/features/driver/domain/driverCourseLateness";
 import {
   AppCard,
   AppSpinner,
   AppText,
   brandSurfaceSoft,
   Screen,
+  useAppBottomInsets,
   useAppViewport,
 } from "../../../../src/design/responsive";
 import { MissionMap } from "../../../../src/features/driver/components/MissionMap";
-import { ConfirmCompletionModal } from "../../../../src/features/driver/components/ConfirmCompletionModal";
-import { CancelJustificationModal } from "../../../../src/features/driver/components/CancelJustificationModal";
-import { getMissionClientDisplayName } from "../../../../src/features/driver/domain/missionDisplay";
-import { StatusSwitch } from "../../../../src/features/driver/components/StatusSwitch";
 import { DriverStateBanners } from "../../../../src/features/driver/components/DriverStateBanners";
+import { MissionConsultationSheet } from "../../../../src/features/driver/components/MissionConsultationSheet";
 import { useMissionLayout } from "../../../../src/features/driver/hooks/useMissionLayout";
-import { useDriverFloatingTabScrollPadding } from "../../../../src/features/driver/navigation/DriverFloatingTabBar";
 import { FONT_SIZE } from "../../../../src/design/responsive/typographyTokens";
-import { useMissionLiveTrackingGuard } from "../../../../src/features/driver/hooks/useMissionLiveTrackingGuard";
-import { requiresLiveTrackingPermission } from "../../../../src/features/driver/services/missionLiveTrackingEligibility";
+import { ABSENT_TIME } from "../../../../src/features/driver/domain/missionConsultation";
+
+/**
+ * Fiche de consultation. Aucune transition et aucune écriture financière.
+ * L'exécution reste sur le Dashboard.
+ */
 export default function DriverMissionDetailScreen() {
   const router = useRouter();
   const { width } = useAppViewport();
-  const scrollPad = useDriverFloatingTabScrollPadding();
+  const appBottom = useAppBottomInsets();
   const isCompactMobile = width < 380;
   const { missionId } = useLocalSearchParams<{ missionId: string }>();
   const missionIdNumber = Number(missionId);
@@ -45,41 +44,13 @@ export default function DriverMissionDetailScreen() {
   const etaQuery = useDynamicEtaQuery(Number.isFinite(missionIdNumber) ? missionIdNumber : null, {
     missionStatus: mission?.status ?? null,
   });
-  const transition = useDriverStatusTransition();
-  const liveTrackingGuard = useMissionLiveTrackingGuard();
-
-  const handleMissionTransition = (nextStatus: DriverTransitionStatus) => {
-    if (!mission?.id) return;
-    if (nextStatus === "COMPLETED") {
-      setConfirmCompletionOpen(true);
-      return;
-    }
-    if (nextStatus === "CANCELLED") {
-      setCancelOpen(true);
-      return;
-    }
-    const proceed = () => {
-      transition.mutate({ missionId: mission.id, targetStatus: nextStatus });
-    };
-    if (requiresLiveTrackingPermission(nextStatus)) {
-      liveTrackingGuard.guardTransition({
-        missionId: mission.id,
-        target: nextStatus,
-        onProceed: proceed,
-      });
-      return;
-    }
-    proceed();
-  };
-  // NB: le tracking GPS est piloté au niveau du `_layout.tsx` driver
-  // via `DriverTrackingHost` pour qu'il reste actif quel que soit
-  // l'écran ouvert. Pas besoin de le re-déclencher ici.
   useDriverMissionDetailOpenResync(Number.isFinite(missionIdNumber) ? missionIdNumber : null);
 
-  const statusUx = useMemo(() => getDriverStatusUx(mission?.status as string), [mission?.status]);
+  const missionLate = useMemo(
+    () => (mission ? driverCoursePickupIsLate(mission, Date.now()) : false),
+    [mission]
+  );
   const missionLayout = useMissionLayout();
-  const [confirmCompletionOpen, setConfirmCompletionOpen] = useState(false);
-  const [cancelOpen, setCancelOpen] = useState(false);
   const invalidMissionId = !Number.isFinite(missionIdNumber);
   const missionError = missionQuery.error as { status?: number; code?: string; message?: string } | undefined;
   const missionReassigned =
@@ -87,15 +58,23 @@ export default function DriverMissionDetailScreen() {
     (missionError?.status === 403 || missionError?.code === "BOOKING_ASSIGNED_TO_OTHER_DRIVER");
   const missionNotFound = missionQuery.isError && missionError?.status === 404;
   const missionUnavailable = invalidMissionId || missionNotFound || missionReassigned;
+  const etaMinutes = etaQuery.data?.eta_minutes;
+  const etaLabel =
+    typeof etaMinutes === "number" && Number.isFinite(etaMinutes)
+      ? `${etaMinutes} min`
+      : ABSENT_TIME;
 
   return (
     <DriverContextGuard>
-      <PermissionGuard permission="mission:update_status">
+      <PermissionGuard permission="mission:read">
         <Screen
           scroll
           backgroundColor={brandSurfaceSoft}
           withHorizontalPadding={false}
-          extraScrollBottomPadding={scrollPad}
+          automaticallyAdjustKeyboardInsets
+          extraScrollBottomPadding={
+            appBottom.hasFloatingNavigation ? appBottom.navigationClearance : 0
+          }
           contentContainerStyle={[
             styles.page,
             {
@@ -105,99 +84,57 @@ export default function DriverMissionDetailScreen() {
           ]}
         >
           <View style={[styles.content, { width: missionLayout.contentWidth }]}>
-          <AppText variant="sectionTitle" style={isCompactMobile ? styles.titleCompact : undefined}>Mission detail</AppText>
-          <DriverStateBanners />
-          {missionUnavailable ? (
-            <AppCard style={[styles.detailsCard, isCompactMobile && styles.detailsCardCompact]}>
-              <AppText variant="label">Mission indisponible</AppText>
-              <AppText variant="bodyMuted">
-                {invalidMissionId
-                  ? "Identifiant mission invalide."
-                  : missionReassigned
-                    ? "Ce transport ne vous est plus assigné."
-                    : "Cette mission n'est plus accessible (annulee, terminee ou reattribuee)."}
-              </AppText>
-              <Pressable
-                style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-                onPress={() => router.replace("/(app)/(driver)/missions")}
-              >
-                <AppText variant="label" style={styles.backButtonText}>
-                  Retour aux missions
-                </AppText>
-              </Pressable>
-            </AppCard>
-          ) : null}
-          {!missionUnavailable && missionQuery.isLoading ? <AppSpinner size="small" /> : null}
-          {!missionUnavailable && missionQuery.isError ? (
-            <AppText variant="error">
-              Impossible de charger le detail mission: {(missionQuery.error as Error)?.message ?? "Erreur"}
+            <AppText variant="sectionTitle" style={isCompactMobile ? styles.titleCompact : undefined}>
+              Détails de mission
             </AppText>
-          ) : null}
-          {!missionUnavailable && mission ? (
-            <AppCard style={[styles.detailsCard, isCompactMobile && styles.detailsCardCompact]}>
-              <AppText variant="label">Mission #{mission.id}</AppText>
-              <AppText variant="body">Statut: {statusUx.label}</AppText>
-              <AppText variant="body" style={styles.routeLine}>
-                {(mission.pickup_location as string | undefined) ?? "Depart"}
-                {" -> "}
-                {(mission.dropoff_location as string | undefined) ?? "Arrivee"}
+            <DriverStateBanners />
+            {missionUnavailable ? (
+              <AppCard style={styles.detailsCard}>
+                <AppText variant="label">Mission indisponible</AppText>
+                <AppText variant="bodyMuted">
+                  {invalidMissionId
+                    ? "Identifiant mission invalide."
+                    : missionReassigned
+                      ? "Ce transport ne vous est plus assigné."
+                      : "Cette mission n'est plus accessible."}
+                </AppText>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Retour aux missions"
+                  style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+                  onPress={() => router.replace("/(app)/(driver)/missions")}
+                >
+                  <AppText variant="label" style={styles.backButtonText}>
+                    Retour aux missions
+                  </AppText>
+                </Pressable>
+              </AppCard>
+            ) : null}
+            {!missionUnavailable && missionQuery.isLoading ? <AppSpinner size="small" /> : null}
+            {!missionUnavailable && missionQuery.isError ? (
+              <AppText variant="error">
+                {"Impossible de charger le détail de la mission. Aucune modification n'a été envoyée."}
               </AppText>
-              <AppText variant="body">
-                Planifie: {(mission.scheduled_time as string | undefined) ?? "N/A"}
-              </AppText>
-              <AppText variant="body">
-                ETA dynamique:{" "}
-                {etaQuery.data?.eta_minutes != null ? `${etaQuery.data.eta_minutes} min` : "indisponible"}
-              </AppText>
-            </AppCard>
-          ) : null}
-
-          {!missionUnavailable && mission ? (
-            <View style={styles.mapWrap}>
-              <MissionMap
+            ) : null}
+            {!missionUnavailable && mission ? (
+              <MissionConsultationSheet
                 mission={mission}
-                height={missionLayout.mapHeight}
-                etaMinutes={etaQuery.data?.eta_minutes ?? null}
+                etaLabel={etaLabel}
+                stacked={isCompactMobile}
+                late={missionLate}
+                map={
+                  <View style={styles.mapWrap}>
+                    <MissionMap
+                      mission={mission}
+                      height={missionLayout.mapHeight}
+                      etaMinutes={etaQuery.data?.eta_minutes ?? null}
+                    />
+                  </View>
+                }
               />
-            </View>
-          ) : null}
-
-          {!missionUnavailable && mission ? (
-            <StatusSwitch
-              mode="mission"
-              missionStatus={mission.status as DriverMissionStatus}
-              pending={transition.isPending}
-              onTransition={handleMissionTransition}
-            />
-          ) : null}
-
-          {!missionUnavailable && transition.isPending ? (
-            <AppText variant="bodyMuted">Transition en cours...</AppText>
-          ) : null}
+            ) : null}
           </View>
         </Screen>
-        <ConfirmCompletionModal
-          visible={confirmCompletionOpen}
-          missionId={mission?.id ?? null}
-          clientLabel={mission ? getMissionClientDisplayName(mission) : null}
-          pending={transition.isPending}
-          onCancel={() => setConfirmCompletionOpen(false)}
-          onConfirm={() => {
-            if (!mission?.id) return;
-            transition.mutate({ missionId: mission.id, targetStatus: "COMPLETED" });
-            setConfirmCompletionOpen(false);
-          }}
-        />
-        <CancelJustificationModal
-          visible={cancelOpen}
-          pending={transition.isPending}
-          onCancel={() => setCancelOpen(false)}
-          onConfirm={(reason) => {
-            if (!mission?.id) return;
-            transition.mutate({ missionId: mission.id, targetStatus: "CANCELLED", reason });
-            setCancelOpen(false);
-          }}
-        />
       </PermissionGuard>
     </DriverContextGuard>
   );
@@ -225,21 +162,14 @@ const styles = StyleSheet.create({
   detailsCard: {
     gap: 6,
   },
-  detailsCardCompact: {
-    padding: 12,
-    gap: 4,
-  },
-  routeLine: {
-    lineHeight: 20,
-  },
   mapWrap: {
     borderRadius: 12,
     overflow: "hidden",
   },
   backButton: {
     marginTop: 8,
-    minHeight: 40,
-    borderRadius: 10,
+    minHeight: 48,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(30, 58, 138, 0.28)",
     backgroundColor: "rgba(37, 99, 235, 0.08)",
@@ -255,4 +185,3 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
-

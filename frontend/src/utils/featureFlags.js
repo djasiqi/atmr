@@ -9,6 +9,7 @@ const toBool = (value, fallback = false) => {
 const envMap = {
   FF_PRICING_WIZARD_V1: process.env.REACT_APP_FF_PRICING_WIZARD_V1,
   FF_ADMIN_ZONESETS_READONLY: process.env.REACT_APP_FF_ADMIN_ZONESETS_READONLY,
+  FF_COMPANY_SETTLEMENT_SETTINGS: process.env.REACT_APP_FF_COMPANY_SETTLEMENT_SETTINGS,
 };
 
 export const isFeatureEnabled = (flagKey, fallback = true) => {

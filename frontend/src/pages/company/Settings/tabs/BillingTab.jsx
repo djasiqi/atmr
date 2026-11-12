@@ -27,6 +27,7 @@ import {
   publishPortalCancellationPolicyFromBilling,
 } from '../../../../services/companyService';
 import { isFeatureEnabled } from '../../../../utils/featureFlags';
+import CompanySettlementPreferences from './CompanySettlementPreferences';
 import EmailConfigSection from './EmailConfigSection';
 import CancellationPolicyEditor from './components/CancellationPolicyEditor';
 import ZoneSetReadonlyMap from './components/ZoneSetReadonlyMap';
@@ -266,6 +267,10 @@ const SectionCard = ({ icon: Icon, title, hint, expanded, onToggle, children }) 
 const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
   const pricingWizardEnabled = isFeatureEnabled('FF_PRICING_WIZARD_V1', true);
   const pricingZoneSetsEnabled = isFeatureEnabled('FF_ADMIN_ZONESETS_READONLY', true);
+  const settlementPreferencesEnabled = isFeatureEnabled(
+    'FF_COMPANY_SETTLEMENT_SETTINGS',
+    false
+  );
   const location = useLocation();
   const [form, setForm] = useState({ ...BILLING_DEFAULTS });
   const [pricingRules, setPricingRules] = useState({
@@ -749,6 +754,9 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
     <div className={`${styles.settingsForm} ${styles.billingFormBlock}`}>
       {message && <div className={styles.success}>{message}</div>}
       {error && <div className={styles.error}>{error}</div>}
+      {settlementPreferencesEnabled && (
+        <CompanySettlementPreferences companyId={companyId} />
+      )}
 
       <div className={styles.billingGrid}>
         {/* ═══ Colonne gauche: Finances ═══ */}

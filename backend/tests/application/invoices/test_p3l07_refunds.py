@@ -179,7 +179,6 @@ def _credit(client, world, amount, key):
     )
 
 
-@pytest.mark.skip(reason="FIN-CAISSE hors lot FIN-FACTURE-1")
 def test_especes_non_imputees_remboursement_partiel_et_total(client, db, uploads_tmp):
     world = _facture(
         db,
@@ -249,7 +248,6 @@ def test_especes_non_imputees_remboursement_partiel_et_total(client, db, uploads
     )
 
 
-@pytest.mark.skip(reason="FIN-CAISSE hors lot FIN-FACTURE-1")
 def test_correction_et_remboursement_se_distinguent(client, db, uploads_tmp):
     from application.settlement.cash_ledger import _operation_lines
 
@@ -799,9 +797,16 @@ def test_instruction_sans_remise_ne_consomme_pas_le_credit(client, db, uploads_t
     )
 
 
-@pytest.mark.skip(reason="FIN-CAISSE hors lot FIN-FACTURE-1")
-def test_remise_ne_touche_ni_creance_ni_paiement(db, uploads_tmp):
+def test_remise_ne_touche_ni_creance_ni_paiement(db, uploads_tmp, monkeypatch):
     from application.settlement.cash_ledger import declare_handover
+
+    # La remise exige la préparation financière. atmr_test n'est pas une base
+    # de recette autorisée : on ouvre seulement le verrou pour ce contrôle.
+    monkeypatch.setenv("SETTLEMENT_PRODUCTION_PREP", "1")
+    monkeypatch.setattr(
+        "application.settlement.production_gates.prep_open",
+        lambda **_kwargs: True,
+    )
 
     world = _facture(
         db,
