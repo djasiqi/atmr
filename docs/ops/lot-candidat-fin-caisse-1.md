@@ -174,11 +174,11 @@ Company `/api/v1/companies/` : hors CSRF_STRICT encore largement exempt (dette p
 
 (créés uniquement sur `candidate/lirie-fin-caisse-20261112`, sans push)
 
-1. Noyau règlement / journal / domaine / recipe  
-2. Intégration Chauffeur (routes driver + crochets acceptation / payeur + mobile)  
-3. Rapprochement Entreprise (routes company + wiring `routes_api`)  
-4. Interfaces web  
-5. Tests, parité stage14, rapport ops  
+1. `76e587ec` — feat(caisse): noyau reglement et journal d'especes  
+2. `8cfe95ab` — feat(caisse): integration chauffeur et verrous payeur  
+3. `cf8c980a` — feat(caisse): rapprochement et routes entreprise  
+4. `cfaad826` — feat(caisse): interfaces entreprise et suivi de caisse  
+5. `debf5eed` — test(caisse): suites reglement et rapport FIN-CAISSE-1  
 
 ---
 
