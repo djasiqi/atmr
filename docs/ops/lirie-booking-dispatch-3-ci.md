@@ -16,8 +16,9 @@ Publication GitHub et validation CI finale de BOOKING-DISPATCH.
 |---------|--------|
 | Branche | `candidate/lirie-booking-dispatch-20261112` |
 | Base stack | `candidate/lirie-notif-ios-p0-20261112` (PR #105, tip `7a54ad39`) |
-| SHA CI GREEN (code + ack) | `676d09b5` (`676d09b5262e919815c53d73625f04493555d13d`) |
-| SHA final (HEAD PR #106) | `aec4196b` (`aec4196bb29629f0c27845a6c232360128b294b4`) |
+| SHA CI GREEN (code + ack) | `676d09b5` |
+| SHA docs rapport | `aec4196b` |
+| SHA final (HEAD PR #106) | tip branche après alignement docs (preuve CI GREEN confirmée sur `2dc22275`) |
 
 Préflight : worktree propre hors commit ack ; 7 commits BOOKING depuis `7a54ad39` + clarification quick-accept ; **aucune** migration Alembic ; **aucun** fichier FIN-FACTURE / FIN-CAISSE / Saferpay ; tests locaux sur `postgres_test` (port 5433, projet `lirie-ci-gate`) — pas d’écriture `atmr`.
 
@@ -51,6 +52,7 @@ Depuis tip NOTIF `7a54ad39` :
 | `9e95f62f` / `dccfeb08` | docs tampon LOT-2 |
 | `676d09b5` | fix(driver): clarifier quick-accept comme ack ASSIGNED |
 | `aec4196b` | docs(ops): rapport LOT-BOOKING-DISPATCH-3 CI |
+| `2dc22275` | docs(ops): aligner le SHA final du rapport BOOKING-DISPATCH-3 |
 
 Push : **uniquement** la branche BOOKING. PR #101–#105 non modifiées.
 
@@ -75,9 +77,9 @@ Push : **uniquement** la branche BOOKING. PR #101–#105 non modifiées.
 
 ---
 
-## F. Matrice des CI sur le SHA final `aec4196b`
+## F. Matrice des CI (preuve `2dc22275`)
 
-(Identique en succès au run `676d09b5` ; matrice ci-dessous = HEAD PR.)
+Rejouée avec succès sur `676d09b5`, `aec4196b` et `2dc22275`. Matrice = HEAD PR.
 
 | Check | Résultat |
 |-------|----------|
@@ -151,7 +153,7 @@ Frontend Tests dédiés : non déclenchés comme job nommé (pas de changement f
 
 | Gate | Verdict |
 |------|---------|
-| CI | **GREEN** (HEAD `aec4196b` ; aussi validé sur `676d09b5`) |
+| CI | **GREEN** (preuve `2dc22275` ; tip = HEAD branche) |
 | SECURITY | **PASS** (Security Gate + GG + Gitleaks + CodeQL/Semgrep success) |
 | BOOKING-DISPATCH | **PASS** |
 | READY FOR HUMAN REVIEW | **YES** |
