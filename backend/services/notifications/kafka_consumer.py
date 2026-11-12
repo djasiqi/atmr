@@ -415,24 +415,32 @@ class KafkaConsumer:
         if not device_tokens:
             raise NotificationConsumerSkip("no_active_tokens")
 
+        from services.notifications.push_device_selection import prepare_push_targets
+
+        push_targets = prepare_push_targets(device_tokens, owner_id=driver_id)
+        if not push_targets:
+            raise NotificationConsumerSkip("no_active_tokens")
+
         success_count = 0
         invalid_count = 0
         last_result: Dict[str, Any] | None = None
-        for device_token in device_tokens:
+        for target in push_targets:
+            device_token_id = target.get("id")
             result = send_push_message(
-                token=device_token.token,
+                token=target["token"],
                 title=title,
                 body=body,
                 data=data,
                 driver_id=driver_id,
                 bypass_rate_limit=message.get("bypass_rate_limit", False),
-                provider=getattr(device_token, "provider", None),
-                platform=getattr(device_token, "platform", None),
-                device_token_id=device_token.id,
+                provider=target.get("provider"),
+                platform=target.get("platform"),
+                device_token_id=device_token_id,
                 correlation_id=correlation_id,
             )
             last_result = result
-            apply_push_result_to_device_token(device_token.id, result)
+            if device_token_id is not None:
+                apply_push_result_to_device_token(device_token_id, result)
 
             if result.get("ok"):
                 success_count += 1
@@ -443,7 +451,7 @@ class KafkaConsumer:
                     driver_id=driver_id,
                     notification_type=notification_type,
                     correlation_id=correlation_id,
-                    device_token_id=device_token.id,
+                    device_token_id=device_token_id,
                 )
             elif result.get("token_invalid"):
                 invalid_count += 1
@@ -469,7 +477,7 @@ class KafkaConsumer:
         except Exception:
             logger.exception("[kafka_consumer] stale token cleanup failed")
 
-        if success_count == 0 and invalid_count == len(device_tokens):
+        if success_count == 0 and invalid_count == len(push_targets):
             log_notification_pipeline_event(
                 "notification_skipped",
                 notification_id=notification_id,
@@ -492,10 +500,10 @@ class KafkaConsumer:
         timer.observe_if_started()
 
         logger.info(
-            "[kafka_consumer] Push sent successfully to driver %s (%d/%d devices)",
+            "[kafka_consumer] Push sent successfully to driver %s (%d/%d targets)",
             driver_id,
             success_count,
-            len(device_tokens),
+            len(push_targets),
         )
 
     def _process_sms_notification(self, message: Dict[str, Any]) -> None:
