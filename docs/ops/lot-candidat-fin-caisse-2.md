@@ -134,7 +134,7 @@ Jest settlement / caisse / billing : **6 suites, 31 PASS**
 (sans push)
 
 1. `5d30f5b8` — fix(security): CSRF cookie sur ecritures financieres chauffeur  
-2. (suivant) — test(caisse): chaine E2E FIN-CAISSE-2 et rapport  
+2. `9d1f4ec4` — test(caisse): chaine E2E FIN-CAISSE-2 et rapport  
 
 ---
 
