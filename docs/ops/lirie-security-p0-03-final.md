@@ -107,7 +107,7 @@ Correctif **séparé** (branche `candidate/lirie-gg-fixture-40006359-20261112`, 
 
 ## H. SHA final (branche MFA)
 
-`44ba46631457bb2779706aa1227590f45bc424ad` — tip publié.
+`a7effb893f05fa2ab97aa24281b8e0951c230608` — tip publié.
 
 Chaîne : `2366f6a1` → `aefa42fe` → `a8c5de87` → `51291583` → `2257f208` → docs final.
 
