@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import styles from '../Dashboard/CompanyDashboard.module.css';
-import InvoicesRegistry from './registry/InvoicesRegistry';
+import CompanyBillingSpace from './CompanyBillingSpace';
 import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
 
 const ClientInvoices = () => {
@@ -27,9 +27,7 @@ const ClientInvoices = () => {
           }}
         />
       )}
-      <div data-tour-id="invoice-registry">
-        <InvoicesRegistry />
-      </div>
+      <CompanyBillingSpace />
     </main>
   );
 };
