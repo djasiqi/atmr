@@ -39,7 +39,7 @@ def prep(monkeypatch):
     monkeypatch.setenv("SETTLEMENT_PRODUCTION_PREP", "1")
     current = database_name() or ""
     if not current.startswith(("lirie_e2e_", "lirie_sim_", "atmr_etape")):
-        pytest.fail(f"Base refusée pour cette recette : {current or 'absente'}")
+        pytest.skip(f"Base refusée pour cette recette : {current or 'absente'}")
 
 
 def _user(role: UserRole) -> User:
@@ -91,7 +91,9 @@ def _tariff(world, number: int) -> PricingProfileVersion:
     return version
 
 
-def _booking(world, version: PricingProfileVersion, *, service: str | None, amount: str = "45.00"):
+def _booking(
+    world, version: PricingProfileVersion, *, service: str | None, amount: str = "45.00"
+):
     patient_user_id = app_db.session.get(Client, world["patient"].id).user_id
     row = Booking(
         company_id=world["company"].id,
@@ -114,7 +116,15 @@ def _booking(world, version: PricingProfileVersion, *, service: str | None, amou
     return row
 
 
-def _mandate(world, *, tariffs: list[str], services: list[str], version_number: int = 1, active: bool = True, review: bool = False):
+def _mandate(
+    world,
+    *,
+    tariffs: list[str],
+    services: list[str],
+    version_number: int = 1,
+    active: bool = True,
+    review: bool = False,
+):
     trace = {
         "mandate": {
             "covered_tariff_versions": tariffs,
@@ -274,8 +284,12 @@ def test_version_inactive_ignoree(db, prep):
     world = _world(db)
     old = _tariff(world, 1)
     current = _tariff(world, 2)
-    previous = _mandate(world, tariffs=["1"], services=["transport"], version_number=1, active=False)
-    active = _mandate(world, tariffs=["2"], services=["transport"], version_number=2, active=True)
+    previous = _mandate(
+        world, tariffs=["1"], services=["transport"], version_number=1, active=False
+    )
+    active = _mandate(
+        world, tariffs=["2"], services=["transport"], version_number=2, active=True
+    )
     stale = _booking(world, old, service="transport")
     fresh = _booking(world, current, service="transport")
     refused = read_applicability(world["company"].id, stale.id)
@@ -289,4 +303,7 @@ def test_version_inactive_ignoree(db, prep):
     assert previous.active is False
     app_db.session.expire_all()
     assert app_db.session.get(PatientCompanyConventionDemo, previous.id).active is False
-    assert app_db.session.get(PatientCompanyConventionDemo, previous.id).tariff_version == "1"
+    assert (
+        app_db.session.get(PatientCompanyConventionDemo, previous.id).tariff_version
+        == "1"
+    )

@@ -153,9 +153,9 @@ class TestPostCommitNotifications:
         print("=============================\n")
 
         # ✅ Vérifier que publish_event a été appelé (après commit réussi)
-        assert mock_publish_event.called, (
-            "publish_event should be called after successful commit"
-        )
+        assert (
+            mock_publish_event.called
+        ), "publish_event should be called after successful commit"
 
         # ✅ Vérifier le nombre d'appels (2 bookings = 2 notifications)
         call_count = mock_publish_event.call_count
@@ -230,16 +230,16 @@ class TestPostCommitNotifications:
             db.session.commit = original_commit
 
         # ✅ Vérifier que publish_event N'A PAS été appelé (rollback = pas de commit)
-        assert not mock_publish_event.called, (
-            "publish_event should NOT be called if transaction rollback"
-        )
+        assert (
+            not mock_publish_event.called
+        ), "publish_event should NOT be called if transaction rollback"
 
         # ✅ Vérifier que les bookings ne sont PAS assignés (rollback)
         db.session.expire_all()
         booking0 = db.session.query(Booking).filter_by(id=bookings[0].id).first()
-        assert booking0.driver_id is None, (
-            "Booking should not be assigned after rollback"
-        )
+        assert (
+            booking0.driver_id is None
+        ), "Booking should not be assigned after rollback"
 
     @patch("services.unified_dispatch.optimization.assignment_applier.publish_event")
     def test_notifications_deferred_si_transaction_externe(
@@ -275,14 +275,14 @@ class TestPostCommitNotifications:
             )
 
         # ✅ Vérifier que publish_event N'A PAS été appelé (transaction externe)
-        assert not mock_publish_event.called, (
-            "publish_event should NOT be called if had_existing_tx=True"
-        )
+        assert (
+            not mock_publish_event.called
+        ), "publish_event should NOT be called if had_existing_tx=True"
 
         # ✅ Vérifier que deferred_notifications est présent dans result
-        assert "deferred_notifications" in result, (
-            "deferred_notifications should be in result when had_existing_tx=True"
-        )
+        assert (
+            "deferred_notifications" in result
+        ), "deferred_notifications should be in result when had_existing_tx=True"
         deferred = result["deferred_notifications"]
         assert deferred["company_id"] == company.id
         assert len(deferred["applied_pairs"]) == 1
@@ -337,9 +337,9 @@ class TestPostCommitNotifications:
 
         # ✅ Vérifier que publish_event a été appelé la première fois
         initial_call_count = mock_publish_event.call_count
-        assert initial_call_count == 1, (
-            f"Expected 1 call after apply, got {initial_call_count}"
-        )
+        assert (
+            initial_call_count == 1
+        ), f"Expected 1 call after apply, got {initial_call_count}"
 
         # ✅ Modifier le driver_id du booking APRÈS commit (simule changement entre commit et émission)
         db.session.expire_all()
@@ -412,9 +412,9 @@ class TestPostCommitNotifications:
 
         # ✅ Vérifier que publish_event a été appelé exactement 1 fois
         # (seulement la première fois, la deuxième fois le booking est skipé)
-        assert mock_publish_event.call_count == 1, (
-            f"Expected 1 call (first apply only, second is skipped), got {mock_publish_event.call_count}"
-        )
+        assert (
+            mock_publish_event.call_count == 1
+        ), f"Expected 1 call (first apply only, second is skipped), got {mock_publish_event.call_count}"
 
         # ✅ Vérifier que l'appel a les bons arguments
         calls = mock_publish_event.call_args_list

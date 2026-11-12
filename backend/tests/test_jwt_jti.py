@@ -154,9 +154,9 @@ class TestJwtJtiGeneration:
         decoded2 = pyjwt.decode(token2, options={"verify_signature": False})
 
         # Les jti doivent être différents
-        assert decoded1["jti"] != decoded2["jti"], (
-            "Chaque token doit avoir un jti unique"
-        )
+        assert (
+            decoded1["jti"] != decoded2["jti"]
+        ), "Chaque token doit avoir un jti unique"
 
         # Vérifier aussi les refresh tokens
         refresh_token1 = data1["refresh_token"]
@@ -169,9 +169,9 @@ class TestJwtJtiGeneration:
             refresh_token2, options={"verify_signature": False}
         )
 
-        assert decoded_refresh1["jti"] != decoded_refresh2["jti"], (
-            "Chaque refresh token doit avoir un jti unique"
-        )
+        assert (
+            decoded_refresh1["jti"] != decoded_refresh2["jti"]
+        ), "Chaque refresh token doit avoir un jti unique"
 
 
 class TestJwtJtiBlacklist:

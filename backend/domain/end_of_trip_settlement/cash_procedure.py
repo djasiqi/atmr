@@ -318,21 +318,15 @@ def assess_cash_settlement(
     if due <= 0:
         raise ValueError("Montant dû invalide.")
     if amount_tendered_chf is None:
-        return describe_cash_amounts(
-            amount_due_chf=due, amount_tendered_chf=None
-        )
+        return describe_cash_amounts(amount_due_chf=due, amount_tendered_chf=None)
     tendered = amount_tendered_chf.quantize(_CENT)
     if tendered < 0:
         raise ValueError("Montant remis invalide.")
     if tendered < due:
-        return describe_cash_amounts(
-            amount_due_chf=due, amount_tendered_chf=tendered
-        )
+        return describe_cash_amounts(amount_due_chf=due, amount_tendered_chf=tendered)
     if tendered == due:
         declared_change = (
-            None
-            if change_returned_chf is None
-            else change_returned_chf.quantize(_CENT)
+            None if change_returned_chf is None else change_returned_chf.quantize(_CENT)
         )
         if declared_change not in (None, Decimal("0.00")):
             return CashAmounts(
@@ -348,13 +342,9 @@ def assess_cash_settlement(
                 change_policy=CHANGE_POLICY,
                 partial_policy=PARTIAL_POLICY,
             )
-        return describe_cash_amounts(
-            amount_due_chf=due, amount_tendered_chf=tendered
-        )
+        return describe_cash_amounts(amount_due_chf=due, amount_tendered_chf=tendered)
     declared = (
-        None
-        if change_returned_chf is None
-        else change_returned_chf.quantize(_CENT)
+        None if change_returned_chf is None else change_returned_chf.quantize(_CENT)
     )
     expected = (tendered - due).quantize(_CENT)
     if declared is None:

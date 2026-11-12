@@ -95,7 +95,9 @@ def open_collection(
 
         require_exceptional_cash(booking)
     else:
-        require_new_cash_declaration(booking, driver_id=driver_id, company_id=company_id)
+        require_new_cash_declaration(
+            booking, driver_id=driver_id, company_id=company_id
+        )
     row = CashCollection(
         booking_id=int(booking.id),
         company_id=int(company_id),
@@ -608,7 +610,9 @@ def collection_still_held(origin: CashCollection) -> tuple[Decimal, Decimal]:
     return held, handed_total
 
 
-def _handover_view(row: CashCollection, handover: CashHandover, *, replay: bool) -> dict[str, Any]:
+def _handover_view(
+    row: CashCollection, handover: CashHandover, *, replay: bool
+) -> dict[str, Any]:
     view = _view(row)
     view["replay"] = replay
     view["handover_id"] = int(handover.id)
@@ -625,7 +629,9 @@ def _handover_public(item: CashHandover) -> dict[str, Any]:
         "state": item.state,
         "idempotency_key": item.idempotency_key,
         "declared_at": None if item.created_at is None else item.created_at.isoformat(),
-        "confirmed_at": None if item.confirmed_at is None else item.confirmed_at.isoformat(),
+        "confirmed_at": None
+        if item.confirmed_at is None
+        else item.confirmed_at.isoformat(),
     }
 
 
@@ -907,7 +913,9 @@ def _same_line(
     status: str,
     regularizes_id: int | None,
 ) -> bool:
-    stored_parent = None if stored.regularizes_id is None else int(stored.regularizes_id)
+    stored_parent = (
+        None if stored.regularizes_id is None else int(stored.regularizes_id)
+    )
     return (
         int(stored.handover_id) == int(handover_id)
         and Decimal(stored.expected_chf) == expected
@@ -1205,11 +1213,19 @@ def render_control_csv(cases: list[dict[str, Any]]) -> str:
             lines.append(
                 ";".join(
                     [
-                        "" if item.get("driver_id") is None else str(item.get("driver_id")),
+                        ""
+                        if item.get("driver_id") is None
+                        else str(item.get("driver_id")),
                         str(item.get("created_at") or "")[:10],
-                        "" if item.get("booking_id") is None else str(item.get("booking_id")),
-                        "" if item.get("tendered_chf") is None else str(item.get("tendered_chf")),
-                        "" if item.get("change_chf") is None else str(item.get("change_chf")),
+                        ""
+                        if item.get("booking_id") is None
+                        else str(item.get("booking_id")),
+                        ""
+                        if item.get("tendered_chf") is None
+                        else str(item.get("tendered_chf")),
+                        ""
+                        if item.get("change_chf") is None
+                        else str(item.get("change_chf")),
                         "" if item.get("net_chf") is None else str(item.get("net_chf")),
                         str(item.get("state") or ""),
                         str(item.get("handover_state") or ""),
@@ -1223,7 +1239,9 @@ def render_control_csv(cases: list[dict[str, Any]]) -> str:
                         "" if detail is None else str(detail.get("expected_chf") or ""),
                         "" if detail is None else str(detail.get("counted_chf") or ""),
                         variance,
-                        "" if detail is None else str(detail.get("reason") or "").replace(";", ","),
+                        ""
+                        if detail is None
+                        else str(detail.get("reason") or "").replace(";", ","),
                         "" if detail is None else str(detail.get("status") or ""),
                     ]
                 )
@@ -1279,7 +1297,9 @@ def _empty_bucket() -> dict[str, Decimal]:
     }
 
 
-def _bucket_payload(company_id: int, driver_id: int | None, parts: dict[str, Decimal]) -> dict[str, Any]:
+def _bucket_payload(
+    company_id: int, driver_id: int | None, parts: dict[str, Decimal]
+) -> dict[str, Any]:
     held = (
         parts["collected"] - parts["corrections"] - parts["refunds"] - parts["handed"]
     ).quantize(Decimal("0.01"))
@@ -1428,7 +1448,9 @@ def _cash_position(
                     {
                         "company_id": int(company_id),
                         "driver_id": int(handover.driver_id),
-                        "booking_id": None if origin is None else int(origin.booking_id),
+                        "booking_id": None
+                        if origin is None
+                        else int(origin.booking_id),
                         "collection_id": int(handover.collection_id),
                         "compensates_collection_id": None,
                         "handover_id": int(handover.id),
@@ -1490,7 +1512,9 @@ def list_company(company_id: int) -> dict[str, Any]:
         .order_by(CashCollection.id)
     ).all()
     handovers = db.session.scalars(
-        select(CashHandover).where(CashHandover.company_id == cid).order_by(CashHandover.id)
+        select(CashHandover)
+        .where(CashHandover.company_id == cid)
+        .order_by(CashHandover.id)
     ).all()
     return {
         "banner": _ledger_banner(),
@@ -2055,7 +2079,9 @@ def _booking_history(booking_id: int) -> list[dict[str, Any]]:
     ]
 
 
-def _with_position(view: dict[str, Any], booking_id: int, due: Decimal) -> dict[str, Any]:
+def _with_position(
+    view: dict[str, Any], booking_id: int, due: Decimal
+) -> dict[str, Any]:
     recognized, remaining = _position(booking_id, due)
     operations = _operation_lines(booking_id)
     view["amount_due_chf"] = f"{due:.2f}"
@@ -2317,7 +2343,8 @@ def _view(row: CashCollection) -> dict[str, Any]:
             (
                 item
                 for item in lines
-                if int(item.handover_id) == int(handover.id) and item.status == "constate"
+                if int(item.handover_id) == int(handover.id)
+                and item.status == "constate"
             ),
             None,
         )

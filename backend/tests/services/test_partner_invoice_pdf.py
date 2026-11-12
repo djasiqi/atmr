@@ -293,9 +293,9 @@ class TestPartnerInvoicePdf:
 
         # Assert
         page_count = _get_pdf_page_count(pdf_content)
-        assert page_count >= 2, (
-            f"Le PDF devrait avoir au moins 2 pages, mais en a {page_count}"
-        )
+        assert (
+            page_count >= 2
+        ), f"Le PDF devrait avoir au moins 2 pages, mais en a {page_count}"
 
     def test_partner_invoice_pdf_qrbill_section_paiement(self, db):
         """Test que la 2e page contient le QR-Bill (Section paiement).
@@ -356,9 +356,9 @@ class TestPartnerInvoicePdf:
         found = any(
             indicator.lower() in pdf_text.lower() for indicator in recepisse_indicators
         )
-        assert found, (
-            "Le récépissé/QR-Bill devrait être présent (aucun indicateur trouvé)"
-        )
+        assert (
+            found
+        ), "Le récépissé/QR-Bill devrait être présent (aucun indicateur trouvé)"
 
     def test_partner_invoice_pdf_contains_scor_reference(self, db):
         """Test que le QR-Bill contient une référence SCOR (RF...)."""
@@ -372,9 +372,9 @@ class TestPartnerInvoicePdf:
         pdf_text = _extract_text_from_pdf(pdf_content)
 
         # Assert: La référence SCOR commence par "RF"
-        assert "RF" in pdf_text, (
-            "Le QR-Bill devrait contenir une référence SCOR (RF...)"
-        )
+        assert (
+            "RF" in pdf_text
+        ), "Le QR-Bill devrait contenir une référence SCOR (RF...)"
 
     def test_partner_invoice_pdf_contains_footer_message(self, db):
         """Test que le PDF contient des informations de paiement.

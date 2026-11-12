@@ -15,7 +15,9 @@ def _amount(value: Any) -> str | None:
     return contractual_price_label(value)
 
 
-def unconfirmed_financial_contract(*, billed_to_type: str | None, amount: Any) -> dict[str, Any]:
+def unconfirmed_financial_contract(
+    *, billed_to_type: str | None, amount: Any
+) -> dict[str, Any]:
     payer = (billed_to_type or "").strip().lower() or None
     return {
         "kind": "financial_situation_unconfirmed",
@@ -39,7 +41,9 @@ def unconfirmed_financial_contract(*, billed_to_type: str | None, amount: Any) -
     }
 
 
-def read_unconfirmed_financial_contract(booking_id: int, driver: Any) -> dict[str, Any] | None:
+def read_unconfirmed_financial_contract(
+    booking_id: int, driver: Any
+) -> dict[str, Any] | None:
     from ext import db
     from models.booking import Booking
 

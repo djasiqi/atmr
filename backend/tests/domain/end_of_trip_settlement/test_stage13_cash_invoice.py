@@ -261,24 +261,33 @@ def test_caisse_isolee_par_entreprise_et_chauffeur() -> None:
     assert [item.company_id for item in company_view] == [10]
     assert [item.driver_id for item in driver_view] == [3]
     assert foreign == ()
-    assert reconcile_cash(
-        company_view[0],
-        actor_role="driver",
-        actor_company_id=10,
-        reconciled_amount_chf=Decimal("45.00"),
-    ) == "reconciliation_refused"
-    assert reconcile_cash(
-        company_view[0],
-        actor_role="company",
-        actor_company_id=20,
-        reconciled_amount_chf=Decimal("45.00"),
-    ) == "reconciliation_refused"
-    assert reconcile_cash(
-        company_view[0],
-        actor_role="company",
-        actor_company_id=10,
-        reconciled_amount_chf=Decimal("45.00"),
-    ) == "reconciliation_prepared"
+    assert (
+        reconcile_cash(
+            company_view[0],
+            actor_role="driver",
+            actor_company_id=10,
+            reconciled_amount_chf=Decimal("45.00"),
+        )
+        == "reconciliation_refused"
+    )
+    assert (
+        reconcile_cash(
+            company_view[0],
+            actor_role="company",
+            actor_company_id=20,
+            reconciled_amount_chf=Decimal("45.00"),
+        )
+        == "reconciliation_refused"
+    )
+    assert (
+        reconcile_cash(
+            company_view[0],
+            actor_role="company",
+            actor_company_id=10,
+            reconciled_amount_chf=Decimal("45.00"),
+        )
+        == "reconciliation_prepared"
+    )
     assert company_view[0].persists is False
     receipt = cash_receipt_draft(company_view[0])
     assert receipt.issued is False

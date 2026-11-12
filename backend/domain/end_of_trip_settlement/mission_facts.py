@@ -87,7 +87,8 @@ def decide_mission(facts: MissionFacts) -> dict[str, object]:
         group_amount_chf=group,
         amount_validated=leg > 0,
         online_payment_status=online_status,
-        online_payment_covers_scope=covers_group or (covers_leg and not facts.is_round_trip),
+        online_payment_covers_scope=covers_group
+        or (covers_leg and not facts.is_round_trip),
         invoice_already_issued=facts.invoice_already_issued,
         operational_status=facts.operational_status,
         is_round_trip=facts.is_round_trip,

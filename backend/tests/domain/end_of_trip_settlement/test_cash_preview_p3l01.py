@@ -94,7 +94,10 @@ def test_previsualisation_des_acomptes(app):
         price_before = db.session.execute(
             text("SELECT price_amount FROM booking WHERE id = 70")
         ).scalar_one()
-        _insert(db.session, **_line(booking_id=71, client_operation_key="p71", net_chf="20.00"))
+        _insert(
+            db.session,
+            **_line(booking_id=71, client_operation_key="p71", net_chf="20.00"),
+        )
         _insert(
             db.session,
             **_line(booking_id=72, client_operation_key="p72a", net_chf="20.00"),

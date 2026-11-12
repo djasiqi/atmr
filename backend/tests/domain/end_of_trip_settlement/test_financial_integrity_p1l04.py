@@ -125,8 +125,7 @@ def test_encaissements_imputation_et_avoir_ensemble():
         )
         first_id = connection.execute(
             text(
-                "SELECT id FROM cash_collection "
-                "WHERE client_operation_key = 'enc-a'"
+                "SELECT id FROM cash_collection " "WHERE client_operation_key = 'enc-a'"
             )
         ).scalar_one()
         connection.execute(
@@ -179,9 +178,7 @@ def test_encaissements_imputation_et_avoir_ensemble():
 def test_rejeu_et_compensations_invalides():
     def _run(connection):
         connection.execute(
-            text(
-                "INSERT INTO booking (id) VALUES (11) ON CONFLICT DO NOTHING"
-            )
+            text("INSERT INTO booking (id) VALUES (11) ON CONFLICT DO NOTHING")
         )
         connection.execute(
             text(

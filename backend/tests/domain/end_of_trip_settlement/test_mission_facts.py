@@ -114,14 +114,20 @@ def test_scenarios_reels_sans_bouton() -> None:
         )
     )
     account = decide_mission(
-        facts(policy=policy_at(modality="established_account", modes=frozenset(), locked=True))
+        facts(
+            policy=policy_at(
+                modality="established_account", modes=frozenset(), locked=True
+            )
+        )
     )
     unlocked = decide_mission(
         facts(
             created_via="institution_portal",
             billed_to_type="patient",
             billing_intent="patient",
-            policy=policy_at(modality="on_site", modes=frozenset({"cash"}), locked=False),
+            policy=policy_at(
+                modality="on_site", modes=frozenset({"cash"}), locked=False
+            ),
         )
     )
     missing = decide_mission(facts(policy=None))
@@ -276,7 +282,9 @@ def test_parcours_fictifs_sans_ecriture() -> None:
             billed_to_type="patient",
             billing_intent="patient",
             operational_status="IN_PROGRESS",
-            policy=policy_at(modality="on_site", modes=frozenset({"cash"}), locked=False),
+            policy=policy_at(
+                modality="on_site", modes=frozenset({"cash"}), locked=False
+            ),
         )
     )
     prepaid = decide_mission(
@@ -338,4 +346,3 @@ def test_parcours_fictifs_sans_ecriture() -> None:
         assert reading["payment_executable"] is False
         assert reading["completion_independent"] is True
         assert reading["attestation_separate"] is True
-

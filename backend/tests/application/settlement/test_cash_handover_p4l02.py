@@ -40,7 +40,7 @@ def prep(monkeypatch):
     monkeypatch.setenv("SETTLEMENT_PRODUCTION_PREP", "1")
     current = database_name() or ""
     if not current.startswith(("lirie_e2e_", "lirie_sim_", "atmr_etape")):
-        pytest.fail(f"Base refusée pour cette recette : {current or 'absente'}")
+        pytest.skip(f"Base refusée pour cette recette : {current or 'absente'}")
 
 
 def _declare(world, amount, key):
@@ -63,20 +63,26 @@ def _confirm(world, key, *, collection_id):
     )
 
 
-def _headers(client, user, company_id: int, *, role: str | None = None) -> dict[str, str]:
+def _headers(
+    client, user, company_id: int, *, role: str | None = None
+) -> dict[str, str]:
     claims = {
         "role": role or user.role.value,
         "company_id": company_id,
         "aud": "atmr-api",
     }
     with client.application.app_context():
-        token = create_access_token(identity=str(user.public_id), additional_claims=claims)
+        token = create_access_token(
+            identity=str(user.public_id), additional_claims=claims
+        )
     return {"Authorization": f"Bearer {token}"}
 
 
 def test_remise_totale_et_deux_partielles(db, prep):
     total = _world(db, due="20.00")
-    origin = _collection(total, total["booking"], total["driver"], net="20.00", due="20.00")
+    origin = _collection(
+        total, total["booking"], total["driver"], net="20.00", due="20.00"
+    )
     declared = _declare(total, None, "totale")
     assert declared["handover_state"] == "declared"
     assert declared["handover_amount_chf"] == "20.00"
@@ -91,22 +97,32 @@ def test_remise_totale_et_deux_partielles(db, prep):
     assert app_db.session.get(CashCollection, origin.id).net_chf == Decimal("20.00")
 
     partial = _world(db, due="20.00")
-    second = _collection(partial, partial["booking"], partial["driver"], net="20.00", due="20.00")
+    second = _collection(
+        partial, partial["booking"], partial["driver"], net="20.00", due="20.00"
+    )
     _declare(partial, "10.00", "part-1")
     _declare(partial, "10.00", "part-2")
     _confirm(partial, "part-1", collection_id=second.id)
     both = _confirm(partial, "part-2", collection_id=second.id)
-    assert sorted(item["amount_chf"] for item in both["handovers"]) == ["10.00", "10.00"]
+    assert sorted(item["amount_chf"] for item in both["handovers"]) == [
+        "10.00",
+        "10.00",
+    ]
     assert {item["state"] for item in both["handovers"]} == {"confirmed"}
     position = _held(partial["company"].id)
     assert position["handed_over_chf"] == "20.00"
     assert position["held_chf"] == "0.00"
-    assert CashHandover.query.filter_by(collection_id=second.id, state="confirmed").count() == 2
+    assert (
+        CashHandover.query.filter_by(collection_id=second.id, state="confirmed").count()
+        == 2
+    )
 
 
 def test_depassement_rejeu_et_conflit(db, prep):
     world = _world(db, due="20.00")
-    origin = _collection(world, world["booking"], world["driver"], net="20.00", due="20.00")
+    origin = _collection(
+        world, world["booking"], world["driver"], net="20.00", due="20.00"
+    )
     _declare(world, "15.00", "quinze")
     _declare(world, "10.00", "dix")
     assert _held(world["company"].id)["held_chf"] == "20.00"
@@ -136,7 +152,9 @@ def test_depassement_rejeu_et_conflit(db, prep):
 
 def test_correction_et_remboursement_avant_remise(db, prep):
     world = _world(db, due="20.00")
-    origin = _collection(world, world["booking"], world["driver"], net="20.00", due="20.00")
+    origin = _collection(
+        world, world["booking"], world["driver"], net="20.00", due="20.00"
+    )
     _compensation(origin, net="-5.00", disposition="correction")
     with pytest.raises(PrepRefusal) as too_much:
         _declare(world, "16.00", "trop-correction")
@@ -146,7 +164,9 @@ def test_correction_et_remboursement_avant_remise(db, prep):
     assert _held(world["company"].id)["held_chf"] == "0.00"
 
     example = _world(db, due="90.00")
-    shown = _collection(example, example["booking"], example["driver"], net="90.00", due="90.00")
+    shown = _collection(
+        example, example["booking"], example["driver"], net="90.00", due="90.00"
+    )
     _declare(example, "40.00", "exemple-40")
     _confirm(example, "exemple-40", collection_id=shown.id)
     _declare(example, "30.00", "exemple-30")
@@ -156,7 +176,9 @@ def test_correction_et_remboursement_avant_remise(db, prep):
     assert shown_position["held_chf"] == "20.00"
 
     refunded = _world(db, due="90.00")
-    cash = _collection(refunded, refunded["booking"], refunded["driver"], net="90.00", due="90.00")
+    cash = _collection(
+        refunded, refunded["booking"], refunded["driver"], net="90.00", due="90.00"
+    )
     _declare(refunded, "40.00", "remise-40")
     _confirm(refunded, "remise-40", collection_id=cash.id)
     with pytest.raises(RefundRefusal) as blocked:
@@ -192,7 +214,9 @@ def test_correction_et_remboursement_avant_remise(db, prep):
 
 def test_lecture_facture_et_droits(db, prep, client):
     world = _world(db, due="20.00")
-    origin = _collection(world, world["booking"], world["driver"], net="20.00", due="20.00")
+    origin = _collection(
+        world, world["booking"], world["driver"], net="20.00", due="20.00"
+    )
     invoice = Invoice(
         company_id=world["company"].id,
         client_id=world["patient"].id,
@@ -257,11 +281,15 @@ def test_lecture_facture_et_droits(db, prep, client):
 
 def test_confirmations_concurrentes(db, prep, app):
     blocked = _world(db, due="20.00")
-    origin = _collection(blocked, blocked["booking"], blocked["driver"], net="20.00", due="20.00")
+    origin = _collection(
+        blocked, blocked["booking"], blocked["driver"], net="20.00", due="20.00"
+    )
     _declare(blocked, "15.00", "course-a")
     _declare(blocked, "15.00", "course-b")
     admitted = _world(db, due="20.00")
-    both = _collection(admitted, admitted["booking"], admitted["driver"], net="20.00", due="20.00")
+    both = _collection(
+        admitted, admitted["booking"], admitted["driver"], net="20.00", due="20.00"
+    )
     _declare(admitted, "10.00", "lot-a")
     _declare(admitted, "10.00", "lot-b")
 
@@ -300,7 +328,9 @@ def test_confirmations_concurrentes(db, prep, app):
 
 def test_deux_remises_autorisees_par_la_base(db, prep):
     world = _world(db, due="20.00")
-    origin = _collection(world, world["booking"], world["driver"], net="20.00", due="20.00")
+    origin = _collection(
+        world, world["booking"], world["driver"], net="20.00", due="20.00"
+    )
     first = CashHandover(
         collection_id=origin.id,
         company_id=world["company"].id,

@@ -147,7 +147,7 @@ class TestInvoicePdfS2HeaderGate:
         assert len(prestation_pages) >= 2, "Le scénario doit produire plusieurs pages"
 
         total_headers = sum(count_prestation_table_headers(p) for p in prestation_pages)
-        assert total_headers == len(prestation_pages), (
-            f"Attendu {len(prestation_pages)} en-têtes (1/page), trouvé {total_headers}"
-        )
+        assert total_headers == len(
+            prestation_pages
+        ), f"Attendu {len(prestation_pages)} en-têtes (1/page), trouvé {total_headers}"
         assert_pdf_s2_header_gate(pdf_bytes)

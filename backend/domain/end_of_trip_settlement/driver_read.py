@@ -84,9 +84,7 @@ def read_for_assigned_driver(
         return _denied("driver_unassigned")
     if not same_company:
         return _denied("other_company")
-    return read_driver_settlement(
-        snapshot, attestation_recorded=attestation_recorded
-    )
+    return read_driver_settlement(snapshot, attestation_recorded=attestation_recorded)
 
 
 def invalidate_displayed_amount(

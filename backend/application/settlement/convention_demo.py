@@ -118,7 +118,9 @@ def prepare(
     if created:
         from application.settlement.mandate_registry import remember
 
-        remember(row, "prepared", "Mandat préparé pour cette relation patient–entreprise.")
+        remember(
+            row, "prepared", "Mandat préparé pour cette relation patient–entreprise."
+        )
     db.session.commit()
     return _view(row, company_name)
 
@@ -169,7 +171,9 @@ def specimen_pdf(company_id: int, client_id: int, *, company_name: str) -> bytes
 
 def archive_reference(row: PatientCompanyConventionDemo) -> str:
     """Chemin stable d'une version. Une version suivante n'écrase pas ce fichier."""
-    return f"mandates/{int(row.company_id)}/{int(row.id)}-v{int(row.version_number)}.pdf"
+    return (
+        f"mandates/{int(row.company_id)}/{int(row.id)}-v{int(row.version_number)}.pdf"
+    )
 
 
 def tactile_reference(points: list[dict[str, float]]) -> str:
@@ -191,9 +195,13 @@ def store_mandate_pdf(relative: str, payload: bytes) -> None:
 def read_archived_pdf(row: PatientCompanyConventionDemo) -> bytes | None:
     trace = row.specimen_trace if isinstance(row.specimen_trace, dict) else {}
     mandate = trace.get("mandate") if isinstance(trace.get("mandate"), dict) else {}
-    signature = mandate.get("signature") if isinstance(mandate.get("signature"), dict) else {}
+    signature = (
+        mandate.get("signature") if isinstance(mandate.get("signature"), dict) else {}
+    )
     relative = signature.get("archive_reference")
-    if not isinstance(relative, str) or not relative.startswith(f"mandates/{int(row.company_id)}/"):
+    if not isinstance(relative, str) or not relative.startswith(
+        f"mandates/{int(row.company_id)}/"
+    ):
         return None
     path = _archive_root() / relative
     if not path.is_file():
@@ -217,7 +225,9 @@ def consult_archived_pdf(company_id: int, client_id: int, convention_id: int) ->
         )
     stored = read_archived_pdf(row)
     if stored is None:
-        raise ConventionRefusal("archive_absente", "Le document archivé est indisponible.")
+        raise ConventionRefusal(
+            "archive_absente", "Le document archivé est indisponible."
+        )
     return stored
 
 
@@ -226,10 +236,14 @@ def archived_pdf_for(company_id: int, convention_id: int) -> bytes:
     _require_open()
     row = db.session.get(PatientCompanyConventionDemo, int(convention_id))
     if row is None or int(row.company_id) != int(company_id):
-        raise ConventionRefusal("specimen_absent", "Ce document n'appartient pas à cette entreprise.")
+        raise ConventionRefusal(
+            "specimen_absent", "Ce document n'appartient pas à cette entreprise."
+        )
     stored = read_archived_pdf(row)
     if stored is None:
-        raise ConventionRefusal("archive_absente", "Aucun document archivé pour cette version.")
+        raise ConventionRefusal(
+            "archive_absente", "Aucun document archivé pour cette version."
+        )
     return stored
 
 
@@ -347,7 +361,9 @@ def _pdf(row: PatientCompanyConventionDemo, company_name: str) -> bytes:
             raw_signature = raw_mandate.get("signature")
             if isinstance(raw_signature, dict):
                 signature = raw_signature
-    covered_services = _covered(signature, "covered_services") or _covered(mandate, "covered_services")
+    covered_services = _covered(signature, "covered_services") or _covered(
+        mandate, "covered_services"
+    )
     covered_tariffs = _covered(signature, "covered_tariff_versions") or _covered(
         mandate, "covered_tariff_versions"
     )

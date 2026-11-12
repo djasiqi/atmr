@@ -159,8 +159,12 @@ def record_event(
     row.contractual_basis = basis
     row.state = state
     if action == "representative":
-        row.representative_name = str(payload.get("representative_name") or "")[:160] or None
-        row.representative_kind = str(payload.get("representative_kind") or "")[:40] or None
+        row.representative_name = (
+            str(payload.get("representative_name") or "")[:160] or None
+        )
+        row.representative_kind = (
+            str(payload.get("representative_kind") or "")[:40] or None
+        )
         row.representative_proof_expected = str(
             payload.get("representative_proof_expected") or "justificatif de pouvoir"
         )[:160]
@@ -193,7 +197,9 @@ def record_event(
     return _view(row)
 
 
-def read_dossier(booking: Any, *, driver_id: int, company_id: int) -> dict[str, Any] | None:
+def read_dossier(
+    booking: Any, *, driver_id: int, company_id: int
+) -> dict[str, Any] | None:
     """Consulte un dossier patient déjà enregistré sans ouvrir une écriture."""
     require_prep()
     authorize_settlement_history_read(
@@ -243,7 +249,9 @@ def _recipe_fixture(
         actor_role="driver",
         actor_id=actor_id,
         payload={
-            "request_fingerprint": fingerprint({**payload, "kind": "declare_recipe_fixture"}),
+            "request_fingerprint": fingerprint(
+                {**payload, "kind": "declare_recipe_fixture"}
+            ),
             "recipe_fixture": "fictif-identifie",
             "legally_binding": False,
             "creates_debt": False,
@@ -413,9 +421,7 @@ def release_specimen_locks(company_id: int) -> dict[str, Any]:
     )
     line_ids = [int(row["id"]) for row in lines]
     reservation_ids = [
-        int(row["reservation_id"])
-        for row in lines
-        if row["reservation_id"] is not None
+        int(row["reservation_id"]) for row in lines if row["reservation_id"] is not None
     ]
     bookings = []
     if line_ids or reservation_ids:
@@ -606,7 +612,9 @@ def review_representative(
         actor_role="company",
         actor_id=actor_id,
         payload={
-            "request_fingerprint": fingerprint({**body, "kind": "review_representative"}),
+            "request_fingerprint": fingerprint(
+                {**body, "kind": "review_representative"}
+            ),
             "result": result,
             "document_reference": str(payload.get("document_reference") or "")[:160],
             "scope_note": str(payload.get("scope_note") or "")[:240],
@@ -746,10 +754,10 @@ def _followup_payload(events: list[Any]) -> dict[str, Any] | None:
     found = None
     for event in events:
         if (
-        event.action in {"followup", "reconcile"}
-        and isinstance(event.payload, dict)
-        and "balance_chf" in event.payload
-    ):
+            event.action in {"followup", "reconcile"}
+            and isinstance(event.payload, dict)
+            and "balance_chf" in event.payload
+        ):
             found = event.payload
     return found
 
@@ -771,7 +779,9 @@ def _view(row: PatientBillingDossier) -> dict[str, Any]:
     return {
         "id": row.id,
         "booking_id": row.booking_id,
-        "client_id": None if booking is None or booking.client_id is None else int(booking.client_id),
+        "client_id": None
+        if booking is None or booking.client_id is None
+        else int(booking.client_id),
         "company_id": row.company_id,
         "company_name": company.name if company is not None else None,
         "driver_id": row.driver_id,
@@ -809,7 +819,9 @@ def _view(row: PatientBillingDossier) -> dict[str, Any]:
         "balance_chf": None if follow is None else follow.get("balance_chf"),
         "real_payment": False,
         "invoice_confirmation_required": (
-            True if follow is None else bool(follow.get("invoice_confirmation_required"))
+            True
+            if follow is None
+            else bool(follow.get("invoice_confirmation_required"))
         ),
         "mandate_kind": None if follow is None else follow.get("mandate_kind"),
         "mandate_id": None if follow is None else follow.get("mandate_id"),
@@ -864,7 +876,11 @@ def reconcile_followup_balance(booking: Any) -> bool:
     )
     if already is not None:
         return False
-    signature = situation.get("signature") if isinstance(situation.get("signature"), dict) else {}
+    signature = (
+        situation.get("signature")
+        if isinstance(situation.get("signature"), dict)
+        else {}
+    )
     representative = bool(signature.get("admin_review_required"))
     previous = row.state
     row.state = state
@@ -935,7 +951,11 @@ def ensure_patient_followup(
     )
     if booking.driver_id is None:
         raise PrepRefusal("chauffeur_non_affecte", 403)
-    signature = situation.get("signature") if isinstance(situation.get("signature"), dict) else {}
+    signature = (
+        situation.get("signature")
+        if isinstance(situation.get("signature"), dict)
+        else {}
+    )
     representative = bool(signature.get("admin_review_required"))
     row = PatientBillingDossier(
         booking_id=int(booking.id),
@@ -965,7 +985,9 @@ def ensure_patient_followup(
             if not signature.get("representative_quality")
             else str(signature.get("representative_quality"))[:40]
         ),
-        representative_proof_expected="justificatif de pouvoir" if representative else None,
+        representative_proof_expected="justificatif de pouvoir"
+        if representative
+        else None,
         representative_powers_verified=False,
         representative_decision="pending_review" if representative else "absent",
     )
@@ -989,7 +1011,9 @@ def ensure_patient_followup(
         actor_role="company",
         actor_id=actor_id,
         payload={
-            "request_fingerprint": fingerprint({"kind": "followup", "booking_id": int(booking.id)}),
+            "request_fingerprint": fingerprint(
+                {"kind": "followup", "booking_id": int(booking.id)}
+            ),
             "due_chf": f"{due:.2f}",
             "recognized_chf": f"{recognized:.2f}",
             "balance_chf": f"{balance:.2f}",
@@ -1049,17 +1073,12 @@ def hint_label(
     if dossier_state != "absent":
         return persisted
     if "Dossier préparé" in persisted:
-        return (
-            "Mandat signé. "
-            "Facturation prévue, dossier non préparé. À facturer."
-        )
+        return "Mandat signé. " "Facturation prévue, dossier non préparé. À facturer."
     if persisted.startswith("Dossier de suivi"):
         balance = due - recognized
         if balance < 0:
             balance = Decimal("0.00")
-        return (
-            f"Vérification nécessaire. Solde restant {balance:.2f} CHF. À facturer."
-        )
+        return f"Vérification nécessaire. Solde restant {balance:.2f} CHF. À facturer."
     return persisted
 
 
@@ -1131,7 +1150,9 @@ def _blocked_target(booking: Any) -> str | None:
 
     if linked_round_trip(booking) and not separate_leg_ready(booking):
         return "round_trip"
-    payer = str(getattr(booking.billed_to_type, "value", booking.billed_to_type) or "patient")
+    payer = str(
+        getattr(booking.billed_to_type, "value", booking.billed_to_type) or "patient"
+    )
     payer = payer.strip().lower()
     if payer == "clinic":
         return "clinic"
@@ -1164,12 +1185,24 @@ def _situation(booking: Any) -> dict[str, Any]:
     from application.settlement.mandate_registry import assess_for_booking
 
     if booking.client_id is None:
-        return {"kind": "absent", "mandate_id": None, "document_version": None, "signature": None}
+        return {
+            "kind": "absent",
+            "mandate_id": None,
+            "document_version": None,
+            "signature": None,
+        }
     try:
         assessed = assess_for_booking(int(booking.company_id), int(booking.id))
     except Exception:
-        return {"kind": "absent", "mandate_id": None, "document_version": None, "signature": None}
-    mandate = assessed.get("mandate") if isinstance(assessed.get("mandate"), dict) else {}
+        return {
+            "kind": "absent",
+            "mandate_id": None,
+            "document_version": None,
+            "signature": None,
+        }
+    mandate = (
+        assessed.get("mandate") if isinstance(assessed.get("mandate"), dict) else {}
+    )
     return {
         "kind": str(assessed.get("kind") or "absent"),
         "mandate_id": mandate.get("id"),
@@ -1182,7 +1215,11 @@ def _followup_class(
     situation: dict[str, Any], *, recognized: Decimal, due: Decimal, refused: bool
 ) -> tuple[str, str, bool, str]:
     kind = str(situation.get("kind") or "absent")
-    signature = situation.get("signature") if isinstance(situation.get("signature"), dict) else {}
+    signature = (
+        situation.get("signature")
+        if isinstance(situation.get("signature"), dict)
+        else {}
+    )
     if refused:
         return (
             "refused",

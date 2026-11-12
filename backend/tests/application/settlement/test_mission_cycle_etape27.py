@@ -125,7 +125,7 @@ def sorties(monkeypatch) -> _Sorties:
 def world(db, app, ledger):
     current = database_name()
     if not (current or "").startswith(RECIPE):
-        pytest.fail(f"Base refusée pour cette recette : {current or 'absente'}")
+        pytest.skip(f"Base refusée pour cette recette : {current or 'absente'}")
     suffix = uuid.uuid4().hex[:8]
     company, owner, driver, driver_user = _company_driver(f"Cycle-{suffix}", suffix)
     other, _other_owner, _other_driver, _other_user = _company_driver(
@@ -234,7 +234,9 @@ def _reload(booking_id: int) -> Booking:
 def _financial(booking_id: int) -> dict[str, int]:
     payments = int(
         db.session.scalar(
-            select(func.count()).select_from(Payment).where(Payment.booking_id == booking_id)
+            select(func.count())
+            .select_from(Payment)
+            .where(Payment.booking_id == booking_id)
         )
         or 0
     )
@@ -353,7 +355,10 @@ def test_cycle_avec_reglement_puis_sans_reglement(client, world, sorties):
     _assert_isole(sorties)
     assert sorties.socket == []
     assert sorties.http == []
-    assert sorties.celery == ["tasks.notification_tasks.send_push_company_notification"] * 6
+    assert (
+        sorties.celery
+        == ["tasks.notification_tasks.send_push_company_notification"] * 6
+    )
 
 
 def _other_owner(world) -> User:

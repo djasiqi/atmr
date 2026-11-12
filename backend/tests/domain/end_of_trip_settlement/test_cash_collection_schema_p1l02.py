@@ -94,9 +94,7 @@ def test_rejeu_de_la_meme_cle_refuse():
     def _run(connection):
         _insert(connection, **_base(client_operation_key="enc-1", net_chf="20.00"))
         with pytest.raises(IntegrityError):
-            _insert(
-                connection, **_base(client_operation_key="enc-1", net_chf="1.00")
-            )
+            _insert(connection, **_base(client_operation_key="enc-1", net_chf="1.00"))
 
     _rollback(_run)
 
@@ -195,12 +193,16 @@ def test_approbation_juridique_refusee():
 def test_unicite_booking_historique_levee():
     engine = _engine()
     with engine.connect() as connection:
-        names = connection.execute(
-            text(
-                "SELECT conname FROM pg_constraint "
-                "WHERE conrelid = 'cash_collection'::regclass"
+        names = (
+            connection.execute(
+                text(
+                    "SELECT conname FROM pg_constraint "
+                    "WHERE conrelid = 'cash_collection'::regclass"
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     assert "uq_cash_collection_booking" not in names
     assert "uq_cash_collection_booking_operation" in names
     assert "ck_cash_collection_inactive" in names

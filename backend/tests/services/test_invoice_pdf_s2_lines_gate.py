@@ -315,9 +315,9 @@ def test_s2_pdf_mono_line_round_trip_contains_inline_ar(db):
     full_text = "\n".join(extract_text_per_page(pdf_bytes))
     ar_count = full_text.count("[A/R]")
     # Légende pied de page + au moins un tag inline par prestation A/R
-    assert ar_count >= 4, (
-        f"Attendu ≥4 occurrences [A/R] (3 inline + légende), trouvé {ar_count}"
-    )
+    assert (
+        ar_count >= 4
+    ), f"Attendu ≥4 occurrences [A/R] (3 inline + légende), trouvé {ar_count}"
 
 
 def test_s2_discount_line_matches_live_preview():

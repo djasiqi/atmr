@@ -36,7 +36,7 @@ pytestmark = pytest.mark.integration
 def recipe_db():
     current = database_name() or ""
     if not current.startswith(("lirie_e2e_", "lirie_sim_", "atmr_etape")):
-        pytest.fail(f"Base refusée pour cette recette : {current or 'absente'}")
+        pytest.skip(f"Base refusée pour cette recette : {current or 'absente'}")
 
 
 def test_flags_produit_restent_eteints(recipe_db):
@@ -116,9 +116,7 @@ def test_chaine_complete_partielle_remise_ecart_idempotence(db, recipe_db, monke
     )
     assert replay_declare.get("replay") is True
     assert (
-        CashCollection.query.filter_by(
-            booking_id=booking.id, kind="collection"
-        ).count()
+        CashCollection.query.filter_by(booking_id=booking.id, kind="collection").count()
         == 1
     )
 
@@ -199,4 +197,3 @@ def test_chaine_complete_partielle_remise_ecart_idempotence(db, recipe_db, monke
             idempotency_key="fc2-intrus",
         )
     assert refused.value.status in {403, 404}
-

@@ -50,9 +50,12 @@ def test_liberation_cible_et_second_passage(app):
         first = release_specimen_locks(1)
         released_ids = {item["booking_id"] for item in first["released"]}
         assert released_ids == {10}
-        assert db.session.execute(
-            text("SELECT invoice_line_id FROM booking WHERE id = 10")
-        ).scalar_one() is None
+        assert (
+            db.session.execute(
+                text("SELECT invoice_line_id FROM booking WHERE id = 10")
+            ).scalar_one()
+            is None
+        )
         candidates = {
             row[0]
             for row in db.session.execute(
@@ -198,7 +201,5 @@ def test_deux_liberations_concurrentes(app):
     assert real == 110
     assert invoices_after == invoices_before
     assert line == 1
-    released = [
-        item["booking_id"] for result in found for item in result["released"]
-    ]
+    released = [item["booking_id"] for result in found for item in result["released"]]
     assert released.count(17) == 1

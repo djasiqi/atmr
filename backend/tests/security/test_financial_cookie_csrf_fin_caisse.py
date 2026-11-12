@@ -68,9 +68,7 @@ class TestFinancialPathHelpers:
         )
 
     def test_driver_location_not_financial(self):
-        assert not is_financial_settlement_mutation_path(
-            "/api/v1/driver/me/location"
-        )
+        assert not is_financial_settlement_mutation_path("/api/v1/driver/me/location")
 
     def test_company_confirm_is_financial(self):
         assert is_financial_settlement_mutation_path(
@@ -80,9 +78,7 @@ class TestFinancialPathHelpers:
     def test_cookie_requires_csrf_bearer_skips(self):
         path = "/api/v1/driver/me/bookings/1/cash-collection"
         assert financial_cookie_csrf_required(path, authorization=None) is True
-        assert (
-            financial_cookie_csrf_required(path, authorization="Bearer abc") is False
-        )
+        assert financial_cookie_csrf_required(path, authorization="Bearer abc") is False
 
 
 class TestAuthProA1Locations:

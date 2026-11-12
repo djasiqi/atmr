@@ -75,9 +75,9 @@ class TestExecutionTime:
         assert result is not None
 
         # Vérifier que le temps d'exécution est raisonnable (< 30 secondes pour petit dataset)
-        assert execution_time < 30.0, (
-            f"Temps d'exécution trop long: {execution_time:.2f}s"
-        )
+        assert (
+            execution_time < 30.0
+        ), f"Temps d'exécution trop long: {execution_time:.2f}s"
 
     @patch("services.unified_dispatch.locking.RedisLockManager")
     def test_medium_dataset_execution_time(self, mock_lock_manager, db):
@@ -132,9 +132,9 @@ class TestExecutionTime:
         assert result is not None
 
         # Vérifier que le temps d'exécution est raisonnable (< 120 secondes pour dataset moyen)
-        assert execution_time < 120.0, (
-            f"Temps d'exécution trop long: {execution_time:.2f}s"
-        )
+        assert (
+            execution_time < 120.0
+        ), f"Temps d'exécution trop long: {execution_time:.2f}s"
 
     @pytest.mark.slow
     @patch("services.unified_dispatch.locking.RedisLockManager")
@@ -193,9 +193,9 @@ class TestExecutionTime:
         assert result is not None
 
         # Vérifier que le temps d'exécution est raisonnable (< 600 secondes pour grand dataset)
-        assert execution_time < 600.0, (
-            f"Temps d'exécution trop long: {execution_time:.2f}s"
-        )
+        assert (
+            execution_time < 600.0
+        ), f"Temps d'exécution trop long: {execution_time:.2f}s"
 
 
 class TestMemoryUsage:

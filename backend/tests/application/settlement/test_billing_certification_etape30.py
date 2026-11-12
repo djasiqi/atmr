@@ -43,7 +43,7 @@ def prep(monkeypatch):
 def world(db, app, prep):
     current = database_name()
     if not (current or "").startswith(RECIPE):
-        pytest.fail(f"Base refusée pour cette recette : {current or 'absente'}")
+        pytest.skip(f"Base refusée pour cette recette : {current or 'absente'}")
     suffix = uuid.uuid4().hex[:8]
     company, owner, driver, driver_user = _company_driver(f"a-{suffix}")
     other, other_owner, _driver, _user = _company_driver(f"b-{suffix}")
@@ -232,9 +232,7 @@ def test_portail_retrouve_le_brouillon_et_empeche_le_doublon(client, world):
     listing = client.get(DOSSIERS, headers=_owner(world))
     assert listing.status_code == 200
     found = [
-        item
-        for item in listing.get_json()["cases"]
-        if item["booking_id"] == booking.id
+        item for item in listing.get_json()["cases"] if item["booking_id"] == booking.id
     ]
     assert found[0]["draft_invoice_id"] == body["draft_invoice_id"]
     assert found[0]["draft_status"] == "draft"

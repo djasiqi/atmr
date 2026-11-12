@@ -152,15 +152,15 @@ class TestGetBilledToS2Bypass:
         name, addr = _get_billed_to(invoice)
 
         # Assert: le nom doit être la clinique, pas le patient
-        assert "Clinique" in name or "ANIÈRES" in name.upper(), (
-            f"Expected clinic name, got: {name}"
-        )
-        assert "LUGASSY" not in name.upper(), (
-            f"Patient name should NOT appear in billed_to: {name}"
-        )
-        assert "Chemin des Courbes" in addr or "1247" in addr, (
-            f"Expected clinic address, got: {addr}"
-        )
+        assert (
+            "Clinique" in name or "ANIÈRES" in name.upper()
+        ), f"Expected clinic name, got: {name}"
+        assert (
+            "LUGASSY" not in name.upper()
+        ), f"Patient name should NOT appear in billed_to: {name}"
+        assert (
+            "Chemin des Courbes" in addr or "1247" in addr
+        ), f"Expected clinic address, got: {addr}"
 
     def test_get_billed_to_clinic_type_without_link(
         self, db, sample_company, sample_client, clinic_billing_party
@@ -191,9 +191,9 @@ class TestGetBilledToS2Bypass:
         name, _addr = _get_billed_to(invoice)
 
         # Assert: doit utiliser la clinique (bypass via type=CLINIC)
-        assert "Clinique" in name or "ANIÈRES" in name.upper(), (
-            f"Expected clinic name, got: {name}"
-        )
+        assert (
+            "Clinique" in name or "ANIÈRES" in name.upper()
+        ), f"Expected clinic name, got: {name}"
 
     def test_get_billed_to_ems_type_without_link(
         self, db, sample_company, sample_client, ems_billing_party
@@ -257,6 +257,6 @@ class TestGetBilledToS2Bypass:
         name, _addr = _get_billed_to(invoice)
 
         # Assert: doit fallback au client car pas de lien et type=OTHER
-        assert "LUGASSY" in name.upper(), (
-            f"Expected patient name (fallback), got: {name}"
-        )
+        assert (
+            "LUGASSY" in name.upper()
+        ), f"Expected patient name (fallback), got: {name}"

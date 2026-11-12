@@ -32,7 +32,7 @@ def prep(monkeypatch):
     monkeypatch.setenv("SETTLEMENT_PRODUCTION_PREP", "1")
     current = database_name() or ""
     if not current.startswith(("lirie_e2e_", "lirie_sim_", "atmr_etape")):
-        pytest.fail(f"Base refusée pour cette recette : {current or 'absente'}")
+        pytest.skip(f"Base refusée pour cette recette : {current or 'absente'}")
 
 
 @pytest.fixture
@@ -163,7 +163,9 @@ def _counts() -> dict[str, int]:
     }
 
 
-def test_fiche_lit_historique_et_pdf_sans_facture(client, db, prep, uploads, monkeypatch):
+def test_fiche_lit_historique_et_pdf_sans_facture(
+    client, db, prep, uploads, monkeypatch
+):
     del db
     world = _world()
     booking = _booking(world)
@@ -260,7 +262,10 @@ def test_fiche_lit_historique_et_pdf_sans_facture(client, db, prep, uploads, mon
     assert gone.status_code == 409
     assert gone.get_json()["error_code"] == "archive_absente"
     app_db.session.expire_all()
-    assert app_db.session.get(PatientCompanyConventionDemo, mandate.id).status == "demo_specimen_signed"
+    assert (
+        app_db.session.get(PatientCompanyConventionDemo, mandate.id).status
+        == "demo_specimen_signed"
+    )
     missing = client.get(
         f"/api/v1/companies/me/clients/{world['patient'].id}/convention-demo/specimen.pdf"
         "?mandate=999999",
@@ -282,7 +287,10 @@ def test_fiche_lit_historique_et_pdf_sans_facture(client, db, prep, uploads, mon
         headers=_headers(client, other),
     )
     assert leaked.status_code == 409
-    assert leaked.get_json()["error_code"] in {"specimen_absent", "patient_autre_entreprise"}
+    assert leaked.get_json()["error_code"] in {
+        "specimen_absent",
+        "patient_autre_entreprise",
+    }
     app_db.session.expire_all()
     assert app_db.session.get(Booking, booking.id).billed_to_type == payer
     assert _counts() == before

@@ -271,15 +271,15 @@ class TestEventPerformance:
             avg_latency_ms = total_time_ms / num_events
 
             # Vérifier que la latence moyenne est < 10ms
-            assert avg_latency_ms < 10, (
-                f"Latence moyenne trop élevée: {avg_latency_ms:.2f}ms (attendu < 10ms)"
-            )
+            assert (
+                avg_latency_ms < 10
+            ), f"Latence moyenne trop élevée: {avg_latency_ms:.2f}ms (attendu < 10ms)"
 
             # Vérifier que le débit est acceptable (> 10 événements/seconde)
             throughput = num_events / (total_time_ms / 1000)
-            assert throughput > 10, (
-                f"Débit trop faible: {throughput:.2f} événements/s (attendu > 10/s)"
-            )
+            assert (
+                throughput > 10
+            ), f"Débit trop faible: {throughput:.2f} événements/s (attendu > 10/s)"
 
     def test_metrics_handler_performance(self, app):
         """Test que le metrics_handler n'ajoute pas de latence significative."""

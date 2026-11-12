@@ -163,9 +163,9 @@ class TestSolverEmptyProblems:
             # Si empty_problem, vérifier que le debug contient la raison
             assert "reason" in result.debug
         else:
-            assert booking.id in result.unassigned_booking_ids, (
-                "Booking devrait être non assigné"
-            )
+            assert (
+                booking.id in result.unassigned_booking_ids
+            ), "Booking devrait être non assigné"
 
     def test_solve_no_bookings(self, db):
         """Test solver sans courses à assigner."""
@@ -356,9 +356,9 @@ class TestSolverConstraints:
         # Si assigné, devrait respecter la fenêtre
         if result.assignments:
             assignment = result.assignments[0]
-            assert 120 <= assignment.estimated_pickup_min <= 125, (
-                "Devrait respecter time window"
-            )
+            assert (
+                120 <= assignment.estimated_pickup_min <= 125
+            ), "Devrait respecter time window"
 
     def test_solve_respects_capacity(self, db):
         """Test que le solver respecte les capacités."""
@@ -479,9 +479,9 @@ class TestSolverDebugInfo:
         # ✅ FIX: Le debug contient des métriques mais pas nécessairement
         # "status" ou "reason"
         # Vérifier que le debug contient au moins certaines clés attendues
-        assert "vehicles" in result.debug or "tasks" in result.debug, (
-            "Debug devrait contenir des métriques (vehicles ou tasks)"
-        )
+        assert (
+            "vehicles" in result.debug or "tasks" in result.debug
+        ), "Debug devrait contenir des métriques (vehicles ou tasks)"
         # Peut aussi contenir solver_time_ms, num_vehicles, etc.
 
     def test_solve_handles_infeasible_problem(self, db):
@@ -518,7 +518,7 @@ class TestSolverDebugInfo:
         result = solve(problem, settings)
 
         # Problème infaisable → booking non assigné
-        assert booking.id in result.unassigned_booking_ids, (
-            "Booking impossible devrait être non assigné"
-        )
+        assert (
+            booking.id in result.unassigned_booking_ids
+        ), "Booking impossible devrait être non assigné"
         assert len(result.assignments) == 0, "Aucun assignment pour problème infaisable"

@@ -160,9 +160,7 @@ def test_caisse_separe_encaissement_remise_et_rapprochement() -> None:
 
 
 def test_texte_revise_reste_un_brouillon() -> None:
-    original = draft_signature_document(
-        version=DOCUMENT_VERSION, text=DOCUMENT_TEXT
-    )
+    original = draft_signature_document(version=DOCUMENT_VERSION, text=DOCUMENT_TEXT)
     kept, revised = revise_signature_document(
         original, version=DOCUMENT_VERSION_REVISED, text=REVISED_TEXT
     )

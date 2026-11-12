@@ -27,18 +27,18 @@ class TestRateLimitingPublicEndpoints:
 
         # Les 5 premières devraient passer (même si échec auth = 401)
         # La 6ème devrait être limitée (429)
-        assert all(status in [400, 401, 403, 404, 422] for status in responses[:5]), (
-            f"Les 5 premières requêtes devraient passer (auth/validation), got={responses}"
-        )
+        assert all(
+            status in [400, 401, 403, 404, 422] for status in responses[:5]
+        ), f"Les 5 premières requêtes devraient passer (auth/validation), got={responses}"
         if ratelimit_enabled:
-            assert responses[5] == 429, (
-                f"Rate limiting actif: la 6ème requête doit être 429, got={responses}"
-            )
+            assert (
+                responses[5] == 429
+            ), f"Rate limiting actif: la 6ème requête doit être 429, got={responses}"
         else:
             # En config testing, le rate limiting peut être désactivé.
-            assert responses[5] in [400, 401, 403, 404, 422], (
-                f"Rate limiting désactivé: on attend un code d'échec auth/validation, got={responses}"
-            )
+            assert (
+                responses[5] in [400, 401, 403, 404, 422]
+            ), f"Rate limiting désactivé: on attend un code d'échec auth/validation, got={responses}"
 
     def test_rate_limiting_register(self, app, client):
         """Test que le rate limiting fonctionne sur /auth/register (10 per minute)."""
@@ -59,13 +59,13 @@ class TestRateLimitingPublicEndpoints:
 
         # Les 10 premières devraient passer (même si erreur validation)
         # La 11ème devrait être limitée (429)
-        assert all(status in [200, 400, 403, 404, 422] for status in responses[:10]), (
-            "Les 10 premières requêtes devraient passer"
-        )
+        assert all(
+            status in [200, 400, 403, 404, 422] for status in responses[:10]
+        ), "Les 10 premières requêtes devraient passer"
         if ratelimit_enabled:
-            assert responses[10] == 429, (
-                "La 11ème requête devrait être limitée (429 Too Many Requests)"
-            )
+            assert (
+                responses[10] == 429
+            ), "La 11ème requête devrait être limitée (429 Too Many Requests)"
 
     def test_rate_limiting_forgot_password(self, app, client):
         """Test que le rate limiting fonctionne sur /auth/forgot-password (5 per minute)."""
@@ -82,13 +82,13 @@ class TestRateLimitingPublicEndpoints:
 
         # Les 5 premières devraient passer
         # La 6ème devrait être limitée (429)
-        assert all(status in [200, 400, 403, 404] for status in responses[:5]), (
-            "Les 5 premières requêtes devraient passer"
-        )
+        assert all(
+            status in [200, 400, 403, 404] for status in responses[:5]
+        ), "Les 5 premières requêtes devraient passer"
         if ratelimit_enabled:
-            assert responses[5] == 429, (
-                "La 6ème requête devrait être limitée (429 Too Many Requests)"
-            )
+            assert (
+                responses[5] == 429
+            ), "La 6ème requête devrait être limitée (429 Too Many Requests)"
 
     def test_rate_limiting_version_check(self, app, client):
         """Test que le rate limiting fonctionne sur /app/version-check (100 per minute)."""
@@ -108,13 +108,13 @@ class TestRateLimitingPublicEndpoints:
 
         # Les 100 premières devraient passer
         # La 101ème devrait être limitée (429)
-        assert all(status in [200, 400, 403, 404] for status in responses[:100]), (
-            "Les 100 premières requêtes devraient passer"
-        )
+        assert all(
+            status in [200, 400, 403, 404] for status in responses[:100]
+        ), "Les 100 premières requêtes devraient passer"
         if ratelimit_enabled:
-            assert responses[100] == 429, (
-                "La 101ème requête devrait être limitée (429 Too Many Requests)"
-            )
+            assert (
+                responses[100] == 429
+            ), "La 101ème requête devrait être limitée (429 Too Many Requests)"
 
     def test_rate_limiting_reset_password(self, app, client):
         """Test que le rate limiting fonctionne sur /auth/reset-password (5 per minute).
@@ -135,13 +135,13 @@ class TestRateLimitingPublicEndpoints:
 
         # Les 5 premières devraient passer (même si erreur métier)
         # La 6ème devrait être limitée (429)
-        assert all(status in [200, 400, 403, 404, 410] for status in responses[:5]), (
-            "Les 5 premières requêtes devraient passer"
-        )
+        assert all(
+            status in [200, 400, 403, 404, 410] for status in responses[:5]
+        ), "Les 5 premières requêtes devraient passer"
         if ratelimit_enabled:
-            assert responses[5] == 429, (
-                "La 6ème requête devrait être limitée (429 Too Many Requests)"
-            )
+            assert (
+                responses[5] == 429
+            ), "La 6ème requête devrait être limitée (429 Too Many Requests)"
 
     def test_rate_limiting_refresh_token(self, app, client, sample_user):
         """Test que le rate limiting fonctionne sur /auth/refresh-token (30 per minute)."""
@@ -178,13 +178,13 @@ class TestRateLimitingPublicEndpoints:
         # Les 30 premières devraient passer
         # La 31ème devrait être limitée (429)
         allowed_first_30 = {200, 400, 401, 403, 404, 422, 500}
-        assert all(status in allowed_first_30 for status in responses[:30]), (
-            f"Les 30 premières requêtes devraient passer (auth/validation), got={responses}"
-        )
+        assert all(
+            status in allowed_first_30 for status in responses[:30]
+        ), f"Les 30 premières requêtes devraient passer (auth/validation), got={responses}"
         if ratelimit_enabled:
-            assert responses[30] == 429, (
-                "La 31ème requête devrait être limitée (429 Too Many Requests)"
-            )
+            assert (
+                responses[30] == 429
+            ), "La 31ème requête devrait être limitée (429 Too Many Requests)"
 
     def test_rate_limiting_healthcheck(self, app, client):
         """Test que le rate limiting fonctionne sur /ready (1000 per minute)."""
@@ -200,9 +200,9 @@ class TestRateLimitingPublicEndpoints:
             responses.append(response.status_code)
 
         # Toutes devraient passer (limite très élevée pour healthchecks)
-        assert all(status in [200, 503, 404] for status in responses), (
-            "Les healthchecks devraient passer (200/503) ou être absents (404) selon la config"
-        )
+        assert all(
+            status in [200, 503, 404] for status in responses
+        ), "Les healthchecks devraient passer (200/503) ou être absents (404) selon la config"
 
     def test_rate_limiting_prometheus_metrics(self, client):
         """Test que le rate limiting fonctionne sur /prometheus/metrics (100 per minute)."""
@@ -224,10 +224,10 @@ class TestRateLimitingPublicEndpoints:
 
         # Les 5 premières devraient passer
         # La 6ème devrait être limitée (429) si le ratelimit est activé
-        assert all(status in [200, 400, 403, 404, 500] for status in responses[:5]), (
-            "Les 5 premières requêtes devraient passer"
-        )
+        assert all(
+            status in [200, 400, 403, 404, 500] for status in responses[:5]
+        ), "Les 5 premières requêtes devraient passer"
         if ratelimit_enabled:
-            assert responses[5] == 429, (
-                "La 6ème requête devrait être limitée (429 Too Many Requests)"
-            )
+            assert (
+                responses[5] == 429
+            ), "La 6ème requête devrait être limitée (429 Too Many Requests)"

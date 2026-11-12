@@ -51,9 +51,9 @@ def assert_pdf_s2_header_gate(pdf_bytes: bytes) -> None:
         if not page_has_prestation_lines(page_text):
             continue
         header_count = count_prestation_table_headers(page_text)
-        assert header_count == 1, (
-            f"Page {idx + 1} : attendu 1 en-tête prestations, trouvé {header_count}"
-        )
+        assert (
+            header_count == 1
+        ), f"Page {idx + 1} : attendu 1 en-tête prestations, trouvé {header_count}"
 
 
 def count_html_br_lines(html: str) -> int:

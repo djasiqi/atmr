@@ -33,8 +33,13 @@ def test_prep_fermee_sur_atmr_et_atmr_test(monkeypatch):
 
 
 def test_bases_production_refusees_par_recette():
-    assert recipe_database_allowed("atmr", host="db.prod.example", configured=True) is False
-    assert recipe_database_allowed("atmr_test", host="localhost", configured=True) is False
+    assert (
+        recipe_database_allowed("atmr", host="db.prod.example", configured=True)
+        is False
+    )
+    assert (
+        recipe_database_allowed("atmr_test", host="localhost", configured=True) is False
+    )
     assert recipe_database_allowed("lirie_e2e_fin_caisse", host="postgres_test") is True
 
 

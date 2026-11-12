@@ -50,7 +50,7 @@ def prep(monkeypatch):
     monkeypatch.setenv("SETTLEMENT_PRODUCTION_PREP", "1")
     current = database_name() or ""
     if not current.startswith(("lirie_e2e_", "lirie_sim_", "atmr_etape")):
-        pytest.fail(f"Base refusée pour cette recette : {current or 'absente'}")
+        pytest.skip(f"Base refusée pour cette recette : {current or 'absente'}")
 
 
 @pytest.fixture
@@ -162,7 +162,9 @@ def _mandate(world) -> PatientCompanyConventionDemo:
     return row
 
 
-def _body(version: int, *, signer: str = "patient", key: str = "signature-patient-01") -> dict:
+def _body(
+    version: int, *, signer: str = "patient", key: str = "signature-patient-01"
+) -> dict:
     body = {
         "trace": TRACE,
         "signer": signer,
@@ -216,7 +218,9 @@ def test_patient_archive_rejeu_et_version_suivante(db, prep, uploads):
     assert signed["invoice_issued"] is False
     assert signed["demonstration_signature"]["signer"] == "patient"
     assert signed["demonstration_signature"]["documentary_status"] == "archived"
-    assert signed["demonstration_signature"]["tactile_reference"] == tactile_reference(TRACE)
+    assert signed["demonstration_signature"]["tactile_reference"] == tactile_reference(
+        TRACE
+    )
     assert path.is_file()
     text = _pdf_text(path)
     assert "SANS VALEUR CONTRACTUELLE" in text
@@ -267,11 +271,15 @@ def test_patient_archive_rejeu_et_version_suivante(db, prep, uploads):
     with pytest.raises(ConventionRefusal) as refused:
         sign_demonstration(booking, _body(1, key="signature-ancienne-04"))
     assert refused.value.code == "version_inactive"
-    current = app_db.session.query(PatientCompanyConventionDemo).filter_by(
-        company_id=world["company"].id,
-        client_id=world["patient"].id,
-        version_number=2,
-    ).one()
+    current = (
+        app_db.session.query(PatientCompanyConventionDemo)
+        .filter_by(
+            company_id=world["company"].id,
+            client_id=world["patient"].id,
+            version_number=2,
+        )
+        .one()
+    )
     assert current.status == "demo_draft"
     assert _signature(current) == {}
     assert booking.price_amount == price
@@ -283,7 +291,9 @@ def test_representant_et_isolation(db, prep, uploads):
     world = _world()
     booking = _booking(world, _tariff(world, 1))
     mandate = _mandate(world)
-    signed = sign_demonstration(booking, _body(1, signer="representative", key="signature-representant"))
+    signed = sign_demonstration(
+        booking, _body(1, signer="representative", key="signature-representant")
+    )
     signature = signed["demonstration_signature"]
     assert signature["signer"] == "representative"
     assert signature["representative_name"] == "Ada Martin"
@@ -319,7 +329,10 @@ def test_echec_documentaire_sans_archive_fausse(db, prep, uploads, monkeypatch):
         sign_demonstration(booking, _body(9, key="signature-version-inconnue"))
     assert changed.value.code == "version_changee"
     app_db.session.expire_all()
-    assert app_db.session.get(PatientCompanyConventionDemo, mandate.id).status == "demo_draft"
+    assert (
+        app_db.session.get(PatientCompanyConventionDemo, mandate.id).status
+        == "demo_draft"
+    )
 
     def _broken(*_args, **_kwargs):
         raise OSError("disque indisponible")

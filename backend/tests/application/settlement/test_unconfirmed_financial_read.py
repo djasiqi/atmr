@@ -1,6 +1,8 @@
 """Le contrat non confirmé n'autorise aucune opération financière."""
 
-from application.settlement.unconfirmed_financial_read import unconfirmed_financial_contract
+from application.settlement.unconfirmed_financial_read import (
+    unconfirmed_financial_contract,
+)
 
 
 def test_contrat_patient_sans_politique():

@@ -79,16 +79,12 @@ def test_tap_seul() -> None:
 
 
 def test_carte_et_especes() -> None:
-    decision = prepare(
-        settings=settings(tap_to_pay_enabled=True, cash_enabled=True)
-    )
+    decision = prepare(settings=settings(tap_to_pay_enabled=True, cash_enabled=True))
     assert decision.modes == frozenset({"tap_to_pay", "cash"})
 
 
 def test_facture_directe_exige_un_texte_approuve() -> None:
-    refused = prepare(
-        settings=settings(direct_patient_invoice_enabled=True)
-    )
+    refused = prepare(settings=settings(direct_patient_invoice_enabled=True))
     approved = prepare(
         settings=settings(
             direct_patient_invoice_enabled=True,
@@ -219,9 +215,7 @@ def test_institution_ne_definit_pas_un_moyen() -> None:
 
 def test_deux_entreprises_gardent_leurs_reglages() -> None:
     cash_only = prepare(settings=settings(cash_enabled=True, config_version="a"))
-    card_only = prepare(
-        settings=settings(tap_to_pay_enabled=True, config_version="b")
-    )
+    card_only = prepare(settings=settings(tap_to_pay_enabled=True, config_version="b"))
     assert cash_only.modes == frozenset({"cash"})
     assert card_only.config_version == "b"
     assert cash_only.config_version == "a"
@@ -284,6 +278,4 @@ def test_acceptation_reelle_reste_gatee() -> None:
     class _Booking:
         id = 1
 
-    assert (
-        note_acceptance_financial_review(_Booking(), company_id=3) == "skipped"
-    )
+    assert note_acceptance_financial_review(_Booking(), company_id=3) == "skipped"

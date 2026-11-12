@@ -299,9 +299,9 @@ def test_parite_des_tests_historiques_est_documentee() -> None:
             "test_politique_confirmee_n_est_pas_ecrasee"
         ),
     }
-    isolated = (
-        _ROOT / "tests/e2e/test_stage14_persistence_isolated.py"
-    ).read_text(encoding="utf-8")
+    isolated = (_ROOT / "tests/e2e/test_stage14_persistence_isolated.py").read_text(
+        encoding="utf-8"
+    )
     originals = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (

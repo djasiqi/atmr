@@ -197,9 +197,9 @@ class TestRollbackRobustness:
 
         # Vérifier que booking1 n'est PAS restauré (déjà commité)
         booking1_reloaded = db.session.get(Booking, booking1.id)
-        assert booking1_reloaded.driver_id == driver.id, (
-            "booking1 should NOT be restored (already committed)"
-        )
+        assert (
+            booking1_reloaded.driver_id == driver.id
+        ), "booking1 should NOT be restored (already committed)"
 
     def test_rollback_restores_after_engine_run_rollback_defensive(self, db, company):
         """✅ Test : Rollback restaure après rollback défensif de engine.run().
@@ -225,9 +225,9 @@ class TestRollbackRobustness:
         db.session.flush()
 
         # ✅ FIX: Vérifier que le booking a bien été modifié avant engine.run()
-        assert booking.driver_id == driver.id, (
-            "Booking should be modified before engine.run()"
-        )
+        assert (
+            booking.driver_id == driver.id
+        ), "Booking should be modified before engine.run()"
 
         # Appeler engine.run() qui fait un rollback défensif
         result = engine.run(company_id=company.id, for_date=date.today().isoformat())
@@ -277,9 +277,9 @@ class TestRollbackRobustness:
         dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get(
             "dispatch_run_id"
         )
-        assert dispatch_run_id is not None, (
-            "DispatchRun should be created despite rollback defensive"
-        )
+        assert (
+            dispatch_run_id is not None
+        ), "DispatchRun should be created despite rollback defensive"
 
     def test_rollback_restores_assignment_after_dispatch_failure(
         self, db, company, drivers
@@ -334,6 +334,6 @@ class TestRollbackRobustness:
         assignment_reloaded = (
             db.session.query(Assignment).filter_by(booking_id=booking.id).first()
         )
-        assert assignment_reloaded is None, (
-            "Assignment should not exist (never committed)"
-        )
+        assert (
+            assignment_reloaded is None
+        ), "Assignment should not exist (never committed)"

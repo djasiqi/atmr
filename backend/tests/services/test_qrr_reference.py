@@ -51,9 +51,9 @@ class TestQRRReference:
             ref_base = qrr_ref[:26]
             check_digit = int(qrr_ref[26])
             calculated_check = service._calculate_qrr_check_digit(ref_base)
-            assert check_digit == calculated_check, (
-                f"Check digit incorrect: expected {calculated_check}, got {check_digit}"
-            )
+            assert (
+                check_digit == calculated_check
+            ), f"Check digit incorrect: expected {calculated_check}, got {check_digit}"
         finally:
             # Restore
             BillingProfileService.get_by_company_id = original_get
@@ -94,9 +94,9 @@ class TestQRRReference:
             qrr_ref_2 = service._get_payment_reference(invoice)
 
             # Assert
-            assert qrr_ref_1 == qrr_ref_2, (
-                f"QRR reference should be stable. First: {qrr_ref_1}, Second: {qrr_ref_2}"
-            )
+            assert (
+                qrr_ref_1 == qrr_ref_2
+            ), f"QRR reference should be stable. First: {qrr_ref_1}, Second: {qrr_ref_2}"
             assert len(qrr_ref_1) == 27
             assert len(qrr_ref_2) == 27
         finally:
@@ -283,14 +283,14 @@ class TestQRRReference:
             # Assert
             assert qrr_ref is not None
             assert len(qrr_ref) == 27
-            assert qrr_ref.isdigit(), (
-                "QRR should contain only digits after normalization"
-            )
+            assert (
+                qrr_ref.isdigit()
+            ), "QRR should contain only digits after normalization"
             # Vérifier que les chiffres de invoice_number sont présents
             # "ATMR-2026-12-9999" -> "2026129999"
-            assert "2026129999" in qrr_ref or "9999" in qrr_ref, (
-                "QRR should contain normalized digits from invoice_number"
-            )
+            assert (
+                "2026129999" in qrr_ref or "9999" in qrr_ref
+            ), "QRR should contain normalized digits from invoice_number"
         finally:
             # Restore
             BillingProfileService.get_by_company_id = original_get

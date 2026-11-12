@@ -272,15 +272,15 @@ class TestSendWithOffers:
             f"/api/v1/institutions/requests/{sample_request.id}/send",
             headers=auth_headers,
         )
-        assert response.status_code == 200, (
-            f"Expected idempotent 200, got {response.status_code}"
-        )
+        assert (
+            response.status_code == 200
+        ), f"Expected idempotent 200, got {response.status_code}"
 
         # Vérifier que le nombre d'offres est cohérent
         second_offers = response.json.get("send_info", {}).get("offers_created", 0)
-        assert second_offers == first_offers, (
-            "Idempotent send should return same offer count"
-        )
+        assert (
+            second_offers == first_offers
+        ), "Idempotent send should return same offer count"
 
     def test_send_draft_with_pending_offers_finalizes_sent(
         self,
@@ -496,9 +496,9 @@ class TestSendWithOffers:
             for call in mock_notify.call_args_list
             if call.kwargs.get("company_id") == sample_company.id
         ]
-        assert relaunch_calls, (
-            f"Aucune notification relance pour company_id={sample_company.id}"
-        )
+        assert (
+            relaunch_calls
+        ), f"Aucune notification relance pour company_id={sample_company.id}"
         kwargs = relaunch_calls[0].kwargs
         assert kwargs["title"] == "Demande de transport relancée"
         assert ":relaunch:" in kwargs["dedupe_key"]
@@ -604,9 +604,9 @@ class TestSendWithOffers:
             f"/api/v1/institutions/requests/{sample_request.id}/send",
             headers=auth_headers,
         )
-        assert response.status_code == 409, (
-            f"Expected 409 for CONVERTED, got {response.status_code}"
-        )
+        assert (
+            response.status_code == 409
+        ), f"Expected 409 for CONVERTED, got {response.status_code}"
         assert "convertie" in response.json.get("error", "").lower()
 
 

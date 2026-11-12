@@ -113,9 +113,9 @@ class TestClientRegistrationToBookingFlow:
         )
         register_result = register_response.get_json()
         activation_session_id = register_result.get("activation_session_id")
-        assert activation_session_id, (
-            f"activation_session_id manquant après register (réponse={register_result})"
-        )
+        assert (
+            activation_session_id
+        ), f"activation_session_id manquant après register (réponse={register_result})"
 
         # 1b. Activation obligatoire avant login (account_pending_activation)
         _complete_activation_for_e2e(e2e_client, db, activation_session_id)
@@ -178,9 +178,9 @@ class TestClientRegistrationToBookingFlow:
             for b in bookings
             if b.get("id") or b.get("booking_id")
         ]
-        assert booking_id in booking_ids, (
-            f"Le booking créé (id={booking_id}) doit être dans l'historique"
-        )
+        assert (
+            booking_id in booking_ids
+        ), f"Le booking créé (id={booking_id}) doit être dans l'historique"
 
 
 class TestClientProfileUpdateFlow:
@@ -305,9 +305,9 @@ class TestClientBookingHistoryFlow:
         ]
 
         for booking_id in bookings_created:
-            assert booking_id in booking_ids_in_history, (
-                f"Le booking {booking_id} doit être dans l'historique"
-            )
+            assert (
+                booking_id in booking_ids_in_history
+            ), f"Le booking {booking_id} doit être dans l'historique"
 
         # 4. Vérifier les réservations récentes (limit=4)
         recent_response = e2e_client.get(f"/api/v1/clients/{public_id}/recent-bookings")
@@ -315,9 +315,9 @@ class TestClientBookingHistoryFlow:
         assert recent_response.status_code == 200
         recent_bookings = recent_response.get_json()
         assert isinstance(recent_bookings, list)
-        assert len(recent_bookings) <= 4, (
-            "Les réservations récentes doivent être limitées à 4"
-        )
+        assert (
+            len(recent_bookings) <= 4
+        ), "Les réservations récentes doivent être limitées à 4"
 
         # Vérifier que les bookings créés sont dans les récentes
         recent_booking_ids = [
@@ -327,9 +327,9 @@ class TestClientBookingHistoryFlow:
         ]
 
         # Au moins certains des bookings créés doivent être dans les récentes
-        assert any(bid in recent_booking_ids for bid in bookings_created), (
-            "Au moins un des bookings créés doit être dans les récentes"
-        )
+        assert any(
+            bid in recent_booking_ids for bid in bookings_created
+        ), "Au moins un des bookings créés doit être dans les récentes"
 
 
 class TestCompanyClientCreateUpdatePersistE2E:
@@ -394,10 +394,10 @@ class TestCompanyClientCreateUpdatePersistE2E:
         updated = update_resp.get_json()
 
         # 3. Assert persisted
-        assert updated.get("phone") == updated_phone, (
-            "phone doit être persisté après update"
-        )
+        assert (
+            updated.get("phone") == updated_phone
+        ), "phone doit être persisté après update"
         access = updated.get("access") or {}
-        assert access.get("notes") == "Notes modifiées en édition", (
-            "access_notes doit être persisté après update"
-        )
+        assert (
+            access.get("notes") == "Notes modifiées en édition"
+        ), "access_notes doit être persisté après update"

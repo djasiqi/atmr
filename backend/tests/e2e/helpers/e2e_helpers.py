@@ -176,9 +176,9 @@ def login_as_user(client: FlaskClient, email: str, password: str) -> dict[str, A
         "/api/v1/auth/login",
         json={"email": email, "password": password},
     )
-    assert response.status_code == 200, (
-        f"Login failed: {response.status_code} - {response.get_json()}"
-    )
+    assert (
+        response.status_code == 200
+    ), f"Login failed: {response.status_code} - {response.get_json()}"
     data = response.get_json()
     assert data is not None
     return data
@@ -414,9 +414,9 @@ def assert_dispatch_run_created(
         .filter_by(company_id=company_id, day=for_date)
         .first()
     )
-    assert dispatch_run is not None, (
-        f"No DispatchRun found for company_id={company_id} and day={for_date}"
-    )
+    assert (
+        dispatch_run is not None
+    ), f"No DispatchRun found for company_id={company_id} and day={for_date}"
 
     if expected_status is not None:
         assert dispatch_run.status == expected_status, (

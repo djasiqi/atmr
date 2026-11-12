@@ -27,10 +27,14 @@ def test_preferences_n_activent_pas_les_moyens() -> None:
     application = _app()
     with application.app_context():
         company_id = int(
-            db.session.execute(text("SELECT id FROM company ORDER BY id LIMIT 1")).scalar()
+            db.session.execute(
+                text("SELECT id FROM company ORDER BY id LIMIT 1")
+            ).scalar()
         )
         user_id = int(
-            db.session.execute(text('SELECT id FROM "user" ORDER BY id LIMIT 1')).scalar()
+            db.session.execute(
+                text('SELECT id FROM "user" ORDER BY id LIMIT 1')
+            ).scalar()
         )
         before = db.session.execute(
             text(
@@ -117,13 +121,19 @@ def test_declaration_patient_n_est_pas_une_preuve() -> None:
     application = _app()
     with application.app_context():
         booking_id = int(
-            db.session.execute(text("SELECT id FROM booking ORDER BY id LIMIT 1")).scalar()
+            db.session.execute(
+                text("SELECT id FROM booking ORDER BY id LIMIT 1")
+            ).scalar()
         )
         company_id = int(
-            db.session.execute(text("SELECT id FROM company ORDER BY id LIMIT 1")).scalar()
+            db.session.execute(
+                text("SELECT id FROM company ORDER BY id LIMIT 1")
+            ).scalar()
         )
         user_id = int(
-            db.session.execute(text('SELECT id FROM "user" ORDER BY id LIMIT 1')).scalar()
+            db.session.execute(
+                text('SELECT id FROM "user" ORDER BY id LIMIT 1')
+            ).scalar()
         )
         try:
             with pytest.raises(ValueError, match="incomplète ou précochée"):
@@ -242,7 +252,9 @@ def test_acceptation_ne_cree_pas_de_politique_active() -> None:
             {"id": int(row.id)},
         ).scalar()
         current = db.session.execute(
-            text("SELECT billed_to_type::text AS payer, updated_at FROM booking WHERE id = :id"),
+            text(
+                "SELECT billed_to_type::text AS payer, updated_at FROM booking WHERE id = :id"
+            ),
             {"id": int(row.id)},
         ).one()
         assert after == before
@@ -270,7 +282,9 @@ def test_politique_confirmee_n_est_pas_ecrasee() -> None:
             )
         ).one()
         user_id = int(
-            db.session.execute(text('SELECT id FROM "user" ORDER BY id LIMIT 1')).scalar()
+            db.session.execute(
+                text('SELECT id FROM "user" ORDER BY id LIMIT 1')
+            ).scalar()
         )
         activation.SETTLEMENT_ACCEPTANCE_SNAPSHOT_ENABLED = True
         try:

@@ -168,7 +168,9 @@ def test_aller_retour_et_historique(app):
         assert retour["recognized_net_chf"] == "10.00"
         assert retour["remaining_due_chf"] == "20.00"
         origin = db.session.execute(
-            text("SELECT net_chf, client_operation_key FROM cash_collection WHERE id = 1")
+            text(
+                "SELECT net_chf, client_operation_key FROM cash_collection WHERE id = 1"
+            )
         ).one()
         flags = db.session.execute(
             text(

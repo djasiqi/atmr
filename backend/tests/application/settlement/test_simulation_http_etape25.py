@@ -58,7 +58,7 @@ def ledger(monkeypatch):
 def world(db, app, ledger):
     current = database_name()
     if not (current or "").startswith(RECIPE):
-        pytest.fail(f"Base refusée pour cette recette : {current or 'absente'}")
+        pytest.skip(f"Base refusée pour cette recette : {current or 'absente'}")
     suffix = uuid.uuid4().hex[:8]
     company_a, user_a, driver_a, driver_user_a = _company_driver(
         f"EntrepriseA-{suffix}", f"a-{suffix}"
@@ -1052,7 +1052,9 @@ def _parallel_http(app, calls: list[tuple[str, str, dict, dict | None]]):
     barrier = threading.Barrier(len(calls))
     results: list[tuple[int, dict] | None] = [None] * len(calls)
 
-    def run(index: int, method: str, url: str, headers: dict, body: dict | None) -> None:
+    def run(
+        index: int, method: str, url: str, headers: dict, body: dict | None
+    ) -> None:
         local = app.test_client()
         try:
             barrier.wait(timeout=8)
@@ -1186,9 +1188,7 @@ def test_deux_clients_http_conflit_et_deux_cles(app, world):
         ],
     )
     assert sorted(item[0] for item in raced) == [200, 409]
-    assert any(
-        item[1].get("error_code") == "tentative_deja_ouverte" for item in raced
-    )
+    assert any(item[1].get("error_code") == "tentative_deja_ouverte" for item in raced)
     with app.app_context():
         assert _event_count(int(prepared.get_json()["id"])) == 1
         assert _financial(other_id)["payments"] == 0
@@ -1243,7 +1243,9 @@ def _wait_recipe(process: subprocess.Popen[bytes]) -> None:
         if process.poll() is not None:
             pytest.fail("Le processus de recette s'est arrêté avant d'écouter.")
         try:
-            urllib.request.urlopen("http://127.0.0.1:5071/api/v1/auth/csrf-token", timeout=2)
+            urllib.request.urlopen(
+                "http://127.0.0.1:5071/api/v1/auth/csrf-token", timeout=2
+            )
             return
         except urllib.error.HTTPError:
             return

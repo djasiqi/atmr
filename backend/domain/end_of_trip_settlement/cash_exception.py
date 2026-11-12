@@ -301,20 +301,35 @@ def resolve_held_cash(
     if replay is not None:
         return prior, replay
     if actor_company_id != beneficiary_company_id:
-        return prior, _refused(custody, action, beneficiary_company_id, "company_isolation_refused")
+        return prior, _refused(
+            custody, action, beneficiary_company_id, "company_isolation_refused"
+        )
     if custody.reason != "cash_held_not_settlement" or not custody.custody_reference:
-        return prior, _refused(custody, action, beneficiary_company_id, "custody_missing")
+        return prior, _refused(
+            custody, action, beneficiary_company_id, "custody_missing"
+        )
     if actor_role not in {"company", "driver"}:
-        return prior, _refused(custody, action, beneficiary_company_id, "author_not_authorized")
+        return prior, _refused(
+            custody, action, beneficiary_company_id, "author_not_authorized"
+        )
     returned = any(item.returned for item in prior)
     requested = any(item.imputation_requested for item in prior)
     if action == "return":
         if actor_role not in {"company", "driver"}:
-            return prior, _refused(custody, action, beneficiary_company_id, "author_not_authorized")
+            return prior, _refused(
+                custody, action, beneficiary_company_id, "author_not_authorized"
+            )
         if returned:
-            return prior, _refused(custody, action, beneficiary_company_id, "double_return_refused")
+            return prior, _refused(
+                custody, action, beneficiary_company_id, "double_return_refused"
+            )
         if requested:
-            return prior, _refused(custody, action, beneficiary_company_id, "return_and_imputation_conflict")
+            return prior, _refused(
+                custody,
+                action,
+                beneficiary_company_id,
+                "return_and_imputation_conflict",
+            )
         decision = _decision(
             custody,
             action="return",
@@ -330,16 +345,27 @@ def resolve_held_cash(
         return (*prior, decision), decision
     if action == "impute":
         if actor_role != "company":
-            return prior, _refused(custody, action, beneficiary_company_id, "author_not_authorized")
+            return prior, _refused(
+                custody, action, beneficiary_company_id, "author_not_authorized"
+            )
         if returned:
-            return prior, _refused(custody, action, beneficiary_company_id, "return_and_imputation_conflict")
+            return prior, _refused(
+                custody,
+                action,
+                beneficiary_company_id,
+                "return_and_imputation_conflict",
+            )
         if requested:
-            return prior, _refused(custody, action, beneficiary_company_id, "double_imputation_refused")
+            return prior, _refused(
+                custody, action, beneficiary_company_id, "double_imputation_refused"
+            )
         decision = _decision(
             custody,
             action="impute",
             held=custody.physically_held_chf,
-            proposed=(custody.amount_due_chf - custody.physically_held_chf).quantize(_CENT),
+            proposed=(custody.amount_due_chf - custody.physically_held_chf).quantize(
+                _CENT
+            ),
             custody_open=True,
             holder="driver",
             imputation_requested=True,
@@ -350,7 +376,9 @@ def resolve_held_cash(
         return (*prior, decision), decision
     if action == "dispute":
         if actor_role != "company":
-            return prior, _refused(custody, action, beneficiary_company_id, "author_not_authorized")
+            return prior, _refused(
+                custody, action, beneficiary_company_id, "author_not_authorized"
+            )
         decision = _decision(
             custody,
             action="dispute",
@@ -366,9 +394,13 @@ def resolve_held_cash(
         return (*prior, decision), decision
     if action == "remit":
         if actor_role != "driver":
-            return prior, _refused(custody, action, beneficiary_company_id, "author_not_authorized")
+            return prior, _refused(
+                custody, action, beneficiary_company_id, "author_not_authorized"
+            )
         if any(item.remitted_to_company for item in prior):
-            return prior, _refused(custody, action, beneficiary_company_id, "double_remittance_refused")
+            return prior, _refused(
+                custody, action, beneficiary_company_id, "double_remittance_refused"
+            )
         decision = _decision(
             custody,
             action="remit",
@@ -383,7 +415,9 @@ def resolve_held_cash(
         )
         return (*prior, decision), decision
     if action == "close":
-        return prior, _refused(custody, action, beneficiary_company_id, "misleading_close_refused")
+        return prior, _refused(
+            custody, action, beneficiary_company_id, "misleading_close_refused"
+        )
     return prior, _refused(custody, action, beneficiary_company_id, "action_refused")
 
 

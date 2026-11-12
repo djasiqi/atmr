@@ -182,7 +182,9 @@ def prepare_acceptance_snapshot(
             ignored=ignored,
         )
     if payer == "third_party":
-        return _blocked("third_party_convention", ignored, settings, lock_required=False)
+        return _blocked(
+            "third_party_convention", ignored, settings, lock_required=False
+        )
     if client_has_established_account:
         return _snap(
             record=False,

@@ -191,9 +191,9 @@ class TestManualBookingWebMobileParity:
         for f in fields_to_compare:
             v_web = getattr(web_booking, f, None)
             v_mobile = getattr(mobile_booking, f, None)
-            assert v_web == v_mobile, (
-                f"Champ {f} diverge: web={v_web!r} vs mobile={v_mobile!r}"
-            )
+            assert (
+                v_web == v_mobile
+            ), f"Champ {f} diverge: web={v_web!r} vs mobile={v_mobile!r}"
 
     def test_case2_round_trip_same_fields(
         self, mock_route, mock_geocode, app, db, client
@@ -502,9 +502,9 @@ class TestManualBookingWebMobileParity:
             )
             .count()
         )
-        assert mobile_count >= 3, (
-            f"Mobile attendu >= 3 courses récurrentes, obtenu {mobile_count}"
-        )
+        assert (
+            mobile_count >= 3
+        ), f"Mobile attendu >= 3 courses récurrentes, obtenu {mobile_count}"
 
     def test_case6_alias_conversion_no_data_loss(
         self, mock_route, mock_geocode, app, db, client

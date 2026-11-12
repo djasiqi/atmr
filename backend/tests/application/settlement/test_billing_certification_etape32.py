@@ -49,8 +49,11 @@ _ = (prep, world)
 
 
 def test_scor_refuse_la_troncature() -> None:
+    # format_scor refuse toute troncature ; generate_scor reste compatible lisible.
+    trop_long = "14PARTNERPC14FEF2026100002"
+    assert len(trop_long) > 21
     with pytest.raises(ScorReferenceError):
-        PaymentReferenceGenerator.generate_scor("PARTNER-PC14FEF-2026-10-0002", company_id=14)
+        PaymentReferenceGenerator.format_scor(trop_long)
     short = PaymentReferenceGenerator.generate_scor("EM-2026-10-0001", company_id=1)
     assert PaymentReferenceGenerator.validate_scor(short)
     assert len(compact_scor(short)) <= 25
@@ -124,7 +127,9 @@ def test_saferpay_couverture_prix_et_liens(client, world):
     assert blocked.status_code in {400, 409, 422}
     assert _lines(full.id) == []
 
-    opened = client.post(PATIENT.format(booking_id=full.id), json={}, headers=_driver(world))
+    opened = client.post(
+        PATIENT.format(booking_id=full.id), json={}, headers=_driver(world)
+    )
     assert opened.status_code == 409
     assert opened.get_json()["error_code"] == "deja_paye"
 
@@ -294,7 +299,9 @@ def test_tva_non_applicable_et_incluse_si_deja_dans_le_total():
         vat_amount=Decimal("0.90"),
         total_amount=Decimal("12.90"),
     )
-    settings = SimpleNamespace(vat_applicable=True, vat_rate=Decimal("7.7"), vat_number="")
+    settings = SimpleNamespace(
+        vat_applicable=True, vat_rate=Decimal("7.7"), vat_number=""
+    )
     assert _partner_vat_header(settings, added) == "TVA 7.7% en sus"
     included = SimpleNamespace(
         subtotal_amount=Decimal("12.90"),
@@ -426,7 +433,9 @@ def test_chauffeur_et_entreprise_simultanes(app, world):
     threads = [
         threading.Thread(
             target=_run,
-            args=((PATIENT_TX.format(booking_id=booking_id), driver_body, driver_headers),),
+            args=(
+                (PATIENT_TX.format(booking_id=booking_id), driver_body, driver_headers),
+            ),
         ),
         threading.Thread(
             target=_run,
@@ -532,7 +541,9 @@ def test_reprise_apres_redemarrage_backend(app, world):
     process = _start()
     try:
         _wait(process)
-        opened_status, _opened = _live("POST", PATIENT.format(booking_id=booking_id), {})
+        opened_status, _opened = _live(
+            "POST", PATIENT.format(booking_id=booking_id), {}
+        )
         assert opened_status == 200
         basis_status, _basis = _live(
             "POST",
@@ -583,7 +594,5 @@ def test_deux_paiements_completent_le_prix(client, world):
     _pay(booking, 25.0, PaymentStatus.COMPLETED)
     preview = _preview(client, world, year=2026, month=10, client_id=world["client"].id)
     assert booking.id not in _ids(preview)
-    assert (
-        db.session.scalar(select(func.count()).select_from(InvoiceLine)) is not None
-    )
+    assert db.session.scalar(select(func.count()).select_from(InvoiceLine)) is not None
     _ = uuid

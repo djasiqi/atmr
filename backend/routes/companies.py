@@ -579,9 +579,9 @@ manual_booking_model = companies_ns.model(
 )
 
 
-def get_company_from_token() -> tuple[
-    Company | None, dict[str, str] | None, int | None
-]:
+def get_company_from_token() -> (
+    tuple[Company | None, dict[str, str] | None, int | None]
+):
     """Récupère l'entreprise associée à l'utilisateur courant.
 
     CP-PR1 : ne crée plus automatiquement de Company (409 si profil manquant).
@@ -644,9 +644,9 @@ def get_company_from_token() -> tuple[
     return (resolved_company, result.error, result.status_code)
 
 
-def _get_current_company_via_use_case() -> tuple[
-    Company | None, dict[str, str] | None, int | None
-]:
+def _get_current_company_via_use_case() -> (
+    tuple[Company | None, dict[str, str] | None, int | None]
+):
     """Récupère l'entreprise courante via use-case (DDD).
 
     Returns:

@@ -272,9 +272,9 @@ def assert_emission_chain(
     assert QR_UNAVAILABLE not in pdf_text
     dupont_hits = len(re.findall(re.escape(MARIE_LABEL), pdf_text, flags=re.IGNORECASE))
     if marie_in:
-        assert dupont_hits == 1, (
-            f"Marie doit apparaître une seule fois, trouvé {dupont_hits}"
-        )
+        assert (
+            dupont_hits == 1
+        ), f"Marie doit apparaître une seule fois, trouvé {dupont_hits}"
     else:
         assert dupont_hits == 0, "Marie exclue a réapparu sur le PDF institution"
 

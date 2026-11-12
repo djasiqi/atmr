@@ -59,7 +59,9 @@ def _booking(booking_id, due="45.00"):
 
 
 def _collect(booking, key, amount):
-    disposition = "partial" if Decimal(amount) < Decimal(str(booking.price_amount)) else None
+    disposition = (
+        "partial" if Decimal(amount) < Decimal(str(booking.price_amount)) else None
+    )
     return record_capped_collection(
         booking,
         {
@@ -174,22 +176,22 @@ def _payments(invoice_id):
 
 
 def test_frontiere_avant_le_commit_et_hors_clinique():
-    source = Path(
-        "application/invoices/generate_invoice.py"
-    ).read_text(encoding="utf-8")
+    source = Path("application/invoices/generate_invoice.py").read_text(
+        encoding="utf-8"
+    )
     impute_at = source.index("impute_confirmed_cash(")
     commit_at = source.index("db.session.commit()", impute_at)
     pdf_at = source.index("generate_invoice_pdf", commit_at)
     assert impute_at < commit_at < pdf_at
-    clinic = Path(
-        "application/invoices/generate_clinic_monthly_invoice.py"
-    ).read_text(encoding="utf-8")
-    partner = Path(
-        "application/invoices/add_partner_invoice_payment.py"
-    ).read_text(encoding="utf-8")
-    pdf = Path(
-        "application/invoices/force_regenerate_invoice_pdf.py"
-    ).read_text(encoding="utf-8")
+    clinic = Path("application/invoices/generate_clinic_monthly_invoice.py").read_text(
+        encoding="utf-8"
+    )
+    partner = Path("application/invoices/add_partner_invoice_payment.py").read_text(
+        encoding="utf-8"
+    )
+    pdf = Path("application/invoices/force_regenerate_invoice_pdf.py").read_text(
+        encoding="utf-8"
+    )
     assert "impute_confirmed_cash" not in clinic
     assert "impute_confirmed_cash" not in partner
     assert "impute_confirmed_cash" not in pdf
@@ -427,11 +429,15 @@ def test_echec_avant_commit_et_paiement(app, monkeypatch):
         db.session.rollback()
         monkeypatch.undo()
         assert (
-            db.session.execute(text("SELECT COUNT(*) FROM invoices WHERE id = 212")).scalar_one()
+            db.session.execute(
+                text("SELECT COUNT(*) FROM invoices WHERE id = 212")
+            ).scalar_one()
             == 0
         )
         assert (
-            db.session.execute(text("SELECT COUNT(*) FROM invoice_payments")).scalar_one()
+            db.session.execute(
+                text("SELECT COUNT(*) FROM invoice_payments")
+            ).scalar_one()
             == before_payments
         )
         db.session.remove()
@@ -518,9 +524,7 @@ def test_encaissement_pendant_emission(app):
 
     def _emit():
         with app.app_context():
-            db.session.execute(
-                text("SELECT id FROM booking WHERE id = 90 FOR UPDATE")
-            )
+            db.session.execute(text("SELECT id FROM booking WHERE id = 90 FOR UPDATE"))
             locked.set()
             assert started.wait(5)
             time.sleep(0.3)

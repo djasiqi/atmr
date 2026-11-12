@@ -112,18 +112,18 @@ class TestLoginRememberMe:
         max_age = _refresh_max_age(cookie)
         assert max_age is not None, "Max-Age requis pour remember_me=True"
         long_ttl = _long_refresh_ttl_seconds()
-        assert abs(max_age - long_ttl) <= 5, (
-            f"Max-Age attendu ~{long_ttl}s, reçu {max_age}"
-        )
+        assert (
+            abs(max_age - long_ttl) <= 5
+        ), f"Max-Age attendu ~{long_ttl}s, reçu {max_age}"
 
         data = response.get_json()
         _assert_no_web_jwt_in_json(data)
         _assert_access_expiry_metadata(data)
 
         ttl = _decode_refresh_ttl(_cookie_value(cookie))
-        assert abs(ttl - long_ttl) <= 5, (
-            f"TTL JWT long attendu ~{long_ttl}s, reçu {ttl}"
-        )
+        assert (
+            abs(ttl - long_ttl) <= 5
+        ), f"TTL JWT long attendu ~{long_ttl}s, reçu {ttl}"
 
     def test_login_remember_me_false_uses_session_cookie_and_short_ttl(
         self, client, sample_user
@@ -146,9 +146,9 @@ class TestLoginRememberMe:
         short_ttl = _short_refresh_ttl_seconds()
         assert short_ttl == 8 * 60 * 60 or abs(short_ttl - 8 * 60 * 60) <= 0
         ttl = _decode_refresh_ttl(_cookie_value(cookie))
-        assert abs(ttl - short_ttl) <= 5, (
-            f"Refresh token court attendu ~{short_ttl}s (8h), reçu {ttl}s"
-        )
+        assert (
+            abs(ttl - short_ttl) <= 5
+        ), f"Refresh token court attendu ~{short_ttl}s (8h), reçu {ttl}s"
 
     def test_login_default_behaviour_when_remember_me_absent(self, client, sample_user):
         response = _post_login(client, sample_user, remember_me=None)
@@ -190,9 +190,9 @@ class TestLoginRememberMe:
             decoded = decode_token(refresh_token)
         ttl = decoded["exp"] - decoded["iat"]
         default_delta: timedelta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
-        assert abs(ttl - int(default_delta.total_seconds())) <= 5, (
-            f"TTL mobile attendu {int(default_delta.total_seconds())}s, reçu {ttl}s"
-        )
+        assert (
+            abs(ttl - int(default_delta.total_seconds())) <= 5
+        ), f"TTL mobile attendu {int(default_delta.total_seconds())}s, reçu {ttl}s"
 
 
 @pytest.mark.parametrize("remember_me", [True, False])
@@ -223,9 +223,9 @@ class TestRefreshRotationRememberMe:
 
         rotated_cookie = _refresh_cookie_header(refresh_response)
         assert rotated_cookie is not None
-        assert _is_session_cookie(rotated_cookie), (
-            "Après rotation remember_me=false, cookie session attendu"
-        )
+        assert _is_session_cookie(
+            rotated_cookie
+        ), "Après rotation remember_me=false, cookie session attendu"
 
         data = refresh_response.get_json()
         _assert_no_web_jwt_in_json(data)
@@ -233,9 +233,9 @@ class TestRefreshRotationRememberMe:
 
         ttl = _decode_refresh_ttl(_cookie_value(rotated_cookie))
         short_ttl = _short_refresh_ttl_seconds()
-        assert abs(ttl - short_ttl) <= 5, (
-            f"TTL refresh après rotation devrait rester ~{short_ttl}s, reçu {ttl}s"
-        )
+        assert (
+            abs(ttl - short_ttl) <= 5
+        ), f"TTL refresh après rotation devrait rester ~{short_ttl}s, reçu {ttl}s"
 
     def test_refresh_rotation_preserves_remember_me_true(self, client, sample_user):
         login_response = _post_login(client, sample_user, remember_me=True)
@@ -257,18 +257,18 @@ class TestRefreshRotationRememberMe:
         assert rotated_cookie is not None
         rotated_max_age = _refresh_max_age(rotated_cookie)
         assert rotated_max_age is not None
-        assert abs(rotated_max_age - long_ttl) <= 5, (
-            "Après rotation remember_me=true, Max-Age long attendu"
-        )
+        assert (
+            abs(rotated_max_age - long_ttl) <= 5
+        ), "Après rotation remember_me=true, Max-Age long attendu"
 
         data = refresh_response.get_json()
         _assert_no_web_jwt_in_json(data)
         _assert_access_expiry_metadata(data)
 
         ttl = _decode_refresh_ttl(_cookie_value(rotated_cookie))
-        assert abs(ttl - long_ttl) <= 5, (
-            f"TTL refresh après rotation devrait rester ~{long_ttl}s, reçu {ttl}s"
-        )
+        assert (
+            abs(ttl - long_ttl) <= 5
+        ), f"TTL refresh après rotation devrait rester ~{long_ttl}s, reçu {ttl}s"
 
     def test_no_involuntary_ttl_conversion(self, app, sample_user):
         """false→false et true→true ; jamais de bascule involontaire."""
@@ -292,6 +292,6 @@ class TestRefreshRotationRememberMe:
             rotated_cookie = _refresh_cookie_header(refresh_response)
             assert rotated_cookie is not None
             ttl = _decode_refresh_ttl(_cookie_value(rotated_cookie))
-            assert abs(ttl - login_ttl) <= 5, (
-                f"remember_me={remember_me}: TTL attendu ~{login_ttl}s, reçu {ttl}s"
-            )
+            assert (
+                abs(ttl - login_ttl) <= 5
+            ), f"remember_me={remember_me}: TTL attendu ~{login_ttl}s, reçu {ttl}s"

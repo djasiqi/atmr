@@ -39,7 +39,9 @@ def sibling_of(booking: Any) -> Any | None:
 
 
 def leg_role(booking: Any) -> str:
-    if getattr(booking, "parent_booking_id", None) or getattr(booking, "is_return", False):
+    if getattr(booking, "parent_booking_id", None) or getattr(
+        booking, "is_return", False
+    ):
         return "return"
     if getattr(booking, "is_round_trip", False) or sibling_of(booking) is not None:
         return "outbound"
@@ -81,14 +83,18 @@ def separate_leg_ready(booking: Any) -> bool:
         return False
     if _money(getattr(sibling, "price_amount", None)) is None:
         return False
-    payer = str(
-        getattr(
-            getattr(booking, "billed_to_type", None),
-            "value",
-            getattr(booking, "billed_to_type", None),
+    payer = (
+        str(
+            getattr(
+                getattr(booking, "billed_to_type", None),
+                "value",
+                getattr(booking, "billed_to_type", None),
+            )
+            or ""
         )
-        or ""
-    ).strip().lower()
+        .strip()
+        .lower()
+    )
     if payer != "patient":
         return False
     policy = _active_policy(int(booking.id))
@@ -110,13 +116,17 @@ def leg_public(booking: Any) -> dict[str, Any]:
     role = leg_role(booking)
     due = _money(getattr(booking, "price_amount", None))
     sibling = sibling_of(booking) if role != "single" else None
-    sibling_due = None if sibling is None else _money(getattr(sibling, "price_amount", None))
+    sibling_due = (
+        None if sibling is None else _money(getattr(sibling, "price_amount", None))
+    )
     return {
         "leg_role": role,
         "leg_amount_chf": None if due is None else f"{due:.2f}",
         "linked_booking_id": None if sibling is None else int(sibling.id),
         "sibling_amount_chf": None if sibling_due is None else f"{sibling_due:.2f}",
-        "separate_leg_authorized": separate_leg_ready(booking) if role != "single" else False,
+        "separate_leg_authorized": separate_leg_ready(booking)
+        if role != "single"
+        else False,
         "amounts_added": False,
     }
 
@@ -130,7 +140,9 @@ def reject_leg_amount(booking: Any, payload: dict, *, company_id: int) -> None:
 
     due = amount_due(booking)
     sibling = sibling_of(booking) if linked_round_trip(booking) else None
-    sibling_due = None if sibling is None else _money(getattr(sibling, "price_amount", None))
+    sibling_due = (
+        None if sibling is None else _money(getattr(sibling, "price_amount", None))
+    )
     raw = payload.get("amount_chf")
     if raw is not None and sibling_due is not None:
         try:
@@ -152,17 +164,24 @@ def exceptional_cash_allowed(booking: Any) -> bool:
         return False
     if linked_round_trip(booking) and not separate_leg_ready(booking):
         return False
-    payer = str(
-        getattr(
-            getattr(booking, "billed_to_type", None),
-            "value",
-            getattr(booking, "billed_to_type", None),
+    payer = (
+        str(
+            getattr(
+                getattr(booking, "billed_to_type", None),
+                "value",
+                getattr(booking, "billed_to_type", None),
+            )
+            or ""
         )
-        or ""
-    ).strip().lower()
+        .strip()
+        .lower()
+    )
     if payer != "patient":
         return False
-    if getattr(booking, "id", None) is None or getattr(booking, "client_id", None) is None:
+    if (
+        getattr(booking, "id", None) is None
+        or getattr(booking, "client_id", None) is None
+    ):
         return False
     policy = _active_policy(int(booking.id))
     if policy is None:

@@ -34,7 +34,7 @@ def prep(monkeypatch):
     monkeypatch.setenv("SETTLEMENT_PRODUCTION_PREP", "1")
     current = database_name() or ""
     if not current.startswith(("lirie_e2e_", "lirie_sim_", "atmr_etape")):
-        pytest.fail(f"Base refusée pour cette recette : {current or 'absente'}")
+        pytest.skip(f"Base refusée pour cette recette : {current or 'absente'}")
 
 
 def _user(role: UserRole) -> User:
@@ -64,7 +64,9 @@ def _world(db):
     return {"company": company, "patient": patient}
 
 
-def _historical(world, *, tariff: str = "demo-2026.1", status: str = "demo_draft") -> PatientCompanyConventionDemo:
+def _historical(
+    world, *, tariff: str = "demo-2026.1", status: str = "demo_draft"
+) -> PatientCompanyConventionDemo:
     row = PatientCompanyConventionDemo(
         client_id=world["patient"].id,
         company_id=world["company"].id,
@@ -78,7 +80,9 @@ def _historical(world, *, tariff: str = "demo-2026.1", status: str = "demo_draft
         active=True,
         idempotency_key=f"legacy-{uuid.uuid4().hex[:12]}",
         legally_effective=False,
-        specimen_trace={"mandate": {"history": [{"action": "recorded", "detail": "copie"}]}},
+        specimen_trace={
+            "mandate": {"history": [{"action": "recorded", "detail": "copie"}]}
+        },
     )
     app_db.session.add(row)
     app_db.session.commit()
@@ -116,7 +120,11 @@ def test_version_active_et_historique_conserve(db, prep):
         origin.legally_effective,
     )
     before = _counts()
-    opened = open_version(world["company"].id, world["patient"].id, _payload("version-deux", "demo-2026.2"))
+    opened = open_version(
+        world["company"].id,
+        world["patient"].id,
+        _payload("version-deux", "demo-2026.2"),
+    )
     assert opened["replay"] is False
     assert opened["version_number"] == 2
     assert opened["active"] is True
@@ -156,13 +164,23 @@ def test_rejeu_conflit_et_version_figee(db, prep):
     again = open_version(world["company"].id, world["patient"].id, payload)
     assert again["replay"] is True
     assert again["id"] == first["id"]
-    assert PatientCompanyConventionDemo.query.filter_by(client_id=world["patient"].id).count() == 2
+    assert (
+        PatientCompanyConventionDemo.query.filter_by(
+            client_id=world["patient"].id
+        ).count()
+        == 2
+    )
     changed = dict(payload)
     changed["tariff_version"] = "demo-2026.9"
     with pytest.raises(ConventionRefusal) as conflict:
         open_version(world["company"].id, world["patient"].id, changed)
     assert conflict.value.code == "conflit_idempotence"
-    assert PatientCompanyConventionDemo.query.filter_by(client_id=world["patient"].id).count() == 2
+    assert (
+        PatientCompanyConventionDemo.query.filter_by(
+            client_id=world["patient"].id
+        ).count()
+        == 2
+    )
     with pytest.raises(ConventionRefusal) as frozen:
         refuse_historical_change(
             world["company"].id,
@@ -171,8 +189,14 @@ def test_rejeu_conflit_et_version_figee(db, prep):
         )
     assert frozen.value.code == "version_figee"
     app_db.session.expire_all()
-    assert app_db.session.get(PatientCompanyConventionDemo, signed.id).tariff_version == "demo-2026.1"
-    assert app_db.session.get(PatientCompanyConventionDemo, signed.id).status == "demo_specimen_signed"
+    assert (
+        app_db.session.get(PatientCompanyConventionDemo, signed.id).tariff_version
+        == "demo-2026.1"
+    )
+    assert (
+        app_db.session.get(PatientCompanyConventionDemo, signed.id).status
+        == "demo_specimen_signed"
+    )
 
 
 def test_isolation_et_couple_distinct(db, prep):
@@ -180,22 +204,40 @@ def test_isolation_et_couple_distinct(db, prep):
     second = _world(db)
     _historical(first, tariff="tarif-a")
     _historical(second, tariff="tarif-b")
-    open_version(first["company"].id, first["patient"].id, _payload("suite-alpha", "tarif-a2"))
+    open_version(
+        first["company"].id, first["patient"].id, _payload("suite-alpha", "tarif-a2")
+    )
     with pytest.raises(ConventionRefusal) as foreign:
-        open_version(second["company"].id, first["patient"].id, _payload("intrus-b", "tarif-x"))
+        open_version(
+            second["company"].id, first["patient"].id, _payload("intrus-b", "tarif-x")
+        )
     assert foreign.value.code == "patient_autre_entreprise"
-    assert PatientCompanyConventionDemo.query.filter_by(
-        client_id=second["patient"].id, active=True
-    ).one().tariff_version == "tarif-b"
-    assert PatientCompanyConventionDemo.query.filter_by(
-        client_id=first["patient"].id, active=True
-    ).one().tariff_version == "tarif-a2"
+    assert (
+        PatientCompanyConventionDemo.query.filter_by(
+            client_id=second["patient"].id, active=True
+        )
+        .one()
+        .tariff_version
+        == "tarif-b"
+    )
+    assert (
+        PatientCompanyConventionDemo.query.filter_by(
+            client_id=first["patient"].id, active=True
+        )
+        .one()
+        .tariff_version
+        == "tarif-a2"
+    )
 
 
 def test_double_activation_et_contrainte_juridique(db, prep):
     world = _world(db)
     origin = _historical(world)
-    opened = open_version(world["company"].id, world["patient"].id, _payload("version-deux", "demo-2026.2"))
+    opened = open_version(
+        world["company"].id,
+        world["patient"].id,
+        _payload("version-deux", "demo-2026.2"),
+    )
     extra = PatientCompanyConventionDemo(
         client_id=world["patient"].id,
         company_id=world["company"].id,
@@ -223,7 +265,9 @@ def test_double_activation_et_contrainte_juridique(db, prep):
     assert definition is not None
     assert "false" in str(definition).lower()
     index = app_db.session.execute(
-        text("SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_convention_demo_active'")
+        text(
+            "SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_convention_demo_active'"
+        )
     ).scalar()
     assert index is not None
     assert "UNIQUE" in str(index).upper()
@@ -233,10 +277,18 @@ def test_double_activation_et_contrainte_juridique(db, prep):
     with pytest.raises(IntegrityError):
         app_db.session.commit()
     app_db.session.rollback()
-    assert PatientCompanyConventionDemo.query.filter_by(
-        client_id=world["patient"].id, active=True
-    ).one().id == opened["id"]
-    assert app_db.session.get(PatientCompanyConventionDemo, origin.id).legally_effective is False
+    assert (
+        PatientCompanyConventionDemo.query.filter_by(
+            client_id=world["patient"].id, active=True
+        )
+        .one()
+        .id
+        == opened["id"]
+    )
+    assert (
+        app_db.session.get(PatientCompanyConventionDemo, origin.id).legally_effective
+        is False
+    )
 
 
 def test_activations_concurrentes(db, prep, app):
@@ -267,7 +319,9 @@ def test_activations_concurrentes(db, prep, app):
     for thread in threads:
         thread.join(timeout=30)
     assert sorted(codes) == ["ok", "ok"], codes
-    rows = PatientCompanyConventionDemo.query.filter_by(client_id=world["patient"].id).all()
+    rows = PatientCompanyConventionDemo.query.filter_by(
+        client_id=world["patient"].id
+    ).all()
     assert len(rows) == 3
     assert len([row for row in rows if row.active]) == 1
     assert {row.legally_effective for row in rows} == {False}

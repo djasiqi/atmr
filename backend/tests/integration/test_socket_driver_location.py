@@ -133,13 +133,13 @@ class TestSocketDriverLocation:
 
         received = client.get_received()
         error_events = [e for e in received if e.get("name") == "error"]
-        assert len(error_events) >= 1, (
-            f"Expected 'error' event, got: {[e.get('name') for e in received]}"
-        )
+        assert (
+            len(error_events) >= 1
+        ), f"Expected 'error' event, got: {[e.get('name') for e in received]}"
         payload = error_events[0].get("args", [{}])[0]
-        assert "Chauffeur non lié à une entreprise" in str(payload.get("error", "")), (
-            f"Expected error message, got: {payload}"
-        )
+        assert "Chauffeur non lié à une entreprise" in str(
+            payload.get("error", "")
+        ), f"Expected error message, got: {payload}"
 
         mock_location_service.update_driver_location.assert_not_called()
 
@@ -181,9 +181,9 @@ class TestSocketDriverLocation:
 
         received = client.get_received()
         error_events = [e for e in received if e.get("name") == "error"]
-        assert error_events, (
-            f"Expected error event, got: {[e.get('name') for e in received]}"
-        )
+        assert (
+            error_events
+        ), f"Expected error event, got: {[e.get('name') for e in received]}"
         payload = error_events[0].get("args", [{}])[0]
         assert payload.get("reason") == "availability_presence_socket_forbidden"
         mock_location_service.update_driver_location.assert_not_called()

@@ -61,9 +61,9 @@ def invalidate_osrm_matrix_cache_adapter(coords: list[tuple[float, float]]) -> N
         )
 
 
-def create_cache_invalidation_ports() -> tuple[
-    Callable[[str], None], Callable[[list[tuple[float, float]]], None]
-]:
+def create_cache_invalidation_ports() -> (
+    tuple[Callable[[str], None], Callable[[list[tuple[float, float]]], None]]
+):
     """Factory pour créer les ports d'invalidation du cache.
 
     Returns:

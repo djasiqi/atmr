@@ -151,9 +151,9 @@ class TestDriverStatusUpdateFlow:
 
         # 5. Vérifier que le statut est maintenant IN_PROGRESS
         db.session.refresh(booking)
-        assert booking.status == BookingStatus.IN_PROGRESS, (
-            f"Le statut doit être IN_PROGRESS, actuel: {booking.status}"
-        )
+        assert (
+            booking.status == BookingStatus.IN_PROGRESS
+        ), f"Le statut doit être IN_PROGRESS, actuel: {booking.status}"
 
 
 class TestDriverBookingCompletionFlow:
@@ -219,6 +219,6 @@ class TestDriverBookingCompletionFlow:
 
         # 5. Vérifier le statut final
         db.session.refresh(booking)
-        assert booking.status == BookingStatus.COMPLETED, (
-            f"Le statut final doit être COMPLETED, actuel: {booking.status}"
-        )
+        assert (
+            booking.status == BookingStatus.COMPLETED
+        ), f"Le statut final doit être COMPLETED, actuel: {booking.status}"

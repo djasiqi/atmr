@@ -54,7 +54,7 @@ def prep(monkeypatch):
 def world(db, app, prep):
     current = database_name()
     if not (current or "").startswith(RECIPE):
-        pytest.fail(f"Base refusée pour cette recette : {current or 'absente'}")
+        pytest.skip(f"Base refusée pour cette recette : {current or 'absente'}")
     suffix = uuid.uuid4().hex[:8]
     company, owner, driver, driver_user = _company_driver(f"a-{suffix}")
     other, other_owner, _driver, _user = _company_driver(f"b-{suffix}")
@@ -137,7 +137,9 @@ def _booking(world, **overrides):
         status=overrides.pop("status", BookingStatus.COMPLETED),
         scheduled_time=when,
         pickup_location=overrides.pop("pickup_location", "Rue fictive 1, 1000 Recette"),
-        dropoff_location=overrides.pop("dropoff_location", "Avenue fictive 2, 1000 Recette"),
+        dropoff_location=overrides.pop(
+            "dropoff_location", "Avenue fictive 2, 1000 Recette"
+        ),
         customer_name="Patient fictif",
         billed_to_type=overrides.pop("billed_to_type", "patient"),
         is_round_trip=False,
@@ -157,7 +159,9 @@ def _headers(app, user: User) -> dict[str, str]:
         "token_version": int(getattr(user, "token_version", 0) or 0),
     }
     with app.app_context():
-        token = create_access_token(identity=str(user.public_id), additional_claims=claims)
+        token = create_access_token(
+            identity=str(user.public_id), additional_claims=claims
+        )
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -204,9 +208,7 @@ def _generate(client, world, reservation_ids: list[int], **extra):
 
 def test_patient_trajet_dates_multiples_et_exclusions(client, world):
     simple = _booking(world, amount=Decimal("45.00"))
-    preview = _preview(
-        client, world, year=2026, month=10, client_id=world["client"].id
-    )
+    preview = _preview(client, world, year=2026, month=10, client_id=world["client"].id)
     assert preview["transports_count"] >= 1
     created = _generate(client, world, [simple.id])
     assert created.status_code in {200, 201}, created.get_data(as_text=True)[:500]
@@ -234,7 +236,8 @@ def test_patient_trajet_dates_multiples_et_exclusions(client, world):
     )
     ids = {line["booking_id"] for line in round_trip["preview_lines"]}
     assert outbound.id in ids or any(
-        line.get("round_trip_partner_booking_id") for line in round_trip["preview_lines"]
+        line.get("round_trip_partner_booking_id")
+        for line in round_trip["preview_lines"]
     )
     assert float(round_trip["estimated_total"]) >= 90.0
 
@@ -283,9 +286,7 @@ def test_patient_prepaye_saferpay_nest_plus_propose(client, world):
     )
     db.session.add(payment)
     db.session.commit()
-    preview = _preview(
-        client, world, year=2026, month=10, client_id=world["client"].id
-    )
+    preview = _preview(client, world, year=2026, month=10, client_id=world["client"].id)
     assert booking.id not in {line["booking_id"] for line in preview["preview_lines"]}
     refused = _generate(client, world, [booking.id])
     assert refused.status_code in {400, 409, 422}
@@ -538,7 +539,9 @@ def test_reponse_perdue_et_rollback_injecte(client, world, monkeypatch):
     assert _lines(booking.id) == []
     assert (
         db.session.scalar(
-            select(func.count()).select_from(Invoice).where(Invoice.client_id.is_not(None))
+            select(func.count())
+            .select_from(Invoice)
+            .where(Invoice.client_id.is_not(None))
         )
         is not None
     )
@@ -555,7 +558,9 @@ def test_reponse_perdue_et_rollback_injecte(client, world, monkeypatch):
     )
     assert replay.status_code == 200
     assert replay.get_json()["replay"] is True
-    assert replay.get_json()["draft_invoice_id"] == created.get_json()["draft_invoice_id"]
+    assert (
+        replay.get_json()["draft_invoice_id"] == created.get_json()["draft_invoice_id"]
+    )
     assert len(_lines(booking.id)) == 1
 
 
@@ -566,14 +571,18 @@ def test_qr_specimen_et_decodage_hors_ligne(client, world):
     booking = _booking(world)
     created = _generate(client, world, [booking.id])
     assert created.status_code in {200, 201}, created.get_data(as_text=True)[:500]
-    invoice = db.session.get(Invoice, created.get_json().get("id") or created.get_json()["invoice_id"])
+    invoice = db.session.get(
+        Invoice, created.get_json().get("id") or created.get_json()["invoice_id"]
+    )
     settings = db.session.scalars(
         select(CompanyBillingSettings).where(
             CompanyBillingSettings.company_id == world["company"].id
         )
     ).first()
     if settings is None:
-        settings = CompanyBillingSettings(company_id=world["company"].id, payment_terms_days=30)
+        settings = CompanyBillingSettings(
+            company_id=world["company"].id, payment_terms_days=30
+        )
         db.session.add(settings)
     settings.iban = TEST_IBAN
     world["company"].address = "Rue de recette 1, 1000 Recette"
@@ -610,7 +619,9 @@ def specimen_qr_view(opened: dict, booking) -> dict:
     from models.settlement_production import PatientBillingDossier
 
     row = db.session.scalars(
-        select(PatientBillingDossier).where(PatientBillingDossier.booking_id == booking.id)
+        select(PatientBillingDossier).where(
+            PatientBillingDossier.booking_id == booking.id
+        )
     ).one()
     view = specimen_qr(row)
     view["company_name"] = opened.get("company_name") or "Certif"

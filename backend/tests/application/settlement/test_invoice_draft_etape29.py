@@ -36,7 +36,7 @@ def prep(monkeypatch):
 def world(db, app, prep):
     current = database_name()
     if not (current or "").startswith(RECIPE):
-        pytest.fail(f"Base refusée pour cette recette : {current or 'absente'}")
+        pytest.skip(f"Base refusée pour cette recette : {current or 'absente'}")
     suffix = uuid.uuid4().hex[:8]
     company, owner, driver, driver_user = _company_driver(suffix)
     db.session.commit()
@@ -125,7 +125,9 @@ def _owner(world):
 
 def test_brouillon_unique_non_emetteur_et_qr_non_payable(client, world):
     booking = _booking(world)
-    opened = client.post(PATIENT.format(booking_id=booking.id), json={}, headers=_driver(world))
+    opened = client.post(
+        PATIENT.format(booking_id=booking.id), json={}, headers=_driver(world)
+    )
     assert opened.status_code == 200
     missing = client.post(
         PATIENT_TX.format(booking_id=booking.id),
@@ -136,7 +138,11 @@ def test_brouillon_unique_non_emetteur_et_qr_non_payable(client, world):
     assert missing.get_json()["error_code"] == "fondement_insuffisant"
     accepted = client.post(
         PATIENT_TX.format(booking_id=booking.id),
-        json={"action": "acceptance", "idempotency_key": "accept-1", "signatory_role": "patient"},
+        json={
+            "action": "acceptance",
+            "idempotency_key": "accept-1",
+            "signatory_role": "patient",
+        },
         headers=_driver(world),
     )
     assert accepted.status_code == 200
@@ -203,7 +209,9 @@ def test_brouillon_unique_non_emetteur_et_qr_non_payable(client, world):
     assert int(db.session.scalar(select(func.count()).select_from(Invoice))) >= 1
     listing = client.get(DOSSIERS, headers=_owner(world))
     assert listing.status_code == 200
-    found = [item for item in listing.get_json()["cases"] if item["booking_id"] == booking.id]
+    found = [
+        item for item in listing.get_json()["cases"] if item["booking_id"] == booking.id
+    ]
     assert found[0]["draft_invoice_id"] == body["draft_invoice_id"]
 
 

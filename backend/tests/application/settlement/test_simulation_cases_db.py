@@ -26,6 +26,12 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 def ledger(monkeypatch):
     monkeypatch.setenv("SETTLEMENT_SIMULATION_LEDGER", "1")
+    from domain.end_of_trip_settlement.simulation_barrier import ledger_open
+
+    if not ledger_open():
+        pytest.skip(
+            "Journal de simulation réservé aux bases jetables (hors atmr_test CI)"
+        )
 
 
 def _prepare(booking, driver):

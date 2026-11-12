@@ -138,9 +138,9 @@ class TestIdempotence:
             )
             .count()
         )
-        assert assignments_count_1 == 1, (
-            "Une assignation doit exister après le 1er appel"
-        )
+        assert (
+            assignments_count_1 == 1
+        ), "Une assignation doit exister après le 1er appel"
 
         # Deuxième appel IDENTIQUE (idempotence)
         result2 = apply_assignments(
@@ -162,9 +162,9 @@ class TestIdempotence:
             .count()
         )
 
-        assert assignments_count_2 == 1, (
-            "Idempotence échouée: doublon créé lors du 2ème appel"
-        )
+        assert (
+            assignments_count_2 == 1
+        ), "Idempotence échouée: doublon créé lors du 2ème appel"
 
         logger.info("✅ Test idempotence réussi: 0 doublon créé")
 
@@ -293,9 +293,9 @@ class TestIdempotence:
         )
 
         assert assignments_count == 0, "Pas d'assignation créée en cas d'erreur"
-        assert "error" in result or len(result["applied"]) == 0, (
-            "Aucune assignation appliquée"
-        )
+        assert (
+            "error" in result or len(result["applied"]) == 0
+        ), "Aucune assignation appliquée"
 
         logger.info("✅ Rollback automatique testé")
 

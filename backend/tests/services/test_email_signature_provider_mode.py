@@ -48,12 +48,12 @@ class TestBrevoApiForcesUrlMode:
         img_src = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html_result)
         assert img_src is not None, "Un src img doit être présent"
         src = img_src.group(1)
-        assert src.startswith("https://"), (
-            f"En mode url le src doit être une URL HTTPS, obtenu: {src}"
-        )
-        assert "?v=42" in src or "?v=42" in html_result, (
-            f"Cache-busting ?v=42 attendu dans le src, obtenu: {src}"
-        )
+        assert src.startswith(
+            "https://"
+        ), f"En mode url le src doit être une URL HTTPS, obtenu: {src}"
+        assert (
+            "?v=42" in src or "?v=42" in html_result
+        ), f"Cache-busting ?v=42 attendu dans le src, obtenu: {src}"
 
 
 class TestSmtpMimeContainsRelatedAndContentId:

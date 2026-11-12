@@ -306,7 +306,9 @@ def test_historique_idempotence_et_imputation(app):
     booking = _booking(46)
     with app.app_context():
         origin = _collect(booking, "enc-46", "20.00")
-        _correct(booking, "comp-46", origin["id"], "-5.00", reason="billet compte deux fois")
+        _correct(
+            booking, "comp-46", origin["id"], "-5.00", reason="billet compte deux fois"
+        )
         replay = _correct(
             booking, "comp-46", origin["id"], "-5.00", reason="billet compte deux fois"
         )
@@ -345,9 +347,7 @@ def test_historique_idempotence_et_imputation(app):
                 _correct(booking, "comp-46-impute", origin["id"], "-1.00")
             assert imputed.value.code == "correction_apres_imputation"
             db.session.execute(
-                text(
-                    "DELETE FROM invoice_payments WHERE cash_collection_id = :origin"
-                ),
+                text("DELETE FROM invoice_payments WHERE cash_collection_id = :origin"),
                 {"origin": origin["id"]},
             )
             db.session.commit()
@@ -442,9 +442,7 @@ def _race(app, booking, origin_id, pairs):
             with guard:
                 found.append(item)
 
-    threads = [
-        threading.Thread(target=_run, args=(net, key)) for net, key in pairs
-    ]
+    threads = [threading.Thread(target=_run, args=(net, key)) for net, key in pairs]
     for thread in threads:
         thread.start()
     for thread in threads:

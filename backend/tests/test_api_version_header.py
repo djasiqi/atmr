@@ -18,9 +18,9 @@ class TestApiVersionHeader:
 
         # Le header X-API-Version doit être présent
         assert "X-API-Version" in response.headers, "Header X-API-Version manquant"
-        assert response.headers["X-API-Version"] == "v1", (
-            f"Version attendue: v1, reçue: {response.headers.get('X-API-Version')}"
-        )
+        assert (
+            response.headers["X-API-Version"] == "v1"
+        ), f"Version attendue: v1, reçue: {response.headers.get('X-API-Version')}"
 
     def test_api_v2_header(self, client):
         """Test que le header X-API-Version: v2 est présent pour les routes /api/v2/*."""
@@ -29,9 +29,9 @@ class TestApiVersionHeader:
 
         # Le header X-API-Version doit être présent même pour les 404
         assert "X-API-Version" in response.headers, "Header X-API-Version manquant"
-        assert response.headers["X-API-Version"] == "v2", (
-            f"Version attendue: v2, reçue: {response.headers.get('X-API-Version')}"
-        )
+        assert (
+            response.headers["X-API-Version"] == "v2"
+        ), f"Version attendue: v2, reçue: {response.headers.get('X-API-Version')}"
 
     def test_api_legacy_header(self, client):
         """Test que le header X-API-Version: legacy est présent pour les routes /api/* (legacy)."""
@@ -43,9 +43,9 @@ class TestApiVersionHeader:
 
         # Le header X-API-Version doit être présent
         assert "X-API-Version" in response.headers, "Header X-API-Version manquant"
-        assert response.headers["X-API-Version"] == "legacy", (
-            f"Version attendue: legacy, reçue: {response.headers.get('X-API-Version')}"
-        )
+        assert (
+            response.headers["X-API-Version"] == "legacy"
+        ), f"Version attendue: legacy, reçue: {response.headers.get('X-API-Version')}"
 
     def test_non_api_path_no_header(self, client):
         """Test que le header X-API-Version n'est PAS présent pour les chemins non-API."""
@@ -53,9 +53,9 @@ class TestApiVersionHeader:
         response = client.get("/ready")
 
         # Le header X-API-Version ne doit PAS être présent pour les chemins non-API
-        assert "X-API-Version" not in response.headers, (
-            "Header X-API-Version ne devrait pas être présent pour les chemins non-API"
-        )
+        assert (
+            "X-API-Version" not in response.headers
+        ), "Header X-API-Version ne devrait pas être présent pour les chemins non-API"
 
     def test_api_v1_auth_endpoint_header(self, client):
         """Test que le header X-API-Version est présent même pour les endpoints d'auth."""
@@ -67,9 +67,9 @@ class TestApiVersionHeader:
 
         # Le header X-API-Version doit être présent
         assert "X-API-Version" in response.headers, "Header X-API-Version manquant"
-        assert response.headers["X-API-Version"] == "v1", (
-            f"Version attendue: v1, reçue: {response.headers.get('X-API-Version')}"
-        )
+        assert (
+            response.headers["X-API-Version"] == "v1"
+        ), f"Version attendue: v1, reçue: {response.headers.get('X-API-Version')}"
 
     def test_api_v1_prometheus_metrics_header(self, client):
         """Test que le header X-API-Version est présent pour les métriques Prometheus."""
@@ -78,9 +78,9 @@ class TestApiVersionHeader:
 
         # Le header X-API-Version doit être présent
         assert "X-API-Version" in response.headers, "Header X-API-Version manquant"
-        assert response.headers["X-API-Version"] == "v1", (
-            f"Version attendue: v1, reçue: {response.headers.get('X-API-Version')}"
-        )
+        assert (
+            response.headers["X-API-Version"] == "v1"
+        ), f"Version attendue: v1, reçue: {response.headers.get('X-API-Version')}"
 
     def test_api_version_header_with_authenticated_request(self, client, sample_user):
         """Test que le header X-API-Version est présent même pour les requêtes authentifiées."""
@@ -100,6 +100,6 @@ class TestApiVersionHeader:
 
         # Le header X-API-Version doit être présent
         assert "X-API-Version" in response.headers, "Header X-API-Version manquant"
-        assert response.headers["X-API-Version"] == "v1", (
-            f"Version attendue: v1, reçue: {response.headers.get('X-API-Version')}"
-        )
+        assert (
+            response.headers["X-API-Version"] == "v1"
+        ), f"Version attendue: v1, reçue: {response.headers.get('X-API-Version')}"

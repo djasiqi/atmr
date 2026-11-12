@@ -71,9 +71,10 @@ def test_changement_ordinaire_refuse_apres_verrou_puis_annule() -> None:
             {"booking_id": booking_id, "user_id": user_id, "locked": False},
         )
         assert refuse_ordinary_payer_change(booking_id) is None
-        assert lock_financial_responsibility(
-            booking_id=booking_id, actor_user_id=user_id
-        ) == "locked"
+        assert (
+            lock_financial_responsibility(booking_id=booking_id, actor_user_id=user_id)
+            == "locked"
+        )
         assert refuse_ordinary_payer_change(booking_id) == "payer_locked"
         from models import Booking
 

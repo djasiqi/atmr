@@ -139,7 +139,11 @@ def remember(
 ) -> None:
     """Ajoute une ligne d'historique sans effacer un tracé de démonstration."""
     trace = dict(row.specimen_trace) if isinstance(row.specimen_trace, dict) else {}
-    mandate = dict(trace.get("mandate") or {}) if isinstance(trace.get("mandate"), dict) else {}
+    mandate = (
+        dict(trace.get("mandate") or {})
+        if isinstance(trace.get("mandate"), dict)
+        else {}
+    )
     history = list(mandate.get("history") or [])
     history.append(
         {
@@ -230,10 +234,14 @@ def _public_transmissions(raw: object) -> list[dict[str, Any]]:
     ]
 
 
-def _view(row: PatientCompanyConventionDemo, company_name: str, booking: Booking | None) -> dict[str, Any]:
+def _view(
+    row: PatientCompanyConventionDemo, company_name: str, booking: Booking | None
+) -> dict[str, Any]:
     meta = _meta(row)
     decision = None if booking is None else _decision(row, booking)
-    amendments = [item for item in list(meta.get("amendments") or []) if isinstance(item, dict)]
+    amendments = [
+        item for item in list(meta.get("amendments") or []) if isinstance(item, dict)
+    ]
     unsigned = [item for item in amendments if not item.get("signed")]
     amendment_label = None
     if unsigned or (decision is not None and decision.amendment_required):
@@ -253,16 +261,17 @@ def _view(row: PatientCompanyConventionDemo, company_name: str, booking: Booking
         "service_scope": row.service_scope,
         "billing_conditions": str(meta.get("billing_conditions") or _BILLING),
         "prepared_at": None if row.created_at is None else row.created_at.isoformat(),
-        "signed_at": signature.get("signed_at") if isinstance(signature, dict) else None,
+        "signed_at": signature.get("signed_at")
+        if isinstance(signature, dict)
+        else None,
         "valid_from": meta.get("valid_from"),
         "valid_until": meta.get("valid_until"),
         "duration_label": row.duration_label,
         "status": row.status,
         "status_label": _status_label(row.status),
         "applicability": None if decision is None else decision.kind,
-        "amendment_required": bool(unsigned) or (
-            False if decision is None else decision.amendment_required
-        ),
+        "amendment_required": bool(unsigned)
+        or (False if decision is None else decision.amendment_required),
         "amendment_label": amendment_label,
         "amendments": amendments,
         "reservations": _reservations(row),
@@ -299,7 +308,9 @@ def _company_name(company_id: int) -> str:
     return str(getattr(company, "name", None) or "Entreprise fictive")
 
 
-def _version_content(row: PatientCompanyConventionDemo) -> tuple[str, str, str, str, str]:
+def _version_content(
+    row: PatientCompanyConventionDemo,
+) -> tuple[str, str, str, str, str]:
     return (
         str(row.debtor_label),
         str(row.tariff_version),
@@ -319,7 +330,9 @@ def _lock_pair(client_id: int, company_id: int) -> None:
     )
 
 
-def open_version(company_id: int, client_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+def open_version(
+    company_id: int, client_id: int, payload: dict[str, Any]
+) -> dict[str, Any]:
     """Ouvre une version et désactive la précédente, sans la réécrire.
 
     Aucune facture. ``legally_effective`` reste faux.
@@ -423,7 +436,11 @@ def refuse_historical_change(
     if row is None:
         raise ConventionRefusal("version_absente", "Cette version est introuvable.")
     proposed = str(payload.get("tariff_version") or "")
-    if (not row.active) or row.status != "demo_draft" or proposed != str(row.tariff_version):
+    if (
+        (not row.active)
+        or row.status != "demo_draft"
+        or proposed != str(row.tariff_version)
+    ):
         raise ConventionRefusal(
             "version_figee",
             "Une version signée ou archivée n'est pas réécrite.",
@@ -624,7 +641,11 @@ def _record_existing(row: PatientCompanyConventionDemo) -> bool:
 def _note_booking(row: PatientCompanyConventionDemo, booking: Booking) -> str:
     """Rattache une course ou prépare un avenant. Ne élargit pas la couverture."""
     trace = dict(row.specimen_trace) if isinstance(row.specimen_trace, dict) else {}
-    mandate = dict(trace.get("mandate") or {}) if isinstance(trace.get("mandate"), dict) else {}
+    mandate = (
+        dict(trace.get("mandate") or {})
+        if isinstance(trace.get("mandate"), dict)
+        else {}
+    )
     seen = [int(item) for item in list(mandate.get("seen_booking_ids") or [])]
     booking_id = int(booking.id)
     already = booking_id in seen
@@ -637,9 +658,13 @@ def _note_booking(row: PatientCompanyConventionDemo, booking: Booking) -> str:
     row.specimen_trace = trace
     if label and label not in covered:
         amendments = [
-            item for item in list(mandate.get("amendments") or []) if isinstance(item, dict)
+            item
+            for item in list(mandate.get("amendments") or [])
+            if isinstance(item, dict)
         ]
-        known = any(int(item.get("booking_id") or 0) == booking_id for item in amendments)
+        known = any(
+            int(item.get("booking_id") or 0) == booking_id for item in amendments
+        )
         if known:
             return "replay"
         amendments.append(
@@ -668,7 +693,9 @@ def _note_booking(row: PatientCompanyConventionDemo, booking: Booking) -> str:
         return "amendment"
     if already:
         return "replay"
-    remember(row, "linked", f"Réservation {booking_id} rattachée à la convention existante.")
+    remember(
+        row, "linked", f"Réservation {booking_id} rattachée à la convention existante."
+    )
     return "reused"
 
 
@@ -882,7 +909,9 @@ def driver_read(booking: Booking) -> dict[str, Any]:
         debtor_label=str(booking.customer_name or "Patient fictif"),
     )
     assessed = assess_for_booking(int(booking.company_id), int(booking.id))
-    mandate = assessed.get("mandate") if isinstance(assessed.get("mandate"), dict) else {}
+    mandate = (
+        assessed.get("mandate") if isinstance(assessed.get("mandate"), dict) else {}
+    )
     email, phone = _suggested_contacts(booking)
     body.update(
         {
@@ -892,12 +921,16 @@ def driver_read(booking: Booking) -> dict[str, Any]:
             "amendment_label": mandate.get("amendment_label"),
             "billing_conditions": mandate.get("billing_conditions") or _BILLING,
             "service_scope": mandate.get("service_scope") or body.get("service_scope"),
-            "duration_label": mandate.get("duration_label") or body.get("duration_label"),
-            "document_version": mandate.get("document_version") or body.get("document_version"),
+            "duration_label": mandate.get("duration_label")
+            or body.get("duration_label"),
+            "document_version": mandate.get("document_version")
+            or body.get("document_version"),
             "convention_id": mandate.get("id"),
             "covered_tariff_versions": assessed.get("covered_tariff_versions") or [],
             "supplements": [],
-            "signature_offer": signature_offer(str(assessed["kind"]), body.get("status")),
+            "signature_offer": signature_offer(
+                str(assessed["kind"]), body.get("status")
+            ),
             "demonstration_signature": mandate.get("demonstration_signature"),
             "admin_review_required": bool(mandate.get("admin_review_required")),
             "transmissions": mandate.get("transmissions") or [],
@@ -918,7 +951,9 @@ def driver_read(booking: Booking) -> dict[str, Any]:
     return body
 
 
-def _refuse_other_version(locked: PatientCompanyConventionDemo, body: dict[str, Any]) -> None:
+def _refuse_other_version(
+    locked: PatientCompanyConventionDemo, body: dict[str, Any]
+) -> None:
     """Une signature vise la version présentée. Une version inactive est refusée."""
     raw = body.get("version_number")
     if raw is None or str(raw).strip() == "":
@@ -961,7 +996,9 @@ def _restore_archive(locked: PatientCompanyConventionDemo) -> None:
         return
     trace = locked.specimen_trace if isinstance(locked.specimen_trace, dict) else {}
     mandate = trace.get("mandate") if isinstance(trace.get("mandate"), dict) else {}
-    signature = mandate.get("signature") if isinstance(mandate.get("signature"), dict) else {}
+    signature = (
+        mandate.get("signature") if isinstance(mandate.get("signature"), dict) else {}
+    )
     recorded = signature.get("version_number")
     if recorded is not None and int(recorded) != int(locked.version_number):
         raise ConventionRefusal(
@@ -999,7 +1036,12 @@ def sign_demonstration(booking: Booking, body: dict[str, Any]) -> dict[str, Any]
             "mandat_deja_applicable",
             "Un mandat de démonstration couvre déjà cette réservation.",
         )
-    if decision.kind in {"expired", "amendment_required", "other_company", "not_concerned"}:
+    if decision.kind in {
+        "expired",
+        "amendment_required",
+        "other_company",
+        "not_concerned",
+    }:
         raise ConventionRefusal(decision.kind, decision.label)
     if row is None or row.status not in {"demo_draft", "demo_specimen_signed"}:
         raise ConventionRefusal(
@@ -1022,7 +1064,9 @@ def sign_demonstration(booking: Booking, body: dict[str, Any]) -> dict[str, Any]
         )
     signer = str(body.get("signer") or "")
     if signer not in {"patient", "representative"}:
-        raise ConventionRefusal("signataire_inconnu", "Le signataire indiqué n'est pas reconnu.")
+        raise ConventionRefusal(
+            "signataire_inconnu", "Le signataire indiqué n'est pas reconnu."
+        )
     name = quality = relation = None
     if signer == "representative":
         name = str(body.get("representative_name") or "").strip()[:160]
@@ -1042,8 +1086,14 @@ def sign_demonstration(booking: Booking, body: dict[str, Any]) -> dict[str, Any]
         )
     if not presented:
         presented = str(locked.tariff_version)
-    trace = dict(locked.specimen_trace) if isinstance(locked.specimen_trace, dict) else {}
-    mandate = dict(trace.get("mandate") or {}) if isinstance(trace.get("mandate"), dict) else {}
+    trace = (
+        dict(locked.specimen_trace) if isinstance(locked.specimen_trace, dict) else {}
+    )
+    mandate = (
+        dict(trace.get("mandate") or {})
+        if isinstance(trace.get("mandate"), dict)
+        else {}
+    )
     reference = archive_reference(locked)
     signed_at = datetime.now(UTC).isoformat()
     mandate["signature"] = {
@@ -1058,7 +1108,9 @@ def sign_demonstration(booking: Booking, body: dict[str, Any]) -> dict[str, Any]
         "document_version": locked.document_version,
         "tariff_version_presented": presented,
         "covered_services": list(mandate.get("covered_services") or []),
-        "covered_tariff_versions": list(mandate.get("covered_tariff_versions") or [presented]),
+        "covered_tariff_versions": list(
+            mandate.get("covered_tariff_versions") or [presented]
+        ),
         "acknowledged": True,
         "admin_review_required": signer == "representative",
         "representation_review_required": signer == "representative",
@@ -1135,7 +1187,9 @@ def refuse_signature(booking: Booking, body: dict[str, Any]) -> dict[str, Any]:
     row = _row(int(booking.company_id), booking.client_id)
     if row is None or row.status != "demo_draft":
         raise ConventionRefusal(
-            "deja_signe" if row is not None and row.status == "demo_specimen_signed" else "specimen_sans_brouillon",
+            "deja_signe"
+            if row is not None and row.status == "demo_specimen_signed"
+            else "specimen_sans_brouillon",
             "Aucune signature n'est fabriquée.",
         )
     reason = str(body.get("reason") or "").strip()
@@ -1144,11 +1198,22 @@ def refuse_signature(booking: Booking, body: dict[str, Any]) -> dict[str, Any]:
         raise ConventionRefusal("motif_absent", "Le motif doit être indiqué.")
     locked = _lock(int(row.id))
     if locked.status != "demo_draft":
-        raise ConventionRefusal("deja_signe", "Une démonstration est déjà enregistrée. Elle n'est pas effacée.")
-    trace = dict(locked.specimen_trace) if isinstance(locked.specimen_trace, dict) else {}
-    mandate = dict(trace.get("mandate") or {}) if isinstance(trace.get("mandate"), dict) else {}
+        raise ConventionRefusal(
+            "deja_signe",
+            "Une démonstration est déjà enregistrée. Elle n'est pas effacée.",
+        )
+    trace = (
+        dict(locked.specimen_trace) if isinstance(locked.specimen_trace, dict) else {}
+    )
+    mandate = (
+        dict(trace.get("mandate") or {})
+        if isinstance(trace.get("mandate"), dict)
+        else {}
+    )
     previous = mandate.get("refusal")
-    if isinstance(previous, dict) and int(previous.get("booking_id") or 0) == int(booking.id):
+    if isinstance(previous, dict) and int(previous.get("booking_id") or 0) == int(
+        booking.id
+    ):
         view = driver_read(booking)
         view["replay"] = True
         return view
@@ -1195,7 +1260,9 @@ def signal_blocked(booking: Booking) -> dict[str, Any]:
             "Cette réservation n'appelle pas de signalement de couverture.",
         )
     if row is None:
-        raise ConventionRefusal("specimen_sans_brouillon", "Aucune convention à signaler.")
+        raise ConventionRefusal(
+            "specimen_sans_brouillon", "Aucune convention à signaler."
+        )
     locked = _lock(int(row.id))
     marker = f"coverage_signaled:{int(booking.id)}:{decision.kind}"
     history = list(_meta(locked).get("history") or [])
@@ -1232,17 +1299,33 @@ def dispatch_demonstration(booking: Booking, body: dict[str, Any]) -> dict[str, 
         )
     channel = str(body.get("channel") or "")
     if channel not in {"email", "sms"}:
-        raise ConventionRefusal("canal_inconnu", "Le canal de transmission n'est pas reconnu.")
+        raise ConventionRefusal(
+            "canal_inconnu", "Le canal de transmission n'est pas reconnu."
+        )
     destination = str(body.get("destination") or "").strip()
     key = str(body.get("idempotency_key") or "").strip()[:80]
     if len(key) < 8:
-        raise ConventionRefusal("cle_absente", "La transmission exige une clé d'idempotence.")
+        raise ConventionRefusal(
+            "cle_absente", "La transmission exige une clé d'idempotence."
+        )
     locked = _lock(int(row.id))
     if locked.status != "demo_specimen_signed":
-        raise ConventionRefusal("signature_absente", "La démonstration n'est plus transmissible.")
-    trace = dict(locked.specimen_trace) if isinstance(locked.specimen_trace, dict) else {}
-    mandate = dict(trace.get("mandate") or {}) if isinstance(trace.get("mandate"), dict) else {}
-    transmissions = [item for item in list(mandate.get("transmissions") or []) if isinstance(item, dict)]
+        raise ConventionRefusal(
+            "signature_absente", "La démonstration n'est plus transmissible."
+        )
+    trace = (
+        dict(locked.specimen_trace) if isinstance(locked.specimen_trace, dict) else {}
+    )
+    mandate = (
+        dict(trace.get("mandate") or {})
+        if isinstance(trace.get("mandate"), dict)
+        else {}
+    )
+    transmissions = [
+        item
+        for item in list(mandate.get("transmissions") or [])
+        if isinstance(item, dict)
+    ]
     for item in transmissions:
         if item.get("key") == key:
             view = driver_read(booking)
@@ -1366,10 +1449,16 @@ def _mask(value: str) -> str | None:
     return f"***{digits[-2:]}" if digits else None
 
 
-def _dispatch_status(channel: str, destination: str, *, simulate_failure: bool) -> tuple[str, str | None]:
+def _dispatch_status(
+    channel: str, destination: str, *, simulate_failure: bool
+) -> tuple[str, str | None]:
     if not destination:
         return "absent", None
-    fictive = _fictive_email(destination) if channel == "email" else _fictive_phone(destination)
+    fictive = (
+        _fictive_email(destination)
+        if channel == "email"
+        else _fictive_phone(destination)
+    )
     if not fictive:
         return "blocked", _mask(destination)
     if simulate_failure:
@@ -1385,7 +1474,11 @@ def _suggested_contacts(booking: Booking) -> tuple[str | None, str | None]:
     phone = None
     if booking.client_id is not None:
         client = db.session.get(Client, int(booking.client_id))
-        user = None if client is None or client.user_id is None else db.session.get(User, int(client.user_id))
+        user = (
+            None
+            if client is None or client.user_id is None
+            else db.session.get(User, int(client.user_id))
+        )
         if user is not None and user.email and _fictive_email(str(user.email)):
             email = str(user.email).strip()
         raw_phone = None if user is None else getattr(user, "phone", None)
@@ -1395,4 +1488,3 @@ def _suggested_contacts(booking: Booking) -> tuple[str | None, str | None]:
     if phone is None and passenger and _fictive_phone(passenger):
         phone = passenger
     return email, phone
-

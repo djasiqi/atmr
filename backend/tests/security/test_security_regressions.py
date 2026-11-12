@@ -76,9 +76,9 @@ class TestF2DispatchRateLimit:
             / "dispatch_routes.py"
         )
         content = dispatch_routes.read_text(encoding="utf-8")
-        assert "30 per hour" in content, (
-            "dispatch_routes.py doit contenir '30 per hour' pour /run"
-        )
+        assert (
+            "30 per hour" in content
+        ), "dispatch_routes.py doit contenir '30 per hour' pour /run"
 
     def test_dispatch_trigger_has_rate_limit_50_per_hour(self):
         """Vérifie que /trigger a la limite 50/h (régression si quelqu'un remet 10000)."""
@@ -90,9 +90,9 @@ class TestF2DispatchRateLimit:
             / "dispatch_routes.py"
         )
         content = dispatch_routes.read_text(encoding="utf-8")
-        assert "50 per hour" in content, (
-            "dispatch_routes.py doit contenir '50 per hour' pour /trigger"
-        )
+        assert (
+            "50 per hour" in content
+        ), "dispatch_routes.py doit contenir '50 per hour' pour /trigger"
 
 
 class TestF10CsrfProductionNoFallback:

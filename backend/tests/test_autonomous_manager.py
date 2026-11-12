@@ -387,9 +387,9 @@ class TestProcessOpportunities:
 
         stats = manager.process_opportunities([opportunity], dry_run=True)
 
-        assert stats["manual_required"] == 1, (
-            "En SEMI_AUTO, devrait nécessiter validation"
-        )
+        assert (
+            stats["manual_required"] == 1
+        ), "En SEMI_AUTO, devrait nécessiter validation"
         assert stats["auto_applied"] == 0
 
     @patch("services.unified_dispatch.utils.autonomous.apply_suggestion")

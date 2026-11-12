@@ -479,9 +479,9 @@ class TestCreateBookingP0:
             },
             headers=headers,
         )
-        assert response.status_code != 405, (
-            "POST /clients/me/bookings doit exister (pas 405)"
-        )
+        assert (
+            response.status_code != 405
+        ), "POST /clients/me/bookings doit exister (pas 405)"
         assert response.status_code == 201
         mock_execute.assert_called_once()
         assert mock_execute.call_args[0][0] == str(u.public_id)

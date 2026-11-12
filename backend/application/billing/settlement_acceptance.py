@@ -67,15 +67,19 @@ def _review(booking, *, company_id: int) -> str:
     ).first()
     if active is not None:
         return "policy_already_recorded"
-    capability = db.session.execute(
-        text(
-            "SELECT tap_to_pay_enabled, cash_enabled, "
-            "direct_patient_invoice_enabled, tap_to_pay_preferred, "
-            "cash_preferred, direct_patient_invoice_preferred "
-            "FROM company_settlement_capability WHERE company_id = :id"
-        ),
-        {"id": int(company_id)},
-    ).mappings().first()
+    capability = (
+        db.session.execute(
+            text(
+                "SELECT tap_to_pay_enabled, cash_enabled, "
+                "direct_patient_invoice_enabled, tap_to_pay_preferred, "
+                "cash_preferred, direct_patient_invoice_preferred "
+                "FROM company_settlement_capability WHERE company_id = :id"
+            ),
+            {"id": int(company_id)},
+        )
+        .mappings()
+        .first()
+    )
     authorized = CompanySettlementSettings(
         tap_to_pay_enabled=bool(capability["tap_to_pay_enabled"])
         if capability
@@ -98,9 +102,7 @@ def _review(booking, *, company_id: int) -> str:
         if capability
         else False,
     )
-    settings = settings_for_acceptance(
-        preferences=preferences, authorized=authorized
-    )
+    settings = settings_for_acceptance(preferences=preferences, authorized=authorized)
     payer = _payer(getattr(booking, "billed_to_type", None))
     created_via = str(getattr(booking, "created_via", "") or "")
     invoice_issued = getattr(booking, "invoice_line_id", None) is not None
@@ -171,16 +173,20 @@ def _patient_notice(booking_id: int, company_id: int):
     ).scalar()
     if ready is None:
         return None
-    row = db.session.execute(
-        text(
-            "SELECT amount_chf, conditions_version, author_user_id, "
-            "confirmed_at, channel FROM booking_settlement_patient_notice "
-            "WHERE booking_id = :booking_id AND company_id = :company_id "
-            "AND receipt_proven = false "
-            "ORDER BY confirmed_at DESC LIMIT 1"
-        ),
-        {"booking_id": booking_id, "company_id": company_id},
-    ).mappings().first()
+    row = (
+        db.session.execute(
+            text(
+                "SELECT amount_chf, conditions_version, author_user_id, "
+                "confirmed_at, channel FROM booking_settlement_patient_notice "
+                "WHERE booking_id = :booking_id AND company_id = :company_id "
+                "AND receipt_proven = false "
+                "ORDER BY confirmed_at DESC LIMIT 1"
+            ),
+            {"booking_id": booking_id, "company_id": company_id},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         return None
     confirmed_at = row["confirmed_at"]

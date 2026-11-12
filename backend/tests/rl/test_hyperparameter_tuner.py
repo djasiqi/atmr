@@ -72,9 +72,9 @@ class TestHyperparameterTunerSanity:
             assert 0.90 <= config["gamma"] <= 0.999, "gamma hors bornes"
             assert 0.7 <= config["epsilon_start"] <= 1.0, "epsilon_start hors bornes"
             assert 0.01 <= config["epsilon_end"] <= 0.1, "epsilon_end hors bornes"
-            assert 0.990 <= config["epsilon_decay"] <= 0.999, (
-                "epsilon_decay hors bornes"
-            )
+            assert (
+                0.990 <= config["epsilon_decay"] <= 0.999
+            ), "epsilon_decay hors bornes"
             assert 0.4 <= config["alpha"] <= 0.8, "alpha hors bornes"
             assert 0.3 <= config["beta_start"] <= 0.6, "beta_start hors bornes"
             assert 0.8 <= config["beta_end"] <= 1.0, "beta_end hors bornes"
@@ -83,9 +83,9 @@ class TestHyperparameterTunerSanity:
             assert 0.001 <= config["tau"] <= 0.1, "tau hors bornes"
 
             # Vérifier les bornes des paramètres entiers
-            assert 5 <= config["target_update_freq"] <= 50, (
-                "target_update_freq hors bornes"
-            )
+            assert (
+                5 <= config["target_update_freq"] <= 50
+            ), "target_update_freq hors bornes"
             assert 2 <= config["n_step"] <= 5, "n_step hors bornes"
             assert 5 <= config["num_drivers"] <= 20, "num_drivers hors bornes"
             assert 10 <= config["max_bookings"] <= 50, "max_bookings hors bornes"

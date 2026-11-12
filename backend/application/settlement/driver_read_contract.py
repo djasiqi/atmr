@@ -60,9 +60,7 @@ def recipe_overlay(booking_id: int, contract: dict[str, object]) -> dict[str, ob
     amount_label = contractual_price_label(booking.price_amount)
     from application.settlement.leg_settlement import separate_leg_ready
 
-    round_trip = (
-        siblings > 1 or bool(booking.is_return) or bool(booking.is_round_trip)
-    )
+    round_trip = siblings > 1 or bool(booking.is_return) or bool(booking.is_round_trip)
     facts = RecipeBookingFacts(
         billed_to_type=str(
             getattr(booking.billed_to_type, "value", booking.billed_to_type) or ""

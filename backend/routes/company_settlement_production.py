@@ -167,7 +167,10 @@ class CompanyPatientFollowup(Resource):
         try:
             booking_id = int(body.get("booking_id"))
         except (TypeError, ValueError):
-            return {"error": "reservation_absente", "error_code": "reservation_absente"}, 404
+            return {
+                "error": "reservation_absente",
+                "error_code": "reservation_absente",
+            }, 404
         try:
             return patient_billing_prep.ensure_patient_followup(
                 booking_id,

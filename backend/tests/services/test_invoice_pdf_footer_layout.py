@@ -125,9 +125,9 @@ def _page_has_orphan_totals(page_text: str) -> bool:
 def _assert_no_orphan_totals_pages(pdf_bytes: bytes) -> None:
     pages = _extract_text_per_page(pdf_bytes)
     for idx, page_text in enumerate(pages):
-        assert not _page_has_orphan_totals(page_text), (
-            f"Page {idx + 1} : bloc de synthèse orphelin (sans prestation)"
-        )
+        assert not _page_has_orphan_totals(
+            page_text
+        ), f"Page {idx + 1} : bloc de synthèse orphelin (sans prestation)"
 
 
 def _iter_text_elements(layout):
@@ -221,14 +221,14 @@ def _assert_legend_and_reminder_do_not_overlap(pdf_bytes: bytes) -> None:
         # Les deux extraits existent (contrôles ci-dessus) mais sur des pages
         # distinctes : ils ne peuvent pas se chevaucher.
         return
-    assert not _bboxes_overlap(ar_bbox, reminder_bbox), (
-        "Chevauchement détecté entre la légende [A/R] et le pied de page rappel"
-    )
+    assert not _bboxes_overlap(
+        ar_bbox, reminder_bbox
+    ), "Chevauchement détecté entre la légende [A/R] et le pied de page rappel"
     _x0a, y0a, _x1a, _y1a = ar_bbox
     _x0b, _y0b, _x1b, y1b = reminder_bbox
-    assert y0a >= y1b - 1.0, (
-        f"La légende [A/R] (bas y={y0a:.1f}) chevauche le rappel (haut y={y1b:.1f})"
-    )
+    assert (
+        y0a >= y1b - 1.0
+    ), f"La légende [A/R] (bas y={y0a:.1f}) chevauche le rappel (haut y={y1b:.1f})"
 
 
 def _create_roundtrip_invoice_with_lines(
@@ -422,9 +422,9 @@ class TestInvoicePdfFooterLayout:
         if reminder_bbox is None:
             pytest.skip("pdfminer indisponible pour analyse bbox")
         _x0, y0, _x1, _y1 = reminder_bbox
-        assert y0 < PDF_FOOTER_GATE_MIN_PT + 120, (
-            "Le texte de rappel semble trop haut sur la page (chevauchement probable)"
-        )
+        assert (
+            y0 < PDF_FOOTER_GATE_MIN_PT + 120
+        ), "Le texte de rappel semble trop haut sur la page (chevauchement probable)"
         _assert_no_orphan_totals_pages(pdf_bytes)
 
     def test_pdf_total_01_no_orphan_synthesis_on_reminder(self, db):
@@ -450,9 +450,9 @@ class TestInvoicePdfFooterLayout:
         ]
         assert synthesis_pages, "Bloc de synthèse introuvable"
         for idx in synthesis_pages:
-            assert re.search(r"\d{2}\.\s*\d{2}\.\s*\d{4}", pages[idx]), (
-                f"Page {idx + 1} : synthèse sans date de prestation"
-            )
+            assert re.search(
+                r"\d{2}\.\s*\d{2}\.\s*\d{4}", pages[idx]
+            ), f"Page {idx + 1} : synthèse sans date de prestation"
 
 
 class TestInvoicePdfFooterHelpers:
@@ -551,9 +551,9 @@ class TestInvoicePdfFooterHelpers:
         ]
         tail_h = _measure_table_chunk_pt(table, tail, 280)
         closing_h = _measure_closing_block_pt(table, tail, post, 280)
-        assert closing_h > tail_h + 20.0, (
-            "Le bloc de clôture doit inclure transport + légende + totaux"
-        )
+        assert (
+            closing_h > tail_h + 20.0
+        ), "Le bloc de clôture doit inclure transport + légende + totaux"
 
     def test_paginate_reserves_last_transport_with_closing_block(self):
         from reportlab.lib.styles import getSampleStyleSheet
@@ -588,20 +588,20 @@ class TestInvoicePdfFooterHelpers:
         )
         assert tail_table is not None
         tail_body = tail_table._cellvalues
-        assert len(tail_body) == 1, (
-            "Le groupe terminal ne doit contenir que le dernier transport"
-        )
+        assert (
+            len(tail_body) == 1
+        ), "Le groupe terminal ne doit contenir que le dernier transport"
         closing_h = _measure_closing_block_pt(table, tail_body, post, 390)
-        assert closing_h <= 220 + 12, (
-            "Le groupe terminal doit tenir sur une page utile (transport + synthèse)"
-        )
+        assert (
+            closing_h <= 220 + 12
+        ), "Le groupe terminal doit tenir sur une page utile (transport + synthèse)"
         if body_table is not None:
             prefix_body = body_table._cellvalues[1:]
             last_desc = str(prefix_body[-1][1])
             last_tail_desc = str(tail_body[-1][1])
-            assert last_desc != last_tail_desc, (
-                "Seul le dernier transport accompagne la synthèse"
-            )
+            assert (
+                last_desc != last_tail_desc
+            ), "Seul le dernier transport accompagne la synthèse"
 
     def test_paginate_case3_last_transport_moves_with_totals(self):
         """Cas 3 : dernier transport + synthèse sur la page suivante."""

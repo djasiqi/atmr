@@ -150,9 +150,9 @@ class TestQualityScoreVersioning:
 
         # Vérifier que les facteurs sont triés
         values = list(dominants.values())
-        assert values == sorted(values, reverse=True), (
-            "Facteurs doivent être triés décroissant"
-        )
+        assert values == sorted(
+            values, reverse=True
+        ), "Facteurs doivent être triés décroissant"
 
         logger.info("✅ Test: Dominant factors calculés = %s", dominants)
 

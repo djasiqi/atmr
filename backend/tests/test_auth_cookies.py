@@ -152,9 +152,9 @@ class TestLoginCookies:
         # Devrait fonctionner avec les cookies (200/403) ou route non implémentée (404)
         # 401 ne devrait PAS se produire car les cookies sont envoyés
         assert protected_response.status_code in [200, 403, 404]
-        assert protected_response.status_code != 401, (
-            "Les cookies devraient permettre l'authentification"
-        )
+        assert (
+            protected_response.status_code != 401
+        ), "Les cookies devraient permettre l'authentification"
 
 
 class TestRefreshTokenCookies:
@@ -511,9 +511,9 @@ class TestCookieIntegration:
         # Devrait fonctionner (200) ou échouer si pas de permissions (403) ou route non implémentée (404)
         # 401 ne devrait PAS se produire car les cookies sont envoyés
         assert protected_response.status_code in [200, 403, 404]
-        assert protected_response.status_code != 401, (
-            "Les cookies devraient permettre l'authentification"
-        )
+        assert (
+            protected_response.status_code != 401
+        ), "Les cookies devraient permettre l'authentification"
 
     def test_protected_route_without_cookies_fails(self, client):
         """Test qu'une route protégée échoue sans cookies."""
@@ -546,9 +546,9 @@ class TestCookieIntegration:
             # Devrait fonctionner (200/403) ou route non implémentée (404)
             # 401 ne devrait PAS se produire car les cookies sont envoyés
             assert response.status_code in [200, 403, 404]
-            assert response.status_code != 401, (
-                "Les cookies devraient permettre l'authentification"
-            )
+            assert (
+                response.status_code != 401
+            ), "Les cookies devraient permettre l'authentification"
 
     def test_refresh_token_updates_cookies_and_works(self, client, sample_user):
         """Test que le refresh token met à jour les cookies et qu'ils fonctionnent."""
@@ -574,9 +574,9 @@ class TestCookieIntegration:
         # Devrait fonctionner avec les nouveaux cookies (200/403) ou route non implémentée (404)
         # 401 ne devrait PAS se produire car les cookies sont envoyés
         assert protected_response.status_code in [200, 403, 404]
-        assert protected_response.status_code != 401, (
-            "Les nouveaux cookies devraient permettre l'authentification"
-        )
+        assert (
+            protected_response.status_code != 401
+        ), "Les nouveaux cookies devraient permettre l'authentification"
 
     def test_logout_invalidates_cookies(self, client, sample_user):
         """Test que logout invalide les cookies et qu'ils ne fonctionnent plus."""
@@ -593,9 +593,9 @@ class TestCookieIntegration:
         # Devrait fonctionner (200/403) ou route non implémentée (404)
         # 401 ne devrait PAS se produire car les cookies sont envoyés
         assert protected_response_before.status_code in [200, 403, 404]
-        assert protected_response_before.status_code != 401, (
-            "Les cookies devraient permettre l'authentification"
-        )
+        assert (
+            protected_response_before.status_code != 401
+        ), "Les cookies devraient permettre l'authentification"
 
         # 3. Logout
         logout_response = client.post("/api/v1/auth/logout")
@@ -680,6 +680,6 @@ class TestCookieSecurityAttributes:
 
         max_age_match = re.search(r"Max-Age=(\d+)", access_cookie)
         if max_age_match:
-            assert int(max_age_match.group(1)) > 0, (
-                "Max-Age devrait être > 0 pour le cookie access_token"
-            )
+            assert (
+                int(max_age_match.group(1)) > 0
+            ), "Max-Age devrait être > 0 pour le cookie access_token"

@@ -29,7 +29,9 @@ def _assess(**overrides):
 
 
 def test_institution_et_deja_paye_ne_concernent_pas_le_mandat():
-    clinic = _assess(billed_to_type="clinic", status="demo_absent", mandate_company_id=None)
+    clinic = _assess(
+        billed_to_type="clinic", status="demo_absent", mandate_company_id=None
+    )
     paid = _assess(already_paid=True)
     assert clinic.kind == "not_concerned"
     assert paid.kind == "not_concerned"
@@ -80,7 +82,12 @@ def test_aucune_situation_nautorise_une_facture_reelle():
         "not_concerned",
         "incomplete",
     )
-    reasons = {real_invoice_blocked(kind=kind, legally_effective=False, real_signature_collected=False) for kind in kinds}
+    reasons = {
+        real_invoice_blocked(
+            kind=kind, legally_effective=False, real_signature_collected=False
+        )
+        for kind in kinds
+    }
     assert "convention_inexistante" in reasons
     assert "convention_preparee" in reasons
     assert "mandat_demonstration" in reasons
