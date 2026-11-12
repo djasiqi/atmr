@@ -3819,9 +3819,14 @@ class RejectBooking(Resource):
                 from application.drivers.reject_driver_booking import (
                     RejectDriverBookingUseCase,
                 )
+                from repositories.assignment_repository import AssignmentRepository
                 from repositories.booking_repository import BookingRepository
 
-                uc = RejectDriverBookingUseCase(booking_repo=BookingRepository())
+                uc = RejectDriverBookingUseCase(
+                    booking_repo=BookingRepository(),
+                    assignment_repo=AssignmentRepository(),
+                    db_session=db.session,
+                )
                 uc_res = uc.execute(booking_id=booking_id, driver_id=int(driver.id))
                 result = uc_res.response
                 status_code = uc_res.status_code
@@ -4638,6 +4643,17 @@ class QuickAcceptBooking(Resource):
                 logger.error("Booking %s not found for quick-accept", booking_id)
                 return {"error": "Booking not found"}, 404
 
+            # Isolation multi-entreprise : mission d'une autre société refusée.
+            if getattr(booking, "company_id", None) != getattr(
+                driver, "company_id", None
+            ):
+                logger.warning(
+                    "Driver %s tried to accept booking %s from another company",
+                    driver.id,
+                    booking_id,
+                )
+                return {"error": "Cette mission ne vous est pas assignée"}, 403
+
             # Vérifier que la mission est assignée au chauffeur
             if booking.driver_id != driver.id:
                 logger.warning(
@@ -4647,11 +4663,13 @@ class QuickAcceptBooking(Resource):
                 )
                 return {"error": "Cette mission ne vous est pas assignée"}, 403
 
-            # Vérifier que la mission est dans un statut acceptable
-            if booking.status not in [
-                BookingStatus.assigned,
-                BookingStatus.pending,
-            ]:
+            status_val = str(
+                getattr(booking.status, "value", booking.status) or ""
+            ).upper()
+            if status_val == "CANCELED":
+                return {"error": "Mission annulée : acceptation impossible"}, 400
+            # Ack chauffeur : la mission reste ASSIGNED (pas de transition vers ACCEPTED).
+            if status_val != "ASSIGNED":
                 logger.warning(
                     "Booking %s cannot be accepted from status %s",
                     booking_id,
@@ -4661,17 +4679,13 @@ class QuickAcceptBooking(Resource):
                     "error": f"Mission dans un statut non accepté: {booking.status}"
                 }, 400
 
-            # Mettre à jour le statut
-            booking.status = BookingStatus.accepted
-            db.session.commit()
-
             logger.info(
-                "✅ Mission %s quickly accepted by driver %s",
+                "✅ Mission %s quickly accepted by driver %s (ack ASSIGNED)",
                 booking_id,
                 driver.id,
             )
 
-            # Notifier les autres parties prenantes
+            # Notifier les autres parties prenantes (état inchangé, ack idempotent)
             try:
                 from shared.notifications import notify_booking_update
 
@@ -4683,6 +4697,7 @@ class QuickAcceptBooking(Resource):
                 "ok": True,
                 "message": "Mission acceptée",
                 "booking_id": booking_id,
+                "status": "ASSIGNED",
             }, 200
 
         except Exception as e:
@@ -4721,6 +4736,10 @@ class QuickRejectBooking(Resource):
 
             driver = cast("Driver", driver)
 
+            from application.drivers.reject_driver_booking import (
+                RejectDriverBookingUseCase,
+            )
+            from repositories.assignment_repository import AssignmentRepository
             from repositories.booking_repository import BookingRepository
 
             booking_repo = BookingRepository()
@@ -4730,7 +4749,11 @@ class QuickRejectBooking(Resource):
                 logger.error("Booking %s not found for quick-reject", booking_id)
                 return {"error": "Booking not found"}, 404
 
-            # Vérifier que la mission est assignée au chauffeur
+            if getattr(booking, "company_id", None) != getattr(
+                driver, "company_id", None
+            ):
+                return {"error": "Cette mission ne vous est pas assignée"}, 403
+
             if booking.driver_id != driver.id:
                 logger.warning(
                     "Driver %s tried to reject booking %s not assigned to them",
@@ -4739,23 +4762,15 @@ class QuickRejectBooking(Resource):
                 )
                 return {"error": "Cette mission ne vous est pas assignée"}, 403
 
-            # Vérifier que la mission est dans un statut refusable
-            if booking.status not in [
-                BookingStatus.assigned,
-                BookingStatus.pending,
-            ]:
-                logger.warning(
-                    "Booking %s cannot be rejected from status %s",
-                    booking_id,
-                    booking.status,
-                )
-                return {
-                    "error": f"Mission dans un statut non refusable: {booking.status}"
-                }, 400
+            uc = RejectDriverBookingUseCase(
+                booking_repo=booking_repo,
+                assignment_repo=AssignmentRepository(),
+                db_session=db.session,
+            )
+            uc_res = uc.execute(booking_id=booking_id, driver_id=int(driver.id))
+            if not uc_res.should_commit:
+                return uc_res.response, uc_res.status_code
 
-            # Mettre à jour le statut
-            booking.status = BookingStatus.cancelled
-            booking.driver_id = None  # Libérer le chauffeur
             db.session.commit()
 
             logger.info(
@@ -4764,11 +4779,11 @@ class QuickRejectBooking(Resource):
                 driver.id,
             )
 
-            # Notifier les autres parties prenantes
             try:
                 from shared.notifications import notify_booking_update
 
-                notify_booking_update(driver_id=driver.id, booking=booking)
+                if uc_res.booking is not None:
+                    notify_booking_update(driver_id=driver.id, booking=uc_res.booking)
             except Exception:
                 logger.exception("Erreur notification après quick-reject")
 
@@ -4776,6 +4791,7 @@ class QuickRejectBooking(Resource):
                 "ok": True,
                 "message": "Mission refusée",
                 "booking_id": booking_id,
+                "status": "PENDING",
             }, 200
 
         except Exception as e:

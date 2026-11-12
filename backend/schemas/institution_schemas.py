@@ -951,6 +951,11 @@ class TransportRequestCreateSchema(Schema):
         validate=validate.Length(max=2000),
         allow_none=True,
     )
+    dispatch_target = fields.Str(
+        validate=validate.OneOf(["network", "partners"]),
+        allow_none=True,
+        metadata={"description": "network = réseau LIRIE, partners = partenaires"},
+    )
 
     # Facturation
     billing_intent = fields.Str(
@@ -1323,6 +1328,10 @@ class TransportRequestUpdateSchema(Schema):
 
     # Notes
     notes = fields.Str(validate=validate.Length(max=2000), allow_none=True)
+    dispatch_target = fields.Str(
+        validate=validate.OneOf(["network", "partners"]),
+        allow_none=True,
+    )
 
     # Facturation
     billing_intent = fields.Str(validate=validate.OneOf(VALID_BILLING_INTENTS))

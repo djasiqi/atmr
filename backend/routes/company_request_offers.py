@@ -243,7 +243,10 @@ class RequestOfferDetail(Resource):
 @company_offers_ns.route("/<int:offer_id>/travel-estimate")
 @company_offers_ns.param("offer_id", "ID de l'offre")
 class OfferTravelEstimate(Resource):
-    """Durée estimée du trajet aller (Google Directions côté serveur)."""
+    """Durée estimée du trajet aller.
+
+    Une offre réseau non acceptée reste à vol d'oiseau, sans appel Google.
+    """
 
     @company_offers_ns.doc(
         description="Estime la durée du trajet aller pour une offre (Google Maps)",
@@ -255,8 +258,8 @@ class OfferTravelEstimate(Resource):
     @jwt_required()
     def get(self, offer_id: int):
         try:
-            from services.institutions.route_travel_estimate_service import (
-                estimate_outbound_travel_minutes,
+            from application.institutions.network_offer_disclosure import (
+                travel_estimate_for_offer,
             )
 
             company_id, _user_id = get_company_context()
@@ -266,8 +269,7 @@ class OfferTravelEstimate(Resource):
             if offer.company_id != company_id:
                 return {"error": "Accès non autorisé à cette offre"}, 403
 
-            payload = estimate_outbound_travel_minutes(offer.transport_request)
-            return payload, 200
+            return travel_estimate_for_offer(offer), 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.error(

@@ -275,18 +275,54 @@ class SendTransportRequestUseCase:
                 RequestStatus.EXPIRED.value,
             ]
 
-            if not preferences and not is_relaunch:
+            from application.institutions.network_eligibility import (
+                DISPATCH_NETWORK,
+                resolve_dispatch_target,
+                select_network_companies,
+            )
+
+            dispatch_target = resolve_dispatch_target(
+                getattr(transport_request, "dispatch_target", None),
+                has_preferences=bool(preferences),
+            )
+
+            if dispatch_target == DISPATCH_NETWORK:
+                selection = select_network_companies(transport_request)
+                if selection.error:
+                    return SendTransportRequestResult(
+                        success=False,
+                        transport_request_id=transport_request.id,
+                        error=selection.error,
+                        status_code=422,
+                    )
+                network_ids = [company.id for company in selection.companies]
+                mode = OfferMode.BROADCAST.value
+                if is_relaunch:
+                    if transport_request.status == RequestStatus.EXPIRED.value:
+                        transport_request.status = RequestStatus.SENT.value
+                    offers_created = self._relaunch_broadcast_offers(
+                        transport_request=transport_request,
+                        expires_at=expires_at,
+                        only_company_ids=network_ids,
+                    )
+                else:
+                    offers_created = self._create_broadcast_offers(
+                        transport_request=transport_request,
+                        expires_at=expires_at,
+                        excluded_company_ids=[],
+                        only_company_ids=network_ids,
+                    )
+            elif not preferences and not is_relaunch:
                 return SendTransportRequestResult(
                     success=False,
                     transport_request_id=transport_request.id,
                     error=(
-                        "Aucun transporteur n'est configuré. Ajoutez au moins un "
-                        "transporteur dans les paramètres pour envoyer automatiquement."
+                        "Aucun partenaire n'est configuré. Choisissez le réseau LIRIE "
+                        "pour proposer la demande aux transporteurs éligibles."
                     ),
                     status_code=422,
                 )
-
-            if is_relaunch:
+            elif is_relaunch:
                 if transport_request.status == RequestStatus.EXPIRED.value:
                     transport_request.status = RequestStatus.SENT.value
 
@@ -348,8 +384,8 @@ class SendTransportRequestUseCase:
                     success=False,
                     transport_request_id=transport_request.id,
                     error=(
-                        "Aucun transporteur n'est configuré. Ajoutez au moins un "
-                        "transporteur dans les paramètres pour envoyer automatiquement."
+                        "Aucun partenaire n'est configuré. Choisissez le réseau LIRIE "
+                        "pour proposer la demande aux transporteurs éligibles."
                     ),
                     status_code=422,
                 )
@@ -357,10 +393,19 @@ class SendTransportRequestUseCase:
             # 7. Vérifier qu'au moins une offre a été créée
             if offers_created == 0:
                 db.session.rollback()
+                empty_error = (
+                    "Aucun transporteur du réseau ne correspond actuellement à cette demande. "
+                    "Vous pouvez conserver votre brouillon ou réessayer ultérieurement."
+                    if dispatch_target == DISPATCH_NETWORK
+                    else (
+                        "Aucune entreprise de transport éligible trouvée. "
+                        "Vérifiez que des entreprises sont approuvées et ont le dispatch activé."
+                    )
+                )
                 return SendTransportRequestResult(
                     success=False,
                     transport_request_id=transport_request.id,
-                    error="Aucune entreprise de transport éligible trouvée. Vérifiez que des entreprises sont approuvées et ont le dispatch activé.",
+                    error=empty_error,
                     status_code=422,
                 )
 
@@ -595,7 +640,8 @@ class SendTransportRequestUseCase:
     ) -> _RelaunchOffersResult:
         """Relance la diffusion : réactive les offres expirées et complète la liste configurée."""
         del configured_mode
-        only_company_ids = [p.company_id for p in preferences] if preferences else None
+        # Liste vide : aucune entreprise, jamais le catalogue entier.
+        only_company_ids = [p.company_id for p in preferences]
         offers_created = self._relaunch_broadcast_offers(
             transport_request=transport_request,
             expires_at=expires_at,
@@ -743,14 +789,38 @@ class SendTransportRequestUseCase:
             time_str = sched.strftime("%d.%m.%Y %H:%M") if sched else "Date à confirmer"
             round_trip = " (A/R)" if transport_request.is_round_trip else ""
 
+            from application.institutions.network_eligibility import (
+                DISPATCH_NETWORK,
+                network_notice,
+                place_label,
+                resolve_dispatch_target,
+            )
+
+            preferences = InstitutionTransportPreference.get_ordered_preferences(
+                transport_request.institution_id
+            )
+            network_dispatch = (
+                resolve_dispatch_target(
+                    getattr(transport_request, "dispatch_target", None),
+                    has_preferences=bool(preferences),
+                )
+                == DISPATCH_NETWORK
+            )
             title = (
                 "Demande de transport relancée"
-                if is_relaunch
+                if is_relaunch and not network_dispatch
                 else "Nouvelle demande de transport"
             )
-            message = f"{inst_name} — {patient_name}{round_trip} — {time_str}".strip(
-                " —"
-            )
+            if network_dispatch:
+                message = network_notice(
+                    place=place_label(transport_request.pickup_location),
+                    when_label=time_str,
+                )
+                patient_name = ""
+            else:
+                message = (
+                    f"{inst_name} — {patient_name}{round_trip} — {time_str}".strip(" —")
+                )
             relaunch_ts = int(datetime.now(UTC).timestamp())
             mission_day = get_mission_date(transport_request)
             mission_date_iso = mission_day.isoformat() if mission_day else None

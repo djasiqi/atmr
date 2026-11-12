@@ -811,6 +811,8 @@ class TransportRequestList(Resource):
 
             # Notes
             transport_req.notes = validated.get("notes")
+            if validated.get("dispatch_target") in ("network", "partners"):
+                transport_req.dispatch_target = validated["dispatch_target"]
 
             # Facturation
             transport_req.billing_intent = validated.get("billing_intent", "patient")
@@ -1123,6 +1125,8 @@ class TransportRequestDetail(Resource):
                 transport_req.contact_on_site = validated["contact_on_site"]
             if "notes" in validated:
                 transport_req.notes = validated["notes"]
+            if validated.get("dispatch_target") in ("network", "partners"):
+                transport_req.dispatch_target = validated["dispatch_target"]
 
             # Facturation
             if "billing_intent" in validated:
@@ -1328,6 +1332,22 @@ class TransportRequestSend(Resource):
 
             started = time.perf_counter()
             institution_id, user_id = get_institution_context()
+            payload = request.get_json(silent=True) or {}
+            choice = str(payload.get("dispatch_target") or "").strip().lower()
+            if choice in ("network", "partners"):
+                current = TransportRequest.query.get(request_id)
+                if (
+                    current is not None
+                    and current.institution_id == institution_id
+                    and current.status
+                    in (
+                        RequestStatus.DRAFT.value,
+                        RequestStatus.SENT.value,
+                        RequestStatus.EXPIRED.value,
+                    )
+                ):
+                    current.dispatch_target = choice
+                    db.session.commit()
 
             # Utiliser le use case pour envoyer
             use_case = SendTransportRequestUseCase()
