@@ -32,6 +32,7 @@ import {
   LIRIE_SUPPORT_EMAIL,
   LIRIE_SUPPORT_PHONE,
 } from '../../constants/platformSupport';
+import { challengeTotp, setupTotp, verifyTotp } from '../../services/securityService';
 
 function supportPhoneHref(phone) {
   const compact = String(phone || '').replace(/[^\d+]/g, '');
@@ -167,7 +168,15 @@ const Login = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [mfaPurpose, setMfaPurpose] = useState('');
+  const [mfaTempToken, setMfaTempToken] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaQr, setMfaQr] = useState('');
+  const [mfaSecret, setMfaSecret] = useState('');
+  const [mfaRecoveryCodes, setMfaRecoveryCodes] = useState([]);
   const { hydrateFromLogin } = useSessionBootstrap();
+  const mfaBusy = Boolean(mfaPurpose) && isLoading;
+  const mfaError = mfaPurpose ? errorMessage : '';
   const navigate = useNavigate();
   const civilityDropdownRef = useRef(null);
   const hasSafeNext = Boolean(nextFromQuery || safeReturnFromState);
@@ -409,8 +418,191 @@ const Login = () => {
     return true;
   };
 
+  const clearMfaState = () => {
+    setMfaPurpose('');
+    setMfaTempToken('');
+    setMfaCode('');
+    setMfaQr('');
+    setMfaSecret('');
+    setMfaRecoveryCodes([]);
+    setSuccessMessage('');
+  };
+
+  const finalizeSuccessfulLogin = async (responseData) => {
+    const { token, user, target_env, redirect_to, access_expires_at, access_expires_in, expires_in } =
+      responseData;
+
+    if (!user || !user.role || !user.public_id) {
+      throw new Error('Aucune information utilisateur reçue.');
+    }
+
+    // ⚠️ Sécurité: on ne stocke JAMAIS le mot de passe en clair.
+    // REMEMBER_KEY ne contient que l'email (et un marqueur de version)
+    // pour pré-remplir l'identifiant et cocher la case au prochain chargement.
+    if (rememberMe) {
+      try {
+        localStorage.setItem(
+          REMEMBER_KEY,
+          JSON.stringify({ email: loginFormData.email, version: 2 }),
+        );
+      } catch { /* quota plein, on ignore */ }
+    } else {
+      localStorage.removeItem(REMEMBER_KEY);
+    }
+
+    cleanLocalSession();
+    try {
+      const { disconnectCompanySocket } = await import('../../services/companySocket');
+      disconnectCompanySocket();
+    } catch {
+      // ignore
+    }
+    try {
+      const { clearTenantScopedClientCaches } = await import('../../utils/clearTenantScopedClientCaches');
+      clearTenantScopedClientCaches();
+    } catch {
+      queryClient.clear();
+    }
+    clearExplicitLogoutMarker();
+    clearCrossTabLogoutMarker();
+
+    let roleSegment;
+    if (token && typeof token === 'string') {
+      const decodedToken = jwtDecode(token);
+      roleSegment = normalizeAuthRole(decodedToken.role || user.role);
+    } else {
+      roleSegment = normalizeAuthRole(user.role);
+    }
+
+    const session = writeAuthSession({
+      env: target_env,
+      user,
+      role: roleSegment,
+    });
+    try {
+      const { noteAccessExpiryFromResponse } = await import('../../utils/accessExpiry');
+      noteAccessExpiryFromResponse({
+        access_expires_at,
+        access_expires_in,
+        expires_in,
+      });
+    } catch {
+      // ignore
+    }
+    // Synchronise immédiatement le bootstrap : sinon ProtectedRoute voit encore
+    // l'ancienne session (admin/autre) et redirige vers /unauthorized.
+    hydrateFromLogin(session?.user || { ...user, role: roleSegment });
+    try {
+      const { resumeSessionKeepAlive } = await import('../../utils/sessionKeepAlive');
+      resumeSessionKeepAlive();
+    } catch (_) {
+      // ignore
+    }
+    removePendingActivationByEmail(loginFormData.email);
+    linkMobilityProfileToUser({
+      publicId: user.public_id,
+      email: user.email || loginFormData.email,
+    });
+
+    window.dispatchEvent(new Event('auth-changed'));
+
+    if (user.force_password_change) {
+      navigate('/force-reset-password', { replace: true });
+    } else {
+      const preferredReturn = firstAllowedReturnPath(
+        roleSegment,
+        redirect_to,
+        safeReturnFromState,
+        nextFromQuery
+      );
+      const destination =
+        preferredReturn ||
+        `/dashboard/${roleSegment}/${user.public_id}`;
+      navigate(destination, { replace: true });
+    }
+  };
+
+  const startMfaFlow = async (payload) => {
+    const purpose = payload?.mfa_purpose || '';
+    const tempToken = payload?.temp_token || '';
+    // Jamais de localStorage/sessionStorage pour temp_token MFA.
+    setMfaPurpose(purpose);
+    setMfaTempToken(tempToken);
+    setMfaCode('');
+    setMfaQr('');
+    setMfaSecret('');
+    setMfaRecoveryCodes([]);
+    setErrorMessage('');
+    setSuccessMessage('');
+    if (purpose === 'mfa_enroll' && tempToken) {
+      const setup = await setupTotp(tempToken);
+      setMfaQr(setup.data?.qr_code_base64 || '');
+      setMfaSecret(setup.data?.secret_display || '');
+    }
+  };
+
+  const handleMfaSubmit = async (e) => {
+    e.preventDefault();
+    if (!mfaTempToken || !mfaCode.trim()) {
+      setErrorMessage('Saisissez le code à 6 chiffres.');
+      return;
+    }
+    setIsLoading(true);
+    beginLoginSession();
+    let loginSucceeded = false;
+    try {
+      if (mfaPurpose === 'mfa_enroll') {
+        const verify = await verifyTotp(mfaCode.trim(), mfaTempToken);
+        const nextToken = verify.data?.temp_token;
+        const codes = verify.data?.recovery_codes || [];
+        setMfaRecoveryCodes(codes);
+        if (!nextToken) {
+          throw new Error('Enrollment incomplet : challenge manquant.');
+        }
+        setMfaPurpose('2fa_challenge');
+        setMfaTempToken(nextToken);
+        setMfaCode('');
+        setMfaQr('');
+        setMfaSecret('');
+        setSuccessMessage(
+          codes.length
+            ? 'Conservez vos codes de secours, puis saisissez un code de votre application.'
+            : 'Saisissez un code de votre application.',
+        );
+        return;
+      }
+      const response = await challengeTotp(mfaTempToken, mfaCode.trim());
+      loginSucceeded = true;
+      clearMfaState();
+      await finalizeSuccessfulLogin(response.data);
+    } catch (error) {
+      const status = error?.response?.status;
+      if (status === 401) {
+        setErrorMessage('Code invalide.');
+        return;
+      }
+      setErrorMessage(getApiErrorMessage(error, 'Impossible de valider le code.'));
+    } finally {
+      if (!loginSucceeded) {
+        endLoginSession();
+      }
+      setIsLoading(false);
+    }
+  };
+
+  const handleMfaAbandon = () => {
+    clearMfaState();
+    setErrorMessage('');
+    endLoginSession();
+  };
+
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
+
+    if (mfaPurpose) {
+      await handleMfaSubmit(e);
+      return;
+    }
 
     if (!validateLoginForm()) return;
 
@@ -427,102 +619,30 @@ const Login = () => {
         },
         { skipCsrf: true },
       );
-      const { token, user, target_env, redirect_to, access_expires_at, access_expires_in, expires_in } =
-        response.data;
-
-      if (!user || !user.role || !user.public_id) {
-        throw new Error('Aucune information utilisateur reçue.');
+      const payload = response.data || {};
+      // 202 MFA : ne jamais traiter temp_token comme session métier.
+      if (payload.mfa_required || response.status === 202) {
+        await startMfaFlow(payload);
+        return;
       }
-
-      // ⚠️ Sécurité: on ne stocke JAMAIS le mot de passe en clair.
-      // REMEMBER_KEY ne contient que l'email (et un marqueur de version)
-      // pour pré-remplir l'identifiant et cocher la case au prochain chargement.
-      if (rememberMe) {
-        try {
-          localStorage.setItem(
-            REMEMBER_KEY,
-            JSON.stringify({ email: loginFormData.email, version: 2 }),
-          );
-        } catch { /* quota plein, on ignore */ }
-      } else {
-        localStorage.removeItem(REMEMBER_KEY);
-      }
-
-      cleanLocalSession();
-      try {
-        const { disconnectCompanySocket } = await import('../../services/companySocket');
-        disconnectCompanySocket();
-      } catch {
-        // ignore
-      }
-      try {
-        const { clearTenantScopedClientCaches } = await import('../../utils/clearTenantScopedClientCaches');
-        clearTenantScopedClientCaches();
-      } catch {
-        queryClient.clear();
-      }
-      clearExplicitLogoutMarker();
-      clearCrossTabLogoutMarker();
-
-      let roleSegment;
-      if (token && typeof token === 'string') {
-        const decodedToken = jwtDecode(token);
-        roleSegment = normalizeAuthRole(decodedToken.role || user.role);
-      } else {
-        roleSegment = normalizeAuthRole(user.role);
-      }
-
-      const session = writeAuthSession({
-        env: target_env,
-        user,
-        role: roleSegment,
-      });
-      try {
-        const { noteAccessExpiryFromResponse } = await import('../../utils/accessExpiry');
-        noteAccessExpiryFromResponse({
-          access_expires_at,
-          access_expires_in,
-          expires_in,
-        });
-      } catch {
-        // ignore
-      }
-      // Synchronise immédiatement le bootstrap : sinon ProtectedRoute voit encore
-      // l'ancienne session (admin/autre) et redirige vers /unauthorized.
-      hydrateFromLogin(session?.user || { ...user, role: roleSegment });
-      try {
-        const { resumeSessionKeepAlive } = await import('../../utils/sessionKeepAlive');
-        resumeSessionKeepAlive();
-      } catch (_) {
-        // ignore
-      }
-      removePendingActivationByEmail(loginFormData.email);
-      linkMobilityProfileToUser({
-        publicId: user.public_id,
-        email: user.email || loginFormData.email,
-      });
-
-      window.dispatchEvent(new Event('auth-changed'));
-
+      await finalizeSuccessfulLogin(payload);
       loginSucceeded = true;
-
-      if (user.force_password_change) {
-        navigate('/force-reset-password', { replace: true });
-      } else {
-        const preferredReturn = firstAllowedReturnPath(
-          roleSegment,
-          redirect_to,
-          safeReturnFromState,
-          nextFromQuery
-        );
-        const destination =
-          preferredReturn ||
-          `/dashboard/${roleSegment}/${user.public_id}`;
-        navigate(destination, { replace: true });
-      }
     } catch (error) {
       const responseData = error?.response?.data;
       const status = error?.response?.status;
+      if (
+        status === 202
+        || responseData?.mfa_required
+      ) {
+        try {
+          await startMfaFlow(responseData || {});
+        } catch (mfaStartError) {
+          setErrorMessage(
+            getApiErrorMessage(mfaStartError, 'Impossible de démarrer la validation en deux étapes.'),
+          );
+        }
+        return;
+      }
       if (status === 401) {
         setErrorMessage("Les données de connexion sont incorrectes.");
         return;
@@ -781,6 +901,59 @@ const Login = () => {
             </p>
           ) : (
             <>
+              {mfaPurpose && !isSignupMode ? (
+                <div className={styles.inputGroup} aria-busy={mfaBusy || undefined}>
+                  <p className={styles.fieldHint}>
+                    {mfaPurpose === 'mfa_enroll'
+                      ? 'Scannez le QR code avec votre application d’authentification, puis saisissez le code à 6 chiffres.'
+                      : 'Saisissez le code de validation en deux étapes (ou un code de secours).'}
+                  </p>
+                  {mfaQr ? (
+                    <img
+                      src={mfaQr}
+                      alt="QR code de configuration 2FA"
+                      style={{ maxWidth: 180, margin: '8px auto', display: 'block' }}
+                    />
+                  ) : null}
+                  {mfaSecret ? (
+                    <p className={styles.fieldHint} role="status">
+                      Clé secrète : {mfaSecret}
+                    </p>
+                  ) : null}
+                  {mfaRecoveryCodes.length ? (
+                    <p className={styles.fieldHint} role="status">
+                      Codes de secours : {mfaRecoveryCodes.join(' · ')}
+                    </p>
+                  ) : null}
+                  <label htmlFor="mfaCode" className={styles.label}>
+                    Code à 6 chiffres
+                  </label>
+                  <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
+                    <input
+                      type="text"
+                      name="mfaCode"
+                      id="mfaCode"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      className={styles.input}
+                      placeholder="000000"
+                      value={mfaCode}
+                      onChange={(ev) => setMfaCode(ev.target.value.replace(/\D/g, '').slice(0, 8))}
+                      required
+                      autoFocus
+                      aria-invalid={Boolean(mfaError) || undefined}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.forgotLink}
+                    onClick={handleMfaAbandon}
+                    style={{ marginTop: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                  >
+                    Annuler et revenir à la connexion
+                  </button>
+                </div>
+              ) : null}
               {isSignupMode ? (
                 <fieldset className={`${styles.inputGroup} ${styles.identityFieldset}`}>
                   <legend className={styles.label}>
@@ -1145,8 +1318,8 @@ const Login = () => {
           >
             {isLoading && <span className={styles.spinner} />}
             {isLoading
-              ? (isSignupMode ? 'Inscription en cours...' : 'Connexion en cours...')
-              : (isSignupMode ? "Créer mon compte" : 'Se connecter')}
+              ? (isSignupMode ? 'Inscription en cours...' : (mfaPurpose ? 'Validation…' : 'Connexion en cours...'))
+              : (isSignupMode ? "Créer mon compte" : (mfaPurpose ? 'Valider le code' : 'Se connecter'))}
           </button>
         </form>
 

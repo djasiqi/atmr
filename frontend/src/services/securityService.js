@@ -56,10 +56,36 @@ export const AUDIT_ACTION_LABELS = {
 // ─── TOTP 2FA ────────────────────────────────────────────
 export const fetchTotpStatus = () => apiClient.get('/auth/totp/status');
 
-export const setupTotp = () => apiClient.post('/auth/totp/setup');
+export const setupTotp = (tempToken) =>
+  apiClient.post(
+    '/auth/totp/setup',
+    tempToken ? { temp_token: tempToken } : {},
+    {
+      skipCsrf: true,
+      ...(tempToken
+        ? { headers: { Authorization: `Bearer ${tempToken}` } }
+        : {}),
+    },
+  );
 
-export const verifyTotp = (code) =>
-  apiClient.post('/auth/totp/verify', { code });
+export const verifyTotp = (code, tempToken) =>
+  apiClient.post(
+    '/auth/totp/verify',
+    tempToken ? { code, temp_token: tempToken } : { code },
+    {
+      skipCsrf: true,
+      ...(tempToken
+        ? { headers: { Authorization: `Bearer ${tempToken}` } }
+        : {}),
+    },
+  );
+
+export const challengeTotp = (tempToken, code) =>
+  apiClient.post(
+    '/auth/totp/challenge',
+    { temp_token: tempToken, code },
+    { skipCsrf: true },
+  );
 
 export const disableTotp = (password) =>
   apiClient.post('/auth/totp/disable', { password });
