@@ -107,15 +107,17 @@ Correctif **séparé** (branche `candidate/lirie-gg-fixture-40006359-20261112`, 
 
 ## H. SHA final (branche MFA)
 
-`2ad7caa759a83b8d81979f7359753cb21aa088c7` — docs final + stack commits MFA.
+`44ba46631457bb2779706aa1227590f45bc424ad` — tip publié.
 
-Chaîne : `2366f6a1` → `aefa42fe` → `a8c5de87` → `51291583` → `2257f208` → `0e75be16`.
+Chaîne : `2366f6a1` → `aefa42fe` → `a8c5de87` → `51291583` → `2257f208` → docs final.
 
 ---
 
 ## I. PR Draft
 
-Draft basée sur `candidate/lirie-auth-pro-ci-20261111` (#101), head `candidate/lirie-security-p0-03-mfa-20261112`.  
+https://github.com/djasiqi/atmr/pull/104 — Draft  
+Base : `candidate/lirie-auth-pro-ci-20261111` (#101)  
+Head : `candidate/lirie-security-p0-03-mfa-20261112`  
 Ne pas baser sur FIN-CAISSE #103.
 
 ---
