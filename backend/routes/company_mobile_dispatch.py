@@ -1919,6 +1919,18 @@ class MobileDispatchMode(Resource):
             )
             raise AssertionError("Invalid dispatch mode") from exc
 
+        # Verrou S23 : semi_auto / fully_auto gelés (flags OFF par défaut).
+        from services.dispatch.s23_dispatch_mode_lock import (
+            DispatchModeLockedError,
+            assert_dispatch_mode_switch_allowed,
+        )
+
+        try:
+            assert_dispatch_mode_switch_allowed(target_mode.value)
+        except DispatchModeLockedError as locked:
+            company_mobile_dispatch_ns.abort(403, str(locked))
+            raise AssertionError("dispatch mode locked") from locked
+
         previous_mode = getattr(company.dispatch_mode, "value", None)
         if previous_mode == target_mode.value:
             return {

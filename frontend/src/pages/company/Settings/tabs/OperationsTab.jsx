@@ -148,7 +148,7 @@ const OperationsTab = forwardRef(({ isEditing }, ref) => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [currentMode, setCurrentMode] = useState('semi_auto');
+  const [currentMode, setCurrentMode] = useState('manual');
   const [showAdvancedSettingsModal, setShowAdvancedSettingsModal] = useState(false);
   const [advancedSettings, setAdvancedSettings] = useState(null);
   const [loadingAdvancedSettings, setLoadingAdvancedSettings] = useState(false);

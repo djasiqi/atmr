@@ -3557,6 +3557,15 @@ class DispatchModeResource(Resource):
         )
         if new_mode:
             from models.enums import DispatchMode
+            from services.dispatch.s23_dispatch_mode_lock import (
+                DispatchModeLockedError,
+                assert_dispatch_mode_switch_allowed,
+            )
+
+            try:
+                assert_dispatch_mode_switch_allowed(str(new_mode))
+            except DispatchModeLockedError as locked:
+                return {"error": str(locked), "code": "dispatch_mode_locked"}, 403
 
             try:
                 # Invariant MANUAL ⇒ dispatch_enabled=false (centralisé sur le modèle)

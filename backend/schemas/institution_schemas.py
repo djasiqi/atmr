@@ -652,6 +652,16 @@ class MobilitySchema(Schema):
     oxygen = fields.Bool(load_default=False)
     walking = fields.Bool(load_default=True)
 
+    @validates_schema
+    def _reject_specialized_mobility_when_locked(self, data, **_kwargs):
+        from services.booking.specialized_mobility_gate import (
+            reject_if_specialized_mobility_blocked,
+        )
+
+        msg = reject_if_specialized_mobility_blocked(data)
+        if msg:
+            raise ValidationError({"mobility": msg})
+
 
 class ContactOnSiteSchema(Schema):
     """Schema pour le contact sur site (structure enrichie, rétrocompatible).
