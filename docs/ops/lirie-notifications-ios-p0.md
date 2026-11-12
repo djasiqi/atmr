@@ -167,20 +167,14 @@ Vérification : **statique PASS** (pas de conflit code push) ; **intégration ru
 
 ## I. Commits
 
-À renseigner après `git commit` local (voir historique branche). Aucun `git push`.
+Locaux uniquement (aucun `git push`) :
 
-Fichiers touchés prévus :
+| SHA | Message |
+|-----|---------|
+| `bcd1b842` | `fix(push-ios): dedup company/kafka et logout device_installation_id` |
+| `67747005` | `docs(ops): rapport NOTIF-IOS-P0 et alignement audit iOS` |
 
-- `backend/services/notifications/push_device_selection.py`
-- `backend/services/notifications/company_push.py`
-- `backend/services/notifications/kafka_consumer.py`
-- `backend/routes/auth.py`
-- `mobile/unified-app/src/core/api/client.ts`
-- `backend/tests/services/notifications/test_push_device_selection.py`
-- `backend/tests/services/notifications/test_company_push_ios_dedup.py`
-- `backend/tests/routes/test_logout_push_device_installation_id.py`
-- `docs/ops/push-ios-no-notifications-audit.md`
-- `docs/ops/lirie-notifications-ios-p0.md`
+Branche ahead de `origin/candidate/lirie-fin-caisse-20261112` de **2** commits.
 
 ---
 
