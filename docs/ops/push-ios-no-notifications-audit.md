@@ -4,12 +4,16 @@
 
 ```text
 PUSH iOS ROUTING          = PASS (code + preuve prod 2026-09-28)
-PUSH DELIVERY RELIABILITY = FIXED IN CODE (818355ba + fe07b2ac ; tests METRICS/DELIVERY)
-DEVICE PROVIDER DEDUP     = FIXED IN CODE (5f720740 driver ; NOTIF-IOS-P0 company/kafka)
-REAL-DEVICE VALIDATION    = PENDING / NOT VERIFIED (nov. 2026)
+PUSH DELIVERY RELIABILITY = FIXED IN CODE (Prometheus 818355ba + lease fe07b2ac)
+DEVICE PROVIDER DEDUP     = FIXED IN CODE (chauffeur 5f720740 ; entreprise/Kafka bcd1b842)
+LOGOUT DEVICE TOKENS      = FIXED IN CODE (device_installation_id / device_id)
+DEPLOYMENT                = NOT VERIFIED
+REAL-DEVICE VALIDATION    = NOT VERIFIED (nov. 2026 — recette iPhone préparée)
 ```
 
-Rapport consolidé : [`lirie-notifications-ios-p0.md`](lirie-notifications-ios-p0.md).
+Ne pas déclarer « P0 production résolu » sur la seule base de tests verts.
+
+Rapports : [`lirie-notifications-ios-p0.md`](lirie-notifications-ios-p0.md) · [`lirie-notifications-ios-p0-ci.md`](lirie-notifications-ios-p0-ci.md) · [`lirie-notifications-ios-p0-iphone-recipe.md`](lirie-notifications-ios-p0-iphone-recipe.md).
 
 Le routage FCM iOS (`d6f05831`) a été prouvé en prod le 2026-09-28. La course 40500 à 22:20 a montré le doublon Expo+FCM du même `device_id`. À 22:29–22:30, les notifications d'assignation et de réattribution ont été perdues : la tâche Celery mourait sur Prometheus (`eta_accuracy_rate`, `Incorrect label names`) après claim Redis consommé. Ces défauts code sont corrigés dans la base FIN-CAISSE / candidat NOTIF-IOS-P0 ; **la réception réelle sur iPhone n'est toujours pas revalidée**.
 
