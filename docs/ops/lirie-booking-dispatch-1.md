@@ -131,7 +131,12 @@ Aucune migration Alembic. Aucun flag ops ON.
 
 ## L. Commits locaux
 
-Voir `git log 7a54ad39..HEAD` sur la branche candidate (après commit).
+| SHA | Message |
+|-----|---------|
+| `d5f3a2e8` | fix(booking-dispatch): verrou S23 manuel, isolation accept et garde mobilité |
+| `96fa2d08` | docs(ops): rapport LOT-BOOKING-DISPATCH-1 |
+
+Tip : `96fa2d08` — **aucun push**.
 
 ---
 
