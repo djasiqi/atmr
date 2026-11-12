@@ -221,6 +221,13 @@ def init_namespaces(app):
 
     _ = ClientMyTermsAcceptances
     from routes.companies import companies_ns
+    import routes.company_settlement_settings as _company_settlement_settings
+    import routes.company_settlement_simulation as _company_settlement_simulation
+    import routes.company_settlement_production as _company_settlement_production
+
+    _ = _company_settlement_settings
+    _ = _company_settlement_simulation
+    _ = _company_settlement_production
     from routes.portal_receivables import portal_receivables_ns
     from routes.client_portal_receivables import client_portal_receivables_ns
     from routes.contact import contact_ns
@@ -247,8 +254,14 @@ def init_namespaces(app):
     from routes.driver import driver_ns
 
     import routes.driver_invitations as _driver_invitations
+    import routes.driver_settlement_read as _driver_settlement_read
+    import routes.driver_settlement_simulation as _driver_settlement_simulation
+    import routes.driver_settlement_production as _driver_settlement_production
 
     _ = _driver_invitations
+    _ = _driver_settlement_read
+    _ = _driver_settlement_simulation
+    _ = _driver_settlement_production
     from routes.driver_tracking_sessions import tracking_sessions_ns
     from routes.email import email_ns  # Configuration emails transactionnels (Brevo)
     from routes.geocode import geocode_ns
