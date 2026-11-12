@@ -5,11 +5,11 @@ Publication GitHub, CI et préparation recette iPhone.
 **Date :** 2026-11-12  
 **PR Draft :** [#105](https://github.com/djasiqi/atmr/pull/105)  
 **Branche :** `candidate/lirie-notif-ios-p0-20261112`  
+**SHA code + CI GREEN (avant ce commit docs) :** `71acf9fe` (`71acf9feb8655d6124f8cbf6c957f63da8a8cce7`)  
 **Base PR :** `candidate/lirie-fin-caisse-20261112` @ `1f12a9db` (#103)  
-**Mention PR :** DRAFT — DEVICE DELIVERY NOT VERIFIED — DO NOT MERGE OR DEPLOY.
 
-> **HEAD exact :** à figer après le dernier push (voir section A / git log).  
-> **#104 MFA n’est pas intégrée dans #105** — seule une compatibilité par merge temporaire a été vérifiée.
+> **DRAFT — DEVICE DELIVERY NOT VERIFIED — DO NOT MERGE OR DEPLOY.**  
+> **#104 MFA n’est pas intégrée dans #105** (compatibilité vérifiée uniquement par merge temporaire).
 
 ---
 
@@ -18,13 +18,13 @@ Publication GitHub, CI et préparation recette iPhone.
 | Élément | Valeur |
 |---------|--------|
 | Worktree | `D:\lirie-backups\_candidate_lirie_notif_ios_p0_20261112` |
-| Upstream tip #103 | `1f12a9db` (inchangé) |
+| HEAD PR #105 (au moment de la clôture CI) | **`71acf9fe`** |
+| Tip #103 | `1f12a9db` (inchangé) |
 | WIP `main` | non modifié |
-| MFA #104 | non mergée dans #105 |
+| MFA #104 | **non mergée** dans #105 |
 
-Périmètre NOTIF : push company/kafka, logout device ids, tests, docs.  
-Correctif CI lint : format `company_push.py`, PLR0402 test logout, I001 isort hérités settlement/e2e (bloquants Backend Tests sur tip).  
-**Aucune** migration Alembic, **aucun** flag ops activé, **aucun** secret, **aucun** `deploy.yml`.
+Périmètre : push iOS company/kafka, logout device ids, tests NOTIF, docs, correctifs CI (ruff + test RL mock hors métier).  
+Pas de migration, pas de flag ops ON, pas de secret, pas de `deploy.yml`.
 
 ---
 
@@ -32,100 +32,110 @@ Correctif CI lint : format `company_push.py`, PLR0402 test logout, I001 isort h�
 
 - **#105** — https://github.com/djasiqi/atmr/pull/105  
 - Titre : `fix(notifications): harden iOS push delivery and device deduplication`  
-- Draft = true · Base = FIN-CAISSE · Head = NOTIF  
-- Empilée sur #103 (dépendances #101 / #102 / #103)
+- Draft = true · Base = FIN-CAISSE · Head = NOTIF
 
 ---
 
-## C. Commits publiés (série)
+## C. Commits publiés (principaux)
 
 | SHA | Message |
 |-----|---------|
 | `bcd1b842` | fix(push-ios): dedup company/kafka et logout device_installation_id |
-| `67747005`…`a81ca2b2` | docs NOTIF-IOS-P0 |
-| `e6a9522d` | docs(ops): PR #105, recette iPhone et rapport NOTIF-IOS-P0-CI |
-| *(tip)* | lint CI + finalisation rapport |
+| `a81ca2b2`…`e6a9522d` | docs NOTIF-IOS-P0 / PR #105 / recette iPhone |
+| `9185697a` | fix(ci): ruff format/import NOTIF et I001 settlement |
+| `71acf9fe` | fix(test): mock Path.open tuner RL (Backend Tests shard 1) |
+| *(tip docs)* | ce rapport final |
 
 ---
 
 ## D. Compatibilité MFA (#104)
 
 - Tip MFA : `626de1c3`  
-- Merge temporaire MFA → tip NOTIF : **aucun conflit** ; alias logout préservés.  
-- **PR #104 non modifiée et non intégrée à #105.**  
-- Runtime MFA×push sur appareil : non exécuté.
+- Merge temporaire MFA → NOTIF : **aucun conflit** ; alias logout préservés.  
+- **#104 non intégrée à #105.**  
+- Runtime MFA×push appareil : non exécuté.
 
 ---
 
-## E. Matrice CI
+## E. Matrice CI — HEAD `71acf9fe` (obligatoires)
 
-### E.1 Première vague — SHA `a81ca2b2` (code + docs init)
+| Contrôle | Mode | SHA | Conclusion |
+|----------|------|-----|------------|
+| **Backend Tests** (Lint + pytest 4 shards + E2E + Migrations + pip-audit) | workflow_dispatch | `71acf9fe` | **success** |
+| **Security Gate** / verdict | pull_request | `71acf9fe` | **success** |
+| **Mobile unified-app** (boundaries + lint-and-test) | pull_request | `71acf9fe` | **success** |
+| Architecture Review | PR | `71acf9fe` | **success** |
+| Phase 1 Gates | PR | `71acf9fe` | **success** |
+| `trigger-backend-deploy` | Phase 1 | `71acf9fe` | **skipped** |
+| Secret Pattern Scan | PR + push | `71acf9fe` | **success** |
+| Security Scan | dispatch | `71acf9fe` | **success** |
+| Repository Integrity | dispatch | `71acf9fe` | **success** |
+| SAST CodeQL / Bandit+Semgrep / Semgrep cloud | Gate | `71acf9fe` | **success** |
+| Secrets Gitleaks HEAD | Gate | `71acf9fe` | **success** |
+| **GitGuardian Security Checks** | PR | `71acf9fe` | **success** |
+| Vercel Preview Comments | status | `71acf9fe` | **success** (preview ≠ prod) |
 
-| Workflow / check | Mode | SHA | Conclusion |
-|------------------|------|-----|------------|
-| Secret Pattern Scan | PR + push | a81ca2b2 | **success** |
-| Architecture Review | PR | a81ca2b2 | **success** |
-| Mobile unified-app (Lint + Jest) | PR | a81ca2b2 | **success** |
-| Phase 1 Gates | PR | a81ca2b2 | **success** (`trigger-backend-deploy` **skipped**) |
-| Security Gate / verdict | PR | a81ca2b2 | **success** |
-| SAST CodeQL / Bandit+Semgrep / Gitleaks | Gate | a81ca2b2 | **success** |
-| GitGuardian Security Checks | PR | a81ca2b2 | **success** (pas de nouveau FAIL visible ; hist. 40006359 #103 non masqué) |
-| Security Scan | dispatch | a81ca2b2 | **success** |
-| Repository Integrity | dispatch | a81ca2b2 | **success** |
-| Backend Tests — Lint (Ruff) | dispatch | a81ca2b2 | **failure** (format `company_push.py` + PLR0402 logout test + I001 settlement hérités) |
-| Backend Tests — pytest shards / E2E / Migrations | dispatch | a81ca2b2 | en cours / success partiels au moment du diagnostic |
+**40/40 check-runs terminés, 0 failure** sur `71acf9fe`.  
+**0** workflow `Deploy*` / `deploy.yml` / kafka deploy sur ce tip.
 
-### E.2 Correctif lint + docs tip (après push)
+### Historique CI (vagues antérieures)
 
-| Action | Détail |
-|--------|--------|
-| Fix | `ruff format` company_push ; `from routes import auth` ; I001 settlement/e2e |
-| Redeploy CI | push tip → vérif Backend Tests + Security Gate + Mobile sur **HEAD final** |
-| Deploy workflows | **aucun** `deploy.yml` / kafka / RL exécuté |
-
-*Tableau E.3 (HEAD final) complété après clôture CI du tip poussé.*
+| SHA | Problème | Correctif |
+|-----|----------|-----------|
+| `a81ca2b2` | Lint Ruff (format company_push, PLR0402, I001 settlement) | `9185697a` |
+| `9185697a` | pytest shard1 : `test_save_best_params_with_custom_filename` (mock Path.open) | `71acf9fe` |
 
 ---
 
 ## F. GitGuardian
 
-- Incident historique **#103** `40006359` : classification humaine **ouverte** — **non masqué**.  
-- Sur #105 @ `a81ca2b2` : check **GitGuardian Security Checks = success**.  
-- Surveiller le tip final après push lint/docs.
+- Check **GitGuardian Security Checks = success** sur `71acf9fe`.  
+- Incident historique **#103** `40006359` : classification humaine **toujours ouverte** — **non masqué** ici.  
+- Aucun nouveau FAIL GG signalé sur #105.
 
 ---
 
 ## G. Documentation
 
-- Audit : Prometheus / dédup chauffeur / dédup company-kafka / logout = **FIXED IN CODE** ; déploiement & iPhone = **NOT VERIFIED**  
-- Recette : [`lirie-notifications-ios-p0-iphone-recipe.md`](lirie-notifications-ios-p0-iphone-recipe.md)  
-- Ne pas déclarer « P0 production résolu » sur tests verts seuls.
+```text
+Prometheus              = FIXED IN CODE
+Dédup Chauffeur         = FIXED IN CODE
+Dédup Entreprise/Kafka  = FIXED IN CODE
+Logout tokens           = FIXED IN CODE
+Déploiement             = NOT VERIFIED
+Livraison iPhone        = NOT VERIFIED
+```
+
+Recette : [`lirie-notifications-ios-p0-iphone-recipe.md`](lirie-notifications-ios-p0-iphone-recipe.md)  
+Audit : [`push-ios-no-notifications-audit.md`](push-ios-no-notifications-audit.md)
+
+Ne pas déclarer « P0 production résolu » sur la seule base CI GREEN.
 
 ---
 
 ## H. Procédure iPhone
 
-Recette prête. **IOS DEVICE DELIVERY = NOT VERIFIED.**
+Prête. **IOS DEVICE DELIVERY = NOT VERIFIED** (aucune réception réelle démontrée).
 
 ---
 
 ## I. Risques résiduels
 
 1. Réception iPhone non prouvée.  
-2. #104 non dans #105 — stacking ultérieur requis.  
+2. Stacking #104 ultérieur (logout aliases déjà compatibles en merge-tree).  
 3. GG historique #103 hors FP humain.  
-4. I001 settlement corrigés sur tip NOTIF pour CI (héritage #103) — à reporter éventuel vers FIN-CAISSE.
+4. Correctifs isort settlement + mock RL sur tip NOTIF (héritage / hors métier) — à reporter si besoin vers #103.
 
 ---
 
-## J. Verdicts (avant clôture tip final)
+## J. Verdicts
 
 | Gate | Verdict |
 |------|---------|
-| CI | **PARTIAL** (Lint Backend FAIL sur `a81ca2b2` ; correctif en push) |
-| SECURITY | **PASS** (Security Gate + scans @ a81ca2b2) |
-| PUSH BACKEND | **PASS** (code) |
+| CI | **GREEN** sur HEAD `71acf9fe` |
+| SECURITY | **PASS** |
+| PUSH BACKEND | **PASS** |
 | PUSH MOBILE | **PARTIAL** |
 | IOS DEVICE DELIVERY | **NOT VERIFIED** |
-| READY FOR HUMAN REVIEW | **NO** (attendre CI tip final) |
+| READY FOR HUMAN REVIEW | **YES** |
 | READY FOR PRODUCTION | **NO** |
