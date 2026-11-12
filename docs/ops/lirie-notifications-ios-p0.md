@@ -172,9 +172,9 @@ Locaux uniquement (aucun `git push`) :
 | SHA | Message |
 |-----|---------|
 | `bcd1b842` | `fix(push-ios): dedup company/kafka et logout device_installation_id` |
-| `67747005` | `docs(ops): rapport NOTIF-IOS-P0 et alignement audit iOS` |
+| `67747005` (+ docs SHA sync) | `docs(ops): rapport NOTIF-IOS-P0 et alignement audit iOS` |
 
-Branche ahead de `origin/candidate/lirie-fin-caisse-20261112` de **2** commits.
+Branche locale ahead de `origin/candidate/lirie-fin-caisse-20261112`. Tip : `git -C … log --oneline 1f12a9db..HEAD`.
 
 ---
 
