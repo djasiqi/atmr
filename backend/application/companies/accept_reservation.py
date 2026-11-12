@@ -154,6 +154,7 @@ class AcceptReservationUseCase:
                     error=result.error,
                     status_code=result.status_code,
                 )
+            _review_settlement(booking, int(company_id))
             return AcceptReservationResult(
                 ok=True,
                 should_trigger_dispatch=False,
@@ -240,4 +241,14 @@ class AcceptReservationUseCase:
         _set_status(booking, "accepted")
         if client is not None and is_portal_client(client):
             _apply_portal_carrier_tariff(booking, int(company_id))
+        _review_settlement(booking, int(company_id))
         return AcceptReservationResult(ok=True, should_trigger_dispatch=True)
+
+
+def _review_settlement(booking, company_id: int) -> None:
+    """Revue financière optionnelle. Le drapeau éteint ne touche aucune table."""
+    from application.billing.settlement_acceptance import (
+        note_acceptance_financial_review,
+    )
+
+    note_acceptance_financial_review(booking, company_id=company_id)
