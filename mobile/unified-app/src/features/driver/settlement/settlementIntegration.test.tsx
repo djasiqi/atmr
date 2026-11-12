@@ -181,16 +181,19 @@ describe("intégration du panneau chauffeur", () => {
       join(root, "app/(app)/(driver)/missions/[missionId]/attestation.tsx"),
       "utf8"
     );
+    // Isolation règlement : la fiche mission existante peut garder StatusSwitch / transitions,
+    // mais ne doit pas brancher le panneau de caisse ni l'étape « à destination ».
     expect(mission).not.toContain("MissionSettlementSlot");
-    expect(mission).not.toContain("StatusSwitch");
-    expect(mission).not.toContain("handleMissionTransition");
-    expect(mission).not.toContain("submitDriverAttestation");
-    expect(mission).not.toContain("/attestation");
     expect(mission).not.toContain("Je suis à l'arrêt");
     expect(mission).not.toContain("DriverSettlementPanel");
     expect(mission).not.toContain("ARRIVED_DESTINATION");
     expect(mission).not.toContain("DashboardHandoverSettlement");
     expect(mission).toContain('permission="mission:read"');
+    expect(attestation).not.toContain("DriverSettlementPanel");
+    expect(attestation).not.toContain("MissionSettlementSlot");
+    expect(confirm).not.toContain("DriverSettlementPanel");
+    expect(confirm).not.toContain("MissionSettlementSlot");
+    expect(preview).toContain("settlement");
     const dashboard = readFileSync(join(root, "app/(app)/(driver)/index.tsx"), "utf8");
     const active = readFileSync(
       join(root, "src/features/driver/components/DashboardActiveMission.tsx"),

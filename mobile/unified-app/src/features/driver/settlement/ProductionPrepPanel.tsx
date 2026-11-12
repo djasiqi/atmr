@@ -69,20 +69,21 @@ export function ProductionPrepPanel({
       {cash.state === "received" ? (
         <Text>
           Enregistrement confirmé. Net {cash.net_chf} CHF. Monnaie rendue{" "}
-          {cash.change_chf} CHF. Ce n'est pas une activation de caisse.
+          {cash.change_chf} CHF. {"Ce n'est pas une activation de caisse."}
         </Text>
       ) : null}
       {cash.state === "returned" ? (
-        <Text>Les espèces présentées doivent être restituées. Rien n'est encaissé.</Text>
+        <Text>{"Les espèces présentées doivent être restituées. Rien n'est encaissé."}</Text>
       ) : null}
       {cash.state === "administrative" ? (
         <Text>
-          Situation administrative. Ce n'est pas une créance définitive et ce n'est
-          pas une quittance.
+          {
+            "Situation administrative. Ce n'est pas une créance définitive et ce n'est pas une quittance."
+          }
         </Text>
       ) : null}
       {cash.state === "uncertain" ? (
-        <Text>Le serveur n'a pas confirmé l'enregistrement. Aucun second encaissement.</Text>
+        <Text>{"Le serveur n'a pas confirmé l'enregistrement. Aucun second encaissement."}</Text>
       ) : null}
       {cash.state === "prepared" ? (
         <View>
@@ -142,7 +143,7 @@ export function ProductionPrepPanel({
           })
         }
       >
-        <Text>Présenter l'information préalable</Text>
+        <Text>{"Présenter l'information préalable"}</Text>
       </Pressable>
       <Pressable
         onPress={() =>

@@ -5,7 +5,6 @@ import { LirieSheet } from "../../../design/foundations/LirieSheet";
 import { lirieSpace } from "../../../design/foundations/tokens";
 import { useNetInfo } from "@react-native-community/netinfo";
 import { apiClient } from "../../../core/api/client";
-import { readPublishedAppVariant } from "../../../core/api/p0RuntimeIdentity";
 import { MissionSettlementEntry } from "./MissionSettlementEntry";
 import { missionPanelState } from "./missionPanelState";
 import {
@@ -71,7 +70,7 @@ async function ensureSimulationCase(missionId: number): Promise<SimulationDossie
 }
 
 export function useSettlementRecipeAccess(): boolean {
-  const appVariant = readPublishedAppVariant() ?? process.env.EXPO_PUBLIC_APP_VARIANT;
+  const appVariant = process.env.EXPO_PUBLIC_APP_VARIANT;
   const candidate = settlementRecipeCandidate({
     dev: typeof __DEV__ !== "undefined" && __DEV__,
     appVariant,
@@ -94,7 +93,7 @@ export function useSettlementRecipeAccess(): boolean {
 }
 
 export function useSettlementCashPrepAccess(): boolean {
-  const appVariant = readPublishedAppVariant() ?? process.env.EXPO_PUBLIC_APP_VARIANT;
+  const appVariant = process.env.EXPO_PUBLIC_APP_VARIANT;
   const candidate = settlementRecipeCandidate({
     dev: typeof __DEV__ !== "undefined" && __DEV__,
     appVariant,
@@ -116,7 +115,7 @@ export function useSettlementCashPrepAccess(): boolean {
 }
 
 export function useSettlementLedgerAccess(): boolean {
-  const appVariant = readPublishedAppVariant() ?? process.env.EXPO_PUBLIC_APP_VARIANT;
+  const appVariant = process.env.EXPO_PUBLIC_APP_VARIANT;
   const candidate = settlementRecipeCandidate({
     dev: typeof __DEV__ !== "undefined" && __DEV__,
     appVariant,

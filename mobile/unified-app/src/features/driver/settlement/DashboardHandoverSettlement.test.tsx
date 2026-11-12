@@ -402,6 +402,12 @@ describe("règlement à la remise", () => {
         kind: "invoice_authorized",
         modes: ["invoice"],
         amount_chf: "45.00",
+        billing_followup: {
+          invoice_confirmation_required: false,
+          label: "Mandat de démonstration applicable. Dossier préparé, facture non émise.",
+          real_payment: false,
+          invoice_issued: false,
+        },
       },
     });
     const tree = await mount("IN_PROGRESS");

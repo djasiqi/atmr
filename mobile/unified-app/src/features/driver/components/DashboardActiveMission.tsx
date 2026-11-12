@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "../../../design/ui/AppText";
@@ -32,6 +33,11 @@ import {
   openNavigation,
   safeCall,
 } from "../utils/missionContact";
+import { dashboardMissionEyebrow } from "./driverDashboardShell";
+import { DriverIncidentReport, signalSettlementImpossible } from "./DriverIncidentReport";
+import { useDashboardHandover } from "../settlement/DashboardHandoverSettlement";
+import { dashboardPrimaryKind, settlementImpossibleNotice } from "../settlement/dashboardHandover";
+import { useSingleTransitionPress } from "../domain/useSingleTransitionPress";
 import { D, dashboardSoftShadow, missionActiveCardShadow } from "../theme/driverDashboardTheme";
 
 type FocusSide = "pickup" | "dropoff" | null;
@@ -50,6 +56,7 @@ function focusHeaderLabel(focus: FocusSide, statusKey: DriverMissionStatus): str
 
 type Props = {
   mission: DriverMission;
+  driverUserId?: string | null;
   pending?: boolean;
   onMissionTransition?: (target: DriverTransitionStatus) => void;
   onMissionRelease?: () => void;
@@ -176,9 +183,11 @@ function QuickAction({ label, icon, onPress, disabled, stacked }: QuickActionPro
 
 export function DashboardActiveMission({
   mission,
+  driverUserId,
   pending = false,
   onMissionTransition,
   onMissionRelease,
+  onOpenDetails,
 }: Props) {
   const { can } = useSession();
   const { isVeryLargeText, fontScale } = useAccessibilityScale();
@@ -192,6 +201,8 @@ export function DashboardActiveMission({
     etaMinutes: etaQuery.data?.eta_minutes,
     etaSnapshot: etaQuery.data ?? null,
   });
+  const handover = useDashboardHandover(mission.id, mission.status);
+  const [exitNotice, setExitNotice] = useState<string | null>(null);
   const pickup = (mission.pickup_location as string | null | undefined) ?? null;
   const dropoff = (mission.dropoff_location as string | null | undefined) ?? null;
   const phone = getCallablePhoneFromMission(mission);
@@ -202,10 +213,17 @@ export function DashboardActiveMission({
   const forwardTransition = FORWARD_TRANSITION_PRIORITY.find((t) =>
     statusUx.nextTransitions.includes(t)
   );
+  const transitionPress = useSingleTransitionPress(pending, forwardTransition ?? null);
+  const primaryKind = dashboardPrimaryKind({
+    nextTransition: forwardTransition ?? null,
+    destinationAuthorized: handover.showDestinationStep,
+    destinationConfirmed: handover.destinationConfirmed,
+    settlementSettled: handover.settlementSettled,
+  });
   const canRelease = Boolean(
     can("mission:update_status") &&
       typeof onMissionRelease === "function" &&
-      (statusKey === "ASSIGNED" || statusKey === "EN_ROUTE")
+      statusKey === "ASSIGNED"
   );
   const showGps = !statusUx.terminal && dest.length > 0;
   const showCall = Boolean(phone) && !statusUx.terminal;
@@ -232,14 +250,22 @@ export function DashboardActiveMission({
   const pickupActive = focusSide === "pickup";
   const dropoffActive = focusSide === "dropoff";
 
+  const missionEyebrow = dashboardMissionEyebrow(mission.status);
+
   return (
-    <View style={styles.root} accessibilityLabel={`Mission active ${mission.id}`}>
-      <View style={styles.infoCard}>
+    <View style={styles.root} accessibilityLabel={`${missionEyebrow} ${mission.id}`}>
+      <Pressable
+        onPress={onOpenDetails}
+        disabled={!onOpenDetails}
+        accessibilityRole={onOpenDetails ? "button" : undefined}
+        accessibilityLabel={onOpenDetails ? "Ouvrir le détail du trajet" : undefined}
+        style={styles.infoCard}
+      >
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderLeft}>
             <Ionicons name="bookmark-outline" size={15} color={D.brand} accessibilityElementsHidden />
             <AppText variant="caption" style={styles.cardEyebrow}>
-              MISSION ACTIVE
+              {missionEyebrow}
             </AppText>
           </View>
           <View style={styles.headerBadges}>
@@ -414,24 +440,86 @@ export function DashboardActiveMission({
             compactLabel={!stackMetrics}
           />
         </View>
-      </View>
+      </Pressable>
 
       <View style={styles.controlsBlock}>
+        {handover.verificationLabel ? (
+          <AppText variant="bodyMuted" accessibilityLabel="Vérification du règlement nécessaire">
+            {handover.verificationLabel}
+          </AppText>
+        ) : null}
+        {handover.followupLabel ? (
+          <AppText variant="bodyMuted" accessibilityLabel="Suivi de facturation">
+            {handover.followupLabel}
+          </AppText>
+        ) : null}
         <MissionProgressStepper
           mission={mission}
           etaSnapshot={etaQuery.data ?? null}
           remainingDistanceKm={routeMetrics.distanceKm}
+          destinationHalt={
+            handover.showDestinationStep
+              ? {
+                  confirmed: handover.destinationConfirmed || handover.settlementSettled,
+                  completionReady: handover.settlementSettled,
+                  onConfirm: handover.confirmDestination,
+                  onReopen: handover.confirmDestination,
+                }
+              : null
+          }
         />
 
-        {showTransitionActions && forwardTransition ? (
+        {handover.panel}
+
+        {showTransitionActions && primaryKind === "destination" ? (
           <Pressable
-            onPress={() => onMissionTransition?.(forwardTransition)}
+            onPress={handover.confirmDestination}
             disabled={pending}
+            accessibilityRole="button"
+            accessibilityLabel="Je suis à destination"
+            style={({ pressed }) => [
+              styles.primaryCta,
+              pending && styles.disabledOpacity,
+              pressed && styles.pressed,
+            ]}
+          >
+            <AppText variant="label" style={styles.primaryCtaLabel}>
+              JE SUIS À DESTINATION
+            </AppText>
+          </Pressable>
+        ) : null}
+
+        {showTransitionActions && primaryKind === "reopen" ? (
+          <Pressable
+            onPress={handover.confirmDestination}
+            disabled={pending}
+            accessibilityRole="button"
+            accessibilityLabel="Rouvrir le règlement"
+            style={({ pressed }) => [
+              styles.primaryCta,
+              pending && styles.disabledOpacity,
+              pressed && styles.pressed,
+            ]}
+          >
+            <AppText variant="label" style={styles.primaryCtaLabel}>
+              ROUVRIR LE RÈGLEMENT
+            </AppText>
+          </Pressable>
+        ) : null}
+
+        {showTransitionActions && primaryKind === "transition" && forwardTransition ? (
+          <Pressable
+            onPressIn={transitionPress.onPressIn}
+            onPress={() => {
+              const target = transitionPress.onPress();
+              if (target) onMissionTransition?.(target);
+            }}
+            disabled={transitionPress.locked}
             accessibilityRole="button"
             accessibilityLabel={transitionLabel(forwardTransition, isMaterialDeliveryMission(mission))}
             style={({ pressed }) => [
               styles.primaryCta,
-              pending && styles.disabledOpacity,
+              transitionPress.locked && styles.disabledOpacity,
               pressed && styles.pressed,
             ]}
           >
@@ -441,6 +529,46 @@ export function DashboardActiveMission({
             </AppText>
           </Pressable>
         ) : null}
+
+        {showTransitionActions && primaryKind !== "transition" ? (
+          <Pressable
+            onPress={() => {
+              void signalSettlementImpossible(mission.id, driverUserId || "session")
+                .then((result) => {
+                  handover.markSettlementWaived();
+                  setExitNotice(settlementImpossibleNotice(result));
+                })
+                .catch(() => {
+                  handover.markSettlementWaived();
+                  setExitNotice(settlementImpossibleNotice("queued"));
+                });
+            }}
+            disabled={pending}
+            accessibilityRole="button"
+            accessibilityLabel="Signaler un règlement impossible sans déclaration financière"
+            style={styles.exitCta}
+          >
+            <AppText variant="label" style={styles.exitCtaLabel}>
+              Signaler un règlement impossible
+            </AppText>
+          </Pressable>
+        ) : null}
+        {exitNotice ? (
+          <AppText variant="caption" style={styles.exitNotice}>
+            {exitNotice}
+          </AppText>
+        ) : null}
+
+        <DriverIncidentReport
+          missionId={mission.id}
+          driverUserId={driverUserId || "session"}
+          companyPhone={
+            typeof mission.company_professional_phone === "string"
+              ? mission.company_professional_phone
+              : null
+          }
+          visible={statusKey === "EN_ROUTE" || statusKey === "IN_PROGRESS"}
+        />
 
         {showQuickActions ? (
           <View style={[styles.quickActionsRow, stackMetrics && styles.quickActionsRowStacked]}>
@@ -846,12 +974,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
-    minHeight: 40,
+    minHeight: 48,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
     backgroundColor: D.brandDark,
     ...actionShadow,
+  },
+  exitCta: {
+    minHeight: 48,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: D.brandDark,
+    backgroundColor: "#FFFFFF",
+  },
+  exitCtaLabel: {
+    color: D.brandDark,
+    fontWeight: "700",
+    fontSize: FONT_SIZE.px13,
+    textAlign: "center",
+  },
+  exitNotice: {
+    color: D.brandDark,
   },
   primaryCtaLabel: {
     color: "#FFFFFF",

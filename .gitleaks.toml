@@ -24,6 +24,7 @@ paths = [
   '''\.(png|jpg|jpeg|gif|webp|ico|pdf|apk|aab|jar|woff2?)$''',
   '''(^|/)docs(/|$)''',
   '''(^|/)backend/tests(/|$)''',
+  '''(^|/)mobile/unified-app/.+\.test\.(ts|tsx)$''',
   '''\.example$''',
   '''\.example\.''',
   '''env\..*\.example''',

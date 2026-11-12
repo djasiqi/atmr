@@ -47,7 +47,7 @@ describe("parcours de signature de démonstration", () => {
       representativeRelation: "fille",
       tariffVersion: "1",
       versionNumber: 2,
-      idempotencyKey: "signature-version-02",
+      idempotencyKey: "idemp-signature-version-deux",
     });
     expect(payload.version_number).toBe(2);
     expect(payload.signer).toBe("representative");
@@ -58,7 +58,7 @@ describe("parcours de signature de démonstration", () => {
       signer: "patient",
       tariffVersion: "1",
       versionNumber: null,
-      idempotencyKey: "signature-patient-01",
+      idempotencyKey: "idemp-signature-patient-un",
     }).representative_name).toBeNull();
   });
 

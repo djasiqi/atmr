@@ -62,7 +62,7 @@ export function useDashboardHandover(
       const { data } = await apiClient.get(`/driver/me/bookings/${missionId}/settlement-read`);
       return data;
     },
-    enabled: missionId > 0 && !offline,
+    enabled: missionId > 0 && inProgress && !offline,
     retry: false,
     staleTime: 0,
     refetchOnMount: "always",
@@ -150,7 +150,8 @@ export function useDashboardHandover(
   }
 
   return {
-    showDestinationStep: destinationAuthorized,
+    // L'étape n'apparaît qu'en course en cours, jamais avant l'embarquement ni après clôture.
+    showDestinationStep: authorized,
     verificationRequired,
     verificationLabel: verificationRequired
       ? reading.isSuccess

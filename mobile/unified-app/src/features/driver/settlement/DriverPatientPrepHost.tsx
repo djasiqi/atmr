@@ -185,7 +185,7 @@ export function DriverPatientPrepHost({
             {notice}
           </LirieText>
         ) : (
-          <LirieText variant="message">Dossier absent. Aucune facture n'est ouverte.</LirieText>
+          <LirieText variant="message">{"Dossier absent. Aucune facture n'est ouverte."}</LirieText>
         )}
         {allowOpen && !openLocked && !openUncertain ? (
           <LirieButton

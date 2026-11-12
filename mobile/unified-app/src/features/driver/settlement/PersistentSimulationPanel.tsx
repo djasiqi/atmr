@@ -79,7 +79,7 @@ export function PersistentSimulationPanel({
       <Text>{`Référence du transport : ${dossier.booking_id ?? "—"}`}</Text>
       {error ? <Text>{error}</Text> : null}
       {uncertain ? (
-        <Text>Aucun nouveau paiement n'est proposé.</Text>
+        <Text>{"Aucun nouveau paiement n'est proposé."}</Text>
       ) : null}
       {preparing && modes.includes("tap_to_pay") ? (
         <View>
@@ -180,7 +180,7 @@ export function PersistentSimulationPanel({
             }
             style={styles.button}
           >
-            <Text>30 CHF conservés, à examiner. Ce n'est pas une créance définitive.</Text>
+            <Text>{"30 CHF conservés, à examiner. Ce n'est pas une créance définitive."}</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -205,7 +205,7 @@ export function PersistentSimulationPanel({
             }
             style={styles.button}
           >
-            <Text>30 CHF transmis à l'administration</Text>
+            <Text>{"30 CHF transmis à l'administration"}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -215,7 +215,7 @@ export function PersistentSimulationPanel({
           <Text>{`Base contractuelle : ${dossier.contractual_basis}`}</Text>
           <Text>{`Document non approuvé : ${dossier.document_version}`}</Text>
           <Text>Traitement administratif nécessaire.</Text>
-          <Text>Aucune signature n'est enregistrée. Elle n'a aucune valeur juridique.</Text>
+          <Text>{"Aucune signature n'est enregistrée. Elle n'a aucune valeur juridique."}</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Information préalable absente"
