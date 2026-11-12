@@ -1,15 +1,17 @@
 # Audit — iOS : aucune notification (Sujet 1)
 
-**Statut officiel (2026-09-28, 22:35 Genève) :**
+**Statut officiel (2026-09-28, 22:35 Genève) — mis à jour code 2026-11-12 (NOTIF-IOS-P0) :**
 
 ```text
-PUSH iOS ROUTING          = PASS PROD
-PUSH DELIVERY RELIABILITY = P0 FAIL / HOTFIX REQUIRED
-DEVICE PROVIDER DEDUP     = FAIL
-REAL-DEVICE VALIDATION    = PAUSED
+PUSH iOS ROUTING          = PASS (code + preuve prod 2026-09-28)
+PUSH DELIVERY RELIABILITY = FIXED IN CODE (818355ba + fe07b2ac ; tests METRICS/DELIVERY)
+DEVICE PROVIDER DEDUP     = FIXED IN CODE (5f720740 driver ; NOTIF-IOS-P0 company/kafka)
+REAL-DEVICE VALIDATION    = PENDING / NOT VERIFIED (nov. 2026)
 ```
 
-Le routage FCM iOS (`d6f05831`) est en production depuis 21:33. La course 40500 à 22:20 a prouvé le routage (FCM iOS accepté) et le doublon Expo+FCM du même `device_id`. À 22:29–22:30, les notifications d'assignation et de réattribution ont été perdues : la tâche Celery meurt sur Prometheus (`eta_accuracy_rate`, `Incorrect label names`) après que le claim Redis est déjà consommé. Aucun token n'a été modifié. La validation appareil est en pause tant que ce hotfix n'est pas en production.
+Rapport consolidé : [`lirie-notifications-ios-p0.md`](lirie-notifications-ios-p0.md).
+
+Le routage FCM iOS (`d6f05831`) a été prouvé en prod le 2026-09-28. La course 40500 à 22:20 a montré le doublon Expo+FCM du même `device_id`. À 22:29–22:30, les notifications d'assignation et de réattribution ont été perdues : la tâche Celery mourait sur Prometheus (`eta_accuracy_rate`, `Incorrect label names`) après claim Redis consommé. Ces défauts code sont corrigés dans la base FIN-CAISSE / candidat NOTIF-IOS-P0 ; **la réception réelle sur iPhone n'est toujours pas revalidée**.
 
 DELIVERY-06, assumé `at-least-once` : si le provider accepte puis que le processus meurt avant l'écriture de `SENT`, le retry peut renvoyer. Le même `notification_id` trace les deux acceptations. Ce n'est pas une perte de notification.
 
