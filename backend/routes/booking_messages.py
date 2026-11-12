@@ -103,7 +103,7 @@ def _is_conversation_closed(booking: Booking) -> bool:
 # ---------------------------------------------------------------------------
 # Auth helper
 # ---------------------------------------------------------------------------
-def _get_booking_with_auth(booking_id: int):
+def _get_booking_with_auth(booking_id: int):  # noqa: RET503
     """Charge le booking, verifie l'acces.
 
     Retourne
