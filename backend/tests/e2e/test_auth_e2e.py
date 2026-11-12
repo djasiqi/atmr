@@ -42,9 +42,9 @@ class TestAuthLoginToLogoutFlow:
             json={"email": user.email, "password": "testpassword123"},
         )
 
-        assert (
-            login_response.status_code == 200
-        ), "Login doit réussir avec credentials valides"
+        assert login_response.status_code == 200, (
+            "Login doit réussir avec credentials valides"
+        )
         login_data = login_response.get_json()
         assert "user" in login_data, "Réponse login doit contenir les infos utilisateur"
         assert login_data["user"]["email"] == user.email
@@ -53,9 +53,9 @@ class TestAuthLoginToLogoutFlow:
         # Les cookies httpOnly sont définis automatiquement par Flask
         # On vérifie qu'on peut accéder à /auth/me après login
         response = e2e_client.get("/api/v1/auth/me")
-        assert (
-            response.status_code == 200
-        ), "Accès protégé avec cookies doit fonctionner"
+        assert response.status_code == 200, (
+            "Accès protégé avec cookies doit fonctionner"
+        )
         me_data = response.get_json()
         assert me_data["email"] == user.email
 
@@ -65,9 +65,9 @@ class TestAuthLoginToLogoutFlow:
 
         # 5. Vérifier qu'on ne peut plus accéder aux routes protégées après logout
         response = e2e_client.get("/api/v1/auth/me")
-        assert (
-            response.status_code == 401
-        ), "Accès protégé après logout doit renvoyer 401"
+        assert response.status_code == 401, (
+            "Accès protégé après logout doit renvoyer 401"
+        )
 
 
 class TestAuthRefreshTokenFlow:
@@ -112,15 +112,14 @@ class TestAuthRefreshTokenFlow:
         # Le refresh peut réussir (200) ou échouer si le token n'est pas encore expiré
         # (selon l'implémentation, certains systèmes permettent le refresh même si le token est valide)
         # 415 signifie Content-Type manquant, 400 signifie token encore valide, 200 signifie succès
-        assert (
-            refresh_response.status_code
-            in (
-                200,
-                400,
-                401,
-                415,
-            )
-        ), f"Refresh token doit renvoyer 200, 400, 401 ou 415, reçu {refresh_response.status_code}"
+        assert refresh_response.status_code in (
+            200,
+            400,
+            401,
+            415,
+        ), (
+            f"Refresh token doit renvoyer 200, 400, 401 ou 415, reçu {refresh_response.status_code}"
+        )
 
         # 5. Vérifier qu'on peut toujours accéder après refresh
         response = e2e_client.get("/api/v1/auth/me")

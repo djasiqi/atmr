@@ -193,9 +193,9 @@ class TestDispatchPerformance:
 
         # Pour un test de performance, on vérifie qu'au moins quelques bookings sont assignés
         # Le SLO strict de 90% est vérifié en production avec des données réelles
-        assert (
-            assigned_count > 0
-        ), f"Au moins un booking devrait être assigné, mais {assigned_count} l'ont été"
+        assert assigned_count > 0, (
+            f"Au moins un booking devrait être assigné, mais {assigned_count} l'ont été"
+        )
 
         # Log du taux d'assignation pour information
         print(
@@ -285,9 +285,9 @@ class TestConcurrentBookingsCreation:
 
         # Vérifier que tous les bookings ont été créés avec des IDs uniques
         booking_ids = [r["booking_id"] for r in successful]
-        assert (
-            len(set(booking_ids)) == num_bookings
-        ), "Tous les bookings devraient avoir des IDs uniques"
+        assert len(set(booking_ids)) == num_bookings, (
+            "Tous les bookings devraient avoir des IDs uniques"
+        )
 
         # Log du temps d'exécution (pour information)
         print(

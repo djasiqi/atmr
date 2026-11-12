@@ -151,8 +151,7 @@ def _policy_count(booking_id: int) -> int:
     return int(
         db.session.execute(
             text(
-                "SELECT count(*) FROM booking_settlement_policy "
-                "WHERE booking_id = :id"
+                "SELECT count(*) FROM booking_settlement_policy WHERE booking_id = :id"
             ),
             {"id": booking_id},
         ).scalar()
@@ -337,15 +336,13 @@ def test_preferences_n_activent_pas_les_moyens(isolated):
 
     before = db.session.execute(
         text(
-            "SELECT count(*) FROM company_settlement_capability "
-            "WHERE company_id = :id"
+            "SELECT count(*) FROM company_settlement_capability WHERE company_id = :id"
         ),
         {"id": isolated["company"].id},
     ).scalar()
     other_before = db.session.execute(
         text(
-            "SELECT count(*) FROM company_settlement_capability "
-            "WHERE company_id = :id"
+            "SELECT count(*) FROM company_settlement_capability WHERE company_id = :id"
         ),
         {"id": isolated["other"].id},
     ).scalar()
@@ -415,8 +412,7 @@ def test_preferences_n_activent_pas_les_moyens(isolated):
         db.session.rollback()
     after = db.session.execute(
         text(
-            "SELECT count(*) FROM company_settlement_capability "
-            "WHERE company_id = :id"
+            "SELECT count(*) FROM company_settlement_capability WHERE company_id = :id"
         ),
         {"id": isolated["company"].id},
     ).scalar()

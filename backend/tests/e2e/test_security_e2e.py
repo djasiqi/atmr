@@ -88,9 +88,9 @@ class TestRBACCompanyIsolation:
         if booking_response.status_code == 200:
             booking_data = booking_response.get_json()
             # Vérifier au moins que les données retournées sont valides
-            assert (
-                "id" in booking_data or "booking_id" in booking_data
-            ), "Les données du booking doivent être valides"
+            assert "id" in booking_data or "booking_id" in booking_data, (
+                "Les données du booking doivent être valides"
+            )
 
 
 class TestRBACClientIsolation:
@@ -122,9 +122,9 @@ class TestRBACClientIsolation:
 
         # Vérifier que client A peut accéder à son booking
         booking_response = e2e_client.get(f"/api/v1/bookings/{booking.id}")
-        assert (
-            booking_response.status_code == 200
-        ), "Client A devrait pouvoir accéder à son propre booking"
+        assert booking_response.status_code == 200, (
+            "Client A devrait pouvoir accéder à son propre booking"
+        )
 
         # Login en tant que client B
         login_response_b = e2e_client.post(
@@ -338,9 +338,9 @@ class TestXSSPrevention:
         if customer_name:
             # Vérifier que le customer_name est présent dans la réponse
             # (confirmant que les données sont stockées et retournées)
-            assert isinstance(
-                customer_name, str
-            ), "customer_name devrait être une chaîne"
+            assert isinstance(customer_name, str), (
+                "customer_name devrait être une chaîne"
+            )
             assert len(customer_name) > 0, "customer_name ne devrait pas être vide"
             # Note: Le payload XSS peut être présent tel quel dans JSON (sécurisé)
             # L'important est qu'il ne soit pas exécuté (échappement côté frontend)

@@ -36,9 +36,9 @@ class TestGiniFairness:
 
         gini = collector._calculate_gini_index(values)
 
-        assert (
-            gini == 0.0
-        ), f"Gini devrait être 0 pour distribution parfaite, got {gini}"
+        assert gini == 0.0, (
+            f"Gini devrait être 0 pour distribution parfaite, got {gini}"
+        )
 
         logger.info("✅ Test: Gini = 0 pour distribution parfaitement équitable")
 

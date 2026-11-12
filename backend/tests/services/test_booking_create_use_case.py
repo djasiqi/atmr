@@ -779,9 +779,9 @@ def test_known_client_post_routes_delegate_to_shared_helper() -> None:
                         ast.get_source_segment(path.read_text(encoding="utf-8"), item)
                         or ""
                     )
-                    assert (
-                        "execute_client_booking_creation" in segment
-                    ), f"{rel} {class_name}.{method_name}"
+                    assert "execute_client_booking_creation" in segment, (
+                        f"{rel} {class_name}.{method_name}"
+                    )
                     found = True
         assert found, f"Handler manquant: {rel} {class_name}.{method_name}"
 

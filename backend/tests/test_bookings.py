@@ -184,9 +184,9 @@ def test_booking_create_amount_below_minimum_rejected(
         # 403 est acceptable si le rôle du user n'a pas la permission (protection).
         if response.status_code in (403, 404):
             return
-        assert (
-            response.status_code == 400
-        ), f"amount={invalid_amount} devrait être rejeté"
+        assert response.status_code == 400, (
+            f"amount={invalid_amount} devrait être rejeté"
+        )
         data = response.get_json()
         assert "error" in data or "amount" in str(data).lower()
 
@@ -209,9 +209,9 @@ def test_booking_amount_rounding_rules(db, sample_client, sample_company):
     )
     db.session.add(booking1)
     db.session.flush()
-    assert (
-        booking1.amount == 0.5
-    ), f"0.6 devrait être arrondi à 0.5, obtenu {booking1.amount}"
+    assert booking1.amount == 0.5, (
+        f"0.6 devrait être arrondi à 0.5, obtenu {booking1.amount}"
+    )
 
     # Test 0.75 → 0.8
     booking2 = Booking(
@@ -227,9 +227,9 @@ def test_booking_amount_rounding_rules(db, sample_client, sample_company):
     )
     db.session.add(booking2)
     db.session.flush()
-    assert (
-        booking2.amount == 0.8
-    ), f"0.75 devrait être arrondi à 0.8, obtenu {booking2.amount}"
+    assert booking2.amount == 0.8, (
+        f"0.75 devrait être arrondi à 0.8, obtenu {booking2.amount}"
+    )
 
     # Test 39.98 → 40.0
     booking3 = Booking(
@@ -245,9 +245,9 @@ def test_booking_amount_rounding_rules(db, sample_client, sample_company):
     )
     db.session.add(booking3)
     db.session.flush()
-    assert (
-        booking3.amount == 40.0
-    ), f"39.98 devrait être arrondi à 40.0, obtenu {booking3.amount}"
+    assert booking3.amount == 40.0, (
+        f"39.98 devrait être arrondi à 40.0, obtenu {booking3.amount}"
+    )
 
     # Test montant standard (pas d'arrondi spécial)
     booking4 = Booking(
@@ -263,9 +263,9 @@ def test_booking_amount_rounding_rules(db, sample_client, sample_company):
     )
     db.session.add(booking4)
     db.session.flush()
-    assert (
-        booking4.amount == 50.0
-    ), f"50.0 devrait rester 50.0, obtenu {booking4.amount}"
+    assert booking4.amount == 50.0, (
+        f"50.0 devrait rester 50.0, obtenu {booking4.amount}"
+    )
 
     # Test montant avec décimales (arrondi standard)
     booking5 = Booking(
@@ -281,9 +281,9 @@ def test_booking_amount_rounding_rules(db, sample_client, sample_company):
     )
     db.session.add(booking5)
     db.session.flush()
-    assert (
-        booking5.amount == 25.46
-    ), f"25.456 devrait être arrondi à 25.46, obtenu {booking5.amount}"
+    assert booking5.amount == 25.46, (
+        f"25.456 devrait être arrondi à 25.46, obtenu {booking5.amount}"
+    )
 
 
 def test_booking_amount_minimum_accepted(db, sample_client, sample_company):

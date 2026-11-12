@@ -122,12 +122,12 @@ class TestInvoicePdfUnified:
 
         # Assert: Extraire le texte du PDF
         pdf_text = _extract_text_from_pdf(pdf_bytes)
-        assert (
-            "DÉTAIL DES PRESTATIONS" in pdf_text
-        ), "Section 'DÉTAIL DES PRESTATIONS' manquante"
-        assert (
-            "TOTAL À FACTURER" in pdf_text
-        ), "Libellé total manquant pour facture client"
+        assert "DÉTAIL DES PRESTATIONS" in pdf_text, (
+            "Section 'DÉTAIL DES PRESTATIONS' manquante"
+        )
+        assert "TOTAL À FACTURER" in pdf_text, (
+            "Libellé total manquant pour facture client"
+        )
         assert "Test ride" in pdf_text, "Ligne de prestation manquante"
 
     def test_s2_clinic_invoice_header(self, db):
@@ -202,12 +202,12 @@ class TestInvoicePdfUnified:
 
         # Assert
         pdf_text = _extract_text_from_pdf(pdf_bytes)
-        assert (
-            "Rue de la Paix" in pdf_text
-        ), "Adresse pickup manquante pour facture clinique"
-        assert (
-            "DÉTAIL DES PRESTATIONS" in pdf_text
-        ), "Section 'DÉTAIL DES PRESTATIONS' manquante"
+        assert "Rue de la Paix" in pdf_text, (
+            "Adresse pickup manquante pour facture clinique"
+        )
+        assert "DÉTAIL DES PRESTATIONS" in pdf_text, (
+            "Section 'DÉTAIL DES PRESTATIONS' manquante"
+        )
         assert "TOTAL À FACTURER" in pdf_text, "Libellé 'TOTAL À FACTURER' manquant"
 
     def test_roundtrip_explicit_detection(self, db):
@@ -364,12 +364,12 @@ class TestInvoicePdfUnified:
 
         # Assert: "Livraison" et la description doivent apparaître dans le PDF
         pdf_text = _extract_text_from_pdf(pdf_bytes)
-        assert (
-            "Livraison" in pdf_text
-        ), "Libellé 'Livraison' manquant pour MATERIAL_DELIVERY"
-        assert (
-            "Médicament urgent" in pdf_text
-        ), "Description livraison manquante dans PDF"
+        assert "Livraison" in pdf_text, (
+            "Libellé 'Livraison' manquant pour MATERIAL_DELIVERY"
+        )
+        assert "Médicament urgent" in pdf_text, (
+            "Description livraison manquante dans PDF"
+        )
 
     def test_mixed_invoice_2_rides_1_delivery_in_pdf(self, db):
         """Test facture mixte (2 transports + 1 livraison) : la livraison apparaît bien."""

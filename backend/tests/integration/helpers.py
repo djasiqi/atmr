@@ -29,9 +29,9 @@ def assert_response_json(
 
     if expected_keys:
         for key in expected_keys:
-            assert (
-                key in data
-            ), f"Response should contain key '{key}'. Got: {list(data.keys())}"
+            assert key in data, (
+                f"Response should contain key '{key}'. Got: {list(data.keys())}"
+            )
 
     return data
 

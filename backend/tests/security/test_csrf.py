@@ -14,9 +14,9 @@ class TestCSRFConfiguration:
         csrf_enabled = app.config.get("WTF_CSRF_ENABLED", False)
         # Pour une API REST avec JWT, CSRF n'est généralement pas nécessaire
         # car les tokens JWT sont dans les headers, pas dans les cookies
-        assert (
-            csrf_enabled is False
-        ), "CSRF devrait être désactivé pour une API REST avec JWT"
+        assert csrf_enabled is False, (
+            "CSRF devrait être désactivé pour une API REST avec JWT"
+        )
 
     def test_csrf_not_required_for_api(self):
         """Test que CSRF n'est pas requis pour les endpoints API

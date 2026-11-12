@@ -69,14 +69,14 @@ class TestCompanySettingsBillingPersistence:
 
         assert sql_result is not None, "Billing settings should exist in DB after PUT"
         # esr_ref_base n'est pas chiffré, vérifier directement
-        assert (
-            sql_result.esr_ref_base == test_esr_ref_base
-        ), f"esr_ref_base mismatch: SQL={sql_result.esr_ref_base}, expected={test_esr_ref_base}"
+        assert sql_result.esr_ref_base == test_esr_ref_base, (
+            f"esr_ref_base mismatch: SQL={sql_result.esr_ref_base}, expected={test_esr_ref_base}"
+        )
         # iban et qr_iban sont chiffrés, vérifier qu'ils ne sont pas NULL
         assert sql_result.iban is not None, "iban should be encrypted (not NULL) in DB"
-        assert (
-            sql_result.qr_iban is not None
-        ), "qr_iban should be encrypted (not NULL) in DB"
+        assert sql_result.qr_iban is not None, (
+            "qr_iban should be encrypted (not NULL) in DB"
+        )
 
         # 3. Recharger via ORM (simule un GET après restart)
         billing = CompanyBillingSettings.query.filter_by(
@@ -153,15 +153,15 @@ class TestCompanySettingsBillingPersistence:
 
         assert sql_result is not None
         # Vérifier que les valeurs sont NULL en base
-        assert (
-            sql_result.iban is None or sql_result.iban == ""
-        ), f"iban should be NULL/empty in DB, got: {sql_result.iban}"
-        assert (
-            sql_result.qr_iban is None or sql_result.qr_iban == ""
-        ), f"qr_iban should be NULL/empty in DB, got: {sql_result.qr_iban}"
-        assert (
-            sql_result.esr_ref_base is None or sql_result.esr_ref_base == ""
-        ), f"esr_ref_base should be NULL/empty in DB, got: {sql_result.esr_ref_base}"
+        assert sql_result.iban is None or sql_result.iban == "", (
+            f"iban should be NULL/empty in DB, got: {sql_result.iban}"
+        )
+        assert sql_result.qr_iban is None or sql_result.qr_iban == "", (
+            f"qr_iban should be NULL/empty in DB, got: {sql_result.qr_iban}"
+        )
+        assert sql_result.esr_ref_base is None or sql_result.esr_ref_base == "", (
+            f"esr_ref_base should be NULL/empty in DB, got: {sql_result.esr_ref_base}"
+        )
 
         # Vérifier aussi via ORM
         billing = CompanyBillingSettings.query.filter_by(

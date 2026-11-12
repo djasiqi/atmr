@@ -111,9 +111,9 @@ class TestInvoicesIntegration:
             "107.70"
         )  # ✅ FIX: définir total_with_vat (requis, default=0 mais mieux explicite)
         # ✅ Assertion défensive: vérifier que type est défini avant commit
-        assert (
-            invoice_line.type is not None
-        ), "invoice_line.type must be set before commit"
+        assert invoice_line.type is not None, (
+            "invoice_line.type must be set before commit"
+        )
         db.session.add(invoice_line)
         db.session.commit()
 
@@ -127,9 +127,9 @@ class TestInvoicesIntegration:
 
         # ✅ FIX: L'API retourne une réponse wrappée avec {"data": {...}}
         # via success_response(), donc accéder à data["data"]
-        assert (
-            "data" in response_data
-        ), f"Response should contain 'data' key. Got: {list(response_data.keys())}"
+        assert "data" in response_data, (
+            f"Response should contain 'data' key. Got: {list(response_data.keys())}"
+        )
         data = response_data["data"]
 
         # Vérifier la structure de la réponse
@@ -181,9 +181,9 @@ class TestInvoicesIntegration:
             "100.00"
         )  # ✅ FIX: définir total_with_vat (requis, default=0 mais mieux explicite)
         # ✅ Assertion défensive: vérifier que type est défini avant flush
-        assert (
-            invoice_line.type is not None
-        ), "invoice_line.type must be set before flush"
+        assert invoice_line.type is not None, (
+            "invoice_line.type must be set before flush"
+        )
         db.session.add(invoice_line)
         db.session.flush()
 
@@ -366,9 +366,9 @@ class TestInvoicesIntegration:
 
         assert d["total_eligible"] >= 1
         excluded_ids = {x["id"] for x in d["excluded_bookings"]}
-        assert (
-            book_a.id not in excluded_ids
-        ), "Client patient-only doit ne pas apparaître dans exclusions S2"
+        assert book_a.id not in excluded_ids, (
+            "Client patient-only doit ne pas apparaître dans exclusions S2"
+        )
         assert book_b_clinic.id not in excluded_ids
         assert book_b_patient.id in excluded_ids
 
@@ -440,9 +440,9 @@ class TestInvoicesIntegration:
         assert "data" in ed
         assert "clients" in ed["data"]
         client_ids = [c["id"] for c in ed["data"]["clients"]]
-        assert (
-            test_client.id in client_ids
-        ), "Le client doit apparaître dans eligible (facturation client) après annulation"
+        assert test_client.id in client_ids, (
+            "Le client doit apparaître dans eligible (facturation client) après annulation"
+        )
 
         totals_url = (
             f"/api/v1/invoices/companies/{test_company.id}/clinic-monthly-totals"
@@ -454,9 +454,9 @@ class TestInvoicesIntegration:
         assert "data" in td
         assert "excluded_bookings" in td["data"]
         excluded_ids = [x["id"] for x in td["data"]["excluded_bookings"]]
-        assert (
-            test_completed_booking.id not in excluded_ids
-        ), "Le booking annulé (facture client) ne doit pas fuiter dans exclusions S2"
+        assert test_completed_booking.id not in excluded_ids, (
+            "Le booking annulé (facture client) ne doit pas fuiter dans exclusions S2"
+        )
 
     def test_eligible_clients_returns_unbilled_count_and_total_amount(
         self, authenticated_client, test_company, test_client, db
@@ -655,15 +655,15 @@ class TestInvoicesIntegration:
         clients = data.get("data", {}).get("clients", [])
         client_ids = [c["id"] for c in clients]
 
-        assert (
-            client_a.id in client_ids
-        ), "Cas A : client avec CANCELED billable doit apparaître dans eligible (patient)"
-        assert (
-            client_b.id not in client_ids
-        ), "Cas B : client avec CANCELED non billable ne doit pas apparaître"
-        assert (
-            client_c.id not in client_ids
-        ), "Cas C : client avec uniquement retour (parent CANCELED) ne doit pas apparaître"
+        assert client_a.id in client_ids, (
+            "Cas A : client avec CANCELED billable doit apparaître dans eligible (patient)"
+        )
+        assert client_b.id not in client_ids, (
+            "Cas B : client avec CANCELED non billable ne doit pas apparaître"
+        )
+        assert client_c.id not in client_ids, (
+            "Cas C : client avec uniquement retour (parent CANCELED) ne doit pas apparaître"
+        )
 
     def test_unbilled_reservations_includes_canceled_billable_patient(
         self, authenticated_client, test_company, db
@@ -736,9 +736,9 @@ class TestInvoicesIntegration:
         data = assert_response_json(r)
         reservations = data.get("reservations", [])
         ids = [x["id"] for x in reservations]
-        assert (
-            b.id in ids
-        ), "La course CANCELED billable (patient) doit apparaître dans unbilled-reservations"
+        assert b.id in ids, (
+            "La course CANCELED billable (patient) doit apparaître dans unbilled-reservations"
+        )
         assert len(reservations) == 1
         assert float(reservations[0].get("amount", 0)) == 45.0
 
@@ -812,12 +812,12 @@ class TestInvoicesIntegration:
         d = data["data"]
         assert "total_eligible" in d
         # Un seul booking éligible : celui avec NO_SHOW (billable=True)
-        assert (
-            d["total_eligible"] == 1
-        ), "Seule l'annulation NO_SHOW (billable) doit être éligible à la facture"
-        assert float(d["total_amount_eligible"]) == float(
-            no_show_booking.amount
-        ), "Montant éligible = montant du booking NO_SHOW"
+        assert d["total_eligible"] == 1, (
+            "Seule l'annulation NO_SHOW (billable) doit être éligible à la facture"
+        )
+        assert float(d["total_amount_eligible"]) == float(no_show_booking.amount), (
+            "Montant éligible = montant du booking NO_SHOW"
+        )
 
     def test_return_excluded_when_parent_aller_canceled(
         self, authenticated_client, test_company, db
@@ -941,9 +941,9 @@ class TestInvoicesIntegration:
         d = data.get("data", data)
         total_eligible = d.get("total_eligible", 0)
         # Parent annulé non billable → 0 ; retour exclu car parent annulé → 0
-        assert (
-            total_eligible == 0
-        ), "Cas 1 : parent CANCELED + retour COMPLETED → retour doit être exclu (total_eligible=0)"
+        assert total_eligible == 0, (
+            "Cas 1 : parent CANCELED + retour COMPLETED → retour doit être exclu (total_eligible=0)"
+        )
 
         # Cas 2 : parent CANCELED, child CANCELED billable (NO_SHOW) → retour exclu
         aller2 = make_aller(mid + timedelta(days=1), BookingStatus.CANCELED, False)
@@ -958,9 +958,9 @@ class TestInvoicesIntegration:
         data2 = assert_response_json(response2)
         d2 = data2.get("data", data2)
         total_eligible2 = d2.get("total_eligible", 0)
-        assert (
-            total_eligible2 == 0
-        ), "Cas 2 : parent CANCELED + retour CANCELED billable → retour doit être exclu (total_eligible=0)"
+        assert total_eligible2 == 0, (
+            "Cas 2 : parent CANCELED + retour CANCELED billable → retour doit être exclu (total_eligible=0)"
+        )
 
         # Cas 3 : parent COMPLETED, child CANCELED billable → les deux éligibles (retour inclus)
         aller3 = make_aller(mid + timedelta(days=2), BookingStatus.COMPLETED)
@@ -974,13 +974,13 @@ class TestInvoicesIntegration:
         data3 = assert_response_json(response3)
         d3 = data3.get("data", data3)
         total_eligible3 = d3.get("total_eligible", 0)
-        assert (
-            total_eligible3 == 2
-        ), "Cas 3 : parent COMPLETED + retour CANCELED billable → retour doit être inclus (total_eligible=2)"
+        assert total_eligible3 == 2, (
+            "Cas 3 : parent COMPLETED + retour CANCELED billable → retour doit être inclus (total_eligible=2)"
+        )
         total_amount = float(d3.get("total_amount_eligible", 0))
-        assert total_amount >= float(aller3.amount) + float(
-            retour3.amount
-        ), "Montant éligible doit inclure aller + retour annulation billable"
+        assert total_amount >= float(aller3.amount) + float(retour3.amount), (
+            "Montant éligible doit inclure aller + retour annulation billable"
+        )
 
     def test_unbilled_reservation_ids_endpoint(
         self, authenticated_client, test_company, test_client, db
@@ -1099,9 +1099,9 @@ class TestInvoicesIntegration:
 
         # ✅ FIX: L'API renvoie {"message": ..., "draft": ...} au lieu de {"draft_context": ...}
         # Adapter le test pour utiliser "draft" au lieu de "draft_context"
-        assert (
-            "draft" in data
-        ), f"Response should contain 'draft' key. Got: {list(data.keys())}"
+        assert "draft" in data, (
+            f"Response should contain 'draft' key. Got: {list(data.keys())}"
+        )
         draft_context = data["draft"]
 
         # Vérifier que le contexte de brouillon contient les bonnes données

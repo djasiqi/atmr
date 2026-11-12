@@ -205,27 +205,27 @@ class TestReminderPdfInvoiceIntact:
                 GenerateInvoiceReminderInput(invoice_id=invoice_id, level=level)
             )
             assert result.success, f"La génération du rappel niveau {level} a échoué"
-            assert (
-                result.reminder is not None
-            ), f"Le rappel niveau {level} n'a pas été créé"
-            assert (
-                result.reminder.pdf_url is not None
-            ), f"Le rappel niveau {level} n'a pas de PDF"
+            assert result.reminder is not None, (
+                f"Le rappel niveau {level} n'a pas été créé"
+            )
+            assert result.reminder.pdf_url is not None, (
+                f"Le rappel niveau {level} n'a pas de PDF"
+            )
             reminder_urls.append(result.reminder.pdf_url)
 
             # Vérifier que invoice.pdf_url reste inchangé après chaque rappel
             db.session.refresh(invoice)
-            assert (
-                invoice.pdf_url == original_pdf_url
-            ), f"invoice.pdf_url a été modifié après le rappel niveau {level} !"
+            assert invoice.pdf_url == original_pdf_url, (
+                f"invoice.pdf_url a été modifié après le rappel niveau {level} !"
+            )
 
         # Assert: Vérifier que tous les PDFs sont distincts
-        assert (
-            len(set(reminder_urls)) == 3
-        ), f"Les 3 rappels doivent avoir des PDFs distincts ! Reçu: {reminder_urls}"
-        assert (
-            invoice.pdf_url not in reminder_urls
-        ), "Le PDF de la facture ne doit pas être dans les PDFs des rappels !"
+        assert len(set(reminder_urls)) == 3, (
+            f"Les 3 rappels doivent avoir des PDFs distincts ! Reçu: {reminder_urls}"
+        )
+        assert invoice.pdf_url not in reminder_urls, (
+            "Le PDF de la facture ne doit pas être dans les PDFs des rappels !"
+        )
 
         # Assert: Vérifier que tous les PDFs commencent par "reminder_"
         for url in reminder_urls:
@@ -279,21 +279,21 @@ class TestReminderPdfInvoiceIntact:
             f"PDFService.generate_reminder_pdf a modifié invoice.pdf_url ! "
             f"Attendu: {original_pdf_url}, Reçu: {invoice.pdf_url}"
         )
-        assert (
-            invoice.total_amount == original_total
-        ), "PDFService.generate_reminder_pdf a modifié invoice.total_amount !"
-        assert (
-            invoice.due_date == original_due_date
-        ), "PDFService.generate_reminder_pdf a modifié invoice.due_date !"
+        assert invoice.total_amount == original_total, (
+            "PDFService.generate_reminder_pdf a modifié invoice.total_amount !"
+        )
+        assert invoice.due_date == original_due_date, (
+            "PDFService.generate_reminder_pdf a modifié invoice.due_date !"
+        )
 
         # Assert: Vérifier que le PDF du rappel est distinct
         assert reminder_pdf_url is not None, "Le PDF du rappel n'a pas été généré"
-        assert (
-            reminder_pdf_url != invoice.pdf_url
-        ), "Le PDF du rappel ne doit pas être le même que celui de la facture !"
-        assert (
-            "reminder_" in reminder_pdf_url
-        ), "Le PDF du rappel doit avoir un filename commençant par 'reminder_' !"
+        assert reminder_pdf_url != invoice.pdf_url, (
+            "Le PDF du rappel ne doit pas être le même que celui de la facture !"
+        )
+        assert "reminder_" in reminder_pdf_url, (
+            "Le PDF du rappel doit avoir un filename commençant par 'reminder_' !"
+        )
 
     def test_reminder_pdf_uses_invoice_template(
         self, db, sample_company, sample_client
@@ -368,9 +368,9 @@ class TestReminderPdfInvoiceIntact:
 
         # Vérifier que le PDF rappel contient les sections du template facture
         # Marqueur stable et spécifique du template facture (évite flakiness "TOTAL" vs "TOTAL À FACTURER")
-        assert (
-            "DÉTAIL DES PRESTATIONS" in pdf_text
-        ), "Le PDF rappel doit contenir 'DÉTAIL DES PRESTATIONS' (template facture)"
+        assert "DÉTAIL DES PRESTATIONS" in pdf_text, (
+            "Le PDF rappel doit contenir 'DÉTAIL DES PRESTATIONS' (template facture)"
+        )
         assert (
             "RAPPEL N°1" in pdf_text
             or "RAPPEL N° 1" in pdf_text
@@ -382,11 +382,11 @@ class TestReminderPdfInvoiceIntact:
             result.reminder.reminder_fee_amount
             and result.reminder.reminder_fee_amount > 0
         ):
-            assert (
-                "Frais de rappel" in pdf_text
-            ), "Le PDF rappel doit contenir 'Frais de rappel' si des frais sont appliqués"
+            assert "Frais de rappel" in pdf_text, (
+                "Le PDF rappel doit contenir 'Frais de rappel' si des frais sont appliqués"
+            )
             # Vérifier que le montant des frais est présent
             fee_str = f"{float(result.reminder.reminder_fee_amount):.2f}"
-            assert (
-                fee_str in pdf_text
-            ), f"Le PDF rappel doit contenir le montant des frais ({fee_str})"
+            assert fee_str in pdf_text, (
+                f"Le PDF rappel doit contenir le montant des frais ({fee_str})"
+            )

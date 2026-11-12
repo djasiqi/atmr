@@ -113,9 +113,9 @@ class TestInvoicePdfPerformance:
                 for call in mock_logger.warning.call_args_list
                 if call.args and "InvoicePDF slow/large" in str(call.args[0])
             ]
-            assert (
-                not perf_warnings
-            ), "WARNING perf ne doit pas être émis pour une facture normale"
+            assert not perf_warnings, (
+                "WARNING perf ne doit pas être émis pour une facture normale"
+            )
 
     def test_performance_logging_large_invoice(self, db):
         """Test que les logs WARNING sont émis pour une facture avec beaucoup de lignes."""
@@ -190,9 +190,9 @@ class TestInvoicePdfPerformance:
             pdf_service.generate_invoice_pdf(invoice)
 
             # Vérifier que WARNING a été appelé
-            assert (
-                mock_logger.warning.called
-            ), "WARNING log should be called for large invoice"
+            assert mock_logger.warning.called, (
+                "WARNING log should be called for large invoice"
+            )
             perf_call = next(
                 call
                 for call in mock_logger.warning.call_args_list

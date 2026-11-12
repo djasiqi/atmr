@@ -538,6 +538,6 @@ def test_notification_matrix(case: dict) -> None:
     )
     for key, expected_val in case["expect"].items():
         actual = getattr(targets, key)
-        assert (
-            actual == expected_val
-        ), f"[{case['id']}] {key}: expected {expected_val}, got {actual}"
+        assert actual == expected_val, (
+            f"[{case['id']}] {key}: expected {expected_val}, got {actual}"
+        )

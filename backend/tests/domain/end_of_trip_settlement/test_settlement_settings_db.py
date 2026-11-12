@@ -201,8 +201,7 @@ def test_acceptation_ne_cree_pas_de_politique_active() -> None:
         booking = db.session.get(Booking, int(row.id))
         before = db.session.execute(
             text(
-                "SELECT count(*) FROM booking_settlement_policy "
-                "WHERE booking_id = :id"
+                "SELECT count(*) FROM booking_settlement_policy WHERE booking_id = :id"
             ),
             {"id": int(row.id)},
         ).scalar()
@@ -246,8 +245,7 @@ def test_acceptation_ne_cree_pas_de_politique_active() -> None:
             db.session.rollback()
         after = db.session.execute(
             text(
-                "SELECT count(*) FROM booking_settlement_policy "
-                "WHERE booking_id = :id"
+                "SELECT count(*) FROM booking_settlement_policy WHERE booking_id = :id"
             ),
             {"id": int(row.id)},
         ).scalar()

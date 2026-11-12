@@ -297,9 +297,9 @@ class TestBuildRecipientBlockFlowable:
                 plain = _plain_text_for_width_check(line)
                 if plain:
                     w = pdfmetrics.stringWidth(plain, "Helvetica", 10)
-                    assert (
-                        w <= max_width_pt + 2
-                    ), f"Ligne dépasse maxWidth: {plain!r} = {w:.1f}pt > {max_width_pt:.1f}pt"
+                    assert w <= max_width_pt + 2, (
+                        f"Ligne dépasse maxWidth: {plain!r} = {w:.1f}pt > {max_width_pt:.1f}pt"
+                    )
 
     def test_no_line_exceeds_max_width_pt(self):
         """Aucune ligne ne dépasse DEST_ADDR_MAX_WIDTH_MM en points (stringWidth)."""
@@ -325,9 +325,9 @@ class TestBuildRecipientBlockFlowable:
                 plain = _plain_text_for_width_check(line)
                 if plain:
                     w = pdfmetrics.stringWidth(plain, "Helvetica", 10)
-                    assert (
-                        w <= max_width_pt + 2
-                    ), f"Ligne dépasse: {plain[:50]!r}... = {w:.1f}pt > {max_width_pt:.1f}pt"
+                    assert w <= max_width_pt + 2, (
+                        f"Ligne dépasse: {plain[:50]!r}... = {w:.1f}pt > {max_width_pt:.1f}pt"
+                    )
 
 
 class TestDedupePostalAndGlobalDiscountPdfHelpers:

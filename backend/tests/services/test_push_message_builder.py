@@ -253,18 +253,18 @@ def test_build_push_message_never_id_only_body():
         for discrete in (True, False):
             ctx = {"id": 3253}  # minimal, pas de client_name
             out = build_push_message(EVENT_ASSIGNED, ctx, role, discrete_mode=discrete)
-            assert not _body_contains_raw_id(
-                out["body"]
-            ), f"Body ne doit pas contenir d'ID brut pour role={role} discrete={discrete}: {out['body']!r}"
+            assert not _body_contains_raw_id(out["body"]), (
+                f"Body ne doit pas contenir d'ID brut pour role={role} discrete={discrete}: {out['body']!r}"
+            )
 
     # discrete_mode=False avec client_name : body doit contenir le nom client
     for role in ("driver", "company"):
         ctx = {"id": 3253, "client_name": "Drin Jasiqi", "time_formatted": "13:00"}
         out = build_push_message(EVENT_ASSIGNED, ctx, role, discrete_mode=False)
         assert not _body_contains_raw_id(out["body"]), f"Pas d'ID brut: {out['body']!r}"
-        assert (
-            "Drin Jasiqi" in out["body"]
-        ), f"Mode detailed avec client_name : le body doit contenir le nom client pour role={role}: {out['body']!r}"
+        assert "Drin Jasiqi" in out["body"], (
+            f"Mode detailed avec client_name : le body doit contenir le nom client pour role={role}: {out['body']!r}"
+        )
 
     # discrete_mode=False avec contexte minimal : body doit contenir un marqueur métier non-ID
     for role in ("driver", "company"):
@@ -272,7 +272,9 @@ def test_build_push_message_never_id_only_body():
         out = build_push_message(EVENT_ASSIGNED, ctx, role, discrete_mode=False)
         assert not _body_contains_raw_id(out["body"]), f"Pas d'ID brut: {out['body']!r}"
         has_marker = any(m in out["body"] for m in _NON_ID_MARKERS)
-        assert has_marker, f"Mode detailed sans client_name : le body doit contenir un marqueur métier (ex. Client, Ouvrez…) pour role={role}: {out['body']!r}"
+        assert has_marker, (
+            f"Mode detailed sans client_name : le body doit contenir un marqueur métier (ex. Client, Ouvrez…) pour role={role}: {out['body']!r}"
+        )
 
 
 # ---------- 8) Chat / Messagerie ----------

@@ -187,9 +187,9 @@ def test_clinic_preview_aggregates_skip_client_loads(db):
     prev, lookups = _count_client_by_id_lookups(_run)
     assert prev.transports_count == 8
     assert prev.preview_lines == ()
-    assert (
-        lookups == []
-    ), f"include_line_details=False ne doit pas charger de clients: {lookups}"
+    assert lookups == [], (
+        f"include_line_details=False ne doit pas charger de clients: {lookups}"
+    )
 
 
 def test_billing_opportunities_clinic_no_client_n1(db):

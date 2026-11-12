@@ -157,9 +157,9 @@ def test_login_sets_httponly_cookies(
     # Vérifier que chaque cookie sensible a HttpOnly
     for cookie_header in set_cookie_headers:
         if "access_token=" in cookie_header or "refresh_token=" in cookie_header:
-            assert (
-                "HttpOnly" in cookie_header
-            ), f"Cookie devrait avoir HttpOnly: {cookie_header}"
+            assert "HttpOnly" in cookie_header, (
+                f"Cookie devrait avoir HttpOnly: {cookie_header}"
+            )
 
 
 def test_cookies_have_secure_flag_in_production(
@@ -189,9 +189,9 @@ def test_cookies_have_secure_flag_in_production(
     # Vérifier que chaque cookie sensible a Secure
     for cookie_header in set_cookie_headers:
         if "access_token=" in cookie_header or "refresh_token=" in cookie_header:
-            assert (
-                "Secure" in cookie_header
-            ), f"Cookie devrait avoir Secure en production: {cookie_header}"
+            assert "Secure" in cookie_header, (
+                f"Cookie devrait avoir Secure en production: {cookie_header}"
+            )
 
 
 def test_cookies_have_samesite_flag(
@@ -218,9 +218,9 @@ def test_cookies_have_samesite_flag(
     # Vérifier que chaque cookie sensible a SameSite
     for cookie_header in set_cookie_headers:
         if "access_token=" in cookie_header or "refresh_token=" in cookie_header:
-            assert (
-                "SameSite=" in cookie_header
-            ), f"Cookie devrait avoir SameSite: {cookie_header}"
+            assert "SameSite=" in cookie_header, (
+                f"Cookie devrait avoir SameSite: {cookie_header}"
+            )
 
 
 def test_cookies_have_max_age(
@@ -248,9 +248,9 @@ def test_cookies_have_max_age(
     # volontairement un cookie de session : ne pas lui imposer une expiration.
     for cookie_header in set_cookie_headers:
         if "access_token=" in cookie_header:
-            assert (
-                "Max-Age" in cookie_header or "expires" in cookie_header.lower()
-            ), f"Cookie devrait avoir une expiration: {cookie_header}"
+            assert "Max-Age" in cookie_header or "expires" in cookie_header.lower(), (
+                f"Cookie devrait avoir une expiration: {cookie_header}"
+            )
 
 
 def test_cookies_not_accessible_via_javascript(

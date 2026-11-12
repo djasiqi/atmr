@@ -82,9 +82,9 @@ class TestActionMaskingEdges:
 
         # Tester get_valid_actions
         valid_actions = mock_env.get_valid_actions()
-        assert valid_actions == [
-            0
-        ], f"Devrait retourner [0], a retourné {valid_actions}"
+        assert valid_actions == [0], (
+            f"Devrait retourner [0], a retourné {valid_actions}"
+        )
 
         # Tester le masque d'actions
         mask = mock_env._get_valid_actions_mask()
@@ -117,9 +117,9 @@ class TestActionMaskingEdges:
 
         # Vérifier qu'aucune action d'assignation n'est valide
         assignment_actions = [i for i in range(1, mock_env.action_space.n) if mask[i]]
-        assert (
-            len(assignment_actions) == 0
-        ), f"Pas d'actions d'assignation valides, trouvé {assignment_actions}"
+        assert len(assignment_actions) == 0, (
+            f"Pas d'actions d'assignation valides, trouvé {assignment_actions}"
+        )
 
         # Tester step avec action 0
         _state, _reward, _terminated, _truncated, info = mock_env.step(0)
@@ -145,9 +145,9 @@ class TestActionMaskingEdges:
 
         # Tester get_valid_actions
         valid_actions = mock_env.get_valid_actions()
-        assert valid_actions == [
-            0
-        ], f"Devrait retourner [0], a retourné {valid_actions}"
+        assert valid_actions == [0], (
+            f"Devrait retourner [0], a retourné {valid_actions}"
+        )
 
         # Tester le masque d'actions
         mask = mock_env._get_valid_actions_mask()
@@ -155,9 +155,9 @@ class TestActionMaskingEdges:
 
         # Vérifier qu'aucune action d'assignation n'est valide
         assignment_actions = [i for i in range(1, mock_env.action_space.n) if mask[i]]
-        assert (
-            len(assignment_actions) == 0
-        ), f"Pas d'actions d'assignation valides, trouvé {assignment_actions}"
+        assert len(assignment_actions) == 0, (
+            f"Pas d'actions d'assignation valides, trouvé {assignment_actions}"
+        )
 
         logger.info("✅ Test 0 drivers/bookings disponibles réussi")
 
@@ -233,12 +233,12 @@ class TestActionMaskingEdges:
             _state, reward, _terminated, _truncated, info = mock_env.step(
                 invalid_action
             )
-            assert (
-                reward < REWARD_ZERO
-            ), f"Action invalide {invalid_action} devrait avoir reward négatif"
-            assert info.get(
-                "invalid_action", False
-            ), f"Action {invalid_action} devrait être marquée invalide"
+            assert reward < REWARD_ZERO, (
+                f"Action invalide {invalid_action} devrait avoir reward négatif"
+            )
+            assert info.get("invalid_action", False), (
+                f"Action {invalid_action} devrait être marquée invalide"
+            )
 
         logger.info("✅ Test protection index out of range réussi")
 
@@ -255,16 +255,16 @@ class TestActionMaskingEdges:
             action = mock_agent.select_action(state, valid_actions=[])
 
             # Vérifier que l'action est 0 (wait)
-            assert (
-                action == ACTION_ZERO
-            ), f"Devrait retourner action ACTION_ZERO, a retourné {action}"
+            assert action == ACTION_ZERO, (
+                f"Devrait retourner action ACTION_ZERO, a retourné {action}"
+            )
 
             # Vérifier qu'un warning a été loggé
             mock_warning.assert_called()
             warning_call = mock_warning.call_args[0][0]
-            assert (
-                "valid_actions vide" in warning_call
-            ), "Devrait logger un warning sur valid_actions vide"
+            assert "valid_actions vide" in warning_call, (
+                "Devrait logger un warning sur valid_actions vide"
+            )
 
         logger.info("✅ Test agent fallback avec valid_actions vide réussi")
 
@@ -286,9 +286,9 @@ class TestActionMaskingEdges:
                     state, valid_actions=[invalid_action]
                 )
                 # Si pas d'erreur, vérifier que l'action est dans les limites
-                assert (
-                    0 <= result_action < mock_agent.action_dim
-                ), f"Action {result_action} hors limites"
+                assert 0 <= result_action < mock_agent.action_dim, (
+                    f"Action {result_action} hors limites"
+                )
             except Exception as e:
                 pytest.fail(
                     f"Agent a échoué avec action invalide {invalid_action}: {e}"
@@ -341,17 +341,17 @@ class TestActionMaskingEdges:
             # Tester que l'agent peut sélectionner une action
             try:
                 action = mock_agent.select_action(state, valid_actions)
-                assert (
-                    0 <= action < mock_env.action_space.n
-                ), f"Scénario {i}: Action {action} hors limites"
+                assert 0 <= action < mock_env.action_space.n, (
+                    f"Scénario {i}: Action {action} hors limites"
+                )
 
                 # Tester que l'environnement peut traiter l'action
                 _next_state, _reward, _terminated, _truncated, info = mock_env.step(
                     action
                 )
-                assert not info.get(
-                    "invalid_action", False
-                ), f"Scénario {i}: Action {action} marquée invalide"
+                assert not info.get("invalid_action", False), (
+                    f"Scénario {i}: Action {action} marquée invalide"
+                )
 
             except Exception as e:
                 pytest.fail(f"Scénario {i} a échoué: {e}")
@@ -403,9 +403,9 @@ def test_action_masking_performance():
     )
 
     # Vérifier que le pourcentage est < EST_ONE%
-    assert (
-        invalid_percentage < INVALID_PERCENTAGE_ONE
-    ), f"Pourcentage d'actions invalides trop élevé: {invalid_percentage}"
+    assert invalid_percentage < INVALID_PERCENTAGE_ONE, (
+        f"Pourcentage d'actions invalides trop élevé: {invalid_percentage}"
+    )
 
     logger.info(
         "✅ Performance test réussi: %s%% d'actions invalides", invalid_percentage

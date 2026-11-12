@@ -47,9 +47,9 @@ def _ensure_company_visible(db, company):
         temp_company = CompanyFactory.build(id=company_id)
         company = db.session.merge(temp_company)
         db.session.flush()
-    assert (
-        company is not None
-    ), f"Company {company_id} doit être visible avant engine.run()"
+    assert company is not None, (
+        f"Company {company_id} doit être visible avant engine.run()"
+    )
     return company
 
 
@@ -255,9 +255,9 @@ class TestEnginePublicAPI:
         # Vérifier qu'il n'y a pas de duplication
         db.session.flush()  # S'assurer que les changements sont visibles
         runs = DispatchRun.query.filter_by(company_id=company.id, day=day).all()
-        assert (
-            len(runs) == 1
-        ), f"Devrait avoir exactement 1 DispatchRun, trouvé {len(runs)}"
+        assert len(runs) == 1, (
+            f"Devrait avoir exactement 1 DispatchRun, trouvé {len(runs)}"
+        )
 
         print("✅ Test réutilisation DispatchRun OK")
 
@@ -584,9 +584,9 @@ class TestEngineAdditionalCoverage:
             result = engine.run(
                 company_id=company.id, for_date=day.isoformat(), mode=mode
             )
-            assert isinstance(
-                result["assignments"], list
-            ), f"Mode {mode} devrait retourner des assignments"
+            assert isinstance(result["assignments"], list), (
+                f"Mode {mode} devrait retourner des assignments"
+            )
             assert "unassigned" in result
             assert "debug" in result
 

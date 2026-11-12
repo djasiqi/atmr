@@ -55,13 +55,14 @@ def _candidate(conn):
 
 
 def test_changement_ordinaire_refuse_apres_verrou_puis_annule() -> None:
+    from tests.support.disposable_bootstrap import boot_testing_app
+
     from application.billing.settlement_payer_lock import (
         lock_financial_responsibility,
         refuse_ordinary_payer_change,
     )
     from application.institutions.change_booking_payer import change_booking_payer
     from ext import db
-    from tests.support.disposable_bootstrap import boot_testing_app
 
     application = boot_testing_app()
     with application.app_context():

@@ -169,9 +169,9 @@ class TestWebSocketACK:
         under_5s = sum(1 for t in delivery_times if t < 5.0)
         success_rate = under_5s / len(delivery_times)
 
-        assert (
-            success_rate >= 0.995
-        ), f"Seulement {success_rate * 100:.1f}% confirmés < 5s"
+        assert success_rate >= 0.995, (
+            f"Seulement {success_rate * 100:.1f}% confirmés < 5s"
+        )
 
         logger.info(
             "✅ Test: 99.5%% confirmés < 5s (%.1f%%, min=%.3fs, max=%.3fs)",
@@ -232,9 +232,9 @@ class TestWebSocketACK:
         # Vérifier livraison
         delivery_rate = len(acks_received) / len(messages_sent) if messages_sent else 0
 
-        assert (
-            delivery_rate >= 0.95
-        ), f"Seulement {delivery_rate * 100:.1f}% de livraison"
+        assert delivery_rate >= 0.95, (
+            f"Seulement {delivery_rate * 100:.1f}% de livraison"
+        )
 
         logger.info(
             "✅ Test: End-to-end ACK (%.1f%% livraison, %d/%d messages)",

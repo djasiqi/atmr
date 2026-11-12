@@ -144,12 +144,12 @@ class TestDisasterScenarios:
             )
 
             # Vérifier que le dispatch après récupération fonctionne normalement
-            assert (
-                result_after_recovery is not None
-            ), "Dispatch doit retourner un résultat"
-            assert (
-                "assignments" in result_after_recovery
-            ), "Résultat doit contenir 'assignments'"
+            assert result_after_recovery is not None, (
+                "Dispatch doit retourner un résultat"
+            )
+            assert "assignments" in result_after_recovery, (
+                "Résultat doit contenir 'assignments'"
+            )
 
             return result_after_recovery
 
@@ -164,9 +164,9 @@ class TestDisasterScenarios:
         )
 
         # ✅ Assertion : RTO ≤ 30s
-        assert (
-            rto_seconds <= RTO_MAX_SECONDS
-        ), f"RTO trop élevé: {rto_seconds:.2f}s (max: {RTO_MAX_SECONDS}s)"
+        assert rto_seconds <= RTO_MAX_SECONDS, (
+            f"RTO trop élevé: {rto_seconds:.2f}s (max: {RTO_MAX_SECONDS}s)"
+        )
 
         logger.info(
             "[D3] ✅ Test OSRM down terminé avec succès (RTO: %.2fs)", rto_seconds
@@ -283,9 +283,9 @@ class TestDisasterScenarios:
 
         # ✅ Vérifier que système ne crash pas - tester une autre lecture
         users_after = User.query.limit(1).all()
-        assert (
-            users_after is not None
-        ), "Système ne doit pas crash après tentative d'écriture"
+        assert users_after is not None, (
+            "Système ne doit pas crash après tentative d'écriture"
+        )
         logger.info("[D3] ✅ Système reste opérationnel après tentative d'écriture")
 
         # ✅ Désactiver read-only et vérifier écritures reprennent
@@ -299,9 +299,9 @@ class TestDisasterScenarios:
 
         # Maintenant ça devrait fonctionner
         # (201 créé ou 500 si autre problème, mais pas 503 read-only)
-        assert (
-            response_post_after.status_code != 503
-        ), "Écriture devrait fonctionner après désactivation read-only"
+        assert response_post_after.status_code != 503, (
+            "Écriture devrait fonctionner après désactivation read-only"
+        )
 
         # Vérifier que ce n'est pas une erreur read-only
         if response_post_after.status_code != 201:
@@ -310,9 +310,9 @@ class TestDisasterScenarios:
             has_readonly = (
                 "read-only" in error_msg_after or "readonly" in error_msg_after
             )
-            assert (
-                not has_readonly
-            ), f"L'erreur ne devrait plus être read-only, reçu: {response_data_after}"
+            assert not has_readonly, (
+                f"L'erreur ne devrait plus être read-only, reçu: {response_data_after}"
+            )
 
         logger.info("[D3] ✅ Test DB read-only terminé avec succès")
 
@@ -417,15 +417,15 @@ class TestDisasterScenarios:
                 logger.warning("  - Request #%s: %s", err["request_id"], err["error"])
 
         # ✅ Vérifications
-        assert (
-            total == PIC_LOAD_REQUESTS
-        ), f"Nombre de requêtes incorrect: {total} au lieu de {PIC_LOAD_REQUESTS}"
-        assert (
-            success_rate >= 95.0
-        ), f"Taux de succès trop bas: {success_rate:.1f}% (attendu ≥ 95%)"
-        assert (
-            p95_latency < 5.0
-        ), f"Latence P95 trop élevée: {p95_latency:.2f}s (attendu < 5s)"
+        assert total == PIC_LOAD_REQUESTS, (
+            f"Nombre de requêtes incorrect: {total} au lieu de {PIC_LOAD_REQUESTS}"
+        )
+        assert success_rate >= 95.0, (
+            f"Taux de succès trop bas: {success_rate:.1f}% (attendu ≥ 95%)"
+        )
+        assert p95_latency < 5.0, (
+            f"Latence P95 trop élevée: {p95_latency:.2f}s (attendu < 5s)"
+        )
 
         logger.info("[D3] ✅ Test pic de charge terminé avec succès")
 
@@ -560,9 +560,9 @@ class TestDisasterScenarios:
 
             # Au moins une requête doit réussir (via retry ou fallback)
             # Avec 30% d'erreur et retries, on devrait avoir au moins 1 succès sur 5
-            assert (
-                success_count >= 1
-            ), f"Aucune requête n'a réussi malgré retries/fallback (0/{total_count})"
+            assert success_count >= 1, (
+                f"Aucune requête n'a réussi malgré retries/fallback (0/{total_count})"
+            )
 
             # ✅ Vérifier pas de perte de données (idempotence)
             # Si plusieurs appels réussissent, les résultats doivent être cohérents
@@ -710,15 +710,15 @@ class TestDisasterScenarios:
                 combined_duration = time.time() - start_combined
 
                 # ✅ Vérifier système reste opérationnel (même en mode dégradé)
-                assert (
-                    result_combined is not None
-                ), "Dispatch doit retourner un résultat (même vide)"
-                assert (
-                    "assignments" in result_combined
-                ), "Résultat doit contenir 'assignments'"
-                assert (
-                    "unassigned" in result_combined
-                ), "Résultat doit contenir 'unassigned'"
+                assert result_combined is not None, (
+                    "Dispatch doit retourner un résultat (même vide)"
+                )
+                assert "assignments" in result_combined, (
+                    "Résultat doit contenir 'assignments'"
+                )
+                assert "unassigned" in result_combined, (
+                    "Résultat doit contenir 'unassigned'"
+                )
                 assert "meta" in result_combined, "Résultat doit contenir 'meta'"
 
                 logger.info(
@@ -750,9 +750,9 @@ class TestDisasterScenarios:
             # Tester une opération simple (lecture)
             try:
                 users_check = User.query.limit(1).all()
-                assert (
-                    users_check is not None
-                ), "Système doit toujours permettre les lectures"
+                assert users_check is not None, (
+                    "Système doit toujours permettre les lectures"
+                )
                 logger.info(
                     "[D3] ✅ Système toujours opérationnel après catastrophe combinée"
                 )

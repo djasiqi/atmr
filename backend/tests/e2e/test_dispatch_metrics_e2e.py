@@ -207,9 +207,9 @@ def test_osrm_metrics_present(authenticated_client):
 
     for metric in expected_metrics:
         # ✅ FIX: Vérifier que la métrique est déclarée (HELP/TYPE)
-        assert (
-            metric in content
-        ), f"Métrique {metric} doit être déclarée (HELP/TYPE présents)"
+        assert metric in content, (
+            f"Métrique {metric} doit être déclarée (HELP/TYPE présents)"
+        )
 
         # ✅ FIX: Accepter aussi les métriques avec valeur 0.0 ou déclarées sans valeur
         pattern = rf"^{metric}(\{{[^}}]*\}})?\s+[0-9.+eE-]+"
@@ -272,12 +272,12 @@ def test_osrm_metrics_initialized(authenticated_client):
     content = response.get_data(as_text=True)
 
     # Vérifier que les métriques sont déclarées
-    assert (
-        "# HELP osrm_cache_hits_total" in content
-    ), "osrm_cache_hits_total doit être déclarée"
-    assert (
-        "# TYPE osrm_cache_hits_total counter" in content
-    ), "osrm_cache_hits_total doit être de type counter"
+    assert "# HELP osrm_cache_hits_total" in content, (
+        "osrm_cache_hits_total doit être déclarée"
+    )
+    assert "# TYPE osrm_cache_hits_total counter" in content, (
+        "osrm_cache_hits_total doit être de type counter"
+    )
 
     # ✅ FIX: Vérifier qu'elles ont une valeur (même 0.0)
     # Les métriques avec labels peuvent avoir plusieurs lignes,
@@ -287,46 +287,46 @@ def test_osrm_metrics_initialized(authenticated_client):
     if hits_match:
         # Si une valeur est trouvée, vérifier qu'elle est >= 0
         value = float(hits_match.group(2))
-        assert (
-            value >= 0.0
-        ), f"osrm_cache_hits_total doit avoir une valeur >= 0, got {value}"
+        assert value >= 0.0, (
+            f"osrm_cache_hits_total doit avoir une valeur >= 0, got {value}"
+        )
     else:
         # Si pas de valeur, au moins vérifier que HELP/TYPE sont présents
-        assert (
-            "# HELP osrm_cache_hits_total" in content
-        ), "osrm_cache_hits_total doit être déclarée"
+        assert "# HELP osrm_cache_hits_total" in content, (
+            "osrm_cache_hits_total doit être déclarée"
+        )
 
     # Vérifier osrm_cache_misses_total
-    assert (
-        "# HELP osrm_cache_misses_total" in content
-    ), "osrm_cache_misses_total doit être déclarée"
-    assert (
-        "# TYPE osrm_cache_misses_total counter" in content
-    ), "osrm_cache_misses_total doit être de type counter"
+    assert "# HELP osrm_cache_misses_total" in content, (
+        "osrm_cache_misses_total doit être déclarée"
+    )
+    assert "# TYPE osrm_cache_misses_total counter" in content, (
+        "osrm_cache_misses_total doit être de type counter"
+    )
 
     misses_pattern = r"^osrm_cache_misses_total(\{[^}]*\})?\s+([0-9.+eE-]+)"
     misses_match = re.search(misses_pattern, content, re.MULTILINE)
     if misses_match:
         value = float(misses_match.group(2))
-        assert (
-            value >= 0.0
-        ), f"osrm_cache_misses_total doit avoir une valeur >= 0, got {value}"
+        assert value >= 0.0, (
+            f"osrm_cache_misses_total doit avoir une valeur >= 0, got {value}"
+        )
 
     # Vérifier osrm_cache_hit_rate (gauge)
-    assert (
-        "# HELP osrm_cache_hit_rate" in content
-    ), "osrm_cache_hit_rate doit être déclarée"
-    assert (
-        "# TYPE osrm_cache_hit_rate gauge" in content
-    ), "osrm_cache_hit_rate doit être de type gauge"
+    assert "# HELP osrm_cache_hit_rate" in content, (
+        "osrm_cache_hit_rate doit être déclarée"
+    )
+    assert "# TYPE osrm_cache_hit_rate gauge" in content, (
+        "osrm_cache_hit_rate doit être de type gauge"
+    )
 
     hit_rate_pattern = r"^osrm_cache_hit_rate\s+([0-9.+eE-]+)"
     hit_rate_match = re.search(hit_rate_pattern, content, re.MULTILINE)
     if hit_rate_match:
         value = float(hit_rate_match.group(1))
-        assert (
-            0.0 <= value <= 1.0
-        ), f"osrm_cache_hit_rate doit être entre 0 et 1, got {value}"
+        assert 0.0 <= value <= 1.0, (
+            f"osrm_cache_hit_rate doit être entre 0 et 1, got {value}"
+        )
 
 
 @pytest.mark.skip(reason="Nécessite un environnement complet avec Prometheus")

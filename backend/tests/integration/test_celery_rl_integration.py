@@ -301,9 +301,9 @@ class TestCeleryRLPerformance:
         # Vérifications
         assert memory_info is not None
         # ✅ FIX: Vérifier que memory_info est un dictionnaire, pas un Mock
-        assert isinstance(
-            memory_info, dict
-        ), f"memory_info doit être un dict, got {type(memory_info)}"
+        assert isinstance(memory_info, dict), (
+            f"memory_info doit être un dict, got {type(memory_info)}"
+        )
         assert "rss" in memory_info
         assert "vms" in memory_info
         print("  ✅ Utilisation mémoire Celery RL monitorée")

@@ -58,17 +58,17 @@ class TestAPIVersioning:
             # (ils sont tous ajoutés par le même handler)
             if "Deprecation" in response.headers:
                 # Vérifier header Sunset
-                assert (
-                    "Sunset" in response.headers
-                ), "Header Sunset doit être présent sur routes v1"
+                assert "Sunset" in response.headers, (
+                    "Header Sunset doit être présent sur routes v1"
+                )
 
                 # Vérifier header Link
-                assert (
-                    "Link" in response.headers
-                ), "Header Link doit être présent sur routes v1"
-                assert (
-                    "successor-version" in response.headers["Link"]
-                ), "Header Link doit contenir 'successor-version'"
+                assert "Link" in response.headers, (
+                    "Header Link doit être présent sur routes v1"
+                )
+                assert "successor-version" in response.headers["Link"], (
+                    "Header Link doit contenir 'successor-version'"
+                )
         else:
             # Si la route n'existe pas (404), le header peut ne pas être ajouté
             # C'est acceptable car le test vérifie que les routes v1 existantes
@@ -83,13 +83,13 @@ class TestAPIVersioning:
         response = client.get("/api/v2/nonexistent", headers={})
         # L'API v2 doit être montée, donc une route inexistante retourne
         # 404 JSON de Flask-RESTx
-        assert (
-            response.status_code == 404
-        ), f"Endpoint /api/v2/* doit être monté (status: {response.status_code})"
+        assert response.status_code == 404, (
+            f"Endpoint /api/v2/* doit être monté (status: {response.status_code})"
+        )
         # La réponse doit être JSON (Flask-RESTx)
-        assert (
-            response.is_json or response.status_code == 404
-        ), "Réponse v2 doit être JSON (Flask-RESTx)"
+        assert response.is_json or response.status_code == 404, (
+            "Réponse v2 doit être JSON (Flask-RESTx)"
+        )
 
     def test_legacy_api_if_enabled(self, client, auth_headers):
         """Test que les routes legacy sont disponibles si activées."""
@@ -108,12 +108,12 @@ class TestAPIVersioning:
 
             # Vérifier header Deprecation sur legacy
             if response.status_code != 404:
-                assert (
-                    "Deprecation" in response.headers
-                ), "Header Deprecation doit être présent sur routes legacy"
-                assert (
-                    'version="legacy"' in response.headers["Deprecation"]
-                ), "Header Deprecation legacy doit contenir 'version=\"legacy\"'"
+                assert "Deprecation" in response.headers, (
+                    "Header Deprecation doit être présent sur routes legacy"
+                )
+                assert 'version="legacy"' in response.headers["Deprecation"], (
+                    "Header Deprecation legacy doit contenir 'version=\"legacy\"'"
+                )
         else:
             # Legacy désactivée: la route /api/companies/me existe toujours
             # car elle est définie directement dans app.py comme route de compatibilité
@@ -157,9 +157,9 @@ class TestAPIVersioning:
         response_v2 = client.get("/api/v2/companies/me", headers=auth_headers)
 
         # V1 doit retourner quelque chose (200, 404 avec data, 403)
-        assert (
-            response_v1.status_code != 500
-        ), "v1 ne doit pas retourner 500 (route montée)"
+        assert response_v1.status_code != 500, (
+            "v1 ne doit pas retourner 500 (route montée)"
+        )
 
         # V2 peut retourner 200, 404, ou 403
         # La route /api/v<int:version>/companies/me existe dans app.py (ligne 1000)

@@ -100,16 +100,16 @@ class TestClientTypeInvariants:
                 "AND management_mode::text NOT IN ('SELF_SERVICE', 'MANAGED', 'CORPORATE')"
             )
         ).fetchall()
-        assert (
-            len(result) == 0
-        ), f"Valeurs management_mode invalides : {[r[0] for r in result]}"
+        assert len(result) == 0, (
+            f"Valeurs management_mode invalides : {[r[0] for r in result]}"
+        )
 
     def test_institution_patients_untouched(self, db):
         """La table institution_patients ne doit pas avoir ete modifiee."""
         count = db.session.execute(
             text("SELECT COUNT(*) FROM institution_patients")
         ).scalar()
-        assert (
-            count is not None
-        ), "La table institution_patients n'existe pas ou est inaccessible."
+        assert count is not None, (
+            "La table institution_patients n'existe pas ou est inaccessible."
+        )
         assert count >= 0, "COUNT(*) institution_patients ne doit pas etre negatif."

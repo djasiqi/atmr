@@ -122,9 +122,9 @@ class TestAuthActivationFlow:
             },
             headers={"Content-Type": "application/json"},
         )
-        assert (
-            login_before_response.status_code == 403
-        ), "Le login doit etre bloque avant activation."
+        assert login_before_response.status_code == 403, (
+            "Le login doit etre bloque avant activation."
+        )
         login_before_data = login_before_response.get_json() or {}
         assert login_before_data.get("reason") == "account_pending_activation"
 

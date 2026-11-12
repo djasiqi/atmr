@@ -1073,7 +1073,7 @@ def hint_label(
     if dossier_state != "absent":
         return persisted
     if "Dossier préparé" in persisted:
-        return "Mandat signé. " "Facturation prévue, dossier non préparé. À facturer."
+        return "Mandat signé. Facturation prévue, dossier non préparé. À facturer."
     if persisted.startswith("Dossier de suivi"):
         balance = due - recognized
         if balance < 0:

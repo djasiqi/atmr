@@ -165,9 +165,9 @@ def bookings(db, company=None):
             scheduled_time=scheduled_time,
         )
         # ✅ FIX: Vérifier explicitement que le booking utilise la bonne company
-        assert (
-            booking.company_id == company.id
-        ), f"Booking must belong to company {company.id}, got {booking.company_id}"
+        assert booking.company_id == company.id, (
+            f"Booking must belong to company {company.id}, got {booking.company_id}"
+        )
         bookings_list.append(booking)
     db.session.flush()  # Force l'assignation des IDs
     # ✅ FIX: Commit pour garantir persistance
@@ -340,12 +340,12 @@ class TestDispatchE2E:
         # Si validation stricte active, les bookings ne devraient pas être assignés
         # Vérifier que le résultat indique un échec
         # ou que les bookings ne sont pas assignés
-        assert (
-            booking1_reloaded.driver_id is None
-        ), "Booking1 ne devrait pas être assigné après rollback"
-        assert (
-            booking2_reloaded.driver_id is None
-        ), "Booking2 ne devrait pas être assigné après rollback"
+        assert booking1_reloaded.driver_id is None, (
+            "Booking1 ne devrait pas être assigné après rollback"
+        )
+        assert booking2_reloaded.driver_id is None, (
+            "Booking2 ne devrait pas être assigné après rollback"
+        )
 
         # Vérifier que le résultat du dispatch indique un problème
         # (optionnel selon implémentation)
@@ -439,9 +439,9 @@ class TestDispatchE2E:
         # après le rollback défensif
         db.session.commit()
         # ✅ Vérifier que l'ID est disponible après commit
-        assert (
-            dispatch_run.id is not None
-        ), "DispatchRun ID should be available after commit"
+        assert dispatch_run.id is not None, (
+            "DispatchRun ID should be available after commit"
+        )
 
         # ✅ FIX: S'assurer que les bookings et drivers sont bien commités et visibles
         # Le rollback défensif dans apply_assignments expire les objets,
@@ -576,9 +576,9 @@ class TestDispatchE2E:
             # ✅ FIX: Vérifier que la Company existe avant chaque dispatch
             # (engine.run() fait un rollback défensif qui peut expirer la Company)
             company_check = db.session.query(Company).filter_by(id=company.id).first()
-            assert (
-                company_check is not None
-            ), f"Company must exist before dispatch #{i + 1}"
+            assert company_check is not None, (
+                f"Company must exist before dispatch #{i + 1}"
+            )
 
             result = engine.run(
                 company_id=company.id,
@@ -607,9 +607,9 @@ class TestDispatchE2E:
         dispatch_runs = DispatchRun.query.filter(
             DispatchRun.id.in_(dispatch_run_ids)
         ).all()
-        assert (
-            len(dispatch_runs) >= 1
-        ), f"Expected at least 1 DispatchRun in DB, got {len(dispatch_runs)}"
+        assert len(dispatch_runs) >= 1, (
+            f"Expected at least 1 DispatchRun in DB, got {len(dispatch_runs)}"
+        )
 
     def test_dispatch_run_id_correlation(self, company, drivers, bookings):
         """Test : Corrélation dispatch_run_id dans tous les logs et métriques."""
@@ -676,9 +676,9 @@ class TestDispatchE2E:
         # Vérifier que le DispatchRun existe
         dispatch_run = DispatchRun.query.get(dispatch_run_id)
         assert dispatch_run is not None, f"DispatchRun {dispatch_run_id} must exist"
-        assert (
-            dispatch_run.company_id == company.id
-        ), "DispatchRun must belong to company"
+        assert dispatch_run.company_id == company.id, (
+            "DispatchRun must belong to company"
+        )
 
     def test_apply_assignments_finds_bookings(self, company, drivers, bookings, db):
         """✅ Test de non-régression : Vérifier que apply_assignments
@@ -775,9 +775,9 @@ class TestDispatchE2E:
         # Recharger depuis DB avec un nouveau query
         booking_reloaded = db.session.query(Booking).filter_by(id=booking.id).first()
         assert booking_reloaded is not None, "Booking must be reloaded from DB"
-        assert (
-            booking_reloaded.driver_id is None
-        ), "Rollback must restore original value (driver_id should be None)"
+        assert booking_reloaded.driver_id is None, (
+            "Rollback must restore original value (driver_id should be None)"
+        )
 
     def test_company_persisted_before_dispatch(self, company, db):
         """✅ Test de non-régression : Vérifier que la Company
@@ -801,18 +801,18 @@ class TestDispatchE2E:
         dispatch_run_id = result.get("dispatch_run_id") or result.get("meta", {}).get(
             "dispatch_run_id"
         )
-        assert (
-            dispatch_run_id is not None
-        ), f"DispatchRun must be created. Result: {result.get('meta', {})}"
+        assert dispatch_run_id is not None, (
+            f"DispatchRun must be created. Result: {result.get('meta', {})}"
+        )
 
         # Vérifier que le DispatchRun existe en DB
         dispatch_run = DispatchRun.query.get(dispatch_run_id)
-        assert (
-            dispatch_run is not None
-        ), f"DispatchRun {dispatch_run_id} must exist in DB"
-        assert (
-            dispatch_run.company_id == company.id
-        ), "DispatchRun must belong to company"
+        assert dispatch_run is not None, (
+            f"DispatchRun {dispatch_run_id} must exist in DB"
+        )
+        assert dispatch_run.company_id == company.id, (
+            "DispatchRun must belong to company"
+        )
 
     def test_fixtures_isolation_and_rollback_defensive(self, db, company):
         """✅ Test de non-régression : Vérifier l'isolation des fixtures
@@ -846,12 +846,12 @@ class TestDispatchE2E:
 
         # 3. Vérifier que la company est toujours visible après engine.run()
         company_after = db.session.query(Company).get(company.id)
-        assert (
-            company_after is not None
-        ), "Company doit rester visible après engine.run() malgré le rollback défensif"
-        assert (
-            company_after.id == company.id
-        ), "Company doit avoir le même ID après engine.run()"
+        assert company_after is not None, (
+            "Company doit rester visible après engine.run() malgré le rollback défensif"
+        )
+        assert company_after.id == company.id, (
+            "Company doit avoir le même ID après engine.run()"
+        )
 
         # 4. Vérifier que le résultat contient des informations cohérentes
         assert "meta" in result, "Résultat doit contenir meta"
@@ -880,12 +880,12 @@ class TestDispatchE2E:
         result = engine.run(
             company_id=invalid_company_id, for_date=date.today().isoformat()
         )
-        assert (
-            result.get("meta", {}).get("reason") == "company_not_found"
-        ), "Par défaut, doit retourner un résultat avec reason='company_not_found'"
-        assert (
-            result.get("dispatch_run_id") is None
-        ), "Pas de DispatchRun créé si Company introuvable"
+        assert result.get("meta", {}).get("reason") == "company_not_found", (
+            "Par défaut, doit retourner un résultat avec reason='company_not_found'"
+        )
+        assert result.get("dispatch_run_id") is None, (
+            "Pas de DispatchRun créé si Company introuvable"
+        )
 
         # Test 2: Comportement avec raise_on_company_not_found=True (lève une exception)
         with pytest.raises(CompanyNotFoundError) as exc_info:
@@ -897,14 +897,14 @@ class TestDispatchE2E:
 
         # Vérifier que l'exception contient les bonnes informations
         exception = exc_info.value
-        assert (
-            exception.company_id == invalid_company_id
-        ), "Exception doit contenir le company_id"
-        assert (
-            "introuvable" in str(exception).lower()
-        ), "Message d'erreur doit mentionner 'introuvable'"
-        assert (
-            exception.extra.get("caller") is not None
-        ), "Exception doit contenir les infos du caller"
+        assert exception.company_id == invalid_company_id, (
+            "Exception doit contenir le company_id"
+        )
+        assert "introuvable" in str(exception).lower(), (
+            "Message d'erreur doit mentionner 'introuvable'"
+        )
+        assert exception.extra.get("caller") is not None, (
+            "Exception doit contenir les infos du caller"
+        )
 
         print("✅ Test CompanyNotFoundError OK")

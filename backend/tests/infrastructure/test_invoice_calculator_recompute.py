@@ -267,9 +267,9 @@ class TestRecomputeInvoiceTotals:
 
         # La facture ne doit PAS avoir été modifiée
         db.session.refresh(invoice)
-        assert (
-            invoice.total_amount == original_total
-        ), "commit=False should NOT modify the invoice (preview mode)"
+        assert invoice.total_amount == original_total, (
+            "commit=False should NOT modify the invoice (preview mode)"
+        )
 
     def test_recompute_respects_existing_payments(
         self, db, sample_company, sample_client

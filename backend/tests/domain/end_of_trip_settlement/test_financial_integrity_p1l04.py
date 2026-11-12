@@ -124,9 +124,7 @@ def test_encaissements_imputation_et_avoir_ensemble():
             )
         )
         first_id = connection.execute(
-            text(
-                "SELECT id FROM cash_collection " "WHERE client_operation_key = 'enc-a'"
-            )
+            text("SELECT id FROM cash_collection WHERE client_operation_key = 'enc-a'")
         ).scalar_one()
         connection.execute(
             text(

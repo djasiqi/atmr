@@ -277,9 +277,9 @@ class TestA06VulnerableComponents:
         critical_deps = ["flask", "sqlalchemy", "flask-jwt-extended"]
         for dep in critical_deps:
             # Vérifier que la dépendance ou un variant est présent
-            assert any(
-                dep in line for line in content.split("\n")
-            ), f"{dep} doit être dans requirements.txt"
+            assert any(dep in line for line in content.split("\n")), (
+                f"{dep} doit être dans requirements.txt"
+            )
 
 
 class TestA07AuthenticationFailures:

@@ -48,9 +48,9 @@ class TestHeuristicsPooling:
         settings.pooling.pickup_distance_m = 500
 
         result = _can_be_pooled(booking1, booking2, settings)
-        assert (
-            result is True
-        ), "Les courses avec même pickup et temps proche devraient être poolables"
+        assert result is True, (
+            "Les courses avec même pickup et temps proche devraient être poolables"
+        )
 
     def test_can_be_pooled_disabled(self, db):
         """Test pooling désactivé."""
@@ -80,9 +80,9 @@ class TestHeuristicsPooling:
         settings.pooling.time_tolerance_min = 15  # Max 15 min
 
         result = _can_be_pooled(booking1, booking2, settings)
-        assert (
-            result is False
-        ), "Courses avec temps trop différent ne devraient pas être poolables"
+        assert result is False, (
+            "Courses avec temps trop différent ne devraient pas être poolables"
+        )
 
 
 class TestHeuristicsScoring:

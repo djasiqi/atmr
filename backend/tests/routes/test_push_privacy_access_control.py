@@ -156,9 +156,9 @@ class TestPushPrivacyAccessControl:
             resp = client.patch(
                 url, json={"push_privacy_mode": invalid}, headers=headers
             )
-            assert (
-                resp.status_code == HTTPStatus.BAD_REQUEST
-            ), f"mode={invalid!r} should return 400, got {resp.status_code}"
+            assert resp.status_code == HTTPStatus.BAD_REQUEST, (
+                f"mode={invalid!r} should return 400, got {resp.status_code}"
+            )
 
     def test_push_privacy_validation_accepts_detailed_and_discreet(
         self, app, client, db
@@ -172,8 +172,8 @@ class TestPushPrivacyAccessControl:
 
         for mode in ("detailed", "discreet"):
             resp = client.patch(url, json={"push_privacy_mode": mode}, headers=headers)
-            assert (
-                resp.status_code == 200
-            ), f"mode={mode!r} should return 200, got {resp.status_code}"
+            assert resp.status_code == 200, (
+                f"mode={mode!r} should return 200, got {resp.status_code}"
+            )
             data = resp.get_json()
             assert data.get("push_privacy_mode") == mode

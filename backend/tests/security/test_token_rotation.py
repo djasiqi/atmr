@@ -257,9 +257,9 @@ def test_token_rotation_on_refresh(
     assert new_refresh_token is not None, "Nouveau refresh token non trouvé"
 
     # 3. Vérifier que le nouveau token est différent
-    assert (
-        new_refresh_token != old_refresh_token
-    ), "Le nouveau token doit être différent"
+    assert new_refresh_token != old_refresh_token, (
+        "Le nouveau token doit être différent"
+    )
 
     # 4. Vérifier que l'ancien token est révoqué (via RefreshTokenService)
     with client.application.app_context():
@@ -270,14 +270,14 @@ def test_token_rotation_on_refresh(
         user = User.query.filter_by(email=sample_user.email).first()
         assert user is not None, "L'utilisateur devrait exister"
 
-        assert not token_service.is_token_valid(
-            old_refresh_token, user.id
-        ), "L'ancien token devrait être révoqué"
+        assert not token_service.is_token_valid(old_refresh_token, user.id), (
+            "L'ancien token devrait être révoqué"
+        )
 
         # 5. Vérifier que le nouveau token est valide
-        assert token_service.is_token_valid(
-            new_refresh_token, user.id
-        ), "Le nouveau token devrait être valide"
+        assert token_service.is_token_valid(new_refresh_token, user.id), (
+            "Le nouveau token devrait être valide"
+        )
 
 
 def test_revoke_current_token_on_logout(
@@ -333,13 +333,13 @@ def test_revoke_current_token_on_logout(
         user = User.query.filter_by(email=sample_user.email).first()
         assert user is not None, "L'utilisateur devrait exister"
 
-        assert not token_service.is_token_valid(
-            tokens[-1], user.id
-        ), "Le token explicitement fourni devrait être révoqué après logout"
+        assert not token_service.is_token_valid(tokens[-1], user.id), (
+            "Le token explicitement fourni devrait être révoqué après logout"
+        )
         for token in tokens[:-1]:
-            assert token_service.is_token_valid(
-                token, user.id
-            ), "Un logout ciblé ne doit pas révoquer les autres appareils"
+            assert token_service.is_token_valid(token, user.id), (
+                "Un logout ciblé ne doit pas révoquer les autres appareils"
+            )
 
 
 def test_token_limit_per_user(
@@ -396,9 +396,9 @@ def test_token_limit_per_user(
 
         # Vérifier aussi directement via get_active_token_count
         count = token_service.get_active_token_count(user.id)
-        assert (
-            count <= 2
-        ), f"Le nombre de tokens actifs ({count}) devrait être limité à 2"
+        assert count <= 2, (
+            f"Le nombre de tokens actifs ({count}) devrait être limité à 2"
+        )
 
 
 def test_token_store_and_retrieve(
@@ -413,9 +413,9 @@ def test_token_store_and_retrieve(
         token_service.store_token(user_id, token)
 
         # Vérifier qu'il est valide
-        assert token_service.is_token_valid(
-            token, user_id
-        ), "Le token devrait être valide"
+        assert token_service.is_token_valid(token, user_id), (
+            "Le token devrait être valide"
+        )
 
         # Vérifier le nombre de tokens actifs
         count = token_service.get_active_token_count(user_id)
@@ -426,9 +426,9 @@ def test_token_store_and_retrieve(
     token_service.revoke_token(token)
 
     # Vérifier qu'il est maintenant révoqué
-    assert not token_service.is_token_valid(
-        token, user_id
-    ), "Le token devrait être révoqué"
+    assert not token_service.is_token_valid(token, user_id), (
+        "Le token devrait être révoqué"
+    )
 
 
 def test_revoke_all_user_tokens(token_service: RefreshTokenService, app: Flask) -> None:
@@ -443,15 +443,15 @@ def test_revoke_all_user_tokens(token_service: RefreshTokenService, app: Flask) 
 
         # Vérifier qu'ils sont tous actifs
         for token in tokens:
-            assert token_service.is_token_valid(
-                token, user_id
-            ), f"Le token {token} devrait être actif"
+            assert token_service.is_token_valid(token, user_id), (
+                f"Le token {token} devrait être actif"
+            )
 
         # Révoquer tous les tokens
         token_service.revoke_all_user_tokens(user_id)
 
         # Vérifier qu'ils sont tous révoqués
         for token in tokens:
-            assert not token_service.is_token_valid(
-                token, user_id
-            ), f"Le token {token} devrait être révoqué"
+            assert not token_service.is_token_valid(token, user_id), (
+                f"Le token {token} devrait être révoqué"
+            )

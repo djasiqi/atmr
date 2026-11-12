@@ -248,17 +248,17 @@ class TestBookingCancellation:
 
             # Essayer d'annuler ce nouveau booking
             cancel_result = cancel_uc.execute(booking_pending)
-            assert (
-                cancel_result.ok is True
-            ), f"Cancel failed on PENDING booking: {cancel_result.error}"
+            assert cancel_result.ok is True, (
+                f"Cancel failed on PENDING booking: {cancel_result.error}"
+            )
             db.session.commit()
             db.session.refresh(booking_pending)
             assert booking_pending.status == BookingStatus.CANCELED
         else:
             # Vérifier que l'annulation a réussi
-            assert (
-                cancel_result.ok is True
-            ), f"Cancel failed: {cancel_result.error}, status was: {initial_status}"
+            assert cancel_result.ok is True, (
+                f"Cancel failed: {cancel_result.error}, status was: {initial_status}"
+            )
             db.session.commit()
 
             # Recharger le booking depuis la DB
