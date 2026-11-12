@@ -11,7 +11,7 @@ Dépôt principal `C:\Users\jasiq\atmr` : WIP non touché
 
 | Critère | Verdict |
 | --- | --- |
-| CI | **GREEN** sur `dae8bec855ef3cac446fc18b6b3d51be04dee419` (matrice G sur parent `db9968ef`) (workflows dépôt) |
+| CI | **GREEN** sur `d1ecd6073f71a12df07268676ad7acbf9e6254a5` (matrice G sur parent `db9968ef`) (workflows dépôt) |
 | SECURITY | **PARTIAL** — Security Gate **PASS** ; GitGuardian externe **FAIL** (dashboard opaque) |
 | READY FOR HUMAN REVIEW | **YES** |
 
@@ -24,7 +24,7 @@ Aucun merge. Aucun déploiement. Aucune migration de production. Flags opératio
 | Élément | Valeur |
 | --- | --- |
 | Branche | `candidate/lirie-fin-caisse-20261112` |
-| HEAD final | dae8bec855ef3cac446fc18b6b3d51be04dee419 |
+| HEAD final | `d1ecd6073f71a12df07268676ad7acbf9e6254a5` |
 | Base distante FIN-FACTURE | `ade4543468d7a828015cf16773246725341fe140` (compatible, non évoluée) |
 | Draft | oui |
 
@@ -148,6 +148,6 @@ Aucune assertion de sécurité affaiblie. Pas d’intégration PAY-SAFERPAY. Pas
 
 ## L. Verdict (rappel)
 
-- **CI : GREEN** sur `dae8bec855ef3cac446fc18b6b3d51be04dee419` (matrice G sur parent `db9968ef`) (workflows dépôt requis).
+- **CI : GREEN** sur `d1ecd6073f71a12df07268676ad7acbf9e6254a5` (matrice G sur parent `db9968ef`) (workflows dépôt requis).
 - **SECURITY : PARTIAL** (Gate PASS ; GitGuardian externe FAIL).
 - **READY FOR HUMAN REVIEW : YES**.
