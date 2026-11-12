@@ -6,8 +6,6 @@ Flags produit END_OF_TRIP restent OFF ; prep locale SETTLEMENT_PRODUCTION_PREP=1
 
 from __future__ import annotations
 
-from tests.support.recipe_credentials import RECIPE_PASSWORD
-
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -27,6 +25,7 @@ from services.security.csrf import (
     financial_cookie_csrf_required,
     generate_csrf_token,
 )
+from tests.support.recipe_credentials import RECIPE_PASSWORD
 
 pytestmark = pytest.mark.integration
 

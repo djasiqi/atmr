@@ -6,8 +6,8 @@ import importlib
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import routes.auth as auth
 from models import UserRole
+from routes import auth
 
 
 def test_logout_push_invalidation_accepte_device_installation_id(client, monkeypatch):

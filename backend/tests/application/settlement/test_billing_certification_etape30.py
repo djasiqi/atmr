@@ -5,8 +5,6 @@ Base jetable uniquement. Aucune émission, aucun paiement.
 
 from __future__ import annotations
 
-from tests.support.recipe_credentials import RECIPE_PASSWORD
-
 import base64
 import threading
 import uuid
@@ -26,6 +24,7 @@ from models.enums import BookingStatus, InvoiceStatus, UserRole
 from models.invoice import Invoice, InvoiceLine
 from models.user import User
 from services.recipe_environment import database_name
+from tests.support.recipe_credentials import RECIPE_PASSWORD
 
 pytestmark = pytest.mark.integration
 

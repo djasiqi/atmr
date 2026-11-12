@@ -118,9 +118,7 @@ def send_push_to_company_sync(
             log_push_recipient_proof,
         )
 
-        token_hashes = [
-            _token_hash(t["token"]) for t in push_targets if t.get("token")
-        ]
+        token_hashes = [_token_hash(t["token"]) for t in push_targets if t.get("token")]
         log_push_recipient_proof(
             trace_id=data.get("trace_id"),
             booking_id=data.get("booking_id"),
