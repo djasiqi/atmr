@@ -8,10 +8,9 @@ from __future__ import annotations
 import os
 from typing import Any, Final, Mapping
 
-SPECIALIZED_MOBILITY_ENABLED: Final[bool] = (
-    os.getenv("SPECIALIZED_MOBILITY_ENABLED", "0").strip().lower()
-    in {"1", "true", "yes", "on"}
-)
+SPECIALIZED_MOBILITY_ENABLED: Final[bool] = os.getenv(
+    "SPECIALIZED_MOBILITY_ENABLED", "0"
+).strip().lower() in {"1", "true", "yes", "on"}
 
 _BLOCKED_KEYS: Final[tuple[tuple[str, str], ...]] = (
     ("stretcher", "brancard"),
@@ -19,7 +18,9 @@ _BLOCKED_KEYS: Final[tuple[tuple[str, str], ...]] = (
 )
 
 
-def blocked_specialized_mobility_labels(mobility: Mapping[str, Any] | None) -> list[str]:
+def blocked_specialized_mobility_labels(
+    mobility: Mapping[str, Any] | None,
+) -> list[str]:
     """Retourne les libellés des besoins spécialisés présents et non autorisés."""
     if SPECIALIZED_MOBILITY_ENABLED or not mobility:
         return []

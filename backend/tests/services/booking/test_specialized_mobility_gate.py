@@ -9,9 +9,12 @@ from services.booking.specialized_mobility_gate import (
 
 
 def test_wheelchair_and_assistance_allowed():
-    assert blocked_specialized_mobility_labels(
-        {"wheelchair": True, "needs_assistance": True}
-    ) == []
+    assert (
+        blocked_specialized_mobility_labels(
+            {"wheelchair": True, "needs_assistance": True}
+        )
+        == []
+    )
     assert reject_if_specialized_mobility_blocked({"wheelchair": True}) is None
 
 

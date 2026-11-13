@@ -16,30 +16,39 @@ def test_default_target_follows_existing_preferences() -> None:
 
 
 def test_unknown_zone_does_not_cover_and_national_is_explicit() -> None:
-    assert area_covers(
-        mode="B_PICKUP_ONLY",
-        area_geo_unit_id=9,
-        pickup_ids={1, 2},
-        drop_ids=set(),
-        drop_known=False,
-        same_canton=False,
-    ) is False
-    assert area_covers(
-        mode="D_NATIONAL",
-        area_geo_unit_id=9,
-        pickup_ids={1},
-        drop_ids=set(),
-        drop_known=False,
-        same_canton=False,
-    ) is True
-    assert area_covers(
-        mode="C_INTRA_ONLY",
-        area_geo_unit_id=1,
-        pickup_ids={1},
-        drop_ids=set(),
-        drop_known=False,
-        same_canton=False,
-    ) is False
+    assert (
+        area_covers(
+            mode="B_PICKUP_ONLY",
+            area_geo_unit_id=9,
+            pickup_ids={1, 2},
+            drop_ids=set(),
+            drop_known=False,
+            same_canton=False,
+        )
+        is False
+    )
+    assert (
+        area_covers(
+            mode="D_NATIONAL",
+            area_geo_unit_id=9,
+            pickup_ids={1},
+            drop_ids=set(),
+            drop_known=False,
+            same_canton=False,
+        )
+        is True
+    )
+    assert (
+        area_covers(
+            mode="C_INTRA_ONLY",
+            area_geo_unit_id=1,
+            pickup_ids={1},
+            drop_ids=set(),
+            drop_known=False,
+            same_canton=False,
+        )
+        is False
+    )
 
 
 def test_personal_wheelchair_is_modeled_but_stretcher_is_not() -> None:
@@ -94,6 +103,7 @@ def test_pickup_match_includes_company_and_miss_excludes_it(monkeypatch) -> None
         "application.institutions.eligible_carriers.companies_for_marketplace_dispatch",
         fake_catalog,
     )
+
     class _Col:
         def in_(self, _values):
             return self
@@ -106,8 +116,12 @@ def test_pickup_match_includes_company_and_miss_excludes_it(monkeypatch) -> None
         is_active = _Col()
         query = _Rows(
             [
-                SimpleNamespace(company_id=7, geo_unit_id=1, coverage_mode="B_PICKUP_ONLY"),
-                SimpleNamespace(company_id=8, geo_unit_id=99, coverage_mode="B_PICKUP_ONLY"),
+                SimpleNamespace(
+                    company_id=7, geo_unit_id=1, coverage_mode="B_PICKUP_ONLY"
+                ),
+                SimpleNamespace(
+                    company_id=8, geo_unit_id=99, coverage_mode="B_PICKUP_ONLY"
+                ),
             ]
         )
 
@@ -179,7 +193,9 @@ def test_unmodeled_need_does_not_open_the_catalog(monkeypatch) -> None:
     assert "oxygène" in (selection.error or "")
 
 
-def test_declared_capabilities_filter_without_opening_specialized_needs(monkeypatch) -> None:
+def test_declared_capabilities_filter_without_opening_specialized_needs(
+    monkeypatch,
+) -> None:
     from types import SimpleNamespace
 
     from application.institutions import network_eligibility as eligibility
@@ -222,8 +238,12 @@ def test_declared_capabilities_filter_without_opening_specialized_needs(monkeypa
         is_active = _Col()
         query = _Rows(
             [
-                SimpleNamespace(company_id=7, geo_unit_id=1, coverage_mode="B_PICKUP_ONLY"),
-                SimpleNamespace(company_id=8, geo_unit_id=1, coverage_mode="B_PICKUP_ONLY"),
+                SimpleNamespace(
+                    company_id=7, geo_unit_id=1, coverage_mode="B_PICKUP_ONLY"
+                ),
+                SimpleNamespace(
+                    company_id=8, geo_unit_id=1, coverage_mode="B_PICKUP_ONLY"
+                ),
             ]
         )
 
@@ -237,7 +257,11 @@ def test_declared_capabilities_filter_without_opening_specialized_needs(monkeypa
         "application.institutions.eligible_carriers.companies_for_marketplace_dispatch",
         lambda **_kwargs: [declared, silent],
     )
-    monkeypatch.setattr(eligibility, "_local_unit", lambda _text: SimpleNamespace(id=1, name="Genève", type=None))
+    monkeypatch.setattr(
+        eligibility,
+        "_local_unit",
+        lambda _text: SimpleNamespace(id=1, name="Genève", type=None),
+    )
     monkeypatch.setattr(eligibility, "geo_chain", lambda unit: [unit])
     monkeypatch.setattr(eligibility, "ServiceArea", _Area)
     monkeypatch.setattr(eligibility, "Vehicle", _Vehicle)

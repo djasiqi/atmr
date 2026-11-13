@@ -89,7 +89,9 @@ def apply_transport_capabilities(
         "provides_standard_assistance": getattr(
             company, "provides_standard_assistance", None
         ),
-        "provides_manual_wheelchair": getattr(company, "provides_manual_wheelchair", None),
+        "provides_manual_wheelchair": getattr(
+            company, "provides_manual_wheelchair", None
+        ),
         "manual_wheelchair_count": getattr(company, "manual_wheelchair_count", None),
     }
     company.provides_standard_assistance = assistance

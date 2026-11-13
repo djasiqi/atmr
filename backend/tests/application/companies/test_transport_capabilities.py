@@ -83,13 +83,10 @@ def test_voluntary_declaration_is_audited(db) -> None:
     db.session.flush()
     assert company.provides_standard_assistance is True
     assert company.manual_wheelchair_count == 1
-    audit = (
-        AuditLog.query.filter_by(
-            company_id=company.id,
-            action_type="company_transport_capabilities_updated",
-        )
-        .one()
-    )
+    audit = AuditLog.query.filter_by(
+        company_id=company.id,
+        action_type="company_transport_capabilities_updated",
+    ).one()
     details = json.loads(audit.action_details)
     assert details["before"]["provides_standard_assistance"] is None
     assert details["after"]["provides_standard_assistance"] is True
