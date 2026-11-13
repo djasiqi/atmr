@@ -121,9 +121,9 @@ Distinction explicite : transitions chauffeur post-assign = **API/DB + contrats 
 | SHA | Message |
 |-----|---------|
 | `0c9467ee` | fix(entreprise): ouverture fiable de la modale Assigner |
-| *(suivant)* | test+docs RI-2 (specs + rapport) |
+| bffba045 | test(recette): certifier Assigner + transmission Institution |
 
-HEAD final : voir tip après commit docs/tests.
+HEAD final : `bffba045`.
 
 ---
 
