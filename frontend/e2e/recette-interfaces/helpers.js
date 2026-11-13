@@ -16,17 +16,24 @@ function loadAccounts() {
 }
 
 async function login(page, email, password) {
-  await page.goto('/login');
+  await page.context().clearCookies();
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => {
     try {
+      // Éviter le toast « session expirée » issu d'un motif de logout résiduel
+      const keys = [];
+      for (let i = 0; i < sessionStorage.length; i += 1) {
+        keys.push(sessionStorage.key(i));
+      }
+      keys.forEach((k) => {
+        if (k && /logout|auth|session/i.test(k)) sessionStorage.removeItem(k);
+      });
       localStorage.clear();
-      sessionStorage.clear();
     } catch (_) {
       /* ignore */
     }
   });
-  await page.context().clearCookies();
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   const emailInput = page.locator('input#email');
   await expect(emailInput).toBeVisible({ timeout: 60000 });
   await emailInput.fill(email);
