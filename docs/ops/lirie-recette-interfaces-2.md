@@ -8,6 +8,21 @@ Clôture des parcours Entreprise / Institution et préparation Mobile.
 **Base LOT-1 :** `5a7676b6` / `98f47885`  
 **Push / PR / merge / deploy :** non effectués  
 
+### Décision (2026-11-13)
+
+| Jalon | Statut |
+|-------|--------|
+| Recette locale | **Terminée** — Local PASS |
+| Passage en CI distante | **Autorisé** — Remote CI Pending |
+| Validation mobile réelle | **En attente** (Jest ≠ téléphone) |
+| Validation E2E multi-profils UI complète | **Incomplète** (PARTIAL) |
+| Déploiement production | **Non établi** |
+
+Statut opérationnel : **Local PASS — Remote CI Pending**.  
+Aucune nouvelle fonctionnalité pendant cette phase de recette.
+
+Preuves locales figées : Playwright 10/10 · Jest contrats mobile 23 · booking `1660` → chauffeur `252` · demandes institutionnelles SENT + offers entreprise `2035`.
+
 ---
 
 ## A. Défauts initialement identifiés (héritage LOT-1)
@@ -121,18 +136,23 @@ Distinction explicite : transitions chauffeur post-assign = **API/DB + contrats 
 | SHA | Message |
 |-----|---------|
 | `0c9467ee` | fix(entreprise): ouverture fiable de la modale Assigner |
-| bffba045 | test(recette): certifier Assigner + transmission Institution |
+| `bffba045` | test(recette): certifier Assigner + transmission Institution |
+| `220f9763` | docs(ops): figer HEAD LOT-RECETTE-INTERFACES-2 |
+| (tip) | docs(ops): figer décision Local PASS — Remote CI Pending |
 
-HEAD final : `bffba045`.
+Tip candidat pour CI : commit décision ci-dessus (ancêtre certifié `220f9763`).
+
+Preuves chiffrées locales : Playwright **10/10** · Jest mobile contrats **23** · gates UI/API **6/8** PASS (device + multi-profil FULL UI hors PASS).
 
 ---
 
 ## I. Limites restantes
 
-1. Pas de validation appareil chauffeur (adb/émulateur).
+1. Pas de validation appareil chauffeur (adb/émulateur) — **Jest ≠ téléphone réel**.
 2. Offre institution → acceptation + assign UI non rejouée dans le même scénario Playwright unique (offre PENDING prouvée en DB).
 3. MFA runtime 4 profils hors périmètre.
 4. Seeds pricing / patient / cookies : **test only**.
+5. CI distante / téléphone réel / multi-profil FULL UI : encore ouverts (voir Décision).
 
 ---
 
@@ -148,4 +168,6 @@ HEAD final : `bffba045`.
 | MULTI-PROFILE WEB + API | **PASS** (A web+DB ; B SENT+offers) |
 | MULTI-PROFILE FULL UI | **PARTIAL** (chauffeur sans device) |
 | SECURITY | **PASS** |
-| READY FOR REMOTE CI | **YES** |
+| READY FOR REMOTE CI | **YES** (autorisé, non exécuté) |
+| LOT STATUS | **Local PASS — Remote CI Pending** |
+| PRODUCTION DEPLOY | **Non établi** |
