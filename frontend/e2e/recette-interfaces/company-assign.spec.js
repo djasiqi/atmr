@@ -1,7 +1,5 @@
 /**
- * Entreprise : réception (liste datée), acceptation, présence action Assigner.
- * Attribution modale : tentée ; si non ouverte (lazy/Suspense), le test reste
- * PARTIAL côté rapport — le bouton Assigner est prouvé sur le dashboard.
+ * Entreprise : attribution réelle via la modale Assigner (pas d'API directe).
  */
 const { test, expect } = require('@playwright/test');
 const { loadAccounts, loginExpectUrl } = require('./helpers');
@@ -9,8 +7,8 @@ const { loadAccounts, loginExpectUrl } = require('./helpers');
 const accounts = loadAccounts();
 const TODAY = '2026-11-13';
 
-test.describe('LOT-RECETTE — Entreprise attribution', () => {
-  test('recevoir, accepter, ouvrir action Assigner (dashboard)', async ({ page }) => {
+test.describe('LOT-RECETTE-2 — Entreprise modale Assigner', () => {
+  test('ouvrir modale, sélectionner chauffeur, POST assign', async ({ page }) => {
     const apiLog = [];
     page.on('response', (res) => {
       if (!res.url().includes('/api/')) return;
@@ -31,78 +29,69 @@ test.describe('LOT-RECETTE — Entreprise attribution', () => {
     const base = `/dashboard/company/${accounts.companyPublicId}`;
 
     await page.goto(`${base}/reservations?date=${TODAY}`);
-    await expect(page.locator('body')).toContainText(/Mont-Blanc|Cornavin/i, {
-      timeout: 45000,
-    });
+    await expect(page.locator('body')).toContainText(
+      /Mont-Blanc|Cornavin|CLIENT\.RI1|Réservation/i,
+      { timeout: 45000 }
+    );
 
-    const pendingCell = page.getByText(/Rue du Mont-Blanc|Mont-Blanc/i).first();
-    await pendingCell.click();
     const accept = page.getByRole('button', { name: /^Accepter$/i });
     if (await accept.count()) {
-      await accept.first().click();
-      await expect
-        .poll(
-          () =>
-            apiLog.some(
-              (e) =>
-                e.method === 'POST' &&
-                /accept/i.test(e.path) &&
-                e.status < 400
-            ),
-          { timeout: 30000 }
-        )
-        .toBeTruthy();
-    }
-
-    await page.goto(`${base}?date=${TODAY}`);
-    await expect(page.getByRole('button', { name: /Sans chauffeur/i })).toBeVisible({
-      timeout: 45000,
-    });
-    await page.getByRole('button', { name: /Sans chauffeur/i }).click();
-    await expect(page.locator('body')).toContainText(/Manuel/i);
-
-    const assignBtn = page.getByTestId('assigned-assign-action').first();
-    await expect(assignBtn).toBeVisible({ timeout: 30000 });
-    await assignBtn.click({ force: true });
-
-    const modal = page.locator('[data-testid="assign-driver-modal"]');
-    const modalVisible = await modal
-      .waitFor({ state: 'visible', timeout: 12000 })
-      .then(() => true)
-      .catch(() => false);
-
-    if (modalVisible) {
-      const confirmAssign = modal.getByTestId('assign-driver-confirm').first();
-      if (await confirmAssign.count()) {
-        await confirmAssign.click();
+      await page.getByText(/Mont-Blanc|Cornavin/i).first().click();
+      if (await accept.count()) {
+        await accept.first().click();
         await expect
           .poll(
             () =>
               apiLog.some(
-                (e) =>
-                  e.method === 'POST' &&
-                  /assign/i.test(e.path) &&
-                  e.status < 400
+                (e) => e.method === 'POST' && /accept/i.test(e.path) && e.status < 400
               ),
             { timeout: 30000 }
           )
           .toBeTruthy();
-      } else {
-        test.info().annotations.push({
-          type: 'partial',
-          description: 'Modale Assigner ouverte sans chauffeur listé (drivers non hydratés).',
-        });
       }
-    } else {
-      test.info().annotations.push({
-        type: 'partial',
-        description:
-          'Bouton Assigner visible ; modale non montée sous Playwright (Suspense/lazy). stopPropagation ajouté sur ReservationActions.',
-      });
     }
 
-    await page.goto(`${base}/settings`);
-    const body = (await page.locator('body').innerText()).toLowerCase();
-    expect(body).not.toMatch(/fully.?auto.*activé|mode automatique.*activé/);
+    await page.goto(`${base}?date=${TODAY}`);
+    await expect
+      .poll(
+        () =>
+          apiLog.some(
+            (e) => e.method === 'GET' && /drivers/i.test(e.path) && e.status < 400
+          ),
+        { timeout: 45000 }
+      )
+      .toBeTruthy();
+
+    await page.getByRole('button', { name: /Sans chauffeur/i }).click();
+    await expect(page.locator('body')).toContainText(/Manuel/i);
+
+    const assignBtn = page
+      .getByRole('button', { name: /Assigner un chauffeur/i })
+      .first();
+    await expect(assignBtn).toBeVisible({ timeout: 30000 });
+    await assignBtn.click();
+
+    const dialog = page.getByRole('dialog', { name: /Assigner un chauffeur/i });
+    await expect(dialog).toBeVisible({ timeout: 15000 });
+    await expect(dialog.getByText(/Aucun chauffeur disponible/i)).toHaveCount(0);
+    await expect(dialog.getByText('Recette driver.ri1')).toBeVisible();
+
+    // Bouton « Assigner » de la ligne chauffeur (pas le titre de la modale)
+    await dialog.getByRole('button', { name: /^Assigner$/i }).click();
+
+    await expect
+      .poll(
+        () =>
+          apiLog.some(
+            (e) =>
+              e.method === 'POST' &&
+              /assign/i.test(e.path) &&
+              e.status < 400
+          ),
+        { timeout: 45000 }
+      )
+      .toBeTruthy();
+
+    await expect(dialog).toBeHidden({ timeout: 15000 });
   });
 });
