@@ -85,7 +85,11 @@ const useCompanyData = ({ day } = {}) => {
     queryKey: lirieKeys.companyDrivers(),
     queryFn: async () => {
       const data = await fetchCompanyDriversCanonical();
-      return Array.isArray(data) ? data : data?.driver ?? [];
+      // Canonical / live renvoient un tableau ; fallback clés historiques.
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.drivers)) return data.drivers;
+      if (Array.isArray(data?.driver)) return data.driver;
+      return [];
     },
     enabled: Boolean(company?.id),
     ...companyDriversQueryOptions,
