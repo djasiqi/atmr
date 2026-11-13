@@ -912,6 +912,13 @@ class TestingConfig(Config):
     RATELIMIT_ENABLED = False
     PDF_BASE_URL = "http://testserver"
     UPLOADS_PUBLIC_BASE = "/uploads"
+    # Cookies JWT utilisables sur HTTP localhost (recette / Playwright / proxy CRA)
+    SESSION_COOKIE_SECURE = False
+    REMEMBER_COOKIE_SECURE = False
+    COOKIE_SECURE = False
+    JWT_COOKIE_SECURE = False
+    COOKIE_SAME_SITE = "Lax"
+    JWT_COOKIE_SAMESITE = "Lax"
 
     @staticmethod
     def init_app(app):  # pyright: ignore[reportImplicitOverride]

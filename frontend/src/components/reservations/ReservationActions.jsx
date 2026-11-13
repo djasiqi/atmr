@@ -97,13 +97,24 @@ const ReservationActions = ({
     return null;
   }
 
+  const stopAnd =
+    (fn) =>
+    (event) => {
+      // Empêche le clic ligne (ouverture panneau) d'avaler l'action secondaire.
+      event?.stopPropagation?.();
+      event?.preventDefault?.();
+      fn?.();
+    };
+
   return (
     <div className={`${styles.actionsContainer} ${className}`}>
       {/* Planifier l'heure */}
       {showSchedule && (
         <button
-          onClick={() => onSchedule?.(reservation)}
+          type="button"
+          onClick={stopAnd(() => onSchedule?.(reservation))}
           title={isReturn ? "Planifier l'heure de retour" : "Planifier l'heure"}
+          aria-label={isReturn ? "Planifier l'heure de retour" : "Planifier l'heure"}
           className={styles.actionButton}
         >
           <FiClock />
@@ -113,8 +124,10 @@ const ReservationActions = ({
       {/* Urgent */}
       {showUrgent && (
         <button
-          onClick={() => onDispatchNow?.(reservation)}
+          type="button"
+          onClick={stopAnd(() => onDispatchNow?.(reservation))}
           title="Urgent (+15 min)"
+          aria-label="Urgent (+15 min)"
           className={`${styles.actionButton} ${styles.urgentButton}`}
         >
           <FiZap />
@@ -124,9 +137,11 @@ const ReservationActions = ({
       {/* Assigner un chauffeur */}
       {showAssign && (
         <button
-          data-tour-id="assigned-assign-action"
-          onClick={() => onAssign?.(reservation)}
+          type="button"
+          data-testid="assigned-assign-action"
+          onClick={stopAnd(() => onAssign?.(reservation))}
           title="Assigner un chauffeur"
+          aria-label="Assigner un chauffeur"
           className={styles.actionButton}
         >
           <FiUserPlus />
@@ -136,8 +151,10 @@ const ReservationActions = ({
       {/* Transférer à un partenaire */}
       {showTransfer && (
         <button
-          onClick={() => onTransfer?.(reservation)}
+          type="button"
+          onClick={stopAnd(() => onTransfer?.(reservation))}
           title="Transférer à un partenaire"
+          aria-label="Transférer à un partenaire"
           className={styles.actionButton}
         >
           <FiShare2 />
