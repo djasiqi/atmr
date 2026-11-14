@@ -146,7 +146,7 @@ class TestSendWithOffers:
         auth_headers,
         sample_request,
     ):
-        """Sans transporteur configuré, send refuse (pas de fan-out global)."""
+        """Sans préférences : send refuse (réseau/zone ou transporteur) — pas de fan-out."""
         assert not InstitutionTransportPreference.has_preferences(sample_institution.id)
 
         response = client.post(
@@ -155,7 +155,10 @@ class TestSendWithOffers:
         )
 
         assert response.status_code == 422, response.get_json()
-        assert "transporteur" in (response.get_json().get("error") or "").lower()
+        err = (response.get_json().get("error") or "").lower()
+        assert any(
+            token in err for token in ("transporteur", "réseau", "zone")
+        ), response.get_json()
         db.session.refresh(sample_request)
         assert sample_request.status == RequestStatus.DRAFT.value
         assert sample_request.sent_at is None
