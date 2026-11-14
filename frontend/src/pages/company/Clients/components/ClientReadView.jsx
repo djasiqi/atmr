@@ -16,6 +16,7 @@ import {
 } from 'react-icons/fi';
 import ClientStaysSection from './ClientStaysSection';
 import ClientBillingPartiesSection from './ClientBillingPartiesSection';
+import ClientConventionPanel from './ClientConventionPanel';
 import { fetchClientReservations } from '../../../../services/companyService';
 import { renderBookingDateTime } from '../../../../utils/formatDate';
 import { pathFromCompanyReturnTo } from '../../../../utils/safeReturnPath';
@@ -380,6 +381,8 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
         {!client.is_institution && (
           <ClientBillingPartiesSection clientId={client.id} readOnly={true} />
         )}
+
+        {!client.is_institution && <ClientConventionPanel clientId={client.id} />}
 
         {/* Sejours d'hospitalisation (uniquement pour clients) */}
         {!client.is_institution && (

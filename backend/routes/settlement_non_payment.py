@@ -58,14 +58,26 @@ def _failure(exc: store.SettlementStoreRefusal):
 
 
 def _mandate_kind_for(booking: Booking) -> tuple[str, bool]:
-    """Retourne (kind, legally_effective). Démo → legally_effective False."""
+    """Retourne (kind, legally_effective).
+
+    Priorité à la convention réelle (gate différé fermée sans activation).
+    La démo reste ``legally_effective=False`` (contrainte DB).
+    """
     from datetime import date
 
+    from application.settlement import convention_real as convention_real_service
     from models.convention_demo import PatientCompanyConventionDemo
 
     client_id = getattr(booking, "client_id", None)
     if client_id is None:
         return "absent", False
+
+    real_gate = convention_real_service.gate_for_client(
+        int(booking.company_id), int(client_id)
+    )
+    if real_gate.get("convention_id") is not None:
+        return str(real_gate["mandate_kind"]), bool(real_gate["legally_effective"])
+
     row = (
         db.session.query(PatientCompanyConventionDemo)
         .filter_by(
