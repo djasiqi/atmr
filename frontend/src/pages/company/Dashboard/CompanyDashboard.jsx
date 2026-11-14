@@ -23,6 +23,7 @@ import DispatchModeStatusBar from './components/DispatchModeStatusBar';
 import InstitutionOffersTable from './components/InstitutionOffersTable';
 import ReservationFilterBar, { TIME_RANGES } from './components/ReservationFilterBar';
 import QuickAssignPanel from './components/QuickAssignPanel';
+import ReservationModals from '../../../components/reservations/ReservationModals';
 import { portalCarrierAcceptOfferedAmount } from '../../../utils/portalDoubleValidationUi';
 import {
   acceptReservation,
@@ -104,7 +105,6 @@ const ManualBookingForm = lazy(() => import('./components/ManualBookingForm'));
 const EditDriverForm = lazy(() => import('../components/EditDriverForm'));
 const ChatWidget = lazy(() => import('../../../components/widgets/ChatWidget'));
 const DemoInteractiveGuide = lazy(() => import('../../../components/demo/DemoInteractiveGuide'));
-const ReservationModals = lazy(() => import('../../../components/reservations/ReservationModals'));
 const TransferBookingModal = lazy(() => import('../../../components/reservations/TransferBookingModal'));
 
 function makeToday() {
@@ -971,8 +971,12 @@ const CompanyDashboard = () => {
   };
 
   const openAssignModal = (res) => {
-    const resObj = typeof res === 'object' ? res : reservationsMap.get(res);
-    if (!resObj) return;
+    const resObj =
+      res && typeof res === 'object'
+        ? res
+        : reservationsMap.get(res) ||
+          (reservations || []).find((r) => Number(r.id) === Number(res));
+    if (!resObj?.id) return;
     setAssignModalReservation(resObj);
     setAssignModalOpen(true);
   };
@@ -1903,34 +1907,32 @@ const CompanyDashboard = () => {
         </Suspense>
       )}
 
-      {(scheduleModalOpen || assignModalOpen || deleteModalOpen) && (
-        <Suspense fallback={null}>
-          <ReservationModals
-            scheduleModalOpen={scheduleModalOpen}
-            scheduleModalReservation={scheduleModalReservation}
-            onScheduleConfirm={handleConfirmReturnTime}
-            onScheduleClose={() => {
-              setScheduleModalOpen(false);
-              setScheduleModalReservation(null);
-            }}
-            assignModalOpen={assignModalOpen}
-            assignModalReservation={assignModalReservation}
-            assignModalDrivers={(driver || []).filter((d) => d.is_active)}
-            onAssignConfirm={handleAssignDriver}
-            onAssignClose={() => {
-              setAssignModalOpen(false);
-              setAssignModalReservation(null);
-            }}
-            deleteModalOpen={deleteModalOpen}
-            deleteModalReservation={deleteModalReservation}
-            onDeleteConfirm={handleConfirmDelete}
-            onDeleteClose={() => {
-              setDeleteModalOpen(false);
-              setDeleteModalReservation(null);
-            }}
-          />
-        </Suspense>
-      )}
+      <ReservationModals
+        scheduleModalOpen={scheduleModalOpen}
+        scheduleModalReservation={scheduleModalReservation}
+        onScheduleConfirm={handleConfirmReturnTime}
+        onScheduleClose={() => {
+          setScheduleModalOpen(false);
+          setScheduleModalReservation(null);
+        }}
+        assignModalOpen={assignModalOpen}
+        assignModalReservation={assignModalReservation}
+        assignModalDrivers={(driver || []).filter(
+          (d) => d?.is_active !== false && d?.active !== false
+        )}
+        onAssignConfirm={handleAssignDriver}
+        onAssignClose={() => {
+          setAssignModalOpen(false);
+          setAssignModalReservation(null);
+        }}
+        deleteModalOpen={deleteModalOpen}
+        deleteModalReservation={deleteModalReservation}
+        onDeleteConfirm={handleConfirmDelete}
+        onDeleteClose={() => {
+          setDeleteModalOpen(false);
+          setDeleteModalReservation(null);
+        }}
+      />
 
       {transferModalOpen && (
         <Suspense fallback={null}>

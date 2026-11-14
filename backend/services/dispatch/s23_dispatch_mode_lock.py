@@ -8,14 +8,12 @@ from __future__ import annotations
 import os
 from typing import Final
 
-SEMI_AUTO_DISPATCH_ENABLED: Final[bool] = (
-    os.getenv("SEMI_AUTO_DISPATCH_ENABLED", "0").strip().lower()
-    in {"1", "true", "yes", "on"}
-)
-FULLY_AUTO_DISPATCH_ENABLED: Final[bool] = (
-    os.getenv("FULLY_AUTO_DISPATCH_ENABLED", "0").strip().lower()
-    in {"1", "true", "yes", "on"}
-)
+SEMI_AUTO_DISPATCH_ENABLED: Final[bool] = os.getenv(
+    "SEMI_AUTO_DISPATCH_ENABLED", "0"
+).strip().lower() in {"1", "true", "yes", "on"}
+FULLY_AUTO_DISPATCH_ENABLED: Final[bool] = os.getenv(
+    "FULLY_AUTO_DISPATCH_ENABLED", "0"
+).strip().lower() in {"1", "true", "yes", "on"}
 
 
 class DispatchModeLockedError(ValueError):

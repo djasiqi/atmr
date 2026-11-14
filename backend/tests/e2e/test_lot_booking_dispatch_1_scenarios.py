@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from marshmallow import ValidationError
 
 from application.companies.accept_reservation import AcceptReservationUseCase
 from application.companies.assign_driver_to_reservation import (
@@ -94,9 +95,7 @@ class TestLotBookingDispatch1Scenarios:
         company = create_test_company(db)
         client = create_test_client(db, company=company)
         driver = create_test_driver(db, company=company)
-        booking = create_test_booking(
-            db, client=client, status=BookingStatus.PENDING
-        )
+        booking = create_test_booking(db, client=client, status=BookingStatus.PENDING)
         accept = _accept(booking, company.id)
         assert accept.ok is True
         db.session.commit()
@@ -111,9 +110,7 @@ class TestLotBookingDispatch1Scenarios:
         company = create_test_company(db)
         client = create_test_client(db, company=company)
         driver = create_test_driver(db, company=company)
-        booking = create_test_booking(
-            db, client=client, status=BookingStatus.PENDING
-        )
+        booking = create_test_booking(db, client=client, status=BookingStatus.PENDING)
         assert _accept(booking, company.id).ok
         assert _assign(booking, driver, company.id)[0].ok
         db.session.commit()
@@ -165,9 +162,7 @@ class TestLotBookingDispatch1Scenarios:
         """F — Annulation métier (statut CANCELLED)."""
         company = create_test_company(db)
         client = create_test_client(db, company=company)
-        booking = create_test_booking(
-            db, client=client, status=BookingStatus.PENDING
-        )
+        booking = create_test_booking(db, client=client, status=BookingStatus.PENDING)
         booking.status = BookingStatus.CANCELED
         db.session.commit()
         db.session.refresh(booking)
@@ -177,9 +172,7 @@ class TestLotBookingDispatch1Scenarios:
         """G — Reject reservation + verrou semi_auto/fully_auto."""
         company = create_test_company(db)
         client = create_test_client(db, company=company)
-        booking = create_test_booking(
-            db, client=client, status=BookingStatus.PENDING
-        )
+        booking = create_test_booking(db, client=client, status=BookingStatus.PENDING)
         reject_uc = RejectReservationUseCase()
         rejected = reject_uc.execute(booking=booking, company_id=company.id)
         assert rejected.ok is True
@@ -204,7 +197,7 @@ class TestLotBookingDispatch1Scenarios:
         """H — Institution : brancard/oxygène refusés (schema) ; fauteuil OK."""
         ok = MobilitySchema().load({"wheelchair": True, "needs_assistance": True})
         assert ok["wheelchair"] is True
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             MobilitySchema().load({"stretcher": True})
         assert reject_if_specialized_mobility_blocked({"oxygen": True})
 
@@ -214,9 +207,7 @@ class TestLotBookingDispatch1Scenarios:
         company_b = create_test_company(db)
         client_a = create_test_client(db, company=company_a)
         driver_b = create_test_driver(db, company=company_b)
-        booking = create_test_booking(
-            db, client=client_a, status=BookingStatus.PENDING
-        )
+        booking = create_test_booking(db, client=client_a, status=BookingStatus.PENDING)
         assert booking.company_id == company_a.id
         assert driver_b.company_id == company_b.id
         assert booking.company_id != driver_b.company_id
@@ -231,14 +222,13 @@ class TestLotBookingDispatch1Scenarios:
         company = create_test_company(db)
         client = create_test_client(db, company=company)
         driver = create_test_driver(db, company=company)
-        booking = create_test_booking(
-            db, client=client, status=BookingStatus.PENDING
-        )
+        booking = create_test_booking(db, client=client, status=BookingStatus.PENDING)
         assert _accept(booking, company.id).ok
         writer = _AssignmentWriter()
         r1, _ = _assign(booking, driver, company.id, writer)
         r2, _ = _assign(booking, driver, company.id, writer)
-        assert r1.ok and r2.ok
+        assert r1.ok is True
+        assert r2.ok is True
         assert r1.changed is True
         assert r2.changed is False
         assert booking.driver_id == driver.id

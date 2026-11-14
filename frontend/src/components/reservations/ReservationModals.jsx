@@ -283,7 +283,7 @@ const AssignDriverModal = ({ isOpen, onClose, reservation, drivers = [], onAssig
   };
 
   return (
-    <Modal onClose={onClose} size="compact">
+    <Modal onClose={onClose} size="compact" ariaLabel="Assigner un chauffeur">
       <div className={styles.modalWrapper} data-tour-id="assign-driver-modal">
         <h3>Assigner un chauffeur</h3>
 
