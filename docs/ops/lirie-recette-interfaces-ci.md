@@ -18,8 +18,8 @@ Publication GitHub de la recette interfaces et validation CI.
 | État | **Draft** — OPEN |
 | Head | `candidate/lirie-recette-interfaces-20261113` |
 | Base | `candidate/lirie-booking-dispatch-20261112` (PR **#106**) |
-| SHA final | `29da1866` (inclut ce rapport) |
-| SHA CI Backend/Frontend certifié | `0cd447fd` (diff docs-only ensuite) |
+| SHA CI Backend/Frontend certifié | `0cd447fd` |
+| Tip docs (après rapport) | HEAD de `candidate/lirie-recette-interfaces-20261113` (docs-only après `0cd447fd`) |
 | Merge / Deploy | **NON** |
 
 **Mention PR :** DRAFT — FULL UI / DEVICE NOT VERIFIED — DO NOT MERGE OR DEPLOY
