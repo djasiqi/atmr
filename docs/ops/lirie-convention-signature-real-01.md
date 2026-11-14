@@ -125,7 +125,7 @@ Scénarios couverts côté API/domaine/DB jetable : création, version exacte, s
 
 | SHA | Message |
 |-----|---------|
-| *(à figer après commit)* | feat(convention): parcours réel signature et archivage sans différé juridique |
+| `e5a2ac17` | feat(convention): parcours réel signature et archivage sans différé juridique |
 
 Aucun push.
 
