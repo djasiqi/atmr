@@ -43,6 +43,10 @@ from .settlement_simulation import (
     SettlementSimulationEvent,
 )
 from .convention_demo import PatientCompanyConventionDemo
+from .patient_company_convention import (
+    PatientCompanyConvention,
+    PatientCompanyConventionEvent,
+)
 from .settlement_production import (
     CashCollection,
     CashCollectionEvent,
