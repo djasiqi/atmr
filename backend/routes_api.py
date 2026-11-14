@@ -230,6 +230,7 @@ def init_namespaces(app):
     _ = _company_settlement_simulation
     _ = _company_settlement_production
     _ = _company_transport_capabilities
+    # settlement_non_payment enregistré côté driver (importe aussi companies_ns)
     from routes.portal_receivables import portal_receivables_ns
     from routes.client_portal_receivables import client_portal_receivables_ns
     from routes.contact import contact_ns
@@ -259,11 +260,13 @@ def init_namespaces(app):
     import routes.driver_settlement_read as _driver_settlement_read
     import routes.driver_settlement_simulation as _driver_settlement_simulation
     import routes.driver_settlement_production as _driver_settlement_production
+    import routes.settlement_non_payment as _settlement_non_payment
 
     _ = _driver_invitations
     _ = _driver_settlement_read
     _ = _driver_settlement_simulation
     _ = _driver_settlement_production
+    _ = _settlement_non_payment
     from routes.driver_tracking_sessions import tracking_sessions_ns
     from routes.email import email_ns  # Configuration emails transactionnels (Brevo)
     from routes.geocode import geocode_ns

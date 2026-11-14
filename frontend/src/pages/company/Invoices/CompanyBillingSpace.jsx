@@ -2,12 +2,14 @@ import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import InvoicesRegistry from './registry/InvoicesRegistry';
 import CashRegisterFollowUp from '../Settings/tabs/CashRegisterFollowUp';
+import SettlementIncidentsFollowUp from '../Settings/tabs/SettlementIncidentsFollowUp';
 import styles from './CompanyBillingSpace.module.css';
 
 const VIEWS = [
   { id: 'factures', label: 'Factures' },
   { id: 'reglements', label: 'Règlements' },
   { id: 'caisse', label: 'Caisse chauffeurs' },
+  { id: 'signalements', label: 'Signalements règlement' },
 ];
 
 const KNOWN = new Set(VIEWS.map((view) => view.id));
@@ -56,6 +58,8 @@ export default function CompanyBillingSpace() {
       {view === 'reglements' ? <CashRegisterFollowUp focus="reglements" /> : null}
 
       {view === 'caisse' ? <CashRegisterFollowUp /> : null}
+
+      {view === 'signalements' ? <SettlementIncidentsFollowUp /> : null}
     </div>
   );
 }

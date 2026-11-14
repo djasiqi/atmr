@@ -52,6 +52,11 @@ from .settlement_production import (
     PatientBillingDossier,
     PatientBillingEvent,
 )
+from .settlement_non_payment_incident import (
+    ExternalCardSettlement,
+    SettlementNonPaymentEvent,
+    SettlementNonPaymentIncident,
+)
 from .client import Client
 from .client_stay import ClientStay
 from .client_booking_contract_event import ClientBookingContractEvent

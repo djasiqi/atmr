@@ -18,6 +18,9 @@ jest.mock('./registry/InvoicesRegistry', () => () => (
 jest.mock('../Settings/tabs/CashRegisterFollowUp', () => ({ focus }) => (
   <div>{focus === 'reglements' ? 'Suivi des règlements' : 'Registre de caisse'}</div>
 ));
+jest.mock('../Settings/tabs/SettlementIncidentsFollowUp', () => () => (
+  <div>File des signalements de règlement</div>
+));
 
 function renderSpace(entry = '/dashboard/company/abc/invoices/clients') {
   return render(
@@ -104,14 +107,14 @@ describe('espace Facturation', () => {
     expect(route).not.toMatch(/def delete|session\.delete|DROP TABLE/i);
     renderSpace();
     expect(screen.queryByText(/Suivi fictif/)).toBeNull();
-    expect(screen.getByRole('navigation', { name: 'Facturation' }).querySelectorAll('button')).toHaveLength(3);
+    expect(screen.getByRole('navigation', { name: 'Facturation' }).querySelectorAll('button')).toHaveLength(4);
   });
 
-  it('empile les trois onglets sur un écran étroit', () => {
+  it('empile les onglets sur un écran étroit', () => {
     const css = fs.readFileSync(path.join(__dirname, 'CompanyBillingSpace.module.css'), 'utf8');
     expect(css).toMatch(/@media \(max-width: 640px\)/);
     expect(css).toMatch(/grid-template-columns:\s*1fr/);
     renderSpace();
-    expect(screen.getByRole('navigation', { name: 'Facturation' }).querySelectorAll('button')).toHaveLength(3);
+    expect(screen.getByRole('navigation', { name: 'Facturation' }).querySelectorAll('button')).toHaveLength(4);
   });
 });
