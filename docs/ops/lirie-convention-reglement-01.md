@@ -111,7 +111,11 @@ Isolation : refus si `driver_company_id ≠ company_id`. Pas de prod, pas de fla
 
 ## H. Commits locaux
 
-Voir `git log` sur la branche candidate (après commit de ce lot).
+| SHA | Message |
+|-----|---------|
+| `55cb5922` | feat(settlement): clôture convention, règlement ou signalement admin |
+
+Aucun push.
 
 ---
 
