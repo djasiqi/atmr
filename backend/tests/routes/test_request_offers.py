@@ -156,9 +156,9 @@ class TestSendWithOffers:
 
         assert response.status_code == 422, response.get_json()
         err = (response.get_json().get("error") or "").lower()
-        assert any(
-            token in err for token in ("transporteur", "réseau", "zone")
-        ), response.get_json()
+        assert any(token in err for token in ("transporteur", "réseau", "zone")), (
+            response.get_json()
+        )
         db.session.refresh(sample_request)
         assert sample_request.status == RequestStatus.DRAFT.value
         assert sample_request.sent_at is None
