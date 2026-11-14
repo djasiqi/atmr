@@ -93,7 +93,9 @@ Isolation : refus inter-entreprises. Aucun Saferpay/Worldline. Aucune migration 
 
 ## H. Commits locaux
 
-Voir `git log` après commit de ce lot.
+| `4c754c6c` | feat(settlement): persister signalements, carte terminal externe et file admin |
+
+Aucun push.
 
 ---
 
