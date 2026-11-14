@@ -101,7 +101,9 @@ class PatientCompanyConvention(db.Model):
     debtor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     debtor_label: Mapped[str] = mapped_column(String(160), nullable=False)
     invoice_recipient_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    invoice_recipient_label: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    invoice_recipient_label: Mapped[str | None] = mapped_column(
+        String(160), nullable=True
+    )
     billing_conditions: Mapped[str] = mapped_column(Text, nullable=False)
     tariff_version: Mapped[str] = mapped_column(String(64), nullable=False)
     service_scope: Mapped[str] = mapped_column(Text, nullable=False)
@@ -128,7 +130,9 @@ class PatientCompanyConvention(db.Model):
     signature_modality: Mapped[str] = mapped_column(
         String(32), nullable=False, default="none", server_default="none"
     )
-    signed_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    signed_at: Mapped[object | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     document_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     archive_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
     paper_scan_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -172,7 +176,9 @@ class PatientCompanyConventionEvent(db.Model):
     actor_role: Mapped[str] = mapped_column(String(32), nullable=False)
     actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     action: Mapped[str] = mapped_column(String(64), nullable=False)
-    detail: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    detail: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
     created_at: Mapped[object] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

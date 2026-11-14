@@ -81,7 +81,10 @@ class CompanyClientConventionDetail(Resource):
         try:
             body = service.get_convention(int(company.id), int(convention_id))
             if int(body["client_id"]) != int(client_id):
-                return {"error": "Convention introuvable.", "error_code": "convention_absente"}, 404
+                return {
+                    "error": "Convention introuvable.",
+                    "error_code": "convention_absente",
+                }, 404
             return body, 200
         except service.ConventionRealRefusal as exc:
             return _refuse(exc)
@@ -115,9 +118,7 @@ class CompanyConventionSubmit(Resource):
             return _refuse(exc)
 
 
-@companies_ns.route(
-    "/me/clients/<int:client_id>/conventions/<int:convention_id>/paper"
-)
+@companies_ns.route("/me/clients/<int:client_id>/conventions/<int:convention_id>/paper")
 class CompanyConventionPaper(Resource):
     @jwt_required()
     @role_required(UserRole.company)
@@ -236,9 +237,15 @@ class DriverBookingConvention(Resource):
                 "authorizes_deferred_billing": False,
                 "mandate_kind": "absent",
             }, 200
-        listing = service.list_for_client(int(driver.company_id), int(booking.client_id))
+        listing = service.list_for_client(
+            int(driver.company_id), int(booking.client_id)
+        )
         gate = service.gate_for_client(int(driver.company_id), int(booking.client_id))
-        return {"active": listing.get("active"), "gate": gate, "versions": listing["conventions"]}, 200
+        return {
+            "active": listing.get("active"),
+            "gate": gate,
+            "versions": listing["conventions"],
+        }, 200
 
 
 @driver_ns.route("/me/bookings/<int:booking_id>/convention/sign")
@@ -253,7 +260,10 @@ class DriverBookingConventionSign(Resource):
         if booking is None or int(booking.company_id) != int(driver.company_id):
             return {"error": "Mission indisponible"}, 404
         if booking.client_id is None:
-            return {"error": "Client non rattaché", "error_code": "patient_non_rattache"}, 400
+            return {
+                "error": "Client non rattaché",
+                "error_code": "patient_non_rattache",
+            }, 400
         payload = request.get_json(silent=True) or {}
         convention_id = payload.get("convention_id")
         if convention_id is None:
@@ -261,7 +271,10 @@ class DriverBookingConventionSign(Resource):
                 int(driver.company_id), int(booking.client_id)
             ).get("active")
             if not active:
-                return {"error": "Aucune convention active", "error_code": "convention_absente"}, 404
+                return {
+                    "error": "Aucune convention active",
+                    "error_code": "convention_absente",
+                }, 404
             convention_id = active["id"]
         try:
             return (

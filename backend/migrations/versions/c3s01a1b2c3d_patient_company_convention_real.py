@@ -98,9 +98,7 @@ def upgrade():
         sa.UniqueConstraint(
             "client_id", "company_id", "version_number", name="uq_pcc_version"
         ),
-        sa.UniqueConstraint(
-            "company_id", "idempotency_key", name="uq_pcc_company_key"
-        ),
+        sa.UniqueConstraint("company_id", "idempotency_key", name="uq_pcc_company_key"),
         sa.CheckConstraint(
             "status IN ("
             "'draft','awaiting_signature','signed_pending_validation',"
@@ -108,9 +106,7 @@ def upgrade():
             name="ck_pcc_status",
         ),
         sa.CheckConstraint("version_number > 0", name="ck_pcc_version"),
-        sa.CheckConstraint(
-            "char_length(idempotency_key) > 0", name="ck_pcc_key"
-        ),
+        sa.CheckConstraint("char_length(idempotency_key) > 0", name="ck_pcc_key"),
         sa.CheckConstraint(
             "signature_modality IN ('none','on_screen_trace','paper_scan')",
             name="ck_pcc_modality",
@@ -125,9 +121,7 @@ def upgrade():
             name="ck_pcc_consent_signed_only",
         ),
     )
-    op.create_index(
-        "ix_pcc_company_id", "patient_company_convention", ["company_id"]
-    )
+    op.create_index("ix_pcc_company_id", "patient_company_convention", ["company_id"])
     op.create_index("ix_pcc_client_id", "patient_company_convention", ["client_id"])
     op.execute(
         "CREATE UNIQUE INDEX uq_pcc_active ON patient_company_convention "
@@ -142,9 +136,7 @@ def upgrade():
         sa.Column("actor_role", sa.String(length=32), nullable=False),
         sa.Column("actor_id", sa.Integer(), nullable=True),
         sa.Column("action", sa.String(length=64), nullable=False),
-        sa.Column(
-            "detail", sa.Text(), server_default=sa.text("''"), nullable=False
-        ),
+        sa.Column("detail", sa.Text(), server_default=sa.text("''"), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -160,9 +152,7 @@ def upgrade():
         sa.UniqueConstraint(
             "convention_id", "idempotency_key", name="uq_pcc_event_key"
         ),
-        sa.CheckConstraint(
-            "char_length(idempotency_key) > 0", name="ck_pcc_event_key"
-        ),
+        sa.CheckConstraint("char_length(idempotency_key) > 0", name="ck_pcc_event_key"),
     )
     op.create_index(
         "ix_pcc_event_convention",

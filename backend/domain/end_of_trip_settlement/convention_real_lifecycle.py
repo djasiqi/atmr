@@ -74,15 +74,11 @@ def signature_alone_is_not_applicable(
     archive_reference: str | None,
 ) -> bool:
     """True si les seules preuves de signature ne suffisent pas à l'applicabilité."""
-    if modality == "on_screen_trace":
-        return True
-    if modality == "paper_scan":
+    if modality in {"on_screen_trace", "paper_scan"}:
         return True
     if not consent_acknowledged:
         return True
-    if not document_sha256 or not archive_reference:
-        return True
-    return False
+    return bool(not document_sha256 or not archive_reference)
 
 
 def deferred_billing_gate(
@@ -158,13 +154,18 @@ def frozen_document_must_not_change(
     status: str,
 ) -> None:
     """Interdit de réécrire silencieusement un document déjà signé/archivé."""
-    if status in {
-        "signed_pending_validation",
-        "applicable",
-        "expired",
-        "revoked",
-        "replaced",
-    } and previous_sha256 and previous_sha256 != candidate_sha256:
+    if (
+        status
+        in {
+            "signed_pending_validation",
+            "applicable",
+            "expired",
+            "revoked",
+            "replaced",
+        }
+        and previous_sha256
+        and previous_sha256 != candidate_sha256
+    ):
         raise ConventionLifecycleRefusal(
             "document_fige",
             "Un document signé ou archivé ne peut pas être modifié sans nouvelle version.",

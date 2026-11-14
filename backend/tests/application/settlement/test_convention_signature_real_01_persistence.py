@@ -100,7 +100,9 @@ CREATE TABLE IF NOT EXISTS patient_company_convention_event (
 def engine():
     eng = create_engine(os.environ["CSR01_DATABASE_URL"])
     with eng.begin() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS patient_company_convention_event CASCADE"))
+        conn.execute(
+            text("DROP TABLE IF EXISTS patient_company_convention_event CASCADE")
+        )
         conn.execute(text("DROP TABLE IF EXISTS patient_company_convention CASCADE"))
         for statement in DDL.split(";"):
             stmt = statement.strip()
@@ -108,7 +110,9 @@ def engine():
                 conn.execute(text(stmt))
     yield eng
     with eng.begin() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS patient_company_convention_event CASCADE"))
+        conn.execute(
+            text("DROP TABLE IF EXISTS patient_company_convention_event CASCADE")
+        )
         conn.execute(text("DROP TABLE IF EXISTS patient_company_convention CASCADE"))
 
 
@@ -145,7 +149,9 @@ def test_01_creation_brouillon(engine):
     with engine.begin() as conn:
         cid = _insert_draft(conn, company_id=100, client_id=200, key="create-001")
         status = conn.execute(
-            text("SELECT status, legally_effective FROM patient_company_convention WHERE id=:id"),
+            text(
+                "SELECT status, legally_effective FROM patient_company_convention WHERE id=:id"
+            ),
             {"id": cid},
         ).one()
         assert status[0] == "draft"
@@ -219,7 +225,9 @@ def test_02_03_04_signature_et_pdf_fige(engine):
 
 def test_05_06_nouvelle_version_sans_ecrasement(engine):
     with engine.begin() as conn:
-        first = _insert_draft(conn, company_id=102, client_id=202, key="ver-001", version=1)
+        first = _insert_draft(
+            conn, company_id=102, client_id=202, key="ver-001", version=1
+        )
         conn.execute(
             text(
                 """
@@ -234,10 +242,14 @@ def test_05_06_nouvelle_version_sans_ecrasement(engine):
         )
         # marque replaced
         conn.execute(
-            text("UPDATE patient_company_convention SET status='replaced' WHERE id=:id"),
+            text(
+                "UPDATE patient_company_convention SET status='replaced' WHERE id=:id"
+            ),
             {"id": first},
         )
-        second = _insert_draft(conn, company_id=102, client_id=202, key="ver-002", version=2)
+        second = _insert_draft(
+            conn, company_id=102, client_id=202, key="ver-002", version=2
+        )
         versions = conn.execute(
             text(
                 """
@@ -249,10 +261,13 @@ def test_05_06_nouvelle_version_sans_ecrasement(engine):
             )
         ).all()
         assert len(versions) == 2
-        assert versions[0][0] == 1 and versions[0][1] == "replaced" and versions[0][2] is False
+        assert versions[0][0] == 1
+        assert versions[0][1] == "replaced"
+        assert versions[0][2] is False
         assert versions[0][3] == "conventions/102/1-v1.pdf"
-        assert versions[1][0] == 2 and versions[1][2] is True
-        assert second == versions[1]._mapping["version_number"] or True
+        assert versions[1][0] == 2
+        assert versions[1][2] is True
+        assert isinstance(second, int)
 
 
 def test_07_signature_refusee_retour_brouillon(engine):
@@ -311,7 +326,9 @@ def test_08_expiree_ou_revoquee(engine):
             {"id": cid},
         )
         status = conn.execute(
-            text("SELECT status, legally_effective FROM patient_company_convention WHERE id=:id"),
+            text(
+                "SELECT status, legally_effective FROM patient_company_convention WHERE id=:id"
+            ),
             {"id": cid},
         ).one()
         assert status[0] == "expired"
@@ -323,7 +340,6 @@ def test_09_isolation_entreprise_index_actif(engine):
         _insert_draft(conn, company_id=105, client_id=205, key="iso-a")
         with pytest.raises(IntegrityError):
             _insert_draft(conn, company_id=105, client_id=205, key="iso-b")
-            conn.execute(text("SELECT 1"))
 
 
 def test_10_legal_effective_refuse_hors_applicable(engine):

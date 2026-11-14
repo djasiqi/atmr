@@ -232,7 +232,9 @@ def _read_pdf(relative: str | None) -> bytes | None:
     return path.read_bytes()
 
 
-def _public(row: PatientCompanyConvention, *, company_name: str | None = None) -> dict[str, Any]:
+def _public(
+    row: PatientCompanyConvention, *, company_name: str | None = None
+) -> dict[str, Any]:
     name = company_name or _company_name(int(row.company_id))
     gate = deferred_billing_gate(
         status=str(row.status),
@@ -353,7 +355,9 @@ def create_draft(
     debtor_label = str(payload.get("debtor_label") or "").strip()[:160]
     if len(debtor_label) < 2:
         raise ConventionRealRefusal("debiteur_absent", "Libellé débiteur requis.")
-    recipient_label = str(payload.get("invoice_recipient_label") or "").strip()[:160] or None
+    recipient_label = (
+        str(payload.get("invoice_recipient_label") or "").strip()[:160] or None
+    )
     # Destinataire ≠ débiteur automatique
     if recipient_label and recipient_label == debtor_label:
         # autorisé s'ils sont la même personne, mais pas de promotion silencieuse
@@ -547,7 +551,9 @@ def sign_convention(
         raise ConventionRealRefusal("signataire_inconnu", "Signataire non reconnu.")
     signer_name = str(payload.get("signer_name") or "").strip()[:160]
     if len(signer_name) < 2:
-        raise ConventionRealRefusal("signataire_nom_absent", "Nom du signataire requis.")
+        raise ConventionRealRefusal(
+            "signataire_nom_absent", "Nom du signataire requis."
+        )
     presented = str(payload.get("document_sha256_presented") or "").strip()
     name = _company_name(company_id)
     current_hash = document_sha256_for(row, name)

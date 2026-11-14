@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
-from domain.end_of_trip_settlement.convention_real_lifecycle import (
-    ConventionLifecycleRefusal,
-    assert_transition,
-    deferred_billing_gate,
-    frozen_document_must_not_change,
-    signature_alone_is_not_applicable,
-)
 from domain.end_of_trip_settlement.closure_options import (
     OPTION_CASH,
     OPTION_DEFERRED,
@@ -18,7 +13,13 @@ from domain.end_of_trip_settlement.closure_options import (
     ClosureContext,
     build_closure_menu,
 )
-from decimal import Decimal
+from domain.end_of_trip_settlement.convention_real_lifecycle import (
+    ConventionLifecycleRefusal,
+    assert_transition,
+    deferred_billing_gate,
+    frozen_document_must_not_change,
+    signature_alone_is_not_applicable,
+)
 
 
 def test_transitions_coherentes():
