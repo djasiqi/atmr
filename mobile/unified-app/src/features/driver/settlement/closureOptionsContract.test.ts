@@ -1,31 +1,48 @@
 import {
   buildDriverClosureOptions,
+  externalCardProofValid,
   incidentRequiresObservation,
 } from "./closureOptionsContract";
 
-describe("options de clôture chauffeur", () => {
-  it("propose le différé seulement si convention applicable", () => {
-    const withConvention = buildDriverClosureOptions({
+describe("options de clôture chauffeur CR-02", () => {
+  it("convention démo visible sans autoriser le différé réel", () => {
+    const withDemo = buildDriverClosureOptions({
       billedToType: "patient",
       mandateKind: "applicable_demonstration",
       driverCompanyId: 1,
       companyId: 1,
       paymentReceived: false,
     });
-    expect(withConvention.find((o) => o.code === "deferred_convention")?.available).toBe(
-      true
-    );
+    const deferred = withDemo.find((o) => o.code === "deferred_convention");
+    expect(deferred?.available).toBe(true);
+    expect(deferred?.authorizesDeferredBilling).toBe(false);
 
-    const without = buildDriverClosureOptions({
+    const real = buildDriverClosureOptions({
+      billedToType: "patient",
+      mandateKind: "applicable",
+      conventionLegallyEffective: true,
+      driverCompanyId: 1,
+      companyId: 1,
+      paymentReceived: false,
+    });
+    expect(
+      real.find((o) => o.code === "deferred_convention")?.authorizesDeferredBilling
+    ).toBe(true);
+  });
+
+  it("distingue terminal externe et Tap to Pay", () => {
+    const menu = buildDriverClosureOptions({
       billedToType: "patient",
       mandateKind: "absent",
       driverCompanyId: 1,
       companyId: 1,
       paymentReceived: false,
+      tapToPayOperational: false,
     });
-    expect(without.find((o) => o.code === "deferred_convention")?.available).toBe(false);
-    expect(without.find((o) => o.code === "cash")?.available).toBe(true);
-    expect(without.find((o) => o.code === "no_payment_incident")?.available).toBe(true);
+    expect(menu.find((o) => o.code === "card_external_terminal")?.available).toBe(true);
+    expect(menu.find((o) => o.code === "card_tap_to_pay")?.available).toBe(false);
+    expect(externalCardProofValid("AUTH-123", "")).toBe(true);
+    expect(externalCardProofValid("", "")).toBe(false);
   });
 
   it("refuse l'accès inter-entreprises et les institutions", () => {
@@ -47,19 +64,6 @@ describe("options de clôture chauffeur", () => {
         paymentReceived: false,
       })
     ).toEqual([]);
-  });
-
-  it("carte non opérationnelle et observation obligatoire pour autre", () => {
-    const menu = buildDriverClosureOptions({
-      billedToType: "patient",
-      mandateKind: "absent",
-      driverCompanyId: 1,
-      companyId: 1,
-      paymentReceived: false,
-      cardProviderOperational: false,
-    });
-    expect(menu.find((o) => o.code === "card")?.available).toBe(false);
-    expect(incidentRequiresObservation("autre", "")).toBe(false);
-    expect(incidentRequiresObservation("autre", "Motif détaillé")).toBe(true);
+    expect(incidentRequiresObservation("autre", "Motif")).toBe(true);
   });
 });

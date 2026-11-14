@@ -1,12 +1,13 @@
 /**
- * Contrat d'options de clôture — aligné sur le domaine backend.
- * Aucun paiement fictif, Tap to Pay non opérationnel.
+ * Contrat d'options de clôture — aligné sur le domaine backend CR-02.
+ * Terminal externe ≠ Tap to Pay. Convention démo ≠ différé réel.
  */
 
 export type ClosureOptionCode =
   | "deferred_convention"
   | "cash"
-  | "card"
+  | "card_external_terminal"
+  | "card_tap_to_pay"
   | "no_payment_incident";
 
 export type SettlementIncidentMotif =
@@ -24,6 +25,7 @@ export type ClosureOptionView = {
   authorizesDeferredBilling: boolean;
   opensIncident: boolean;
   reason?: string;
+  channel?: string;
 };
 
 export const SETTLEMENT_INCIDENT_MOTIFS: {
@@ -46,6 +48,9 @@ type MenuInput = {
   driverCompanyId: number;
   companyId: number;
   paymentReceived: boolean;
+  conventionLegallyEffective?: boolean;
+  tapToPayOperational?: boolean;
+  /** @deprecated CR-01 alias → tapToPayOperational */
   cardProviderOperational?: boolean;
 };
 
@@ -61,20 +66,48 @@ export function buildDriverClosureOptions(input: MenuInput): ClosureOptionView[]
     return [];
   }
 
-  const conventionOk =
+  const legal = input.conventionLegallyEffective === true;
+  const realDeferred = input.mandateKind === "applicable" && legal;
+  const demoKind =
     input.mandateKind === "applicable_demonstration" ||
-    input.mandateKind === "applicable";
+    input.mandateKind === "specimen";
+  const tapOk =
+    input.tapToPayOperational === true || input.cardProviderOperational === true;
 
-  const options: ClosureOptionView[] = [
-    {
+  const options: ClosureOptionView[] = [];
+
+  if (realDeferred) {
+    options.push({
       code: "deferred_convention",
       label: "Facturation différée autorisée par convention",
-      available: conventionOk,
+      available: true,
       recordsPayment: false,
-      authorizesDeferredBilling: conventionOk,
+      authorizesDeferredBilling: true,
       opensIncident: false,
-      reason: conventionOk ? undefined : "convention_not_applicable",
-    },
+    });
+  } else if (demoKind) {
+    options.push({
+      code: "deferred_convention",
+      label: "Facturation différée (convention de démonstration)",
+      available: true,
+      recordsPayment: false,
+      authorizesDeferredBilling: false,
+      opensIncident: false,
+      reason: "demo_convention_not_legally_effective",
+    });
+  } else {
+    options.push({
+      code: "deferred_convention",
+      label: "Facturation différée",
+      available: false,
+      recordsPayment: false,
+      authorizesDeferredBilling: false,
+      opensIncident: false,
+      reason: "convention_not_applicable",
+    });
+  }
+
+  options.push(
     {
       code: "cash",
       label: "Paiement espèces",
@@ -82,18 +115,26 @@ export function buildDriverClosureOptions(input: MenuInput): ClosureOptionView[]
       recordsPayment: true,
       authorizesDeferredBilling: false,
       opensIncident: false,
+      channel: "cash",
     },
     {
-      code: "card",
-      label: "Paiement carte",
-      available: input.cardProviderOperational === true,
+      code: "card_external_terminal",
+      label: "Paiement carte (terminal bancaire externe)",
+      available: true,
+      recordsPayment: true,
+      authorizesDeferredBilling: false,
+      opensIncident: false,
+      channel: "external_terminal",
+    },
+    {
+      code: "card_tap_to_pay",
+      label: "Paiement carte (Tap to Pay LIRIE)",
+      available: tapOk,
       recordsPayment: false,
       authorizesDeferredBilling: false,
       opensIncident: false,
-      reason:
-        input.cardProviderOperational === true
-          ? undefined
-          : "card_provider_not_operational",
+      reason: tapOk ? undefined : "tap_to_pay_not_operational",
+      channel: "tap_to_pay",
     },
     {
       code: "no_payment_incident",
@@ -102,10 +143,10 @@ export function buildDriverClosureOptions(input: MenuInput): ClosureOptionView[]
       recordsPayment: false,
       authorizesDeferredBilling: false,
       opensIncident: true,
-    },
-  ];
+    }
+  );
 
-  return options.filter((option) => option.available || option.code === "card" || option.code === "deferred_convention");
+  return options;
 }
 
 export function incidentRequiresObservation(
@@ -116,4 +157,8 @@ export function incidentRequiresObservation(
     return true;
   }
   return observation.trim().length > 0;
+}
+
+export function externalCardProofValid(reference: string, receiptNote: string): boolean {
+  return reference.trim().length > 0 || receiptNote.trim().length > 0;
 }

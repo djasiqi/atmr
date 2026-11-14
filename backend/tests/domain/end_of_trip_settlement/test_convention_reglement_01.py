@@ -10,7 +10,8 @@ from application.settlement.settlement_incident_registry import (
     cash_payment_recorded,
 )
 from domain.end_of_trip_settlement.closure_options import (
-    OPTION_CARD,
+    OPTION_CARD_EXTERNAL,
+    OPTION_CARD_TAP,
     OPTION_CASH,
     OPTION_DEFERRED,
     OPTION_INCIDENT,
@@ -69,11 +70,12 @@ def _draft(**overrides) -> SettlementIncidentDraft:
 
 
 # --- A ---
-def test_a_convention_valide_facture_differee_autorisee():
+def test_a_convention_demo_visible_sans_differe_reel():
     menu = build_closure_menu(_ctx(mandate_kind="applicable_demonstration"))
     deferred = next(o for o in menu.options if o.code == OPTION_DEFERRED)
     assert deferred.available is True
-    assert deferred.authorizes_deferred_billing is True
+    assert deferred.authorizes_deferred_billing is False
+    assert deferred.reason == "demo_convention_not_legally_effective"
     assert deferred.records_payment is False
     mandate = assess_mandate(
         mandate_company_id=7,
@@ -88,7 +90,6 @@ def test_a_convention_valide_facture_differee_autorisee():
         already_paid=False,
     )
     assert mandate.kind == "applicable_demonstration"
-    # Valeur juridique toujours refusée tant que non confirmée.
     assert (
         real_invoice_blocked(
             kind=mandate.kind,
@@ -97,6 +98,15 @@ def test_a_convention_valide_facture_differee_autorisee():
         )
         == "mandat_demonstration"
     )
+
+
+def test_a2_convention_reelle_autorise_differe():
+    menu = build_closure_menu(
+        _ctx(mandate_kind="applicable", convention_legally_effective=True)
+    )
+    deferred = next(o for o in menu.options if o.code == OPTION_DEFERRED)
+    assert deferred.available is True
+    assert deferred.authorizes_deferred_billing is True
 
 
 # --- B ---
@@ -112,11 +122,14 @@ def test_b_aucune_convention_especes_enregistrees():
 
 
 # --- C ---
-def test_c_carte_non_operationnelle_reste_non_payee():
+def test_c_tap_to_pay_non_op_et_terminal_externe_disponible():
     menu = build_closure_menu(_ctx(mandate_kind="absent"))
-    card = next(o for o in menu.options if o.code == OPTION_CARD)
-    assert card.available is False
-    assert card.reason == "card_provider_not_operational"
+    tap = next(o for o in menu.options if o.code == OPTION_CARD_TAP)
+    external = next(o for o in menu.options if o.code == OPTION_CARD_EXTERNAL)
+    assert tap.available is False
+    assert tap.reason == "tap_to_pay_not_operational"
+    assert external.available is True
+    assert external.channel == "external_terminal"
     result = attempt_card_payment(provider_operational=False)
     assert result.payment_recorded is False
     assert result.status == "unpaid"
@@ -228,11 +241,15 @@ def test_h_changement_destinataire_conserve_debiteur():
 
 # --- I ---
 def test_i_convention_non_applicable_pas_de_differe_auto():
-    for kind in ("absent", "prepared", "expired", "amendment_required", "specimen"):
+    for kind in ("absent", "prepared", "expired", "amendment_required"):
         menu = build_closure_menu(_ctx(mandate_kind=kind))
         deferred = next(o for o in menu.options if o.code == OPTION_DEFERRED)
         assert deferred.available is False
         assert deferred.authorizes_deferred_billing is False
+    specimen = build_closure_menu(_ctx(mandate_kind="specimen"))
+    deferred_s = next(o for o in specimen.options if o.code == OPTION_DEFERRED)
+    assert deferred_s.available is True
+    assert deferred_s.authorizes_deferred_billing is False
 
 
 # --- J ---
