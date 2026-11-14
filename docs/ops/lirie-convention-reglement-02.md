@@ -93,9 +93,13 @@ Isolation : refus inter-entreprises. Aucun Saferpay/Worldline. Aucune migration 
 
 ## H. Commits locaux
 
+| SHA | Message |
+|-----|---------|
 | `4c754c6c` | feat(settlement): persister signalements, carte terminal externe et file admin |
+| `d3380855`… | docs(ops) : figement rapport (suite) |
 
-Aucun push.
+**Tip feature CR-02 :** `4c754c6c`  
+Aucun push / merge / deploy.
 
 ---
 
