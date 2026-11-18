@@ -97,6 +97,9 @@ from .driver import (
     DriverWeeklyTemplate,
     DriverWorkingConfig,
 )
+from .driver_invitation import DriverInvitation
+from .external_auth_transaction import ExternalAuthTransaction
+from .user_external_identity import UserExternalIdentity
 from .enums import (
     AssignmentStatus,
     BillingIntent,
@@ -271,6 +274,12 @@ from .control_plane import (
     ServiceCatalog,
 )
 from .platform_admin_permission_grant import PlatformAdminPermissionGrant
+from .portal_grant import PortalGrant
+from .organization_application import (
+    OrganizationApplication,
+    OrganizationApplicationEvent,
+    OrganizationApplicationToken,
+)
 from .platform_billing import (
     BookingBillingOriginAudit,
     CompanyPlatformBillingConfig,
@@ -419,6 +428,9 @@ __all__ = [
     "DriverVacation",
     "DriverWeeklyTemplate",
     "DriverWorkingConfig",
+    "DriverInvitation",
+    "ExternalAuthTransaction",
+    "UserExternalIdentity",
     "EtaAccuracyLog",
     "FavoritePlace",
     "GenderEnum",
@@ -434,6 +446,10 @@ __all__ = [
     "OrganizationServiceEntitlement",
     "PermissionCatalog",
     "PlatformOrganization",
+    "PortalGrant",
+    "OrganizationApplication",
+    "OrganizationApplicationEvent",
+    "OrganizationApplicationToken",
     "RoleTemplate",
     "RoleTemplatePermission",
     "ServiceCatalog",

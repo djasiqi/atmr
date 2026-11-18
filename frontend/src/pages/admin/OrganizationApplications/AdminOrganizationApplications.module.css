@@ -1,0 +1,276 @@
+.pageHeader,
+.toolbar,
+.actions,
+.rowActions,
+.checkRow,
+.searchRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.pageHeader {
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.pageHeader h1,
+.section h2,
+.card h2 {
+  margin: 0;
+  overflow-wrap: break-word;
+  letter-spacing: -0.02em;
+}
+
+.lead,
+.hint,
+.meta {
+  margin: 8px 0 0;
+  color: var(--text-secondary, #4b5563);
+  line-height: 1.5;
+  max-width: 46rem;
+}
+
+.toolbar,
+.section,
+.card {
+  margin-bottom: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.field span,
+.section h2,
+.card h2 {
+  font-size: 0.95rem;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font: inherit;
+  scroll-margin-bottom: 40vh;
+}
+
+.field textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.button,
+.ghost,
+.linkButton {
+  min-height: 2.75rem;
+  border-radius: 10px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 100ms ease-out;
+}
+
+.button:active,
+.ghost:active,
+.linkButton:active {
+  transform: scale(0.97);
+}
+
+.button:focus-visible,
+.ghost:focus-visible,
+.linkButton:focus-visible,
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible {
+  outline: 2px solid var(--brand-primary, #0f766e);
+  outline-offset: 2px;
+}
+
+.button {
+  border: 0;
+  background: var(--brand-primary, #0f766e);
+  color: #fff;
+}
+
+.ghost,
+.linkButton {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #1f2937;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.danger {
+  background: #9f1239;
+}
+
+.button:disabled,
+.ghost:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 12px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  overflow-wrap: break-word;
+}
+
+.table th:nth-child(2),
+.table td:nth-child(2) {
+  white-space: nowrap;
+}
+
+.email {
+  overflow-wrap: anywhere;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.badgeIncomplete {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badgeClosed {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.alert {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.empty,
+.loading {
+  padding: 24px 0;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.facts div {
+  min-width: 0;
+}
+
+.facts dt {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.facts dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.history {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.history li {
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+}
+
+.locked {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  background: #f8fafc;
+}
+
+@media (max-width: 800px) {
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table tr {
+    padding: 8px 0 12px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .table td {
+    border: 0;
+    padding: 4px 0;
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #6b7280;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .ghost,
+  .linkButton {
+    transition: none;
+  }
+
+  .button:active,
+  .ghost:active,
+  .linkButton:active {
+    transform: none;
+  }
+}

@@ -28,7 +28,11 @@ class AuthorizationService:
         Returns:
             User si trouvé, None sinon
         """
-        user_public_id = get_jwt_identity()
+        try:
+            user_public_id = get_jwt_identity()
+        except Exception:
+            # Hors contexte JWT (API Key, jobs) : pas d'identité utilisable.
+            return None
         if not user_public_id:
             return None
 
@@ -88,6 +92,14 @@ class AuthorizationService:
                         "[Authorization] Rôle invalide dans la configuration : %s", role
                     )
 
+        from security.portal_grant_access import require_role_grant_gate
+
+        grant_gate = require_role_grant_gate(user, normalized_roles)
+        if grant_gate == "allow":
+            return user
+        if grant_gate == "deny":
+            abort(403, description="Accès non autorisé")
+
         if user.role not in normalized_roles:
             roles_str = ", ".join([r.value for r in normalized_roles])
             msg = (
@@ -109,44 +121,35 @@ class AuthorizationService:
         Raises:
             HTTPException: 404 si l'utilisateur ou la company n'est pas trouvée
         """
-        from sqlalchemy.orm import joinedload
+        from security.portal_grant_access import authoritative_company
+
+        user = AuthorizationService.require_user()
+        decision, granted_company = authoritative_company(user)
+        if decision == "allow" and granted_company is not None:
+            return granted_company, user
+        if decision == "deny":
+            abort(403, description="Accès non autorisé")
 
         user = AuthorizationService.require_role(UserRole.company)
+        if granted_company is not None:
+            return granted_company, user
 
-        # Charger la company avec eager loading
-        user_with_company = (
-            User.query.options(joinedload(User.company))
-            .filter_by(public_id=user.public_id)
-            .first()
+        logger.warning(
+            "[Authorization] Compte company sans profil Company user=%s",
+            user.username,
         )
+        from flask import jsonify
 
-        if not user_with_company:
-            logger.error("[Authorization] User disappeared after role check")
-            abort(404, description="Utilisateur non trouvé")
-
-        company: Company | None = getattr(user_with_company, "company", None)
-
-        # CP-PR1 : plus de création automatique — profil manquant = anomalie admin
-        if company is None:
-            logger.warning(
-                "[Authorization] Compte company sans profil Company user=%s",
-                user.username,
-            )
-            from flask import jsonify
-
-            response = jsonify(
-                {
-                    "error": "company_profile_missing",
-                    "message": (
-                        "Ce compte entreprise n'est rattaché à aucune entreprise."
-                    ),
-                    "support_code": "CP-COMPANY-PROFILE-MISSING",
-                }
-            )
-            response.status_code = 409
-            abort(response)
-
-        return company, user
+        response = jsonify(
+            {
+                "error": "company_profile_missing",
+                "message": ("Ce compte entreprise n'est rattaché à aucune entreprise."),
+                "support_code": "CP-COMPANY-PROFILE-MISSING",
+            }
+        )
+        response.status_code = 409
+        abort(response)
+        return granted_company, user
 
     @staticmethod
     def require_driver() -> Tuple[Driver, User]:
@@ -160,7 +163,14 @@ class AuthorizationService:
         """
         from sqlalchemy.orm import joinedload
 
+        from security.portal_grant_access import authoritative_driver
+
         user = AuthorizationService.require_user()
+        decision, granted_driver = authoritative_driver(user)
+        if decision == "allow" and granted_driver is not None:
+            return granted_driver, user
+        if decision == "deny":
+            abort(403, description="Accès non autorisé")
 
         # Charger le driver avec eager loading
         user_with_driver = (
@@ -233,6 +243,29 @@ class AuthorizationService:
         """
         from flask_jwt_extended import get_jwt
 
+        from security.portal_grant_access import authoritative_institution
+
+        user = AuthorizationService.require_user()
+        decision, granted_institution = authoritative_institution(user)
+        if decision == "deny":
+            abort(403, description="Accès non autorisé")
+        if decision == "allow" and granted_institution is not None:
+            if getattr(user, "force_password_change", False):
+                forbidden = Forbidden()
+                response = jsonify(
+                    {
+                        "error": "password_change_required",
+                        "message": (
+                            "Vous devez modifier votre mot de passe avant de continuer."
+                        ),
+                        "redirect_to": "/force-reset-password",
+                    }
+                )
+                response.status_code = 403
+                forbidden.response = response
+                raise forbidden
+            return granted_institution, user
+
         user = AuthorizationService.require_role(UserRole.INSTITUTION)
 
         # Récupérer institution_id depuis le JWT claim
@@ -280,6 +313,19 @@ class AuthorizationService:
             Le rôle institution (institution_admin, institution_requester, etc.) ou None
         """
         from flask_jwt_extended import get_jwt
+
+        from security.portal_grant_access import (
+            grants_are_authoritative,
+            institution_role_from_grant,
+        )
+
+        try:
+            user = AuthorizationService.get_current_user()
+        except Exception:
+            # Auth API Key / hors contexte JWT : pas de rôle institution JWT.
+            return None
+        if user is not None and grants_are_authoritative(user):
+            return institution_role_from_grant(user)
 
         try:
             jwt_claims = get_jwt()
@@ -338,6 +384,14 @@ class AuthorizationService:
         if user.role == UserRole.ADMIN:
             return True, None
 
+        from security.portal_grant_access import institution_access_decision
+
+        granted = institution_access_decision(user, resource_institution_id)
+        if granted is True:
+            return True, None
+        if granted is False:
+            return False, ({"error": "Accès non autorisé à cette ressource"}, 403)
+
         # Institution doit être la propriétaire
         if user.role == UserRole.INSTITUTION:
             jwt_claims = get_jwt()
@@ -384,20 +438,22 @@ class AuthorizationService:
         if user_role_value == UserRole.admin.value:
             return True, None
 
+        from security.portal_grant_access import booking_access_decision
+
+        granted_booking = booking_access_decision(booking, user)
+        if granted_booking is not None:
+            return granted_booking
+
         # Company a accès à tous ses bookings
         if user_role_value == UserRole.company.value:
-            company = Company.query.filter_by(user_id=user.id).first()
-            has_access = company is not None and company.id == booking.company_id
-            if has_access:
+            from security.portal_scope import portal_company_allowed
+
+            if portal_company_allowed(user, "company", int(booking.company_id)):
                 return True, None
-            # IDOR attempt détecté
-            company_id_str = str(company.id) if company else "None"
-            msg = (
-                "[Authorization] ⚠️ IDOR attempt: Company %s (user %s) a tenté d'accéder "
-                "au booking %s (company_id=%s)"
-            )
             logger.warning(
-                msg, company_id_str, user.public_id, booking.id, booking.company_id
+                "[Authorization] Accès réservation refusé user_id=%s booking_id=%s",
+                user.id,
+                booking.id,
             )
             return False, error_response
 
@@ -506,18 +562,25 @@ class AuthorizationService:
         if user.role == UserRole.admin:
             return True, None
 
+        from security.portal_grant_access import company_access_decision
+
+        granted_company = company_access_decision(user, resource_company_id)
+        if granted_company is True:
+            return True, None
+        if granted_company is False:
+            return False, ({"error": "Accès non autorisé à cette ressource"}, 403)
+
         # Company doit être la propriétaire
         if user.role == UserRole.company:
-            company = Company.query.filter_by(user_id=user.id).first()
-            if company and company.id == resource_company_id:
+            from security.portal_scope import portal_company_allowed
+
+            if portal_company_allowed(user, "company", int(resource_company_id)):
                 return True, None
-            # IDOR attempt détecté
-            company_id_str = str(company.id) if company else "None"
-            msg = (
-                "[Authorization] ⚠️ IDOR attempt: Company %s (user %s) a tenté d'accéder "
-                "à une ressource de company_id=%s"
+            logger.warning(
+                "[Authorization] Accès ressource entreprise refusé user_id=%s company_id=%s",
+                user.id,
+                resource_company_id,
             )
-            logger.warning(msg, company_id_str, user.public_id, resource_company_id)
             return False, ({"error": "Accès non autorisé à cette ressource"}, 403)
 
         return False, ({"error": "Accès non autorisé"}, 403)

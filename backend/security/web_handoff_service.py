@@ -170,13 +170,9 @@ def _user_token_version(user: User) -> int:
 
 
 def _resolve_company_id(user: User) -> int | None:
-    company_id = getattr(user, "company_id", None)
-    if company_id is not None:
-        return int(company_id)
-    driver = getattr(user, "driver", None)
-    if driver is not None and getattr(driver, "company_id", None) is not None:
-        return int(driver.company_id)
-    return None
+    from security.portal_scope import authorized_company_id
+
+    return authorized_company_id(user)
 
 
 def _get_password_hash_version(user: User) -> str:
