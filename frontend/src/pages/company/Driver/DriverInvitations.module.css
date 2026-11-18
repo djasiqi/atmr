@@ -1,0 +1,159 @@
+.panel {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0.9rem;
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.note,
+.feedback,
+.empty {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  overflow-wrap: break-word;
+}
+
+.form {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.field span {
+  font-weight: 700;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--brand-neutral-gray-cyan);
+  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+  scroll-margin-bottom: 40vh;
+}
+
+.actions,
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.button,
+.secondary,
+.danger {
+  min-height: 2.75rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--radius-lg);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 100ms ease-out;
+}
+
+.button {
+  border: 0;
+  background: var(--brand-primary);
+  color: #fff;
+}
+
+.secondary,
+.danger {
+  border: 1px solid var(--brand-neutral-gray-cyan);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.danger {
+  color: #7f1d1d;
+}
+
+.button:focus-visible,
+.secondary:focus-visible,
+.danger:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--brand-primary-dark);
+  outline-offset: 2px;
+}
+
+.button:active,
+.secondary:active,
+.danger:active {
+  transform: scale(0.97);
+}
+
+.button:disabled,
+.secondary:disabled,
+.danger:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
+}
+
+.name,
+.meta {
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.meta {
+  color: var(--text-secondary);
+}
+
+.alert {
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-lg);
+  background: #fde8e8;
+  color: #7f1d1d;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .secondary,
+  .danger {
+    transition: none;
+  }
+
+  .button:active,
+  .secondary:active,
+  .danger:active {
+    transform: none;
+  }
+}

@@ -120,6 +120,38 @@ def mobile_session_required(fn: F) -> F:
     return wrapper  # type: ignore[return-value]
 
 
+def is_mobile_jwt_revoked_by_session(jwt_payload: dict[str, Any]) -> bool:
+    """Rejette un JWT mobile dont la session durable n'est plus active.
+
+    Appelé depuis le pipeline JWT, donc pour chaque portail. Un jeton sans
+    ``session_id`` (web ou ancien client) n'est pas concerné. Si le stockage
+    de session ne répond pas, le jeton est refusé de façon réessayable.
+    """
+    session_id, session_epoch = extract_mobile_session_claims(jwt_payload)
+    if not session_id:
+        return False
+
+    error_code, _retryable = validate_mobile_session(
+        session_id=session_id,
+        session_epoch=session_epoch,
+    )
+    if not error_code:
+        return False
+
+    try:
+        from flask import g
+
+        g.jwt_revocation_reason = error_code
+    except RuntimeError:
+        pass
+    logger.info(
+        "mobile_session_guard reject session=%s error=%s",
+        session_id,
+        error_code,
+    )
+    return True
+
+
 def check_mobile_session_from_claims(
     claims: dict[str, Any],
     *,

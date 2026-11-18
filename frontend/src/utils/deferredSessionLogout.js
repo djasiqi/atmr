@@ -113,7 +113,8 @@ const executeLogout = (options) => {
   import('./apiClient')
     .then(({ logoutUser }) => logoutUser(options))
     .catch(() => {
-      import('./authNavigation').then(({ requestAuthNavigate }) => {
+      import('./authNavigation').then(({ isAnonymousPublicPath, requestAuthNavigate }) => {
+        if (isAnonymousPublicPath(window.location.pathname)) return;
         requestAuthNavigate('/login', { replace: true });
       });
     });
