@@ -123,7 +123,7 @@ Justification des conditions d’environnement (non exclusions de tests) :
 
 | Niveau | Risque | Mitigation |
 | --- | --- | --- |
-| **P1** | Dérive schéma `company` : modèles `main` vs chaîne Alembic jusqu’à `9ddf4ec5763f` (5 colonnes) | Documenté ; à traiter hors V1 par migration dédiée sur `main` — **ne pas** étendre le tip V1 |
+| ~~**P1**~~ | ~~Dérive schéma `company` (5 colonnes)~~ | **Levé** par SCHEMA-CONSISTENCY-GATE : modèle réaligné sur `origin/main` / migrations V1 — voir `addendum-validation-v1-auth-pro-schema-consistency-gate.md` |
 | **P1** | CI compose force `SKIP_SOCKETIO=true` : les 3 tests socket échoueraient si rejoués ainsi | Documenter le job CI Socket.IO réel (déjà prévu AUTH-PRO) |
 | **P2** | Surface `companies.py` alignée AUTH-PRO (CreateDriver) : parcours création directe définitivement fermé | Attendu produit V1 ; vérifier UX invitation |
 | **P2** | Correctifs non encore poussés / non mergés | STOP PUSH / STOP MERGE jusqu’à autorisation humaine |
