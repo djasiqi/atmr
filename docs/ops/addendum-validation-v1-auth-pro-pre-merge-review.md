@@ -2,7 +2,8 @@
 
 **Date :** 2026-11-18  
 **Branche :** `integrate/lirie-v1-auth-pro`  
-**HEAD :** `c85a84e4`  
+**HEAD code validé :** `c85a84e4`  
+**HEAD branche (docs PRE-MERGE) :** `dd190c95`  
 **Base :** `origin/main` @ `afea1f00`  
 **Alembic tip :** `9ddf4ec5763f`  
 **Réf. cohérence schéma :** `docs/ops/addendum-validation-v1-auth-pro-schema-consistency-gate.md`

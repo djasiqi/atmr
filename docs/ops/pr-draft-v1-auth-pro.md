@@ -1,7 +1,7 @@
 # Brouillon PR — V1 AUTH-PRO → `main`
 
 **Statut :** texte local uniquement — **PR GitHub non créée**  
-**Head :** `integrate/lirie-v1-auth-pro` @ `c85a84e4`  
+**Head :** `integrate/lirie-v1-auth-pro` @ `dd190c95` (code validé `c85a84e4` + docs PRE-MERGE)  
 **Base :** `main` (`afea1f00` au moment de la revue)  
 **Alembic :** `9ddf4ec5763f` (6 migrations linéaires depuis `cc4eebfd81e6`)
 
