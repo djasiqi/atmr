@@ -19,6 +19,42 @@ class UserRole(str, PyEnum):
     institution = INSTITUTION
 
 
+class PortalKind(str, PyEnum):
+    """Portail couvert par une habilitation, distinct de ``User.role``."""
+
+    CLIENT = "client"
+    COMPANY = "company"
+    DRIVER = "driver"
+    INSTITUTION = "institution"
+
+
+class PortalGrantStatus(str, PyEnum):
+    """Cycle d'une habilitation. ``pending_activation`` ne donne aucun accès."""
+
+    PENDING_ACTIVATION = "pending_activation"
+    ACTIVE = "active"
+    REVOKED = "revoked"
+
+
+class OrganizationApplicationKind(str, PyEnum):
+    """Type de dossier de préinscription. Distinct d'un tenant opérationnel."""
+
+    COMPANY = "company"
+    INSTITUTION = "institution"
+
+
+class OrganizationApplicationStatus(str, PyEnum):
+    """Cycle d'une demande. L'approbation n'est pas ouverte dans cette phase."""
+
+    EMAIL_UNVERIFIED = "email_unverified"
+    RECEIVED = "received"
+    IN_REVIEW = "in_review"
+    NEEDS_INFO = "needs_info"
+    APPROVED = "approved"
+    REFUSED = "refused"
+    ABANDONED = "abandoned"
+
+
 class InstitutionRole(str, PyEnum):
     """Rôles spécifiques au sein d'une institution.
 
