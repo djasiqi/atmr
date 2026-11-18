@@ -26,7 +26,7 @@ from flask_socketio import SocketIO, emit, join_room
 from socketio.exceptions import ConnectionRefusedError as SocketConnectionRefusedError
 
 from ext import db, redis_client
-from models import Company, Driver, Message, SenderRole, User, UserRole
+from models import Driver, Message, SenderRole, User, UserRole
 from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.company_driver_location_freshness import (
     last_seen_seconds_from_location_fields,
@@ -118,6 +118,194 @@ _SOCKET_KAFKA_MIRROR_ENABLED = (
 def _store_sid_claims(sid: str, data: Dict[str, Any]) -> None:
     set_sid_claims(sid, data)
     _SID_INDEX[sid] = data
+
+
+_CHAT_SOCKETIO: SocketIO | None = None
+_FLASK_APP: Any | None = None
+_PROFESSIONAL_SOCKET_ROLES = frozenset({"company", "driver", "institution"})
+
+
+def _refuse_professional_if_channel_down() -> None:
+    """Refuse une socket professionnelle si les révocations ne se propagent plus."""
+    from security.portal_grant_socket_bus import revocation_channel_healthy
+
+    if revocation_channel_healthy():
+        return
+    raise SocketConnectionRefusedError("REVOCATION_CHANNEL_UNAVAILABLE")
+
+
+def _disconnect_indexed_sid(sid: str) -> None:
+    if _CHAT_SOCKETIO is None:
+        return
+    claims = _SID_INDEX.get(sid) or {}
+    server = _CHAT_SOCKETIO.server
+    rooms: list[str] = []
+    claimed_company = claims.get("company_id")
+    if isinstance(claimed_company, int):
+        rooms.append(f"company_{claimed_company}")
+    claimed_institution = claims.get("institution_id")
+    if isinstance(claimed_institution, int):
+        rooms.append(f"institution_{claimed_institution}")
+    driver_id = claims.get("driver_id")
+    if isinstance(driver_id, int):
+        rooms.append(f"driver_{driver_id}")
+    public_id = claims.get("user_public_id")
+    if public_id:
+        rooms.append(f"client_{public_id}")
+    for room in rooms:
+        try:
+            server.leave_room(sid, room, namespace="/")
+        except Exception:
+            logger.exception("[socketio] leave_room on revoke failed sid=%s", sid)
+    try:
+        server.disconnect(sid, namespace="/")
+    except Exception:
+        logger.exception("[socketio] disconnect on revoke failed sid=%s", sid)
+
+
+def local_sids_for_user(user_id: int) -> list[str]:
+    """Sockets de cet utilisateur détenues par ce processus."""
+    target = int(user_id)
+    found: list[str] = []
+    for sid, claims in list(_SID_INDEX.items()):
+        raw = claims.get("user_id")
+        try:
+            if int(raw) == target:
+                found.append(sid)
+        except (TypeError, ValueError):
+            continue
+    return found
+
+
+def leave_conversation_room_for_user(user_id: int, conversation_id: int) -> None:
+    """Retire les sockets locales de la salle de mission, sans déconnecter."""
+    if _CHAT_SOCKETIO is None:
+        return
+    room = f"conversation_{int(conversation_id)}"
+    server = _CHAT_SOCKETIO.server
+    for sid in local_sids_for_user(user_id):
+        try:
+            server.leave_room(sid, room, namespace="/")
+        except Exception:
+            logger.exception(
+                "[socketio] sortie salle mission refusée sid=%s conv=%s",
+                sid,
+                conversation_id,
+            )
+
+
+def drop_open_sockets_for_mobile_session(session_id: str) -> None:
+    """Ferme les sockets déjà ouvertes de cette session mobile, pas les autres."""
+    target = str(session_id or "")
+    if not target:
+        return
+    doomed = [
+        sid
+        for sid, claims in list(_SID_INDEX.items())
+        if str(claims.get("mobile_session_id") or "") == target
+    ]
+    for sid in doomed:
+        _disconnect_indexed_sid(sid)
+
+
+def drop_open_sockets_for_grant(grant: Any) -> None:
+    """Coupe les sockets déjà abonnées quand le droit correspondant est révoqué."""
+    if _CHAT_SOCKETIO is None:
+        return
+    user_id = getattr(grant, "user_id", None)
+    if not isinstance(user_id, int):
+        return
+    portal = str(getattr(grant, "portal", "") or "")
+    company_id = getattr(grant, "company_id", None)
+    institution_id = getattr(grant, "institution_id", None)
+    doomed: list[str] = []
+    for sid, claims in list(_SID_INDEX.items()):
+        claimed_user = claims.get("user_id")
+        if claimed_user != user_id:
+            continue
+        if portal in {"company", "driver"} and isinstance(company_id, int):
+            claimed_company = claims.get("company_id")
+            if isinstance(claimed_company, int) and claimed_company != company_id:
+                continue
+        if portal == "institution" and isinstance(institution_id, int):
+            claimed_institution = claims.get("institution_id")
+            if (
+                isinstance(claimed_institution, int)
+                and claimed_institution != institution_id
+            ):
+                continue
+        doomed.append(sid)
+    if not doomed:
+        return
+    logger.warning(
+        "portal_grant_socket_revoked count=%s at=%.6f",
+        len(doomed),
+        time.time(),
+    )
+    for sid in doomed:
+        _disconnect_indexed_sid(sid)
+
+
+def drop_professional_sockets_channel_lost() -> None:
+    """Coupe les sockets professionnelles de ce processus. Le portail client reste."""
+    doomed = [
+        sid
+        for sid, claims in list(_SID_INDEX.items())
+        if claims.get("role") in _PROFESSIONAL_SOCKET_ROLES
+    ]
+    logger.warning(
+        "portal_grant_professional_sockets_dropped count=%s at=%.6f",
+        len(doomed),
+        time.time(),
+    )
+    for sid in doomed:
+        _disconnect_indexed_sid(sid)
+
+
+def reconcile_open_professional_sockets() -> None:
+    """Ferme les sockets encore ouvertes après le retour du canal."""
+    if _FLASK_APP is None:
+        logger.warning("portal_grant_reconciliation_skipped reason=no_app")
+        return
+    closed = 0
+    with _FLASK_APP.app_context():
+        for sid, claims in list(_SID_INDEX.items()):
+            role = claims.get("role")
+            if role not in _PROFESSIONAL_SOCKET_ROLES:
+                continue
+            user_id = claims.get("user_id")
+            user = (
+                db.session.get(User, int(user_id)) if isinstance(user_id, int) else None
+            )
+            if user is None or not _professional_scope_matches(user, claims, role):
+                _disconnect_indexed_sid(sid)
+                closed += 1
+    logger.warning(
+        "portal_grant_reconciliation_closed count=%s at=%.6f",
+        closed,
+        time.time(),
+    )
+
+
+def _professional_scope_matches(user: User, claims: dict[str, Any], role: str) -> bool:
+    from security.portal_scope import resolve_portal_scope
+
+    scope = resolve_portal_scope(user, role, use_request_claim=False)
+    if not scope.allowed:
+        return False
+    claimed_company = claims.get("company_id")
+    if (
+        isinstance(claimed_company, int)
+        and scope.company is not None
+        and int(scope.company.id) != claimed_company
+    ):
+        return False
+    claimed_institution = claims.get("institution_id")
+    return not (
+        isinstance(claimed_institution, int)
+        and scope.institution is not None
+        and int(scope.institution.id) != claimed_institution
+    )
 
 
 # ✅ Tracking des erreurs token_expired par IP pour réduire le bruit dans les logs
@@ -547,7 +735,48 @@ def _emit_company_room_subscribed(company_id: int, room: str) -> None:
     )
 
 
-def init_chat_socket(socketio: SocketIO):
+def _drop_remote_revocation(payload: dict[str, Any]) -> None:
+    """Applique une révocation publiée par un autre processus."""
+    kind = payload.get("kind")
+    if kind == "mobile_session":
+        session_id = payload.get("mobile_session_id")
+        if session_id:
+            drop_open_sockets_for_mobile_session(str(session_id))
+        return
+    if kind == "mission_read_cutoff":
+        user_id = payload.get("user_id")
+        conversation_id = payload.get("conversation_id")
+        if isinstance(user_id, int) and isinstance(conversation_id, int):
+            leave_conversation_room_for_user(user_id, conversation_id)
+        return
+    if kind:
+        # Un type inconnu ne doit pas être lu comme une révocation de session.
+        logger.warning("portal_grant_revocation_unknown_kind kind=%s", kind)
+        return
+    from types import SimpleNamespace
+
+    drop_open_sockets_for_grant(
+        SimpleNamespace(
+            user_id=payload.get("user_id"),
+            portal=payload.get("portal"),
+            company_id=payload.get("company_id"),
+            institution_id=payload.get("institution_id"),
+        )
+    )
+
+
+def init_chat_socket(socketio: SocketIO, flask_app: Any | None = None) -> None:
+    global _CHAT_SOCKETIO, _FLASK_APP
+    _CHAT_SOCKETIO = socketio
+    if flask_app is not None:
+        _FLASK_APP = flask_app
+    from security.portal_grant_socket_bus import start_portal_revocation_listener
+
+    start_portal_revocation_listener(
+        _drop_remote_revocation,
+        on_channel_lost=drop_professional_sockets_channel_lost,
+        on_channel_recovered=reconcile_open_professional_sockets,
+    )
     logger.info("🔧 [INIT] Initialisation des handlers Socket.IO chat")
 
     @socketio.on("connect", namespace="/")
@@ -760,6 +989,13 @@ def init_chat_socket(socketio: SocketIO):
                 if decoded is None:
                     raise last_decode_error or Exception("Token decode error")
 
+                from security.mobile_session_guard import (
+                    is_mobile_jwt_revoked_by_session,
+                )
+
+                if is_mobile_jwt_revoked_by_session(decoded):
+                    raise SocketConnectionRefusedError("AUTH_INVALID")
+
             except jwt_exceptions.ExpiredSignatureError:
                 # ✅ Réduire le bruit dans les logs : tracker les erreurs token_expired par IP
                 # Logger seulement si c'est la première erreur ou si ça fait plus de 60s depuis le dernier log
@@ -864,6 +1100,7 @@ def init_chat_socket(socketio: SocketIO):
                 raise SocketConnectionRefusedError("AUTH_INVALID") from e
 
             public_id = decoded.get("sub")
+            mobile_session_id = str(decoded.get("session_id") or "") or None
             if not public_id:
                 logger.info(
                     "socket_connect_refused",
@@ -931,6 +1168,7 @@ def init_chat_socket(socketio: SocketIO):
             )
 
             if user.role == UserRole.driver or is_driver_context:
+                _refuse_professional_if_channel_down()
                 driver = Driver.query.filter_by(user_id=user.id).first()
                 if not driver or not driver.company_id:
                     logger.error(
@@ -945,6 +1183,10 @@ def init_chat_socket(socketio: SocketIO):
                         },
                     )
                     raise SocketConnectionRefusedError("DRIVER_OR_COMPANY_NOT_FOUND")
+                from security.portal_scope import portal_company_allowed
+
+                if not portal_company_allowed(user, "driver", int(driver.company_id)):
+                    raise SocketConnectionRefusedError("PORTAL_ACCESS_DENIED")
                 if not _try_acquire_company_slot(int(driver.company_id)):
                     ws_metrics.on_error("realtime_company_capacity_exceeded")
                     raise SocketConnectionRefusedError(
@@ -1015,6 +1257,7 @@ def init_chat_socket(socketio: SocketIO):
                         "role": "driver",
                         "device_id": device_id,
                         "session_diag": session_diag,
+                        "mobile_session_id": mobile_session_id,
                     },
                 )
                 register_presence(
@@ -1051,7 +1294,13 @@ def init_chat_socket(socketio: SocketIO):
                 )
 
             elif user.role == UserRole.company:
-                company = Company.query.filter_by(user_id=user.id).first()
+                _refuse_professional_if_channel_down()
+                from security.portal_scope import resolve_portal_scope
+
+                company_scope = resolve_portal_scope(
+                    user, "company", use_request_claim=False
+                )
+                company = company_scope.company if company_scope.allowed else None
                 if not company:
                     logger.error(
                         "socket_connect_error",
@@ -1118,6 +1367,7 @@ def init_chat_socket(socketio: SocketIO):
                         "role": "company",
                         "device_id": device_id,
                         "session_diag": session_diag,
+                        "mobile_session_id": mobile_session_id,
                     },
                 )
                 register_presence(
@@ -1154,7 +1404,16 @@ def init_chat_socket(socketio: SocketIO):
             # ÉTAPE 5/6: Institution users - portail institutionnel
             # =====================================================================
             elif user.role == UserRole.institution:
-                institution_id = getattr(user, "institution_id", None)
+                _refuse_professional_if_channel_down()
+                from security.portal_scope import resolve_portal_scope
+
+                institution_scope = resolve_portal_scope(
+                    user, "institution", use_request_claim=False
+                )
+                institution = (
+                    institution_scope.institution if institution_scope.allowed else None
+                )
+                institution_id = institution.id if institution is not None else None
                 if not institution_id:
                     logger.error(
                         "socket_connect_error",
@@ -1184,6 +1443,7 @@ def init_chat_socket(socketio: SocketIO):
                         "role": "institution",
                         "device_id": device_id,
                         "session_diag": session_diag,
+                        "mobile_session_id": mobile_session_id,
                     },
                 )
                 register_presence(
@@ -1216,6 +1476,14 @@ def init_chat_socket(socketio: SocketIO):
                 )
 
             elif user.role == UserRole.client:
+                from security.portal_scope import resolve_portal_scope
+
+                client_scope = resolve_portal_scope(
+                    user, "client", use_request_claim=False
+                )
+                if not client_scope.allowed:
+                    ws_metrics.on_error("portal_access_denied")
+                    raise SocketConnectionRefusedError("PORTAL_ACCESS_DENIED")
                 room = f"client_{public_id}"
                 join_room(room)
                 emit("connected", {"message": f"✅ Client connecté à {room}"})
@@ -1229,6 +1497,7 @@ def init_chat_socket(socketio: SocketIO):
                         "role": "client",
                         "device_id": device_id,
                         "session_diag": session_diag,
+                        "mobile_session_id": mobile_session_id,
                     },
                 )
                 register_presence(
@@ -1363,6 +1632,14 @@ def init_chat_socket(socketio: SocketIO):
                 inc_chat_message_rejected("auth")
                 emit("error", {"error": "Utilisateur non reconnu."})
                 return
+            if user.role in {UserRole.company, UserRole.driver}:
+                from security.portal_grant_socket_bus import revocation_channel_healthy
+
+                if not revocation_channel_healthy():
+                    emit("error", {"error": "Canal de révocation indisponible."})
+                    with suppress(Exception):
+                        socketio.server.disconnect(sid, namespace="/")
+                    return
 
             client_ip = request.environ.get("REMOTE_ADDR", "unknown")
             allowed, retry_after = ws_rate_limiter.check_rate_limit(
@@ -1456,6 +1733,13 @@ def init_chat_socket(socketio: SocketIO):
                     emit("error", {"error": "Chauffeur introuvable."})
                     return
                 company_id = driver.company_id
+                from security.portal_scope import portal_company_allowed
+
+                if not portal_company_allowed(user, "driver", int(company_id)):
+                    emit("error", {"error": "Accès retiré."})
+                    with suppress(Exception):
+                        socketio.server.disconnect(_get_sid(), namespace="/")
+                    return
                 # ✅ FIX: Utiliser l'Enum SenderRole au lieu d'une chaîne
                 sender_role = SenderRole.DRIVER
                 sender_id = user.id
@@ -1467,9 +1751,16 @@ def init_chat_socket(socketio: SocketIO):
                     company_id,
                 )
             elif user.role == UserRole.company:
-                company_obj = Company.query.filter_by(user_id=user.id).first()
+                from security.portal_scope import resolve_portal_scope
+
+                company_scope = resolve_portal_scope(
+                    user, "company", use_request_claim=False
+                )
+                company_obj = company_scope.company if company_scope.allowed else None
                 if not company_obj:
-                    emit("error", {"error": "Entreprise introuvable."})
+                    emit("error", {"error": "Accès retiré."})
+                    with suppress(Exception):
+                        socketio.server.disconnect(_get_sid(), namespace="/")
                     return
                 company_id = company_obj.id
                 # ✅ FIX: Utiliser l'Enum SenderRole au lieu d'une chaîne
@@ -1571,6 +1862,11 @@ def init_chat_socket(socketio: SocketIO):
                     except Exception:
                         logger.exception("[CHAT] conversation resolve failed")
 
+                    from services.messaging.conversation_service import (
+                        ConversationService,
+                    )
+
+                    timestamp = ConversationService.message_timestamp_for_send(conv_obj)
                     message = MessageCtor(
                         sender_id=sender_id,
                         receiver_id=receiver_id,
@@ -1747,23 +2043,34 @@ def init_chat_socket(socketio: SocketIO):
                                     message_preview[: MAX_PUSH_PREVIEW_LEN - 1] + "…"
                                 )
 
-                            # ✅ Utiliser fanout_message_new (templates + anti-spam)
-                            from services.events.fanout import fanout_message_new
+                            from services.messaging.permission_service import (
+                                driver_may_receive_message_push,
+                            )
 
-                            fanout_message_new(
-                                driver_id=driver.id,
-                                message_id=message.id,
-                                sender_name=sender_display,
-                                message_preview=message_preview,
-                                company_id=company_id,
-                                chat_type="direct",
-                                thread_id=company_id,
-                            )
-                            logger.info(
-                                "[chat] Push notification queued for driver %s (message %s)",
-                                driver.id,
-                                message.id,
-                            )
+                            if not driver_may_receive_message_push(
+                                int(receiver_id), message
+                            ):
+                                logger.info(
+                                    "[chat] push ignorée, message après la borne driver user_id=%s",
+                                    receiver_id,
+                                )
+                            else:
+                                from services.events.fanout import fanout_message_new
+
+                                fanout_message_new(
+                                    driver_id=driver.id,
+                                    message_id=message.id,
+                                    sender_name=sender_display,
+                                    message_preview=message_preview,
+                                    company_id=company_id,
+                                    chat_type="direct",
+                                    thread_id=company_id,
+                                )
+                                logger.info(
+                                    "[chat] Push notification queued for driver %s (message %s)",
+                                    driver.id,
+                                    message.id,
+                                )
                 except (ValueError, TypeError, AttributeError) as e:
                     logger.error(
                         "[chat] Push notification failed (validation error: %s): %s",
@@ -3380,9 +3687,16 @@ def init_chat_socket(socketio: SocketIO):
             user_id_log = user.id
 
             if user_role == "company":
-                company = Company.query.filter_by(user_id=user.id).first()
+                from security.portal_scope import resolve_portal_scope
+
+                company_scope = resolve_portal_scope(
+                    user, "company", use_request_claim=False
+                )
+                company = company_scope.company if company_scope.allowed else None
                 if not company:
-                    emit("error", {"error": "Entreprise introuvable."})
+                    emit("error", {"error": "Accès retiré."})
+                    with suppress(Exception):
+                        socketio.server.disconnect(sid, namespace="/")
                     return
 
                 company_id_log = company.id
@@ -3418,6 +3732,14 @@ def init_chat_socket(socketio: SocketIO):
                         "error",
                         {"error": "Chauffeur ou entreprise associée introuvable."},
                     )
+                    return
+
+                from security.portal_scope import portal_company_allowed
+
+                if not portal_company_allowed(user, "driver", int(driver.company_id)):
+                    emit("error", {"error": "Accès retiré."})
+                    with suppress(Exception):
+                        socketio.server.disconnect(sid, namespace="/")
                     return
 
                 company_id_log = driver.company_id

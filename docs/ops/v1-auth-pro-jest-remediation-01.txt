@@ -1,0 +1,11 @@
+PASS src/utils/authNavigation.test.js (32.274 s)
+PASS src/pages/admin/OrganizationApplications/AdminOrganizationApplications.test.jsx (41.205 s)
+PASS src/pages/Public/organizationSignup/OrganizationSignup.test.jsx (42.679 s)
+PASS src/pages/Public/driverInvitation/DriverInvitationPage.test.jsx (44.64 s)
+PASS src/pages/company/Driver/DriverInvitationsPanel.test.jsx (45.068 s)
+
+Test Suites: 5 passed, 5 total
+Tests:       20 passed, 20 total
+Snapshots:   0 total
+Time:        85.114 s
+Ran all test suites matching /(OrganizationSignup|DriverInvitationPage|AdminOrganizationApplications|DriverInvitationsPanel|authNavigation)\.test/i.

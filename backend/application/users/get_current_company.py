@@ -72,30 +72,30 @@ class GetCurrentCompanyUseCase:
                     status_code=403,
                 )
 
-            # Priorité claim JWT company_id (switchs) pour non-admin seulement
-            company = None
-            try:
-                from flask_jwt_extended import get_jwt
+            from security.portal_scope import resolve_portal_scope
 
-                jwt_data = get_jwt()
-                if jwt_data and "company_id" in jwt_data:
-                    company_id = jwt_data["company_id"]
-                    if company_id:
-                        company = self.company_repo.find_model_by_id(int(company_id))
-            except Exception:
-                pass
-
-            if not company:
-                company = self.company_repo.find_model_by_user_id(user.id)
-
-            if not company:
+            scope = resolve_portal_scope(user, "company")
+            if scope.allowed and scope.company is not None:
+                return GetCurrentCompanyResult(found=True, company=scope.company)
+            if scope.reason in {
+                "cross_tenant",
+                "revoked",
+                "ambiguous_company",
+                "pending",
+                "unapproved",
+                "ineligible",
+                "denied",
+            }:
                 return GetCurrentCompanyResult(
                     found=False,
-                    error={"error": "Entreprise non trouvée"},
-                    status_code=404,
+                    error={"error": "Accès non autorisé"},
+                    status_code=403,
                 )
-
-            return GetCurrentCompanyResult(found=True, company=company)
+            return GetCurrentCompanyResult(
+                found=False,
+                error={"error": "Entreprise non trouvée"},
+                status_code=404,
+            )
         except Exception:
             return GetCurrentCompanyResult(
                 found=False,

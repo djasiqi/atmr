@@ -698,6 +698,16 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
     except Exception:
         app_logger.exception("[JWT Security] institution session guard failed")
 
+    # Session mobile durable : un access ou refresh déjà émis devient inutilisable
+    # dès que la session est révoquée, sur tous les portails.
+    try:
+        from security.mobile_session_guard import is_mobile_jwt_revoked_by_session
+
+        if is_mobile_jwt_revoked_by_session(jwt_payload):
+            return True
+    except Exception:
+        app_logger.exception("[JWT Security] mobile session guard failed")
+
     # Vérifier si le token est dans la blacklist
     # ✅ SECURITY: Flask-JWT-Extended génère automatiquement un jti
     # pour chaque token
@@ -736,17 +746,21 @@ def revoked_token_callback(_jwt_header, _jwt_payload):
         "session_revoked": "Session révoquée.",
         "session_not_found": "Session introuvable.",
         "session_expired": "Session expirée.",
+        "session_validation_unavailable": (
+            "Vérification de session indisponible. Réessayez."
+        ),
     }
+    unavailable = reason == "session_validation_unavailable"
     return (
         jsonify(
             {
                 "error": reason,
                 "error_code": reason,
                 "message": messages.get(reason, "Token révoqué ou invalide."),
-                "retryable": False,
+                "retryable": unavailable,
             }
         ),
-        401,
+        503 if unavailable else 401,
     )
 
 
@@ -990,6 +1004,22 @@ def role_required(*roles):
                             "Rôle invalide dans la configuration : %s",
                             role_str,
                         )
+
+            # Habilitations : si une ligne existe, le claim JWT ne suffit plus.
+            from security.portal_grant_access import role_required_grant_gate
+
+            grant_gate = role_required_grant_gate(user, allowed_roles)
+            if grant_gate == "allow":
+                return fn(*args, **kwargs)
+            if grant_gate == "driver_context_required":
+                return {
+                    "error": "active_driver_context_required",
+                    "error_code": "ACTIVE_DRIVER_CONTEXT_REQUIRED",
+                    "message": "Le contexte chauffeur doit être actif.",
+                    "retryable": False,
+                }, 403
+            if grant_gate == "deny":
+                abort(403, description="Accès non autorisé")
 
             # ✅ Vérifier d'abord le claim du token,
             # puis le rôle de l'utilisateur dans la DB

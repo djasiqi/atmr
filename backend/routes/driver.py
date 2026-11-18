@@ -671,18 +671,59 @@ def get_driver_from_token() -> tuple[Driver | None, dict[str, Any] | None, int |
             return None, error_response, status_code
         return driver, None, None
 
-    # App unifiée : rôle BDD = company, etc. + fiche chauffeur + en-tête driver:{id}
-    if (
-        context_driver_id is not None
-        and driver is not None
-        and int(driver.id) == context_driver_id
-    ):
-        logger.info(
-            "Driver found: %s for user %s (contexte unifié)",
-            driver.id,
-            getattr(user, "username", user.id),
-        )
-        return driver, None, None
+    # App unifiée : rôle BDD client/company + fiche chauffeur.
+    # 1) en-tête driver:{id} explicite
+    # 2) sinon habilitation DRIVER active pour l'entreprise de la fiche
+    # 3) sinon contexte Redis persisté après acceptation / switch
+    if driver is not None:
+        if context_driver_id is not None and int(driver.id) == context_driver_id:
+            logger.info(
+                "Driver found: %s for user %s (contexte unifié)",
+                driver.id,
+                getattr(user, "username", user.id),
+            )
+            return driver, None, None
+        try:
+            from models.enums import PortalKind
+            from security.portal_scope import portal_company_allowed
+
+            company_id = getattr(driver, "company_id", None)
+            if company_id is not None and portal_company_allowed(
+                user, PortalKind.DRIVER.value, int(company_id)
+            ):
+                logger.info(
+                    "Driver found: %s for user %s (habilitation chauffeur)",
+                    driver.id,
+                    getattr(user, "username", user.id),
+                )
+                return driver, None, None
+        except Exception as grant_exc:
+            logger.warning(
+                "get_driver_from_token: lecture habilitation impossible: %s",
+                grant_exc,
+            )
+        if not active_ctx:
+            try:
+                from routes.auth import _get_saved_active_context
+
+                saved = (_get_saved_active_context(str(user.public_id)) or "").strip()
+                if saved.startswith("driver:"):
+                    try:
+                        saved_id = int(saved.split(":", 1)[1].strip())
+                    except (ValueError, IndexError):
+                        saved_id = None
+                    if saved_id is not None and int(driver.id) == saved_id:
+                        logger.info(
+                            "Driver found: %s for user %s (contexte Redis)",
+                            driver.id,
+                            getattr(user, "username", user.id),
+                        )
+                        return driver, None, None
+            except Exception as redis_exc:
+                logger.warning(
+                    "get_driver_from_token: contexte Redis indisponible: %s",
+                    redis_exc,
+                )
 
     logger.error(
         "User %s n'est pas un chauffeur (role=%s, contexte actif: %s)",
